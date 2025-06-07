@@ -32,7 +32,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
           id: msg.id,
           role: msg.role,
           content: msg.content,
-          toolInvocations: msg.tool_invocations,
+          toolInvocations: msg.toolInvocations,
           createdAt: msg.created_at,
         }))}
         chatId={params.id}

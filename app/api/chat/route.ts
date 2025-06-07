@@ -74,7 +74,6 @@ export async function POST(req: Request) {
         }
         await saveMessage(chat.id, "assistant", result.text, safeToolCalls)
 
-        // Update chat title if it's the first exchange
         if (messages.length <= 2) {
           const newTitle = extractTitleFromContent(userMessage?.content || "")
           await updateChat(chat.id, newTitle)

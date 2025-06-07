@@ -83,11 +83,10 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
         className="absolute inset-0 bg-gradient-to-br from-black/80 via-slate-900/70 to-black/80 backdrop-blur-xl"
         onClick={() => setFullView(false)}
       />
-      
       {/* Dialog */}
       <div className="relative w-full max-w-6xl h-[85vh] overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-8 duration-500">
         {/* Glass morphism background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900/95 via-slate-800/90 to-slate-900/95 backdrop-blur-2xl border border-slate-700/50 rounded-3xl shadow-2xl">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-purple-900 to-slate-900 backdrop-blur-2xl border border-slate-700/50 rounded-3xl shadow-2xl">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-cyan-500/10 rounded-3xl"></div>
           <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent rounded-3xl"></div>
         </div>
@@ -374,8 +373,8 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
     <>
       {/* Compact view */}
       <div className="mt-3 animate-in fade-in-0 slide-in-from-top-2 duration-500">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900/90 via-slate-800/50 to-slate-900/90 backdrop-blur-xl border border-slate-700/30 shadow-xl">
-          <div className="absolute inset-0 bg-gradient-to-r from-green-500/5 via-blue-500/5 to-purple-500/5"></div>
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-900 via-purple-900 to-slate-900 backdrop-blur-xl border border-slate-700/30 shadow-xl">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-cyan-500/10"></div>
           
           {/* Header */}
           <div className="relative p-4 bg-gradient-to-r from-slate-800/50 to-slate-900/50 border-b border-slate-700/30">

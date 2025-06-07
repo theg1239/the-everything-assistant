@@ -70,7 +70,7 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
       content: msg.content,
       toolInvocations: msg.toolInvocations,
     })),
-    body: chatId ? { id: chatId } : undefined,
+    body: optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : undefined,
     onResponse: (response) => {
       if (!showFullChat) {
         setShowFullChat(true)
@@ -81,7 +81,8 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
       const newChatPath = response.headers.get("X-Chat-Path")
       if (newChatId && newChatPath && !chatId) {
         setOptimisticChatId(newChatId)
-        router.replace(newChatPath)
+        // Instead of router.replace, update the URL without reload
+        window.history.replaceState({}, '', newChatPath)
       }
     },
     onError: (error) => {
@@ -335,7 +336,8 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
 
           <div ref={messagesEndRef} />
 
-          {messages.length > 0 && messages.length < 4 && !isLoading && (
+          {/* Hide suggestions when inside a chat */}
+          {!showFullChat && messages.length > 0 && messages.length < 4 && !isLoading && (
             <SuggestedQuestions isFirstMessage={false} onQuestionClick={handleSuggestedQuestion} />
           )}
         </div>

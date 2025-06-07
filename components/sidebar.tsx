@@ -117,7 +117,7 @@ export function Sidebar(props: SidebarProps) {
             animate={{ x: 0 }}
             exit={{ x: -300 }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="fixed left-0 top-0 z-50 h-full w-80 bg-slate-800/90 backdrop-blur-xl border-r border-slate-700/50 flex flex-col shadow-xl"
+            className="fixed left-0 top-0 z-50 h-full w-80 bg-gradient-to-br from-blue-900 via-purple-900 to-slate-900 backdrop-blur-xl border-r border-slate-700/50 flex flex-col shadow-xl"
             onMouseEnter={() => setHovering(true)}
             onMouseLeave={() => setHovering(false)}
           >

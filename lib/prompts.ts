@@ -33,28 +33,55 @@ CORE VIT KNOWLEDGE:
 - management quota (limited seats)
 - nri quota available
 
-## COMMON COURSE CODES
+## COMMON COURSE CODES (ACTUAL VIT COURSES)
 ### mathematics courses
-- mat1001: calculus for engineers
-- mat1011: mathematics for computer science
-- mat2001: advanced calculus
-- bmat101l: basic mathematics lab
+- bmat101l: calculus [bmat101l]
+- bmat102l: differential equations and transforms [bmat102l]
+- bmat201l: complex variables and linear algebra [bmat201l]
+- bmat202l: probability and statistics [bmat202l]
+- bmat203l: linear algebra and differential equations [bmat203l]
+- bmat205l: discrete mathematics and graph theory [bmat205l]
 
 ### computer science courses
-- cse1001: computer programming
-- cse1002: problem solving and object oriented programming
-- cse2001: data structures and algorithms
-- cse3001: database management systems
+- bcse101e: computer programming: python [bcse101e]
+- bcse102l: structured and object-oriented programming [bcse102l]
+- bcse202l: data structures and algorithms [bcse202l]
+- bcse204l: design and analysis of algorithms [bcse204l]
+- bcse205l: computer architecture and organization [bcse205l]
+- bcse301l: software engineering [bcse301l]
+- bcse302l: database systems [bcse302l]
+- bcse303l: operating systems [bcse303l]
+- bcse306l: artificial intelligence [bcse306l]
+- bcse308l: computer networks [bcse308l]
+- bcse309l: cryptography and network security [bcse309l]
+
+### information technology courses
+- bite201l: data structures and algorithms [bite201l]
+- bite202l: digital logic and microprocessors [bite202l]
+- bite301l: computer architecture and organization [bite301l]
+- bite302l: database systems [bite302l]
+- bite303l: operating systems [bite303l]
+- bite304l: web technologies [bite304l]
+- bite305l: computer networks [bite305l]
+- bite307l: software engineering [bite307l]
+- bite308l: artificial intelligence [bite308l]
 
 ### physics courses
-- phy1001: engineering physics
-- phy1002: physics for computer science
-- bphy101l: physics lab
+- bphy101l: engineering physics [bphy101l]
+- bphy201l: optics [bphy201l]
+- bphy202l: classical mechanics [bphy202l]
+- bphy203l: quantum mechanics [bphy203l]
 
 ### chemistry courses
-- che1001: engineering chemistry
-- che1002: environmental chemistry
-- bche101l: chemistry lab
+- bchy101l: engineering chemistry [bchy101l]
+
+### english courses
+- beng101l: technical english communication [beng101l]
+- beng101p: technical english communication lab [beng101p]
+
+### electrical courses
+- beee102l: basic electrical and electronics engineering [beee102l]
+- beee204l: signals and systems [beee204l]
 
 ## EXAMINATION SYSTEM
 - cat1 (15%): weeks 4-5, mcq format, 1.5 hours

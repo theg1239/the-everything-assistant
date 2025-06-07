@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@ai-sdk/google": "latest",
-    "@emotion/is-prop-valid": "latest",
+    "@emotion/is-prop-valid": "^1.2.1",
     "@radix-ui/react-slot": "latest",
     "@sparticuz/chromium": "latest",
     "@tailwindcss/typography": "latest",
@@ -26,14 +26,14 @@
     "zod": "latest"
   },
   "devDependencies": {
-    "@types/node": "^20",
+    "@types/node": "^20.11.5",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "autoprefixer": "^10.0.1",
-    "eslint": "^8",
+    "autoprefixer": "^10.4.17",
+    "eslint": "^8.56.0",
     "eslint-config-next": "14.1.0",
-    "postcss": "^8",
-    "tailwindcss": "^3.3.0",
-    "typescript": "^5"
+    "postcss": "^8.4.33",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5.3.3"
   }
 }

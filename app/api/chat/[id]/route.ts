@@ -2,19 +2,20 @@ import { auth } from "@/lib/auth"
 import { getChat, getMessages, deleteChat } from "@/lib/db"
 import type { NextRequest } from "next/server"
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.id) {
       return new Response("Unauthorized", { status: 401 })
     }
 
-    const chat = await getChat(params.id, session.user.id)
+    const { id } = await params
+    const chat = await getChat(id, session.user.id)
     if (!chat) {
       return new Response("Chat not found", { status: 404 })
     }
 
-    const messages = await getMessages(params.id)
+    const messages = await getMessages(id)
 
     return Response.json({
       chat,
@@ -32,14 +33,15 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
     if (!session?.user?.id) {
       return new Response("Unauthorized", { status: 401 })
     }
 
-    await deleteChat(params.id, session.user.id)
+    const { id } = await params
+    await deleteChat(id, session.user.id)
     return new Response("OK", { status: 200 })
   } catch (error) {
     console.error("Error deleting chat:", error)

@@ -5,9 +5,9 @@ import { getChat, getMessages } from "@/lib/db"
 import { ChatInterface } from "@/components/chat-interface"
 
 interface ChatPageProps {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 export default async function ChatPage({ params }: ChatPageProps) {
@@ -17,13 +17,14 @@ export default async function ChatPage({ params }: ChatPageProps) {
     redirect("/login")
   }
 
-  const chat = await getChat(params.id, session.user.id)
+  const { id } = await params
+  const chat = await getChat(id, session.user.id)
 
   if (!chat) {
     redirect("/")
   }
 
-  const messages = await getMessages(params.id)
+  const messages = await getMessages(id)
 
   return (
     <div className="h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -35,7 +36,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
           toolInvocations: msg.toolInvocations,
           createdAt: msg.created_at,
         }))}
-        chatId={params.id}
+        chatId={id}
       />
     </div>
   )

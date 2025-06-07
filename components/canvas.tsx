@@ -81,12 +81,12 @@ export function Canvas({ isOpen, onClose, chatId, initialDocument }: CanvasProps
   const downloadDocument = () => {
     const blob = new Blob([document.content], { type: "text/markdown" })
     const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
+    const a = window.document.createElement("a")
     a.href = url
     a.download = `${document.title}.md`
-    document.body.appendChild(a)
+    window.document.body.appendChild(a)
     a.click()
-    document.body.removeChild(a)
+    window.document.body.removeChild(a)
     URL.revokeObjectURL(url)
   }
 

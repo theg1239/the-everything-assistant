@@ -33,8 +33,8 @@ export function createVITTools() {
             scrapeVITPaperVault(resolvedCourseCode, examType, year),
           ])
 
-          const papers = []
-          const sources = []
+          const papers: any[] = [];
+          const sources: any[] = [];
 
           results.forEach((result, index) => {
             if (result.status === "fulfilled" && result.value.success) {
@@ -69,9 +69,13 @@ export function createVITTools() {
             sources,
           }
         } catch (error) {
+          let errorMessage = "unable to scrape papers at the moment. please try again later.";
+          if (typeof error === "object" && error !== null && "message" in error) {
+            errorMessage = (error as { message?: string }).message || errorMessage;
+          }
           return {
             success: false,
-            error: error.message,
+            error: errorMessage,
             message: "unable to scrape papers at the moment. please try again later.",
           }
         }

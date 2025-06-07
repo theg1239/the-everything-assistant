@@ -1,11 +1,17 @@
+import { redirect } from "next/navigation"
+import { auth } from "@/lib/auth"
 import { ChatInterface } from "@/components/chat-interface"
 
-export default function Home() {
+export default async function Home() {
+  const session = await auth()
+
+  if (!session?.user) {
+    redirect("/login")
+  }
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      <div className="container mx-auto px-4 py-8">
-        <ChatInterface />
-      </div>
+      <ChatInterface />
     </main>
   )
 }

@@ -2,36 +2,58 @@
 
 import { useState, useRef, useEffect } from "react"
 import { useChat } from "ai/react"
+import { useRouter } from "next/navigation"
 import { AnimatePresence, motion } from "framer-motion"
-import { Send, ArrowLeft } from "lucide-react"
+import { Send, ArrowLeft, Menu, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { SuggestedQuestions } from "@/components/suggested-questions"
 import { ChatHeader } from "@/components/chat-header"
 import { MessageBubble } from "@/components/message-bubble"
+import { Sidebar } from "@/components/sidebar"
+import { Canvas } from "@/components/canvas"
 import React from "react"
 
-export function ChatInterface() {
-  const [showFullChat, setShowFullChat] = useState(false)
+interface ChatInterfaceProps {
+  initialMessages?: any[]
+  chatId?: string
+}
+
+export function ChatInterface({ initialMessages = [], chatId }: ChatInterfaceProps) {
+  const [showFullChat, setShowFullChat] = useState(initialMessages.length > 0)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [canvasOpen, setCanvasOpen] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const router = useRouter()
 
   const { messages, input, handleInputChange, handleSubmit, isLoading, setInput, error } = useChat({
     api: "/api/chat",
+    initialMessages: initialMessages.map((msg) => ({
+      id: msg.id,
+      role: msg.role,
+      content: msg.content,
+      toolInvocations: msg.toolInvocations,
+    })),
+    body: chatId ? { id: chatId } : undefined,
     onResponse: (response) => {
       if (!showFullChat) {
         setShowFullChat(true)
       }
       setErrorMessage(null)
-      console.log("Response received:", response.status)
+
+      // Handle new chat creation
+      const newChatId = response.headers.get("X-Chat-Id")
+      const newChatPath = response.headers.get("X-Chat-Path")
+
+      if (newChatId && newChatPath && !chatId) {
+        router.push(newChatPath)
+      }
     },
     onError: (error) => {
       console.error("Chat error:", error)
       setErrorMessage("something went wrong. please try again.")
-    },
-    onFinish: (message) => {
-      console.log("Message finished:", message)
     },
   })
 
@@ -63,7 +85,6 @@ export function ChatInterface() {
     }
     setErrorMessage(null)
 
-    // Create a synthetic form event and submit
     setTimeout(() => {
       const form = document.createElement("form")
       const event = new Event("submit", { bubbles: true, cancelable: true })
@@ -74,156 +95,196 @@ export function ChatInterface() {
   }
 
   const resetToHome = () => {
-    setShowFullChat(false)
-    setInput("")
-    setErrorMessage(null)
+    router.push("/")
+  }
+
+  const openCanvas = () => {
+    setCanvasOpen(true)
   }
 
   if (!showFullChat) {
     return (
-      <motion.div initial={{ opacity: 1 }} className="max-w-5xl mx-auto" key="home-view">
-        <ChatHeader />
+      <>
+        <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
 
-        <div className="mt-8">
-          <div className="flex flex-col items-center justify-center min-h-[70vh] space-y-8">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: "easeOut" }}
-              className="text-center space-y-6"
+        <motion.div initial={{ opacity: 1 }} className="max-w-5xl mx-auto" key="home-view">
+          <div className="flex items-center justify-between p-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSidebarOpen(true)}
+              className="text-slate-400 hover:text-white"
             >
-              <div className="space-y-3">
-                <h1 className="text-5xl font-extralight text-white tracking-wide">vit assistant</h1>
-                <p className="text-slate-400 text-xl max-w-2xl mx-auto leading-relaxed">
-                  comprehensive knowledge base for vit vellore - courses, exams, faculty, placements, research, and
-                  everything you need to know
-                </p>
-              </div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
-              className="w-full max-w-3xl"
-            >
-              <SearchBar
-                input={input}
-                handleInputChange={handleInputChange}
-                handleSubmit={handleFormSubmit}
-                isLoading={isLoading}
-                placeholder="ask anything about vit vellore..."
-                ref={inputRef}
-              />
-            </motion.div>
-
-            {errorMessage && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-red-500/20 border border-red-500/30 text-white rounded-xl p-4 text-center max-w-md"
-              >
-                {errorMessage}
-              </motion.div>
-            )}
-
-            <SuggestedQuestions isFirstMessage={true} onQuestionClick={handleSuggestedQuestion} />
+              <Menu className="w-5 h-5" />
+            </Button>
           </div>
-        </div>
-      </motion.div>
+
+          <ChatHeader />
+
+          <div className="mt-8">
+            <div className="flex flex-col items-center justify-center min-h-[70vh] space-y-8">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, ease: "easeOut" }}
+                className="text-center space-y-6"
+              >
+                <div className="space-y-3">
+                  <h1 className="text-5xl font-extralight text-white tracking-wide">vit assistant</h1>
+                  <p className="text-slate-400 text-xl max-w-2xl mx-auto leading-relaxed">
+                    comprehensive knowledge base for vit vellore - courses, exams, faculty, placements, research, and
+                    everything you need to know
+                  </p>
+                </div>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
+                className="w-full max-w-3xl"
+              >
+                <SearchBar
+                  input={input}
+                  handleInputChange={handleInputChange}
+                  handleSubmit={handleFormSubmit}
+                  isLoading={isLoading}
+                  placeholder="ask anything about vit vellore..."
+                  ref={inputRef}
+                />
+              </motion.div>
+
+              {errorMessage && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-red-500/20 border border-red-500/30 text-white rounded-xl p-4 text-center max-w-md"
+                >
+                  {errorMessage}
+                </motion.div>
+              )}
+
+              <SuggestedQuestions isFirstMessage={true} onQuestionClick={handleSuggestedQuestion} />
+            </div>
+          </div>
+        </motion.div>
+      </>
     )
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.4, ease: "easeOut" }}
-      className="max-w-5xl mx-auto h-[90vh] flex flex-col"
-      key="chat-view"
-    >
-      {/* Chat Header */}
+    <>
+      <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
+      <Canvas isOpen={canvasOpen} onClose={() => setCanvasOpen(false)} chatId={chatId} />
+
       <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.1 }}
-        className="flex items-center justify-between p-4 border-b border-slate-700/30 bg-slate-800/20 backdrop-blur-xl rounded-t-3xl"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className="max-w-5xl mx-auto h-[90vh] flex flex-col"
+        key="chat-view"
       >
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={resetToHome}
-          className="text-slate-400 hover:text-white hover:bg-slate-700/30 rounded-xl"
+        {/* Chat Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+          className="flex items-center justify-between p-4 border-b border-slate-700/30 bg-slate-800/20 backdrop-blur-xl rounded-t-3xl"
         >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          back to home
-        </Button>
-        <div className="text-center">
-          <h2 className="text-lg font-light text-white">vit assistant</h2>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSidebarOpen(true)}
+              className="text-slate-400 hover:text-white"
+            >
+              <Menu className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={resetToHome}
+              className="text-slate-400 hover:text-white hover:bg-slate-700/30 rounded-xl"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              back to home
+            </Button>
+          </div>
+
+          <div className="text-center">
+            <h2 className="text-lg font-light text-white">vit assistant</h2>
+          </div>
+
+          <Button variant="ghost" size="sm" onClick={openCanvas} className="text-slate-400 hover:text-white">
+            <FileText className="w-4 h-4 mr-2" />
+            canvas
+          </Button>
+        </motion.div>
+
+        {/* Messages Area */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-800/10 backdrop-blur-xl">
+          {errorMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-red-500/20 border border-red-500/30 text-white rounded-xl p-4 text-center"
+            >
+              {errorMessage}
+            </motion.div>
+          )}
+
+          <AnimatePresence>
+            {messages.map((message, index) => (
+              <MessageBubble key={`${message.id}-${index}`} message={message} />
+            ))}
+          </AnimatePresence>
+
+          {isLoading && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center justify-center space-x-3 text-slate-400"
+            >
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                <div
+                  className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"
+                  style={{ animationDelay: "0.2s" }}
+                ></div>
+                <div
+                  className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"
+                  style={{ animationDelay: "0.4s" }}
+                ></div>
+              </div>
+              <span className="text-sm">thinking...</span>
+            </motion.div>
+          )}
+
+          <div ref={messagesEndRef} />
+
+          {messages.length > 0 && messages.length < 4 && !isLoading && (
+            <SuggestedQuestions isFirstMessage={false} onQuestionClick={handleSuggestedQuestion} />
+          )}
         </div>
-        <div className="w-20"></div>
+
+        {/* Input Area */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.2 }}
+          className="p-4 border-t border-slate-700/30 bg-slate-800/20 backdrop-blur-xl rounded-b-3xl"
+        >
+          <SearchBar
+            input={input}
+            handleInputChange={handleInputChange}
+            handleSubmit={handleFormSubmit}
+            isLoading={isLoading}
+            placeholder="continue the conversation..."
+            ref={inputRef}
+          />
+        </motion.div>
       </motion.div>
-
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-800/10 backdrop-blur-xl">
-        {errorMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-red-500/20 border border-red-500/30 text-white rounded-xl p-4 text-center"
-          >
-            {errorMessage}
-          </motion.div>
-        )}
-
-        <AnimatePresence>
-          {messages.map((message, index) => (
-            <MessageBubble key={`${message.id}-${index}`} message={message} />
-          ))}
-        </AnimatePresence>
-
-        {isLoading && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center justify-center space-x-3 text-slate-400"
-          >
-            <div className="flex space-x-1">
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-              <div
-                className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"
-                style={{ animationDelay: "0.2s" }}
-              ></div>
-              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: "0.4s" }}></div>
-            </div>
-            <span className="text-sm">thinking...</span>
-          </motion.div>
-        )}
-
-        <div ref={messagesEndRef} />
-
-        {messages.length > 0 && messages.length < 4 && !isLoading && (
-          <SuggestedQuestions isFirstMessage={false} onQuestionClick={handleSuggestedQuestion} />
-        )}
-      </div>
-
-      {/* Input Area */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.2 }}
-        className="p-4 border-t border-slate-700/30 bg-slate-800/20 backdrop-blur-xl rounded-b-3xl"
-      >
-        <SearchBar
-          input={input}
-          handleInputChange={handleInputChange}
-          handleSubmit={handleFormSubmit}
-          isLoading={isLoading}
-          placeholder="continue the conversation..."
-          ref={inputRef}
-        />
-      </motion.div>
-    </motion.div>
+    </>
   )
 }
 

@@ -2,13 +2,21 @@ import { streamText } from "ai"
 import { google } from "@ai-sdk/google"
 import { createVITTools } from "@/lib/tools"
 import { VIT_SYSTEM_PROMPT } from "@/lib/prompts"
+import { auth } from "@/lib/auth"
+import { getChat, createChat, saveMessage, updateChat } from "@/lib/db"
+import { generateChatPath, extractTitleFromContent } from "@/lib/utils"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json()
+    const session = await auth()
+    if (!session?.user?.id) {
+      return new Response("Unauthorized", { status: 401 })
+    }
+
+    const { messages, id: chatId } = await req.json()
 
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY
     if (!apiKey) {
@@ -20,6 +28,25 @@ export async function POST(req: Request) {
       )
     }
 
+    let chat
+    if (chatId) {
+      chat = await getChat(chatId, session.user.id)
+      if (!chat) {
+        return new Response("Chat not found", { status: 404 })
+      }
+    } else {
+      // Create new chat
+      const title = extractTitleFromContent(messages[0]?.content || "New Chat")
+      const path = generateChatPath()
+      chat = await createChat(session.user.id, title, path)
+    }
+
+    // Save user message
+    const userMessage = messages[messages.length - 1]
+    if (userMessage?.role === "user") {
+      await saveMessage(chat.id, "user", userMessage.content)
+    }
+
     const tools = createVITTools()
 
     const result = await streamText({
@@ -29,9 +56,29 @@ export async function POST(req: Request) {
       temperature: 0.7,
       maxTokens: 4096,
       toolChoice: "auto",
+      onFinish: async (result) => {
+        // Save assistant message
+        await saveMessage(
+          chat.id,
+          "assistant",
+          result.text,
+          result.toolCalls?.length > 0 ? result.toolCalls : undefined,
+        )
+
+        // Update chat title if it's the first exchange
+        if (messages.length <= 2) {
+          const newTitle = extractTitleFromContent(userMessage?.content || "")
+          await updateChat(chat.id, newTitle)
+        }
+      },
     })
 
-    return result.toDataStreamResponse()
+    return result.toDataStreamResponse({
+      headers: {
+        "X-Chat-Id": chat.id,
+        "X-Chat-Path": chat.path,
+      },
+    })
   } catch (error) {
     console.error("Chat API error:", error)
     return new Response(

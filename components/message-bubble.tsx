@@ -5,12 +5,14 @@ import type { Message } from "ai"
 import { cn } from "@/lib/utils"
 import ReactMarkdown from "react-markdown"
 import { ToolCallDisplay } from "./tool-call-display"
+import { MessageActions } from "./message-actions"
 
 interface MessageBubbleProps {
   message: Message
+  chatId?: string
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({ message, chatId }: MessageBubbleProps) {
   const isUser = message.role === "user"
 
   return (
@@ -85,6 +87,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                 {message.content as string}
               </ReactMarkdown>
             </div>
+
+            {/* Message actions */}
+            {chatId && <MessageActions messageId={message.id} chatId={chatId} content={message.content} />}
           </div>
         )}
       </div>

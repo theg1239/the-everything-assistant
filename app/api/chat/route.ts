@@ -2,6 +2,7 @@ import { streamText } from "ai"
 import { google } from "@ai-sdk/google"
 import { createVITTools } from "@/lib/tools"
 import { VIT_SYSTEM_PROMPT } from "@/lib/prompts"
+import { VIT_COMPREHENSIVE_KNOWLEDGE } from "@/lib/knowledge-base"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { getChat, createChat, saveMessage, updateChat } from "@/lib/db"
@@ -33,19 +34,16 @@ export async function POST(req: Request) {
     if (chatId) {
       chat = await getChat(chatId, session.user.id)
       if (!chat) {
-        // If chat not found, create a new chat with the provided chatId
         const title = extractTitleFromContent(messages[0]?.content || "New Chat")
         const path = generateChatPath()
         chat = await createChat(session.user.id, title, path)
       }
     } else {
-      // Create new chat
       const title = extractTitleFromContent(messages[0]?.content || "New Chat")
       const path = generateChatPath()
       chat = await createChat(session.user.id, title, path)
     }
 
-    // Save user message
     const userMessage = messages[messages.length - 1]
     if (userMessage?.role === "user") {
       await saveMessage(chat.id, "user", userMessage.content)
@@ -53,19 +51,19 @@ export async function POST(req: Request) {
 
     const tools = createVITTools()
 
+    const combinedSystemPrompt = `${VIT_SYSTEM_PROMPT}\n\nADDITIONAL COMPREHENSIVE KNOWLEDGE:\n${VIT_COMPREHENSIVE_KNOWLEDGE}`
+    
     const result = await streamText({
       model: google("gemini-2.0-flash"),
-      messages: [{ role: "system", content: VIT_SYSTEM_PROMPT }, ...messages],
+      messages: [{ role: "system", content: combinedSystemPrompt }, ...messages],
       tools,
       temperature: 0.7,
       maxTokens: 4096,
       toolChoice: "auto",
       onFinish: async (result) => {
-        // Save assistant message
         let safeToolCalls = undefined
         if (result.toolCalls?.length > 0) {
           try {
-            // Ensure toolCalls is JSON-serializable
             safeToolCalls = JSON.parse(JSON.stringify(result.toolCalls))
           } catch (e) {
             console.error("Failed to serialize toolCalls for DB:", e)

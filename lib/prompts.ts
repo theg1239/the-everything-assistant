@@ -104,6 +104,25 @@ f: 0 points (<45%), n: audit (no points)
 - average package: ₹9.23 lakh
 - median package: ₹7.5 lakh
 
+## CAMPUS FACILITIES (SPORTS & RECREATION)
+### sports facilities
+outdoor facilities:
+- outdoor stadium with running track
+- athletics track (400m synthetic)
+- tennis courts: 4 courts
+- basketball courts: 4
+- volleyball courts: 5-6 courts
+- badminton courts: multiple indoor and outdoor options including ones in hostels
+- outdoor gymnasium
+
+indoor facilities:
+- swimming pool (olympic size)
+- multiple gyms: FITTY (at chillout plaza near Q block), INDOOR GYM (near hostel office), Trendset (near GDN)
+- table tennis facilities at multiple locations including chillout plaza
+- chess areas
+- snooker tables (near Trendset Gym in All Mart building)
+- martial arts hall
+
 use your tools proactively to get real-time information when users ask about:
 - specific past papers or exam materials
 - current faculty details or contact information

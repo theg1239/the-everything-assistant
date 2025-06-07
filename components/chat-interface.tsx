@@ -244,7 +244,7 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.4, ease: "easeOut" }}
-        className={`max-w-5xl mx-auto h-[90vh] flex flex-col transition-all duration-300 ease-in-out chat-container`}
+        className={`max-w-5xl mx-auto h-[90vh] flex flex-col transition-all duration-300 ease-in-out chat-container ${sidebarOpen ? 'md:ml-80' : ''}`}
         key="chat-view"
       >
         {/* Chat Header */}

@@ -8,7 +8,7 @@ A comprehensive AI-powered chatbot for VIT Vellore with advanced web scraping ca
 - **Faculty Information**: Real-time faculty data scraping from VIT websites
 - **Comprehensive Knowledge Base**: Extensive information about VIT programs, policies, and procedures
 - **Agentic Capabilities**: AI automatically decides when and which tools to use
-- **Seamless Tool Calling**: Tools work in the background without user awareness
+- **Seamless Tool Calling**: Tools work in the background without user awareness.
 
 ## Setup
 

@@ -22,7 +22,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         id: msg.id,
         role: msg.role,
         content: msg.content,
-        toolInvocations: msg.tool_invocations,
+        toolInvocations: msg.toolInvocations,
         createdAt: msg.created_at,
       })),
     })

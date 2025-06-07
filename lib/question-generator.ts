@@ -1,5 +1,66 @@
 import { VIT_COMPREHENSIVE_KNOWLEDGE } from "@/lib/knowledge-base"
 
+// Course name to course code mapping
+const courseMapping: { [key: string]: string } = {
+  // Mathematics courses
+  "calculus": "BMAT101L",
+  "differential equations": "BMAT102L",
+  "complex variables": "BMAT201L",
+  "linear algebra": "BMAT201L",
+  "probability and statistics": "BMAT202L",
+  "discrete mathematics": "BMAT205L",
+  
+  // Computer Science courses
+  "python programming": "BCSE101E",
+  "computer programming": "BCSE101E",
+  "object oriented programming": "BCSE102L",
+  "data structures": "BCSE202L",
+  "algorithms": "BCSE204L",
+  "computer architecture": "BCSE205L",
+  "software engineering": "BCSE301L",
+  "database systems": "BCSE302L",
+  "operating systems": "BCSE303L",
+  "artificial intelligence": "BCSE306L",
+  "computer networks": "BCSE308L",
+  "cryptography": "BCSE309L",
+  "network security": "BCSE309L",
+  
+  // IT courses
+  "digital logic": "BITE202L",
+  "microprocessors": "BITE202L",
+  "web technologies": "BITE304L",
+  
+  // Physics courses
+  "engineering physics": "BPHY101L",
+  "optics": "BPHY201L",
+  "classical mechanics": "BPHY202L",
+  "quantum mechanics": "BPHY203L",
+  
+  // Chemistry courses
+  "engineering chemistry": "BCHY101L",
+  
+  // English courses
+  "technical english": "BENG101L",
+  
+  // Electrical courses
+  "basic electrical engineering": "BEEE102L",
+  "signals and systems": "BEEE204L"
+};
+
+// Function to map course name to course code
+export function getCourseCode(courseName: string): string | null {
+  const lowerCourseName = courseName.toLowerCase();
+  
+  // Direct match
+  for (const [key, value] of Object.entries(courseMapping)) {
+    if (lowerCourseName.includes(key.toLowerCase())) {
+      return value;
+    }
+  }
+  
+  return null;
+}
+
 function extractSections(text: string): { [key: string]: string[] } {
   const sections: { [key: string]: string[] } = {}
   
@@ -76,13 +137,17 @@ function generateQuestionsByCategory(): { [key: string]: string[] } {
       "what is the faculty strength in computer science?",
       "who are the top researchers at vit?",
       "how can I contact faculty members?",
-    ],
-    courses: [
+    ],    courses: [
       "what programs are offered at vit?",
       "tell me about the cse curriculum",
       "what specializations are available in ece?",
       "how are the laboratory facilities?",
       "what are the popular elective courses?",
+      "get me the syllabus for calculus",
+      "show me the syllabus for BMAT101L",
+      "what's the syllabus for data structures and algorithms?",
+      "get me past papers for operating systems",
+      "I need past papers for BCSE303L",
     ],
     international: [
       "what international collaborations does vit have?",

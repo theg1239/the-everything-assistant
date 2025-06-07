@@ -4,21 +4,33 @@ import { scrapePapersCodeChef } from "./scrapers/papers-codechef"
 import { scrapeVITPaperVault } from "./scrapers/vit-papervault"
 import { scrapeFacultyInfo } from "./scrapers/faculty-scraper"
 import { scrapePlacementInfo } from "./scrapers/placement-scraper"
+import { getCourseCode } from "./question-generator"
 
 export function createVITTools() {
   return {
     findPastPapers: tool({
-      description: "find past examination papers for vit courses from real repositories",
+      description: "find past examination papers for vit courses from real repositories. You can use course names or codes.",
       parameters: z.object({
-        courseCode: z.string().describe("course code like CSE1001, MAT1001, ECE1001"),
+        courseCode: z.string().describe("course code like BCSE302L or course name like 'database systems'"),
         examType: z.string().optional().describe("exam type: cat1, cat2, fat, quiz"),
         year: z.string().optional().describe("academic year like 2023, 2022"),
       }),
       execute: async ({ courseCode, examType, year }) => {
         try {
+          // Try to map course name to course code if it's not already a code
+          let resolvedCourseCode = courseCode.trim().toUpperCase();
+          
+          // Check if input is a course name rather than a course code
+          if (!resolvedCourseCode.match(/^[A-Z]{4}\d{3}[A-Z]?$/)) {
+            const mappedCode = getCourseCode(courseCode);
+            if (mappedCode) {
+              resolvedCourseCode = mappedCode;
+            }
+          }
+          
           const results = await Promise.allSettled([
-            scrapePapersCodeChef(courseCode, examType, year),
-            scrapeVITPaperVault(courseCode, examType, year),
+            scrapePapersCodeChef(resolvedCourseCode, examType, year),
+            scrapeVITPaperVault(resolvedCourseCode, examType, year),
           ])
 
           const papers = []

@@ -28,10 +28,8 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
   const inputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   
-  // Remember sidebar state in localStorage
   useEffect(() => {
     if (typeof window === "undefined") return;
-    // Load sidebar state from localStorage on mount
     const savedSidebarState = localStorage.getItem('sidebarOpen');
     if (savedSidebarState !== null) {
       setSidebarOpen(savedSidebarState === 'true');
@@ -40,11 +38,9 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    // Save sidebar state to localStorage when it changes
     localStorage.setItem('sidebarOpen', String(sidebarOpen));
   }, [sidebarOpen]);
 
-  // Add transition class to body when sidebar is open
   useEffect(() => {
     if (sidebarOpen) {
       document.body.classList.add('sidebar-open');
@@ -56,7 +52,6 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
     };
   }, [sidebarOpen]);
   
-  // Focus input field when chat opens
   useEffect(() => {
     if (showFullChat && inputRef.current) {
       inputRef.current.focus();

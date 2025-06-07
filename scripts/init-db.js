@@ -2,8 +2,7 @@ const fs = require("fs")
 const path = require("path")
 const { neon } = require("@neondatabase/serverless")
 
-// Load environment variables if needed
-// require('dotenv').config();
+require('dotenv').config();
 
 async function initializeDatabase() {
   try {

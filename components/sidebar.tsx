@@ -117,50 +117,50 @@ export function Sidebar(props: SidebarProps) {
             animate={{ x: 0 }}
             exit={{ x: -300 }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="fixed left-0 top-0 z-50 h-full w-[var(--sidebar-width)] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 backdrop-blur-xl border-r border-slate-700/50 flex flex-col shadow-xl"
+            className="fixed left-0 top-0 z-50 h-full w-[var(--sidebar-width)] bg-background border-r border-border flex flex-col shadow-xl"
             onMouseEnter={() => setHovering(true)}
             onMouseLeave={() => setHovering(false)}
           >
             {/* Header with collapse button */}
-            <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
+            <div className="p-4 border-b border-border flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <h2 className="text-lg font-light text-white">vit assistant</h2>
+                <h2 className="text-lg font-medium text-foreground">vit assistant</h2>
               </div>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={onToggle}
-                className="text-slate-400 hover:text-white ml-auto"
+                className="text-muted-foreground hover:text-foreground ml-auto"
                 aria-label="Collapse sidebar"
               >
                 <ChevronLeft className="h-5 w-5" />
               </Button>
             </div>
             
-            <div className="p-4 border-b border-slate-700/50">
+            <div className="p-4 border-b border-border">
               <Button 
                 onClick={startNewChat} 
-                className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white border-0 rounded-xl transition-all duration-200"
+                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground border-0 rounded-lg transition-all duration-200"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                new chat
+                New Chat
               </Button>
             </div>
 
             {/* Chat History */}
-            <ScrollArea className="flex-1 p-4 custom-scrollbar">
-              <div className="space-y-2">
+            <ScrollArea className="flex-1 p-4">
+              <div className="space-y-1">
                 {loading ? (
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     {[...Array(5)].map((_, i) => (
-                      <div key={i} className="h-12 bg-slate-700/50 rounded-xl animate-pulse" />
+                      <div key={i} className="h-10 bg-muted rounded-lg animate-pulse" />
                     ))}
                   </div>
                 ) : chats.length === 0 ? (
-                  <div className="text-center text-slate-400 py-8">
+                  <div className="text-center text-muted-foreground py-8">
                     <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">no chats yet</p>
-                    <p className="text-xs">start a conversation to see your history</p>
+                    <p className="text-sm">No chats yet</p>
+                    <p className="text-xs">Start a conversation to see your history</p>
                   </div>
                 ) : (
                   chats.map((chat) => (
@@ -169,10 +169,10 @@ export function Sidebar(props: SidebarProps) {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       className={cn(
-                        "group relative flex items-center p-3 rounded-xl cursor-pointer transition-colors",
+                        "group relative flex items-center p-2 rounded-lg cursor-pointer transition-colors",
                         (selectedChatId === chat.id || pathname === `/chat/${chat.id}`)
-                          ? "bg-gradient-to-r from-blue-500/20 to-purple-600/20 border border-blue-500/30"
-                          : "hover:bg-slate-700/30",
+                          ? "bg-muted text-foreground"
+                          : "hover:bg-muted/50 text-muted-foreground hover:text-foreground",
                       )}
                       onClick={() => {
                         setSelectedChatId(chat.id)
@@ -182,15 +182,15 @@ export function Sidebar(props: SidebarProps) {
                         }
                       }}
                     >
-                      <MessageSquare className="h-4 w-4 text-slate-400 mr-3 flex-shrink-0" />
+                      <MessageSquare className="h-4 w-4 mr-3 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white truncate">{chat.title}</p>
-                        <p className="text-xs text-slate-400">{formatDate(chat.updatedAt)}</p>
+                        <p className="text-sm truncate">{chat.title}</p>
+                        <p className="text-xs opacity-60">{formatDate(chat.updatedAt)}</p>
                       </div>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-slate-400 hover:text-red-400"
+                        className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 hover:bg-destructive hover:text-destructive-foreground"
                         onClick={(e) => deleteChat(chat.id, e)}
                       >
                         <Trash2 className="h-3 w-3" />
@@ -202,7 +202,7 @@ export function Sidebar(props: SidebarProps) {
             </ScrollArea>
 
             {/* User Menu */}
-            <div className="p-4 border-t border-slate-700/50 bg-slate-800/30">
+            <div className="p-4 border-t border-border bg-muted/30">
               <div className="flex items-center space-x-3 mb-3">
                 {session?.user?.image ? (
                   <img
@@ -211,29 +211,29 @@ export function Sidebar(props: SidebarProps) {
                     className="h-8 w-8 rounded-full"
                   />
                 ) : (
-                  <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
-                    <User className="h-4 w-4 text-white" />
+                  <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
+                    <User className="h-4 w-4 text-primary-foreground" />
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white truncate">{session?.user?.name || "User"}</p>
-                  <p className="text-xs text-slate-400 truncate">{session?.user?.email}</p>
+                  <p className="text-sm text-foreground truncate">{session?.user?.name || "User"}</p>
+                  <p className="text-xs text-muted-foreground truncate">{session?.user?.email}</p>
                 </div>
               </div>
 
               <div className="space-y-1">
-                <Button variant="ghost" size="sm" className="w-full justify-start text-slate-400 hover:text-white hover:bg-slate-700/30 rounded-xl">
+                <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg">
                   <Settings className="h-4 w-4 mr-2" />
-                  settings
+                  Settings
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="w-full justify-start text-slate-400 hover:text-white hover:bg-slate-700/30 rounded-xl"
+                  className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
                   onClick={() => signOut()}
                 >
                   <LogOut className="h-4 w-4 mr-2" />
-                  sign out
+                  Sign Out
                 </Button>
               </div>
             </div>

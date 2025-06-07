@@ -23,7 +23,7 @@ export function SuggestedQuestions({ isFirstMessage, onQuestionClick, sidebarOpe
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, delay: 0.4, ease: "easeOut" }}
-      className={`flex flex-wrap gap-3 justify-center ${sidebarOpen ? 'md:ml-80' : 'max-w-5xl mx-auto'}`}
+      className="flex flex-wrap gap-2 justify-center w-full max-w-2xl mx-auto px-4"
     >
       {questions.map((question, index) => (
         <motion.div
@@ -35,7 +35,7 @@ export function SuggestedQuestions({ isFirstMessage, onQuestionClick, sidebarOpe
           <Button
             variant="outline"
             size="sm"
-            className="bg-slate-800/20 backdrop-blur-xl border-slate-700/40 text-slate-300 hover:bg-slate-700/40 hover:text-white hover:border-slate-600 transition-all duration-200 rounded-2xl px-5 py-3 text-sm font-normal"
+            className="text-sm font-normal text-muted-foreground bg-background border-border hover:bg-muted hover:text-foreground transition-colors rounded-full px-4 py-2 h-auto"
             onClick={() => onQuestionClick(question)}
           >
             {question}

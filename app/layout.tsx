@@ -5,6 +5,7 @@ import "./globals.css"
 import "./sidebar-styles.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { SessionProvider } from "@/components/session-provider"
+import { Toaster } from "sonner"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -25,6 +26,7 @@ export default function RootLayout({
         <SessionProvider>
           <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
             {children}
+            <Toaster position="top-right" />
           </ThemeProvider>
         </SessionProvider>
       </body>

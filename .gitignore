@@ -16,6 +16,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+ai-chatbot
 # env files
 .env*
 

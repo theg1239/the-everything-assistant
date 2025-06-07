@@ -149,6 +149,7 @@ export async function saveMessage(
   role: "user" | "assistant" | "system",
   content: string,
   toolInvocations?: any,
+  messageId?: string,
 ): Promise<Message> {
   // Always ensure toolInvocations is JSON-serializable before saving
   let safeToolInvocations = undefined
@@ -162,6 +163,7 @@ export async function saveMessage(
   }
   const message = await prisma.message.create({
     data: {
+      id: messageId, // Use provided ID if available, otherwise Prisma will generate one
       chatId,
       role,
       content,
@@ -238,20 +240,51 @@ export async function getVote(chatId: string, messageId: string): Promise<Vote |
 }
 
 export async function saveVote(chatId: string, messageId: string, isUpvoted: boolean): Promise<void> {
-  await prisma.vote.upsert({
-    where: {
-      chatId_messageId: {
+  try {
+    // First, check if the message exists
+    const message = await prisma.message.findUnique({
+      where: { id: messageId }
+    })
+    
+    if (!message) {
+      console.error(`Message with ID ${messageId} not found`)
+      throw new Error(`Message with ID ${messageId} not found`)
+    }
+    
+    // Check if the chat exists
+    const chat = await prisma.chat.findUnique({
+      where: { id: chatId }
+    })
+    
+    if (!chat) {
+      console.error(`Chat with ID ${chatId} not found`)
+      throw new Error(`Chat with ID ${chatId} not found`)
+    }
+    
+    // Verify the message belongs to the chat
+    if (message.chatId !== chatId) {
+      console.error(`Message ${messageId} does not belong to chat ${chatId}`)
+      throw new Error(`Message ${messageId} does not belong to chat ${chatId}`)
+    }
+    
+    await prisma.vote.upsert({
+      where: {
+        chatId_messageId: {
+          chatId,
+          messageId,
+        },
+      },
+      update: {
+        is_upvoted: isUpvoted,
+      },
+      create: {
         chatId,
         messageId,
+        is_upvoted: isUpvoted,
       },
-    },
-    update: {
-      is_upvoted: isUpvoted,
-    },
-    create: {
-      chatId,
-      messageId,
-      is_upvoted: isUpvoted,
-    },
-  })
+    })
+  } catch (error) {
+    console.error('Error in saveVote:', error)
+    throw error
+  }
 }

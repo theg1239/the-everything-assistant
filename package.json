@@ -3,16 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "npx prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
-    "init-db": "node scripts/init-db.js",
-    "migrate": "node scripts/run-migrations.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio",
-    "prisma:setup": "node scripts/migrate-to-prisma.js"
+    "prisma:studio": "prisma studio"
   },
   "dependencies": {
     "@ai-sdk/google": "latest",
@@ -38,6 +35,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-markdown": "latest",
+    "sonner": "^2.0.5",
     "tailwind-merge": "^3.3.0",
     "tailwindcss-animate": "^1.0.7",
     "zod": "latest"

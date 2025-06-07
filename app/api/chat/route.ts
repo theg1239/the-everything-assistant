@@ -45,8 +45,10 @@ export async function POST(req: Request) {
     }
 
     const userMessage = messages[messages.length - 1]
+    let userMessageId: string | undefined
     if (userMessage?.role === "user") {
-      await saveMessage(chat.id, "user", userMessage.content)
+      const savedUserMessage = await saveMessage(chat.id, "user", userMessage.content, undefined, userMessage.id)
+      userMessageId = savedUserMessage.id
     }
 
     const tools = createVITTools()
@@ -70,7 +72,8 @@ export async function POST(req: Request) {
             safeToolCalls = undefined
           }
         }
-        await saveMessage(chat.id, "assistant", result.text, safeToolCalls)
+        // Use the streaming message ID from AI SDK for consistency with frontend
+        await saveMessage(chat.id, "assistant", result.text, safeToolCalls, result.response.id)
 
         if (messages.length <= 2) {
           const newTitle = extractTitleFromContent(userMessage?.content || "")

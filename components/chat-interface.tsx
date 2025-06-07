@@ -216,19 +216,20 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
                   placeholder="ask anything about vit vellore..."
                   ref={inputRef}
                 />
-              </motion.div>
+              </motion.div>          {errorMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-red-500/20 border border-red-500/30 text-white rounded-xl p-4 text-center max-w-md"
+            >
+              {errorMessage}
+            </motion.div>
+          )}
 
-              {errorMessage && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-red-500/20 border border-red-500/30 text-white rounded-xl p-4 text-center max-w-md"
-                >
-                  {errorMessage}
-                </motion.div>
-              )}
-
-              <SuggestedQuestions isFirstMessage={true} onQuestionClick={handleSuggestedQuestion} />
+          <SuggestedQuestions 
+            isFirstMessage={true} 
+            onQuestionClick={handleSuggestedQuestion} 
+            sidebarOpen={sidebarOpen} />
             </div>
           </div>
         </motion.div>
@@ -353,7 +354,10 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
 
           {/* Hide suggestions when inside a chat */}
           {!showFullChat && messages.length > 0 && messages.length < 4 && !isLoading && (
-            <SuggestedQuestions isFirstMessage={false} onQuestionClick={handleSuggestedQuestion} />
+            <SuggestedQuestions 
+              isFirstMessage={false} 
+              onQuestionClick={handleSuggestedQuestion}
+              sidebarOpen={sidebarOpen} />
           )}
         </div>
 

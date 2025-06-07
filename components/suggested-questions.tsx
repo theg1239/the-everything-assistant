@@ -2,38 +2,30 @@
 
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
+import { getRandomQuestions } from "@/lib/question-generator"
+import { useEffect, useState } from "react"
 
 interface SuggestedQuestionsProps {
   isFirstMessage: boolean
   onQuestionClick: (question: string) => void
+  sidebarOpen?: boolean
 }
 
-export function SuggestedQuestions({ isFirstMessage, onQuestionClick }: SuggestedQuestionsProps) {
-  const initialQuestions = isFirstMessage
-    ? [
-        "what are the admission requirements?",
-        "tell me about vit's placement statistics",
-        "how does the ffcs system work?",
-        "what research opportunities are available?",
-        "explain the grading system",
-        "what are the hostel facilities?",
-      ]
-    : [
-        "show me faculty information",
-        "what are the fee structures?",
-        "find internship opportunities",
-        "explain the semester structure",
-        "what are the library facilities?",
-      ]
+export function SuggestedQuestions({ isFirstMessage, onQuestionClick, sidebarOpen = false }: SuggestedQuestionsProps) {
+  const [questions, setQuestions] = useState<string[]>([])
+  
+  useEffect(() => {
+    setQuestions(getRandomQuestions(6, isFirstMessage))
+  }, [isFirstMessage])
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, delay: 0.4, ease: "easeOut" }}
-      className="flex flex-wrap gap-3 justify-center max-w-5xl mx-auto"
+      className={`flex flex-wrap gap-3 justify-center ${sidebarOpen ? 'md:ml-80' : 'max-w-5xl mx-auto'}`}
     >
-      {initialQuestions.map((question, index) => (
+      {questions.map((question, index) => (
         <motion.div
           key={question}
           initial={{ opacity: 0, scale: 0.9 }}

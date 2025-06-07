@@ -1,11 +1,11 @@
 {
   "functions": {
     "app/api/screen/route.ts": {
-      "memory": 3008,
+      "memory": 1024,
       "maxDuration": 60
     },
     "app/api/chat/route.ts": {
-      "memory": 3008,
+      "memory": 1024,
       "maxDuration": 60
     }
   }

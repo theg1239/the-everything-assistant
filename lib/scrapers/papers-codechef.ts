@@ -8,13 +8,11 @@ export async function scrapePapersCodeChef(
   year?: string
 ) {
   try {
-    // First try the API approach (unchanged)…
     const apiResult = await tryAPIApproach(courseCode, examType, year);
     if (apiResult.success && apiResult.papers.length > 0) {
       return apiResult;
     }
 
-    // Fallback to browser scraping
     return await tryBrowserScraping(courseCode, examType, year);
   } catch (error: any) {
     console.error("Error in scrapePapersCodeChef:", error);
@@ -29,10 +27,8 @@ export async function scrapePapersCodeChef(
 
 async function tryAPIApproach(courseCode: string, examType?: string, year?: string) {
   try {
-    // Find the full course name from the course code
     const fullCourseName = findFullCourseName(courseCode)
 
-    // Use the correct API endpoint format
     const searchUrl = `https://papers.codechefvit.com/api/papers?subject=${encodeURIComponent(fullCourseName)}`
 
     const response = await fetch(searchUrl, {
@@ -74,7 +70,6 @@ async function tryAPIApproach(courseCode: string, examType?: string, year?: stri
       }
     }
 
-    // Try with just the course code if full name doesn't work
     const codeOnlyUrl = `https://papers.codechefvit.com/api/papers?subject=${encodeURIComponent(courseCode)}`
     const codeResponse = await fetch(codeOnlyUrl, {
       headers: {

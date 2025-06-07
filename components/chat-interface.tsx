@@ -235,7 +235,7 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
 
           <AnimatePresence>
             {messages.map((message, index) => (
-              <MessageBubble key={`${message.id}-${index}`} message={message} />
+              <MessageBubble key={`${message.id}-${index}`} message={message} chatId={chatId} />
             ))}
           </AnimatePresence>
 

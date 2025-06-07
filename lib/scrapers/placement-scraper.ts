@@ -42,7 +42,7 @@ export async function scrapePlacementInfo(year?: string, company?: string): Prom
 }
 
 async function tryBrowserScraping(year?: string, company?: string): Promise<PlacementResponse> {
-  let browser: puppeteer.Browser | undefined
+  let browser: any | undefined
 
   try {
     // Simplified Chromium setup - let @sparticuz/chromium handle the paths

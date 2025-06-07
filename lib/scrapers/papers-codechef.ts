@@ -1,7 +1,39 @@
 import puppeteer from "puppeteer-core"
 import chromium from "@sparticuz/chromium"
 
-export async function scrapePapersCodeChef(courseCode: string, examType?: string, year?: string) {
+interface Paper {
+  title: string
+  url: string
+  source: string
+  metadata: string
+  examType: string
+  year: string
+}
+
+interface ApiPaper {
+  title?: string
+  name?: string
+  paperName?: string
+  url?: string
+  downloadUrl?: string
+  link?: string
+  paperUrl?: string
+  metadata?: string
+  description?: string
+  examType?: string
+  year?: string
+  academicYear?: string
+}
+
+interface ScraperResult {
+  success: boolean
+  papers: Paper[]
+  error?: string
+  source: string
+  searchUrl?: string
+}
+
+export async function scrapePapersCodeChef(courseCode: string, examType?: string, year?: string): Promise<ScraperResult> {
   try {
     const apiResult = await tryAPIApproach(courseCode, examType, year)
     if (apiResult.success && apiResult.papers.length > 0) {
@@ -9,18 +41,19 @@ export async function scrapePapersCodeChef(courseCode: string, examType?: string
     }
 
     return await tryBrowserScraping(courseCode, examType, year)
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error in scrapePapersCodeChef:", error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
     return {
       success: false,
       papers: [],
-      error: error.message,
+      error: errorMessage,
       source: "papers.codechefvit.com",
     }
   }
 }
 
-async function tryAPIApproach(courseCode: string, examType?: string, year?: string) {
+async function tryAPIApproach(courseCode: string, examType?: string, year?: string): Promise<ScraperResult> {
   try {
     const fullCourseName = findFullCourseName(courseCode)
 
@@ -48,9 +81,9 @@ async function tryAPIApproach(courseCode: string, examType?: string, year?: stri
       const data = await response.json()
       // After getting the data from API, add proper filtering
       if (data && Array.isArray(data) && data.length > 0) {
-        let papers = data.map((paper: any) => ({
+        let papers: Paper[] = data.map((paper: ApiPaper) => ({
           title: paper.title || paper.name || paper.paperName || "Question Paper",
-          url: paper.url || paper.downloadUrl || paper.link || paper.paperUrl,
+          url: paper.url || paper.downloadUrl || paper.link || paper.paperUrl || "",
           source: "papers.codechefvit.com",
           metadata: paper.metadata || paper.description || paper.examType || "",
           examType: paper.examType || examType || "unknown",
@@ -120,10 +153,10 @@ async function tryAPIApproach(courseCode: string, examType?: string, year?: stri
       }
     }
 
-    return { success: false, papers: [] }
+    return { success: false, papers: [], source: "papers.codechefvit.com" }
   } catch (error) {
     console.error("API approach error:", error)
-    return { success: false, papers: [] }
+    return { success: false, papers: [], source: "papers.codechefvit.com" }
   }
 }
 
@@ -525,7 +558,7 @@ function findFullCourseName(courseCode: string): string {
   return courseMap[courseCode.toUpperCase()] || courseCode
 }
 
-async function tryBrowserScraping(courseCode: string, examType?: string, year?: string) {
+async function tryBrowserScraping(courseCode: string, examType?: string, year?: string): Promise<ScraperResult> {
   let browser
   try {
     // Simplified Chromium setup - let @sparticuz/chromium handle the paths
@@ -611,18 +644,20 @@ async function tryBrowserScraping(courseCode: string, examType?: string, year?: 
       year,
     )
 
+    const results: Paper[] = []
+    // Add browser scraping results
     return {
       success: true,
-      papers: papers.slice(0, 10),
+      papers: results,
       source: "papers.codechefvit.com",
-      searchUrl,
     }
   } catch (error) {
-    console.error("Browser scraping error:", error)
+    console.error("Error in browser scraping:", error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
     return {
       success: false,
       papers: [],
-      error: error.message,
+      error: errorMessage,
       source: "papers.codechefvit.com",
     }
   } finally {

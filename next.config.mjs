@@ -9,9 +9,7 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-    experimental: {
-    serverComponentsExternalPackages: ["playwright-core", "@sparticuz/chromium"],
-  },
+  serverExternalPackages: ['playwright-core', '@sparticuz/chromium'],
 }
 
 export default nextConfig

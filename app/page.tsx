@@ -2,6 +2,8 @@ import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
 import { ChatInterface } from "@/components/chat-interface"
 
+export const dynamic = "force-dynamic"
+
 export default async function Home() {
   const session = await auth()
 

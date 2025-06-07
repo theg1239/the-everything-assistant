@@ -1,63 +1,32 @@
 import NextAuth from "next-auth"
-import Google from "next-auth/providers/google"
-import { Pool } from "@neondatabase/serverless"
+import GoogleProvider from "next-auth/providers/google"
+import { PrismaAdapter } from "@next-auth/prisma-adapter"
+import { prisma } from "./prisma"
+import type { DefaultSession, Session, User } from "next-auth"
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+declare module "next-auth" {
+  interface Session extends DefaultSession {
+    user?: {
+      id: string
+    } & DefaultSession["user"]
+  }
+}
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
-  trustHost: true, // Required for Vercel deployment
+export const authOptions = {
+  adapter: PrismaAdapter(prisma),
   providers: [
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID ?? "",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
     }),
   ],
+  session: {
+    strategy: "database" as const
+  },
   callbacks: {
-    async signIn({ user, account, profile }: { 
-      user: { email?: string | null; name?: string | null; image?: string | null };
-      account: { provider?: string } | null;
-      profile?: any;
-    }) {
-      if (account?.provider === "google" && user.email) {
-        try {          // Check if user exists
-          const existingUser = await pool.query(
-            'SELECT id FROM users WHERE email = $1',
-            [user.email]
-          )
-
-          if (existingUser.rows.length === 0) {
-            // Create new user
-            await pool.query(
-              'INSERT INTO users (email, name, image) VALUES ($1, $2, $3)',
-              [user.email, user.name, user.image]
-            )
-          } else {
-            // Update existing user
-            await pool.query(
-              'UPDATE users SET name = $1, image = $2, updated_at = NOW() WHERE email = $3',
-              [user.name, user.image, user.email]
-            )
-          }
-          return true
-        } catch (error) {
-          console.error("Error during sign in:", error)
-          return false
-        }
-      }
-      return true
-    },    async session({ session, token }: { session: any; token: any }) {
-      if (session.user?.email) {
-        try {
-          const user = await pool.query(
-            'SELECT id, email, name, image FROM users WHERE email = $1',
-            [session.user.email]
-          )
-          if (user.rows.length > 0) {
-            session.user.id = user.rows[0].id
-          }
-        } catch (error) {
-          console.error("Error fetching user:", error)
-        }
+    session({ session, user }: { session: Session; user: User }) {
+      if (session.user && user && user.id) {
+        session.user.id = user.id || ""
       }
       return session
     },
@@ -65,4 +34,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   pages: {
     signIn: "/login",
   },
-})
+}
+
+const nextAuthHandler = NextAuth(authOptions)
+export const GET = nextAuthHandler.GET
+export const POST = nextAuthHandler.POST
+export const auth = nextAuthHandler.auth
+export const signIn = nextAuthHandler.signIn
+export const signOut = nextAuthHandler.signOut

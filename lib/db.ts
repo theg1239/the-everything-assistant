@@ -1,6 +1,4 @@
-import { neon } from "@neondatabase/serverless"
-
-const sql = neon(process.env.DATABASE_URL!)
+import { prisma } from "./prisma"
 
 export interface User {
   id: string
@@ -48,10 +46,10 @@ export interface Vote {
 // User operations
 export async function getUser(email: string): Promise<User | null> {
   try {
-    const result = await sql`
-      SELECT * FROM users WHERE email = ${email}
-    `
-    return (result[0] as User) || null
+    const user = await prisma.user.findUnique({
+      where: { email },
+    })
+    return user as User
   } catch (error) {
     console.error("Error getting user:", error)
     return null
@@ -59,23 +57,24 @@ export async function getUser(email: string): Promise<User | null> {
 }
 
 export async function createUser(email: string, name: string, image?: string): Promise<User> {
-  const result = await sql`
-    INSERT INTO users (email, name, image)
-    VALUES (${email}, ${name}, ${image || null})
-    RETURNING *
-  `
-  return result[0] as User
+  const user = await prisma.user.create({
+    data: {
+      email,
+      name,
+      image,
+    },
+  })
+  return user as User
 }
 
 // Chat operations
 export async function getChats(userId: string): Promise<Chat[]> {
   try {
-    const result = await sql`
-      SELECT * FROM chats 
-      WHERE user_id = ${userId} 
-      ORDER BY updated_at DESC
-    `
-    return result as Chat[]
+    const chats = await prisma.chat.findMany({
+      where: { user_id: userId },
+      orderBy: { updated_at: "desc" },
+    })
+    return chats as Chat[]
   } catch (error) {
     console.error("Error getting chats:", error)
     return []
@@ -84,11 +83,13 @@ export async function getChats(userId: string): Promise<Chat[]> {
 
 export async function getChat(id: string, userId: string): Promise<Chat | null> {
   try {
-    const result = await sql`
-      SELECT * FROM chats 
-      WHERE id = ${id} AND user_id = ${userId}
-    `
-    return (result[0] as Chat) || null
+    const chat = await prisma.chat.findFirst({
+      where: {
+        id,
+        user_id: userId,
+      },
+    })
+    return chat as Chat
   } catch (error) {
     console.error("Error getting chat:", error)
     return null
@@ -96,38 +97,43 @@ export async function getChat(id: string, userId: string): Promise<Chat | null> 
 }
 
 export async function createChat(userId: string, title: string, path: string): Promise<Chat> {
-  const result = await sql`
-    INSERT INTO chats (user_id, title, path)
-    VALUES (${userId}, ${title}, ${path})
-    RETURNING *
-  `
-  return result[0] as Chat
+  const chat = await prisma.chat.create({
+    data: {
+      user_id: userId,
+      title,
+      path,
+    },
+  })
+  return chat as Chat
 }
 
 export async function updateChat(id: string, title: string): Promise<void> {
-  await sql`
-    UPDATE chats 
-    SET title = ${title}, updated_at = NOW()
-    WHERE id = ${id}
-  `
+  await prisma.chat.update({
+    where: { id },
+    data: {
+      title,
+      updated_at: new Date(),
+    },
+  })
 }
 
 export async function deleteChat(id: string, userId: string): Promise<void> {
-  await sql`
-    DELETE FROM chats 
-    WHERE id = ${id} AND user_id = ${userId}
-  `
+  await prisma.chat.deleteMany({
+    where: {
+      id,
+      user_id: userId,
+    },
+  })
 }
 
 // Message operations
 export async function getMessages(chatId: string): Promise<Message[]> {
   try {
-    const result = await sql`
-      SELECT * FROM messages 
-      WHERE chat_id = ${chatId} 
-      ORDER BY created_at ASC
-    `
-    return result as Message[]
+    const messages = await prisma.message.findMany({
+      where: { chat_id: chatId },
+      orderBy: { created_at: "asc" },
+    })
+    return messages as Message[]
   } catch (error) {
     console.error("Error getting messages:", error)
     return []
@@ -140,23 +146,25 @@ export async function saveMessage(
   content: string,
   toolInvocations?: any,
 ): Promise<Message> {
-  const result = await sql`
-    INSERT INTO messages (chat_id, role, content, tool_invocations)
-    VALUES (${chatId}, ${role}, ${content}, ${toolInvocations ? JSON.stringify(toolInvocations) : null})
-    RETURNING *
-  `
-  return result[0] as Message
+  const message = await prisma.message.create({
+    data: {
+      chat_id: chatId,
+      role,
+      content,
+      tool_invocations: toolInvocations ? toolInvocations : undefined,
+    },
+  })
+  return message as Message
 }
 
 // Canvas document operations
 export async function getCanvasDocuments(chatId: string): Promise<CanvasDocument[]> {
   try {
-    const result = await sql`
-      SELECT * FROM canvas_documents 
-      WHERE chat_id = ${chatId} 
-      ORDER BY created_at DESC
-    `
-    return result as CanvasDocument[]
+    const documents = await prisma.canvasDocument.findMany({
+      where: { chat_id: chatId },
+      orderBy: { created_at: "desc" },
+    })
+    return documents as CanvasDocument[]
   } catch (error) {
     console.error("Error getting canvas documents:", error)
     return []
@@ -169,36 +177,46 @@ export async function createCanvasDocument(
   content: string,
   type = "document",
 ): Promise<CanvasDocument> {
-  const result = await sql`
-    INSERT INTO canvas_documents (chat_id, title, content, type)
-    VALUES (${chatId}, ${title}, ${content}, ${type})
-    RETURNING *
-  `
-  return result[0] as CanvasDocument
+  const document = await prisma.canvasDocument.create({
+    data: {
+      chat_id: chatId,
+      title,
+      content,
+      type,
+    },
+  })
+  return document as CanvasDocument
 }
 
 export async function updateCanvasDocument(id: string, title: string, content: string): Promise<void> {
-  await sql`
-    UPDATE canvas_documents 
-    SET title = ${title}, content = ${content}, updated_at = NOW()
-    WHERE id = ${id}
-  `
+  await prisma.canvasDocument.update({
+    where: { id },
+    data: {
+      title,
+      content,
+      updated_at: new Date(),
+    },
+  })
 }
 
 export async function deleteCanvasDocument(id: string): Promise<void> {
-  await sql`
-    DELETE FROM canvas_documents WHERE id = ${id}
-  `
+  await prisma.canvasDocument.delete({
+    where: { id },
+  })
 }
 
 // Vote operations
 export async function getVote(chatId: string, messageId: string): Promise<Vote | null> {
   try {
-    const result = await sql`
-      SELECT * FROM votes 
-      WHERE chat_id = ${chatId} AND message_id = ${messageId}
-    `
-    return (result[0] as Vote) || null
+    const vote = await prisma.vote.findUnique({
+      where: {
+        chat_id_message_id: {
+          chat_id: chatId,
+          message_id: messageId,
+        },
+      },
+    })
+    return vote as Vote
   } catch (error) {
     console.error("Error getting vote:", error)
     return null
@@ -206,12 +224,20 @@ export async function getVote(chatId: string, messageId: string): Promise<Vote |
 }
 
 export async function saveVote(chatId: string, messageId: string, isUpvoted: boolean): Promise<void> {
-  await sql`
-    INSERT INTO votes (chat_id, message_id, is_upvoted)
-    VALUES (${chatId}, ${messageId}, ${isUpvoted})
-    ON CONFLICT (chat_id, message_id)
-    DO UPDATE SET is_upvoted = ${isUpvoted}
-  `
+  await prisma.vote.upsert({
+    where: {
+      chat_id_message_id: {
+        chat_id: chatId,
+        message_id: messageId,
+      },
+    },
+    update: {
+      is_upvoted: isUpvoted,
+    },
+    create: {
+      chat_id: chatId,
+      message_id: messageId,
+      is_upvoted: isUpvoted,
+    },
+  })
 }
-
-export { sql }

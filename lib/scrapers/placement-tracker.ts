@@ -1,6 +1,6 @@
 import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
-import path from "path";
+import { join } from "path";
 
 export interface PlacementStatistics {
   totalOffers: number;
@@ -21,7 +21,7 @@ export async function scrapePlacementStats(
   let browser;
   try {
     // Similar Chromium setup as papers-codechef.ts
-    const chromiumBinDir = path.join(
+    const chromiumBinDir = join(
       "/var/task/node_modules/@sparticuz/chromium/bin"
     );
 

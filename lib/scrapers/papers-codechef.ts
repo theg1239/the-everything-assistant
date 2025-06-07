@@ -1,4 +1,5 @@
-import { chromium } from "playwright-core"
+import puppeteer from "puppeteer-core"
+import chromium from "@sparticuz/chromium"
 
 export async function scrapePapersCodeChef(courseCode: string, examType?: string, year?: string) {
   try {
@@ -8,7 +9,7 @@ export async function scrapePapersCodeChef(courseCode: string, examType?: string
       return apiResult
     }
 
-    // Fallback to browser scraping with Playwright
+    // Fallback to browser scraping with Puppeteer
     return await tryBrowserScraping(courseCode, examType, year)
   } catch (error) {
     console.error("Error in scrapePapersCodeChef:", error)
@@ -64,7 +65,22 @@ async function tryAPIApproach(courseCode: string, examType?: string, year?: stri
 
     if (catalogueResponse.ok) {
       const catalogueData = await catalogueResponse.json()
-      // Process catalogue data similar to above
+      if (catalogueData.papers || catalogueData.results || Array.isArray(catalogueData)) {
+        const papers = (catalogueData.papers || catalogueData.results || catalogueData).map((paper: any) => ({
+          title: paper.title || paper.name || "Question Paper",
+          url: paper.url || paper.downloadUrl || paper.link,
+          source: "papers.codechefvit.com",
+          metadata: paper.metadata || paper.description || "",
+          examType: paper.examType || examType || "unknown",
+          year: paper.year || year || "unknown",
+        }))
+
+        return {
+          success: true,
+          papers: papers.slice(0, 10),
+          source: "papers.codechefvit.com",
+        }
+      }
     }
 
     return { success: false, papers: [] }
@@ -76,18 +92,12 @@ async function tryAPIApproach(courseCode: string, examType?: string, year?: stri
 async function tryBrowserScraping(courseCode: string, examType?: string, year?: string) {
   let browser
   try {
-    // Use Playwright for better serverless support
-    browser = await chromium.launch({
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--no-first-run",
-        "--no-zygote",
-        "--single-process",
-      ],
+    // Use Puppeteer with @sparticuz/chromium for serverless
+    browser = await puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
     })
 
     const page = await browser.newPage()
@@ -96,7 +106,7 @@ async function tryBrowserScraping(courseCode: string, examType?: string, year?: 
     )
 
     const searchUrl = `https://papers.codechefvit.com/catalogue?subject=${encodeURIComponent(courseCode.toLowerCase())}`
-    await page.goto(searchUrl, { waitUntil: "networkidle", timeout: 15000 })
+    await page.goto(searchUrl, { waitUntil: "networkidle2", timeout: 15000 })
 
     // Wait for content to load
     await page.waitForTimeout(3000)

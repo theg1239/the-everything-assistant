@@ -1,3 +1,6 @@
+import puppeteer from "puppeteer-core"
+import chromium from "@sparticuz/chromium"
+
 export async function scrapePlacementInfo(year?: string, company?: string) {
   try {
     // Try API first
@@ -6,8 +9,8 @@ export async function scrapePlacementInfo(year?: string, company?: string) {
       return apiResult
     }
 
-    // Fallback to HTML scraping
-    return await tryPlacementHTML(year, company)
+    // Fallback to browser scraping
+    return await tryBrowserScraping(year, company)
   } catch (error) {
     return {
       success: false,
@@ -43,53 +46,85 @@ async function tryPlacementAPI(year?: string, company?: string) {
   }
 }
 
-async function tryPlacementHTML(year?: string, company?: string) {
+async function tryBrowserScraping(year?: string, company?: string) {
+  let browser
   try {
-    const response = await fetch("https://vit.ac.in/placements", {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
+    // Use Puppeteer with @sparticuz/chromium for serverless
+    browser = await puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
     })
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
+    const page = await browser.newPage()
+
+    const placementData = {
+      statistics: {},
+      companies: [],
+      recentOffers: [],
     }
 
-    const html = await response.text()
+    try {
+      await page.goto("https://vit.ac.in/placements", { waitUntil: "networkidle2", timeout: 10000 })
 
-    // Extract basic placement statistics using regex
-    const statsRegex = /(placement|package|offer|company)[^:]*:\s*([^<\n]*)/gi
-    const companyRegex = /(google|microsoft|amazon|apple|tcs|infosys|wipro|cognizant)[^<\n]*/gi
+      // Extract placement statistics
+      const stats = await page.evaluate(() => {
+        const statElements = document.querySelectorAll(".stat-card, .placement-stat, .number-card, .stats")
+        const statistics = {}
 
-    const statistics = {}
-    const companies = []
+        statElements.forEach((element) => {
+          const label = element.querySelector(".label, .stat-label, .title")?.textContent?.trim()
+          const value = element.querySelector(".value, .stat-value, .number, .count")?.textContent?.trim()
+          if (label && value) {
+            statistics[label.toLowerCase()] = value
+          }
+        })
 
-    let match
-    while ((match = statsRegex.exec(html)) !== null) {
-      const [, key, value] = match
-      statistics[key.toLowerCase().trim()] = value.trim()
-    }
-
-    while ((match = companyRegex.exec(html)) !== null) {
-      companies.push({
-        name: match[0].trim(),
-        package: "N/A",
-        positions: "N/A",
+        return statistics
       })
+
+      placementData.statistics = stats
+
+      // Extract company information
+      const companies = await page.evaluate(() => {
+        const companyElements = document.querySelectorAll(".company-card, .recruiter-card, .company-logo, .company")
+        return Array.from(companyElements)
+          .map((element) => {
+            const name = element.querySelector(".company-name, .name, .title")?.textContent?.trim()
+            const package_offered = element.querySelector(".package, .salary, .ctc")?.textContent?.trim()
+            const positions = element.querySelector(".positions, .roles, .openings")?.textContent?.trim()
+
+            return {
+              name: name || "N/A",
+              package: package_offered || "N/A",
+              positions: positions || "N/A",
+            }
+          })
+          .filter((c) => c.name !== "N/A")
+      })
+
+      placementData.companies = companies
+    } catch (error) {
+      console.log("Error scraping placement portal:", error.message)
     }
 
     return {
       success: true,
       year: year || "2024-25",
-      data: {
-        statistics,
-        companies: companies.slice(0, 20),
-        recentOffers: [],
-      },
-      message: `retrieved placement information from HTML`,
+      data: placementData,
+      message: `retrieved latest placement information${year ? ` for ${year}` : ""}`,
       lastUpdated: new Date().toISOString(),
     }
   } catch (error) {
-    throw error
+    return {
+      success: false,
+      error: error.message,
+      message: "unable to fetch placement information. please try again later.",
+    }
+  } finally {
+    if (browser) {
+      await browser.close()
+    }
   }
 }

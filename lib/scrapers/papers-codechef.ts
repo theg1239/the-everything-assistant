@@ -589,7 +589,14 @@ async function tryBrowserScraping(courseCode: string, examType?: string, year?: 
           ),
         )
 
-        const results = []
+        const results: { 
+          title: string; 
+          url: string; 
+          source: string; 
+          metadata: string; 
+          examType: string; 
+          year: string; 
+        }[] = []
 
         paperElements.forEach((element) => {
           const titleElement = element.querySelector("h3, h2, .title, .paper-title, .card-title")
@@ -644,11 +651,10 @@ async function tryBrowserScraping(courseCode: string, examType?: string, year?: 
       year,
     )
 
-    const results: Paper[] = []
     // Add browser scraping results
     return {
       success: true,
-      papers: results,
+      papers: papers as Paper[], // Convert the evaluated result to Paper[]
       source: "papers.codechefvit.com",
     }
   } catch (error) {

@@ -30,12 +30,16 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
   
   // Remember sidebar state in localStorage
   useEffect(() => {
+    if (typeof window === "undefined") return;
     // Load sidebar state from localStorage on mount
     const savedSidebarState = localStorage.getItem('sidebarOpen');
     if (savedSidebarState !== null) {
       setSidebarOpen(savedSidebarState === 'true');
     }
-    
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
     // Save sidebar state to localStorage when it changes
     localStorage.setItem('sidebarOpen', String(sidebarOpen));
   }, [sidebarOpen]);

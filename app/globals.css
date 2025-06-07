@@ -281,6 +281,7 @@ button:focus-visible {
   .sidebar-open .max-w-5xl {
     margin-left: 20rem;
     margin-right: 1rem;
+    width: calc(100% - var(--sidebar-width) - 1rem);
     max-width: none;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
@@ -365,6 +366,7 @@ button:focus-visible {
     width: 100%;
     position: relative;
     max-width: 100%;
+    scrollbar-gutter: stable;
     transition: all 0.3s ease-in-out;
     overflow-x: hidden;
   }

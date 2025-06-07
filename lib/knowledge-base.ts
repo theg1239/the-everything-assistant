@@ -182,7 +182,7 @@ cat 1:
 - format: multiple choice questions (mcq)
 - weightage: 15% of total marks
 - syllabus: first 40% of course content
-- question pattern: 30 questions, 1 mark each
+- question pattern: 5 questions + sub questions, 10 marks each
 
 cat 2:
 - timing: weeks 9-10 of semester  
@@ -190,7 +190,7 @@ cat 2:
 - format: multiple choice questions (mcq)
 - weightage: 15% of total marks
 - syllabus: next 40% of course content
-- question pattern: 30 questions, 1 mark each
+- question pattern: 5 questions + sub questions, 10 marks each
 
 ### digital assignments (da)
 - weightage: 10% of total marks
@@ -202,7 +202,7 @@ cat 2:
 ### final assessment test (fat)
 - timing: weeks 15-16 of semester
 - duration: 3 hours
-- format: descriptive/objective (faculty choice)
+- format: descriptive
 - weightage: 50% of total marks
 - syllabus: entire course content
 - question pattern: varies by course
@@ -213,13 +213,6 @@ cat 2:
 - duration: 15-30 minutes
 - format: mcq/short answers
 - announcement: may be surprise or announced
-
-### supplementary examinations
-- eligibility: students who fail in fat
-- timing: within 2 weeks of fat results
-- fee: ₹1,000 per course
-- attempts: maximum 2 attempts
-- grade cap: maximum c grade
 
 ## PLACEMENT STATISTICS 2023-24 (COMPREHENSIVE)
 
@@ -384,16 +377,13 @@ facilities per hostel:
 - recreational facilities
 
 ### dining facilities
-main mess: capacity 5,000 students
-food courts: 8 locations across campus
-cuisine types: north indian, south indian, chinese, continental, jain food
-meal plans:
-- standard: ₹55,000/year
-- premium: ₹75,000/year
-- executive: ₹95,000/year
+mess facilities in almost every hostel
+main canteen, food court, and multiple cafes around the campus
+a lot of restaurants and food outlets in the vicinity
+types of mess services: special, veg, non-veg, paid mess (pre paid credit based mess system)
 
 ### library facilities
-dr. a.p.j. abdul kalam central library:
+periyar central library:
 - area: 1,00,000 sq ft
 - books: 2,50,000+ physical books
 - e-books: 5,00,000+ titles
@@ -414,21 +404,23 @@ digital resources:
 
 ### sports & recreation
 outdoor facilities:
-- cricket ground (international standard)
-- football ground (fifa standard)
+- outdoor stadium with running track
 - athletics track (400m synthetic)
-- tennis courts: 8 courts
-- basketball courts: 12 courts
-- volleyball courts: 8 courts
-- badminton courts: 20 courts
+- tennis courts: 4 courts
+- basketball courts: 4
+- volleyball courts: 5-6 courts
+- badminton courts: many, with indoor and outdoor options including ones in hostels
+- outdoor gymnasium
 
 indoor facilities:
 - swimming pool (olympic size)
-- gymnasium (2,000 sq ft)
-- table tennis: 20 tables
-- chess & carrom halls
-- squash courts: 4 courts
-- boxing ring
+- multiple gyms (FITTY, indoor gym, Trendset)
+    locations: FITTY (good for freshers, at chillout plaza which is near Q block)
+               INDOOR GYM (near the hostel office)
+               Trendset (near GDN, just outside the campus in the All Mart building, good for freshers in the first semester if you want an excuse to go outside campus)
+- table tennis: many locations, like chillout plaza
+- chess areas
+- snooker tables (near Trendset Gym in the same All Mart building)
 - martial arts hall
 
 ### medical facilities
@@ -442,57 +434,30 @@ vit medical center:
 - dental clinic
 - eye care center
 
-health insurance:
-- coverage: ₹2 lakh per student
-- cashless treatment
-- coverage for accidents and illnesses
-- mental health support
-
 ### transportation
-bus services:
-- fleet size: 200+ buses
-- routes: 50+ routes covering 200km radius
-- destinations: chennai, bangalore, salem, coimbatore
-- frequency: every 30 minutes during peak hours
-- fare: ₹15,000-25,000/year based on distance
+- shuttles around the campus every 15 minutes
+- two routes: main building to mens hostels, main building around the academic blocks and ladies hostels
+- costs 10 rupees per trip
+- autos around the campus (they extort you though)
 
 other transport:
-- railway station: vellore cantonment (5km)
+- railway station: katpadi (5km)
 - airport: chennai (140km), bangalore (200km)
 - local transport: auto-rickshaws, taxis
+- buses and private buses, new bus stand nearby
 
 ## CLUBS & EXTRACURRICULAR ACTIVITIES
 
-### technical clubs (50+)
-ieee student branch:
-- members: 2,000+
-- activities: technical workshops, conferences, competitions
-- achievements: best student branch award (region 10)
+### technical clubs and chapters (50+)
 
-computer society of india (csi):
-- members: 1,500+
-- activities: coding competitions, hackathons, tech talks
-- achievements: national level competition winners
+the best technical club and chapter in VIT vellore is the Association for Computing Machinery (ACM) VIT chapter
 
-robotics club:
-- members: 800+
+acm vit chapter:
+- conducts events throughout the year like cryptic hunt, hackathons, workshops, and seminars
+- reverse coding too
+
+robovitics club:
 - activities: robot building, competitions, workshops
-- achievements: national robotics championship winners
-
-coding club:
-- members: 3,000+
-- activities: competitive programming, hackathons
-- achievements: acm icpc world finals qualifiers
-
-artificial intelligence & machine learning club:
-- members: 1,200+
-- activities: ai workshops, research projects, competitions
-- achievements: kaggle competition winners
-
-cybersecurity club:
-- members: 600+
-- activities: ethical hacking, ctf competitions, workshops
-- achievements: national cybersecurity competition winners
 
 ### cultural clubs (30+)
 music club:
@@ -564,36 +529,9 @@ gravitas (technical fest):
 - prize money: ₹20 lakh+
 - industry participation: 100+ companies
 
-milan (sports fest):
-- duration: 5 days
-- participants: 15,000+ athletes
-- events: 25+ sports competitions
-- inter-university participation: 200+ universities
-- prize money: ₹10 lakh+
-
-vitish (freshers orientation):
-- duration: 1 week
-- participants: all first-year students
-- activities: orientation, cultural programs, competitions
-- purpose: integration and introduction to university life
-
 ## ALUMNI NETWORK & ACHIEVEMENTS
 
-### notable alumni
-sundar pichai:
-- position: ceo, alphabet inc. & google
-- graduation: metallurgical engineering, 1993
-- recognition: honorary doctorate from vit
-
-kiran mazumdar-shaw:
-- position: executive chairperson, biocon
-- recognition: honorary doctorate from vit
-- achievement: asia's richest self-made woman
-
-rajeev suri:
-- position: former ceo, nokia
-- graduation: electronics engineering, 1989
-- achievement: led nokia's transformation
+todo
 
 ### alumni statistics
 - total alumni: 3,00,000+ globally

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import { useChat } from "ai/react"
 import { useRouter } from "next/navigation"
 import { AnimatePresence, motion } from "framer-motion"
-import { Send, ArrowLeft, Menu, FileText } from "lucide-react"
+import { Send, ArrowLeft, Menu, FileText, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { SuggestedQuestions } from "@/components/suggested-questions"
@@ -27,6 +27,37 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
+  
+  // Remember sidebar state in localStorage
+  useEffect(() => {
+    // Load sidebar state from localStorage on mount
+    const savedSidebarState = localStorage.getItem('sidebarOpen');
+    if (savedSidebarState !== null) {
+      setSidebarOpen(savedSidebarState === 'true');
+    }
+    
+    // Save sidebar state to localStorage when it changes
+    localStorage.setItem('sidebarOpen', String(sidebarOpen));
+  }, [sidebarOpen]);
+
+  // Add transition class to body when sidebar is open
+  useEffect(() => {
+    if (sidebarOpen) {
+      document.body.classList.add('sidebar-open');
+    } else {
+      document.body.classList.remove('sidebar-open');
+    }
+    return () => {
+      document.body.classList.remove('sidebar-open');
+    };
+  }, [sidebarOpen]);
+  
+  // Focus input field when chat opens
+  useEffect(() => {
+    if (showFullChat && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [showFullChat]);
 
   const { messages, input, handleInputChange, handleSubmit, isLoading, setInput, error } = useChat({
     api: "/api/chat",
@@ -107,7 +138,21 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
       <>
         <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
 
-        <motion.div initial={{ opacity: 1 }} className="max-w-5xl mx-auto" key="home-view">
+        {/* Collapsed sidebar toggle button */}
+        {!sidebarOpen && (
+          <motion.button
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.2 }}
+            onClick={() => setSidebarOpen(true)}
+            className="sidebar-toggle-collapsed md:flex hidden"
+            aria-label="Open sidebar"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </motion.button>
+        )}
+
+        <motion.div initial={{ opacity: 1 }} className="max-w-5xl mx-auto transition-all duration-300 ease-in-out" key="home-view">
           <div className="flex items-center justify-between p-4">
             <Button
               variant="ghost"
@@ -177,11 +222,25 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
       <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
       <Canvas isOpen={canvasOpen} onClose={() => setCanvasOpen(false)} chatId={chatId} />
 
+      {/* Collapsed sidebar toggle button */}
+      {!sidebarOpen && (
+        <motion.button
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.2 }}
+          onClick={() => setSidebarOpen(true)}
+          className="sidebar-toggle-collapsed md:flex hidden"
+          aria-label="Open sidebar"
+        >
+          <ChevronRight className="w-5 h-5" />
+        </motion.button>
+      )}
+
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.4, ease: "easeOut" }}
-        className="max-w-5xl mx-auto h-[90vh] flex flex-col"
+        className={`max-w-5xl mx-auto h-[90vh] flex flex-col transition-all duration-300 ease-in-out chat-container`}
         key="chat-view"
       >
         {/* Chat Header */}
@@ -222,7 +281,7 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
         </motion.div>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-800/10 backdrop-blur-xl">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-800/10 backdrop-blur-xl custom-scrollbar">
           {errorMessage && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -300,7 +359,7 @@ const SearchBar = React.forwardRef<HTMLInputElement, SearchBarProps>(
   ({ input, handleInputChange, handleSubmit, isLoading, placeholder }, ref) => {
     return (
       <form onSubmit={handleSubmit} className="relative group">
-        <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-3xl blur opacity-20 group-hover:opacity-30 transition duration-300"></div>
+        <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500 to-purple-600 rounded-3xl blur opacity-20 group-hover:opacity-30 transition duration-300 animated-gradient"></div>
         <div className="relative flex items-center bg-slate-800/40 backdrop-blur-xl border border-slate-700/30 rounded-3xl overflow-hidden">
           <Input
             ref={ref}

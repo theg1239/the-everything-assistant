@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Sidebar and chat interface transitions */
+.sidebar-open .max-w-5xl {
+  margin-left: 320px;
+  transition: margin-left 0.3s ease-in-out;
+}
+
+/* Collapsed sidebar button */
+.sidebar-toggle-collapsed {
+  position: fixed;
+  left: 1rem;
+  top: 1rem;
+  z-index: 50;
+  background-color: rgba(30, 41, 59, 0.9);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  border-radius: 9999px;
+  padding: 0.5rem;
+  color: #94a3b8;
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.sidebar-toggle-collapsed:hover {
+  color: #ffffff;
+}
+
+/* Custom scrollbar styling */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.3);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(148, 163, 184, 0.5);
+}
+
+/* Media queries for better responsiveness */
+@media (max-width: 768px) {
+  .sidebar-open .max-w-5xl {
+    margin-left: 0;
+  }
+}
+
+/* Smooth transitions for elements */
+.chat-container {
+  transition: all 0.3s ease-in-out;
+}
+
+/* Gradient animations */
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animated-gradient {
+  background-size: 200% 200%;
+  animation: gradientShift 10s ease infinite;
+}

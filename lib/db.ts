@@ -11,7 +11,7 @@ export interface User {
 
 export interface Chat {
   id: string
-  user_id: string
+  userId: string
   title: string
   created_at: Date
   updated_at: Date
@@ -20,7 +20,7 @@ export interface Chat {
 
 export interface Message {
   id: string
-  chat_id: string
+  chatId: string
   role: "user" | "assistant" | "system"
   content: string
   tool_invocations?: any
@@ -29,7 +29,7 @@ export interface Message {
 
 export interface CanvasDocument {
   id: string
-  chat_id: string
+  chatId: string
   title: string
   content: string
   type: string
@@ -38,8 +38,8 @@ export interface CanvasDocument {
 }
 
 export interface Vote {
-  chat_id: string
-  message_id: string
+  chatId: string
+  messageId: string
   is_upvoted: boolean
 }
 
@@ -71,7 +71,7 @@ export async function createUser(email: string, name: string, image?: string): P
 export async function getChats(userId: string): Promise<Chat[]> {
   try {
     const chats = await prisma.chat.findMany({
-      where: { user_id: userId },
+      where: { userId }, // changed from user_id to userId
       orderBy: { updated_at: "desc" },
     })
     return chats as Chat[]
@@ -86,10 +86,10 @@ export async function getChat(id: string, userId: string): Promise<Chat | null> 
     const chat = await prisma.chat.findFirst({
       where: {
         id,
-        user_id: userId,
+        userId, // changed from user_id to userId
       },
     })
-    return chat as Chat
+    return chat as Chat | null
   } catch (error) {
     console.error("Error getting chat:", error)
     return null
@@ -99,7 +99,7 @@ export async function getChat(id: string, userId: string): Promise<Chat | null> 
 export async function createChat(userId: string, title: string, path: string): Promise<Chat> {
   const chat = await prisma.chat.create({
     data: {
-      user_id: userId,
+      userId,
       title,
       path,
     },
@@ -121,7 +121,7 @@ export async function deleteChat(id: string, userId: string): Promise<void> {
   await prisma.chat.deleteMany({
     where: {
       id,
-      user_id: userId,
+      userId,
     },
   })
 }
@@ -130,7 +130,7 @@ export async function deleteChat(id: string, userId: string): Promise<void> {
 export async function getMessages(chatId: string): Promise<Message[]> {
   try {
     const messages = await prisma.message.findMany({
-      where: { chat_id: chatId },
+      where: { chatId },
       orderBy: { created_at: "asc" },
     })
     return messages as Message[]
@@ -148,7 +148,7 @@ export async function saveMessage(
 ): Promise<Message> {
   const message = await prisma.message.create({
     data: {
-      chat_id: chatId,
+      chatId,
       role,
       content,
       tool_invocations: toolInvocations ? toolInvocations : undefined,
@@ -161,7 +161,7 @@ export async function saveMessage(
 export async function getCanvasDocuments(chatId: string): Promise<CanvasDocument[]> {
   try {
     const documents = await prisma.canvasDocument.findMany({
-      where: { chat_id: chatId },
+      where: { chatId },
       orderBy: { created_at: "desc" },
     })
     return documents as CanvasDocument[]
@@ -179,7 +179,7 @@ export async function createCanvasDocument(
 ): Promise<CanvasDocument> {
   const document = await prisma.canvasDocument.create({
     data: {
-      chat_id: chatId,
+      chatId,
       title,
       content,
       type,
@@ -210,9 +210,9 @@ export async function getVote(chatId: string, messageId: string): Promise<Vote |
   try {
     const vote = await prisma.vote.findUnique({
       where: {
-        chat_id_message_id: {
-          chat_id: chatId,
-          message_id: messageId,
+        chatId_messageId: {
+          chatId,
+          messageId,
         },
       },
     })
@@ -226,17 +226,17 @@ export async function getVote(chatId: string, messageId: string): Promise<Vote |
 export async function saveVote(chatId: string, messageId: string, isUpvoted: boolean): Promise<void> {
   await prisma.vote.upsert({
     where: {
-      chat_id_message_id: {
-        chat_id: chatId,
-        message_id: messageId,
+      chatId_messageId: {
+        chatId,
+        messageId,
       },
     },
     update: {
       is_upvoted: isUpvoted,
     },
     create: {
-      chat_id: chatId,
-      message_id: messageId,
+      chatId,
+      messageId,
       is_upvoted: isUpvoted,
     },
   })

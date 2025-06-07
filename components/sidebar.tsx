@@ -7,7 +7,7 @@ import { useRouter, usePathname } from "next/navigation"
 import { signOut, useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { MessageSquare, Plus, Settings, LogOut, Trash2, User } from "lucide-react"
+import { MessageSquare, Plus, Settings, LogOut, Trash2, User, ChevronLeft } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
 import { formatDate } from "@/lib/utils"
@@ -28,6 +28,7 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const [chats, setChats] = useState<Chat[]>([])
   const [loading, setLoading] = useState(true)
+  const [hovering, setHovering] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
   const { data: session } = useSession()
@@ -96,30 +97,43 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
             animate={{ x: 0 }}
             exit={{ x: -300 }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="fixed left-0 top-0 z-50 h-full w-80 bg-slate-900/95 backdrop-blur-xl border-r border-slate-700/50 flex flex-col"
+            className="fixed left-0 top-0 z-50 h-full w-80 bg-slate-800/90 backdrop-blur-xl border-r border-slate-700/50 flex flex-col shadow-xl"
+            onMouseEnter={() => setHovering(true)}
+            onMouseLeave={() => setHovering(false)}
           >
-            {/* Header */}
-            <div className="p-4 border-b border-slate-700/50">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-white">vit assistant</h2>
-                <Button variant="ghost" size="sm" onClick={startNewChat} className="text-slate-400 hover:text-white">
-                  <Plus className="h-4 w-4" />
-                </Button>
+            {/* Header with collapse button */}
+            <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <h2 className="text-lg font-light text-white">vit assistant</h2>
               </div>
-
-              <Button onClick={startNewChat} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onToggle}
+                className="text-slate-400 hover:text-white ml-auto"
+                aria-label="Collapse sidebar"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
+            </div>
+            
+            <div className="p-4 border-b border-slate-700/50">
+              <Button 
+                onClick={startNewChat} 
+                className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white border-0 rounded-xl transition-all duration-200"
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 new chat
               </Button>
             </div>
 
             {/* Chat History */}
-            <ScrollArea className="flex-1 p-4">
+            <ScrollArea className="flex-1 p-4 custom-scrollbar">
               <div className="space-y-2">
                 {loading ? (
                   <div className="space-y-2">
                     {[...Array(5)].map((_, i) => (
-                      <div key={i} className="h-12 bg-slate-800/50 rounded-lg animate-pulse" />
+                      <div key={i} className="h-12 bg-slate-700/50 rounded-xl animate-pulse" />
                     ))}
                   </div>
                 ) : chats.length === 0 ? (
@@ -135,10 +149,10 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       className={cn(
-                        "group relative flex items-center p-3 rounded-lg cursor-pointer transition-colors",
+                        "group relative flex items-center p-3 rounded-xl cursor-pointer transition-colors",
                         pathname === `/chat/${chat.id}`
-                          ? "bg-blue-600/20 border border-blue-600/30"
-                          : "hover:bg-slate-800/50",
+                          ? "bg-gradient-to-r from-blue-500/20 to-purple-600/20 border border-blue-500/30"
+                          : "hover:bg-slate-700/30",
                       )}
                       onClick={() => {
                         router.push(`/chat/${chat.id}`)
@@ -167,7 +181,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
             </ScrollArea>
 
             {/* User Menu */}
-            <div className="p-4 border-t border-slate-700/50">
+            <div className="p-4 border-t border-slate-700/50 bg-slate-800/30">
               <div className="flex items-center space-x-3 mb-3">
                 {session?.user?.image ? (
                   <img
@@ -176,8 +190,8 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
                     className="h-8 w-8 rounded-full"
                   />
                 ) : (
-                  <div className="h-8 w-8 rounded-full bg-slate-700 flex items-center justify-center">
-                    <User className="h-4 w-4 text-slate-400" />
+                  <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center">
+                    <User className="h-4 w-4 text-white" />
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
@@ -187,14 +201,14 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
               </div>
 
               <div className="space-y-1">
-                <Button variant="ghost" size="sm" className="w-full justify-start text-slate-400 hover:text-white">
+                <Button variant="ghost" size="sm" className="w-full justify-start text-slate-400 hover:text-white hover:bg-slate-700/30 rounded-xl">
                   <Settings className="h-4 w-4 mr-2" />
                   settings
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="w-full justify-start text-slate-400 hover:text-white"
+                  className="w-full justify-start text-slate-400 hover:text-white hover:bg-slate-700/30 rounded-xl"
                   onClick={() => signOut()}
                 >
                   <LogOut className="h-4 w-4 mr-2" />

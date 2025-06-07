@@ -26,7 +26,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
   const messages = await getMessages(params.id)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <ChatInterface
         initialMessages={messages.map((msg) => ({
           id: msg.id,

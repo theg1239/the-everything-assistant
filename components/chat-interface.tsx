@@ -13,6 +13,7 @@ import { MessageBubble } from "@/components/message-bubble"
 import { Sidebar } from "@/components/sidebar"
 import { Canvas } from "@/components/canvas"
 import React from "react"
+import { cn } from "@/lib/utils"
 
 interface ChatInterfaceProps {
   initialMessages?: any[]
@@ -160,17 +161,11 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
     )
   );
 
-  // Style object for the chat container based on sidebar state
-  const chatContainerStyle = {
-    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-    width: "100%", 
-    maxWidth: sidebarOpen ? (window.innerWidth > 768 ? "calc(100% - 320px)" : "100%") : "64rem", // Responsive width
-    marginLeft: sidebarOpen ? (window.innerWidth > 768 ? "320px" : "0") : "auto", // Responsive margin
-    marginRight: "auto",
-    paddingLeft: "1rem",
-    paddingRight: "1rem",
-    overflow: "hidden" // Prevent horizontal scrolling
-  };
+  // Container classes for the chat interface. We rely on the body
+  // `sidebar-open` class (managed via `useEffect` above) for width
+  // adjustments when the sidebar is visible.
+  const chatContainerClasses =
+    "chat-container h-full flex flex-col justify-between max-w-5xl mx-auto px-4";
 
   if (!showFullChat) {
     return (
@@ -178,9 +173,9 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
         <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
         <SidebarToggleButton />
 
-        <motion.div 
-          initial={{ opacity: 1 }} 
-          style={chatContainerStyle}
+        <motion.div
+          initial={{ opacity: 1 }}
+          className={chatContainerClasses}
           key="home-view"
         >
           <div className="flex items-center justify-between py-4">
@@ -259,8 +254,7 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.4, ease: "easeOut" }}
-        className="min-h-[90vh] flex flex-col justify-between chat-container"
-        style={chatContainerStyle}
+        className={chatContainerClasses}
         key="chat-view"
       >
         {/* Chat Header - fixed at top */}

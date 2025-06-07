@@ -62,12 +62,17 @@ export async function POST(req: Request) {
       toolChoice: "auto",
       onFinish: async (result) => {
         // Save assistant message
-        await saveMessage(
-          chat.id,
-          "assistant",
-          result.text,
-          result.toolCalls?.length > 0 ? result.toolCalls : undefined,
-        )
+        let safeToolCalls = undefined
+        if (result.toolCalls?.length > 0) {
+          try {
+            // Ensure toolCalls is JSON-serializable
+            safeToolCalls = JSON.parse(JSON.stringify(result.toolCalls))
+          } catch (e) {
+            console.error("Failed to serialize toolCalls for DB:", e)
+            safeToolCalls = undefined
+          }
+        }
+        await saveMessage(chat.id, "assistant", result.text, safeToolCalls)
 
         // Update chat title if it's the first exchange
         if (messages.length <= 2) {

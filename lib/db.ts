@@ -23,7 +23,7 @@ export interface Message {
   chatId: string
   role: "user" | "assistant" | "system"
   content: string
-  tool_invocations?: any
+  toolInvocations?: any
   created_at: Date
 }
 
@@ -133,7 +133,11 @@ export async function getMessages(chatId: string): Promise<Message[]> {
       where: { chatId },
       orderBy: { created_at: "asc" },
     })
-    return messages as Message[]
+    // Map tool_invocations (DB) to toolInvocations (frontend)
+    return messages.map((msg) => ({
+      ...msg,
+      toolInvocations: msg.tool_invocations ?? undefined,
+    })) as Message[]
   } catch (error) {
     console.error("Error getting messages:", error)
     return []
@@ -146,12 +150,22 @@ export async function saveMessage(
   content: string,
   toolInvocations?: any,
 ): Promise<Message> {
+  // Always ensure toolInvocations is JSON-serializable before saving
+  let safeToolInvocations = undefined
+  if (toolInvocations) {
+    try {
+      safeToolInvocations = JSON.parse(JSON.stringify(toolInvocations))
+    } catch (e) {
+      console.error("Failed to serialize toolInvocations for DB:", e)
+      safeToolInvocations = undefined
+    }
+  }
   const message = await prisma.message.create({
     data: {
       chatId,
       role,
       content,
-      tool_invocations: toolInvocations ? toolInvocations : undefined,
+      tool_invocations: safeToolInvocations,
     },
   })
   return message as Message

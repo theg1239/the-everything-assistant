@@ -317,7 +317,14 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
 
           <AnimatePresence>
             {messages.map((message, index) => (
-              <MessageBubble key={`${message.id}-${index}`} message={{...message, toolInvocations: message.toolInvocations}} chatId={optimisticChatId} />
+              <MessageBubble
+                key={`${message.id}-${index}`}
+                message={{
+                  ...message,
+                  toolInvocations: message.toolInvocations // always use the saved toolInvocations from DB
+                }}
+                chatId={optimisticChatId}
+              />
             ))}
           </AnimatePresence>
 

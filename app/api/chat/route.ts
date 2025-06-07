@@ -33,7 +33,10 @@ export async function POST(req: Request) {
     if (chatId) {
       chat = await getChat(chatId, session.user.id)
       if (!chat) {
-        return new Response("Chat not found", { status: 404 })
+        // If chat not found, create a new chat with the provided chatId
+        const title = extractTitleFromContent(messages[0]?.content || "New Chat")
+        const path = generateChatPath()
+        chat = await createChat(session.user.id, title, path)
       }
     } else {
       // Create new chat

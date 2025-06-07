@@ -144,32 +144,42 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
     }
   }, [optimisticChatId, chatId])
 
+  // Common sidebar toggle button component
+  const SidebarToggleButton = () => (
+    !sidebarOpen && (
+      <motion.button
+        initial={{ opacity: 0, x: -10 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: 0.2 }}
+        onClick={() => setSidebarOpen(true)}
+        className="sidebar-toggle-collapsed md:flex hidden"
+        aria-label="Open sidebar"
+      >
+        <ChevronRight className="w-5 h-5" />
+      </motion.button>
+    )
+  );
+
+  // Style object for the chat container based on sidebar state
+  const chatContainerStyle = {
+    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+    width: "100%",
+    maxWidth: sidebarOpen ? (window.innerWidth > 768 ? "calc(100% - 320px)" : "100%") : "64rem", // Responsive width
+    marginLeft: sidebarOpen ? (window.innerWidth > 768 ? "320px" : "0") : "auto", // Responsive margin
+    marginRight: "auto",
+    paddingLeft: "1rem",
+    paddingRight: "1rem"
+  };
+
   if (!showFullChat) {
     return (
       <>
         <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
-
-        {/* Collapsed sidebar toggle button */}
-        {!sidebarOpen && (
-          <motion.button
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
-            onClick={() => setSidebarOpen(true)}
-            className="sidebar-toggle-collapsed md:flex hidden"
-            aria-label="Open sidebar"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </motion.button>
-        )}
+        <SidebarToggleButton />
 
         <motion.div 
           initial={{ opacity: 1 }} 
-          className={`transition-all duration-300 ease-in-out ${
-            sidebarOpen 
-              ? 'ml-0 md:ml-80 mr-0 md:mr-4 px-4' 
-              : 'max-w-5xl mx-auto px-4'
-          }`} 
+          style={chatContainerStyle}
           key="home-view"
         >
           <div className="flex items-center justify-between py-4">
@@ -216,20 +226,21 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
                   placeholder="ask anything about vit vellore..."
                   ref={inputRef}
                 />
-              </motion.div>          {errorMessage && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-red-500/20 border border-red-500/30 text-white rounded-xl p-4 text-center max-w-md"
-            >
-              {errorMessage}
-            </motion.div>
-          )}
+              </motion.div>          
+              {errorMessage && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-red-500/20 border border-red-500/30 text-white rounded-xl p-4 text-center max-w-md"
+                >
+                  {errorMessage}
+                </motion.div>
+              )}
 
-          <SuggestedQuestions 
-            isFirstMessage={true} 
-            onQuestionClick={handleSuggestedQuestion} 
-            sidebarOpen={sidebarOpen} />
+              <SuggestedQuestions 
+                isFirstMessage={true} 
+                onQuestionClick={handleSuggestedQuestion} 
+                sidebarOpen={sidebarOpen} />
             </div>
           </div>
         </motion.div>
@@ -241,30 +252,14 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
     <>
       <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
       <Canvas isOpen={canvasOpen} onClose={() => setCanvasOpen(false)} chatId={optimisticChatId} />
-
-      {/* Collapsed sidebar toggle button */}
-      {!sidebarOpen && (
-        <motion.button
-          initial={{ opacity: 0, x: -10 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.2 }}
-          onClick={() => setSidebarOpen(true)}
-          className="sidebar-toggle-collapsed md:flex hidden"
-          aria-label="Open sidebar"
-        >
-          <ChevronRight className="w-5 h-5" />
-        </motion.button>
-      )}
+      <SidebarToggleButton />
 
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.4, ease: "easeOut" }}
-        className={`min-h-[90vh] flex flex-col justify-between transition-all duration-300 ease-in-out chat-container ${
-          sidebarOpen 
-            ? 'ml-0 md:ml-80 mr-0 md:mr-4 px-4' 
-            : 'max-w-5xl mx-auto px-4 w-full'
-        }`}
+        className="min-h-[90vh] flex flex-col justify-between chat-container"
+        style={chatContainerStyle}
         key="chat-view"
       >
         {/* Chat Header */}

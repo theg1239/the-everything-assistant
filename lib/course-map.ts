@@ -388,8 +388,6 @@ export const COURSE_MAP: { [key: string]: string } = {
     CFOC575M: "Wildlife Ecology [CFOC575M]",
     CFOC587M: "Economics of Banking and Finance Markets [CFOC587M]",
     CFOC599M: "Leadership and Team Effectiveness [CFOC599M]",
-  }
-
 };
 
 export function findFullCourseName(code: string): string {

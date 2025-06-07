@@ -81,15 +81,34 @@ async function tryAPIApproach(courseCode: string, examType?: string, year?: stri
     if (response.ok) {
       const data = await response.json()
       // After getting the data from API, add proper filtering
-      if (data && Array.isArray(data) && data.length > 0) {
-        let papers: Paper[] = data.map((paper: ApiPaper) => ({
-          title: paper.title || paper.name || paper.paperName || "Question Paper",
-          url: paper.url || paper.downloadUrl || paper.link || paper.paperUrl || "",
-          source: "papers.codechefvit.com",
-          metadata: paper.metadata || paper.description || paper.examType || "",
-          examType: paper.examType || examType || "unknown",
-          year: paper.year || paper.academicYear || year || "unknown",
-        }))
+      if (data && Array.isArray(data) && data.length > 0) {        let papers: Paper[] = data.map((paper: ApiPaper) => {
+          const title = paper.title || paper.name || paper.paperName || "Question Paper"
+          const metadata = paper.metadata || paper.description || ""
+          
+          let extractedExamType = paper.examType || examType || ""
+          if (!extractedExamType || extractedExamType === "unknown") {
+            const titleLower = title.toLowerCase()
+            if (titleLower.includes("cat-1") || titleLower.includes("cat 1")) extractedExamType = "CAT-1"
+            else if (titleLower.includes("cat-2") || titleLower.includes("cat 2")) extractedExamType = "CAT-2" 
+            else if (titleLower.includes("fat") || titleLower.includes("final")) extractedExamType = "FAT"
+            else if (titleLower.includes("quiz")) extractedExamType = "Quiz"
+          }
+          
+          let extractedYear = paper.year || paper.academicYear || year || ""
+          if (!extractedYear || extractedYear === "unknown") {
+            const yearMatch = title.match(/20\d{2}/)
+            if (yearMatch) extractedYear = yearMatch[0]
+          }
+          
+          return {
+            title,
+            url: paper.url || paper.downloadUrl || paper.link || paper.paperUrl || "",
+            source: "papers.codechefvit.com",
+            metadata: metadata || extractedExamType || "",
+            examType: extractedExamType,
+            year: extractedYear,
+          }
+        })
 
         // Filter by examType if specified
         if (examType) {
@@ -113,14 +132,13 @@ async function tryAPIApproach(courseCode: string, examType?: string, year?: stri
             const paperMeta = paper.metadata.toLowerCase()
 
             return paperTitle.includes(year) || paperMeta.includes(year) || (paper.year && paper.year.includes(year))
-          })
-        }
-
+          })        }
+        
         return {
           success: true,
-          papers: papers.slice(0, 10),
+          papers: papers,
           source: "papers.codechefvit.com",
-          searchUrl,
+          searchUrl: searchUrl,
         }
       }
     }
@@ -131,23 +149,44 @@ async function tryAPIApproach(courseCode: string, examType?: string, year?: stri
         accept: "application/json, text/plain, */*",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
       },
-    })
-
+    })    
     if (codeResponse.ok) {
       const codeData = await codeResponse.json()
+      
       if (codeData && Array.isArray(codeData) && codeData.length > 0) {
-        const papers = codeData.map((paper: any) => ({
-          title: paper.title || paper.name || paper.paperName || "Question Paper",
-          url: paper.url || paper.downloadUrl || paper.link || paper.paperUrl,
-          source: "papers.codechefvit.com",
-          metadata: paper.metadata || paper.description || paper.examType || "",
-          examType: paper.examType || examType || "unknown",
-          year: paper.year || paper.academicYear || year || "unknown",
-        }))
+        const papers = codeData.map((paper: any) => {
+          const title = paper.title || paper.name || paper.paperName || "Question Paper"
+          
+          // Extract exam type from title if not available
+          let extractedExamType = paper.examType || examType || ""
+          if (!extractedExamType) {
+            const titleLower = title.toLowerCase()
+            if (titleLower.includes("cat-1") || titleLower.includes("cat 1")) extractedExamType = "CAT-1"
+            else if (titleLower.includes("cat-2") || titleLower.includes("cat 2")) extractedExamType = "CAT-2"
+            else if (titleLower.includes("fat") || titleLower.includes("final")) extractedExamType = "FAT"
+            else if (titleLower.includes("quiz")) extractedExamType = "Quiz"
+          }
+          
+          // Extract year from title if not available
+          let extractedYear = paper.year || paper.academicYear || year || ""
+          if (!extractedYear) {
+            const yearMatch = title.match(/20\d{2}/)
+            if (yearMatch) extractedYear = yearMatch[0]
+          }
+          
+          return {
+            title,
+            url: paper.url || paper.downloadUrl || paper.link || paper.paperUrl,
+            source: "papers.codechefvit.com",
+            metadata: paper.metadata || paper.description || extractedExamType || "",
+            examType: extractedExamType,
+            year: extractedYear,
+          }
+        })
 
         return {
           success: true,
-          papers: papers.slice(0, 10),
+          papers: papers, // Remove limit
           source: "papers.codechefvit.com",
           searchUrl: codeOnlyUrl,
         }

@@ -63,7 +63,7 @@ export function createVITTools() {
             courseCode,
             examType,
             year,
-            papers: papers.slice(0, 15),
+            papers: papers,
             totalFound: papers.length,
             message: `found ${papers.length} papers for ${courseCode}${examType ? ` (${examType})` : ""}${year ? ` from ${year}` : ""}`,
             sources,

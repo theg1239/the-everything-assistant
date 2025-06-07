@@ -20,11 +20,11 @@ export function MessageBubble({ message, chatId }: MessageBubbleProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: "easeOut" }}
-      className={cn("flex items-start gap-6 w-full", isUser ? "justify-end" : "justify-start")}
+      className={cn("flex items-start gap-4 w-full overflow-hidden", isUser ? "justify-end" : "justify-start")}
     >
       <div
         className={cn(
-          "rounded-3xl px-8 py-6 max-w-[85%] shadow-xl",
+          "rounded-3xl px-6 py-5 max-w-[85%] shadow-xl overflow-hidden",
           isUser
             ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
             : "bg-slate-800/40 backdrop-blur-xl border border-slate-700/30 text-slate-100",
@@ -52,10 +52,10 @@ export function MessageBubble({ message, chatId }: MessageBubbleProps) {
                   h2: ({ children }) => <h2 className="text-lg font-semibold text-white mb-2">{children}</h2>,
                   h3: ({ children }) => <h3 className="text-base font-semibold text-white mb-2">{children}</h3>,
                   code: ({ children }) => (
-                    <code className="bg-slate-700/50 px-2 py-1 rounded text-blue-300 text-sm">{children}</code>
+                    <code className="bg-slate-700/50 px-2 py-1 rounded text-blue-300 text-sm break-all">{children}</code>
                   ),
                   pre: ({ children }) => (
-                    <pre className="bg-slate-900/50 p-4 rounded-xl overflow-x-auto border border-slate-700/30 mb-3">
+                    <pre className="bg-slate-900/50 p-4 rounded-xl overflow-x-auto border border-slate-700/30 mb-3 max-w-full">
                       {children}
                     </pre>
                   ),

@@ -163,12 +163,13 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
   // Style object for the chat container based on sidebar state
   const chatContainerStyle = {
     transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-    width: "100%",
+    width: "100%", 
     maxWidth: sidebarOpen ? (window.innerWidth > 768 ? "calc(100% - 320px)" : "100%") : "64rem", // Responsive width
     marginLeft: sidebarOpen ? (window.innerWidth > 768 ? "320px" : "0") : "auto", // Responsive margin
     marginRight: "auto",
     paddingLeft: "1rem",
-    paddingRight: "1rem"
+    paddingRight: "1rem",
+    overflow: "hidden" // Prevent horizontal scrolling
   };
 
   if (!showFullChat) {
@@ -262,12 +263,12 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
         style={chatContainerStyle}
         key="chat-view"
       >
-        {/* Chat Header */}
+        {/* Chat Header - fixed at top */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.1 }}
-          className="flex items-center justify-between p-4 border-b border-slate-700/30 bg-slate-800/20 backdrop-blur-xl rounded-t-3xl"
+          className="sticky top-0 z-10 flex items-center justify-between p-4 border-b border-slate-700/30 bg-slate-800/80 backdrop-blur-xl rounded-t-3xl"
         >
           <div className="flex items-center space-x-2">
             <Button
@@ -300,12 +301,12 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
         </motion.div>
 
         {/* Messages Area */}
-        <div className="flex-1 flex flex-col overflow-y-auto p-6 space-y-6 bg-slate-800/10 backdrop-blur-xl custom-scrollbar w-full">
+        <div className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden p-6 space-y-6 bg-slate-800/10 backdrop-blur-xl custom-scrollbar w-full">
           {errorMessage && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-red-500/20 border border-red-500/30 text-white rounded-xl p-4 text-center w-full mx-auto max-w-5xl"
+              className="bg-red-500/20 border border-red-500/30 text-white rounded-xl p-4 text-center w-full mx-auto"
             >
               {errorMessage}
             </motion.div>
@@ -361,9 +362,9 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.2 }}
-          className="p-4 border-t border-slate-700/30 bg-slate-800/20 backdrop-blur-xl rounded-b-3xl mt-auto w-full"
+          className="sticky bottom-0 z-10 p-4 border-t border-slate-700/30 bg-slate-800/80 backdrop-blur-xl rounded-b-3xl mt-auto w-full"
         >
-          <div className="max-w-5xl mx-auto">
+          <div className="w-full">
             <SearchBar
               input={input}
               handleInputChange={handleInputChange}

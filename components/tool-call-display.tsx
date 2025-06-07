@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { FileSearch, ChevronDown, ChevronUp, ExternalLink } from "lucide-react"
+import { useState, useEffect } from "react"
+import { FileSearch, ChevronDown, ChevronUp, ExternalLink, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
@@ -12,16 +12,48 @@ interface ToolCallDisplayProps {
 
 export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
   const [expanded, setExpanded] = useState(false)
+  const [showCard, setShowCard] = useState(false)
 
-  if (!toolCalls || toolCalls.length === 0) return null
+  // Check if all tool calls are completed
+  const allCompleted = toolCalls.every((toolCall) => toolCall.state === "result" || toolCall.result !== undefined)
+
+  useEffect(() => {
+    if (allCompleted && toolCalls.length > 0) {
+      // Small delay to make the appearance smoother
+      const timer = setTimeout(() => setShowCard(true), 300)
+      return () => clearTimeout(timer)
+    } else {
+      setShowCard(false)
+    }
+  }, [allCompleted, toolCalls.length])
+
+  // Show loading state while tools are executing
+  if (!allCompleted && toolCalls.length > 0) {
+    return (
+      <Card className="mt-2 overflow-hidden border-slate-600/30 bg-slate-800/20">
+        <CardHeader className="py-3 px-4 bg-slate-700/20">
+          <div className="flex items-center space-x-2">
+            <Loader2 className="h-4 w-4 text-blue-400 animate-spin" />
+            <CardTitle className="text-sm font-medium text-slate-200">searching for data...</CardTitle>
+          </div>
+        </CardHeader>
+      </Card>
+    )
+  }
+
+  // Don't show anything if no completed tool calls or card shouldn't be shown yet
+  if (!showCard || toolCalls.length === 0) return null
 
   return (
-    <Card className="mt-2 overflow-hidden border-slate-600/30 bg-slate-800/20">
+    <Card className="mt-2 overflow-hidden border-slate-600/30 bg-slate-800/20 animate-in fade-in-0 slide-in-from-top-1 duration-500">
       <CardHeader className="py-3 px-4 bg-slate-700/20">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <FileSearch className="h-4 w-4 text-blue-400" />
-            <CardTitle className="text-sm font-medium text-slate-200">real-time data retrieved</CardTitle>
+            <FileSearch className="h-4 w-4 text-green-400" />
+            <CardTitle className="text-sm font-medium text-slate-200">data retrieved successfully</CardTitle>
+            <span className="text-xs text-green-400 bg-green-400/10 px-2 py-1 rounded-full">
+              {toolCalls.length} tool{toolCalls.length > 1 ? "s" : ""} completed
+            </span>
           </div>
           <Button
             variant="ghost"
@@ -36,7 +68,7 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
       <div
         className={cn(
           "transition-all duration-300 ease-in-out overflow-hidden",
-          expanded ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0",
+          expanded ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0",
         )}
       >
         <CardContent className="p-4 text-sm space-y-4">
@@ -46,9 +78,7 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
                 <h4 className="font-medium text-blue-300 capitalize">
                   {toolCall.toolName?.replace(/([A-Z])/g, " $1").toLowerCase() || "tool execution"}
                 </h4>
-                <span className="text-xs text-slate-400 bg-slate-700/30 px-2 py-1 rounded">
-                  {toolCall.state || "completed"}
-                </span>
+                <span className="text-xs text-green-400 bg-green-400/10 px-2 py-1 rounded">completed</span>
               </div>
 
               {/* Tool arguments */}
@@ -81,18 +111,30 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
                   {/* Papers found */}
                   {toolCall.result.papers && toolCall.result.papers.length > 0 && (
                     <div className="space-y-1">
-                      <span className="text-xs text-slate-400">papers found:</span>
+                      <span className="text-xs text-slate-400">
+                        papers found: {toolCall.result.papers.length}
+                        {toolCall.result.totalFound &&
+                          toolCall.result.totalFound > toolCall.result.papers.length &&
+                          ` (showing ${toolCall.result.papers.length} of ${toolCall.result.totalFound})`}
+                      </span>
                       {toolCall.result.papers.slice(0, 3).map((paper: any, idx: number) => (
                         <div
                           key={idx}
                           className="flex items-center justify-between bg-slate-700/20 p-2 rounded text-xs"
                         >
-                          <span className="text-slate-300 truncate flex-1">{paper.title}</span>
+                          <div className="flex-1 space-y-1">
+                            <div className="text-slate-300 truncate">{paper.title}</div>
+                            {paper.examType && paper.examType !== "unknown" && (
+                              <div className="text-xs text-blue-400">
+                                {paper.examType} {paper.year && paper.year !== "unknown" && `• ${paper.year}`}
+                              </div>
+                            )}
+                          </div>
                           {paper.url && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-6 w-6 p-0 text-blue-400 hover:text-blue-300"
+                              className="h-6 w-6 p-0 text-blue-400 hover:text-blue-300 ml-2"
                               onClick={() => window.open(paper.url, "_blank")}
                             >
                               <ExternalLink className="h-3 w-3" />
@@ -109,7 +151,7 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
                   {/* Faculty found */}
                   {toolCall.result.faculty && toolCall.result.faculty.length > 0 && (
                     <div className="space-y-1">
-                      <span className="text-xs text-slate-400">faculty found:</span>
+                      <span className="text-xs text-slate-400">faculty found: {toolCall.result.faculty.length}</span>
                       {toolCall.result.faculty.slice(0, 2).map((faculty: any, idx: number) => (
                         <div key={idx} className="bg-slate-700/20 p-2 rounded text-xs space-y-1">
                           <div className="text-slate-300 font-medium">{faculty.name}</div>
@@ -119,17 +161,41 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
                           )}
                         </div>
                       ))}
+                      {toolCall.result.faculty.length > 2 && (
+                        <span className="text-xs text-slate-400">
+                          +{toolCall.result.faculty.length - 2} more faculty
+                        </span>
+                      )}
                     </div>
                   )}
 
-                  {/* Research projects */}
-                  {toolCall.result.data?.projects && toolCall.result.data.projects.length > 0 && (
+                  {/* Placement data */}
+                  {toolCall.result.data?.statistics && (
                     <div className="space-y-1">
-                      <span className="text-xs text-slate-400">research projects:</span>
-                      {toolCall.result.data.projects.slice(0, 2).map((project: any, idx: number) => (
+                      <span className="text-xs text-slate-400">placement statistics:</span>
+                      <div className="bg-slate-700/20 p-2 rounded text-xs space-y-1">
+                        {Object.entries(toolCall.result.data.statistics)
+                          .slice(0, 3)
+                          .map(([key, value]: [string, any]) => (
+                            <div key={key} className="flex justify-between">
+                              <span className="text-slate-400 capitalize">{key}:</span>
+                              <span className="text-slate-300">{value}</span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Companies data */}
+                  {toolCall.result.data?.companies && toolCall.result.data.companies.length > 0 && (
+                    <div className="space-y-1">
+                      <span className="text-xs text-slate-400">
+                        top companies: {toolCall.result.data.companies.length}
+                      </span>
+                      {toolCall.result.data.companies.slice(0, 2).map((company: any, idx: number) => (
                         <div key={idx} className="bg-slate-700/20 p-2 rounded text-xs">
-                          <div className="text-slate-300 font-medium">{project.title}</div>
-                          <div className="text-slate-400">{project.investigator}</div>
+                          <div className="text-slate-300 font-medium">{company.name}</div>
+                          <div className="text-slate-400">{company.package}</div>
                         </div>
                       ))}
                     </div>

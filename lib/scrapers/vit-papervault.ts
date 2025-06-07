@@ -39,10 +39,24 @@ async function tryVITVaultListAPI(courseCode: string, examType?: string, year?: 
     const full = findFullCourseName(courseCode)
     const plainName = full.replace(/\s*\[.*\]$/, "")
 
-    // 3) Filter
+    // 3) Filter with better exam type matching
     const filtered = all.filter((p) => {
       const sameSubj = p.subjectName.trim().toLowerCase() === plainName.trim().toLowerCase()
-      const sameExam = !examType || p.paperType.toLowerCase() === examType.toLowerCase()
+
+      // Better exam type matching
+      let sameExam = true
+      if (examType) {
+        const paperType = p.paperType.toLowerCase()
+        const examTypeLower = examType.toLowerCase()
+
+        sameExam =
+          paperType.includes(examTypeLower) ||
+          (examTypeLower === "cat1" && (paperType.includes("cat 1") || paperType.includes("cat-1"))) ||
+          (examTypeLower === "cat2" && (paperType.includes("cat 2") || paperType.includes("cat-2"))) ||
+          (examTypeLower === "fat" && (paperType.includes("final") || paperType.includes("fat"))) ||
+          (examTypeLower === "quiz" && paperType.includes("quiz"))
+      }
+
       const sameYear = !year || new Date(p.paperDate).getUTCFullYear().toString() === year
       return sameSubj && sameExam && sameYear
     })
@@ -116,8 +130,22 @@ async function tryBrowserScraping(courseCode: string, examType?: string, year?: 
 
           const tl = titleText.toLowerCase()
           const cc = courseCode.toLowerCase()
+
+          // Course matching
           const okCourse = tl.includes(cc) || tl.includes(cc.replace(/(\d+)/, " $1"))
-          const okExam = !examType || tl.includes(examType.toLowerCase())
+
+          // Better exam type matching
+          let okExam = true
+          if (examType) {
+            const examTypeLower = examType.toLowerCase()
+            okExam =
+              tl.includes(examTypeLower) ||
+              (examTypeLower === "cat1" && (tl.includes("cat 1") || tl.includes("cat-1"))) ||
+              (examTypeLower === "cat2" && (tl.includes("cat 2") || tl.includes("cat-2"))) ||
+              (examTypeLower === "fat" && (tl.includes("final") || tl.includes("fat"))) ||
+              (examTypeLower === "quiz" && tl.includes("quiz"))
+          }
+
           const okYear = !year || tl.includes(year) || (href.includes(year) as any)
 
           if (okCourse && okExam && okYear) {
@@ -125,7 +153,7 @@ async function tryBrowserScraping(courseCode: string, examType?: string, year?: 
               title: titleText.substring(0, 100),
               url: href.startsWith("http") ? href : `https://vitpapervault.in${href}`,
               source: "vitpapervault.in",
-              metadata: "", // no slot info here
+              metadata: "",
               examType: examType || "unknown",
               year: year || "unknown",
             })

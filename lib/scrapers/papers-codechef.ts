@@ -46,8 +46,9 @@ async function tryAPIApproach(courseCode: string, examType?: string, year?: stri
 
     if (response.ok) {
       const data = await response.json()
+      // After getting the data from API, add proper filtering
       if (data && Array.isArray(data) && data.length > 0) {
-        const papers = data.map((paper: any) => ({
+        let papers = data.map((paper: any) => ({
           title: paper.title || paper.name || paper.paperName || "Question Paper",
           url: paper.url || paper.downloadUrl || paper.link || paper.paperUrl,
           source: "papers.codechefvit.com",
@@ -55,6 +56,31 @@ async function tryAPIApproach(courseCode: string, examType?: string, year?: stri
           examType: paper.examType || examType || "unknown",
           year: paper.year || paper.academicYear || year || "unknown",
         }))
+
+        // Filter by examType if specified
+        if (examType) {
+          papers = papers.filter((paper) => {
+            const paperTitle = paper.title.toLowerCase()
+            const paperMeta = paper.metadata.toLowerCase()
+            const examTypeLower = examType.toLowerCase()
+
+            return (
+              paperTitle.includes(examTypeLower) ||
+              paperMeta.includes(examTypeLower) ||
+              (paper.examType && paper.examType.toLowerCase().includes(examTypeLower))
+            )
+          })
+        }
+
+        // Filter by year if specified
+        if (year) {
+          papers = papers.filter((paper) => {
+            const paperTitle = paper.title.toLowerCase()
+            const paperMeta = paper.metadata.toLowerCase()
+
+            return paperTitle.includes(year) || paperMeta.includes(year) || (paper.year && paper.year.includes(year))
+          })
+        }
 
         return {
           success: true,
@@ -544,16 +570,26 @@ async function tryBrowserScraping(courseCode: string, examType?: string, year?: 
           if (title && href && title.length > 5) {
             const titleLower = title.toLowerCase()
             const courseLower = courseCode.toLowerCase()
+            const metaLower = (meta || "").toLowerCase()
 
-            // More flexible course code matching
+            // Course code matching
             const matchesCourse =
               titleLower.includes(courseLower) ||
               titleLower.includes(courseLower.replace(/(\d+)/, " $1")) ||
               titleLower.includes(courseLower.replace(/([a-z]+)(\d+)/, "$1 $2")) ||
               titleLower.includes(courseLower.replace(/([a-z]+)(\d+)([a-z])/, "$1 $2 $3"))
 
-            const matchesExam = !examType || titleLower.includes(examType.toLowerCase())
-            const matchesYear = !year || titleLower.includes(year) || (meta && meta.includes(year))
+            // Exam type matching - more specific
+            const matchesExam =
+              !examType ||
+              titleLower.includes(examType.toLowerCase()) ||
+              metaLower.includes(examType.toLowerCase()) ||
+              (examType.toLowerCase() === "cat1" && (titleLower.includes("cat 1") || titleLower.includes("cat-1"))) ||
+              (examType.toLowerCase() === "cat2" && (titleLower.includes("cat 2") || titleLower.includes("cat-2"))) ||
+              (examType.toLowerCase() === "fat" && titleLower.includes("final"))
+
+            // Year matching
+            const matchesYear = !year || titleLower.includes(year) || metaLower.includes(year)
 
             if (matchesCourse && matchesExam && matchesYear) {
               results.push({

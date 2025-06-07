@@ -15,6 +15,7 @@
     "@sparticuz/chromium": "latest",
     "@tailwindcss/typography": "latest",
     "ai": "latest",
+    "class-variance-authority": "^0.7.1",
     "framer-motion": "latest",
     "lucide-react": "^0.323.0",
     "next": "14.2.16",
@@ -23,6 +24,8 @@
     "react": "^18",
     "react-dom": "^18",
     "react-markdown": "latest",
+    "tailwind-merge": "^3.3.0",
+    "tailwindcss-animate": "^1.0.7",
     "zod": "latest"
   },
   "devDependencies": {

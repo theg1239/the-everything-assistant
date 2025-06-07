@@ -136,6 +136,14 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
     setCanvasOpen(true)
   }
 
+  useEffect(() => {
+    if (optimisticChatId && optimisticChatId !== chatId) {
+      setShowFullChat(true)
+      setErrorMessage(null)
+      setInput("")
+    }
+  }, [optimisticChatId, chatId])
+
   if (!showFullChat) {
     return (
       <>

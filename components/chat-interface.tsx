@@ -28,6 +28,9 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
   const inputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   
+  // --- Optimistic navigation state ---
+  const [optimisticChatId, setOptimisticChatId] = useState<string | undefined>(chatId)
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const savedSidebarState = localStorage.getItem('sidebarOpen');
@@ -58,6 +61,7 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
     }
   }, [showFullChat]);
 
+  // --- Optimistic navigation for new chat creation ---
   const { messages, input, handleInputChange, handleSubmit, isLoading, setInput, error } = useChat({
     api: "/api/chat",
     initialMessages: initialMessages.map((msg) => ({
@@ -72,13 +76,12 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
         setShowFullChat(true)
       }
       setErrorMessage(null)
-
-      // Handle new chat creation
+      // Optimistically update chatId and path
       const newChatId = response.headers.get("X-Chat-Id")
       const newChatPath = response.headers.get("X-Chat-Path")
-
       if (newChatId && newChatPath && !chatId) {
-        router.push(newChatPath)
+        setOptimisticChatId(newChatId)
+        router.replace(newChatPath)
       }
     },
     onError: (error) => {
@@ -227,7 +230,7 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
   return (
     <>
       <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
-      <Canvas isOpen={canvasOpen} onClose={() => setCanvasOpen(false)} chatId={chatId} />
+      <Canvas isOpen={canvasOpen} onClose={() => setCanvasOpen(false)} chatId={optimisticChatId} />
 
       {/* Collapsed sidebar toggle button */}
       {!sidebarOpen && (
@@ -292,7 +295,7 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
         </motion.div>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-800/10 backdrop-blur-xl custom-scrollbar">
+        <div className="flex-1 flex flex-col overflow-y-auto p-6 space-y-6 bg-slate-800/10 backdrop-blur-xl custom-scrollbar">
           {errorMessage && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -305,7 +308,7 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
 
           <AnimatePresence>
             {messages.map((message, index) => (
-              <MessageBubble key={`${message.id}-${index}`} message={message} chatId={chatId} />
+              <MessageBubble key={`${message.id}-${index}`} message={{...message, toolInvocations: message.toolInvocations}} chatId={optimisticChatId} />
             ))}
           </AnimatePresence>
 
@@ -337,12 +340,12 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
           )}
         </div>
 
-        {/* Input Area */}
+        {/* Input Area pinned to bottom */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.2 }}
-          className="p-4 border-t border-slate-700/30 bg-slate-800/20 backdrop-blur-xl rounded-b-3xl"
+          className="p-4 border-t border-slate-700/30 bg-slate-800/20 backdrop-blur-xl rounded-b-3xl mt-auto"
         >
           <SearchBar
             input={input}

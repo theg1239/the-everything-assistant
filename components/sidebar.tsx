@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import { signOut, useSession } from "next-auth/react"
@@ -22,13 +21,15 @@ interface Chat {
 
 interface SidebarProps {
   isOpen: boolean
-  onToggle: () => void
+  [key: string]: any // Allow any extra props for workaround
 }
 
-export function Sidebar({ isOpen, onToggle }: SidebarProps) {
+export function Sidebar(props: SidebarProps) {
+  const { isOpen, onToggle } = props as { isOpen: boolean; onToggle: () => void }
   const [chats, setChats] = useState<Chat[]>([])
   const [loading, setLoading] = useState(true)
   const [hovering, setHovering] = useState(false)
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(null)
   const router = useRouter()
   const pathname = usePathname()
   const { data: session } = useSession()
@@ -36,6 +37,13 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
   useEffect(() => {
     fetchChats()
   }, [])
+
+  useEffect(() => {
+    // Update selected chatId based on pathname
+    const match = pathname.match(/\/chat\/(.+)$/)
+    if (match) setSelectedChatId(match[1])
+    else setSelectedChatId(null)
+  }, [pathname])
 
   const fetchChats = async () => {
     try {
@@ -54,12 +62,10 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const deleteChat = async (chatId: string, e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-
     try {
       const response = await fetch(`/api/chat/${chatId}`, {
         method: "DELETE",
       })
-
       if (response.ok) {
         setChats(chats.filter((chat) => chat.id !== chatId))
         if (pathname === `/chat/${chatId}`) {
@@ -71,7 +77,21 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
     }
   }
 
+  // Optimistic new chat creation
   const startNewChat = () => {
+    // Optimistically add a placeholder chat to the sidebar
+    const tempId = `temp-${Date.now()}`
+    setChats((prev) => [
+      {
+        id: tempId,
+        title: "New Chat",
+        path: `/chat/${tempId}`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      ...prev,
+    ])
+    setSelectedChatId(tempId)
     router.push("/")
     if (window.innerWidth < 768) {
       onToggle()
@@ -150,12 +170,13 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
                       animate={{ opacity: 1, y: 0 }}
                       className={cn(
                         "group relative flex items-center p-3 rounded-xl cursor-pointer transition-colors",
-                        pathname === `/chat/${chat.id}`
+                        (selectedChatId === chat.id || pathname === `/chat/${chat.id}`)
                           ? "bg-gradient-to-r from-blue-500/20 to-purple-600/20 border border-blue-500/30"
                           : "hover:bg-slate-700/30",
                       )}
                       onClick={() => {
-                        router.push(`/chat/${chat.id}`)
+                        setSelectedChatId(chat.id)
+                        router.replace(`/chat/${chat.id}`)
                         if (window.innerWidth < 768) {
                           onToggle()
                         }

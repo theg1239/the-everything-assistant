@@ -43,28 +43,27 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
       setShowCard(false)
     }
   }, [allCompleted, toolCalls.length])
-
   // Show loading state while tools are executing
   if (!allCompleted && toolCalls.length > 0) {
     return (
-      <div className="mt-3 animate-in fade-in-0 slide-in-from-top-2 duration-500">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900/90 via-slate-800/50 to-slate-900/90 backdrop-blur-xl border border-slate-700/30">
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-cyan-500/5"></div>
+      <div className="mt-3 animate-in fade-in-0 slide-in-from-top-2 duration-300">
+        <div className="relative overflow-hidden rounded-3xl glass-effect-strong border border-slate-700/30 shadow-lg">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-cyan-500/10 animate-gradient"></div>
           <div className="relative p-4">
             <div className="flex items-center space-x-3">
               <div className="relative">
                 <Loader2 className="h-5 w-5 text-blue-400 animate-spin" />
-                <div className="absolute inset-0 bg-blue-400/20 rounded-full animate-ping"></div>
+                <div className="absolute inset-0 bg-blue-400/20 rounded-full animate-pulse-glow"></div>
               </div>
               <div className="flex-1">
-                <div className="text-sm font-medium bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                <div className="text-sm font-medium gradient-text">
                   Searching for data...
                 </div>
                 <div className="text-xs text-slate-400 mt-1">
                   Running {toolCalls.length} tool{toolCalls.length > 1 ? "s" : ""}
                 </div>
               </div>
-              <Sparkles className="h-4 w-4 text-purple-400 animate-pulse" />
+              <Sparkles className="h-4 w-4 text-purple-400 animate-pulse-smooth" />
             </div>
           </div>
         </div>
@@ -74,39 +73,37 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
 
   // Don't show anything if no completed tool calls or card shouldn't be shown yet
   if (!showCard || toolCalls.length === 0) return null
-
   // Full view modal component (rendered via portal)
   const FullViewModal = () => (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-in fade-in-0 duration-500">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-in fade-in-0 duration-300">
       {/* Backdrop */}
       <div 
-        className="absolute inset-0 bg-gradient-to-br from-black/80 via-slate-900/70 to-black/80 backdrop-blur-xl"
+        className="absolute inset-0 bg-black/70 backdrop-blur-md"
         onClick={() => setFullView(false)}
       />
       {/* Dialog */}
-      <div className="relative w-full max-w-6xl h-[85vh] overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-8 duration-500">
-        {/* Glass morphism background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-purple-900 to-slate-900 backdrop-blur-2xl border border-slate-700/50 rounded-3xl shadow-2xl">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-cyan-500/10 rounded-3xl"></div>
-          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent rounded-3xl"></div>
+      <div className="relative w-full max-w-6xl h-[85vh] overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-8 duration-300">
+        {/* Glass background */}
+        <div className="absolute inset-0 glass-effect-strong rounded-3xl shadow-2xl">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-cyan-500/10 rounded-3xl animate-gradient"></div>
         </div>
         
         {/* Content Container */}
         <div className="relative h-full flex flex-col">
           {/* Enhanced Header */}
-          <div className="flex items-center justify-between p-6 border-b border-slate-700/40 bg-gradient-to-r from-slate-800/60 to-slate-900/60 backdrop-blur-sm rounded-t-3xl">
+          <div className="flex items-center justify-between p-6 border-b border-slate-700/40 rounded-t-3xl">
             <div className="flex items-center space-x-4">
-              <div className="relative p-3 rounded-2xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 border border-green-500/40">
-                <div className="absolute inset-0 bg-gradient-to-br from-green-400/10 to-emerald-400/10 rounded-2xl animate-pulse"></div>
+              <div className="relative p-3 rounded-2xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 border border-green-500/30">
+                <div className="absolute inset-0 bg-green-400/10 rounded-2xl animate-pulse-glow"></div>
                 <FileSearch className="h-7 w-7 text-green-400 relative z-10" />
               </div>
               <div>
-                <h2 className="text-2xl font-light bg-gradient-to-r from-white via-slate-200 to-slate-300 bg-clip-text text-transparent">
+                <h2 className="text-2xl font-light gradient-text">
                   Tool Results
                 </h2>
                 <div className="flex items-center space-x-3 mt-2">
                   <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse-glow"></div>
                     <span className="text-sm text-green-400 font-medium">
                       {toolCalls.length} tool{toolCalls.length > 1 ? "s" : ""} completed
                     </span>
@@ -129,9 +126,8 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
           </div>
 
           {/* Enhanced Content Area */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar">
-            <div className="p-6 space-y-8">
-              {toolCalls.map((toolCall, index) => (
+          <div className="flex-1 overflow-y-auto tool-scrollbar">
+            <div className="p-6 space-y-8">                {toolCalls.map((toolCall, index) => (
                 <div key={index} className="relative group">
                   {/* Timeline indicator */}
                   <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-500 via-purple-500 to-cyan-500 rounded-full opacity-80"></div>
@@ -141,16 +137,16 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
                     {/* Tool Header */}
                     <div className="flex items-center space-x-4">
                       <div className="relative p-3 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-500/40 group-hover:border-blue-400/60 transition-all duration-300">
-                        <div className="absolute inset-0 bg-gradient-to-br from-blue-400/10 to-purple-400/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                        <div className="absolute inset-0 bg-blue-400/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                         <Sparkles className="h-6 w-6 text-blue-400 relative z-10" />
                       </div>
                       <div className="flex-1">
-                        <h3 className="text-xl font-medium bg-gradient-to-r from-blue-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent capitalize">
+                        <h3 className="text-xl font-medium gradient-text capitalize">
                           {toolCall.toolName?.replace(/([A-Z])/g, " $1").toLowerCase() || "Tool Execution"}
                         </h3>
                         <div className="flex items-center space-x-3 mt-1">
                           <div className="flex items-center space-x-2">
-                            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse-glow"></div>
                             <span className="text-sm text-green-400 font-medium">Completed</span>
                           </div>
                           <div className="w-1 h-1 bg-slate-500 rounded-full"></div>
@@ -159,11 +155,9 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
                           </span>
                         </div>
                       </div>
-                    </div>
-
-                    {/* Tool Arguments */}
+                    </div>                    {/* Tool Arguments */}
                     {toolCall.args && Object.keys(toolCall.args).length > 0 && (
-                      <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-800/60 to-slate-900/60 backdrop-blur-sm border border-slate-700/40 group-hover:border-slate-600/60 transition-all duration-300">
+                      <div className="p-5 rounded-2xl glass-effect border border-slate-700/40 group-hover:border-slate-600/60 transition-all duration-300">
                         <div className="flex items-center space-x-2 mb-4">
                           <div className="w-4 h-4 rounded bg-blue-500/20 flex items-center justify-center">
                             <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
@@ -193,22 +187,18 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
                             <CheckCircle2 className="w-3 h-3 text-green-400" />
                           </div>
                           <span className="text-sm font-medium text-slate-300">Results</span>
-                        </div>
-
-                        {/* Success/Error status */}
+                        </div>                        {/* Success/Error status */}
                         {typeof toolCall.result === "object" && toolCall.result.success !== undefined && (
                           <div className="flex items-center space-x-3 p-3 rounded-xl bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20">
-                            <CheckCircle2 className="h-5 w-5 text-green-400" />
+                            <CheckCircle2 className="h-5 w-5 text-green-400 animate-pulse-glow" />
                             <span className="text-green-400 font-medium">
                               {toolCall.result.message || "Success"}
                             </span>
                           </div>
-                        )}
-
-                        {/* Papers found - Enhanced grid */}
+                        )}                        {/* Papers found - Enhanced grid */}
                         {toolCall.result.papers && toolCall.result.papers.length > 0 && (
                           <div className="space-y-4">
-                            <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-br from-slate-800/30 to-slate-900/30 border border-slate-700/30">
+                            <div className="flex items-center justify-between p-4 rounded-xl glass-effect border border-slate-700/30">
                               <div className="flex items-center space-x-3">
                                 <GraduationCap className="h-5 w-5 text-blue-400" />
                                 <span className="text-slate-300 font-medium">
@@ -226,7 +216,7 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
                               {toolCall.result.papers.map((paper: any, idx: number) => (
                                 <div
                                   key={idx}
-                                  className="group relative p-4 rounded-xl bg-gradient-to-br from-slate-800/40 to-slate-900/40 backdrop-blur-sm border border-slate-700/30 hover:border-blue-500/30 transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/5"
+                                  className="group relative p-4 rounded-xl glass-effect border border-slate-700/30 hover:border-blue-500/30 transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/5 card-hover-effect"
                                 >
                                   <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                                   <div className="relative space-y-3">
@@ -250,7 +240,7 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
                                       <Button
                                         variant="outline"
                                         size="sm"
-                                        className="text-xs h-7 border-blue-500/30 text-blue-300 hover:bg-blue-500/10"
+                                        className="text-xs h-7 border-blue-500/30 text-blue-300 hover:bg-blue-500/10 group-hover:border-blue-500/50"
                                         onClick={() => window.open(paper.url, "_blank")}
                                       >
                                         <ExternalLink className="w-3 h-3 mr-1" />
@@ -262,12 +252,10 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
                               ))}
                             </div>
                           </div>
-                        )}
-
-                        {/* Faculty found */}
+                        )}                        {/* Faculty found */}
                         {toolCall.result.faculty && toolCall.result.faculty.length > 0 && (
                           <div className="space-y-4">
-                            <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-br from-slate-800/30 to-slate-900/30 border border-slate-700/30">
+                            <div className="flex items-center justify-between p-4 rounded-xl glass-effect border border-slate-700/30">
                               <div className="flex items-center space-x-3">
                                 <Users className="h-5 w-5 text-purple-400" />
                                 <span className="text-slate-300 font-medium">
@@ -280,7 +268,7 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
                               {toolCall.result.faculty.map((member: any, idx: number) => (
                                 <div
                                   key={idx}
-                                  className="group relative p-4 rounded-xl bg-gradient-to-br from-slate-800/40 to-slate-900/40 backdrop-blur-sm border border-slate-700/30 hover:border-purple-500/30 transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/5"
+                                  className="group relative p-4 rounded-xl glass-effect border border-slate-700/30 hover:border-purple-500/30 transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/5 card-hover-effect"
                                 >
                                   <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-pink-500/5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                                   <div className="relative space-y-3">
@@ -301,12 +289,10 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
                               ))}
                             </div>
                           </div>
-                        )}
-
-                        {/* Companies found */}
+                        )}                        {/* Companies found */}
                         {toolCall.result.companies && toolCall.result.companies.length > 0 && (
                           <div className="space-y-4">
-                            <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-br from-slate-800/30 to-slate-900/30 border border-slate-700/30">
+                            <div className="flex items-center justify-between p-4 rounded-xl glass-effect border border-slate-700/30">
                               <div className="flex items-center space-x-3">
                                 <Building2 className="h-5 w-5 text-cyan-400" />
                                 <span className="text-slate-300 font-medium">
@@ -319,7 +305,7 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
                               {toolCall.result.companies.map((company: any, idx: number) => (
                                 <div
                                   key={idx}
-                                  className="group relative p-4 rounded-xl bg-gradient-to-br from-slate-800/40 to-slate-900/40 backdrop-blur-sm border border-slate-700/30 hover:border-cyan-500/30 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/5"
+                                  className="group relative p-4 rounded-xl glass-effect border border-slate-700/30 hover:border-cyan-500/30 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/5 card-hover-effect"
                                 >
                                   <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-blue-500/5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                                   <div className="relative space-y-3">
@@ -342,7 +328,7 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
                         {/* Statistics data */}
                         {toolCall.result.data && (
                           <div className="space-y-4">
-                            <div className="flex items-center space-x-3 p-4 rounded-xl bg-gradient-to-br from-slate-800/30 to-slate-900/30 border border-slate-700/30">
+                            <div className="flex items-center space-x-3 p-4 rounded-xl glass-effect border border-slate-700/30">
                               <TrendingUp className="h-5 w-5 text-green-400" />
                               <span className="text-slate-300 font-medium">Statistics & Data</span>
                             </div>
@@ -368,27 +354,26 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
       </div>
     </div>
   )
-
   return (
     <>
       {/* Compact view */}
-      <div className="mt-3 animate-in fade-in-0 slide-in-from-top-2 duration-500">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-900 via-purple-900 to-slate-900 backdrop-blur-xl border border-slate-700/30 shadow-xl">
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-cyan-500/10"></div>
+      <div className="mt-3 animate-in fade-in-0 slide-in-from-top-2 duration-300">
+        <div className="relative overflow-hidden rounded-3xl glass-effect-strong border border-slate-700/30 shadow-lg">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-cyan-500/10 animate-gradient"></div>
           
           {/* Header */}
-          <div className="relative p-4 bg-gradient-to-r from-slate-800/50 to-slate-900/50 border-b border-slate-700/30">
+          <div className="relative p-4 border-b border-slate-700/30">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
                 <div className="p-2 rounded-xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 border border-green-500/30">
                   <CheckCircle2 className="h-4 w-4 text-green-400" />
                 </div>
                 <div>
-                  <div className="text-sm font-medium bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
+                  <div className="text-sm font-medium gradient-text">
                     Data retrieved successfully
                   </div>
                   <div className="flex items-center space-x-2 mt-1">
-                    <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div>
+                    <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse-glow"></div>
                     <span className="text-xs text-green-400">
                       {toolCalls.length} tool{toolCalls.length > 1 ? "s" : ""} completed
                     </span>

@@ -130,7 +130,7 @@ async function tryBrowserScraping(department?: string, facultyName?: string) {
 
     return {
       success: true,
-      faculty: filteredResults.slice(0, 20), // Return top 20 results
+      faculty: filteredResults.slice(0, 100), // Increased from 20 to 100 results
       totalFound: filteredResults.length,
       searchCriteria: { department, facultyName },
       message: `Found ${filteredResults.length} faculty members.`,

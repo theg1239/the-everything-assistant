@@ -4,13 +4,11 @@ import { findFullCourseName } from "../course-map"
 
 export async function scrapeVITPaperVault(courseCode: string, examType?: string, year?: string) {
   try {
-    // 1️⃣ API first
     const apiResult = await tryVITVaultListAPI(courseCode, examType, year)
     if (apiResult.success && apiResult.papers.length > 0) {
       return apiResult
     }
 
-    // 2️⃣ Fallback to headful scraping
     return await tryBrowserScraping(courseCode, examType, year)
   } catch (error: any) {
     console.error("Error scraping vitpapervault.in:", error)
@@ -25,7 +23,6 @@ export async function scrapeVITPaperVault(courseCode: string, examType?: string,
 
 async function tryVITVaultListAPI(courseCode: string, examType?: string, year?: string) {
   try {
-    // 1) Fetch the entire list
     const resp = await fetch("https://api.vitpapervault.in/api/paper/list", {
       headers: { Accept: "application/json" },
     })
@@ -34,17 +31,12 @@ async function tryVITVaultListAPI(courseCode: string, examType?: string, year?: 
     const body = await resp.json()
     const all: any[] = Array.isArray(body.data) ? body.data : []
 
-    // 2) Determine the human‐readable subject to match
-    //    e.g. "BCSE101E" → "Computer Programming: Python"
-    //    but subjectName in API is like "Computer Programming: Python"
     const full = findFullCourseName(courseCode)
     const plainName = full.replace(/\s*\[.*\]$/, "")
 
-    // 3) Filter with better exam type matching
     const filtered = all.filter((p) => {
       const sameSubj = p.subjectName.trim().toLowerCase() === plainName.trim().toLowerCase()
 
-      // Better exam type matching
       let sameExam = true
       if (examType) {
         const paperType = p.paperType.toLowerCase()
@@ -62,7 +54,6 @@ async function tryVITVaultListAPI(courseCode: string, examType?: string, year?: 
       return sameSubj && sameExam && sameYear
     })
 
-    // 4) Map into your output shape
     const papers = filtered.map((p) => ({
       title: `${p.subjectName} ${p.paperType} (${new Date(p.paperDate).toISOString().slice(0, 10)})`,
       url: p.paperLink,
@@ -70,11 +61,10 @@ async function tryVITVaultListAPI(courseCode: string, examType?: string, year?: 
       metadata: p.paperSlot,
       examType: p.paperType,
       year: new Date(p.paperDate).getUTCFullYear().toString(),
-    }))
-
+    }))    
     return {
       success: true,
-      papers: papers.slice(0, 20),
+      papers: papers.slice(0, 100),
       source: "vitpapervault.in",
       searchUrl: "https://api.vitpapervault.in/api/paper/list",
     }
@@ -87,7 +77,6 @@ async function tryVITVaultListAPI(courseCode: string, examType?: string, year?: 
 async function tryBrowserScraping(courseCode: string, examType?: string, year?: string) {
   let browser
   try {
-    // Simplified Chromium setup - let @sparticuz/chromium handle the paths
     browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
@@ -147,29 +136,44 @@ async function tryBrowserScraping(courseCode: string, examType?: string, year?: 
               (examTypeLower === "quiz" && tl.includes("quiz"))
           }
 
-          const okYear = !year || tl.includes(year) || (href.includes(year) as any)
-
+          const okYear = !year || tl.includes(year) || (href.includes(year) as any)          
           if (okCourse && okExam && okYear) {
+            let extractedExamType = examType || "unknown"
+            let extractedYear = year || "unknown"
+            
+            if (!examType || examType === "unknown") {
+              if (tl.includes("cat-1") || tl.includes("cat 1")) extractedExamType = "CAT-1"
+              else if (tl.includes("cat-2") || tl.includes("cat 2")) extractedExamType = "CAT-2"
+              else if (tl.includes("fat") || tl.includes("final")) extractedExamType = "FAT"
+              else if (tl.includes("quiz")) extractedExamType = "Quiz"
+            }
+            
+            if (!year || year === "unknown") {
+              const yearMatch = titleText.match(/20\d{2}/)
+              if (yearMatch) extractedYear = yearMatch[0]
+            }
+            
             out.push({
               title: titleText.substring(0, 100),
               url: href.startsWith("http") ? href : `https://vitpapervault.in${href}`,
               source: "vitpapervault.in",
               metadata: "",
-              examType: examType || "unknown",
-              year: year || "unknown",
+              examType: extractedExamType,
+              year: extractedYear,
             })
           }
         })
+        
         return out
       },
       courseCode,
       examType,
-      year,
+      year,  
     )
 
     return {
       success: true,
-      papers: papers.slice(0, 10),
+      papers: papers.slice(0, 50),
       source: "vitpapervault.in",
     }
   } catch (error: any) {

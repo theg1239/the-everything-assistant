@@ -45,7 +45,6 @@ async function tryBrowserScraping(year?: string, company?: string): Promise<Plac
   let browser: any | undefined
 
   try {
-    // Simplified Chromium setup - let @sparticuz/chromium handle the paths
     browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,

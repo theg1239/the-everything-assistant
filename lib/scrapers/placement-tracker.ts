@@ -20,12 +20,10 @@ export async function scrapePlacementStats(
   year?: string,
   branch?: string
 ): Promise<PlacementStatistics | null> {
-  // Get the server session (if needed for auth-protected scraping)
   const session = await getServerSession(authOptions);
 
   let browser;
   try {
-    // Similar Chromium setup as papers-codechef.ts
     const chromiumBinDir = path.join(
       "/var/task/node_modules/@sparticuz/chromium/bin"
     );
@@ -56,10 +54,8 @@ export async function scrapePlacementStats(
     const url = "https://vit-placements-tracker.streamlit.app/";
     await page.goto(url, { waitUntil: "networkidle2", timeout: 15000 });
 
-    // Wait for Streamlit to load content
     await page.waitForSelector('[data-testid="stMetric"]', { timeout: 15000 });
 
-    // Extract statistics
     const stats = await page.evaluate(() => {
       const metrics = Array.from(document.querySelectorAll('[data-testid="stMetric"]'));
       const extractNumber = (str: string) => {
@@ -67,7 +63,6 @@ export async function scrapePlacementStats(
         return match ? match[0].replace(/,/g, '') : '0';
       };
 
-      // Find highest and average package
       const highestPackage = Array.from(document.querySelectorAll('[data-testid="stText"]'))
         .find(el => el.textContent?.includes('Highest Package'))
         ?.textContent?.match(/[\d.]+\s*LPA/)?.[0] || 'N/A';

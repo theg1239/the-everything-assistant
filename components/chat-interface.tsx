@@ -260,10 +260,10 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.4, ease: "easeOut" }}
-        className={`h-[90vh] flex flex-col transition-all duration-300 ease-in-out chat-container ${
+        className={`min-h-[90vh] flex flex-col justify-between transition-all duration-300 ease-in-out chat-container ${
           sidebarOpen 
             ? 'ml-0 md:ml-80 mr-0 md:mr-4 px-4' 
-            : 'max-w-5xl mx-auto px-4'
+            : 'max-w-5xl mx-auto px-4 w-full'
         }`}
         key="chat-view"
       >
@@ -305,12 +305,12 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
         </motion.div>
 
         {/* Messages Area */}
-        <div className="flex-1 flex flex-col overflow-y-auto p-6 space-y-6 bg-slate-800/10 backdrop-blur-xl custom-scrollbar">
+        <div className="flex-1 flex flex-col overflow-y-auto p-6 space-y-6 bg-slate-800/10 backdrop-blur-xl custom-scrollbar w-full">
           {errorMessage && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-red-500/20 border border-red-500/30 text-white rounded-xl p-4 text-center"
+              className="bg-red-500/20 border border-red-500/30 text-white rounded-xl p-4 text-center w-full mx-auto max-w-5xl"
             >
               {errorMessage}
             </motion.div>
@@ -333,7 +333,7 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex items-center justify-center space-x-3 text-slate-400"
+              className="flex items-center justify-center space-x-3 text-slate-400 w-full max-w-5xl mx-auto"
             >
               <div className="flex space-x-1">
                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
@@ -366,16 +366,18 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.2 }}
-          className="p-4 border-t border-slate-700/30 bg-slate-800/20 backdrop-blur-xl rounded-b-3xl mt-auto"
+          className="p-4 border-t border-slate-700/30 bg-slate-800/20 backdrop-blur-xl rounded-b-3xl mt-auto w-full"
         >
-          <SearchBar
-            input={input}
-            handleInputChange={handleInputChange}
-            handleSubmit={handleFormSubmit}
-            isLoading={isLoading}
-            placeholder="continue the conversation..."
-            ref={inputRef}
-          />
+          <div className="max-w-5xl mx-auto">
+            <SearchBar
+              input={input}
+              handleInputChange={handleInputChange}
+              handleSubmit={handleFormSubmit}
+              isLoading={isLoading}
+              placeholder="continue the conversation..."
+              ref={inputRef}
+            />
+          </div>
         </motion.div>
       </motion.div>
     </>

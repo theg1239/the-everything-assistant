@@ -20,7 +20,7 @@ export function MessageBubble({ message, chatId }: MessageBubbleProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: "easeOut" }}
-      className={cn("flex items-start gap-6 max-w-5xl mx-auto", isUser ? "justify-end" : "justify-start")}
+      className={cn("flex items-start gap-6 w-full max-w-5xl mx-auto", isUser ? "justify-end" : "justify-start")}
     >
       <div
         className={cn(

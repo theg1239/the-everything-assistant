@@ -356,4 +356,17 @@ button:focus-visible {
   .tool-scrollbar::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(to bottom, rgba(59, 130, 246, 0.7), rgba(139, 92, 246, 0.7));
   }
+  
+  /* Chat layout fixes */
+  .chat-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 90vh;
+    width: 100%;
+    position: relative;
+  }
+  
+  .chat-container > div {
+    width: 100%;
+  }
 }

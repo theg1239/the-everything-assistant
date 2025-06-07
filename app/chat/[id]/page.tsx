@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
-import { auth } from "@/lib/auth"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
 import { getChat, getMessages } from "@/lib/db"
 import { ChatInterface } from "@/components/chat-interface"
 
@@ -10,7 +11,7 @@ interface ChatPageProps {
 }
 
 export default async function ChatPage({ params }: ChatPageProps) {
-  const session = await auth()
+  const session = await getServerSession(authOptions)
 
   if (!session?.user) {
     redirect("/login")

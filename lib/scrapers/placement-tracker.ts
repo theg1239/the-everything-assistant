@@ -1,6 +1,8 @@
 import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium";
-import { join } from "path";
+import path from "path";
+import { getServerSession } from "next-auth";
+import { authOptions } from "../auth";
 
 export interface PlacementStatistics {
   totalOffers: number;
@@ -18,10 +20,13 @@ export async function scrapePlacementStats(
   year?: string,
   branch?: string
 ): Promise<PlacementStatistics | null> {
+  // Get the server session (if needed for auth-protected scraping)
+  const session = await getServerSession(authOptions);
+
   let browser;
   try {
     // Similar Chromium setup as papers-codechef.ts
-    const chromiumBinDir = join(
+    const chromiumBinDir = path.join(
       "/var/task/node_modules/@sparticuz/chromium/bin"
     );
 

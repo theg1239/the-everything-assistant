@@ -81,7 +81,7 @@ async function tryAPIApproach(department?: string, facultyName?: string) {
 async function tryBrowserScraping(department?: string, facultyName?: string) {
   let browser
   try {
-    // Use Puppeteer with @sparticuz/chromium for serverless
+    // Simplified Chromium setup - let @sparticuz/chromium handle the paths
     browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,

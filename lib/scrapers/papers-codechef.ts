@@ -1,27 +1,22 @@
-import puppeteer from "puppeteer-core";
-import chromium from "@sparticuz/chromium";
-import path from "path";
+import puppeteer from "puppeteer-core"
+import chromium from "@sparticuz/chromium"
 
-export async function scrapePapersCodeChef(
-  courseCode: string,
-  examType?: string,
-  year?: string
-) {
+export async function scrapePapersCodeChef(courseCode: string, examType?: string, year?: string) {
   try {
-    const apiResult = await tryAPIApproach(courseCode, examType, year);
+    const apiResult = await tryAPIApproach(courseCode, examType, year)
     if (apiResult.success && apiResult.papers.length > 0) {
-      return apiResult;
+      return apiResult
     }
 
-    return await tryBrowserScraping(courseCode, examType, year);
+    return await tryBrowserScraping(courseCode, examType, year)
   } catch (error: any) {
-    console.error("Error in scrapePapersCodeChef:", error);
+    console.error("Error in scrapePapersCodeChef:", error)
     return {
       success: false,
       papers: [],
       error: error.message,
       source: "papers.codechefvit.com",
-    };
+    }
   }
 }
 
@@ -504,39 +499,16 @@ function findFullCourseName(courseCode: string): string {
   return courseMap[courseCode.toUpperCase()] || courseCode
 }
 
-async function tryBrowserScraping(
-  courseCode: string,
-  examType?: string,
-  year?: string
-) {
-  let browser;
+async function tryBrowserScraping(courseCode: string, examType?: string, year?: string) {
+  let browser
   try {
-    // 1. In Vercel/Lambda, our code lives under /var/task; the Chromium 'bin' folder
-    //    ends up in node_modules/@sparticuz/chromium/bin there.
-    const chromiumBinDir = path.join(
-      "/var/task/node_modules/@sparticuz/chromium/bin"
-    );
-
-    // 2. Tell @sparticuz/chromium exactly where to find its assets:
-    let execPath: string;
-    try {
-      execPath = await chromium.executablePath(chromiumBinDir);
-    } catch (fallbackError) {
-      // If it fails (e.g. local dev), let it auto-resolve itself
-      console.warn(
-        `Couldn't find Chromium in ${chromiumBinDir}, falling back:`,
-        fallbackError
-      );
-      execPath = await chromium.executablePath();
-    }
-
-    // 3. Launch Puppeteer with that forced path
+    // Simplified Chromium setup - let @sparticuz/chromium handle the paths
     browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
-      executablePath: execPath,
+      executablePath: await chromium.executablePath(),
       headless: chromium.headless,
-    });
+    })
 
     const page = await browser.newPage()
     await page.setUserAgent(
@@ -548,7 +520,7 @@ async function tryBrowserScraping(
     await page.goto(searchUrl, { waitUntil: "networkidle2", timeout: 15000 })
 
     // Wait for content to load
-    await new Promise(res => setTimeout(res, 3000))
+    await new Promise((res) => setTimeout(res, 3000))
 
     const papers = await page.evaluate(
       (courseCode, examType, year) => {

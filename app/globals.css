@@ -280,12 +280,16 @@ button:focus-visible {
 @layer utilities {
   .sidebar-open .max-w-5xl {
     margin-left: 20rem;
+    margin-right: 1rem;
+    max-width: none;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
   
   @media (max-width: 768px) {
     .sidebar-open .max-w-5xl {
       margin-left: 0;
+      margin-right: 0;
+      max-width: 80rem;
     }
   }
   

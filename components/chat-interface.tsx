@@ -151,8 +151,16 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
           </motion.button>
         )}
 
-        <motion.div initial={{ opacity: 1 }} className="max-w-5xl mx-auto transition-all duration-300 ease-in-out" key="home-view">
-          <div className="flex items-center justify-between p-4">
+        <motion.div 
+          initial={{ opacity: 1 }} 
+          className={`transition-all duration-300 ease-in-out ${
+            sidebarOpen 
+              ? 'ml-0 md:ml-80 mr-0 md:mr-4 px-4' 
+              : 'max-w-5xl mx-auto px-4'
+          }`} 
+          key="home-view"
+        >
+          <div className="flex items-center justify-between py-4">
             <Button
               variant="ghost"
               size="sm"
@@ -239,7 +247,11 @@ export function ChatInterface({ initialMessages = [], chatId }: ChatInterfacePro
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.4, ease: "easeOut" }}
-        className={`max-w-5xl mx-auto h-[90vh] flex flex-col transition-all duration-300 ease-in-out chat-container ${sidebarOpen ? 'md:ml-80' : ''}`}
+        className={`h-[90vh] flex flex-col transition-all duration-300 ease-in-out chat-container ${
+          sidebarOpen 
+            ? 'ml-0 md:ml-80 mr-0 md:mr-4 px-4' 
+            : 'max-w-5xl mx-auto px-4'
+        }`}
         key="chat-view"
       >
         {/* Chat Header */}

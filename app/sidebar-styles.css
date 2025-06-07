@@ -3,10 +3,7 @@
 @tailwind utilities;
 
 /* Sidebar and chat interface transitions */
-.sidebar-open .max-w-5xl {
-  margin-left: 320px;
-  transition: margin-left 0.3s ease-in-out;
-}
+/* This has been replaced with inline styles in chat-interface.tsx */
 
 /* Collapsed sidebar button */
 .sidebar-toggle-collapsed {
@@ -53,15 +50,11 @@
 
 /* Media queries for better responsiveness */
 @media (max-width: 768px) {
-  .sidebar-open .max-w-5xl {
-    margin-left: 0;
-  }
+  /* Styles handled by inline styles in chat-interface.tsx */
 }
 
 /* Smooth transitions for elements */
-.chat-container {
-  transition: all 0.3s ease-in-out;
-}
+/* Chat container transitions now handled with inline styles */
 
 /* Gradient animations */
 @keyframes gradientShift {

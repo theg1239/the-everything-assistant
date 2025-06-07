@@ -1,9 +1,10 @@
-import { auth } from "@/lib/auth"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
 import { saveVote } from "@/lib/db"
 
 export async function POST(request: Request) {
   try {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
       return new Response("Unauthorized", { status: 401 })
     }

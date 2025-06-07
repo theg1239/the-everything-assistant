@@ -271,17 +271,31 @@ async function tryBrowserScraping(courseCode: string, examType?: string, year?: 
               (examType.toLowerCase() === "cat2" && (titleLower.includes("cat 2") || titleLower.includes("cat-2"))) ||
               (examType.toLowerCase() === "fat" && titleLower.includes("final"))
 
-            // Year matching
-            const matchesYear = !year || titleLower.includes(year) || metaLower.includes(year)
-
+            const matchesYear = !year || titleLower.includes(year) || metaLower.includes(year)            
             if (matchesCourse && matchesExam && matchesYear) {
+              let extractedExamType = examType || ""
+              if (!extractedExamType) {
+                if (titleLower.includes("cat-1") || titleLower.includes("cat 1")) extractedExamType = "CAT-1"
+                else if (titleLower.includes("cat-2") || titleLower.includes("cat 2")) extractedExamType = "CAT-2"
+                else if (titleLower.includes("fat") || titleLower.includes("final")) extractedExamType = "FAT"
+                else if (titleLower.includes("quiz")) extractedExamType = "Quiz"
+                else extractedExamType = "unknown"
+              }
+              
+              let extractedYear = year || ""
+              if (!extractedYear) {
+                const yearMatch = title.match(/20\d{2}/)
+                if (yearMatch) extractedYear = yearMatch[0]
+                else extractedYear = "unknown"
+              }
+              
               results.push({
                 title: title.substring(0, 100),
                 url: href.startsWith("http") ? href : `https://papers.codechefvit.com${href}`,
                 source: "papers.codechefvit.com",
                 metadata: meta || "",
-                examType: examType || "unknown",
-                year: year || "unknown",
+                examType: extractedExamType,
+                year: extractedYear,
               })
             }
           }

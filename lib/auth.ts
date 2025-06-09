@@ -1,11 +1,11 @@
-import NextAuth from "next-auth"
+import { NextAuthOptions } from "next-auth"
+import { getServerSession } from "next-auth/next"
 import GoogleProvider from "next-auth/providers/google"
 import { PrismaAdapter } from "@next-auth/prisma-adapter"
 import { prisma } from "./prisma"
-import type { Session, User } from "next-auth"
+import type { Session } from "next-auth"
 
-
-export const authOptions = {
+export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
     GoogleProvider({
@@ -22,14 +22,14 @@ export const authOptions = {
     }),
   ],
   session: {
-    strategy: "database" as const
+    strategy: "database",
   },
   callbacks: {
-    session({ session, user }: { session: Session; user: User }) {
-      if (session.user && user && user.id) {
-        session.user.id = user.id || ""
+    session: ({ session, user }) => {
+      if (session.user) {
+        session.user.id = user.id;
       }
-      return session
+      return session;
     },
   },
   pages: {
@@ -37,15 +37,5 @@ export const authOptions = {
   },
 }
 
-export const GET = async (req: Request, ctx?: { params: any }) => {
-  return await NextAuth(authOptions).GET(req, ctx)
-}
-
-export const POST = async (req: Request, ctx?: { params: any }) => {
-  return await NextAuth(authOptions).POST(req, ctx)
-}
-
-const nextAuthHandler = NextAuth(authOptions)
-export const auth = nextAuthHandler.auth
-export const signIn = nextAuthHandler.signIn
-export const signOut = nextAuthHandler.signOut
+// Helper to get session with typed result
+export const auth = () => getServerSession(authOptions)

@@ -74,12 +74,10 @@ input:focus-visible,
   --tw-ring-offset-shadow: none !important;
 }
 
-/* Ultra-smooth scrolling */
 html {
   scroll-behavior: smooth;
 }
 
-/* Custom scrollbar with minimal design */
 ::-webkit-scrollbar {
   width: 4px;
 }

@@ -14,6 +14,7 @@ import { MessageBubble } from "@/components/message-bubble"
 import { MultimodalInput } from "@/components/multimodal-input"
 import { Sidebar } from "@/components/sidebar"
 import { Canvas } from "@/components/canvas"
+import ResearchPreviewModal from "@/components/research-preview-modal"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
@@ -140,11 +141,11 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     setCanvasContent(content)
     setCanvasOpen(true)
   }
-
   // first‐message UI
   if (!showFullChat) {
     return (
       <>
+        <ResearchPreviewModal />
         <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
         <div className="flex flex-col h-screen bg-background text-foreground relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-background via-muted/20 to-background" />
@@ -208,12 +209,12 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
           </div>
         </div>
       </>
-    )
-  }
+    )  }
 
   // full‐chat UI
   return (
     <>
+      <ResearchPreviewModal />
       <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
       <Canvas
         isOpen={canvasOpen}
@@ -230,8 +231,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                 type: "document",
               }
             : undefined
-        }
-      />
+        }      />
 
       <div className="flex flex-col h-screen bg-background text-foreground">
         <header className="flex-shrink-0 sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border">

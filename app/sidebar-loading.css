@@ -1,0 +1,49 @@
+.sidebar-loading-profile {
+  animation: pulse 2s infinite;
+}
+
+.sidebar-loading-item {
+  animation: pulse 2s infinite;
+  animation-delay: calc(var(--delay, 0) * 100ms);
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0.5;
+  }
+}
+
+/* Enhanced background gradient for loading items */
+.sidebar-loading-item,
+.sidebar-loading-profile div {
+  background: linear-gradient(90deg, 
+    var(--muted, rgba(0, 0, 0, 0.1)), 
+    var(--muted-hover, rgba(0, 0, 0, 0.15)), 
+    var(--muted, rgba(0, 0, 0, 0.1))
+  );
+  background-size: 200% 100%;
+  animation: pulse 2s infinite, gradient 2s infinite;
+  animation-delay: calc(var(--delay, 0) * 100ms);
+}
+
+@keyframes gradient {
+  0% {
+    background-position: 100% 50%;
+  }
+  50% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 100% 50%;
+  }
+}
+
+.sidebar-user-section {
+  backdrop-filter: blur(8px);
+}

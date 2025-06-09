@@ -111,7 +111,7 @@ async function tryBrowserScraping(year?: string, company?: string): Promise<Plac
 
         if (!companyTable) return []
 
-        const rows = Array.from(companyTable.querySelectorAll("tr")).slice(1) // Skip header row
+        const rows = Array.from(companyTable.querySelectorAll("tr")).slice(1)
         return rows
           .map((row) => {
             const cells = Array.from(row.querySelectorAll("td, th"))
@@ -135,7 +135,7 @@ async function tryBrowserScraping(year?: string, company?: string): Promise<Plac
 
         if (!offersTable) return []
 
-        const rows = Array.from(offersTable.querySelectorAll("tr")).slice(1) // Skip header row
+        const rows = Array.from(offersTable.querySelectorAll("tr")).slice(1)
         return rows
           .map((row) => {
             const cells = Array.from(row.querySelectorAll("td, th"))

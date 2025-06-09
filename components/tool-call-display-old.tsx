@@ -12,15 +12,12 @@ import {
   X, 
   Sparkles,
   CheckCircle2,
-  AlertCircle,
   Users,
   Building2,
   GraduationCap,
   TrendingUp
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { cn } from "@/lib/utils"
 
 interface ToolCallDisplayProps {
   toolCalls: any[]
@@ -31,18 +28,16 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
   const [showCard, setShowCard] = useState(false)
   const [fullView, setFullView] = useState(false)
 
-  // Check if all tool calls are completed
   const allCompleted = toolCalls.every((toolCall) => toolCall.state === "result" || toolCall.result !== undefined)
 
   useEffect(() => {
     if (allCompleted && toolCalls.length > 0) {
-      // Small delay to make the appearance smoother
       const timer = setTimeout(() => setShowCard(true), 300)
       return () => clearTimeout(timer)
     } else {
       setShowCard(false)
     }
-  }, [allCompleted, toolCalls.length])  // Show loading state while tools are executing
+  }, [allCompleted, toolCalls.length])
   if (!allCompleted && toolCalls.length > 0) {
     return (
       <div className="mt-3 animate-in fade-in-0 slide-in-from-top-2 duration-300">
@@ -68,26 +63,19 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
     )
   }
 
-  // Don't show anything if no completed tool calls or card shouldn't be shown yet
   if (!showCard || toolCalls.length === 0) return null
-  // Full view modal component (rendered via portal)
   const FullViewModal = () => (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-in fade-in-0 duration-300">
-      {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/70 backdrop-blur-md"
         onClick={() => setFullView(false)}
       />
-      {/* Dialog */}
       <div className="relative w-full max-w-6xl h-[85vh] overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-8 duration-300">
-        {/* Glass background */}
         <div className="absolute inset-0 glass-effect-strong rounded-3xl shadow-2xl">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-purple-500/10 to-cyan-500/10 rounded-3xl animate-gradient"></div>
         </div>
         
-        {/* Content Container */}
         <div className="relative h-full flex flex-col">
-          {/* Enhanced Header */}
           <div className="flex items-center justify-between p-6 border-b border-slate-700/40 rounded-t-3xl">
             <div className="flex items-center space-x-4">
               <div className="relative p-3 rounded-2xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 border border-green-500/30">
@@ -122,16 +110,12 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
             </Button>
           </div>
 
-          {/* Enhanced Content Area */}
           <div className="flex-1 overflow-y-auto tool-scrollbar">
             <div className="p-6 space-y-8">                {toolCalls.map((toolCall, index) => (
                 <div key={index} className="relative group">
-                  {/* Timeline indicator */}
                   <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-500 via-purple-500 to-cyan-500 rounded-full opacity-80"></div>
                   
-                  {/* Tool Card */}
                   <div className="ml-8 space-y-6">
-                    {/* Tool Header */}
                     <div className="flex items-center space-x-4">
                       <div className="relative p-3 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-500/40 group-hover:border-blue-400/60 transition-all duration-300">
                         <div className="absolute inset-0 bg-blue-400/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
@@ -176,7 +160,6 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
                       </div>
                     )}
 
-                    {/* Tool Results */}
                     {toolCall.result && (
                       <div className="space-y-4">
                         <div className="flex items-center space-x-2">
@@ -322,7 +305,6 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
                           </div>
                         )}
 
-                        {/* Statistics data */}
                         {toolCall.result.data && (
                           <div className="space-y-4">
                             <div className="flex items-center space-x-3 p-4 rounded-xl glass-effect border border-slate-700/30">
@@ -353,11 +335,9 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
 
   return (
     <>
-      {/* Compact view */}
       <div className="mt-3 animate-in fade-in-0 slide-in-from-top-2 duration-300">
         <div className="relative overflow-hidden rounded-xl bg-muted border border-border shadow-sm">
           
-          {/* Header */}
           <div className="relative p-4 border-b border-border">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
@@ -396,7 +376,7 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
                 </Button>
               </div>
             </div>
-          </div>          {/* Compact Content */}
+          </div> 
           {expanded && (
             <div className="relative p-4 space-y-4 max-h-96 overflow-y-auto">
               {toolCalls.map((toolCall, index) => (
@@ -410,7 +390,6 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
                   
                   {toolCall.result && (
                     <div className="ml-6 space-y-2">
-                      {/* Basic result summary */}
                       {toolCall.result.papers && (
                         <div className="text-xs text-muted-foreground">
                           Found {toolCall.result.papers.length} papers
@@ -440,7 +419,6 @@ export function ToolCallDisplay({ toolCalls }: ToolCallDisplayProps) {
         </div>
       </div>
 
-      {/* Full view modal rendered via portal */}
       {fullView && typeof document !== 'undefined' && createPortal(<FullViewModal />, document.body)}
     </>
   )

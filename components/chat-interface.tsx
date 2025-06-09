@@ -4,7 +4,8 @@ import { useState, useRef, useEffect, memo } from "react"
 import { useChat } from "ai/react"
 import { useRouter } from "next/navigation"
 import { AnimatePresence, motion } from "framer-motion"
-import { Menu, ArrowLeft, FileText, Plus } from "lucide-react"
+import { ArrowLeft, FileText, Plus } from "lucide-react"
+import { HamburgerButton } from "@/components/hamburger-button"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { SuggestedQuestions } from "@/components/suggested-questions"
@@ -13,7 +14,6 @@ import { MessageBubble } from "@/components/message-bubble"
 import { MultimodalInput } from "@/components/multimodal-input"
 import { Sidebar } from "@/components/sidebar"
 import { Canvas } from "@/components/canvas"
-import React from "react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
@@ -28,25 +28,39 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const [canvasOpen, setCanvasOpen] = useState(false)
   const [canvasContent, setCanvasContent] = useState<string>("")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [hasUserInitiatedConversation, setHasUserInitiatedConversation] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
-  
   const [optimisticChatId, setOptimisticChatId] = useState<string | undefined>(chatId)
 
+  // Persist sidebar state
   useEffect(() => {
     if (typeof window === "undefined") return
-    const savedSidebarState = localStorage.getItem('sidebarOpen')
-    if (savedSidebarState !== null) {
-      setSidebarOpen(savedSidebarState === 'true')
-    }
+    const saved = localStorage.getItem("sidebarOpen")
+    if (saved !== null) setSidebarOpen(saved === "true")
   }, [])
 
   useEffect(() => {
     if (typeof window === "undefined") return
-    localStorage.setItem('sidebarOpen', String(sidebarOpen))
+    localStorage.setItem("sidebarOpen", String(sidebarOpen))
   }, [sidebarOpen])
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading, setInput, error, stop } = useChat({
+  // Track whether we have any user‐sent messages in the history
+  useEffect(() => {
+    const hasUser = initialMessages.some((m) => m.role === "user")
+    setHasUserInitiatedConversation(hasUser)
+  }, [initialMessages])
+
+  const {
+    messages,
+    input,
+    handleInputChange,
+    handleSubmit: originalHandleSubmit,
+    isLoading,
+    setInput,
+    error,
+    stop,
+  } = useChat({
     api: "/api/chat",
     initialMessages: initialMessages.map((msg) => ({
       id: msg.id,
@@ -54,60 +68,65 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       content: msg.content,
       toolInvocations: msg.toolInvocations,
     })),
-    body: optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : undefined,
-    onResponse: (response) => {
-      if (!showFullChat) {
-        setShowFullChat(true)
-      }
+    body: optimisticChatId
+      ? { id: optimisticChatId }
+      : chatId
+      ? { id: chatId }
+      : undefined,
+    onResponse: (res) => {
+      // make sure the full chat view is open
+      if (!showFullChat) setShowFullChat(true)
       setErrorMessage(null)
-      const newChatId = response.headers.get("X-Chat-Id")
-      const newChatPath = response.headers.get("X-Chat-Path")
-      if (newChatId && newChatPath && !chatId) {
-        setOptimisticChatId(newChatId)
-        window.history.replaceState({}, '', newChatPath)
+      // grab new chatId & path headers
+      const newId = res.headers.get("X-Chat-Id")
+      const newPath = res.headers.get("X-Chat-Path")
+      if (newId && newPath && !chatId) {
+        setOptimisticChatId(newId)
+        window.history.replaceState({}, "", newPath)
       }
     },
-    onError: (error) => {
-      console.error("Chat error:", error)
+    onError: (err) => {
+      console.error(err)
       toast.error("Something went wrong. Please try again.")
-      setErrorMessage("something went wrong. please try again.")
+      setErrorMessage("Unable to connect. Please check your connection and try again.")
     },
   })
 
+  // scroll as messages arrive or loading state changes
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
+  }, [messages, isLoading])
 
+  // If there's a connectivity error
   useEffect(() => {
     if (error) {
-      setErrorMessage("unable to connect. please check your connection and try again.")
+      setErrorMessage("Unable to connect. Please check your connection and try again.")
     }
   }, [error])
 
   const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (input.trim()) {
-      if (!showFullChat) {
-        setShowFullChat(true)
-      }
-      setErrorMessage(null)
-      handleSubmit(e)
-    }
+    if (!input.trim()) return
+
+    if (!showFullChat) setShowFullChat(true)
+    setErrorMessage(null)
+    setHasUserInitiatedConversation(true)
+    originalHandleSubmit(e)
   }
 
   const handleSuggestedQuestion = (question: string) => {
     setInput(question)
-    if (!showFullChat) {
-      setShowFullChat(true)
-    }
+    if (!showFullChat) setShowFullChat(true)
     setErrorMessage(null)
+    setHasUserInitiatedConversation(true)
 
+    // submit after a tiny delay so the input state settles
     setTimeout(() => {
       const form = document.createElement("form")
       const event = new Event("submit", { bubbles: true, cancelable: true })
       Object.defineProperty(event, "target", { value: form, enumerable: true })
       Object.defineProperty(event, "preventDefault", { value: () => {}, enumerable: true })
-      handleSubmit(event as any)
+      originalHandleSubmit(event as any)
     }, 100)
   }
 
@@ -118,10 +137,11 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     setCanvasOpen(true)
   }
   const createCanvasFromMessage = (content: string) => {
-    // Create a new canvas document with the message content
     setCanvasContent(content)
     setCanvasOpen(true)
   }
+
+  // first‐message UI
   if (!showFullChat) {
     return (
       <>
@@ -129,35 +149,13 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         <div className="flex flex-col h-screen bg-background text-foreground relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-background via-muted/20 to-background" />
           <div className="relative z-10 flex flex-col h-full">
-            {/* Header with sidebar toggle */}
-            <header className="flex-shrink-0 sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border">
+            <header className="flex-shrink-0 sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border">
               <div className="flex h-14 items-center px-4 gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setSidebarOpen(true)}
-                  className="md:hidden h-9 w-9"
-                >
-                  <Menu className="h-4 w-4" />
-                </Button>
-                
-                <Button
-                  variant="outline"
-                  className="ml-auto md:ml-0 h-9"
-                  onClick={() => {
-                    router.push('/')
-                    router.refresh()
-                  }}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Chat
-                </Button>
+                <HamburgerButton onClick={() => setSidebarOpen(!sidebarOpen)} className="md:hidden" />
               </div>
             </header>
-
             <div className="flex-1 flex flex-col items-center justify-center px-4 space-y-8">
               <ChatHeader />
-
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -172,9 +170,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                   placeholder="ask me for past papers..."
                   stop={stop}
                 />
-              </motion.div>
-
-              {errorMessage && (
+              </motion.div>              {errorMessage && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -182,12 +178,31 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                 >
                   {errorMessage}
                 </motion.div>
+              )}              {/* Show thinking indicator only when waiting for the first response */}
+              {isLoading && input.trim() !== "" && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center justify-center space-x-3 text-muted-foreground py-4"
+                >
+                  <div className="flex space-x-1">
+                    <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
+                    <div
+                      className="w-2 h-2 bg-primary rounded-full animate-pulse"
+                      style={{ animationDelay: "0.2s" }}
+                    ></div>
+                    <div
+                      className="w-2 h-2 bg-primary rounded-full animate-pulse"
+                      style={{ animationDelay: "0.4s" }}
+                    ></div>
+                  </div>
+                  <span className="text-sm">thinking...</span>
+                </motion.div>
               )}
-
-              <SuggestedQuestions 
-                isFirstMessage={true} 
-                onQuestionClick={handleSuggestedQuestion} 
-                sidebarOpen={sidebarOpen} 
+              <SuggestedQuestions
+                isFirstMessage={true}
+                onQuestionClick={handleSuggestedQuestion}
+                sidebarOpen={sidebarOpen}
               />
             </div>
           </div>
@@ -195,40 +210,37 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       </>
     )
   }
+
+  // full‐chat UI
   return (
     <>
       <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
-      <Canvas 
-        isOpen={canvasOpen} 
+      <Canvas
+        isOpen={canvasOpen}
         onClose={() => {
           setCanvasOpen(false)
           setCanvasContent("")
-        }} 
+        }}
         chatId={optimisticChatId}
-        initialDocument={canvasContent ? {
-          title: "New Document",
-          content: canvasContent,
-          type: "document"
-        } : undefined}
+        initialDocument={
+          canvasContent
+            ? {
+                title: "New Document",
+                content: canvasContent,
+                type: "document",
+              }
+            : undefined
+        }
       />
-      
+
       <div className="flex flex-col h-screen bg-background text-foreground">
-        {/* Header */}
-        <header className="flex-shrink-0 sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border">
+        <header className="flex-shrink-0 sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border">
           <div className="flex h-14 items-center px-4 gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSidebarOpen(true)}
-              className="h-9 w-9"
-            >
-              <Menu className="h-4 w-4" />
-            </Button>
-            
+            <HamburgerButton onClick={() => setSidebarOpen(!sidebarOpen)} />
             <Button
               variant="outline"
               onClick={() => {
-                router.push('/')
+                router.push("/")
                 router.refresh()
               }}
               className="h-9"
@@ -236,22 +248,16 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               <Plus className="h-4 w-4 mr-2" />
               New Chat
             </Button>
-
-            <Button
-              variant="ghost"
-              onClick={openCanvas}
-              className="ml-auto h-9"
-            >
+            <Button variant="ghost" onClick={openCanvas} className="ml-auto h-9">
               <FileText className="h-4 w-4 mr-2" />
               Canvas
             </Button>
           </div>
         </header>
 
-        {/* Messages Container */}
         <div className="flex-1 overflow-hidden">
           <div className="h-full overflow-y-auto">
-            <div className="max-w-3xl mx-auto px-4 py-6 space-y-6 pb-32">
+            <div className="max-w-3xl mx-auto px-4 py-4 space-y-4 pb-10">
               {errorMessage && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -263,19 +269,16 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               )}
 
               <AnimatePresence>
-                {messages.map((message, index) => (                  <MessageBubble
-                    key={`${message.id}-${index}`}
-                    message={{
-                      ...message,
-                      toolInvocations: message.toolInvocations
-                    }}
+                {messages.map((message, idx) => (
+                  <MessageBubble
+                    key={`${message.id}-${idx}`}
+                    message={message}
                     chatId={optimisticChatId}
                     onCreateCanvas={createCanvasFromMessage}
                   />
                 ))}
-              </AnimatePresence>
-
-              {isLoading && (
+              </AnimatePresence>              {/* Show "thinking..." indicator only when waiting for the first response */}
+              {isLoading && messages.length > 0 && messages[messages.length - 1].role === "user" && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -301,9 +304,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
           </div>
         </div>
 
-        {/* Input Area */}
-        <div className="flex-shrink-0 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="max-w-3xl mx-auto px-4 py-4">
+        <div className="flex-shrink-0 border-t border-border bg-background/95 backdrop-blur">
+          <div className="max-w-3xl mx-auto px-4 py-3">
             <MultimodalInput
               input={input}
               setInput={setInput}

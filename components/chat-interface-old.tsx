@@ -32,7 +32,6 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const inputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   
-  // --- Optimistic navigation state ---
   const [optimisticChatId, setOptimisticChatId] = useState<string | undefined>(chatId)
 
   useEffect(() => {
@@ -78,12 +77,10 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         setShowFullChat(true)
       }
       setErrorMessage(null)
-      // Optimistically update chatId and path
       const newChatId = response.headers.get("X-Chat-Id")
       const newChatPath = response.headers.get("X-Chat-Path")
       if (newChatId && newChatPath && !chatId) {
         setOptimisticChatId(newChatId)
-        // Instead of router.replace, update the URL without reload
         window.history.replaceState({}, '', newChatPath)
       }
     },
@@ -147,7 +144,6 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     }
   }, [optimisticChatId, chatId])
 
-  // Common sidebar toggle button component
   const SidebarToggleButton = () => (
     !sidebarOpen && (
       <motion.button
@@ -163,9 +159,6 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     )
   );
 
-  // Container classes for the chat interface. We rely on the body
-  // `sidebar-open` class (managed via `useEffect` above) for width
-  // adjustments when the sidebar is visible.
   const chatContainerClasses =
     "chat-container h-full flex flex-col justify-between max-w-5xl w-full mx-auto px-4";
 
@@ -259,7 +252,6 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         className={chatContainerClasses}
         key="chat-view"
       >
-        {/* Chat Header - fixed at top */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -296,7 +288,6 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
           </Button>
         </motion.div>
 
-        {/* Messages Area */}
         <ScrollArea className="flex-1 overflow-y-auto">
           <div className="flex flex-col p-6 space-y-6 bg-slate-800/10 backdrop-blur-xl custom-scrollbar w-full">
           {errorMessage && (
@@ -315,7 +306,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                 key={`${message.id}-${index}`}
                 message={{
                   ...message,
-                  toolInvocations: message.toolInvocations // always use the saved toolInvocations from DB
+                  toolInvocations: message.toolInvocations
                 }}
                 chatId={optimisticChatId}
               />
@@ -345,7 +336,6 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
 
           <div ref={messagesEndRef} />
 
-          {/* Hide suggestions when inside a chat */}
           {!showFullChat && messages.length > 0 && messages.length < 4 && !isLoading && (
             <SuggestedQuestions
               isFirstMessage={false}
@@ -355,7 +345,6 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
           </div>
         </ScrollArea>
 
-        {/* Input Area pinned to bottom */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

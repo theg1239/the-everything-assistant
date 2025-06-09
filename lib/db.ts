@@ -43,7 +43,6 @@ export interface Vote {
   is_upvoted: boolean
 }
 
-// User operations
 export async function getUser(email: string): Promise<User | null> {
   try {
     const user = await prisma.user.findUnique({
@@ -67,11 +66,10 @@ export async function createUser(email: string, name: string, image?: string): P
   return user as User
 }
 
-// Chat operations
 export async function getChats(userId: string): Promise<Chat[]> {
   try {
     const chats = await prisma.chat.findMany({
-      where: { userId }, // changed from user_id to userId
+      where: { userId },
       orderBy: { updated_at: "desc" },
     })
     return chats as Chat[]
@@ -86,7 +84,7 @@ export async function getChat(id: string, userId: string): Promise<Chat | null> 
     const chat = await prisma.chat.findFirst({
       where: {
         id,
-        userId, // changed from user_id to userId
+        userId,
       },
     })
     return chat as Chat | null
@@ -126,14 +124,12 @@ export async function deleteChat(id: string, userId: string): Promise<void> {
   })
 }
 
-// Message operations
 export async function getMessages(chatId: string): Promise<Message[]> {
   try {
     const messages = await prisma.message.findMany({
       where: { chatId },
       orderBy: { created_at: "asc" },
     })
-    // Map tool_invocations (DB) to toolInvocations (frontend)
     return messages.map((msg) => ({
       ...msg,
       toolInvocations: msg.tool_invocations ?? undefined,
@@ -151,7 +147,6 @@ export async function saveMessage(
   toolInvocations?: any,
   messageId?: string,
 ): Promise<Message> {
-  // Always ensure toolInvocations is JSON-serializable before saving
   let safeToolInvocations = undefined
   if (toolInvocations) {
     try {
@@ -163,7 +158,7 @@ export async function saveMessage(
   }
   const message = await prisma.message.create({
     data: {
-      id: messageId, // Use provided ID if available, otherwise Prisma will generate one
+      id: messageId,
       chatId,
       role,
       content,
@@ -173,7 +168,6 @@ export async function saveMessage(
   return message as Message
 }
 
-// Canvas document operations
 export async function getCanvasDocuments(chatId: string): Promise<CanvasDocument[]> {
   try {
     const documents = await prisma.canvasDocument.findMany({
@@ -221,7 +215,6 @@ export async function deleteCanvasDocument(id: string): Promise<void> {
   })
 }
 
-// Vote operations
 export async function getVote(chatId: string, messageId: string): Promise<Vote | null> {
   try {
     const vote = await prisma.vote.findUnique({
@@ -241,7 +234,6 @@ export async function getVote(chatId: string, messageId: string): Promise<Vote |
 
 export async function saveVote(chatId: string, messageId: string, isUpvoted: boolean): Promise<void> {
   try {
-    // First, check if the message exists
     const message = await prisma.message.findUnique({
       where: { id: messageId }
     })
@@ -251,7 +243,6 @@ export async function saveVote(chatId: string, messageId: string, isUpvoted: boo
       throw new Error(`Message with ID ${messageId} not found`)
     }
     
-    // Check if the chat exists
     const chat = await prisma.chat.findUnique({
       where: { id: chatId }
     })
@@ -261,7 +252,6 @@ export async function saveVote(chatId: string, messageId: string, isUpvoted: boo
       throw new Error(`Chat with ID ${chatId} not found`)
     }
     
-    // Verify the message belongs to the chat
     if (message.chatId !== chatId) {
       console.error(`Message ${messageId} does not belong to chat ${chatId}`)
       throw new Error(`Message ${messageId} does not belong to chat ${chatId}`)

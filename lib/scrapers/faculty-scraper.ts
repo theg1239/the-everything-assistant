@@ -38,11 +38,9 @@ async function tryBrowserScraping(department?: string, facultyName?: string) {
       try {
         await page.goto(url, { waitUntil: "networkidle2", timeout: 20000 })
         const links = await page.evaluate(() => {
-          // Selectors to find links to department faculty pages
           const selectors = ".eael-adv-accordion a, .school-box a, .card-body a, .elementor-widget-icon-list a";
           return Array.from(document.querySelectorAll(selectors))
                        .map(a => (a as HTMLAnchorElement).href)
-                       // Filter for URLs that seem to be faculty lists
                        .filter(href => href && (href.includes('/allfaculty/') || href.includes('/faculty')));
         })
         links.forEach(link => departmentUrls.add(link))
@@ -60,7 +58,6 @@ async function tryBrowserScraping(department?: string, facultyName?: string) {
         await page.goto(deptUrl, { waitUntil: "networkidle2", timeout: 20000 })
         console.log(`Scraping department: ${deptUrl}`)
         
-        // Scrape the list of faculty profiles on the department page
         const profilesOnPage = await page.evaluate(() => {
           const facultyCards = document.querySelectorAll("article.exad-post-grid-three")
           return Array.from(facultyCards).map(card => {
@@ -130,7 +127,7 @@ async function tryBrowserScraping(department?: string, facultyName?: string) {
 
     return {
       success: true,
-      faculty: filteredResults.slice(0, 100), // Increased from 20 to 100 results
+      faculty: filteredResults.slice(0, 100),
       totalFound: filteredResults.length,
       searchCriteria: { department, facultyName },
       message: `Found ${filteredResults.length} faculty members.`,

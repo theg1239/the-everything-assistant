@@ -21,7 +21,6 @@ export function generateChatPath(): string {
 }
 
 export function extractTitleFromContent(content: string): string {
-  // Extract first meaningful sentence or phrase
   const cleaned = content.replace(/[#*`]/g, "").trim()
   const firstLine = cleaned.split("\n")[0]
   const truncated = firstLine.length > 50 ? firstLine.substring(0, 50) + "..." : firstLine

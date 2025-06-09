@@ -103,7 +103,6 @@ async function tryBrowserScraping(courseCode: string, examType?: string, year?: 
       await page.keyboard.press("Enter")
       await new Promise((res) => setTimeout(res, 2000))
     } catch {
-      // no search box: ok
     }
 
     const papers = await page.evaluate(
@@ -121,10 +120,8 @@ async function tryBrowserScraping(courseCode: string, examType?: string, year?: 
           const tl = titleText.toLowerCase()
           const cc = courseCode.toLowerCase()
 
-          // Course matching
           const okCourse = tl.includes(cc) || tl.includes(cc.replace(/(\d+)/, " $1"))
 
-          // Better exam type matching
           let okExam = true
           if (examType) {
             const examTypeLower = examType.toLowerCase()

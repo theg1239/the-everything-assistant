@@ -40,12 +40,10 @@ const PureMessageBubble = ({ message, chatId, onCreateCanvas }: MessageBubblePro
         )}
 
         <div className="flex flex-col gap-4 w-full">
-          {/* Tool calls display */}
           {message.toolInvocations && message.toolInvocations.length > 0 && (
             <ToolCallDisplay toolCalls={message.toolInvocations} />
           )}
 
-          {/* Message content */}
           <div
             className={cn('flex flex-col gap-4', {
               'bg-primary text-primary-foreground px-3 py-2 rounded-xl':

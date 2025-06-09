@@ -21,7 +21,7 @@ interface Chat {
 
 interface SidebarProps {
   isOpen: boolean
-  [key: string]: any // Allow any extra props for workaround
+  [key: string]: any
 }
 
 export function Sidebar(props: SidebarProps) {
@@ -39,7 +39,6 @@ export function Sidebar(props: SidebarProps) {
   }, [])
 
   useEffect(() => {
-    // Update selected chatId based on pathname
     const match = pathname.match(/\/chat\/(.+)$/)
     if (match) setSelectedChatId(match[1])
     else setSelectedChatId(null)
@@ -77,9 +76,7 @@ export function Sidebar(props: SidebarProps) {
     }
   }
 
-  // Optimistic new chat creation
   const startNewChat = () => {
-    // Optimistically add a placeholder chat to the sidebar
     const tempId = `temp-${Date.now()}`
     setChats((prev) => [
       {
@@ -102,7 +99,6 @@ export function Sidebar(props: SidebarProps) {
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Mobile overlay */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -111,20 +107,22 @@ export function Sidebar(props: SidebarProps) {
             onClick={onToggle}
           />
 
-          {/* Sidebar */}
           <motion.div
             initial={{ x: -300 }}
             animate={{ x: 0 }}
             exit={{ x: -300 }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="fixed left-0 top-0 z-50 h-full w-[var(--sidebar-width)] bg-background border-r border-border flex flex-col shadow-xl"
+            className="fixed left-0 top-0 z-50 h-full w-[var(--sidebar-width)] bg-background border-r border-border flex flex-col shadow-xl overflow-hidden"
             onMouseEnter={() => setHovering(true)}
             onMouseLeave={() => setHovering(false)}
           >
-            {/* Header with collapse button */}
             <div className="p-4 border-b border-border flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <h2 className="text-lg font-medium text-foreground">vit assistant</h2>
+                {loading ? (
+                  <div className="h-7 w-32 bg-muted/60 rounded sidebar-loading-item"></div>
+                ) : (
+                  <h2 className="text-lg font-medium text-foreground">vit assistant</h2>
+                )}
               </div>
               <Button
                 variant="ghost"
@@ -138,29 +136,48 @@ export function Sidebar(props: SidebarProps) {
             </div>
             
             <div className="p-4 border-b border-border">
-              <Button 
-                onClick={startNewChat} 
-                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground border-0 rounded-lg transition-all duration-200"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                New Chat
-              </Button>
+              {loading ? (
+                <div className="h-10 bg-muted/60 rounded-lg sidebar-loading-item" style={{ '--delay': 0 } as React.CSSProperties}></div>
+              ) : (
+                <Button 
+                  onClick={startNewChat} 
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground border-0 rounded-lg transition-all duration-200"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Chat
+                </Button>
+              )}
             </div>
 
-            {/* Chat History */}
             <ScrollArea className="flex-1 p-4">
               <div className="space-y-1">
                 {loading ? (
-                  <div className="space-y-1">
-                    {[...Array(5)].map((_, i) => (
-                      <div key={i} className="h-10 bg-muted rounded-lg animate-pulse" />
-                    ))}
+                  <div className="h-full w-full flex flex-col space-y-3">
+                    <div className="flex flex-col space-y-2">
+                      {[...Array(8)].map((_, i) => (
+                        <div 
+                          key={i} 
+                          className="h-12 bg-muted/60 rounded-lg sidebar-loading-item" 
+                          style={{ '--delay': i } as React.CSSProperties} 
+                        >
+                          <div className="flex items-center p-3">
+                            <div className="w-4 h-4 rounded-full bg-muted-foreground/20 mr-3"></div>
+                            <div className="flex-1">
+                              <div className="h-3 bg-muted-foreground/20 rounded w-3/4 mb-2"></div>
+                              <div className="h-2 bg-muted-foreground/10 rounded w-1/2"></div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : chats.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-8">
-                    <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">No chats yet</p>
-                    <p className="text-xs">Start a conversation to see your history</p>
+                  <div className="text-center text-muted-foreground py-6">
+                    <div className="w-16 h-16 bg-muted/30 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <MessageSquare className="h-8 w-8 opacity-50" />
+                    </div>
+                    <p className="text-sm font-medium mb-1">No chat history</p>
+                    <p className="text-xs text-muted-foreground">Start a conversation to see your history here</p>
                   </div>
                 ) : (
                   chats.map((chat) => (
@@ -169,9 +186,9 @@ export function Sidebar(props: SidebarProps) {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       className={cn(
-                        "group relative flex items-center p-2 rounded-lg cursor-pointer transition-colors",
+                        "group relative flex items-center p-3 rounded-lg cursor-pointer transition-all",
                         (selectedChatId === chat.id || pathname === `/chat/${chat.id}`)
-                          ? "bg-muted text-foreground"
+                          ? "bg-muted text-foreground shadow-sm"
                           : "hover:bg-muted/50 text-muted-foreground hover:text-foreground",
                       )}
                       onClick={() => {
@@ -184,8 +201,8 @@ export function Sidebar(props: SidebarProps) {
                     >
                       <MessageSquare className="h-4 w-4 mr-3 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm truncate">{chat.title}</p>
-                        <p className="text-xs opacity-60">{formatDate(chat.updatedAt)}</p>
+                        <p className="text-sm font-medium truncate">{chat.title}</p>
+                        <p className="text-xs text-muted-foreground">{formatDate(chat.updatedAt)}</p>
                       </div>
                       <Button
                         variant="ghost"
@@ -201,41 +218,60 @@ export function Sidebar(props: SidebarProps) {
               </div>
             </ScrollArea>
 
-            {/* User Menu */}
-            <div className="p-4 border-t border-border bg-muted/30">
-              <div className="flex items-center space-x-3 mb-3">
-                {session?.user?.image ? (
-                  <img
-                    src={session.user.image || "/placeholder.svg"}
-                    alt={session.user.name || "User"}
-                    className="h-8 w-8 rounded-full"
-                  />
-                ) : (
-                  <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
-                    <User className="h-4 w-4 text-primary-foreground" />
+            <div className="p-4 border-t border-border bg-muted/30 sidebar-user-section">
+              {loading ? (
+                <div className="sidebar-loading-profile">
+                  <div className="flex items-center space-x-3 mb-3">
+                    <div className="h-8 w-8 rounded-full bg-muted-foreground/20"></div>
+                    <div className="flex-1 min-w-0">
+                      <div className="h-3 bg-muted-foreground/20 rounded w-3/4 mb-2"></div>
+                      <div className="h-2 bg-muted-foreground/10 rounded w-1/2"></div>
+                    </div>
                   </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-foreground truncate">{session?.user?.name || "User"}</p>
-                  <p className="text-xs text-muted-foreground truncate">{session?.user?.email}</p>
+                  <div className="space-y-2">
+                    <div className="h-8 bg-muted-foreground/10 rounded-md"></div>
+                    <div className="h-8 bg-muted-foreground/10 rounded-md"></div>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <>
+                  <div className="flex items-center space-x-3 mb-3">
+                    {session?.user?.image ? (
+                      <img
+                        src={session.user.image || "/placeholder.svg"}
+                        alt={session.user.name || "User"}
+                        className="h-8 w-8 rounded-full"
+                      />
+                    ) : (
+                      <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
+                        <User className="h-4 w-4 text-primary-foreground" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-foreground truncate">{session?.user?.name || "User"}</p>
+                      <p className="text-xs text-muted-foreground truncate">{session?.user?.email}</p>
+                    </div>
+                  </div>
+                </>
+              )}
 
-              <div className="space-y-1">
-                <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg">
-                  <Settings className="h-4 w-4 mr-2" />
-                  Settings
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
-                  onClick={() => signOut()}
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Sign Out
-                </Button>
-              </div>
+              {!loading && (
+                <div className="space-y-1">
+                  <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg">
+                    <Settings className="h-4 w-4 mr-2" />
+                    Settings
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
+                    onClick={() => signOut()}
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Sign Out
+                  </Button>
+                </div>
+              )}
             </div>
           </motion.div>
         </>

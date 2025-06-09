@@ -17,10 +17,8 @@ export function createVITTools() {
       }),
       execute: async ({ courseCode, examType, year }) => {
         try {
-          // Try to map course name to course code if it's not already a code
           let resolvedCourseCode = courseCode.trim().toUpperCase();
           
-          // Check if input is a course name rather than a course code
           if (!resolvedCourseCode.match(/^[A-Z]{4}\d{3}[A-Z]?$/)) {
             const mappedCode = getCourseCode(courseCode);
             if (mappedCode) {

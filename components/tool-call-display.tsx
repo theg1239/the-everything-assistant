@@ -111,7 +111,6 @@ const ToolCallResultsSummary = ({
     tool.result && (tool.result.success !== false)
   )
   
-  // Extract all artifacts from successful tool results
   const artifacts = successfulTools
     .map(tool => getArtifactConfig(tool.result, tool.toolName))
     .filter(config => config.data && (
@@ -148,7 +147,6 @@ const ToolCallResultsSummary = ({
 
   return (
     <div className="mt-4 space-y-4">
-      {/* Render artifacts */}
       <AnimatePresence>
         {artifacts.map((artifact, index) => (
           <motion.div
@@ -164,7 +162,6 @@ const ToolCallResultsSummary = ({
               type={artifact.type}
               className="relative"
             />
-            {/* Source label */}
             {artifact.source && (
               <div className="mt-2 flex justify-end">
                 <Badge variant="outline" className="text-xs">

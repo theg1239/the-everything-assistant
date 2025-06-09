@@ -2,15 +2,8 @@ import NextAuth from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
 import { PrismaAdapter } from "@next-auth/prisma-adapter"
 import { prisma } from "./prisma"
-import type { DefaultSession, Session, User } from "next-auth"
+import type { Session, User } from "next-auth"
 
-declare module "next-auth" {
-  interface Session extends DefaultSession {
-    user?: {
-      id: string
-    } & DefaultSession["user"]
-  }
-}
 
 export const authOptions = {
   adapter: PrismaAdapter(prisma),
@@ -18,6 +11,14 @@ export const authOptions = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+      authorization: {
+        params: {
+          prompt: "consent",
+          access_type: "offline",
+          response_type: "code",
+          hd: "vitstudent.ac.in"
+        }
+      }
     }),
   ],
   session: {
@@ -36,7 +37,6 @@ export const authOptions = {
   },
 }
 
-// Export route handlers for Next.js API routes
 export const GET = async (req: Request, ctx?: { params: any }) => {
   return await NextAuth(authOptions).GET(req, ctx)
 }

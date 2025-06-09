@@ -80,7 +80,6 @@ async function tryAPIApproach(courseCode: string, examType?: string, year?: stri
 
     if (response.ok) {
       const data = await response.json()
-      // After getting the data from API, add proper filtering
       if (data && Array.isArray(data) && data.length > 0) {        let papers: Paper[] = data.map((paper: ApiPaper) => {
           const title = paper.title || paper.name || paper.paperName || "Question Paper"
           const metadata = paper.metadata || paper.description || ""
@@ -110,7 +109,6 @@ async function tryAPIApproach(courseCode: string, examType?: string, year?: stri
           }
         })
 
-        // Filter by examType if specified
         if (examType) {
           papers = papers.filter((paper) => {
             const paperTitle = paper.title.toLowerCase()
@@ -125,7 +123,6 @@ async function tryAPIApproach(courseCode: string, examType?: string, year?: stri
           })
         }
 
-        // Filter by year if specified
         if (year) {
           papers = papers.filter((paper) => {
             const paperTitle = paper.title.toLowerCase()
@@ -157,7 +154,6 @@ async function tryAPIApproach(courseCode: string, examType?: string, year?: stri
         const papers = codeData.map((paper: any) => {
           const title = paper.title || paper.name || paper.paperName || "Question Paper"
           
-          // Extract exam type from title if not available
           let extractedExamType = paper.examType || examType || ""
           if (!extractedExamType) {
             const titleLower = title.toLowerCase()
@@ -167,7 +163,6 @@ async function tryAPIApproach(courseCode: string, examType?: string, year?: stri
             else if (titleLower.includes("quiz")) extractedExamType = "Quiz"
           }
           
-          // Extract year from title if not available
           let extractedYear = paper.year || paper.academicYear || year || ""
           if (!extractedYear) {
             const yearMatch = title.match(/20\d{2}/)
@@ -186,7 +181,7 @@ async function tryAPIApproach(courseCode: string, examType?: string, year?: stri
 
         return {
           success: true,
-          papers: papers, // Remove limit
+          papers: papers,
           source: "papers.codechefvit.com",
           searchUrl: codeOnlyUrl,
         }
@@ -204,7 +199,6 @@ async function tryAPIApproach(courseCode: string, examType?: string, year?: stri
 async function tryBrowserScraping(courseCode: string, examType?: string, year?: string): Promise<ScraperResult> {
   let browser
   try {
-    // Simplified Chromium setup - let @sparticuz/chromium handle the paths
     browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
@@ -221,7 +215,6 @@ async function tryBrowserScraping(courseCode: string, examType?: string, year?: 
     const searchUrl = `https://papers.codechefvit.com/catalogue?subject=${encodeURIComponent(fullCourseName)}`
     await page.goto(searchUrl, { waitUntil: "networkidle2", timeout: 15000 })
 
-    // Wait for content to load
     await new Promise((res) => setTimeout(res, 3000))
 
     const papers = await page.evaluate(
@@ -255,14 +248,12 @@ async function tryBrowserScraping(courseCode: string, examType?: string, year?: 
             const courseLower = courseCode.toLowerCase()
             const metaLower = (meta || "").toLowerCase()
 
-            // Course code matching
             const matchesCourse =
               titleLower.includes(courseLower) ||
               titleLower.includes(courseLower.replace(/(\d+)/, " $1")) ||
               titleLower.includes(courseLower.replace(/([a-z]+)(\d+)/, "$1 $2")) ||
               titleLower.includes(courseLower.replace(/([a-z]+)(\d+)([a-z])/, "$1 $2 $3"))
 
-            // Exam type matching - more specific
             const matchesExam =
               !examType ||
               titleLower.includes(examType.toLowerCase()) ||
@@ -308,10 +299,9 @@ async function tryBrowserScraping(courseCode: string, examType?: string, year?: 
       year,
     )
 
-    // Add browser scraping results
     return {
       success: true,
-      papers: papers as Paper[], // Convert the evaluated result to Paper[]
+      papers: papers as Paper[],
       source: "papers.codechefvit.com",
     }
   } catch (error) {

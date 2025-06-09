@@ -26,7 +26,6 @@ interface ToolCallDisplayProps {
 }
 
 const getArtifactConfig = (result: any) => {
-  // Determine data type and create artifact configuration
   if (result.papers && result.papers.length > 0) {
     return {
       type: 'papers' as const,
@@ -63,7 +62,6 @@ const getArtifactConfig = (result: any) => {
     }
   }
   
-  // For general data or unstructured results
   return {
     type: 'general' as const,
     title: 'Search Results',
@@ -114,7 +112,6 @@ const ToolCallResultsSummary = ({
     tool.result && (tool.result.success !== false)
   )
   
-  // Extract all artifacts from successful tool results
   const artifacts = successfulTools
     .map(tool => getArtifactConfig(tool.result))
     .filter(config => config.data && (
@@ -122,7 +119,6 @@ const ToolCallResultsSummary = ({
     ))
 
   if (artifacts.length === 0 && completedTools.length > 0) {
-    // Show error state if tools completed but no data found
     return (
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -152,7 +148,6 @@ const ToolCallResultsSummary = ({
 
   return (
     <div className="mt-3 space-y-3">
-      {/* Success summary */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -202,7 +197,6 @@ const ToolCallResultsSummary = ({
         </Card>
       </motion.div>
 
-      {/* Render artifacts */}
       <AnimatePresence>
         {artifacts.map((artifact, index) => (
           <motion.div
@@ -221,7 +215,6 @@ const ToolCallResultsSummary = ({
         ))}
       </AnimatePresence>
 
-      {/* Tool execution details (collapsible) */}
       <AnimatePresence>
         {isExpanded && (
           <motion.div
@@ -279,17 +272,14 @@ const ToolCallResultsSummary = ({
 const PureToolCallDisplay = ({ toolCalls }: ToolCallDisplayProps) => {
   const [showDetails, setShowDetails] = useState(false)
   
-  // Check if all tool calls are completed
   const allCompleted = toolCalls.every((toolCall) => 
     toolCall.state === "result" || toolCall.result !== undefined
   )
 
-  // Show loading state while tools are executing
   if (!allCompleted && toolCalls.length > 0) {
     return <ToolCallLoadingState toolCalls={toolCalls} />
   }
 
-  // Don't show anything if no tool calls
   if (toolCalls.length === 0) return null
 
   return (

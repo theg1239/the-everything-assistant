@@ -1,8 +1,6 @@
 import { VIT_COMPREHENSIVE_KNOWLEDGE } from "@/lib/knowledge-base"
 
-// Course name to course code mapping
 const courseMapping: { [key: string]: string } = {
-  // Mathematics courses
   "calculus": "BMAT101L",
   "differential equations": "BMAT102L",
   "complex variables": "BMAT201L",
@@ -10,7 +8,6 @@ const courseMapping: { [key: string]: string } = {
   "probability and statistics": "BMAT202L",
   "discrete mathematics": "BMAT205L",
   
-  // Computer Science courses
   "python programming": "BCSE101E",
   "computer programming": "BCSE101E",
   "object oriented programming": "BCSE102L",
@@ -25,33 +22,26 @@ const courseMapping: { [key: string]: string } = {
   "cryptography": "BCSE309L",
   "network security": "BCSE309L",
   
-  // IT courses
   "digital logic": "BITE202L",
   "microprocessors": "BITE202L",
   "web technologies": "BITE304L",
   
-  // Physics courses
   "engineering physics": "BPHY101L",
   "optics": "BPHY201L",
   "classical mechanics": "BPHY202L",
   "quantum mechanics": "BPHY203L",
   
-  // Chemistry courses
   "engineering chemistry": "BCHY101L",
   
-  // English courses
   "technical english": "BENG101L",
   
-  // Electrical courses
   "basic electrical engineering": "BEEE102L",
   "signals and systems": "BEEE204L"
 };
 
-// Function to map course name to course code
 export function getCourseCode(courseName: string): string | null {
   const lowerCourseName = courseName.toLowerCase();
   
-  // Direct match
   for (const [key, value] of Object.entries(courseMapping)) {
     if (lowerCourseName.includes(key.toLowerCase())) {
       return value;

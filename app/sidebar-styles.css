@@ -2,10 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Sidebar and chat interface transitions */
-/* This has been replaced with inline styles in chat-interface.tsx */
-
-/* Collapsed sidebar button */
 .sidebar-toggle-collapsed {
   position: fixed;
   left: 1rem;
@@ -25,7 +21,6 @@
   color: #ffffff;
 }
 
-/* Custom scrollbar styling */
 .custom-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
@@ -48,15 +43,9 @@
   background-color: rgba(148, 163, 184, 0.5);
 }
 
-/* Media queries for better responsiveness */
 @media (max-width: 768px) {
-  /* Styles handled by inline styles in chat-interface.tsx */
 }
 
-/* Smooth transitions for elements */
-/* Chat container transitions now handled with inline styles */
-
-/* Gradient animations */
 @keyframes gradientShift {
   0% {
     background-position: 0% 50%;

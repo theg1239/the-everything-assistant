@@ -53,7 +53,16 @@ function decryptPassword(encryptedData, sessionKey) {
   }
 }
 
-const CLI_TOP_PATH = process.env.CLI_TOP_PATH || path.resolve(__dirname, './cli-top.exe');
+function getCliExecutablePath() {
+  if (process.env.CLI_TOP_PATH) {
+    return process.env.CLI_TOP_PATH;
+  }
+  
+  const baseName = process.platform === 'win32' ? 'cli-top.exe' : 'cli-top';
+  return path.resolve(__dirname, `./${baseName}`);
+}
+
+const CLI_TOP_PATH = getCliExecutablePath();
 const CLI_TIMEOUT = parseInt(process.env.CLI_TIMEOUT) || 120000;
 
 const COMMAND_MAPPING = {
@@ -88,6 +97,22 @@ async function executeVTOPCommand(username, password, command, flags) {
       console.log(`Executing VTOP command: ${command} for user: ${username}`);
     }
     
+    if (!fs.existsSync(CLI_TOP_PATH)) {
+      return reject({
+        error: `CLI executable not found at path: ${CLI_TOP_PATH}`,
+        command: command,
+        args: ['proxy', username, '***', command]
+      });
+    }
+
+    if (process.platform !== 'win32') {
+      try {
+        fs.chmodSync(CLI_TOP_PATH, '755');
+      } catch (chmodErr) {
+        console.warn('Could not set executable permissions:', chmodErr.message);
+      }
+    }
+    
     let cliArgs = ['proxy', username, password, command];
     
     if (flags && typeof flags === 'object') {
@@ -105,10 +130,8 @@ async function executeVTOPCommand(username, password, command, flags) {
     const options = {
       timeout: CLI_TIMEOUT,
       cwd: __dirname,
-    };
-
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`Executing: ${CLI_TOP_PATH} ${cliArgs.join(' ')}`);
+    };    if (process.env.NODE_ENV !== 'production') {
+      console.log(`Executing: ${CLI_TOP_PATH} ${['proxy', username, '***', command, ...cliArgs.slice(4)].join(' ')}`);
     }
 
     execFile(CLI_TOP_PATH, cliArgs, options, (err, stdout, stderr) => {
@@ -121,11 +144,10 @@ async function executeVTOPCommand(username, password, command, flags) {
         if (process.env.NODE_ENV !== 'production') {
           console.error(`stderr: ${stderr}`);
           console.error(`stdout: ${stdout}`);
-        }
-        return reject({
+        }        return reject({
           error: stderr || stdout || err.message,
           command: command,
-          args: cliArgs.slice(0, 3).concat(['***', ...cliArgs.slice(4)])
+          args: ['proxy', username, '***', command, ...cliArgs.slice(4)]
         });
       }
 
@@ -257,10 +279,33 @@ app.use((req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
+
+function performStartupChecks() {
+  console.log(`🔧 CLI Path: ${CLI_TOP_PATH}`);
+  
+  if (!fs.existsSync(CLI_TOP_PATH)) {
+    console.error(`❌ CLI executable not found at: ${CLI_TOP_PATH}`);
+    console.error('Please ensure the cli-top executable is available in the correct location.');
+    process.exit(1);
+  }
+  
+  if (process.platform !== 'win32') {
+    try {
+      fs.chmodSync(CLI_TOP_PATH, '755');
+      console.log('✅ Executable permissions set for CLI tool');
+    } catch (chmodErr) {
+      console.warn('⚠️  Could not set executable permissions:', chmodErr.message);
+    }
+  }
+  
+  console.log('✅ CLI executable found and configured');
+}
+
+performStartupChecks();
+
 const server = app.listen(PORT, () => {
   console.log(`🚀 VTOP Proxy Service running on port ${PORT}`);
   console.log(`📖 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔧 CLI Path: ${CLI_TOP_PATH}`);
 });
 
 process.on('SIGTERM', () => {

@@ -8,7 +8,6 @@ const ResearchPreviewModal: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    // Check if the user has seen this modal before
     const hasSeenWelcome = localStorage.getItem('has-seen-research-preview');
     
     if (!hasSeenWelcome) {
@@ -17,7 +16,6 @@ const ResearchPreviewModal: React.FC = () => {
   }, []);
 
   const handleClose = () => {
-    // Mark that the user has seen the modal
     localStorage.setItem('has-seen-research-preview', 'true');
     setIsOpen(false);
   };

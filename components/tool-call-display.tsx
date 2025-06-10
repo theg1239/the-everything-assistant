@@ -39,22 +39,18 @@ const getArtifactConfig = (result: any, toolName?: string) => {
         if (lines.length > 1) {
           const firstLine = lines[0].split('│').map(h => h.trim()).filter(h => h)
           // console.log('VTOP Tool Display - First line split:', firstLine)
-          
-          if (firstLine.length === 2 && firstLine[0] === 'FIELD' && firstLine[1] === 'INFORMATION') {
+            if (firstLine.length === 2 && firstLine[0] === 'FIELD' && firstLine[1] === 'INFORMATION') {
             const profileData: any = {}
             const dataLines = lines.slice(1)
-            console.log('VTOP Tool Display - Profile data lines:', dataLines)
             
             dataLines.forEach(line => {
               const cells = line.split('│').map(c => c.trim()).filter(c => c)
-              console.log('VTOP Tool Display - Profile line cells:', cells)
               if (cells.length >= 2) {
                 const fieldName = cells[0].replace(/\[32m|\[0m/g, '')
                 const fieldValue = cells[1].replace(/\[32m|\[0m/g, '')
                 profileData[fieldName] = fieldValue
               }
             })
-            console.log('VTOP Tool Display - Parsed profile data:', profileData)
             parsedData = profileData
           } else {
             const headers = firstLine.filter(h => h !== 'INDEX')

@@ -13,10 +13,9 @@ export function VTOPToolHandler({ children, toolInvocations, onCredentialsSubmit
   const [showCredentialsDialog, setShowCredentialsDialog] = useState(false)
   const [pendingToolCall, setPendingToolCall] = useState<any>(null)
   const [command, setCommand] = useState("")
-  const [processedToolCalls, setProcessedToolCalls] = useState<Set<string>>(new Set())
+  const [processedToolCalls, setProcessedToolCalls] = useState<Set<string>>(new Set())  
+  
   useEffect(() => {
-    //console.log('VTOP Handler: Checking tool invocations', toolInvocations)
-    
     if (toolInvocations) {
       const vtopToolCall = toolInvocations.find(
         (tool) => 
@@ -28,10 +27,7 @@ export function VTOPToolHandler({ children, toolInvocations, onCredentialsSubmit
           !tool.result.output
       )
       
-      //console.log('VTOP Handler: Found tool requiring credentials:', vtopToolCall)
-      
       if (vtopToolCall && !showCredentialsDialog) {
-        //console.log('VTOP Handler: Setting up credentials dialog')
         setPendingToolCall(vtopToolCall)
         setCommand(vtopToolCall.result.command || vtopToolCall.args?.command || 'VTOP command')
         setShowCredentialsDialog(true)

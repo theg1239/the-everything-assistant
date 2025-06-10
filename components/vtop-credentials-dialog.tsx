@@ -55,27 +55,21 @@ export function VTOPCredentialsDialog({
       localStorage.setItem('vtop_credentials', JSON.stringify({ username }))
     }
   }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('Form submitted with:', { username, password: '***' })
     
     if (!username || !password) {
-      console.log('Missing credentials')
       return
     }
 
     setIsSubmitting(true)
-    console.log('Setting isSubmitting to true')
     
     try {
       const encryptionKey = getEncryptionKey()
       const encryptedPassword = CryptoJS.AES.encrypt(password, encryptionKey).toString()
-      console.log('Password encrypted')
       
       if (rememberCredentials) {
         saveCredentials()
-        console.log('Credentials saved')
       }
       
       // Format: encryptedPassword:::sessionKey
@@ -84,21 +78,16 @@ export function VTOPCredentialsDialog({
         encryptedPassword: `${encryptedPassword}:::${encryptionKey}`
       }
       
-      console.log('Calling onSubmit with credentials...')
-      
       setPassword("")
       
       onClose()
       
       onSubmit(credentialsPayload)
       
-      //console.log('Credentials submitted successfully')
-      
     } catch (error) {
-      //console.error('Error submitting credentials:', error)
+      // Error handled silently
     } finally {
       setIsSubmitting(false)
-      //console.log('Setting isSubmitting to false')
     }
   }
 

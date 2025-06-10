@@ -1,16 +1,25 @@
 {
   "name": "vit-proxy-service",
   "version": "1.0.0",
-  "description": "Proxy service for VTOP CLI commands",
+  "description": "Secure proxy service for VTOP CLI commands with PaaS deployment support",
   "main": "index.js",
-  "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },  "scripts": {
+    "start": "node index.js", 
+    "dev": "nodemon index.js",
+    "build": "echo 'No build step required'",
+    "test": "echo 'No tests specified'"
   },
   "license": "ISC",
   "dependencies": {
     "crypto-js": "^4.2.0",
+    "dotenv": "^16.5.0",
     "express": "^4.18.2",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^7.2.0",
+    "node-cache": "^5.1.2",
     "uuid": "^9.0.0"
   },
   "devDependencies": {

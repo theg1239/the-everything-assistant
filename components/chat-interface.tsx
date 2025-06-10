@@ -137,13 +137,10 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     setCanvasContent(content)
     setCanvasOpen(true)
   }  
-  
-  const handleVTOPCredentials = async (
+    const handleVTOPCredentials = async (
     credentials: { username: string; encryptedPassword: string }, 
     originalToolCall: any
   ) => {
-    console.log('VTOP Credentials submitted, executing tool directly...')
-    
     try {
       const command = originalToolCall?.args?.command || originalToolCall?.result?.command
       if (!command) {
@@ -185,28 +182,14 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
 
       if (response.ok) {
         const result = await response.json()
-        console.log('VTOP tool executed successfully:', result)
           if (result.result && (result.result.data || result.result.output)) {
-          console.log('Updating messages with VTOP result...')
-          console.log('Current messages:', messages)
-          console.log('Original tool call:', originalToolCall)
-          console.log('Command:', command)
           
           const updatedMessages = messages.map((message: any) => {
             if (message.toolInvocations) {
               const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
-                console.log('Checking tool invocation:', {
-                  toolName: toolInvocation.toolName,
-                  command: toolInvocation.args?.command,
-                  state: toolInvocation.state,
-                  hasResult: !!toolInvocation.result,
-                  hasData: !!(toolInvocation.result?.data)
-                })
-                
                 if (toolInvocation.toolName === 'queryVTOP' && 
                     toolInvocation.args?.command === command &&
                     (!toolInvocation.result || !toolInvocation.result.data)) {
-                  console.log('FOUND MATCH! Updating tool invocation with result:', result.result)
                   return {
                     ...toolInvocation,
                     result: result.result,
@@ -222,8 +205,6 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
             return message
           })
           
-          console.log('Updated messages:', updatedMessages)
-          
           setMessages([...updatedMessages])
           
           toast.success(`VTOP ${command} data retrieved successfully!`)
@@ -232,7 +213,6 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         }
         
       } else {
-        console.error('Failed to execute VTOP tool')
         toast.error("Failed to retrieve VTOP data. Please try again.")
       }
     } catch (error) {

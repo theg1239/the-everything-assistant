@@ -26,6 +26,7 @@
     "ai": "latest",
     "class-variance-authority": "^0.7.1",
     "crypto-js": "^4.2.0",
+    "dompurify": "^3.2.6",
     "dotenv": "^16.3.1",
     "framer-motion": "latest",
     "lucide-react": "^0.323.0",

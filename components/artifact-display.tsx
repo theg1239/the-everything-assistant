@@ -1,6 +1,7 @@
 "use client"
 
-import React, { useState, memo } from "react"
+import React, { useState, memo, useMemo } from "react"
+import DOMPurify from "dompurify"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   FileSearch, 
@@ -84,6 +85,12 @@ const VTOPDataCard = ({ vtopData }: { vtopData: any }) => {
     const finalStructuredData = structured_data || finalParsedData?.structured_data
     const finalSummary = summary || finalParsedData?.summary
 
+    const sanitizedContent = useMemo(() =>
+      typeof finalFormattedContent === 'string'
+        ? DOMPurify.sanitize(finalFormattedContent)
+        : ''
+    , [finalFormattedContent])
+
     // Use parsed data if available from server - check for any AI-processed content
     if (finalFormattedContent || finalSummary || (finalStructuredData && typeof finalStructuredData === 'object' && Object.keys(finalStructuredData).length > 0)) {
       return (
@@ -96,8 +103,9 @@ const VTOPDataCard = ({ vtopData }: { vtopData: any }) => {
           
           {finalFormattedContent && typeof finalFormattedContent === 'string' && (
             <div className="p-3 bg-muted/50 rounded-md">
-              <h4 className="text-sm font-medium text-card-foreground mb-2"></h4>              <div 
-                className="text-sm text-muted-foreground prose prose-sm max-w-none 
+              <h4 className="text-sm font-medium text-card-foreground mb-2"></h4>
+              <div
+                className="text-sm text-muted-foreground prose prose-sm max-w-none
                            [&_table]:w-full [&_table]:border-collapse [&_table]:border [&_table]:border-border [&_table]:rounded-md [&_table]:overflow-hidden
                            [&_th]:border [&_th]:border-border [&_th]:p-3 [&_th]:bg-muted/80 [&_th]:font-semibold [&_th]:text-card-foreground [&_th]:text-left
                            [&_td]:border [&_td]:border-border [&_td]:p-3 [&_td]:text-card-foreground
@@ -112,7 +120,7 @@ const VTOPDataCard = ({ vtopData }: { vtopData: any }) => {
                            [&_h4]:text-sm [&_h4]:font-medium [&_h4]:text-card-foreground [&_h4]:mb-2 [&_h4]:mt-3
                            [&_h5]:text-sm [&_h5]:font-medium [&_h5]:text-card-foreground [&_h5]:mb-2 [&_h5]:mt-3
                            [&_h6]:text-sm [&_h6]:font-medium [&_h6]:text-card-foreground [&_h6]:mb-2 [&_h6]:mt-3"
-                dangerouslySetInnerHTML={{ __html: finalFormattedContent }}
+                dangerouslySetInnerHTML={{ __html: sanitizedContent }}
               />
             </div>
           )}

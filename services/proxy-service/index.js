@@ -53,9 +53,34 @@ function decryptPassword(encryptedData, sessionKey) {
   }
 }
 
+function sanitizeErrorForResponse(error, command) {
+  const sanitizedError = {
+    error: error.error || error.message || 'Command execution failed',
+    command: command,
+    timestamp: new Date().toISOString()
+  };
+
+  if (process.env.NODE_ENV !== 'production' && error.args) {
+    sanitizedError.args = error.args.map(arg => arg === error.args[2] ? '***' : arg);
+  }
+
+  return sanitizedError;
+}
+
 function getCliExecutablePath() {
   if (process.env.CLI_TOP_PATH) {
     return process.env.CLI_TOP_PATH;
+  }
+  
+  const possibleNames = process.platform === 'win32' 
+    ? ['cli-top.exe', 'cli-top-windows-amd64.exe', 'main.exe']
+    : ['cli-top', 'cli-top-linux-amd64', 'main'];
+  
+  for (const name of possibleNames) {
+    const fullPath = path.resolve(__dirname, `./${name}`);
+    if (fs.existsSync(fullPath)) {
+      return fullPath;
+    }
   }
   
   const baseName = process.platform === 'win32' ? 'cli-top.exe' : 'cli-top';
@@ -96,8 +121,7 @@ async function executeVTOPCommand(username, password, command, flags) {
     if (process.env.NODE_ENV !== 'production') {
       console.log(`Executing VTOP command: ${command} for user: ${username}`);
     }
-    
-    if (!fs.existsSync(CLI_TOP_PATH)) {
+      if (!fs.existsSync(CLI_TOP_PATH)) {
       return reject({
         error: `CLI executable not found at path: ${CLI_TOP_PATH}`,
         command: command,
@@ -138,13 +162,14 @@ async function executeVTOPCommand(username, password, command, flags) {
       if (process.env.NODE_ENV !== 'production') {
         console.log(`CLI execution completed. Error: ${!!err}, stdout length: ${stdout?.length || 0}, stderr length: ${stderr?.length || 0}`);
       }
-      
-      if (err) {
+        if (err) {
         console.error(`CLI Error: ${err.message}`);
         if (process.env.NODE_ENV !== 'production') {
           console.error(`stderr: ${stderr}`);
           console.error(`stdout: ${stdout}`);
-        }        return reject({
+        }
+        
+        return reject({
           error: stderr || stdout || err.message,
           command: command,
           args: ['proxy', username, '***', command, ...cliArgs.slice(4)]
@@ -222,13 +247,13 @@ async function executeVTOPCommand(username, password, command, flags) {
   if (process.env.NODE_ENV !== 'production') {
     console.log(`Executing VTOP command: ${actualCommand} with flags:`, flagsForCLI);
   }
-  
-  try {
+    try {
     const result = await executeVTOPCommand(username, finalPassword, actualCommand, flagsForCLI);
     res.json(result);
   } catch (error) {
     console.error('VTOP command execution failed:', error.error || error.message);
-    return res.status(500).json(error);
+    const sanitizedError = sanitizeErrorForResponse(error, actualCommand);
+    return res.status(500).json(sanitizedError);
   }
 });
 

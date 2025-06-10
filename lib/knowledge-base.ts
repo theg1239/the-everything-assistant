@@ -448,6 +448,8 @@ other transport:
 
 ## CLUBS & EXTRACURRICULAR ACTIVITIES
 
+you can join clubs and chapters when the registration opens, usually after the quanta (clubs and chapters exhibition) has ended, there are 2 quantas, one for clubs, the other for chapters, they are held in the secoond semester, and club registrations usually open during January or February every year. sometimes there's just no limit on clubs and chapters that you can enroll in but this can change at times. to stay updated, your VIT email inbox is the best place.
+
 ### technical clubs and chapters (50+)
 
 the best technical club and chapter in VIT vellore is the Association for Computing Machinery (ACM) VIT chapter

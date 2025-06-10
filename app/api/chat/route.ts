@@ -13,7 +13,7 @@ export const runtime = "nodejs"
 export const maxDuration = 60
 
 
-async function parseVTOPData(rawData: any, command: string) {
+async function parseVTOPData(rawData: any, command: string, userContext: string = '') {
   try {
     const vtopParseSchema = z.object({
       success: z.boolean(),
@@ -31,14 +31,23 @@ async function parseVTOPData(rawData: any, command: string) {
       prompt: `
 You are a helpful assistant that parses VTOP (VIT Online Portal) data and formats it in a clean, natural language format.
 
+USER'S ORIGINAL REQUEST: ${userContext}
 Command: ${command}
 Raw Data: ${JSON.stringify(rawData)}
 
 Please parse this VTOP data and return a structured response with:
 - success: true if parsing was successful
-- formatted_content: A natural language description with proper formatting
+- formatted_content: A natural language description with proper formatting that directly addresses the user's original request
 - structured_data: Key-value pairs extracted from the data (optional)
-- summary: A brief summary of what this data shows
+- summary: A brief summary of what this data shows in relation to what the user asked for
+
+IMPORTANT: Use the user's original request to understand what they were looking for and tailor your response accordingly. For example:
+- If they asked about "Thursday classes", focus on Thursday in the timetable
+- If they asked about "attendance for chemistry", highlight chemistry attendance specifically
+- If they asked about "summer semester grades", emphasize that semester's performance
+- If they asked about "upcoming exams", focus on dates and timing
+
+get rid of any mentions about the existence of an ICS file even if it has been provided to you in the prompt, you must not include any such information in your output.
 
 FORMATTING GUIDELINES:
 1. Use natural language sentences and paragraphs, not tables or lists
@@ -50,12 +59,14 @@ FORMATTING GUIDELINES:
 7. For receipts/financial data: Describe transactions naturally with HTML tables if needed
 8. For timetable: Present schedule information conversationally
 9. Make it engaging and easy to read, like explaining to a friend
+10. Always relate back to what the user originally asked for
 
 Example formats:
 - Receipts: "Here are your recent payments to VIT: <table><tr><th>Date</th><th>Amount</th><th>Description</th></tr>..."
 - Attendance: "Your attendance looks good overall. In Mathematics, you have 85% attendance which is above the required 75%..."
+- Timetable for "Thursday classes": "Looking at your Thursday schedule specifically, you have..."
 
-Make the formatted_content engaging and conversational while being informative.
+Make the formatted_content engaging and conversational while being informative and contextually relevant to the user's request.
 `,
     })
 
@@ -102,7 +113,17 @@ export async function POST(req: Request) {
               const command = ("command" in result
                 ? result.command
                 : directToolCall.args?.command) as string
-              const parsedData = await parseVTOPData(result.data, command)
+              
+              // Extract user context from the last 3 user messages for better context
+              const userContext = messages && messages.length > 0 
+                ? messages
+                    .filter((m: any) => m.role === 'user')
+                    .slice(-3)
+                    .map((m: any) => m.content)
+                    .join(' | ')
+                : ''
+              
+              const parsedData = await parseVTOPData(result.data, command, userContext)
 
               Object.assign(result, {
                 parsedData,
@@ -188,7 +209,15 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}`
             !tr.result.parsedData
           ) {
             try {
-              const parsed = await parseVTOPData(tr.result.data, tr.args.command)
+              const userContext = messages && messages.length > 0 
+                ? messages
+                    .filter((m: any) => m.role === 'user')
+                    .slice(-3)
+                    .map((m: any) => m.content)
+                    .join(' | ')
+                : ''
+              
+              const parsed = await parseVTOPData(tr.result.data, tr.args.command, userContext)
               Object.assign(tr.result, {
                 parsedData: parsed,
                 formatted_content: parsed.formatted_content,

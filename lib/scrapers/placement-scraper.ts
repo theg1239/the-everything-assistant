@@ -1,12 +1,10 @@
 import puppeteer from "puppeteer-core"
 import chromium from "@sparticuz/chromium"
 
-/* ────────────────⟡  domain types  ⟡─────────────── */
-
 interface Company {
   name: string
-  placed: string           // #students
-  avgCTC: string           // "12.3 LPA" etc.
+  placed: string
+  avgCTC: string           
 }
 
 interface RecentOffer {
@@ -31,8 +29,6 @@ export interface PlacementResponse {
   error?: string
 }
 
-/* ────────────────⟡  PUBLIC ENTRY  ⟡─────────────── */
-
 export async function scrapePlacementInfo (
   year?: string,
   companyFilter?: string,
@@ -41,17 +37,15 @@ export async function scrapePlacementInfo (
     return await withBrowser(async page => {      console.log("Navigating to placement tracker...")
       try {
         await page.goto("https://vit-placements-tracker.streamlit.app/", {
-          waitUntil: "domcontentloaded", // Faster loading condition
-          timeout  : 25_000, // Reduced timeout
+          waitUntil: "domcontentloaded",
+          timeout  : 25_000,
         })
       } catch (navError: any) {
         console.log("Navigation timeout, continuing anyway:", navError?.message)
       }
 
-      /* 1️⃣  Wait for Streamlit to load with shorter timeouts */
       console.log("Waiting for Streamlit to load...")
       
-      // Quick check for main app container
       try {
         await page.waitForFunction(
           () => document.querySelector('[data-testid="stApp"]') !== null,
@@ -61,13 +55,11 @@ export async function scrapePlacementInfo (
         console.log("App container timeout, continuing anyway")
       }
       
-      // Much shorter initial wait
       await page.waitForTimeout(2000)
       
-      // Capture a screenshot for debugging (in development)
       if (process.env.NODE_ENV === 'development') {
         await page.screenshot({ path: '/tmp/placement-debug-initial.png' })
-      }      /* 2️⃣  Grab the "data updated" banner (if present) with timeout */
+      }
       let lastUpdated: string | null = null
       try {
         lastUpdated = await Promise.race([
@@ -82,12 +74,10 @@ export async function scrapePlacementInfo (
         console.log("Failed to get last updated info")
       }
 
-      /* 3️⃣  Fast dropdown selection - try only the most reliable approach */
       console.log("Attempting dropdown selection...")
       let selectionSuccess = false
       
       try {
-        // Try the most direct approach with short timeouts
         const dropdown = await page.$('[aria-label*="Select DataFrame"], [role="combobox"]')
         if (dropdown) {
           await dropdown.click()
@@ -95,11 +85,9 @@ export async function scrapePlacementInfo (
           
           const options = await page.$$('[role="option"]')
           if (options.length >= 2) {
-            // Select first option (Overall Statistics)
             await options[0].click()
             await page.waitForTimeout(1000)
             
-            // Reopen and select second option
             await dropdown.click()
             await page.waitForTimeout(1000)
             
@@ -114,13 +102,10 @@ export async function scrapePlacementInfo (
       } catch (error) {
         console.log("Dropdown selection failed, continuing anyway:", error)
       }
-        /* 4️⃣  Wait for data with shorter timeouts */
       console.log("Waiting for data to load...")
       
-      // Give a moment for any changes to take effect
       await page.waitForTimeout(2000)
       
-      // Try to wait for content but don't block too long
       try {
         await Promise.race([
           page.waitForSelector('[data-testid="stMetric"], [data-testid="stTable"]', { timeout: 15000 }),
@@ -128,13 +113,11 @@ export async function scrapePlacementInfo (
         ])
       } catch (err) {
         console.log("Content wait timeout, proceeding anyway")
-      }      /* 5️⃣  Scrape available data */
+      }
       console.log("Scraping placement data...")
       const scraped = await page.evaluate(() => {
-        /* helper for commas → plain digits */
         const digits = (txt: string = "") => (txt.match(/[\d,.]+/)?.[0] ?? "0").replace(/,/g, "")
 
-        /* ── metrics ─────────────────────────────────────────────── */
         const metrics = [...document.querySelectorAll('[data-testid="stMetric"]')]
         const banner: Record<string, string> = {
           "total offers"       : metrics[0] ? digits(metrics[0].textContent || "") : "0",
@@ -144,14 +127,12 @@ export async function scrapePlacementInfo (
           "total companies"    : metrics[4] ? digits(metrics[4].textContent || "") : "0",
         }
 
-        /* Highest / average package strings */
         const txtEls = [...document.querySelectorAll('[data-testid="stText"]')]
         banner["highest package"] = txtEls.find(e => /Highest Package/i.test(e.textContent ?? ""))
           ?.textContent?.match(/[\d.]+\s*LPA/)?.[0] ?? "N/A"
         banner["average package"] = txtEls.find(e => /Average Package/i.test(e.textContent ?? ""))
           ?.textContent?.match(/[\d.]+\s*LPA/)?.[0] ?? "N/A"
 
-        /* ── company-wise table ─────────────────────────────────── */
         const compTable = [...document.querySelectorAll('[data-testid="stTable"]')]
           .find(t => /Company.*CTC/i.test(t.textContent ?? ""))
 
@@ -166,7 +147,6 @@ export async function scrapePlacementInfo (
             }).filter(c => c.name)
           : []
 
-        /* ── recent-offers table ─────────────────────────────────── */
         const offersTable = [...document.querySelectorAll('[data-testid="stTable"]')]
           .find(t => /Student.*Offer/i.test(t.textContent ?? ""))
 
@@ -183,14 +163,13 @@ export async function scrapePlacementInfo (
           : []
 
         return { banner, companies, recentOffers }
-      })      /* 6️⃣  Optional company filter (case-insensitive substring)     */
+      })
       if (companyFilter && scraped.companies.length > 0) {
         const test = (s: string) => s.toLowerCase().includes(companyFilter.toLowerCase())
         scraped.companies = scraped.companies.filter((c: Company) => test(c.name))
         scraped.recentOffers = scraped.recentOffers.filter((o: RecentOffer) => test(o.company))
       }
 
-      /* 7️⃣  Build response with available data */
       const data: PlacementData = {
         statistics  : scraped.banner,
         companies   : scraped.companies,
@@ -221,8 +200,6 @@ export async function scrapePlacementInfo (
   }
 }
 
-/* ───────────────────── helpers ───────────────────── */
-
 async function withBrowser<T>(userFn: (page: any) => Promise<T>): Promise<T> {
   let browser;
   try {
@@ -237,7 +214,6 @@ async function withBrowser<T>(userFn: (page: any) => Promise<T>): Promise<T> {
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
     );
-      // Set a shorter default timeout for faster operations
     await page.setDefaultTimeout(30000);
     
     const result = await userFn(page);
@@ -252,11 +228,6 @@ async function withBrowser<T>(userFn: (page: any) => Promise<T>): Promise<T> {
   }
 }
 
-/**
- * Select a Streamlit <selectbox> option *by its visible label*.
- * Works by finding the label text, clicking the div that acts as
- * the combobox, then clicking the option inner text.
- */
 async function selectStreamlitOption (
   page: any,
   labelText: string,

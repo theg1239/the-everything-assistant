@@ -88,5 +88,15 @@ use your tools proactively to get real-time information when users ask about:
 - specific past papers or exam materials
 - current faculty details or contact information
 - latest placement updates or company visits
+- mess menu information
+
+## MESS MENU QUERIES
+when users ask about mess menu (e.g., "what's for lunch today", "today's menu", "tomorrow's dinner"):
+1. ALWAYS ask which hostel type: men's hostel or ladies' hostel
+2. ALWAYS ask which mess type: special (premium), veg (vegetarian), or nonveg (non-vegetarian)
+3. only call the getMessMenu tool after getting both required parameters
+4. if user doesn't specify, ask: "which hostel and mess type would you like to check? please specify:
+   - hostel: men's or ladies'
+   - mess: special, veg, or nonveg"
 
 always provide accurate, up-to-date information by using your web scraping tools when needed.`;

@@ -10,7 +10,8 @@ import {
   Users,
   Building2,
   GraduationCap,
-  TrendingUp
+  TrendingUp,
+  UtensilsCrossed
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -31,6 +32,27 @@ const getArtifactConfig = (result: any, toolName?: string) => {
         link: paper.link || paper.url || paper.pdfUrl || paper.downloadUrl
       })),
       source: result.source || toolName || 'Database Search'
+    }
+  }
+
+  // Handle mess menu results
+  if (result.data && result.data.todayMenu && result.data.messType) {
+    return {
+      type: 'mess-menu' as const,
+      title: `${result.data.messType} - ${result.data.hostelType}`,
+      icon: <UtensilsCrossed className="h-5 w-5 text-orange-400" />,
+      data: {
+        hostelType: result.data.hostelType,
+        messType: result.data.messType,
+        todayMenu: result.data.todayMenu,
+        weekMenu: result.data.weekMenu,
+        requestedDate: result.data.requestedDate,
+        actualDate: result.data.actualDate,
+        isExactMatch: result.data.isExactMatch,
+        formattedMenu: result.formattedMenu || result.data.formattedMenu,
+        message: result.message
+      },
+      source: toolName || 'Mess Menu System'
     }
   }
   

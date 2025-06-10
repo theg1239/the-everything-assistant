@@ -42,9 +42,7 @@ export async function scrapePlacementInfo (
         })
       } catch (navError: any) {
         console.log("Navigation timeout, continuing anyway:", navError?.message)
-      }
-
-      console.log("Waiting for Streamlit to load...")
+      }      console.log("Waiting for Streamlit to load...")
       
       try {
         await page.waitForFunction(
@@ -55,7 +53,8 @@ export async function scrapePlacementInfo (
         console.log("App container timeout, continuing anyway")
       }
       
-      await page.waitForTimeout(2000)
+      // Use setTimeout wrapped in Promise instead of waitForTimeout
+      await new Promise(resolve => setTimeout(resolve, 2000))
       
       if (process.env.NODE_ENV === 'development') {
         await page.screenshot({ path: '/tmp/placement-debug-initial.png' })
@@ -72,24 +71,22 @@ export async function scrapePlacementInfo (
         ])
       } catch (err) {
         console.log("Failed to get last updated info")
-      }
-
-      console.log("Attempting dropdown selection...")
+      }      console.log("Attempting dropdown selection...")
       let selectionSuccess = false
       
       try {
         const dropdown = await page.$('[aria-label*="Select DataFrame"], [role="combobox"]')
         if (dropdown) {
           await dropdown.click()
-          await page.waitForTimeout(1000)
+          await new Promise(resolve => setTimeout(resolve, 1000))
           
           const options = await page.$$('[role="option"]')
           if (options.length >= 2) {
             await options[0].click()
-            await page.waitForTimeout(1000)
+            await new Promise(resolve => setTimeout(resolve, 1000))
             
             await dropdown.click()
-            await page.waitForTimeout(1000)
+            await new Promise(resolve => setTimeout(resolve, 1000))
             
             const refreshedOptions = await page.$$('[role="option"]')
             if (refreshedOptions.length >= 2) {
@@ -101,10 +98,9 @@ export async function scrapePlacementInfo (
         }
       } catch (error) {
         console.log("Dropdown selection failed, continuing anyway:", error)
-      }
-      console.log("Waiting for data to load...")
+      }      console.log("Waiting for data to load...")
       
-      await page.waitForTimeout(2000)
+      await new Promise(resolve => setTimeout(resolve, 2000))
       
       try {
         await Promise.race([
@@ -240,7 +236,7 @@ async function selectStreamlitOption (
       await page.waitForSelector('div[role="option"]', { timeout: 5_000 })
       const opt = await page.$x(`//div[@role="option"][contains(., "${optionText}")]`)
       if (opt.length) await opt[0].click()
-      await page.waitForTimeout(1000)
+      await new Promise(resolve => setTimeout(resolve, 1000))
       return true
     } else {
       console.log(`Label with text "${labelText}" not found`)

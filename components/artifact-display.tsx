@@ -17,7 +17,9 @@ import {
   MapPin,
   Phone,
   Mail,
-  Globe
+  Globe,
+  UtensilsCrossed,
+  Clock
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -28,7 +30,7 @@ interface ArtifactDisplayProps {
   title: string
   icon?: React.ReactNode
   data: any
-  type: 'papers' | 'faculty' | 'companies' | 'placements' | 'general'
+  type: 'papers' | 'faculty' | 'companies' | 'placements' | 'mess-menu' | 'general'
   className?: string
 }
 
@@ -227,6 +229,116 @@ const PlacementCard = ({ placement }: { placement: any }) => (
   </Card>
 )
 
+const MessMenuCard = ({ menuData }: { menuData: any }) => {
+  const { hostelType, messType, todayMenu, requestedDate, actualDate, isExactMatch, formattedMenu, message } = menuData
+  
+  const formatMessType = (type: string) => {
+    const typeMap: { [key: string]: string } = {
+      'special': 'Special Mess',
+      'veg': 'Vegetarian Mess',
+      'nonveg': 'Non-Vegetarian Mess'
+    }
+    return typeMap[type] || type
+  }
+
+  const formatHostelType = (type: string) => {
+    const typeMap: { [key: string]: string } = {
+      'mens': "Men's Hostel",
+      'ladies': "Ladies' Hostel"
+    }
+    return typeMap[type] || type
+  }
+
+  const formatMealType = (meal: string) => {
+    return meal.charAt(0).toUpperCase() + meal.slice(1).toLowerCase()
+  }
+  const renderMenuItems = (menuItems: any) => {
+    if (!menuItems || Object.keys(menuItems).length === 0) {
+      return (
+        <div className="text-center py-4 text-muted-foreground">
+          <UtensilsCrossed className="h-6 w-6 mx-auto mb-2 opacity-50" />
+          <p className="text-sm">No menu available</p>
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-4">
+        {Object.entries(menuItems).map(([mealType, items]: [string, any]) => (
+          <div key={mealType} className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-primary" />
+              <h4 className="font-medium text-sm text-card-foreground">
+                {formatMealType(mealType)}
+              </h4>
+            </div>
+            <div className="ml-6 space-y-1">
+              {Array.isArray(items) ? (
+                items.map((item: string, index: number) => (
+                  <p key={index} className="text-sm text-muted-foreground">
+                    • {item}
+                  </p>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  • {items}
+                </p>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <Card className="hover:shadow-sm transition-all duration-200 border-border bg-card">
+      <CardHeader className="pb-3">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <UtensilsCrossed className="h-4 w-4 text-orange-500" />
+            <CardTitle className="text-sm font-medium text-card-foreground">
+              {formatMessType(messType)}
+            </CardTitle>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Building2 className="h-3 w-3" />
+            <span>{formatHostelType(hostelType)}</span>
+          </div>
+          {actualDate && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Calendar className="h-3 w-3" />
+              <span>{actualDate}</span>
+              {!isExactMatch && (
+                <Badge variant="secondary" className="text-xs">
+                  Closest Available
+                </Badge>
+              )}
+            </div>
+          )}
+        </div>
+      </CardHeader>      <CardContent className="pt-0">
+        {message && (
+          <div className="mb-4 p-3 bg-muted rounded-md">
+            <p className="text-xs text-muted-foreground">{message}</p>
+          </div>
+        )}
+        
+        {todayMenu && renderMenuItems(todayMenu)}
+        
+        {/* {formattedMenu && (
+          <div className="mt-4 p-3 bg-muted rounded-md">
+            <h4 className="font-medium text-sm mb-2 text-card-foreground">Menu Details</h4>
+            <pre className="text-xs text-muted-foreground whitespace-pre-wrap">
+              {formattedMenu}
+            </pre>
+          </div>
+        )} */}
+      </CardContent>
+    </Card>
+  )
+}
+
 const PureArtifactDisplay = ({ title, icon, data, type, className }: ArtifactDisplayProps) => {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -239,13 +351,14 @@ const PureArtifactDisplay = ({ title, icon, data, type, className }: ArtifactDis
           <p className="text-sm">No data found</p>
         </div>
       )
-    }
-
-    const items = Array.isArray(data) ? data : [data]
+    }    const items = Array.isArray(data) ? data : [data]
     const displayItems = isExpanded ? items : items.slice(0, 3)
 
     return (
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+      <div className={cn(
+        "grid gap-3",
+        type === 'mess-menu' ? "grid-cols-1" : "md:grid-cols-2 lg:grid-cols-3"
+      )}>
         {displayItems.map((item, index) => {
           switch (type) {
             case 'papers':
@@ -256,6 +369,8 @@ const PureArtifactDisplay = ({ title, icon, data, type, className }: ArtifactDis
               return <CompanyCard key={index} company={item} />
             case 'placements':
               return <PlacementCard key={index} placement={item} />
+            case 'mess-menu':
+              return <MessMenuCard key={index} menuData={item} />
             default:
               return (
                 <Card key={index} className="hover:shadow-md transition-shadow">

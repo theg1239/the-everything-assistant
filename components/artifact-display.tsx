@@ -40,52 +40,171 @@ interface ArtifactDisplayProps {  title: string
 }
 
 const VTOPDataCard = ({ vtopData }: { vtopData: any }) => {
-  const { command, content, rawOutput, success } = vtopData
+  const { command, content, rawOutput, success, data, parsedData, formatted_content, structured_data, summary, error, message } = vtopData
 
   const renderVTOPContent = () => {
-    switch (command) {      case 'profile':
+    // Handle error states first
+    if (success === false || error) {
+      const errorMessage = error || message || 'An error occurred while retrieving VTOP data'
+      const isCredentialError = errorMessage.includes('Invalid LoginId/Password') || 
+                               errorMessage.includes('credentials') ||
+                               errorMessage.includes('Login failed')
+      
+      return (
+        <div className="space-y-3">
+          <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+              <h4 className="text-sm font-medium text-destructive">
+                {isCredentialError ? 'Authentication Failed' : 'Error Retrieving Data'}
+              </h4>
+            </div>
+            <p className="text-xs text-destructive/80">
+              {isCredentialError 
+                ? 'Invalid VTOP credentials. Please check your username and password and try again.'
+                : errorMessage
+              }
+            </p>
+          </div>
+          {isCredentialError && (
+            <div className="p-3 bg-muted/50 rounded-md">
+              <h4 className="text-xs font-medium text-muted-foreground mb-1">Troubleshooting:</h4>
+              <ul className="text-xs text-muted-foreground space-y-1">
+                <li>• Verify your VTOP username and password</li>
+                <li>• Check if your VTOP account is active</li>
+                <li>• Try logging into VTOP directly to confirm credentials</li>
+              </ul>
+            </div>
+          )}
+        </div>
+      )
+    }    // Prioritize server-side parsed data
+    const finalParsedData = parsedData
+    const finalFormattedContent = formatted_content || finalParsedData?.formatted_content
+    const finalStructuredData = structured_data || finalParsedData?.structured_data
+    const finalSummary = summary || finalParsedData?.summary
+
+    // Use parsed data if available from server - check for any AI-processed content
+    if (finalFormattedContent || finalSummary || (finalStructuredData && typeof finalStructuredData === 'object' && Object.keys(finalStructuredData).length > 0)) {
+      return (
+        <div className="space-y-4">
+          {finalSummary && typeof finalSummary === 'string' && (
+            <div className="p-3 bg-primary/10 rounded-md">
+              <p className="text-sm text-card-foreground font-medium">{finalSummary}</p>
+            </div>
+          )}
+          
+          {finalFormattedContent && typeof finalFormattedContent === 'string' && (
+            <div className="p-3 bg-muted/50 rounded-md">
+              <h4 className="text-sm font-medium text-card-foreground mb-2"></h4>
+              <div 
+                className="text-sm text-muted-foreground prose prose-sm max-w-none 
+                           [&_table]:w-full [&_table]:border-collapse [&_table]:border [&_table]:border-border [&_table]:rounded-md [&_table]:overflow-hidden
+                           [&_th]:border [&_th]:border-border [&_th]:p-3 [&_th]:bg-muted/80 [&_th]:font-semibold [&_th]:text-card-foreground [&_th]:text-left
+                           [&_td]:border [&_td]:border-border [&_td]:p-3 [&_td]:text-card-foreground
+                           [&_tr:nth-child(even)]:bg-muted/20
+                           [&_strong]:text-card-foreground [&_strong]:font-semibold
+                           [&_em]:italic [&_em]:text-muted-foreground
+                           [&_p]:mb-3 [&_p]:leading-relaxed
+                           [&_br]:mb-2
+                           [&_h1]:text-lg [&_h1]:font-bold [&_h1]:text-card-foreground [&_h1]:mb-3
+                           [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-card-foreground [&_h2]:mb-2
+                           [&_h3]:text-sm [&_h3]:font-medium [&_h3]:text-card-foreground [&_h3]:mb-2"
+                dangerouslySetInnerHTML={{ __html: finalFormattedContent }}
+              />
+            </div>
+          )}
+
+          {finalStructuredData && typeof finalStructuredData === 'object' && Object.keys(finalStructuredData).length > 0 && (
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium text-card-foreground">Structured Details:</h4>
+              {Object.entries(finalStructuredData).map(([key, value]) => (
+                <div key={key} className="flex items-start gap-3">
+                  <User className="h-3 w-3 text-blue-400 shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs font-medium text-card-foreground block">
+                      {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                    </span>
+                    <span className="text-xs text-muted-foreground break-words">
+                      {Array.isArray(value) ? value.join(', ') : String(value)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    // Fallback to original parsing logic if Gemini parsing failed
+    switch (command) {
+      case 'profile':
+        // Handle different data structures for profile
+        let profileData: any = {}
+        
         if (typeof content === 'object' && content !== null) {
           if (Array.isArray(content)) {
-            const profileData: any = {}
+            // If content is an array, merge all objects
             content.forEach((item: any) => {
               if (typeof item === 'object' && item !== null) {
                 Object.assign(profileData, item)
               }
             })
-            
-            return (
-              <div className="space-y-3">
-                {Object.entries(profileData).map(([key, value]) => (
-                  <div key={key} className="flex items-center gap-3">
-                    <User className="h-3 w-3 text-blue-400 shrink-0" />
-                    <div className="flex-1">
-                      <span className="text-xs font-medium text-card-foreground capitalize">
-                        {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:
-                      </span>
-                      <span className="ml-2 text-xs text-muted-foreground">{String(value)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )
           } else {
-            // Handle single object
+            // If content is a single object
+            profileData = content
+          }
+        } else if (typeof rawOutput === 'string') {
+          // Try to parse rawOutput if content is not available
+          try {
+            const parsed = JSON.parse(rawOutput)
+            if (parsed && typeof parsed === 'object') {
+              profileData = parsed
+            }
+          } catch (e) {
+            // If parsing fails, treat as raw text
             return (
-              <div className="space-y-3">
-                {Object.entries(content).map(([key, value]) => (
-                  <div key={key} className="flex items-center gap-3">
-                    <User className="h-3 w-3 text-blue-400 shrink-0" />
-                    <div className="flex-1">
-                      <span className="text-xs font-medium text-card-foreground capitalize">
-                        {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:
-                      </span>
-                      <span className="ml-2 text-xs text-muted-foreground">{String(value)}</span>
-                    </div>
-                  </div>
-                ))}
+              <div className="space-y-2">
+                <pre className="text-xs text-muted-foreground whitespace-pre-wrap overflow-x-auto">
+                  {rawOutput}
+                </pre>
               </div>
             )
           }
+        }
+
+        // If we have profile data, render it nicely
+        if (profileData && Object.keys(profileData).length > 0) {
+          return (
+            <div className="space-y-3">
+              {Object.entries(profileData).map(([key, value]) => {
+                if (value === null || value === undefined || value === '') return null
+                
+                // Format key names for better display
+                const formattedKey = key
+                  .replace(/([A-Z])/g, ' $1')
+                  .replace(/^./, str => str.toUpperCase())
+                  .replace(/Id$/, 'ID')
+                  .replace(/Cgpa/, 'CGPA')
+                  .replace(/Gpa/, 'GPA')
+                
+                return (
+                  <div key={key} className="flex items-start gap-3">
+                    <User className="h-3 w-3 text-blue-400 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs font-medium text-card-foreground block">
+                        {formattedKey}
+                      </span>
+                      <span className="text-xs text-muted-foreground break-words">
+                        {String(value)}
+                      </span>
+                    </div>
+                  </div>
+                )
+              }).filter(Boolean)}
+            </div>
+          )
         }
         break
       case 'marks':
@@ -175,13 +294,33 @@ const VTOPDataCard = ({ vtopData }: { vtopData: any }) => {
             </div>
           )
         }
-    }
-
-    return (
+    }    return (
       <div className="space-y-2">
-        <pre className="text-xs text-muted-foreground whitespace-pre-wrap overflow-x-auto">
-          {typeof content === 'string' ? content : JSON.stringify(content, null, 2)}
-        </pre>
+        {/* Try to parse and display any available data */}
+        {data && (
+          <div className="p-3 bg-muted/50 rounded-md">
+            <div className="text-xs font-medium text-card-foreground mb-2">VTOP Data:</div>
+            <pre className="text-xs text-muted-foreground whitespace-pre-wrap overflow-x-auto">
+              {typeof data === 'string' ? data : JSON.stringify(data, null, 2)}
+            </pre>
+          </div>
+        )}
+        {rawOutput && rawOutput !== data && (
+          <div className="p-3 bg-muted/50 rounded-md">
+            <div className="text-xs font-medium text-card-foreground mb-2">Raw Output:</div>
+            <pre className="text-xs text-muted-foreground whitespace-pre-wrap overflow-x-auto">
+              {typeof rawOutput === 'string' ? rawOutput : JSON.stringify(rawOutput, null, 2)}
+            </pre>
+          </div>
+        )}
+        {content && content !== rawOutput && content !== data && (
+          <div className="p-3 bg-muted/50 rounded-md">
+            <div className="text-xs font-medium text-card-foreground mb-2">Processed Content:</div>
+            <pre className="text-xs text-muted-foreground whitespace-pre-wrap overflow-x-auto">
+              {typeof content === 'string' ? content : JSON.stringify(content, null, 2)}
+            </pre>
+          </div>
+        )}
       </div>
     )
   }

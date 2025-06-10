@@ -174,40 +174,49 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
             },
             toolCallId: Date.now().toString()
           },
-          id: chatId || optimisticChatId,
-        }),
+          id: chatId || optimisticChatId,        }),
       })
 
       toast.dismiss(loadingToast)
 
       if (response.ok) {
         const result = await response.json()
-          if (result.result && (result.result.data || result.result.output)) {
-          
-          const updatedMessages = messages.map((message: any) => {
-            if (message.toolInvocations) {
-              const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
-                if (toolInvocation.toolName === 'queryVTOP' && 
-                    toolInvocation.args?.command === command &&
-                    (!toolInvocation.result || !toolInvocation.result.data)) {
-                  return {
-                    ...toolInvocation,
-                    result: result.result,
-                    state: 'result'
-                  }
-                }              return toolInvocation
-              })
-              return {
-                ...message,
-                toolInvocations: updatedToolInvocations
+        
+        // Always update the tool invocation with the result, whether success or error
+        const updatedMessages = messages.map((message: any) => {
+          if (message.toolInvocations) {
+            const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
+              if (toolInvocation.toolName === 'queryVTOP' && 
+                  toolInvocation.args?.command === command &&
+                  (!toolInvocation.result || !toolInvocation.result.data)) {
+                return {
+                  ...toolInvocation,
+                  result: result.result,
+                  state: 'result'
+                }
               }
+              return toolInvocation
+            })
+            return {
+              ...message,
+              toolInvocations: updatedToolInvocations
             }
-            return message
-          })
-          
-          setMessages([...updatedMessages])
-          
+          }
+          return message
+        })
+        
+        setMessages([...updatedMessages])
+        
+        // Check if the result indicates success or failure
+        if (result.result && result.result.success !== false && (result.result.data || result.result.output)) {
           toast.success(`VTOP ${command} data retrieved successfully!`)
+        } else if (result.result && result.result.success === false) {
+          const errorMessage = result.result.error || result.result.message || 'Unknown error occurred'
+          if (errorMessage.includes('Invalid LoginId/Password') || errorMessage.includes('Login failed')) {
+            toast.error("Invalid VTOP credentials. Please check your username and password.")
+          } else {
+            toast.error(`VTOP Error: ${errorMessage}`)
+          }
         } else {
           toast.success(`VTOP ${command} command executed successfully!`)
         }

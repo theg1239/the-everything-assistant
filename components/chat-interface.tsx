@@ -46,12 +46,10 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     localStorage.setItem("sidebarOpen", String(sidebarOpen))
   }, [sidebarOpen])
 
-  // Track whether we have any user‐sent messages in the history
   useEffect(() => {
     const hasUser = initialMessages.some((m) => m.role === "user")
     setHasUserInitiatedConversation(hasUser)
-  }, [initialMessages])
-
+  }, [initialMessages])  
   const {
     messages,
     input,

@@ -63,17 +63,28 @@ export async function POST(req: Request) {
       maxTokens: 4096,
       toolChoice: "auto",
       onFinish: async (result) => {
-        let safeToolCalls = undefined
-        if (result.toolCalls?.length > 0) {
+        let safeToolInvocations = undefined
+        
+        if ((result as any).toolResults?.length > 0) {
           try {
-            safeToolCalls = JSON.parse(JSON.stringify(result.toolCalls))
+            safeToolInvocations = JSON.parse(JSON.stringify((result as any).toolResults))
+            console.log("Saving toolResults with complete data:", safeToolInvocations.length, "tool results")
           } catch (e) {
-            console.error("Failed to serialize toolCalls for DB:", e)
-            safeToolCalls = undefined
+            console.error("Failed to serialize toolResults for DB:", e)
+            safeToolInvocations = undefined
           }
         }
-        // Use the streaming message ID from AI SDK for consistency with frontend
-        await saveMessage(chat.id, "assistant", result.text, safeToolCalls, result.response.id)
+        else if (result.toolCalls?.length > 0) {
+          try {
+            safeToolInvocations = JSON.parse(JSON.stringify(result.toolCalls))
+            console.log("Falling back to toolCalls (no results available)")
+          } catch (e) {
+            console.error("Failed to serialize toolCalls for DB:", e)
+            safeToolInvocations = undefined
+          }
+        }
+        
+        await saveMessage(chat.id, "assistant", result.text, safeToolInvocations, result.response.id)
 
         if (messages.length <= 2) {
           const newTitle = extractTitleFromContent(userMessage?.content || "")

@@ -51,6 +51,19 @@ export function getCourseCode(courseName: string): string | null {
   return null;
 }
 
+export function isVTOPQuestion(question: string): boolean {
+  const vtopKeywords = [
+    'vtop', 'marks', 'attendance', 'timetable', 'cgpa', 'grades', 
+    'receipts', 'hostel', 'exams', 'library dues', 'calendar',
+    'nightslip', 'leave', 'class messages', 'digital assignments',
+    'facility', 'profile', 'thursday', 'classes do i have'
+  ]
+  
+  return vtopKeywords.some(keyword => 
+    question.toLowerCase().includes(keyword.toLowerCase())
+  )
+}
+
 function extractSections(text: string): { [key: string]: string[] } {
   const sections: { [key: string]: string[] } = {}
   
@@ -184,15 +197,27 @@ export function getRandomQuestions(count: number = 6, isFirstMessage: boolean = 
   const categories = Object.keys(allCategories)
   
   const priorityCategories = isFirstMessage 
-    ? ['admission', 'academics', 'placements', 'campus'] 
-    : ['research', 'faculty', 'courses', 'international', 'extracurricular']
+    ? ['vtop', 'academics', 'admission', 'placements', 'campus'] 
+    : ['vtop', 'research', 'faculty', 'courses', 'international', 'extracurricular']
   
   let questions: string[] = []
   
+  if (allCategories['vtop'] && allCategories['vtop'].length > 0) {
+    const vtopQuestions = [...allCategories['vtop']]
+    for (let i = 0; i < Math.min(2, vtopQuestions.length) && questions.length < count; i++) {
+      const randomIndex = Math.floor(Math.random() * vtopQuestions.length)
+      const question = vtopQuestions.splice(randomIndex, 1)[0]
+      questions.push(question)
+    }
+  }
+  
   priorityCategories.forEach(category => {
-    if (allCategories[category] && questions.length < count) {
+    if (allCategories[category] && questions.length < count && category !== 'vtop') {
       const randomIndex = Math.floor(Math.random() * allCategories[category].length)
-      questions.push(allCategories[category][randomIndex])
+      const question = allCategories[category][randomIndex]
+      if (!questions.includes(question)) {
+        questions.push(question)
+      }
     }
   })
   

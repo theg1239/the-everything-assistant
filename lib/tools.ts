@@ -243,5 +243,138 @@ export function createVITTools() {
         return result
       },
     }),
+
+    queryVTOP: tool({
+      description:
+        "Access VTOP (VIT's official portal) to get student information like grades, attendance, timetable, profile, marks, hostel info, library dues, exam schedules, and more. This tool automatically handles credential authentication through a secure dialog system. Use this tool whenever users request VTOP data - credentials will be prompted securely.",
+      parameters: z.object({
+        command: z
+          .enum([
+            "profile", "marks", "grades", "attendance", "timetable", "receipts", 
+            "hostel", "cgpa", "exams", "exam-schedule", "library-dues", "calendar",
+            "nightslip", "leave", "leave-status", "msg", "class-message", "da",
+            "facility", "syllabus", "course-page"
+          ])
+          .describe("VTOP command to execute - profile (student info), marks (semester marks), grades (semester grades), attendance (attendance %), timetable (class schedule), receipts (fee receipts), hostel (hostel info), cgpa (CGPA details), exams/exam-schedule (exam timetable), library-dues (library fines), calendar (academic calendar), nightslip (nightslip status), leave/leave-status (leave applications), msg/class-message (class announcements), da (digital assignments), facility (facility booking), syllabus (course syllabus), course-page (course materials)"),
+        username: z
+          .string()
+          .optional()
+          .describe("VTOP username/registration number. Will be prompted securely if not provided."),
+        password: z
+          .string()
+          .optional()
+          .describe("VTOP password. Will be prompted securely if not provided."),
+        semester: z
+          .number()
+          .optional()
+          .describe("Semester number (1-8) for commands like marks, grades, attendance, timetable, exams, calendar"),
+        course: z
+          .number()
+          .optional()
+          .describe("Course selection number for course-page command"),
+        faculty: z
+          .string()
+          .optional()
+          .describe("Faculty name for course-page command"),
+        classGroup: z
+          .number()
+          .optional()
+          .describe("Class group number for calendar command"),
+        fuzzyIndex: z
+          .number()
+          .optional()
+          .describe("Fuzzy search index for course-page command"),
+        courseQuery: z
+          .string()
+          .optional()
+          .describe("Course search query for syllabus command"),
+        debug: z
+          .boolean()
+          .optional()
+          .describe("Enable debug mode for troubleshooting"),
+      }),
+      execute: async ({ command, username, password, semester, course, faculty, classGroup, fuzzyIndex, courseQuery, debug }) => {
+        try {
+          if (!username || !password) {
+            return {
+              success: false,
+              error: "VTOP credentials required",
+              requiresCredentials: true,
+              command,
+              message: "Please provide your VTOP username and password to access VTOP data.",
+            }
+          }
+
+          const flags: Record<string, any> = {}
+          if (semester !== undefined) flags.semester = semester
+          if (course !== undefined) flags.course = course
+          if (faculty) flags.faculty = faculty
+          if (classGroup !== undefined) flags['class-group'] = classGroup
+          if (fuzzyIndex !== undefined) flags['fuzzy-index'] = fuzzyIndex
+          if (courseQuery) flags.course = courseQuery
+          if (debug) flags.debug = debug
+
+          const PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001'
+          
+          let requestBody: any = {
+            command,
+            username,
+            flags,
+          }
+
+          if (password.includes(':::')) {
+            const [encryptedPassword, sessionKey] = password.split(':::')
+            requestBody.encryptedPassword = encryptedPassword
+            requestBody.sessionKey = sessionKey
+          } else {
+            requestBody.password = password
+          }
+
+          const response = await fetch(`${PROXY_URL}/vtop`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+          })
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}))
+            return {
+              success: false,
+              error: `VTOP request failed: ${response.status}`,
+              message: errorData.error || `Failed to execute ${command} command`,
+              details: errorData,
+            }
+          }
+
+          const result = await response.json()
+          
+          if (result.success) {
+            return {
+              success: true,
+              command,
+              data: result.data || result.output,
+              message: `Successfully retrieved ${command} data from VTOP`,
+              raw: result.raw || false,
+            }
+          } else {
+            return {
+              success: false,
+              error: result.error || "Unknown error",
+              message: `Failed to retrieve ${command} data from VTOP`,
+              command,
+            }
+          }
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message || "Network error",
+            message: "Unable to connect to VTOP proxy service. Please ensure the service is running.",
+            suggestion: "The VTOP proxy service may be offline. Please try again later.",
+          }
+        }
+      },
+    }),
   }
 }

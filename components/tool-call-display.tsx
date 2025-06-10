@@ -22,6 +22,81 @@ interface ToolCallDisplayProps {
 }
 
 const getArtifactConfig = (result: any, toolName?: string) => {
+  if (toolName === 'queryVTOP' && (result.data || result.output || result.success)) {
+    const vtopData = result.data || result.output
+    const command = result.command || 'unknown'
+    
+    // console.log('VTOP Tool Display - getArtifactConfig - Raw data:', vtopData)
+    // console.log('VTOP Tool Display - getArtifactConfig - Command:', command)
+    // console.log('VTOP Tool Display - getArtifactConfig - Data type:', typeof vtopData)
+    
+    let parsedData = vtopData
+    if (typeof vtopData === 'string') {      // Check if it's a table format (contains │ and ──)
+      if (vtopData.includes('│') && vtopData.includes('──')) {
+        const lines = vtopData.split('\n').filter(line => line.trim() && !line.includes('──'))
+        // console.log('VTOP Tool Display - Table lines:', lines)
+        
+        if (lines.length > 1) {
+          const firstLine = lines[0].split('│').map(h => h.trim()).filter(h => h)
+          // console.log('VTOP Tool Display - First line split:', firstLine)
+          
+          if (firstLine.length === 2 && firstLine[0] === 'FIELD' && firstLine[1] === 'INFORMATION') {
+            const profileData: any = {}
+            const dataLines = lines.slice(1)
+            console.log('VTOP Tool Display - Profile data lines:', dataLines)
+            
+            dataLines.forEach(line => {
+              const cells = line.split('│').map(c => c.trim()).filter(c => c)
+              console.log('VTOP Tool Display - Profile line cells:', cells)
+              if (cells.length >= 2) {
+                const fieldName = cells[0].replace(/\[32m|\[0m/g, '')
+                const fieldValue = cells[1].replace(/\[32m|\[0m/g, '')
+                profileData[fieldName] = fieldValue
+              }
+            })
+            console.log('VTOP Tool Display - Parsed profile data:', profileData)
+            parsedData = profileData
+          } else {
+            const headers = firstLine.filter(h => h !== 'INDEX')
+            const rows = lines.slice(1).map(line => {
+              const cells = line.split('│').map(c => c.trim()).filter(c => c)
+              const row: any = {}
+              headers.forEach((header, index) => {
+                if (cells[index + (firstLine.includes('INDEX') ? 1 : 0)]) { 
+                  row[header] = cells[index + (firstLine.includes('INDEX') ? 1 : 0)].replace(/\[32m|\[0m/g, '') // Remove color codes
+                }
+              })
+              return row
+            })
+            parsedData = rows
+          }
+        }
+      } else {
+        try {
+          parsedData = JSON.parse(vtopData)
+        } catch (e) {
+          parsedData = vtopData
+        }
+      }
+    }
+    
+    // console.log('VTOP Tool Display - getArtifactConfig - Parsed data:', parsedData)
+    // console.log('VTOP Tool Display - getArtifactConfig - Parsed data type:', typeof parsedData)
+    
+    return {
+      type: 'vtop-data' as const,
+      title: `VTOP ${command.charAt(0).toUpperCase() + command.slice(1)} Data`,
+      icon: <GraduationCap className="h-5 w-5 text-blue-500" />,
+      data: {
+        command,
+        content: parsedData,
+        rawOutput: vtopData,
+        success: result.success !== false
+      },
+      source: 'VTOP Portal'
+    }
+  }
+
   if (result.papers && result.papers.length > 0) {
     return {
       type: 'papers' as const,
@@ -35,7 +110,6 @@ const getArtifactConfig = (result: any, toolName?: string) => {
     }
   }
 
-  // Handle mess menu results
   if (result.data && result.data.todayMenu && result.data.messType) {
     return {
       type: 'mess-menu' as const,
@@ -133,6 +207,39 @@ const ToolCallResultsSummary = ({
     tool.result && (tool.result.success !== false)
   )
   
+  const vtopToolsWaitingForCredentials = toolCalls.filter(tool => 
+    tool.toolName === 'queryVTOP' && 
+    tool.result && 
+    (tool.result.error?.includes('credentials') || tool.result.error?.includes('username') || tool.result.error?.includes('password'))
+  )
+  
+  if (vtopToolsWaitingForCredentials.length > 0) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mt-3"
+      >
+        <Card className="border-blue-500/20 bg-blue-500/5">
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-3">
+              <Loader2 className="h-5 w-5 text-blue-400 animate-spin" />
+              <div className="flex-1">
+                <div className="text-sm font-medium text-foreground">
+                  VTOP credentials required
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Please provide your VTOP credentials to continue
+                </div>
+              </div>
+              <Sparkles className="h-4 w-4 text-muted-foreground animate-pulse" />
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+    )
+  }
+  
   const artifacts = successfulTools
     .map(tool => getArtifactConfig(tool.result, tool.toolName))
     .filter(config => config.data && (
@@ -199,9 +306,18 @@ const ToolCallResultsSummary = ({
 }
 
 const PureToolCallDisplay = ({ toolCalls }: ToolCallDisplayProps) => {
-  const allCompleted = toolCalls.every((toolCall) => 
-    toolCall.state === "result" || toolCall.result !== undefined
-  )
+  const allCompleted = toolCalls.every((toolCall) => {
+    const hasResult = toolCall.state === "result" || toolCall.result !== undefined
+    
+    if (toolCall.toolName === 'queryVTOP' && hasResult && toolCall.result) {
+      const needsCredentials = toolCall.result.error?.includes('credentials') || 
+                              toolCall.result.error?.includes('username') || 
+                              toolCall.result.error?.includes('password')
+      return !needsCredentials
+    }
+    
+    return hasResult
+  })
 
   if (!allCompleted && toolCalls.length > 0) {
     return <ToolCallLoadingState toolCalls={toolCalls} />

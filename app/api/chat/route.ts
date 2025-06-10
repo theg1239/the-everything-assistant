@@ -18,7 +18,43 @@ export async function POST(req: Request) {
       return new Response("Unauthorized", { status: 401 })
     }
 
-    const { messages, id: chatId } = await req.json()
+    const { messages, id: chatId, directToolCall, enhancedToolCall } = await req.json()
+
+    if (directToolCall) {
+      //console.log('Handling direct tool call:', directToolCall)
+      
+      const tools = createVITTools()
+      const tool = tools[directToolCall.toolName as keyof typeof tools]
+      
+      if (tool && 'execute' in tool && typeof tool.execute === 'function') {
+        try {
+          const result = await tool.execute(directToolCall.args, {
+            toolCallId: directToolCall.toolCallId || Date.now().toString(),
+            messages: messages || []
+          })
+          return new Response(JSON.stringify({ success: true, result }), {
+            headers: { "Content-Type": "application/json" },
+          })
+        } catch (error) {
+          //console.error('Direct tool call error:', error)
+          return new Response(JSON.stringify({ 
+            success: false, 
+            error: error instanceof Error ? error.message : "Tool execution failed" 
+          }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          })
+        }
+      } else {
+        return new Response(JSON.stringify({ 
+          success: false, 
+          error: "Tool not found" 
+        }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        })
+      }
+    }
 
     const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY
     if (!apiKey) {

@@ -19,19 +19,193 @@ import {
   Mail,
   Globe,
   UtensilsCrossed,
-  Clock
+  Clock,
+  User,
+  Hash,
+  BookOpen,
+  BarChart3,
+  CheckCircle,
+  AlertTriangle
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
-interface ArtifactDisplayProps {
-  title: string
+interface ArtifactDisplayProps {  title: string
   icon?: React.ReactNode
   data: any
-  type: 'papers' | 'faculty' | 'companies' | 'placements' | 'mess-menu' | 'general'
+  type: 'papers' | 'faculty' | 'companies' | 'placements' | 'mess-menu' | 'vtop-data' | 'general'
   className?: string
+}
+
+const VTOPDataCard = ({ vtopData }: { vtopData: any }) => {
+  const { command, content, rawOutput, success } = vtopData
+
+  const renderVTOPContent = () => {
+    switch (command) {      case 'profile':
+        if (typeof content === 'object' && content !== null) {
+          if (Array.isArray(content)) {
+            const profileData: any = {}
+            content.forEach((item: any) => {
+              if (typeof item === 'object' && item !== null) {
+                Object.assign(profileData, item)
+              }
+            })
+            
+            return (
+              <div className="space-y-3">
+                {Object.entries(profileData).map(([key, value]) => (
+                  <div key={key} className="flex items-center gap-3">
+                    <User className="h-3 w-3 text-blue-400 shrink-0" />
+                    <div className="flex-1">
+                      <span className="text-xs font-medium text-card-foreground capitalize">
+                        {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:
+                      </span>
+                      <span className="ml-2 text-xs text-muted-foreground">{String(value)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          } else {
+            // Handle single object
+            return (
+              <div className="space-y-3">
+                {Object.entries(content).map(([key, value]) => (
+                  <div key={key} className="flex items-center gap-3">
+                    <User className="h-3 w-3 text-blue-400 shrink-0" />
+                    <div className="flex-1">
+                      <span className="text-xs font-medium text-card-foreground capitalize">
+                        {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:
+                      </span>
+                      <span className="ml-2 text-xs text-muted-foreground">{String(value)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          }
+        }
+        break
+      case 'marks':
+      case 'grades':
+        if (Array.isArray(content) && content.length > 0) {
+          const headers = Object.keys(content[0])
+          return (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 gap-2">
+                {content.slice(0, 5).map((row, index) => (
+                  <div key={index} className="p-2 border border-border/50 rounded-md bg-muted/30">
+                    {headers.map(header => (
+                      <div key={header} className="flex justify-between text-xs mb-1">
+                        <span className="font-medium text-card-foreground">{header}:</span>
+                        <span className="text-muted-foreground">{row[header]}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+                {content.length > 5 && (
+                  <div className="text-xs text-muted-foreground text-center">
+                    ... and {content.length - 5} more entries
+                  </div>
+                )}
+              </div>
+            </div>
+          )        }
+        break
+      case 'attendance':
+        if (Array.isArray(content) && content.length > 0) {
+          return (
+            <div className="space-y-2">
+              {content.slice(0, 5).map((subject, index) => {
+                const subjectName = subject.SUBJECT || subject.subject || subject.name || `Subject ${index + 1}`
+                const percentage = subject.PERCENTAGE || subject.percentage || subject.attendance || 'N/A'
+                const attended = subject['CLASSES ATTENDED'] || subject.attended || subject.classesAttended || 'N/A'
+                const alert = subject['75% ALERT'] || subject.alert || subject.status || ''
+                
+                return (
+                  <div key={index} className="p-3 border border-border/50 rounded-md bg-muted/30">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <BookOpen className="h-3 w-3 text-green-400" />
+                        <span className="text-sm font-medium text-card-foreground">
+                          {subjectName}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <BarChart3 className="h-3 w-3 text-blue-400" />
+                        <span className="text-sm font-medium text-card-foreground">
+                          {percentage}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      {attended !== 'N/A' && (
+                        <div>Classes Attended: {attended}</div>
+                      )}
+                      {alert && (
+                        <div className={`font-medium ${alert.includes('Can miss') ? 'text-green-600' : 'text-red-600'}`}>
+                          {alert}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+              {content.length > 10 && (
+                <div className="text-xs text-muted-foreground text-center">
+                  ... and {content.length - 5} more subjects
+                </div>
+              )}
+            </div>
+          )
+        }
+        break
+      default:
+        if (typeof content === 'object') {
+          return (
+            <div className="space-y-2">
+              {Object.entries(content).slice(0, 5).map(([key, value]) => (
+                <div key={key} className="flex justify-between text-xs">
+                  <span className="font-medium text-card-foreground">{key}:</span>
+                  <span className="text-muted-foreground">{String(value)}</span>
+                </div>
+              ))}
+            </div>
+          )
+        }
+    }
+
+    return (
+      <div className="space-y-2">
+        <pre className="text-xs text-muted-foreground whitespace-pre-wrap overflow-x-auto">
+          {typeof content === 'string' ? content : JSON.stringify(content, null, 2)}
+        </pre>
+      </div>
+    )
+  }
+
+  return (
+    <Card className="hover:shadow-sm transition-all duration-200 border-border bg-card">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-medium text-card-foreground flex items-center gap-2">
+            <GraduationCap className="h-4 w-4 text-blue-500" />
+            VTOP {command.charAt(0).toUpperCase() + command.slice(1)}
+          </CardTitle>
+          {success !== false ? (
+            <CheckCircle className="h-4 w-4 text-green-500" />
+          ) : (
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="pt-0">
+        {renderVTOPContent()}
+      </CardContent>
+    </Card>
+  )
 }
 
 const PaperCard = ({ paper }: { paper: any }) => (
@@ -354,12 +528,10 @@ const PureArtifactDisplay = ({ title, icon, data, type, className }: ArtifactDis
     }    const items = Array.isArray(data) ? data : [data]
     const displayItems = isExpanded ? items : items.slice(0, 3)
 
-    return (
-      <div className={cn(
+    return (      <div className={cn(
         "grid gap-3",
-        type === 'mess-menu' ? "grid-cols-1" : "md:grid-cols-2 lg:grid-cols-3"
-      )}>
-        {displayItems.map((item, index) => {
+        type === 'mess-menu' || type === 'vtop-data' ? "grid-cols-1" : "md:grid-cols-2 lg:grid-cols-3"
+      )}>{displayItems.map((item, index) => {
           switch (type) {
             case 'papers':
               return <PaperCard key={index} paper={item} />
@@ -371,6 +543,8 @@ const PureArtifactDisplay = ({ title, icon, data, type, className }: ArtifactDis
               return <PlacementCard key={index} placement={item} />
             case 'mess-menu':
               return <MessMenuCard key={index} menuData={item} />
+            case 'vtop-data':
+              return <VTOPDataCard key={index} vtopData={item} />
             default:
               return (
                 <Card key={index} className="hover:shadow-md transition-shadow">

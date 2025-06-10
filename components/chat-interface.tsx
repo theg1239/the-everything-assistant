@@ -15,6 +15,7 @@ import { MultimodalInput } from "@/components/multimodal-input"
 import { Sidebar } from "@/components/sidebar"
 import { Canvas } from "@/components/canvas"
 import ResearchPreviewModal from "@/components/research-preview-modal"
+import { VTOPToolHandler } from "@/components/vtop-tool-handler"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
@@ -34,7 +35,6 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const router = useRouter()
   const [optimisticChatId, setOptimisticChatId] = useState<string | undefined>(chatId)
 
-  // Persist sidebar state
   useEffect(() => {
     if (typeof window === "undefined") return
     const saved = localStorage.getItem("sidebarOpen")
@@ -50,7 +50,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     const hasUser = initialMessages.some((m) => m.role === "user")
     setHasUserInitiatedConversation(hasUser)
   }, [initialMessages])  
-  const {
+    const {
     messages,
     input,
     handleInputChange,
@@ -59,6 +59,9 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     setInput,
     error,
     stop,
+    append,
+    setMessages,
+    reload,
   } = useChat({
     api: "/api/chat",
     initialMessages: initialMessages.map((msg) => ({
@@ -91,12 +94,10 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     },
   })
 
-  // scroll as messages arrive or loading state changes
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages, isLoading])
 
-  // If there's a connectivity error
   useEffect(() => {
     if (error) {
       setErrorMessage("Unable to connect. Please check your connection and try again.")
@@ -112,37 +113,140 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     setHasUserInitiatedConversation(true)
     originalHandleSubmit(e)
   }
-
-  const handleSuggestedQuestion = (question: string) => {
-    setInput(question)
+  const handleSuggestedQuestion = async (question: string) => {
+    setInput("")
     if (!showFullChat) setShowFullChat(true)
     setErrorMessage(null)
     setHasUserInitiatedConversation(true)
 
-    // submit after a tiny delay so the input state settles
-    setTimeout(() => {
-      const form = document.createElement("form")
-      const event = new Event("submit", { bubbles: true, cancelable: true })
-      Object.defineProperty(event, "target", { value: form, enumerable: true })
-      Object.defineProperty(event, "preventDefault", { value: () => {}, enumerable: true })
-      originalHandleSubmit(event as any)
-    }, 100)
+    await append({
+      role: 'user',
+      content: question,
+    })
   }
 
   const resetToHome = () => {
     router.push("/")
   }
+
   const openCanvas = () => {
     setCanvasOpen(true)
   }
+
   const createCanvasFromMessage = (content: string) => {
     setCanvasContent(content)
     setCanvasOpen(true)
+  }  
+  
+  const handleVTOPCredentials = async (
+    credentials: { username: string; encryptedPassword: string }, 
+    originalToolCall: any
+  ) => {
+    console.log('VTOP Credentials submitted, executing tool directly...')
+    
+    try {
+      const command = originalToolCall?.args?.command || originalToolCall?.result?.command
+      if (!command) {
+        console.error('No command found in original tool call')
+        return
+      }
+
+      const loadingToast = toast.loading(`Executing VTOP ${command} command...`)
+
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [
+            ...messages,
+            {
+              id: Date.now().toString(),
+              role: 'user',
+              content: `show me my vtop ${command}`,
+            }
+          ],
+          directToolCall: {
+            toolName: 'queryVTOP',
+            args: {
+              command,
+              username: credentials.username,
+              password: credentials.encryptedPassword,
+              ...originalToolCall.args,
+            },
+            toolCallId: Date.now().toString()
+          },
+          id: chatId || optimisticChatId,
+        }),
+      })
+
+      toast.dismiss(loadingToast)
+
+      if (response.ok) {
+        const result = await response.json()
+        console.log('VTOP tool executed successfully:', result)
+          if (result.result && (result.result.data || result.result.output)) {
+          console.log('Updating messages with VTOP result...')
+          console.log('Current messages:', messages)
+          console.log('Original tool call:', originalToolCall)
+          console.log('Command:', command)
+          
+          const updatedMessages = messages.map((message: any) => {
+            if (message.toolInvocations) {
+              const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
+                console.log('Checking tool invocation:', {
+                  toolName: toolInvocation.toolName,
+                  command: toolInvocation.args?.command,
+                  state: toolInvocation.state,
+                  hasResult: !!toolInvocation.result,
+                  hasData: !!(toolInvocation.result?.data)
+                })
+                
+                if (toolInvocation.toolName === 'queryVTOP' && 
+                    toolInvocation.args?.command === command &&
+                    (!toolInvocation.result || !toolInvocation.result.data)) {
+                  console.log('FOUND MATCH! Updating tool invocation with result:', result.result)
+                  return {
+                    ...toolInvocation,
+                    result: result.result,
+                    state: 'result'
+                  }
+                }              return toolInvocation
+              })
+              return {
+                ...message,
+                toolInvocations: updatedToolInvocations
+              }
+            }
+            return message
+          })
+          
+          console.log('Updated messages:', updatedMessages)
+          
+          setMessages([...updatedMessages])
+          
+          toast.success(`VTOP ${command} data retrieved successfully!`)
+        } else {
+          toast.success(`VTOP ${command} command executed successfully!`)
+        }
+        
+      } else {
+        console.error('Failed to execute VTOP tool')
+        toast.error("Failed to retrieve VTOP data. Please try again.")
+      }
+    } catch (error) {
+      console.error('Error executing VTOP tool:', error)
+      toast.error("An error occurred while retrieving VTOP data.")
+    }
   }
-  // first‐message UI
+
   if (!showFullChat) {
     return (
-      <>
+      <VTOPToolHandler 
+        toolInvocations={messages[messages.length - 1]?.toolInvocations}
+        onCredentialsSubmit={handleVTOPCredentials}
+      >
         <ResearchPreviewModal />
         <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
         <div className="flex flex-col h-screen bg-background text-foreground relative overflow-hidden">
@@ -169,7 +273,9 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                   placeholder="ask me for past papers..."
                   stop={stop}
                 />
-              </motion.div>              {errorMessage && (
+              </motion.div>
+              
+              {errorMessage && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -177,7 +283,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                 >
                   {errorMessage}
                 </motion.div>
-              )}              {/* Show thinking indicator only when waiting for the first response */}
+              )}
+              
               {isLoading && input.trim() !== "" && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -198,6 +305,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                   <span className="text-sm">thinking...</span>
                 </motion.div>
               )}
+              
               <SuggestedQuestions
                 isFirstMessage={true}
                 onQuestionClick={handleSuggestedQuestion}
@@ -206,12 +314,15 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
             </div>
           </div>
         </div>
-      </>
-    )  }
+      </VTOPToolHandler>
+    )
+  }
 
-  // full‐chat UI
   return (
-    <>
+    <VTOPToolHandler 
+      toolInvocations={messages[messages.length - 1]?.toolInvocations}
+      onCredentialsSubmit={handleVTOPCredentials}
+    >
       <ResearchPreviewModal />
       <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
       <Canvas
@@ -229,7 +340,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                 type: "document",
               }
             : undefined
-        }      />
+        }
+      />
 
       <div className="flex flex-col h-screen bg-background text-foreground">
         <header className="flex-shrink-0 sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border">
@@ -275,7 +387,9 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                     onCreateCanvas={createCanvasFromMessage}
                   />
                 ))}
-              </AnimatePresence>              {/* Show "thinking..." indicator only when waiting for the first response */}
+              </AnimatePresence>
+              
+              {/* Show "thinking..." indicator only when waiting for the first response */}
               {isLoading && messages.length > 0 && messages[messages.length - 1].role === "user" && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -315,7 +429,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
           </div>
         </div>
       </div>
-    </>
+    </VTOPToolHandler>
   )
 }
 

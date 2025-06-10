@@ -38,183 +38,98 @@ export async function scrapePlacementInfo (
   companyFilter?: string,
 ): Promise<PlacementResponse> {
   try {
-    return await withBrowser(async page => {
-      await page.goto("https://vit-placements-tracker.streamlit.app/", {
-        waitUntil: "networkidle2", // Wait until network is idle (more reliable)
-        timeout  : 90_000, // Increased timeout for initial page load
-      })
+    return await withBrowser(async page => {      console.log("Navigating to placement tracker...")
+      try {
+        await page.goto("https://vit-placements-tracker.streamlit.app/", {
+          waitUntil: "domcontentloaded", // Faster loading condition
+          timeout  : 25_000, // Reduced timeout
+        })
+      } catch (navError: any) {
+        console.log("Navigation timeout, continuing anyway:", navError?.message)
+      }
 
-      /* 1️⃣  Wait for Streamlit to load completely - be more patient */
+      /* 1️⃣  Wait for Streamlit to load with shorter timeouts */
       console.log("Waiting for Streamlit to load...")
       
-      // Wait for the main app container
-      await page.waitForFunction(
-        () => document.querySelector('[data-testid="stApp"]') !== null,
-        { timeout: 45000 }
-      )
+      // Quick check for main app container
+      try {
+        await page.waitForFunction(
+          () => document.querySelector('[data-testid="stApp"]') !== null,
+          { timeout: 10000 }
+        )
+      } catch (appError: any) {
+        console.log("App container timeout, continuing anyway")
+      }
       
-      // Wait for initial render to complete
-      await page.waitForTimeout(8000)
-      
-      // Wait for Streamlit sidebar to appear (indicates app is ready)
-      await page.waitForSelector('[data-testid="stSidebar"]', { timeout: 30000 })
-        .catch(() => console.log("No sidebar found, continuing anyway"))
+      // Much shorter initial wait
+      await page.waitForTimeout(2000)
       
       // Capture a screenshot for debugging (in development)
       if (process.env.NODE_ENV === 'development') {
         await page.screenshot({ path: '/tmp/placement-debug-initial.png' })
+      }      /* 2️⃣  Grab the "data updated" banner (if present) with timeout */
+      let lastUpdated: string | null = null
+      try {
+        lastUpdated = await Promise.race([
+          page.evaluate(() => {
+            const el = [...document.querySelectorAll("p, div")]
+              .find(e => /Data Updated as on/i.test(e.textContent ?? ""))
+            return el?.textContent?.replace(/^\s*|\s*$/g, "") ?? null
+          }),
+          new Promise<null>(resolve => setTimeout(() => resolve(null), 3000))
+        ])
+      } catch (err) {
+        console.log("Failed to get last updated info")
       }
 
-      /* 2️⃣  Grab the "data updated" banner (if present)              */
-      const lastUpdated: string | null = await page.evaluate(() => {
-        const el = [...document.querySelectorAll("p, div")]
-          .find(e => /Data Updated as on/i.test(e.textContent ?? ""))
-        return el?.textContent?.replace(/^\s*|\s*$/g, "") ?? null
-      })
-
-      /* 3️⃣  Open the "Select DataFrame" dropdown & pick BOTH:
-              – Overall Statistics (to expose metrics)
-              – Company-wise Placements (to expose the big table)      */
-      console.log("Selecting dropdown options...")
+      /* 3️⃣  Fast dropdown selection - try only the most reliable approach */
+      console.log("Attempting dropdown selection...")
+      let selectionSuccess = false
       
-      // Improved dropdown selection with multiple fallback strategies
-      let selectionSuccess = false;
-      
-      // Approach 1: Find select box by aria-label
       try {
-        const dropdownSelector = await page.$('[aria-label="Select DataFrame :"]');
-        if (dropdownSelector) {
-          // First selection: Overall Statistics
-          await dropdownSelector.click();
-          await page.waitForTimeout(2000);
+        // Try the most direct approach with short timeouts
+        const dropdown = await page.$('[aria-label*="Select DataFrame"], [role="combobox"]')
+        if (dropdown) {
+          await dropdown.click()
+          await page.waitForTimeout(1000)
           
-          const statOption = await page.$x('//div[@role="option" and contains(text(), "Overall Statistics")]');
-          if (statOption.length > 0) {
-            await statOption[0].click();
-            await page.waitForTimeout(3000);
+          const options = await page.$$('[role="option"]')
+          if (options.length >= 2) {
+            // Select first option (Overall Statistics)
+            await options[0].click()
+            await page.waitForTimeout(1000)
             
-            // Take screenshot after first selection
-            if (process.env.NODE_ENV === 'development') {
-              await page.screenshot({ path: '/tmp/placement-debug-after-first-selection.png' });
-            }
+            // Reopen and select second option
+            await dropdown.click()
+            await page.waitForTimeout(1000)
             
-            // Second selection: Company-wise Placements
-            await dropdownSelector.click();
-            await page.waitForTimeout(2000);
-            
-            const companyOption = await page.$x('//div[@role="option" and contains(text(), "Company-wise Placements")]');
-            if (companyOption.length > 0) {
-              await companyOption[0].click();
-              await page.waitForTimeout(3000);
-              selectionSuccess = true;
-              console.log("Successfully selected options via aria-label approach");
+            const refreshedOptions = await page.$$('[role="option"]')
+            if (refreshedOptions.length >= 2) {
+              await refreshedOptions[1].click()
+              selectionSuccess = true
+              console.log("Successfully selected dropdown options")
             }
           }
         }
       } catch (error) {
-        console.log("Error in approach 1:", error);
+        console.log("Dropdown selection failed, continuing anyway:", error)
       }
+        /* 4️⃣  Wait for data with shorter timeouts */
+      console.log("Waiting for data to load...")
       
-      // Approach 2: Use the helper function if approach 1 failed
-      if (!selectionSuccess) {
-        try {
-          await selectStreamlitOption(page, "Select DataFrame :", "Overall Statistics");
-          await page.waitForTimeout(3000);
-          await selectStreamlitOption(page, "Select DataFrame :", "Company-wise Placements");
-          await page.waitForTimeout(3000);
-          selectionSuccess = true;
-          console.log("Successfully selected options via helper function");
-        } catch (error) {
-          console.log("Error in approach 2:", error);
-        }
-      }
+      // Give a moment for any changes to take effect
+      await page.waitForTimeout(2000)
       
-      // Approach 3: Find any combobox
-      if (!selectionSuccess) {
-        try {
-          const selectBoxes = await page.$$('[role="combobox"]');
-          if (selectBoxes.length > 0) {
-            // First selection
-            await selectBoxes[0].click();
-            await page.waitForTimeout(2000);
-            
-            const options = await page.$$('[role="option"]');
-            if (options.length > 0) {
-              await options[0].click();
-              await page.waitForTimeout(3000);
-              
-              // Second selection
-              await selectBoxes[0].click();
-              await page.waitForTimeout(2000);
-              
-              const refreshedOptions = await page.$$('[role="option"]');
-              if (refreshedOptions.length > 1) {
-                await refreshedOptions[1].click();
-                await page.waitForTimeout(3000);
-                selectionSuccess = true;
-                console.log("Successfully selected options via generic combobox approach");
-              }
-            }
-          }
-        } catch (error) {
-          console.log("Error in approach 3:", error);
-        }
-      }
-      
-      // Approach 4: Use CSS selectors to find streamlit widget
-      if (!selectionSuccess) {
-        try {
-          const streamlitWidgets = await page.$$('.stSelectbox');
-          if (streamlitWidgets.length > 0) {
-            await streamlitWidgets[0].click();
-            await page.waitForTimeout(2000);
-            
-            const options = await page.$$('[role="option"], .streamlit-selectbox li');
-            if (options.length > 0) {
-              await options[0].click();
-              await page.waitForTimeout(3000);
-              
-              await streamlitWidgets[0].click();
-              await page.waitForTimeout(2000);
-              
-              const refreshedOptions = await page.$$('[role="option"], .streamlit-selectbox li');
-              if (refreshedOptions.length > 1) {
-                await refreshedOptions[1].click();
-                await page.waitForTimeout(3000);
-                selectionSuccess = true;
-                console.log("Successfully selected options via CSS selector approach");
-              }
-            }
-          }
-        } catch (error) {
-          console.log("Error in approach 4:", error);
-        }
-      }
-      
-      if (!selectionSuccess) {
-        console.log("Warning: Could not select options in any way");
-      }
-      
-      /* 4️⃣  Wait for metrics and tables that Streamlit now renders   */
-      console.log("Waiting for data tables to load...")
-      
-      // Take a screenshot after options selection
-      if (process.env.NODE_ENV === 'development') {
-        await page.screenshot({ path: '/tmp/placement-debug-after-selection.png' });
-      }
-      
-      // Wait for metrics with extended timeout
-      await page.waitForSelector('[data-testid="stMetric"]', { timeout: 30000 })
-        .catch(() => console.log("No metrics found, will try to continue anyway"));
-      
-      // Wait for tables with extended timeout
-      await page.waitForSelector('[data-testid="stTable"]', { timeout: 30000 })
-        .catch(() => console.log("No tables found, will try to continue anyway"));
-      
-      // Give the page a final moment to fully render
-      await page.waitForTimeout(5000);
-
-      /* 5️⃣  Scrape everything we need                                 */
+      // Try to wait for content but don't block too long
+      try {
+        await Promise.race([
+          page.waitForSelector('[data-testid="stMetric"], [data-testid="stTable"]', { timeout: 15000 }),
+          new Promise(resolve => setTimeout(resolve, 15000))
+        ])
+      } catch (err) {
+        console.log("Content wait timeout, proceeding anyway")
+      }      /* 5️⃣  Scrape available data */
+      console.log("Scraping placement data...")
       const scraped = await page.evaluate(() => {
         /* helper for commas → plain digits */
         const digits = (txt: string = "") => (txt.match(/[\d,.]+/)?.[0] ?? "0").replace(/,/g, "")
@@ -222,14 +137,14 @@ export async function scrapePlacementInfo (
         /* ── metrics ─────────────────────────────────────────────── */
         const metrics = [...document.querySelectorAll('[data-testid="stMetric"]')]
         const banner: Record<string, string> = {
-          "total offers"       : digits(metrics[0]?.textContent || ""),
-          "unique offers"      : digits(metrics[1]?.textContent || ""),
-          "super-dream offers" : digits(metrics[2]?.textContent || ""),
-          "dream offers"       : digits(metrics[3]?.textContent || ""),
-          "total companies"    : digits(metrics[4]?.textContent || ""),
+          "total offers"       : metrics[0] ? digits(metrics[0].textContent || "") : "0",
+          "unique offers"      : metrics[1] ? digits(metrics[1].textContent || "") : "0", 
+          "super-dream offers" : metrics[2] ? digits(metrics[2].textContent || "") : "0",
+          "dream offers"       : metrics[3] ? digits(metrics[3].textContent || "") : "0",
+          "total companies"    : metrics[4] ? digits(metrics[4].textContent || "") : "0",
         }
 
-        /* Highest / average package strings (they live in stText) */
+        /* Highest / average package strings */
         const txtEls = [...document.querySelectorAll('[data-testid="stText"]')]
         banner["highest package"] = txtEls.find(e => /Highest Package/i.test(e.textContent ?? ""))
           ?.textContent?.match(/[\d.]+\s*LPA/)?.[0] ?? "N/A"
@@ -238,51 +153,62 @@ export async function scrapePlacementInfo (
 
         /* ── company-wise table ─────────────────────────────────── */
         const compTable = [...document.querySelectorAll('[data-testid="stTable"]')]
-          .find(t => /Company.*Average CTC/i.test(t.textContent ?? ""))
+          .find(t => /Company.*CTC/i.test(t.textContent ?? ""))
 
         const companies = compTable
-          ? [...compTable.querySelectorAll("tbody tr")].map(row => {
-              const [name, placed, avg] = [...row.querySelectorAll("td, th")]
-                .map((c: Element) => c.textContent?.trim() ?? "")
-              return { name, placed, avgCTC: avg }
-            })
+          ? [...compTable.querySelectorAll("tbody tr")].slice(0, 50).map(row => {
+              const cells = [...row.querySelectorAll("td, th")]
+              return {
+                name: cells[0]?.textContent?.trim() ?? "",
+                placed: cells[1]?.textContent?.trim() ?? "",
+                avgCTC: cells[2]?.textContent?.trim() ?? ""
+              }
+            }).filter(c => c.name)
           : []
 
-        /* ── recent-offers table (Student | Company | CTC | Date) ─ */
+        /* ── recent-offers table ─────────────────────────────────── */
         const offersTable = [...document.querySelectorAll('[data-testid="stTable"]')]
           .find(t => /Student.*Offer/i.test(t.textContent ?? ""))
 
         const recentOffers = offersTable
-          ? [...offersTable.querySelectorAll("tbody tr")].map(row => {
-              const [student, company, ctc, date] = [...row.querySelectorAll("td, th")]
-                .map((c: Element) => c.textContent?.trim() ?? "")
-              return { student: student || "Anonymous", company, ctc, date }
-            })
+          ? [...offersTable.querySelectorAll("tbody tr")].slice(0, 20).map(row => {
+              const cells = [...row.querySelectorAll("td, th")]
+              return {
+                student: cells[0]?.textContent?.trim() || "Anonymous",
+                company: cells[1]?.textContent?.trim() ?? "",
+                ctc: cells[2]?.textContent?.trim() ?? "",
+                date: cells[3]?.textContent?.trim() ?? ""
+              }
+            }).filter(o => o.company)
           : []
 
         return { banner, companies, recentOffers }
-      })
-
-      /* 6️⃣  Optional company filter (case-insensitive substring)     */
-      if (companyFilter) {
+      })      /* 6️⃣  Optional company filter (case-insensitive substring)     */
+      if (companyFilter && scraped.companies.length > 0) {
         const test = (s: string) => s.toLowerCase().includes(companyFilter.toLowerCase())
         scraped.companies = scraped.companies.filter((c: Company) => test(c.name))
         scraped.recentOffers = scraped.recentOffers.filter((o: RecentOffer) => test(o.company))
       }
 
-      /* 7️⃣  Build response                                           */
+      /* 7️⃣  Build response with available data */
       const data: PlacementData = {
         statistics  : scraped.banner,
         companies   : scraped.companies,
         recentOffers: scraped.recentOffers,
       }
 
+      const hasAnyData = Object.values(scraped.banner).some(v => v !== "0" && v !== "N/A") || 
+                        scraped.companies.length > 0 || 
+                        scraped.recentOffers.length > 0
+
       return {
-        success    : true,
+        success    : hasAnyData,
         year       : year ?? "2024-25",
         data,
         lastUpdated: lastUpdated ?? undefined,
-        message    : `Retrieved placement information${companyFilter ? " (filtered)" : ""}`,
+        message    : hasAnyData 
+          ? `Retrieved placement information${companyFilter ? " (filtered)" : ""}`
+          : "Partial data retrieved - some information may be unavailable",
       } satisfies PlacementResponse
     })
   } catch (err: any) {
@@ -311,9 +237,8 @@ async function withBrowser<T>(userFn: (page: any) => Promise<T>): Promise<T> {
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
     );
-    
-    // Set a longer default timeout
-    await page.setDefaultTimeout(60000);
+      // Set a shorter default timeout for faster operations
+    await page.setDefaultTimeout(30000);
     
     const result = await userFn(page);
     return result;

@@ -1,5 +1,5 @@
 const express = require('express');
-const { execFile } = require('child_process');
+const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
@@ -114,6 +114,17 @@ const COMMAND_MAPPING = {
   'syllabus': 'syllabus'
 };
 
+const INTERACTIVE_COMMANDS = {
+  'marks': { requiresSemester: true },
+  'grades': { requiresSemester: true },
+  'attendance': { requiresSemester: true },
+  'timetable': { requiresSemester: true },
+  'exams': { requiresSemester: true },
+  'calendar': { requiresSemester: true, requiresClassGroup: true },
+  'course-page': { requiresSemester: true, requiresCourse: true, requiresFaculty: true },
+  'syllabus': { requiresCourse: true }
+};
+
 const SUPPORTED_COMMANDS = Object.keys(COMMAND_MAPPING);
 
 async function executeVTOPCommand(username, password, command, flags) {
@@ -121,7 +132,8 @@ async function executeVTOPCommand(username, password, command, flags) {
     if (process.env.NODE_ENV !== 'production') {
       console.log(`Executing VTOP command: ${command} for user: ${username}`);
     }
-      if (!fs.existsSync(CLI_TOP_PATH)) {
+    
+    if (!fs.existsSync(CLI_TOP_PATH)) {
       return reject({
         error: `CLI executable not found at path: ${CLI_TOP_PATH}`,
         command: command,
@@ -137,15 +149,22 @@ async function executeVTOPCommand(username, password, command, flags) {
       }
     }
     
-    let cliArgs = ['proxy', username, password, command];
-    
-    if (flags && typeof flags === 'object') {
+    let cliArgs = ['proxy', username, password, command];    if (flags && typeof flags === 'object') {
       for (const [key, value] of Object.entries(flags)) {
-        if (value !== undefined && value !== null && value !== '') {
+        if (value !== undefined && value !== null && value !== '' && key !== 'semesterQuery') {
           if (typeof value === 'boolean' && value) {
-            cliArgs.push(`--${key}`);
+            cliArgs.push(`-${key.charAt(0)}`); // Use short flags like -s, -c, -f
           } else if (typeof value === 'number' || typeof value === 'string') {
-            cliArgs.push(`--${key}=${value}`);
+            let flagName = key;
+            if (key === 'semester') flagName = 's';
+            else if (key === 'course') flagName = 'c';
+            else if (key === 'faculty') flagName = 'f';
+            else if (key === 'classGroup') flagName = 'g';
+            else if (key === 'fuzzyIndex') flagName = 'i';
+            else if (key === 'debug') flagName = 'd';
+            
+            cliArgs.push(`-${flagName}`);
+            cliArgs.push(value.toString());
           }
         }
       }
@@ -154,15 +173,26 @@ async function executeVTOPCommand(username, password, command, flags) {
     const options = {
       timeout: CLI_TIMEOUT,
       cwd: __dirname,
-    };    if (process.env.NODE_ENV !== 'production') {
+    };
+    
+    if (process.env.NODE_ENV !== 'production') {
       console.log(`Executing: ${CLI_TOP_PATH} ${['proxy', username, '***', command, ...cliArgs.slice(4)].join(' ')}`);
     }
 
+    // Check if this is an interactive command that might need automated responses
+    const interactiveConfig = INTERACTIVE_COMMANDS[command];
+    if (interactiveConfig) {
+      return executeInteractiveCommand(CLI_TOP_PATH, cliArgs, options, command, flags, resolve, reject);
+    }
+
+    // For non-interactive commands, use the original execFile approach
+    const { execFile } = require('child_process');
     execFile(CLI_TOP_PATH, cliArgs, options, (err, stdout, stderr) => {
       if (process.env.NODE_ENV !== 'production') {
         console.log(`CLI execution completed. Error: ${!!err}, stdout length: ${stdout?.length || 0}, stderr length: ${stderr?.length || 0}`);
       }
-        if (err) {
+      
+      if (err) {
         console.error(`CLI Error: ${err.message}`);
         if (process.env.NODE_ENV !== 'production') {
           console.error(`stderr: ${stderr}`);
@@ -196,6 +226,299 @@ async function executeVTOPCommand(username, password, command, flags) {
       }
     });
   });
+}
+
+function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, resolve, reject) {
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`Executing interactive command: ${command}`);
+  }
+
+  const child = spawn(cliPath, cliArgs, {
+    ...options,
+    stdio: ['pipe', 'pipe', 'pipe']
+  });
+
+  let stdout = '';
+  let stderr = '';
+  let currentPrompt = '';
+  let processingComplete = false;
+  let interactionCount = 0;
+  const maxInteractions = 10; // Prevent infinite loops
+
+  child.stdout.on('data', (data) => {
+    const output = data.toString();
+    stdout += output;
+    currentPrompt += output;
+    
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`CLI stdout: ${output}`);
+    }
+
+    // Check for various interactive prompts and respond automatically
+    if (!processingComplete && interactionCount < maxInteractions) {
+      const response = handleInteractivePrompt(currentPrompt, command, flags);
+      if (response !== null) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`Sending automated response: ${response}`);
+        }
+        child.stdin.write(response + '\n');
+        currentPrompt = ''; // Reset prompt buffer
+        interactionCount++;
+      }
+    }
+  });
+
+  child.stderr.on('data', (data) => {
+    const output = data.toString();
+    stderr += output;
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`CLI stderr: ${output}`);
+    }
+  });
+
+  child.on('close', (code) => {
+    processingComplete = true;
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`CLI process closed with code: ${code}`);
+    }
+
+    if (code !== 0) {
+      return reject({
+        error: stderr || stdout || `Process exited with code ${code}`,
+        command: command,
+        args: ['proxy', cliArgs[1], '***', command, ...cliArgs.slice(4)]
+      });
+    }
+
+    try {
+      const jsonOutput = JSON.parse(stdout);
+      resolve(jsonOutput);
+    } catch (parseErr) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('Output is not JSON, treating as plain text:', parseErr.message);
+      }
+      resolve({
+        success: true,
+        command: command,
+        output: stdout,
+        raw: true
+      });
+    }
+  });
+
+  child.on('error', (err) => {
+    processingComplete = true;
+    console.error(`CLI process error: ${err.message}`);
+    reject({
+      error: err.message,
+      command: command,
+      args: ['proxy', cliArgs[1], '***', command, ...cliArgs.slice(4)]
+    });
+  });
+
+  // Set a timeout for the entire process
+  setTimeout(() => {
+    if (!processingComplete) {
+      processingComplete = true;
+      child.kill();
+      reject({
+        error: 'Interactive command timeout',
+        command: command,
+        args: ['proxy', cliArgs[1], '***', command, ...cliArgs.slice(4)]
+      });
+    }
+  }, CLI_TIMEOUT);
+}
+
+function handleInteractivePrompt(prompt, command, flags) {
+  const lowerPrompt = prompt.toLowerCase();  // Handle semester selection prompts
+  if (lowerPrompt.includes('choose a semester') || 
+      lowerPrompt.includes('select a semester') ||
+      (lowerPrompt.includes('semester') && lowerPrompt.includes('number'))) {
+    
+    // If semester flag is provided, use it
+    if (flags && flags.semester && flags.semester > 0) {
+      return flags.semester.toString();
+    }
+    
+    // Parse semester options from the prompt to find the best match
+    const semesterChoice = findBestSemesterMatch(prompt, flags);
+    if (semesterChoice) {
+      return semesterChoice;
+    }
+      // Try to find the highest semester number in the prompt (most recent semester)
+    // Look for patterns like "1. Fall 2024", "2. Spring 2024", etc.
+    const semesterMatches = prompt.match(/(\d+)\.\s*(Fall|Winter|Summer)?\s*\d{4}/g);
+    if (semesterMatches && semesterMatches.length > 0) {
+      // Find the highest semester number
+      const semesterNumbers = semesterMatches.map(match => {
+        const num = match.match(/^(\d+)\./);
+        return num ? parseInt(num[1]) : 0;
+      });
+      const maxSemester = Math.max(...semesterNumbers);
+      if (maxSemester > 0) {
+        return maxSemester.toString();
+      }
+    }
+    
+    // Try to find the last option from table format
+    const tableRows = prompt.match(/^\s*(\d+)\s*│/gm);
+    if (tableRows && tableRows.length > 0) {
+      const numbers = tableRows.map(row => {
+        const match = row.match(/^\s*(\d+)\s*│/);
+        return match ? parseInt(match[1]) : 0;
+      });
+      const lastOption = Math.max(...numbers);
+      if (lastOption > 0) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`Defaulting to last semester option: ${lastOption}`);
+        }
+        return lastOption.toString();
+      }
+    }
+    
+    return '1';
+  }
+  
+  if (lowerPrompt.includes('choose a course') || 
+      lowerPrompt.includes('select a course') ||
+      (lowerPrompt.includes('course') && lowerPrompt.includes('number'))) {
+    
+    if (flags && flags.course && flags.course > 0) {
+      return flags.course.toString();
+    }
+    
+    return '1';
+  }
+  
+  if (lowerPrompt.includes('choose a faculty') ||
+      lowerPrompt.includes('select a faculty') ||
+      (lowerPrompt.includes('faculty') && lowerPrompt.includes('number'))) {
+    
+    if (flags && flags.faculty && flags.faculty > 0) {
+      return flags.faculty.toString();
+    }
+    
+    return '1';
+  }
+  
+  if (lowerPrompt.includes('choose a class') ||
+      lowerPrompt.includes('select a class') ||
+      lowerPrompt.includes('class group') ||
+      (lowerPrompt.includes('group') && lowerPrompt.includes('number'))) {
+    
+    if (flags && flags.classGroup && flags.classGroup > 0) {
+      return flags.classGroup.toString();
+    }
+    
+    return '1';
+  }
+  
+  if (lowerPrompt.includes('enter a number') ||
+      lowerPrompt.includes('enter the number') ||
+      lowerPrompt.includes('select by entering') ||
+      (lowerPrompt.includes('enter') && lowerPrompt.includes('number'))) {
+    
+    return '1';
+  }
+  
+  if (lowerPrompt.includes('(yes/no)') || 
+      lowerPrompt.includes('(y/n)') ||
+      lowerPrompt.includes('proceed')) {
+    
+    return 'yes';
+  }
+  
+  if (lowerPrompt.includes("type 'exit'") || 
+      lowerPrompt.includes('exit to quit') ||
+      lowerPrompt.includes('exit to cancel')) {
+    
+    return '1';
+  }
+    return null;
+}
+
+function findBestSemesterMatch(prompt, flags) {
+  if (flags && flags.semesterQuery) {
+    const query = flags.semesterQuery.toLowerCase();
+    
+    const lines = prompt.split('\n');
+    const semesterOptions = [];
+    
+    for (const line of lines) {
+      const tableMatch = line.match(/^\s*(\d+)\s*│.*?│\s*(.+?)\s*$/);
+      if (tableMatch) {
+        const number = parseInt(tableMatch[1]);
+        const description = tableMatch[2].toLowerCase().trim();
+        semesterOptions.push({ number, description, line: line.trim() });
+        continue;
+      }
+      
+      const simpleMatch = line.match(/^\s*(\d+)\.\s*(.+)$/);
+      if (simpleMatch) {
+        const number = parseInt(simpleMatch[1]);
+        const description = simpleMatch[2].toLowerCase();
+        semesterOptions.push({ number, description, line: line.trim() });
+      }
+    }    
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`Semester query: "${query}"`);
+      console.log('Parsed semester options:', semesterOptions);
+    }
+    
+    for (const option of semesterOptions) {
+      if (option.description.includes(query)) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`Found semester match: "${query}" -> ${option.number} (${option.description})`);
+        }
+        return option.number.toString();
+      }
+    }
+    
+    const semesterMappings = {
+      'summer': ['summer', 'intersession', 'inter session'],
+      'winter': ['winter', 'intersession', 'inter session'],
+      'fall': ['fall', 'autumn', 'odd'],
+      'spring': ['spring', 'even'],
+      'current': ['current', 'present', 'ongoing'],
+      'latest': ['latest', 'recent', 'last'],
+      '1': ['first', '1st', 'one'],
+      '2': ['second', '2nd', 'two'],
+      '3': ['third', '3rd', 'three'],
+      '4': ['fourth', '4th', 'four'],
+      '5': ['fifth', '5th', 'five'],
+      '6': ['sixth', '6th', 'six'],
+      '7': ['seventh', '7th', 'seven'],
+      '8': ['eighth', '8th', 'eight']
+    };
+    
+    for (const option of semesterOptions) {
+      for (const [key, terms] of Object.entries(semesterMappings)) {
+        for (const term of terms) {
+          if (query.includes(term) && option.description.includes(term)) {
+            if (process.env.NODE_ENV !== 'production') {
+              console.log(`Found fuzzy semester match: "${query}" -> ${option.number} via "${term}"`);
+            }
+            return option.number.toString();
+          }
+        }
+      }
+    }
+    
+    const numberMatch = query.match(/\d+/);
+    if (numberMatch) {
+      const requestedNumber = parseInt(numberMatch[0]);
+      const validOption = semesterOptions.find(opt => opt.number === requestedNumber);
+      if (validOption) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`Found direct number match: "${query}" -> ${requestedNumber}`);
+        }
+        return requestedNumber.toString();
+      }
+    }
+  }
+  
+  return null;
 }app.post('/vtop', async (req, res) => {
   const { command, username, password, encryptedPassword, sessionKey, flags } = req.body;
   
@@ -244,10 +567,30 @@ async function executeVTOPCommand(username, password, command, flags) {
     }
   }
 
+  const interactiveConfig = INTERACTIVE_COMMANDS[actualCommand];
+  if (interactiveConfig) {
+    
+    if (interactiveConfig.requiresCourse && !flagsForCLI.course) {
+      flagsForCLI.course = 1;
+    }
+    
+    if (interactiveConfig.requiresFaculty && !flagsForCLI.faculty) {
+      flagsForCLI.faculty = 1;
+    }
+    
+    if (interactiveConfig.requiresClassGroup && !flagsForCLI.classGroup) {
+      flagsForCLI.classGroup = 1;
+    }
+    
+    // Note: We intentionally do NOT set a default semester
+    // The CLI will prompt interactively and we'll handle it in executeInteractiveCommand
+  }
+
   if (process.env.NODE_ENV !== 'production') {
     console.log(`Executing VTOP command: ${actualCommand} with flags:`, flagsForCLI);
   }
-    try {
+  
+  try {
     const result = await executeVTOPCommand(username, finalPassword, actualCommand, flagsForCLI);
     res.json(result);
   } catch (error) {
@@ -270,8 +613,16 @@ app.get('/commands', (req, res) => {
   res.json({
     commands: SUPPORTED_COMMANDS,
     mapping: COMMAND_MAPPING,
-    description: 'Available VTOP commands',
-    version: require('./package.json').version
+    interactive: INTERACTIVE_COMMANDS,
+    description: 'Available VTOP commands with interactive handling support',
+    version: require('./package.json').version,
+    supportedFlags: {
+      semester: 'Semester number for semester-specific commands',
+      course: 'Course selection number for course-specific commands',
+      faculty: 'Faculty selection number for faculty-specific commands',
+      classGroup: 'Class group selection number for calendar commands',
+      fuzzyIndex: 'Fuzzy search index for course-page commands'
+    }
   });
 });
 

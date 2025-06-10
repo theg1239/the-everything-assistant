@@ -246,7 +246,7 @@ export function createVITTools() {
 
     queryVTOP: tool({
       description:
-        "Access VTOP (VIT's official portal) to get student information like grades, attendance, timetable, profile, marks, hostel info, library dues, exam schedules, and more. This tool automatically handles credential authentication through a secure dialog system. Use this tool whenever users request VTOP data - credentials will be prompted securely.",
+        "Access VTOP (VIT's official portal) to get student information like grades, attendance, timetable, profile, marks, hostel info, library dues, exam schedules, and more. This tool automatically handles credential authentication and interactive command prompts through intelligent defaults. Use this tool whenever users request VTOP data - credentials will be prompted securely.",
       parameters: z.object({
         command: z
           .enum([
@@ -267,19 +267,23 @@ export function createVITTools() {
         semester: z
           .number()
           .optional()
-          .describe("Semester number (1-8) for commands like marks, grades, attendance, timetable, exams, calendar"),
+          .describe("Semester number (1-8) for commands like marks, grades, attendance, timetable, exams, calendar. If not specified, user will be prompted to select from available semesters."),
+        semesterQuery: z
+          .string()
+          .optional()
+          .describe("Text description of semester to search for (e.g., 'summer semester', 'fall 2024', 'current semester', 'latest'). Used for intelligent semester matching."),
         course: z
           .number()
           .optional()
-          .describe("Course selection number for course-page command"),
+          .describe("Course selection number for course-page command. Defaults to first course (1) if not specified."),
         faculty: z
-          .string()
+          .number()
           .optional()
-          .describe("Faculty name for course-page command"),
+          .describe("Faculty selection number for course-page command. Defaults to first faculty (1) if not specified."),
         classGroup: z
           .number()
           .optional()
-          .describe("Class group number for calendar command"),
+          .describe("Class group number for calendar command. Defaults to first group (1) if not specified."),
         fuzzyIndex: z
           .number()
           .optional()
@@ -293,7 +297,7 @@ export function createVITTools() {
           .optional()
           .describe("Enable debug mode for troubleshooting"),
       }),
-      execute: async ({ command, username, password, semester, course, faculty, classGroup, fuzzyIndex, courseQuery, debug }) => {
+      execute: async ({ command, username, password, semester, semesterQuery, course, faculty, classGroup, fuzzyIndex, courseQuery, debug }) => {
         try {
           if (!username || !password) {
             return {
@@ -306,11 +310,13 @@ export function createVITTools() {
           }
 
           const flags: Record<string, any> = {}
+          
           if (semester !== undefined) flags.semester = semester
+          if (semesterQuery) flags.semesterQuery = semesterQuery
           if (course !== undefined) flags.course = course
-          if (faculty) flags.faculty = faculty
-          if (classGroup !== undefined) flags['class-group'] = classGroup
-          if (fuzzyIndex !== undefined) flags['fuzzy-index'] = fuzzyIndex
+          if (faculty !== undefined) flags.faculty = faculty
+          if (classGroup !== undefined) flags.classGroup = classGroup
+          if (fuzzyIndex !== undefined) flags.fuzzyIndex = fuzzyIndex
           if (courseQuery) flags.course = courseQuery
           if (debug) flags.debug = debug
 

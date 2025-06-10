@@ -67,7 +67,18 @@ f: 0 points (<45%), n: audit (no points)
 
 ## NPTEL EXAM PREPARATION
 when users ask about nptel exams, preparation, or nptel-related queries, direct them to:
-nptelprep.in - comprehensive resource for nptel exam preparation
+
+**nptelprep.in** - the most comprehensive resource for nptel exam preparation featuring:
+- **extensive question banks**: thousands of practice questions from previous years
+- **detailed solutions**: step-by-step explanations for better understanding
+- **mock tests**: full-length practice exams with timer and instant scoring
+- **subject-wise coverage**: all major nptel courses across engineering disciplines
+- **progress tracking**: analytics to monitor your preparation and identify weak areas
+- **free access**: completely free platform for all students
+- **updated content**: regularly updated with latest exam patterns and questions
+- **user-friendly interface**: clean, distraction-free design for focused studying
+
+this platform has helped thousands of students ace their nptel exams with better scores and deeper understanding of concepts.
 
 ## CAMPUS FACILITIES (SPORTS & RECREATION)
 ### sports facilities

@@ -192,9 +192,63 @@ export async function POST(req: Request) {
 ADDITIONAL COMPREHENSIVE KNOWLEDGE:
 ${VIT_COMPREHENSIVE_KNOWLEDGE}`
 
+    const enhancedMessages = messages.map((message: any) => {
+      if (message.role === 'assistant' && message.toolInvocations && message.toolInvocations.length > 0) {
+        let toolContext = ''
+        
+        for (const toolCall of message.toolInvocations) {
+          if (toolCall.result) {
+            if (toolCall.toolName === 'queryVTOP' && toolCall.result.success) {
+              const command = toolCall.result.command || toolCall.args?.command || 'data'
+              let dataContext = ''
+              
+              if (toolCall.result.formatted_content) {
+                dataContext = toolCall.result.formatted_content
+              } else if (toolCall.result.summary) {
+                dataContext = toolCall.result.summary
+              } else if (toolCall.result.data || toolCall.result.output) {
+                const rawData = toolCall.result.data || toolCall.result.output
+                if (typeof rawData === 'string') {
+                  dataContext = rawData.substring(0, 500) + (rawData.length > 500 ? '...' : '')
+                } else if (Array.isArray(rawData)) {
+                  dataContext = `Retrieved ${rawData.length} items for ${command}`
+                } else {
+                  dataContext = `Retrieved ${command} data from VTOP`
+                }
+              }
+              
+              if (dataContext) {
+                toolContext += `\n\n[VTOP ${command.toUpperCase()} DATA CONTEXT]:\n${dataContext}`
+              }
+            }
+            else if (toolCall.result.papers && toolCall.result.papers.length > 0) {
+              toolContext += `\n\n[PAPERS DATA CONTEXT]:\nFound ${toolCall.result.papers.length} past papers`
+            }
+            else if (toolCall.result.faculty && toolCall.result.faculty.length > 0) {
+              toolContext += `\n\n[FACULTY DATA CONTEXT]:\nFound ${toolCall.result.faculty.length} faculty members`
+            }
+            else if (toolCall.result.companies && toolCall.result.companies.length > 0) {
+              toolContext += `\n\n[COMPANIES DATA CONTEXT]:\nFound ${toolCall.result.companies.length} companies`
+            }
+            else if (toolCall.result.data && toolCall.result.data.todayMenu) {
+              toolContext += `\n\n[MESS MENU DATA CONTEXT]:\nRetrieved mess menu for ${toolCall.result.data.messType}`
+            }
+          }
+        }
+        
+        if (toolContext) {
+          return {
+            ...message,
+            content: (message.content || '') + toolContext
+          }
+        }
+      }
+      return message
+    })
+
     const resultStream = await streamText({
       model: google("gemini-2.0-flash"),
-      messages: [{ role: "system", content: combinedSystemPrompt }, ...messages],
+      messages: [{ role: "system", content: combinedSystemPrompt }, ...enhancedMessages],
       tools,
       temperature: 0.7,
       maxTokens: 4096,

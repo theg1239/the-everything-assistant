@@ -37,54 +37,382 @@ interface ArtifactDisplayProps {  title: string
   data: any
   type: 'papers' | 'faculty' | 'companies' | 'placements' | 'mess-menu' | 'vtop-data' | 'general'
   className?: string
+  onLoginClick?: () => void
 }
 
-const VTOPDataCard = ({ vtopData }: { vtopData: any }) => {
+const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?: () => void }) => {
   const { command, content, rawOutput, success, data, parsedData, formatted_content, structured_data, summary, error, message } = vtopData
+  const CUSTOM_RENDER_COMMANDS = ['attendance', 'marks', 'grades', 'profile']
 
+  // Early return for authentication-related issues - don't render card at all
+  if (vtopData.requiresCredentials === true) {
+    return null
+  }
+    // Check for authentication errors
+  if (success === false || error) {
+    // Extract and normalize error message
+    let errorMessage = error || message || ''
+    
+    // Try to extract more detailed error from rawOutput if generic error
+    if (!errorMessage || errorMessage === '500') {
+      if (rawOutput && typeof rawOutput === 'string') {
+        if (rawOutput.includes('Login failed') || rawOutput.includes('session could not be established')) {
+          errorMessage = 'Login failed - incorrect username/password'
+        } else if (rawOutput.includes('Invalid LoginId/Password')) {
+          errorMessage = 'Invalid LoginId/Password'
+        } else if (rawOutput.includes('credentials required') || rawOutput.includes('VTOP credentials required')) {
+          errorMessage = 'VTOP credentials required'
+        }
+      }
+    }
+    
+    const isCredentialError = errorMessage.includes('VTOP credentials required') || 
+                             errorMessage.includes('credentials')
+    const isAuthError = errorMessage.includes('Invalid LoginId/Password') ||
+                       errorMessage.includes('Login failed') ||
+                       errorMessage.includes('session could not be established') ||
+                       errorMessage.includes('incorrect username/password')
+    
+    // Don't render card for authentication issues
+    if (isCredentialError || isAuthError) {
+      return null
+    }
+  }
+
+  // Format command names for display
+  const formatCommandName = (cmd: string) => {
+    const commandMap: { [key: string]: string } = {
+      'class-message': 'Class Message',
+      'exam-schedule': 'Exam Schedule', 
+      'library-dues': 'Library Dues',
+      'leave-status': 'Leave Status',
+      'nightslip': 'Night Slip',
+      'course-page': 'Course Page'
+    }
+    return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ')
+  }
+
+  // Custom render function for specific VTOP commands
+  const renderCustomVTOPCommand = (command: string, content: any) => {
+    switch (command) {      case 'attendance':
+        if (Array.isArray(content) && content.length > 0) {
+          // Filter out invalid subjects (empty names, 0% attendance with no classes)
+          const validSubjects = content.filter((subject: any) => {
+            const subjectName = subject.SUBJECT || subject.subject || subject.name || ''
+            const percentage = parseFloat(subject.PERCENTAGE || subject.percentage || subject.attendance || '0')
+            const attended = subject['CLASSES ATTENDED'] || subject.attended || subject.classesAttended || '0'
+            const total = subject['TOTAL CLASSES'] || subject.total || subject.totalClasses || '0'
+            
+            // Filter out subjects with:
+            // 1. Empty or generic names like "Subject X"
+            // 2. 0% attendance with no actual classes
+            // 3. Both attended and total are 0 or N/A
+            return subjectName && 
+                   !subjectName.match(/^Subject \d+$/i) && 
+                   subjectName.trim() !== '' &&
+                   !(percentage === 0 && (attended === '0' || attended === 'N/A') && (total === '0' || total === 'N/A'))
+          })
+          
+          if (validSubjects.length === 0) {
+            return <div className="text-muted-foreground text-sm">No attendance data available.</div>
+          }
+          
+          return (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 mb-4">
+                <BarChart3 className="h-4 w-4 text-blue-500" />
+                <h3 className="text-sm font-semibold text-card-foreground">Attendance Summary</h3>
+              </div>
+              
+              <div className="grid gap-3">
+                {validSubjects.map((subject: any, index: number) => {
+                  const subjectName = subject.SUBJECT || subject.subject || subject.name || `Subject ${index + 1}`
+                  const percentage = parseFloat(subject.PERCENTAGE || subject.percentage || subject.attendance || '0')
+                  const attended = subject['CLASSES ATTENDED'] || subject.attended || subject.classesAttended || 'N/A'
+                  const total = subject['TOTAL CLASSES'] || subject.total || subject.totalClasses || 'N/A'
+                  let alert = subject['75% ALERT'] || subject.alert || subject.status || ''
+                  
+                  // Clean up alert text - remove glyph characters and normalize
+                  if (alert) {
+                    alert = alert
+                      .replace(/[^\x20-\x7E]/g, '') // Remove non-ASCII characters (glyphs)
+                      .replace(/\s+/g, ' ') // Normalize whitespace
+                      .trim()
+                  }
+                  
+                  // Determine status color based on percentage
+                  const getStatusColor = (percent: number) => {
+                    if (percent >= 85) return 'text-green-600 bg-green-50 border-green-200'
+                    if (percent >= 75) return 'text-amber-600 bg-amber-50 border-amber-200'
+                    return 'text-red-600 bg-red-50 border-red-200'
+                  }
+                  
+                  const getProgressColor = (percent: number) => {
+                    if (percent >= 85) return 'bg-green-500'
+                    if (percent >= 75) return 'bg-amber-500'
+                    return 'bg-red-500'
+                  }
+                  
+                  return (
+                    <div key={index} className={`p-4 rounded-lg border ${getStatusColor(percentage)}`}>
+                      {/* Subject Header */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <BookOpen className="h-4 w-4" />
+                          <span className="font-medium text-sm">
+                            {subjectName}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-bold">
+                            {percentage.toFixed(1)}%
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {/* Progress Bar */}
+                      <div className="mb-3">
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div 
+                            className={`h-2 rounded-full transition-all duration-300 ${getProgressColor(percentage)}`}
+                            style={{ width: `${Math.min(percentage, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* Attendance Details */}
+                      <div className="grid grid-cols-2 gap-4 text-xs mb-2">
+                        {attended !== 'N/A' && total !== 'N/A' && (
+                          <div className="flex items-center gap-1">
+                            <CheckCircle className="h-3 w-3" />
+                            <span>Classes: {attended}/{total}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1">
+                          <AlertTriangle className="h-3 w-3" />
+                          <span>Required: 75%</span>
+                        </div>
+                      </div>
+                      
+                      {/* Alert Message */}
+                      {alert && (
+                        <div className={`text-xs font-medium p-2 rounded ${
+                          alert.includes('Can miss') || alert.includes('safe') 
+                            ? 'bg-green-100 text-green-700 border border-green-200' 
+                            : 'bg-red-100 text-red-700 border border-red-200'
+                        }`}>
+                          <div className="flex items-center gap-1">
+                            {alert.includes('Can miss') || alert.includes('safe') ? (
+                              <CheckCircle className="h-3 w-3" />
+                            ) : (
+                              <AlertTriangle className="h-3 w-3" />
+                            )}
+                            {alert}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Additional Insights */}
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        {percentage >= 85 && (
+                          <span className="text-green-600">✓ Excellent attendance</span>
+                        )}
+                        {percentage >= 75 && percentage < 85 && (
+                          <span className="text-amber-600">⚠ Good attendance, stay consistent</span>
+                        )}
+                        {percentage < 75 && (
+                          <span className="text-red-600">⚠ Below minimum requirement</span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+                {/* Overall Summary */}
+              <div className="mt-4 p-3 bg-muted/50 rounded-md">
+                <div className="text-xs font-medium text-card-foreground mb-2">Summary:</div>
+                <div className="grid grid-cols-3 gap-4 text-xs">
+                  <div className="text-center">
+                    <div className="text-green-600 font-medium">
+                      {validSubjects.filter((s: any) => parseFloat(s.PERCENTAGE || s.percentage || '0') >= 85).length}
+                    </div>
+                    <div className="text-muted-foreground">Excellent</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-amber-600 font-medium">
+                      {validSubjects.filter((s: any) => {
+                        const p = parseFloat(s.PERCENTAGE || s.percentage || '0')
+                        return p >= 75 && p < 85
+                      }).length}
+                    </div>
+                    <div className="text-muted-foreground">Good</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-red-600 font-medium">
+                      {validSubjects.filter((s: any) => parseFloat(s.PERCENTAGE || s.percentage || '0') < 75).length}
+                    </div>
+                    <div className="text-muted-foreground">Below 75%</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        }
+        break
+
+      case 'marks':
+      case 'grades':
+        if (Array.isArray(content) && content.length > 0) {
+          const headers = Object.keys(content[0])
+          return (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 gap-2">
+                {content.slice(0, 5).map((row: any, index: number) => (
+                  <div key={index} className="p-2 border border-border/50 rounded-md bg-muted/30">
+                    {headers.map(header => (
+                      <div key={header} className="flex justify-between text-xs mb-1">
+                        <span className="font-medium text-card-foreground">{header}:</span>
+                        <span className="text-muted-foreground">{row[header]}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+                {content.length > 5 && (
+                  <div className="text-xs text-muted-foreground text-center">
+                    ... and {content.length - 5} more entries
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        }
+        break
+
+      case 'profile':
+        let profileData: any = {}
+        
+        if (typeof content === 'object' && content !== null) {
+          if (Array.isArray(content)) {
+            content.forEach((item: any) => {
+              if (typeof item === 'object' && item !== null) {
+                Object.assign(profileData, item)
+              }
+            })
+          } else {
+            profileData = content
+          }
+        }
+
+        if (profileData && Object.keys(profileData).length > 0) {
+          return (
+            <div className="space-y-3">
+              {Object.entries(profileData).map(([key, value]) => {
+                if (value === null || value === undefined || value === '') return null
+                
+                // Format key names for better display
+                const formattedKey = key
+                  .replace(/([A-Z])/g, ' $1')
+                  .replace(/^./, str => str.toUpperCase())
+                  .replace(/Id$/, 'ID')
+                  .replace(/Cgpa/, 'CGPA')
+                  .replace(/Gpa/, 'GPA')
+                
+                return (
+                  <div key={key} className="flex items-start gap-3">
+                    <User className="h-3 w-3 text-blue-400 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs font-medium text-card-foreground block">
+                        {formattedKey}
+                      </span>
+                      <span className="text-xs text-muted-foreground break-words">
+                        {String(value)}
+                      </span>
+                    </div>
+                  </div>
+                )
+              }).filter(Boolean)}
+            </div>
+          )
+        }
+        break
+
+      default:
+        return null
+    }
+    return null
+  }  
   const renderVTOPContent = () => {
-    // Handle error states first
     if (success === false || error) {
-      const errorMessage = error || message || 'An error occurred while retrieving VTOP data'
-      const isCredentialError = errorMessage.includes('Invalid LoginId/Password') || 
-                               errorMessage.includes('credentials') ||
-                               errorMessage.includes('Login failed')
+      let errorMessage = error || message || 'An error occurred while retrieving VTOP data'
       
+      if ((!errorMessage || errorMessage === '500') && rawOutput && typeof rawOutput === 'string') {
+        if (rawOutput.includes('Login failed') || rawOutput.includes('session could not be established')) {
+          errorMessage = 'Login failed - incorrect username/password'
+        } else if (rawOutput.includes('Invalid LoginId/Password')) {
+          errorMessage = 'Invalid LoginId/Password'
+        } else if (rawOutput.includes('credentials required') || rawOutput.includes('VTOP credentials required')) {
+          errorMessage = 'VTOP credentials required'
+        } else if (rawOutput.includes('error')) {
+          const lines = rawOutput.split('\n')
+          const errorLine = lines.find(line => line.toLowerCase().includes('error') || line.toLowerCase().includes('invalid'))
+          if (errorLine) {
+            const cleanError = errorLine
+              .replace(/^[^"]*"/, '')
+              .replace(/"[^"]*$/, '')
+              .replace(/\\n/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim()
+            if (cleanError) {
+              errorMessage = cleanError
+            }
+          }
+        }
+      }
+      
+      const isCredentialError = errorMessage.includes('VTOP credentials required') || 
+                               errorMessage.includes('credentials')
+      const isAuthError = errorMessage.includes('Invalid LoginId/Password') ||
+                         errorMessage.includes('Login failed') ||
+                         errorMessage.includes('session could not be established') ||
+                         errorMessage.includes('incorrect username/password')
+        
+      if (isCredentialError || isAuthError || vtopData.requiresCredentials === true) {
+        return null
+      }
+        
       return (
         <div className="space-y-3">
-          <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+          <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-md">
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="h-4 w-4 text-destructive" />
-              <h4 className="text-sm font-medium text-destructive">
-                {isCredentialError ? 'Authentication Failed' : 'Error Retrieving Data'}
-              </h4>
+              <h4 className="text-sm font-medium text-destructive">Error Retrieving Data</h4>
             </div>
-            <p className="text-xs text-destructive/80">
-              {isCredentialError 
-                ? 'Invalid VTOP credentials. Please check your username and password and try again.'
-                : errorMessage
-              }
-            </p>
+            <p className="text-sm text-destructive font-medium">{errorMessage}</p>
+            {rawOutput && typeof rawOutput === 'string' && rawOutput !== errorMessage && (
+              <details className="mt-3">
+                <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                  Show detailed error information
+                </summary>
+                <pre className="text-xs text-muted-foreground mt-2 p-2 bg-muted/50 rounded overflow-x-auto">
+                  {rawOutput}
+                </pre>
+              </details>
+            )}
           </div>
-          {isCredentialError && (
-            <div className="p-3 bg-muted/50 rounded-md">
-              <h4 className="text-xs font-medium text-muted-foreground mb-1">Troubleshooting:</h4>
-              <ul className="text-xs text-muted-foreground space-y-1">
-                <li>• Verify your VTOP username and password</li>
-                <li>• Check if your VTOP account is active</li>
-                <li>• Try logging into VTOP directly to confirm credentials</li>
-              </ul>
-            </div>
-          )}
         </div>
       )
-    }    // Prioritize server-side parsed data
+    }
+
+    if (CUSTOM_RENDER_COMMANDS.includes(command) && content) {
+      const customRender = renderCustomVTOPCommand(command, content)
+      if (customRender) {
+        return customRender
+      }
+    }
     const finalParsedData = parsedData
     const finalFormattedContent = formatted_content || finalParsedData?.formatted_content
     const finalStructuredData = structured_data || finalParsedData?.structured_data
     const finalSummary = summary || finalParsedData?.summary
-
-    // Use parsed data if available from server - check for any AI-processed content
     if (finalFormattedContent || finalSummary || (finalStructuredData && typeof finalStructuredData === 'object' && Object.keys(finalStructuredData).length > 0)) {
       return (
         <div className="space-y-4">
@@ -136,169 +464,10 @@ const VTOPDataCard = ({ vtopData }: { vtopData: any }) => {
             </div>
           )}
         </div>
-      )
-    }
+      )    }
 
-    // Fallback to original parsing logic if Gemini parsing failed
-    switch (command) {
-      case 'profile':
-        // Handle different data structures for profile
-        let profileData: any = {}
-        
-        if (typeof content === 'object' && content !== null) {
-          if (Array.isArray(content)) {
-            // If content is an array, merge all objects
-            content.forEach((item: any) => {
-              if (typeof item === 'object' && item !== null) {
-                Object.assign(profileData, item)
-              }
-            })
-          } else {
-            // If content is a single object
-            profileData = content
-          }
-        } else if (typeof rawOutput === 'string') {
-          // Try to parse rawOutput if content is not available
-          try {
-            const parsed = JSON.parse(rawOutput)
-            if (parsed && typeof parsed === 'object') {
-              profileData = parsed
-            }
-          } catch (e) {
-            // If parsing fails, treat as raw text
-            return (
-              <div className="space-y-2">
-                <pre className="text-xs text-muted-foreground whitespace-pre-wrap overflow-x-auto">
-                  {rawOutput}
-                </pre>
-              </div>
-            )
-          }
-        }
-
-        // If we have profile data, render it nicely
-        if (profileData && Object.keys(profileData).length > 0) {
-          return (
-            <div className="space-y-3">
-              {Object.entries(profileData).map(([key, value]) => {
-                if (value === null || value === undefined || value === '') return null
-                
-                // Format key names for better display
-                const formattedKey = key
-                  .replace(/([A-Z])/g, ' $1')
-                  .replace(/^./, str => str.toUpperCase())
-                  .replace(/Id$/, 'ID')
-                  .replace(/Cgpa/, 'CGPA')
-                  .replace(/Gpa/, 'GPA')
-                
-                return (
-                  <div key={key} className="flex items-start gap-3">
-                    <User className="h-3 w-3 text-blue-400 shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <span className="text-xs font-medium text-card-foreground block">
-                        {formattedKey}
-                      </span>
-                      <span className="text-xs text-muted-foreground break-words">
-                        {String(value)}
-                      </span>
-                    </div>
-                  </div>
-                )
-              }).filter(Boolean)}
-            </div>
-          )
-        }
-        break
-      case 'marks':
-      case 'grades':
-        if (Array.isArray(content) && content.length > 0) {
-          const headers = Object.keys(content[0])
-          return (
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 gap-2">
-                {content.slice(0, 5).map((row, index) => (
-                  <div key={index} className="p-2 border border-border/50 rounded-md bg-muted/30">
-                    {headers.map(header => (
-                      <div key={header} className="flex justify-between text-xs mb-1">
-                        <span className="font-medium text-card-foreground">{header}:</span>
-                        <span className="text-muted-foreground">{row[header]}</span>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-                {content.length > 5 && (
-                  <div className="text-xs text-muted-foreground text-center">
-                    ... and {content.length - 5} more entries
-                  </div>
-                )}
-              </div>
-            </div>
-          )        }
-        break
-      case 'attendance':
-        if (Array.isArray(content) && content.length > 0) {
-          return (
-            <div className="space-y-2">
-              {content.slice(0, 5).map((subject, index) => {
-                const subjectName = subject.SUBJECT || subject.subject || subject.name || `Subject ${index + 1}`
-                const percentage = subject.PERCENTAGE || subject.percentage || subject.attendance || 'N/A'
-                const attended = subject['CLASSES ATTENDED'] || subject.attended || subject.classesAttended || 'N/A'
-                const alert = subject['75% ALERT'] || subject.alert || subject.status || ''
-                
-                return (
-                  <div key={index} className="p-3 border border-border/50 rounded-md bg-muted/30">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <BookOpen className="h-3 w-3 text-green-400" />
-                        <span className="text-sm font-medium text-card-foreground">
-                          {subjectName}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <BarChart3 className="h-3 w-3 text-blue-400" />
-                        <span className="text-sm font-medium text-card-foreground">
-                          {percentage}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-xs text-muted-foreground space-y-1">
-                      {attended !== 'N/A' && (
-                        <div>Classes Attended: {attended}</div>
-                      )}
-                      {alert && (
-                        <div className={`font-medium ${alert.includes('Can miss') ? 'text-green-600' : 'text-red-600'}`}>
-                          {alert}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-              {content.length > 10 && (
-                <div className="text-xs text-muted-foreground text-center">
-                  ... and {content.length - 5} more subjects
-                </div>
-              )}
-            </div>
-          )
-        }
-        break
-      default:
-        if (typeof content === 'object') {
-          return (
-            <div className="space-y-2">
-              {Object.entries(content).slice(0, 5).map(([key, value]) => (
-                <div key={key} className="flex justify-between text-xs">
-                  <span className="font-medium text-card-foreground">{key}:</span>
-                  <span className="text-muted-foreground">{String(value)}</span>
-                </div>
-              ))}
-            </div>
-          )
-        }
-    }    return (
+    return (
       <div className="space-y-2">
-        {/* Try to parse and display any available data */}
         {data && (
           <div className="p-3 bg-muted/50 rounded-md">
             <div className="text-xs font-medium text-card-foreground mb-2">VTOP Data:</div>
@@ -326,17 +495,17 @@ const VTOPDataCard = ({ vtopData }: { vtopData: any }) => {
       </div>
     )
   }
-
   return (
     <Card className="hover:shadow-sm transition-all duration-200 border-border bg-card">
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium text-card-foreground flex items-center gap-2">
+        <div className="flex items-center justify-between">          <CardTitle className="text-sm font-medium text-card-foreground flex items-center gap-2">
             <GraduationCap className="h-4 w-4 text-blue-500" />
-            VTOP {command.charAt(0).toUpperCase() + command.slice(1)}
+            VTOP {formatCommandName(command || 'data')}
           </CardTitle>
-          {success !== false ? (
+          {(success !== false && !vtopData.requiresCredentials) ? (
             <CheckCircle className="h-4 w-4 text-green-500" />
+          ) : vtopData.requiresCredentials ? (
+            <GraduationCap className="h-4 w-4 text-blue-500" />
           ) : (
             <AlertTriangle className="h-4 w-4 text-amber-500" />
           )}
@@ -348,8 +517,7 @@ const VTOPDataCard = ({ vtopData }: { vtopData: any }) => {
     </Card>
   )
 }
-
-const PaperCard = ({ paper }: { paper: any }) => (
+const PaperCard = ({ paper }: { paper: any }) => (  
   <Card className="hover:shadow-sm transition-all duration-200 border-border bg-card">
     <CardHeader className="pb-3">
       <CardTitle className="text-sm font-medium line-clamp-2 text-card-foreground">
@@ -654,7 +822,7 @@ const MessMenuCard = ({ menuData }: { menuData: any }) => {
   )
 }
 
-const PureArtifactDisplay = ({ title, icon, data, type, className }: ArtifactDisplayProps) => {
+const PureArtifactDisplay = ({ title, icon, data, type, className, onLoginClick }: ArtifactDisplayProps) => {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
 
@@ -681,11 +849,11 @@ const PureArtifactDisplay = ({ title, icon, data, type, className }: ArtifactDis
             case 'companies':
               return <CompanyCard key={index} company={item} />
             case 'placements':
-              return <PlacementCard key={index} placement={item} />
+              return <PlacementCard key={index} placement={item} />            
             case 'mess-menu':
               return <MessMenuCard key={index} menuData={item} />
             case 'vtop-data':
-              return <VTOPDataCard key={index} vtopData={item} />
+              return <VTOPDataCard key={index} vtopData={item} onLoginClick={onLoginClick} />
             default:
               return (
                 <Card key={index} className="hover:shadow-md transition-shadow">
@@ -739,12 +907,13 @@ const PureArtifactDisplay = ({ title, icon, data, type, className }: ArtifactDis
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {icon}
-              <div>
+              {icon}              <div>
                 <CardTitle className="text-base text-card-foreground">{title}</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  {itemCount} item{itemCount !== 1 ? 's' : ''} found
-                </p>
+                {!(type === 'vtop-data' && Array.isArray(data) && data.length === 1 && data[0]?.requiresCredentials) && (
+                  <p className="text-sm text-muted-foreground">
+                    {itemCount} item{itemCount !== 1 ? 's' : ''} found
+                  </p>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-1">

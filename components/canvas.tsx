@@ -105,7 +105,6 @@ export function Canvas({ isOpen, onClose, chatId, initialDocument }: CanvasProps
             exit={{ scale: 0.95, opacity: 0 }}
             className="bg-slate-900 border border-slate-700 rounded-lg w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden"
           >
-            {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-slate-700">
               <div className="flex items-center space-x-2">
                 <FileText className="h-5 w-5 text-blue-400" />
@@ -157,7 +156,6 @@ export function Canvas({ isOpen, onClose, chatId, initialDocument }: CanvasProps
               </div>
             </div>
 
-            {/* Content */}
             <div className="flex-1 overflow-hidden">
               {isEditing ? (
                 <Textarea

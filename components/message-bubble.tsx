@@ -8,15 +8,20 @@ import { ToolCallDisplay } from "./tool-call-display"
 import { MessageActions } from "./message-actions"
 import { SparklesIcon } from "lucide-react"
 import { memo } from "react"
+import { useVTOP } from "./vtop-context"
 
 interface MessageBubbleProps {
   message: Message
   chatId?: string
   onCreateCanvas?: (content: string) => void
+  onLoginClick?: () => void
 }
 
-const PureMessageBubble = ({ message, chatId, onCreateCanvas }: MessageBubbleProps) => {
+const PureMessageBubble = ({ message, chatId, onCreateCanvas, onLoginClick }: MessageBubbleProps) => {
+  const { version } = useVTOP()
   const isUser = message.role === "user"
+  
+  const hasVTOPCalls = message.toolInvocations?.some((tool: any) => tool.toolName === 'queryVTOP')
 
   return (
     <motion.div
@@ -41,7 +46,11 @@ const PureMessageBubble = ({ message, chatId, onCreateCanvas }: MessageBubblePro
 
         <div className="flex flex-col gap-4 w-full">
           {message.toolInvocations && message.toolInvocations.length > 0 && (
-            <ToolCallDisplay toolCalls={message.toolInvocations} />
+            <ToolCallDisplay 
+              key={hasVTOPCalls ? `tool-calls-${message.id}-${version}` : `tool-calls-${message.id}`} 
+              toolCalls={message.toolInvocations} 
+              onLoginClick={onLoginClick} 
+            />
           )}
 
           <div

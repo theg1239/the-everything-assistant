@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth/next"
 import GoogleProvider from "next-auth/providers/google"
 import { PrismaAdapter } from "@next-auth/prisma-adapter"
 import { prisma } from "./prisma"
-import type { Session } from "next-auth"
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
@@ -37,5 +36,4 @@ export const authOptions: NextAuthOptions = {
   },
 }
 
-// Helper to get session with typed result
 export const auth = () => getServerSession(authOptions)

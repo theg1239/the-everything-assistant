@@ -15,23 +15,19 @@ import {
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { ArtifactDisplay } from "./artifact-display"
+import { useVTOP } from "./vtop-context"
 
 interface ToolCallDisplayProps {
   toolCalls: any[]
+  onLoginClick?: () => void
 }
 
-const getArtifactConfig = (result: any, toolName?: string) => {
+const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) => {
   if (toolName === 'queryVTOP') {
-    // Debug log to see the complete result structure
-    console.log('getArtifactConfig - Full result:', result)
     
-    // Handle failed VTOP tools - don't create artifacts for them, let the error handling show the error
-    if (result.success === false || result.error) {
-      return null
-    }
-      // Only process successful VTOP results
-    if (result.data || result.output || result.success) {
+    if (result.data || result.output) {
       const vtopData = result.data || result.output
       const command = result.command || 'unknown'
     
@@ -40,7 +36,7 @@ const getArtifactConfig = (result: any, toolName?: string) => {
       // console.log('VTOP Tool Display - getArtifactConfig - Data type:', typeof vtopData)
       
       let parsedData = vtopData
-      if (typeof vtopData === 'string') {      // Check if it's a table format (contains │ and ──)
+      if (typeof vtopData === 'string') {
         if (vtopData.includes('│') && vtopData.includes('──')) {
           const lines = vtopData.split('\n').filter(line => line.trim() && !line.includes('──'))
           // console.log('VTOP Tool Display - Table lines:', lines)
@@ -65,10 +61,16 @@ const getArtifactConfig = (result: any, toolName?: string) => {
               const headers = firstLine.filter(h => h !== 'INDEX')
               const rows = lines.slice(1).map(line => {
                 const cells = line.split('│').map(c => c.trim()).filter(c => c)
-                const row: any = {}
+                const row: any = {}                
                 headers.forEach((header, index) => {
                   if (cells[index + (firstLine.includes('INDEX') ? 1 : 0)]) { 
-                    row[header] = cells[index + (firstLine.includes('INDEX') ? 1 : 0)].replace(/\[32m|\[0m/g, '') // Remove color codes
+                    let cellValue = cells[index + (firstLine.includes('INDEX') ? 1 : 0)]
+                    cellValue = cellValue
+                      .replace(/\[32m|\[0m|\[31m|\[33m|\[34m|\[35m|\[36m|\[37m/g, '') // Remove ANSI color codes
+                      .replace(/[^\x20-\x7E]/g, ' ') // Replace non-ASCII characters with space
+                      .replace(/\s+/g, ' ') // Normalize whitespace
+                      .trim()
+                    row[header] = cellValue
                   }
                 })
                 return row
@@ -96,7 +98,6 @@ const getArtifactConfig = (result: any, toolName?: string) => {
           content: parsedData,
           rawOutput: vtopData,
           success: result.success !== false,
-          // Include AI-processed data from the backend
           parsedData: result.parsedData,
           formatted_content: result.formatted_content,
           structured_data: result.structured_data,
@@ -104,10 +105,70 @@ const getArtifactConfig = (result: any, toolName?: string) => {
           error: result.error,
           message: result.message
         },
+        source: 'VTOP'
+      }
+    }    if (result.requiresCredentials === true) {
+      return null
+    }    if (result.success === false || result.error) {
+      let errorMessage = result.error || result.message || ''
+      
+      if (!errorMessage || errorMessage === '500' || errorMessage.toLowerCase().includes('request failed')) {
+        const rawData = result.output || result.data
+        if (typeof rawData === 'string') {
+          if (rawData.includes('Login failed') || rawData.includes('session could not be established')) {
+            errorMessage = 'Login failed - incorrect username/password'
+          } else if (rawData.includes('Invalid LoginId/Password')) {
+            errorMessage = 'Invalid LoginId/Password'
+          } else if (rawData.includes('credentials required') || rawData.includes('VTOP credentials required')) {
+            errorMessage = 'VTOP credentials required'
+          } else if (rawData.includes('error') || rawData.includes('Error')) {
+            const lines = rawData.split('\n')
+            const errorLine = lines.find(line => 
+              line.toLowerCase().includes('error') || 
+              line.toLowerCase().includes('failed') ||
+              line.toLowerCase().includes('invalid')
+            )
+            if (errorLine) {
+              errorMessage = errorLine.trim()
+            }
+          }
+        }
+      }
+      
+      const isCredentialError = errorMessage.includes('VTOP credentials required') || 
+                               errorMessage.includes('credentials') ||
+                               (errorMessage.includes('500') && !errorMessage.includes('server error'))
+      const isAuthError = errorMessage.includes('Invalid LoginId/Password') ||
+                         errorMessage.includes('Login failed') ||
+                         errorMessage.includes('session could not be established') ||
+                         errorMessage.includes('incorrect username/password') ||
+                         errorMessage.includes('authentication')
+      
+      if (isCredentialError || isAuthError) {
+        return null
+      }
+      
+      if (errorMessage === '500' || errorMessage.toLowerCase().includes('request failed')) {
+        return null
+      }
+      
+      return {
+        type: 'vtop-data' as const,
+        title: `VTOP ${(result.command || 'data').charAt(0).toUpperCase() + (result.command || 'data').slice(1)} Data`,
+        icon: <GraduationCap className="h-5 w-5 text-blue-500" />,
+        data: {
+          command: result.command || 'data',
+          requiresCredentials: false,
+          success: false,
+          error: errorMessage,
+          message: result.message,
+          rawOutput: result.output || result.data
+        },
         source: 'VTOP Portal'
       }
     }
-      return null // Return null for failed VTOP tools
+    
+    return null
   }
 
   if (result.papers && result.papers.length > 0) {
@@ -211,65 +272,64 @@ const ToolCallLoadingState = ({ toolCalls }: { toolCalls: any[] }) => (
 )
 
 const ToolCallResultsSummary = ({ 
-  toolCalls
+  toolCalls,
+  onLoginClick
 }: { 
   toolCalls: any[]
+  onLoginClick?: () => void
 }) => {
   const completedTools = toolCalls.filter(tool => tool.result)
-  const successfulTools = completedTools.filter(tool => 
-    tool.result && (tool.result.success !== false)
-  )
   
-  const vtopToolsWaitingForCredentials = toolCalls.filter(tool => 
-    tool.toolName === 'queryVTOP' && 
-    tool.result && 
-    (tool.result.error?.includes('credentials') || tool.result.error?.includes('username') || tool.result.error?.includes('password'))
-  )
-  
-  if (vtopToolsWaitingForCredentials.length > 0) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mt-3"
-      >
-        <Card className="border-blue-500/20 bg-blue-500/5">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <Loader2 className="h-5 w-5 text-blue-400 animate-spin" />
-              <div className="flex-1">
-                <div className="text-sm font-medium text-foreground">
-                  VTOP credentials required
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  Please provide your VTOP credentials to continue
-                </div>
-              </div>
-              <Sparkles className="h-4 w-4 text-muted-foreground animate-pulse" />
-            </div>
-          </CardContent>
-        </Card>      </motion.div>
-    )
-  }
-  
-  const artifacts = successfulTools
-    .map(tool => getArtifactConfig(tool.result, tool.toolName))
+  const enrichedToolCalls = toolCalls
+    const artifacts = enrichedToolCalls
+    .filter(tool => tool.result)
+    .map(tool => getArtifactConfig(tool.result, tool.toolName, tool.toolCallId))
     .filter((config): config is NonNullable<typeof config> => 
       config !== null && config !== undefined && config.data && (
         Array.isArray(config.data) ? config.data.length > 0 : true
       )
-    )
+    )      
+    const failedTools = enrichedToolCalls.filter(tool => {
+    if (tool.result && tool.result.success === false) {
+      if (tool.toolName === 'queryVTOP') {
+        let errorMessage = tool.result.error || tool.result.message || ''
+        
+        if (!errorMessage || errorMessage === '500') {
+          const rawData = tool.result.output || tool.result.data
+          if (typeof rawData === 'string') {
+            if (rawData.includes('Login failed') || rawData.includes('session could not be established')) {
+              errorMessage = 'Login failed - incorrect username/password'
+            } else if (rawData.includes('Invalid LoginId/Password')) {
+              errorMessage = 'Invalid LoginId/Password'
+            } else if (rawData.includes('credentials required') || rawData.includes('VTOP credentials required')) {
+              errorMessage = 'VTOP credentials required'
+            }
+          }
+        }
+        
+        const isCredentialError = errorMessage.includes('VTOP credentials required') || 
+                                 errorMessage.includes('credentials')
+        const isAuthError = errorMessage.includes('Invalid LoginId/Password') ||
+                           errorMessage.includes('Login failed') ||
+                           errorMessage.includes('session could not be established') ||
+                           errorMessage.includes('incorrect username/password')
+        
+        if (isAuthError) {
+          tool.result.error = errorMessage
+          return true
+        }
+        return !isCredentialError
+      }
+      return true
+    }
+    return false
+  })
 
-  // Check for failed tools to show their error messages
-  const failedTools = completedTools.filter(tool => 
-    tool.result && tool.result.success === false
-  )
-
-  if (artifacts.length === 0 && completedTools.length > 0) {
-    // If there are failed tools, show their error messages instead of generic message
-    if (failedTools.length > 0) {
+  if (artifacts.length === 0 && completedTools.length > 0) {    if (failedTools.length > 0) {
       const firstFailedTool = failedTools[0]
-      const errorMessage = firstFailedTool.result.error || 'An error occurred'
+      const errorMessage = firstFailedTool.result.error || firstFailedTool.result.message || 'An error occurred'
+      const isAuthError = errorMessage.includes('Invalid LoginId/Password') || 
+                         errorMessage.includes('Login failed')
       
       return (
         <motion.div
@@ -289,6 +349,125 @@ const ToolCallResultsSummary = ({
                     {errorMessage}
                   </div>
                 </div>
+                {isAuthError && onLoginClick && (
+                  <Button 
+                    onClick={() => {
+                      const command = firstFailedTool.result.command || 
+                                     firstFailedTool.args?.command || 'data'
+                      const triggerEvent = new CustomEvent('vtopLoginTrigger', {
+                        detail: { 
+                          command,
+                          toolCallId: firstFailedTool.toolCallId
+                        }
+                      })
+                      window.dispatchEvent(triggerEvent)
+                    }}
+                    className="bg-red-500 hover:bg-red-600 text-white"
+                    size="sm"
+                  >
+                    Retry
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )
+    }    const vtopCredentialTools = enrichedToolCalls.filter(tool => 
+      tool.toolName === 'queryVTOP' && 
+      tool.result && 
+      (tool.result.requiresCredentials === true || 
+       (tool.result.error && (
+         (() => {
+           let errorMessage = tool.result.error || tool.result.message || ''
+           
+           if (!errorMessage || errorMessage === '500') {
+             const rawData = tool.result.output || tool.result.data
+             if (typeof rawData === 'string') {
+               if (rawData.includes('credentials required') || rawData.includes('VTOP credentials required')) {
+                 errorMessage = 'VTOP credentials required'
+               }
+             }
+           }
+           
+           return errorMessage.includes('VTOP credentials required') ||
+                  errorMessage.includes('credentials')
+         })() &&
+         !(() => {
+           let errorMessage = tool.result.error || tool.result.message || ''
+           if (!errorMessage || errorMessage === '500') {
+             const rawData = tool.result.output || tool.result.data
+             if (typeof rawData === 'string') {
+               if (rawData.includes('Login failed') || rawData.includes('session could not be established')) {
+                 return true
+               }
+             }
+           }
+           return errorMessage.includes('Invalid LoginId/Password') ||
+                  errorMessage.includes('Login failed') ||
+                  errorMessage.includes('session could not be established') ||
+                  errorMessage.includes('incorrect username/password')
+         })()
+       )))
+    )
+
+    if (vtopCredentialTools.length > 0) {
+      const tool = vtopCredentialTools[0]
+      const command = tool.result.command || 
+                     tool.args?.command || 
+                     tool.function?.arguments?.command ||
+                     (typeof tool.function?.arguments === 'string' ? 
+                       JSON.parse(tool.function.arguments)?.command : null) ||
+                     'data'
+      
+      const formatCommandName = (cmd: string) => {
+        const commandMap: { [key: string]: string } = {
+          'class-message': 'Class Message',
+          'exam-schedule': 'Exam Schedule', 
+          'library-dues': 'Library Dues',
+          'leave-status': 'Leave Status',
+          'nightslip': 'Night Slip',
+          'da': 'Digital Assignment',
+          'course-page': 'Course Page'        }
+        return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ')
+      }
+
+      return (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-3"
+        >
+          <Card className="overflow-hidden border-blue-500/20 bg-blue-500/5">
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-3">
+                <div className="relative">
+                  <GraduationCap className="h-5 w-5 text-blue-500" />
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-foreground">
+                    Authentication Required
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Please log in to VTOP to access your {formatCommandName(command)} data
+                  </div>
+                </div>                {onLoginClick && (
+                  <Button 
+                    onClick={() => {
+                      const triggerEvent = new CustomEvent('vtopLoginTrigger', {
+                        detail: { 
+                          command,
+                          toolCallId: tool.toolCallId
+                        }
+                      })
+                      window.dispatchEvent(triggerEvent)
+                    }}
+                    className="bg-blue-500 hover:bg-blue-600 text-white"
+                    size="sm"
+                  >
+                    Login
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -296,7 +475,6 @@ const ToolCallResultsSummary = ({
       )
     }
 
-    // Fallback to generic message if no failed tools but no artifacts
     return (
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -333,13 +511,13 @@ const ToolCallResultsSummary = ({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
-          >
-            <ArtifactDisplay
+          >            <ArtifactDisplay
               title={artifact.title}
               icon={artifact.icon}
               data={artifact.data}
               type={artifact.type}
               className="relative"
+              onLoginClick={onLoginClick}
             />
             {artifact.source && (
               <div className="mt-2 flex justify-end">
@@ -355,29 +533,65 @@ const ToolCallResultsSummary = ({
   )
 }
 
-const PureToolCallDisplay = ({ toolCalls }: ToolCallDisplayProps) => {
-  const allCompleted = toolCalls.every((toolCall) => {
-    const hasResult = toolCall.state === "result" || toolCall.result !== undefined
-    
-    if (toolCall.toolName === 'queryVTOP' && hasResult && toolCall.result) {
-      const needsCredentials = toolCall.result.error?.includes('credentials') || 
-                              toolCall.result.error?.includes('username') || 
-                              toolCall.result.error?.includes('password')
-      return !needsCredentials
+const PureToolCallDisplay = ({ toolCalls, onLoginClick }: ToolCallDisplayProps) => {
+  const { getToolResult, version } = useVTOP()
+  
+  const enrichedToolCalls = toolCalls.map(tool => {
+    if (tool.toolName === 'queryVTOP' && tool.toolCallId) {
+      const contextResult = getToolResult(tool.toolCallId)
+      if (contextResult && contextResult.result) {
+        console.log('Using updated result from context for', tool.toolCallId, 'version:', version)
+        return {
+          ...tool,
+          result: contextResult.result,
+          state: 'result'
+        }
+      }
+    }
+    return tool
+  })
+  
+  const allCompleted = enrichedToolCalls.every((toolCall) => {
+    if (!toolCall.result) {
+      return false
     }
     
-    return hasResult
+    if (toolCall.toolName === 'queryVTOP') {
+      const isCredentialRequired = toolCall.result.requiresCredentials === true ||
+                                   (toolCall.result.error && (
+                                     toolCall.result.error.includes('VTOP credentials required') ||
+                                     toolCall.result.error.includes('credentials') ||
+                                     toolCall.result.error.includes('Invalid LoginId/Password') ||
+                                     toolCall.result.error.includes('Login failed')
+                                   ))
+      
+      if (isCredentialRequired) {
+        return true
+      }
+      
+      return toolCall.result && toolCall.state === "result" && (
+        toolCall.result.data || 
+        toolCall.result.output || 
+        toolCall.result.error
+      )
+    }
+    
+    const hasValidResult = toolCall.result && 
+                          !toolCall.result.requiresCredentials &&
+                          toolCall.state === "result"
+    
+    return hasValidResult
   })
-
-  if (!allCompleted && toolCalls.length > 0) {
-    return <ToolCallLoadingState toolCalls={toolCalls} />
+  if (!allCompleted && enrichedToolCalls.length > 0) {
+    return <ToolCallLoadingState toolCalls={enrichedToolCalls} />
   }
 
-  if (toolCalls.length === 0) return null
+  if (enrichedToolCalls.length === 0) return null
 
   return (
     <ToolCallResultsSummary 
-      toolCalls={toolCalls}
+      toolCalls={enrichedToolCalls}
+      onLoginClick={onLoginClick}
     />
   )
 }

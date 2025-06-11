@@ -80,7 +80,8 @@ const PureMultimodalInput = ({
       animate={{ opacity: 1, y: 0 }}
       className={cn("relative w-full", className)}
     >
-      <form onSubmit={onSubmit} className="relative">        <div className="relative flex items-end w-full border border-input rounded-xl bg-background/70 backdrop-blur-sm overflow-hidden focus-within:ring-2 focus-within:ring-ring/50 focus-within:ring-offset-1 transition-all">
+      <form onSubmit={onSubmit} className="relative">        
+        <div className="relative flex items-end w-full border border-input rounded-xl bg-background/70 backdrop-blur-sm overflow-hidden focus-within:ring-2 focus-within:ring-ring/50 focus-within:ring-offset-1 transition-all">
           <Textarea
             ref={textareaRef}
             value={input}

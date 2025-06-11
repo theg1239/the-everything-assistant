@@ -4,10 +4,9 @@ import { useState, useRef, useEffect, memo } from "react"
 import { useChat } from "ai/react"
 import { useRouter } from "next/navigation"
 import { AnimatePresence, motion } from "framer-motion"
-import { ArrowLeft, FileText, Plus } from "lucide-react"
+import { FileText, Plus } from "lucide-react"
 import { HamburgerButton } from "@/components/hamburger-button"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { SuggestedQuestions } from "@/components/suggested-questions"
 import { ChatHeader } from "@/components/chat-header"
 import { MessageBubble } from "@/components/message-bubble"
@@ -16,7 +15,7 @@ import { Sidebar } from "@/components/sidebar"
 import { Canvas } from "@/components/canvas"
 import ResearchPreviewModal from "@/components/research-preview-modal"
 import { VTOPToolHandler } from "@/components/vtop-tool-handler"
-import { cn } from "@/lib/utils"
+import { VTOPProvider, useVTOP } from "@/components/vtop-context"
 import { toast } from "sonner"
 
 interface ChatInterfaceProps {
@@ -34,6 +33,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const [optimisticChatId, setOptimisticChatId] = useState<string | undefined>(chatId)
+  const { updateToolResult } = useVTOP()
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -76,10 +76,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       ? { id: chatId }
       : undefined,
     onResponse: (res) => {
-      // make sure the full chat view is open
       if (!showFullChat) setShowFullChat(true)
       setErrorMessage(null)
-      // grab new chatId & path headers
       const newId = res.headers.get("X-Chat-Id")
       const newPath = res.headers.get("X-Chat-Path")
       if (newId && newPath && !chatId) {
@@ -131,12 +129,18 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
 
   const openCanvas = () => {
     setCanvasOpen(true)
-  }
-
+  }  
   const createCanvasFromMessage = (content: string) => {
     setCanvasContent(content)
     setCanvasOpen(true)
   }  
+    
+  const handleLoginClick = () => {
+    const triggerEvent = new CustomEvent('vtopLoginTrigger', {
+      detail: { command: 'attendance' }
+    })
+    window.dispatchEvent(triggerEvent)
+  }
     const handleVTOPCredentials = async (
     credentials: { username: string; encryptedPassword: string }, 
     originalToolCall: any
@@ -148,7 +152,33 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         return
       }
 
-      const loadingToast = toast.loading(`Executing VTOP ${command} command...`)
+      const toolCallId = originalToolCall.toolCallId || Date.now().toString()
+     //console.log('Handling VTOP credentials for toolCallId:', toolCallId, 'command:', command)
+      const updatedMessagesForLoading = messages.map((message: any) => {
+        if (message.toolInvocations) {
+          const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
+            if (toolInvocation.toolCallId && toolInvocation.toolCallId === toolCallId) {
+              //console.log('Clearing credentials state for toolCallId:', toolCallId)
+              return {
+                ...toolInvocation,
+                toolCallId: toolCallId, // Ensure toolCallId is set
+                state: 'call', // Set to loading state
+                result: undefined // Clear the credentials required result
+              }
+            }
+            return toolInvocation
+          })
+          return {
+            ...message,
+            toolInvocations: updatedToolInvocations
+          }
+        }
+        return message
+      })
+      
+      setMessages([...updatedMessagesForLoading])
+
+      // const loadingToast = toast.loading(`Executing VTOP ${command} command...`)
 
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -163,8 +193,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               role: 'user',
               content: `show me my vtop ${command}`,
             }
-          ],
-          directToolCall: {
+          ],          directToolCall: {
             toolName: 'queryVTOP',
             args: {
               command,
@@ -172,23 +201,24 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               password: credentials.encryptedPassword,
               ...originalToolCall.args,
             },
-            toolCallId: Date.now().toString()
+            toolCallId: toolCallId
           },
           id: chatId || optimisticChatId,        }),
       })
 
-      toast.dismiss(loadingToast)
-
+      // toast.dismiss(loadingToast)
+      
       if (response.ok) {
         const result = await response.json()
         
-        // Always update the tool invocation with the result, whether success or error
+        console.log('VTOP credential submission result:', result)
+        if (toolCallId) {
+          updateToolResult(toolCallId, command, result.result)
+        }
         const updatedMessages = messages.map((message: any) => {
-          if (message.toolInvocations) {
-            const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
-              if (toolInvocation.toolName === 'queryVTOP' && 
-                  toolInvocation.args?.command === command &&
-                  (!toolInvocation.result || !toolInvocation.result.data)) {
+          if (message.toolInvocations) {            const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
+              if (toolInvocation.toolCallId && toolInvocation.toolCallId === toolCallId) {
+                console.log('Updating tool invocation with result:', result.result, 'for toolCallId:', toolCallId)
                 return {
                   ...toolInvocation,
                   result: result.result,
@@ -207,18 +237,16 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         
         setMessages([...updatedMessages])
         
-        // Check if the result indicates success or failure
         if (result.result && result.result.success !== false && (result.result.data || result.result.output)) {
-          toast.success(`VTOP ${command} data retrieved successfully!`)
         } else if (result.result && result.result.success === false) {
           const errorMessage = result.result.error || result.result.message || 'Unknown error occurred'
           if (errorMessage.includes('Invalid LoginId/Password') || errorMessage.includes('Login failed')) {
             toast.error("Invalid VTOP credentials. Please check your username and password.")
           } else {
-            toast.error(`VTOP Error: ${errorMessage}`)
+            // toast.error(`VTOP Error: ${errorMessage}`)
           }
         } else {
-          toast.success(`VTOP ${command} command executed successfully!`)
+          // toast.success(`VTOP ${command} command executed successfully!`)
         }
         
       } else {
@@ -365,20 +393,18 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                 >
                   {errorMessage}
                 </motion.div>
-              )}
-
-              <AnimatePresence>
+              )}              <AnimatePresence>
                 {messages.map((message, idx) => (
                   <MessageBubble
                     key={`${message.id}-${idx}`}
                     message={message}
                     chatId={optimisticChatId}
                     onCreateCanvas={createCanvasFromMessage}
+                    onLoginClick={handleLoginClick}
                   />
                 ))}
               </AnimatePresence>
               
-              {/* Show "thinking..." indicator only when waiting for the first response */}
               {isLoading && messages.length > 0 && messages[messages.length - 1].role === "user" && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -422,4 +448,10 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   )
 }
 
-export const ChatInterface = memo(PureChatInterface)
+export const ChatInterface = memo(({ initialMessages = [], chatId }: ChatInterfaceProps) => {
+  return (
+    <VTOPProvider>
+      <PureChatInterface initialMessages={initialMessages} chatId={chatId} />
+    </VTOPProvider>
+  )
+})

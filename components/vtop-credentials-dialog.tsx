@@ -85,7 +85,6 @@ export function VTOPCredentialsDialog({
       onSubmit(credentialsPayload)
       
     } catch (error) {
-      // Error handled silently
     } finally {
       setIsSubmitting(false)
     }

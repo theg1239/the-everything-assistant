@@ -43,6 +43,7 @@ interface ArtifactDisplayProps {  title: string
 const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?: () => void }) => {
   const { command, content, rawOutput, success, data, parsedData, formatted_content, structured_data, summary, error, message } = vtopData
   const CUSTOM_RENDER_COMMANDS = ['attendance', 'marks', 'grades', 'profile']
+  const RAW_OUTPUT_COMMANDS = ['da', 'facility'] // Commands that should show raw output without parsing
 
   // Early return for authentication-related issues - don't render card at all
   if (vtopData.requiresCredentials === true) {
@@ -87,7 +88,8 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
       'library-dues': 'Library Dues',
       'leave-status': 'Leave Status',
       'nightslip': 'Night Slip',
-      'course-page': 'Course Page'
+      'course-page': 'Course Page',
+      'da': 'Digital Assignments'
     }
     return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ')
   }
@@ -401,12 +403,30 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
           </div>
         </div>
       )
-    }
-
-    if (CUSTOM_RENDER_COMMANDS.includes(command) && content) {
+    }    if (CUSTOM_RENDER_COMMANDS.includes(command) && content) {
       const customRender = renderCustomVTOPCommand(command, content)
       if (customRender) {
         return customRender
+      }
+    }
+
+    // Handle commands that require raw output display (like 'da' and 'facility')
+    if (RAW_OUTPUT_COMMANDS.includes(command)) {
+      const displayData = rawOutput || content || data
+      
+      if (displayData) {
+        return (
+          <div className="space-y-3">
+            <div className="p-3 bg-muted/50 rounded-md">
+              <h4 className="text-sm font-medium text-card-foreground mb-2">
+                {formatCommandName(command)} Information
+              </h4>
+              <div className="text-sm text-muted-foreground whitespace-pre-wrap overflow-x-auto font-mono">
+                {typeof displayData === 'string' ? displayData : JSON.stringify(displayData, null, 2)}
+              </div>
+            </div>
+          </div>
+        )
       }
     }
     const finalParsedData = parsedData

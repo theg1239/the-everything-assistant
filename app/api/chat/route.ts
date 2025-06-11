@@ -98,6 +98,26 @@ export async function POST(req: Request) {
 
       if (tool && typeof tool.execute === "function") {
         try {
+          let chat = chatId
+            ? await getChat(chatId, session.user.id)
+            : null
+          if (!chat) {
+            const title = extractTitleFromContent(messages[0]?.content || "New Chat")
+            const path = generateChatPath()
+            chat = await createChat(session.user.id, title, path)
+          }
+
+          const userMessage = messages[messages.length - 1]
+          if (userMessage?.role === "user") {
+            await saveMessage(
+              chat.id,
+              "user",
+              userMessage.content,
+              undefined,
+              userMessage.id
+            )
+          }
+
           const result = await tool.execute(directToolCall.args, {
             toolCallId: directToolCall.toolCallId || Date.now().toString(),
             messages: messages || [],
@@ -136,7 +156,32 @@ export async function POST(req: Request) {
             }
           }
 
-          return new Response(JSON.stringify({ success: true, result }), {
+          // Save the assistant response with tool result to chat history
+          const assistantMessage = {
+            id: `assistant-${Date.now()}`,
+            role: "assistant",
+            content: (result as any).formatted_content || result.message || `Tool ${directToolCall.toolName} executed successfully.`,
+            toolInvocations: [{
+              toolCallId: directToolCall.toolCallId,
+              toolName: directToolCall.toolName,
+              args: directToolCall.args,
+              result: result
+            }]
+          }
+
+          await saveMessage(
+            chat.id,
+            "assistant",
+            assistantMessage.content,
+            assistantMessage.toolInvocations,
+            assistantMessage.id
+          )
+
+          return new Response(JSON.stringify({ 
+            success: true, 
+            result,
+            chatId: chat.id // Include chatId so frontend can update URL if needed
+          }), {
             headers: { "Content-Type": "application/json" },
           })
         } catch (error: any) {
@@ -187,7 +232,44 @@ export async function POST(req: Request) {
     }
 
     const tools = createVITTools()
-    const combinedSystemPrompt = `${VIT_SYSTEM_PROMPT}
+    
+    // Check if there's existing VTOP context data in the conversation
+    let hasVTOPContext = false
+    let contextSummary = ''
+    
+    for (const message of messages) {
+      if (message.role === 'assistant' && message.toolInvocations) {
+        for (const toolCall of message.toolInvocations) {
+          if (toolCall.result && toolCall.toolName === 'queryVTOP' && 
+              (toolCall.result.data || toolCall.result.output || toolCall.result.formatted_content)) {
+            hasVTOPContext = true
+            const command = toolCall.result.command || toolCall.args?.command || 'data'
+            contextSummary += `[VTOP ${command.toUpperCase()} DATA AVAILABLE] `
+            console.log(`🔍 Found VTOP context: ${command} data available`)
+          }
+        }
+      }
+    }
+    
+    console.log(`🚨 hasVTOPContext: ${hasVTOPContext}, contextSummary: "${contextSummary}"`)
+    console.log(`🔧 toolChoice will be: ${hasVTOPContext ? "none" : "auto"}`)
+    
+    const contextWarning = hasVTOPContext ? 
+      `🚨🚨🚨 STOP! VTOP DATA ALREADY EXISTS IN THIS CONVERSATION (${contextSummary})
+
+YOU ARE FORBIDDEN FROM ASKING FOR CREDENTIALS OR CALLING TOOLS WHEN DATA EXISTS!
+
+LOOK FOR [VTOP DATA CONTEXT] SECTIONS BELOW AND ANSWER FROM THAT DATA IMMEDIATELY.
+
+If user asks about seat numbers, exams, attendance, timetable, or marks - CHECK THE CONTEXT SECTIONS FIRST!
+
+TOOLS ARE DISABLED - YOU MUST USE EXISTING DATA ONLY!
+
+🚨🚨🚨
+
+` : ''
+    
+    const combinedSystemPrompt = `${contextWarning}${VIT_SYSTEM_PROMPT}
 
 ADDITIONAL COMPREHENSIVE KNOWLEDGE:
 ${VIT_COMPREHENSIVE_KNOWLEDGE}`
@@ -198,7 +280,13 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}`
         
         for (const toolCall of message.toolInvocations) {
           if (toolCall.result) {
-            if (toolCall.toolName === 'queryVTOP' && toolCall.result.success) {
+            console.log('Processing tool call for context:', {
+              toolName: toolCall.toolName,
+              hasData: !!(toolCall.result.data || toolCall.result.output || toolCall.result.formatted_content),
+              resultKeys: Object.keys(toolCall.result)
+            })
+            
+            if (toolCall.toolName === 'queryVTOP' && (toolCall.result.data || toolCall.result.output || toolCall.result.formatted_content)) {
               const command = toolCall.result.command || toolCall.args?.command || 'data'
               let dataContext = ''
               
@@ -219,6 +307,15 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}`
               
               if (dataContext) {
                 toolContext += `\n\n[VTOP ${command.toUpperCase()} DATA CONTEXT]:\n${dataContext}`
+                console.log(`Added context for ${command}:`, dataContext.substring(0, 100) + '...')
+                
+                // Add a more specific context injection for the current conversation
+                if (command === 'exams' && dataContext.includes('seat')) {
+                  toolContext += `\n\n🚨 EXAM DATA AVAILABLE: You can answer questions about seat numbers, exam dates, venues, and times from this data!`
+                }
+                if (command === 'attendance' && dataContext.includes('percentage')) {
+                  toolContext += `\n\n🚨 ATTENDANCE DATA AVAILABLE: You can answer questions about attendance percentages and which subjects have low attendance from this data!`
+                }
               }
             }
             else if (toolCall.result.papers && toolCall.result.papers.length > 0) {
@@ -237,6 +334,11 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}`
         }
         
         if (toolContext) {
+          console.log('Final enhanced message with context:', {
+            originalContent: message.content,
+            contextAdded: toolContext.substring(0, 200) + '...',
+            totalContextLength: toolContext.length
+          })
           return {
             ...message,
             content: (message.content || '') + toolContext
@@ -252,7 +354,7 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}`
       tools,
       temperature: 0.7,
       maxTokens: 4096,
-      toolChoice: "auto",
+      toolChoice: hasVTOPContext ? "none" : "auto", // Disable tool calling if we have context data
       onFinish: async (result) => {
         const toolResults = (result as any).toolResults ?? (result.toolCalls ?? [])
         for (const tr of toolResults) {

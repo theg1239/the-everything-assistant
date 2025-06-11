@@ -211,14 +211,14 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       if (response.ok) {
         const result = await response.json()
         
-        console.log('VTOP credential submission result:', result)
+        //console.log('VTOP credential submission result:', result)
         if (toolCallId) {
           updateToolResult(toolCallId, command, result.result)
         }
         const updatedMessages = messages.map((message: any) => {
           if (message.toolInvocations) {            const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
               if (toolInvocation.toolCallId && toolInvocation.toolCallId === toolCallId) {
-                console.log('Updating tool invocation with result:', result.result, 'for toolCallId:', toolCallId)
+                //console.log('Updating tool invocation with result:', result.result, 'for toolCallId:', toolCallId)
                 return {
                   ...toolInvocation,
                   result: result.result,
@@ -250,10 +250,10 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         }
         
       } else {
-        toast.error("Failed to retrieve VTOP data. Please try again.")
+        //toast.error("Failed to retrieve VTOP data. Please try again.")
       }
     } catch (error) {
-      console.error('Error executing VTOP tool:', error)
+      //console.error('Error executing VTOP tool:', error)
       toast.error("An error occurred while retrieving VTOP data.")
     }
   }

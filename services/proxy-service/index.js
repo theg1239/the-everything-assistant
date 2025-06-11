@@ -122,7 +122,9 @@ const INTERACTIVE_COMMANDS = {
   'exams': { requiresSemester: true },
   'calendar': { requiresSemester: true, requiresClassGroup: true },
   'course-page': { requiresSemester: true, requiresCourse: true, requiresFaculty: true },
-  'syllabus': { requiresCourse: true }
+  'syllabus': { requiresCourse: true },
+  'da': { autoRespond: true },
+  'facility': { autoRespond: true }
 };
 
 const SUPPORTED_COMMANDS = Object.keys(COMMAND_MAPPING);
@@ -243,7 +245,9 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
   let currentPrompt = '';
   let processingComplete = false;
   let interactionCount = 0;
-  const maxInteractions = 10; // Prevent infinite loops
+  const maxInteractions = 10;
+  
+  const commandTimeout = (command === 'da' || command === 'facility') ? 30000 : CLI_TIMEOUT;
 
   child.stdout.on('data', (data) => {
     const output = data.toString();
@@ -254,14 +258,21 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
       console.log(`CLI stdout: ${output}`);
     }
 
-    // Check for various interactive prompts and respond automatically
     if (!processingComplete && interactionCount < maxInteractions) {
       const response = handleInteractivePrompt(currentPrompt, command, flags);
       if (response !== null) {
         if (process.env.NODE_ENV !== 'production') {
           console.log(`Sending automated response: ${response}`);
         }
-        child.stdin.write(response + '\n');
+        
+        try {
+          child.stdin.write(response + '\n');
+        } catch (writeErr) {
+          if (process.env.NODE_ENV !== 'production') {
+            console.warn(`Failed to write to stdin: ${writeErr.message}`);
+          }
+        }
+        
         currentPrompt = ''; // Reset prompt buffer
         interactionCount++;
       }
@@ -275,9 +286,9 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
       console.log(`CLI stderr: ${output}`);
     }
   });
-
   child.on('close', (code) => {
     processingComplete = true;
+    clearTimeout(timeoutId);
     if (process.env.NODE_ENV !== 'production') {
       console.log(`CLI process closed with code: ${code}`);
     }
@@ -308,6 +319,7 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
 
   child.on('error', (err) => {
     processingComplete = true;
+    clearTimeout(timeoutId);
     console.error(`CLI process error: ${err.message}`);
     reject({
       error: err.message,
@@ -316,41 +328,63 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
     });
   });
 
-  // Set a timeout for the entire process
-  setTimeout(() => {
+  const timeoutId = setTimeout(() => {
     if (!processingComplete) {
       processingComplete = true;
-      child.kill();
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`Command ${command} timed out after ${commandTimeout}ms, terminating process`);
+      }
+      
+      if ((command === 'da' || command === 'facility') && !child.killed) {
+        try {
+          child.stdin.write('\x03');
+          setTimeout(() => {
+            if (!child.killed) {
+              child.kill('SIGTERM');
+              setTimeout(() => {
+                if (!child.killed) {
+                  child.kill('SIGKILL');
+                }
+              }, 2000);
+            }
+          }, 1000);
+        } catch (err) {
+          child.kill('SIGTERM');
+        }
+      } else {
+        child.kill('SIGTERM');
+        setTimeout(() => {
+          if (!child.killed) {
+            child.kill('SIGKILL');
+          }
+        }, 2000);
+      }
+      
       reject({
-        error: 'Interactive command timeout',
+        error: `Interactive command timeout (${commandTimeout}ms)`,
         command: command,
         args: ['proxy', cliArgs[1], '***', command, ...cliArgs.slice(4)]
       });
     }
-  }, CLI_TIMEOUT);
+  }, commandTimeout);
 }
 
 function handleInteractivePrompt(prompt, command, flags) {
-  const lowerPrompt = prompt.toLowerCase();  // Handle semester selection prompts
+  const lowerPrompt = prompt.toLowerCase();
   if (lowerPrompt.includes('choose a semester') || 
       lowerPrompt.includes('select a semester') ||
       (lowerPrompt.includes('semester') && lowerPrompt.includes('number'))) {
     
-    // If semester flag is provided, use it
     if (flags && flags.semester && flags.semester > 0) {
       return flags.semester.toString();
     }
     
-    // Parse semester options from the prompt to find the best match
     const semesterChoice = findBestSemesterMatch(prompt, flags);
     if (semesterChoice) {
       return semesterChoice;
     }
-      // Try to find the highest semester number in the prompt (most recent semester)
-    // Look for patterns like "1. Fall 2024", "2. Spring 2024", etc.
     const semesterMatches = prompt.match(/(\d+)\.\s*(Fall|Winter|Summer)?\s*\d{4}/g);
     if (semesterMatches && semesterMatches.length > 0) {
-      // Find the highest semester number
       const semesterNumbers = semesterMatches.map(match => {
         const num = match.match(/^(\d+)\./);
         return num ? parseInt(num[1]) : 0;
@@ -361,7 +395,6 @@ function handleInteractivePrompt(prompt, command, flags) {
       }
     }
     
-    // Try to find the last option from table format
     const tableRows = prompt.match(/^\s*(\d+)\s*│/gm);
     if (tableRows && tableRows.length > 0) {
       const numbers = tableRows.map(row => {
@@ -428,14 +461,20 @@ function handleInteractivePrompt(prompt, command, flags) {
     
     return 'yes';
   }
-  
-  if (lowerPrompt.includes("type 'exit'") || 
+    if (lowerPrompt.includes("type 'exit'") || 
       lowerPrompt.includes('exit to quit') ||
       lowerPrompt.includes('exit to cancel')) {
     
     return '1';
   }
-    return null;
+
+  if (command === 'da' || command === 'facility') {
+    // For DA and facility commands, default to Ctrl+C to terminate any interactive prompts
+    // This allows the command to return whatever output it has generated so far
+    return '\x03';
+  }
+  
+  return null;
 }
 
 function findBestSemesterMatch(prompt, flags) {

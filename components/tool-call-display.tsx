@@ -540,7 +540,7 @@ const PureToolCallDisplay = ({ toolCalls, onLoginClick }: ToolCallDisplayProps) 
     if (tool.toolName === 'queryVTOP' && tool.toolCallId) {
       const contextResult = getToolResult(tool.toolCallId)
       if (contextResult && contextResult.result) {
-        console.log('Using updated result from context for', tool.toolCallId, 'version:', version)
+        // console.log('Using updated result from context for', tool.toolCallId, 'version:', version)
         return {
           ...tool,
           result: contextResult.result,

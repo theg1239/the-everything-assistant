@@ -121,10 +121,10 @@ export function VTOPCredentialsDialog({
           </div>
 
           <h4 className="mb-2 text-2xl font-medium text-white">VTOP Authentication</h4>
-          <p className="mb-6 text-slate-300">
+          {/* <p className="mb-6 text-slate-300">
             To execute the <code className="bg-slate-700 px-2 py-1 rounded text-sm">{command}</code> command, 
             please enter your VTOP credentials.
-          </p>
+          </p> */}
           
           <form onSubmit={handleSubmit} className="space-y-4 text-left">
             <div className="space-y-2">
@@ -134,7 +134,7 @@ export function VTOPCredentialsDialog({
               <input
                 id="username"
                 type="text"
-                placeholder="e.g., 21BCE1234"
+                placeholder="Enter your VTOP username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
@@ -158,7 +158,7 @@ export function VTOPCredentialsDialog({
                   autoComplete="current-password"
                   className="w-full px-4 py-3 pr-12 bg-slate-700 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                 />
-                <button
+                {/* <button
                   type="button"
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
                   onClick={() => setShowPassword(!showPassword)}
@@ -168,7 +168,7 @@ export function VTOPCredentialsDialog({
                   ) : (
                     <Eye className="h-5 w-5" />
                   )}
-                </button>
+                </button> */}
               </div>
             </div>
 

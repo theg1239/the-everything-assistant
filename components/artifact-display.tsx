@@ -43,18 +43,14 @@ interface ArtifactDisplayProps {  title: string
 const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?: () => void }) => {
   const { command, content, rawOutput, success, data, parsedData, formatted_content, structured_data, summary, error, message } = vtopData
   const CUSTOM_RENDER_COMMANDS = ['attendance', 'marks', 'grades', 'profile']
-  const RAW_OUTPUT_COMMANDS = ['da', 'facility'] // Commands that should show raw output without parsing
+  const RAW_OUTPUT_COMMANDS = ['da', 'facility']
 
-  // Early return for authentication-related issues - don't render card at all
   if (vtopData.requiresCredentials === true) {
     return null
   }
-    // Check for authentication errors
   if (success === false || error) {
-    // Extract and normalize error message
     let errorMessage = error || message || ''
     
-    // Try to extract more detailed error from rawOutput if generic error
     if (!errorMessage || errorMessage === '500') {
       if (rawOutput && typeof rawOutput === 'string') {
         if (rawOutput.includes('Login failed') || rawOutput.includes('session could not be established')) {
@@ -74,13 +70,11 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                        errorMessage.includes('session could not be established') ||
                        errorMessage.includes('incorrect username/password')
     
-    // Don't render card for authentication issues
     if (isCredentialError || isAuthError) {
       return null
     }
   }
 
-  // Format command names for display
   const formatCommandName = (cmd: string) => {
     const commandMap: { [key: string]: string } = {
       'class-message': 'Class Message',
@@ -89,16 +83,14 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
       'leave-status': 'Leave Status',
       'nightslip': 'Night Slip',
       'course-page': 'Course Page',
-      'da': 'Digital Assignments'
+      'da': 'Digital Assignments',
     }
     return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ')
   }
 
-  // Custom render function for specific VTOP commands
   const renderCustomVTOPCommand = (command: string, content: any) => {
     switch (command) {      case 'attendance':
         if (Array.isArray(content) && content.length > 0) {
-          // Filter out invalid subjects (empty names, 0% attendance with no classes)
           const validSubjects = content.filter((subject: any) => {
             const subjectName = subject.SUBJECT || subject.subject || subject.name || ''
             const percentage = parseFloat(subject.PERCENTAGE || subject.percentage || subject.attendance || '0')
@@ -134,15 +126,13 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                   const total = subject['TOTAL CLASSES'] || subject.total || subject.totalClasses || 'N/A'
                   let alert = subject['75% ALERT'] || subject.alert || subject.status || ''
                   
-                  // Clean up alert text - remove glyph characters and normalize
                   if (alert) {
                     alert = alert
-                      .replace(/[^\x20-\x7E]/g, '') // Remove non-ASCII characters (glyphs)
-                      .replace(/\s+/g, ' ') // Normalize whitespace
+                      .replace(/[^\x20-\x7E]/g, '')
+                      .replace(/\s+/g, ' ')
                       .trim()
                   }
                   
-                  // Determine status color based on percentage
                   const getStatusColor = (percent: number) => {
                     if (percent >= 85) return 'text-green-600 bg-green-50 border-green-200'
                     if (percent >= 75) return 'text-amber-600 bg-amber-50 border-amber-200'
@@ -157,7 +147,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                   
                   return (
                     <div key={index} className={`p-4 rounded-lg border ${getStatusColor(percentage)}`}>
-                      {/* Subject Header */}
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                           <BookOpen className="h-4 w-4" />
@@ -172,7 +161,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                         </div>
                       </div>
                       
-                      {/* Progress Bar */}
                       <div className="mb-3">
                         <div className="w-full bg-gray-200 rounded-full h-2">
                           <div 
@@ -182,7 +170,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                         </div>
                       </div>
                       
-                      {/* Attendance Details */}
                       <div className="grid grid-cols-2 gap-4 text-xs mb-2">
                         {attended !== 'N/A' && total !== 'N/A' && (
                           <div className="flex items-center gap-1">
@@ -196,7 +183,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                         </div>
                       </div>
                       
-                      {/* Alert Message */}
                       {alert && (
                         <div className={`text-xs font-medium p-2 rounded ${
                           alert.includes('Can miss') || alert.includes('safe') 
@@ -214,7 +200,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                         </div>
                       )}
                       
-                      {/* Additional Insights */}
                       <div className="mt-2 text-xs text-muted-foreground">
                         {percentage >= 85 && (
                           <span className="text-green-600">✓ Excellent attendance</span>
@@ -230,7 +215,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                   )
                 })}
               </div>
-                {/* Overall Summary */}
               <div className="mt-4 p-3 bg-muted/50 rounded-md">
                 <div className="text-xs font-medium text-card-foreground mb-2">Summary:</div>
                 <div className="grid grid-cols-3 gap-4 text-xs">
@@ -311,7 +295,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
               {Object.entries(profileData).map(([key, value]) => {
                 if (value === null || value === undefined || value === '') return null
                 
-                // Format key names for better display
                 const formattedKey = key
                   .replace(/([A-Z])/g, ' $1')
                   .replace(/^./, str => str.toUpperCase())
@@ -410,7 +393,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
       }
     }
 
-    // Handle commands that require raw output display (like 'da' and 'facility')
     if (RAW_OUTPUT_COMMANDS.includes(command)) {
       const displayData = rawOutput || content || data
       

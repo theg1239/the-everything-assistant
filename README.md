@@ -1,6 +1,6 @@
 # VIT Vellore AI Assistant
 
-A comprehensive AI-powered chatbot for VIT Vellore with advanced web scraping capabilities and extensive knowledge base.
+A comprehensive AI-powered chatbot for VIT Vellore with advanced web scraping capabilities and extensive knowledge base..
 
 ## Features
 

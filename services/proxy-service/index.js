@@ -260,14 +260,13 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
           console.log(`Sending automated response: ${response === '\x03' ? 'Ctrl+C' : response}`);
         }
         
-        // Send Ctrl+C without newline, other responses with newline
         if (response === '\x03') {
           child.stdin.write(response);
         } else {
           child.stdin.write(response + '\n');
         }
         
-        currentPrompt = ''; // Reset prompt buffer
+        currentPrompt = '';
         interactionCount++;
       }
     }
@@ -286,7 +285,6 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
       console.log(`CLI process closed with code: ${code}`);
     }
 
-    // Handle Ctrl+C termination gracefully
     if (code === 130 || code === null) {
       if (process.env.NODE_ENV !== 'production') {
         console.log('Process terminated by Ctrl+C, returning credentials required error');
@@ -334,7 +332,6 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
     });
   });
 
-  // Set a timeout for the entire process
   setTimeout(() => {
     if (!processingComplete) {
       processingComplete = true;
@@ -349,26 +346,21 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
 }
 
 function handleInteractivePrompt(prompt, command, flags) {
-  const lowerPrompt = prompt.toLowerCase();  // Handle semester selection prompts
+  const lowerPrompt = prompt.toLowerCase();
   if (lowerPrompt.includes('choose a semester') || 
       lowerPrompt.includes('select a semester') ||
       (lowerPrompt.includes('semester') && lowerPrompt.includes('number'))) {
     
-    // If semester flag is provided, use it
     if (flags && flags.semester && flags.semester > 0) {
       return flags.semester.toString();
     }
     
-    // Parse semester options from the prompt to find the best match
     const semesterChoice = findBestSemesterMatch(prompt, flags);
     if (semesterChoice) {
       return semesterChoice;
     }
-      // Try to find the highest semester number in the prompt (most recent semester)
-    // Look for patterns like "1. Fall 2024", "2. Spring 2024", etc.
     const semesterMatches = prompt.match(/(\d+)\.\s*(Fall|Winter|Summer)?\s*\d{4}/g);
     if (semesterMatches && semesterMatches.length > 0) {
-      // Find the highest semester number
       const semesterNumbers = semesterMatches.map(match => {
         const num = match.match(/^(\d+)\./);
         return num ? parseInt(num[1]) : 0;
@@ -379,7 +371,6 @@ function handleInteractivePrompt(prompt, command, flags) {
       }
     }
     
-    // Try to find the last option from table format
     const tableRows = prompt.match(/^\s*(\d+)\s*│/gm);
     if (tableRows && tableRows.length > 0) {
       const numbers = tableRows.map(row => {
@@ -395,7 +386,6 @@ function handleInteractivePrompt(prompt, command, flags) {
       }
     }
     
-    // Send Ctrl+C to terminate if no match found
     return '\x03';
   }
   
@@ -407,7 +397,6 @@ function handleInteractivePrompt(prompt, command, flags) {
       return flags.course.toString();
     }
     
-    // Send Ctrl+C to terminate
     return '\x03';
   }
   
@@ -419,7 +408,6 @@ function handleInteractivePrompt(prompt, command, flags) {
       return flags.faculty.toString();
     }
     
-    // Send Ctrl+C to terminate
     return '\x03';
   }
   
@@ -432,7 +420,6 @@ function handleInteractivePrompt(prompt, command, flags) {
       return flags.classGroup.toString();
     }
     
-    // Send Ctrl+C to terminate
     return '\x03';
   }
   
@@ -441,7 +428,6 @@ function handleInteractivePrompt(prompt, command, flags) {
       lowerPrompt.includes('select by entering') ||
       (lowerPrompt.includes('enter') && lowerPrompt.includes('number'))) {
     
-    // Send Ctrl+C to terminate
     return '\x03';
   }
   
@@ -449,7 +435,6 @@ function handleInteractivePrompt(prompt, command, flags) {
       lowerPrompt.includes('(y/n)') ||
       lowerPrompt.includes('proceed')) {
     
-    // Send Ctrl+C to terminate
     return '\x03';
   }
   
@@ -457,7 +442,6 @@ function handleInteractivePrompt(prompt, command, flags) {
       lowerPrompt.includes('exit to quit') ||
       lowerPrompt.includes('exit to cancel')) {
     
-    // Send Ctrl+C to terminate
     return '\x03';
   }
     return null;
@@ -552,12 +536,10 @@ function resolveSemesterQuery(semesterQuery, semesterOptions) {
   
   const query = semesterQuery.toLowerCase().trim();
   
-  // Handle "latest" or "current" - return the first option (most recent)
   if (query.includes('latest') || query.includes('current') || query.includes('ongoing')) {
     return semesterOptions[0].number;
   }
   
-  // Handle specific semester numbers (e.g., "semester 3", "3rd semester")
   const numberMatch = query.match(/(?:semester\s*)?(\d+)(?:rd|th|st|nd)?/);
   if (numberMatch) {
     const requestedNumber = parseInt(numberMatch[1]);
@@ -571,7 +553,6 @@ function resolveSemesterQuery(semesterQuery, semesterOptions) {
     }
   }
   
-  // Handle semester names (fall, winter, summer, spring)
   const seasonMap = {
     'fall': ['fall', 'autumn'],
     'winter': ['winter'],
@@ -590,7 +571,6 @@ function resolveSemesterQuery(semesterQuery, semesterOptions) {
     }
   }
   
-  // Handle year-based queries (e.g., "2024", "2025")
   const yearMatch = query.match(/20\d{2}/);
   if (yearMatch) {
     const year = yearMatch[0];
@@ -604,19 +584,16 @@ function resolveSemesterQuery(semesterQuery, semesterOptions) {
     return null;
 }
 
-// Fuzzy matching function to calculate similarity between query and description
 function calculateFuzzyMatchScore(query, description) {
   if (!query || !description) return 0;
   
   query = query.toLowerCase().trim();
   description = description.toLowerCase().trim();
   
-  // Exact match gets highest score
   if (description.includes(query)) {
     return 1.0;
   }
   
-  // Split into words and calculate various matching metrics
   const queryWords = query.split(/\s+/).filter(word => word.length > 1);
   const descWords = description.split(/\s+/).filter(word => word.length > 1);
   
@@ -626,19 +603,16 @@ function calculateFuzzyMatchScore(query, description) {
   let partialWordMatches = 0;
   let abbreviationMatches = 0;
   
-  // Check for exact word matches and partial matches
   for (const queryWord of queryWords) {
     let foundExactMatch = false;
     let foundPartialMatch = false;
     
     for (const descWord of descWords) {
-      // Exact word match
       if (queryWord === descWord) {
         exactWordMatches++;
         foundExactMatch = true;
         break;
       }
-      // Partial word match (either word contains the other)
       else if (queryWord.length > 2 && (descWord.includes(queryWord) || queryWord.includes(descWord))) {
         if (!foundPartialMatch) {
           partialWordMatches++;
@@ -647,7 +621,6 @@ function calculateFuzzyMatchScore(query, description) {
       }
     }
     
-    // Check for abbreviation matches (e.g., "CSE" matching "Computer Science")
     if (!foundExactMatch && !foundPartialMatch && queryWord.length <= 4) {
       const abbreviationPattern = new RegExp(queryWord.split('').join('.*'), 'i');
       if (abbreviationPattern.test(description.replace(/\s+/g, ''))) {
@@ -656,13 +629,11 @@ function calculateFuzzyMatchScore(query, description) {
     }
   }
   
-  // Calculate weighted score
   const totalWords = queryWords.length;
   const exactScore = exactWordMatches / totalWords;
   const partialScore = (partialWordMatches / totalWords) * 0.7;
   const abbreviationScore = (abbreviationMatches / totalWords) * 0.5;
   
-  // Bonus for course code matches (e.g., "BMEE204L")
   let courseCodeBonus = 0;
   const courseCodePattern = /[A-Z]{4}\d{3}[A-Z]?/g;
   const queryCodeMatches = query.match(courseCodePattern);
@@ -672,43 +643,36 @@ function calculateFuzzyMatchScore(query, description) {
     for (const queryCode of queryCodeMatches) {
       for (const descCode of descCodeMatches) {
         if (queryCode === descCode) {
-          courseCodeBonus = 0.8; // High bonus for exact course code match
+          courseCodeBonus = 0.8;
           break;
         }
       }
     }
   }
   
-  // Calculate final score
   let finalScore = Math.max(exactScore, partialScore + abbreviationScore) + courseCodeBonus;
   
-  // Apply length penalty for very short queries to avoid false positives
   if (query.length < 4) {
     finalScore *= 0.8;
   }
   
-  // Cap the score at 1.0
   return Math.min(finalScore, 1.0);
 }
 
 async function executeInteractiveCoursePageWorkflow(username, password, step, flags, sessionData) {
-  // Handle session resumption
   if (sessionData && typeof sessionData === 'string') {
     try {
       const parsedSession = JSON.parse(sessionData);
       if (parsedSession.username === username && parsedSession.flags) {
-        // Merge session flags with current flags, giving priority to current flags
         flags = { ...parsedSession.flags, ...flags };
         console.log('Resuming session from step:', parsedSession.currentStep);
         
-        // If we have a target step and now have the necessary prerequisites, progress toward it
         if (parsedSession.targetStep && parsedSession.targetStep !== step) {
           const targetStep = parsedSession.targetStep;
           const stepOrder = ['semester', 'course', 'faculty', 'materials'];
           const currentStepIndex = stepOrder.indexOf(step);
           const targetStepIndex = stepOrder.indexOf(targetStep);
           
-          // Check if we can now progress toward the target step
           if (targetStepIndex > currentStepIndex) {
             const requiredFlags = {
               'course': ['semester'],
@@ -716,7 +680,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
               'materials': ['semester', 'course', 'faculty']
             };
             
-            // Check what's the furthest step we can go with current flags
             let nextPossibleStep = step;
             for (let i = currentStepIndex + 1; i <= targetStepIndex; i++) {
               const stepName = stepOrder[i];
@@ -742,12 +705,10 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
     }
   }
 
-  // Validate prerequisite steps - course-page MUST follow: semester → course → faculty → materials
   const stepOrder = ['semester', 'course', 'faculty', 'materials'];
   const currentStepIndex = stepOrder.indexOf(step);
   
   if (currentStepIndex > 0) {
-    // Check if all prerequisite steps have been completed
     const requiredFlags = {
       'course': ['semester'],
       'faculty': ['semester', 'course'], 
@@ -757,11 +718,9 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
     const required = requiredFlags[step] || [];
     const missing = required.filter(flag => !flags || !flags[flag]);
       if (missing.length > 0) {
-      // Redirect to the first missing prerequisite step, but preserve all flags
       const firstMissing = missing[0];
       console.log(`Step "${step}" requires prerequisite "${firstMissing}". Redirecting to "${firstMissing}" step with preserved context.`);
       
-      // Create session data that includes the original target step and all queries
       const preservedSession = {
         originalStep: step,
         targetStep: step,
@@ -780,10 +739,8 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
     }
   }
 
-  // Handle smart search step
   if (step === 'smart-search' && flags && flags.materialQuery) {
     try {
-      // Parse session data to get available materials
       let materials = [];
       if (sessionData) {
         const parsed = JSON.parse(sessionData);
@@ -797,9 +754,8 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           message: 'Please complete the previous steps first'
         };
       }
-
-      // Call the smart matching API
-      const matchResponse = await fetch('http://localhost:3000/api/smart-match', {
+      const baseUrl = getBaseUrl();
+      const matchResponse = await fetch(`${baseUrl}/api/smart-match`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -815,7 +771,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
 
       const matchResult = await matchResponse.json();
       
-      // Now execute the download with the smart selection
       return await executeInteractiveCoursePageWorkflow(
         username, 
         password, 
@@ -836,10 +791,8 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
     }
   }
 
-  // Handle download step with file serving
   if (step === 'download' && flags && flags.materialSelection) {
     try {
-      // Execute the actual download
       const downloadResult = await executeInteractiveCoursePageWorkflow(
         username, 
         password, 
@@ -849,18 +802,14 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
       );
 
       if (downloadResult.success && downloadResult.completed) {
-        // Check if files were downloaded and register them for serving
-        const downloadPath = path.join(__dirname, 'downloads'); // Assuming downloads go here
+        const downloadPath = path.join(__dirname, 'downloads');
         const files = [];
         
-        // This would need to be adapted based on where cli-top saves files
-        // For now, return the result with file serving info
         return {
           ...downloadResult,
           downloadInfo: {
             message: 'Files downloaded successfully',
             localPath: downloadPath,
-            // In a real implementation, you'd scan the download directory
             // and register files with the file-serve endpoint
             files: []
           }
@@ -951,10 +900,10 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
     // Get course options first
     const tempResult = await executeInteractiveCoursePageWorkflow(username, password, 'course', 
       { ...flags, courseQuery: undefined }, sessionData);
-    
-    if (tempResult.success && tempResult.options) {
+      if (tempResult.success && tempResult.options) {
       try {
-        const matchResponse = await fetch('http://localhost:3000/api/smart-match', {
+        const baseUrl = getBaseUrl();
+        const matchResponse = await fetch(`${baseUrl}/api/smart-match`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1013,10 +962,10 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
     // Get faculty options first
     const tempResult = await executeInteractiveCoursePageWorkflow(username, password, 'faculty', 
       { ...flags, facultyQuery: undefined }, sessionData);
-    
-    if (tempResult.success && tempResult.options) {
+      if (tempResult.success && tempResult.options) {
       try {
-        const matchResponse = await fetch('http://localhost:3000/api/smart-match', {
+        const baseUrl = getBaseUrl();
+        const matchResponse = await fetch(`${baseUrl}/api/smart-match`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1338,7 +1287,7 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
             isResolved = true;
             resolve({
               success: true,
-              step: promptData.type, // Use the actual detected prompt type
+              step: promptData.type,
               data: promptData,
               options: promptData.options,
               prompt: promptData.prompt,
@@ -1352,10 +1301,9 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
               interactiveState: 'waiting_for_input'
             });
           }
-          return; // Early return to prevent further processing
+          return;
         }
       }      
-      // Continue processing - if no prompt is detected, the process will continue
     });
 
     child.stderr.on('data', (data) => {
@@ -1365,13 +1313,11 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
         console.log(`Interactive CLI process closed with code: ${code}`);
       }
 
-      // If we've already resolved (due to prompt detection), don't resolve again
       if (isResolved) {
         return;
       }
 
       if (hasReceivedPrompt && promptData) {
-        // Create session data to maintain state between calls
         const sessionInfo = {
           currentStep: step,
           actualStep: promptData.type,
@@ -1398,13 +1344,10 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           canResume: true,
           interactiveState: 'waiting_for_input'
         });      } else if (code === 0) {
-        // Command completed successfully - parse for download information and serve files
         const downloadInfo = parseDownloadInfo(stdout);
         
-        // Serve downloaded files temporarily
         const servedFiles = await serveDownloadedFiles(downloadInfo.downloadPath, downloadInfo);
         
-        // Clean CLI output after serving files so we know if served files are available
         const cleanedOutput = cleanCliOutput(stdout, servedFiles.length > 0);
         
         const sessionInfo = {
@@ -1416,14 +1359,13 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           timestamp: Date.now()
         };
         
-        // Create a comprehensive completion message
         let completionMessage = 'Course page workflow completed successfully';
         if (downloadInfo.filesDownloaded > 0) {
           completionMessage = `Successfully downloaded ${downloadInfo.filesDownloaded} course materials`;
           if (servedFiles.length > 0) {
             completionMessage += ` and made them available for download`;
           }
-        }        // Build response downloadInfo structure - downloadPath is intentionally excluded
+        }
         const responseDownloadInfo = {
           filesDownloaded: downloadInfo.filesDownloaded,
           totalFiles: downloadInfo.totalFiles,
@@ -1761,10 +1703,18 @@ function parseMaterialOptions(output) {
   return options;
 }
 
-// Store for temporary file serving
 const tempFiles = new Map(); // fileId -> { path, filename, expiry }
 
-// Clean up expired files every 30 minutes
+function getBaseUrl() {
+  if (process.env.NODE_ENV === 'production') {
+    console.log('🌐 Using production API base URL: https://the-everything-assistant.vercel.app');
+    return 'https://the-everything-assistant.vercel.app';
+  } else {
+    console.log('🏠 Using development API base URL: http://localhost:3000');
+    return 'http://localhost:3000';
+  }
+}
+
 setInterval(() => {
   const now = Date.now();
   for (const [fileId, fileInfo] of tempFiles.entries()) {
@@ -1916,18 +1866,23 @@ async function serveDownloadedFiles(downloadPath, downloadInfo) {
           expiry: expiry
         });
         
-        // Clean up expired files periodically
         setTimeout(() => {
           tempFiles.delete(fileId);
         }, 2 * 60 * 60 * 1000);
-        
-        // Use environment variable for host or default to localhost
-        const host = process.env.PROXY_HOST || 'localhost';
-        const port = process.env.PORT || 3001;
+        let downloadUrl;
+        if (process.env.NODE_ENV === 'production') {
+          downloadUrl = `https://the-everything-assistant.onrender.com/download/${fileId}`;
+          console.log(`🌐 Production mode detected - using Render domain for file: ${filename}`);
+        } else {
+          const host = process.env.PROXY_HOST || 'localhost';
+          const port = process.env.PORT || 3001;
+          downloadUrl = `http://${host}:${port}/download/${fileId}`;
+          console.log(`🏠 Development mode detected - using localhost for file: ${filename}`);
+        }
         
         servedFiles.push({
           name: filename,
-          downloadUrl: `http://${host}:${port}/download/${fileId}`,
+          downloadUrl: downloadUrl,
           size: stat.size,
           expiry: new Date(expiry).toISOString()
         });
@@ -1957,7 +1912,6 @@ function parseDownloadInfo(output) {
   for (const line of lines) {
     const trimmed = line.trim();
     
-    // Parse download progress information
     if (trimmed.includes('Downloaded:') || trimmed.includes('Downloading:')) {
       const fileMatch = trimmed.match(/(?:Downloaded|Downloading):\s*(.+)/);
       if (fileMatch) {
@@ -1968,7 +1922,6 @@ function parseDownloadInfo(output) {
       }
     }
     
-    // Parse download summary - look for "Total files:" instead of "Total files downloaded:"
     if (trimmed.includes('Total files:')) {
       const countMatch = trimmed.match(/Total files:\s*(\d+)/);
       if (countMatch) {
@@ -1976,7 +1929,6 @@ function parseDownloadInfo(output) {
       }
     }
     
-    // Parse successfully downloaded count
     if (trimmed.includes('Successfully downloaded:')) {
       const countMatch = trimmed.match(/Successfully downloaded:\s*(\d+)/);
       if (countMatch) {
@@ -1984,7 +1936,6 @@ function parseDownloadInfo(output) {
       }
     }
     
-    // Parse download path - look for "Files have been saved to:" format
     if (trimmed.includes('Files have been saved to:')) {
       const pathMatch = trimmed.match(/Files have been saved to:\s*(.+)/);
       if (pathMatch) {
@@ -1992,7 +1943,6 @@ function parseDownloadInfo(output) {
       }
     }
     
-    // Also check for "Files saved to:" format (alternative)
     if (trimmed.includes('Files saved to:') && !downloadInfo.downloadPath) {
       const pathMatch = trimmed.match(/Files saved to:\s*(.+)/);
       if (pathMatch) {
@@ -2000,18 +1950,15 @@ function parseDownloadInfo(output) {
       }
     }
     
-    // Parse errors
     if (trimmed.includes('Error:') || trimmed.includes('Failed:')) {
       downloadInfo.errors.push(trimmed);
     }
   }
   
-  // If we didn't get filesDownloaded but we have totalFiles and no errors, assume all downloaded
   if (!downloadInfo.filesDownloaded && downloadInfo.totalFiles > 0 && downloadInfo.errors.length === 0) {
     downloadInfo.filesDownloaded = downloadInfo.totalFiles;
   }
   
-  // If we don't have totalFiles but we have individual file entries, count them
   if (!downloadInfo.totalFiles && downloadInfo.files.length > 0) {
     downloadInfo.totalFiles = downloadInfo.files.length;
   }
@@ -2238,23 +2185,19 @@ app.get('/download/:fileId', (req, res) => {
     return res.status(404).json({ error: 'File not found or expired' });
   }
   
-  // Check if file has expired
   if (Date.now() > fileInfo.expiry) {
     tempFiles.delete(fileId);
     return res.status(410).json({ error: 'File has expired' });
   }
   
-  // Check if file still exists on disk
   if (!fs.existsSync(fileInfo.path)) {
     tempFiles.delete(fileId);
     return res.status(404).json({ error: 'File no longer available' });
   }
   
-  // Set appropriate headers
   res.setHeader('Content-Disposition', `attachment; filename="${fileInfo.filename}"`);
   res.setHeader('Content-Type', 'application/octet-stream');
   
-  // Stream the file
   const fileStream = fs.createReadStream(fileInfo.path);
   fileStream.pipe(res);
   

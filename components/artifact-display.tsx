@@ -25,7 +25,10 @@ import {
   BookOpen,
   BarChart3,
   CheckCircle,
-  AlertTriangle
+  AlertTriangle,
+  FileText,
+  Sparkles,
+  Info
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -35,7 +38,7 @@ import { cn } from "@/lib/utils"
 interface ArtifactDisplayProps {  title: string
   icon?: React.ReactNode
   data: any
-  type: 'papers' | 'faculty' | 'companies' | 'placements' | 'mess-menu' | 'vtop-data' | 'general'
+  type: 'papers' | 'faculty' | 'companies' | 'placements' | 'mess-menu' | 'vtop-data' | 'general' | 'interactive-course-page'
   className?: string
   onLoginClick?: () => void
 }
@@ -44,16 +47,12 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
   const { command, content, rawOutput, success, data, parsedData, formatted_content, structured_data, summary, error, message } = vtopData
   const CUSTOM_RENDER_COMMANDS = ['attendance', 'marks', 'grades', 'profile']
 
-  // Early return for authentication-related issues - don't render card at all
   if (vtopData.requiresCredentials === true) {
     return null
   }
-    // Check for authentication errors
   if (success === false || error) {
-    // Extract and normalize error message
     let errorMessage = error || message || ''
     
-    // Try to extract more detailed error from rawOutput if generic error
     if (!errorMessage || errorMessage === '500') {
       if (rawOutput && typeof rawOutput === 'string') {
         if (rawOutput.includes('Login failed') || rawOutput.includes('session could not be established')) {
@@ -73,13 +72,11 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                        errorMessage.includes('session could not be established') ||
                        errorMessage.includes('incorrect username/password')
     
-    // Don't render card for authentication issues
     if (isCredentialError || isAuthError) {
       return null
     }
   }
 
-  // Format command names for display
   const formatCommandName = (cmd: string) => {
     const commandMap: { [key: string]: string } = {
       'class-message': 'Class Message',
@@ -92,11 +89,9 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
     return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ')
   }
 
-  // Custom render function for specific VTOP commands
   const renderCustomVTOPCommand = (command: string, content: any) => {
     switch (command) {      case 'attendance':
         if (Array.isArray(content) && content.length > 0) {
-          // Filter out invalid subjects (empty names, 0% attendance with no classes)
           const validSubjects = content.filter((subject: any) => {
             const subjectName = subject.SUBJECT || subject.subject || subject.name || ''
             const percentage = parseFloat(subject.PERCENTAGE || subject.percentage || subject.attendance || '0')
@@ -132,15 +127,13 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                   const total = subject['TOTAL CLASSES'] || subject.total || subject.totalClasses || 'N/A'
                   let alert = subject['75% ALERT'] || subject.alert || subject.status || ''
                   
-                  // Clean up alert text - remove glyph characters and normalize
                   if (alert) {
                     alert = alert
-                      .replace(/[^\x20-\x7E]/g, '') // Remove non-ASCII characters (glyphs)
-                      .replace(/\s+/g, ' ') // Normalize whitespace
+                      .replace(/[^\x20-\x7E]/g, '')
+                      .replace(/\s+/g, ' ')
                       .trim()
                   }
                   
-                  // Determine status color based on percentage
                   const getStatusColor = (percent: number) => {
                     if (percent >= 85) return 'text-green-600 bg-green-50 border-green-200'
                     if (percent >= 75) return 'text-amber-600 bg-amber-50 border-amber-200'
@@ -155,7 +148,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                   
                   return (
                     <div key={index} className={`p-4 rounded-lg border ${getStatusColor(percentage)}`}>
-                      {/* Subject Header */}
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                           <BookOpen className="h-4 w-4" />
@@ -170,7 +162,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                         </div>
                       </div>
                       
-                      {/* Progress Bar */}
                       <div className="mb-3">
                         <div className="w-full bg-gray-200 rounded-full h-2">
                           <div 
@@ -180,7 +171,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                         </div>
                       </div>
                       
-                      {/* Attendance Details */}
                       <div className="grid grid-cols-2 gap-4 text-xs mb-2">
                         {attended !== 'N/A' && total !== 'N/A' && (
                           <div className="flex items-center gap-1">
@@ -194,7 +184,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                         </div>
                       </div>
                       
-                      {/* Alert Message */}
                       {alert && (
                         <div className={`text-xs font-medium p-2 rounded ${
                           alert.includes('Can miss') || alert.includes('safe') 
@@ -212,7 +201,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                         </div>
                       )}
                       
-                      {/* Additional Insights */}
                       <div className="mt-2 text-xs text-muted-foreground">
                         {percentage >= 85 && (
                           <span className="text-green-600">✓ Excellent attendance</span>
@@ -228,7 +216,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                   )
                 })}
               </div>
-                {/* Overall Summary */}
               <div className="mt-4 p-3 bg-muted/50 rounded-md">
                 <div className="text-xs font-medium text-card-foreground mb-2">Summary:</div>
                 <div className="grid grid-cols-3 gap-4 text-xs">
@@ -309,7 +296,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
               {Object.entries(profileData).map(([key, value]) => {
                 if (value === null || value === undefined || value === '') return null
                 
-                // Format key names for better display
                 const formattedKey = key
                   .replace(/([A-Z])/g, ' $1')
                   .replace(/^./, str => str.toUpperCase())
@@ -439,7 +425,9 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                            [&_h3]:text-sm [&_h3]:font-medium [&_h3]:text-card-foreground [&_h3]:mb-2 [&_h3]:mt-3
                            [&_h4]:text-sm [&_h4]:font-medium [&_h4]:text-card-foreground [&_h4]:mb-2 [&_h4]:mt-3
                            [&_h5]:text-sm [&_h5]:font-medium [&_h5]:text-card-foreground [&_h5]:mb-2 [&_h5]:mt-3
-                           [&_h6]:text-sm [&_h6]:font-medium [&_h6]:text-card-foreground [&_h6]:mb-2 [&_h6]:mt-3"
+                           [&_h6]:text-sm [&_h6]:font-medium [&_h6]:text-card-foreground [&_h6]:mb-2 [&_h6]:mt-3                           [&_a]:inline-flex [&_a]:items-center [&_a]:gap-1.5 [&_a]:px-4 [&_a]:py-2 [&_a]:bg-blue-500 [&_a]:text-white [&_a]:rounded-lg [&_a]:text-sm [&_a]:font-medium [&_a]:no-underline [&_a]:hover:bg-blue-600 [&_a]:transition-colors [&_a]:shadow-sm [&_a]:ml-2
+                           [&_ul]:space-y-4 [&_ul]:mb-6 [&_ul]:pl-0
+                           [&_li]:flex [&_li]:items-center [&_li]:justify-between [&_li]:p-3 [&_li]:bg-muted/30 [&_li]:rounded-lg [&_li]:border [&_li]:border-border/50 [&_li]:text-card-foreground [&_li]:gap-4"
                 dangerouslySetInnerHTML={{ __html: finalFormattedContent }}
               />
             </div>
@@ -460,8 +448,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                     </span>
                   </div>
                 </div>
-              ))}
-            </div>
+              ))}            </div>
           )}
         </div>
       )    }
@@ -818,6 +805,328 @@ const MessMenuCard = ({ menuData }: { menuData: any }) => {
           </div>
         )} */}
       </CardContent>
+    </Card>  )
+}
+
+const InteractiveCoursePageCard = ({ workflowData }: { workflowData: any }) => {
+  const { step, options, prompt, nextStep, sessionData, completed, message, downloadInfo, smartMatch, canResume, interactiveState } = workflowData
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [selectedOption, setSelectedOption] = useState('')
+  const [error, setError] = useState('')
+  
+  const handleContinue = async () => {
+    if (!selectedOption.trim()) {
+      setError('Please enter a selection')
+      return
+    }
+    
+    setIsProcessing(true)
+    setError('')
+    
+    try {
+      // todo: would need to be implemented to call the continuation API
+      // For now, we'll show a message that the user should continue via chat
+      setError('Please continue the conversation by specifying your selection in the chat')
+    } catch (err) {
+      setError('Failed to continue workflow')
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+  if (completed && downloadInfo) {
+    const downloadFiles = downloadInfo.servedFiles || downloadInfo.files || []
+    
+    return (
+      <Card className="border-green-500/20 bg-green-500/5">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="h-4 w-4 text-green-500" />
+            <CardTitle className="text-sm font-medium text-card-foreground">
+              Course Materials Downloaded
+            </CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <p className="text-xs text-muted-foreground mb-3">{message}</p>
+          
+          {downloadFiles && downloadFiles.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-card-foreground">
+                📁 Available Downloads ({downloadFiles.length} files):
+              </p>
+              <div className="space-y-2">
+                {downloadFiles.map((file: any, index: number) => (
+                  <div key={index} className="flex items-center gap-3 p-3 rounded-md bg-muted/50 border">
+                    <FileText className="h-4 w-4 text-blue-500" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-card-foreground">{file.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Size: {(file.size / 1024 / 1024).toFixed(2)} MB
+                        {file.expiry && (
+                          <span className="ml-2">
+                            • Expires: {new Date(file.expiry).toLocaleString()}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    {file.downloadUrl && (
+                      <a 
+                        href={file.downloadUrl} 
+                        download={file.name}
+                        className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                      >
+                        Download
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+            {downloadInfo.downloadPath && (!downloadFiles || downloadFiles.length === 0) && (
+            <div className="mt-3 p-2 bg-muted/50 rounded-md">
+              <p className="text-xs text-muted-foreground">
+                <span className="font-medium">📂 Local path:</span> {downloadInfo.downloadPath}
+              </p>
+            </div>
+          )}
+          
+          {downloadInfo.filesDownloaded && downloadInfo.totalFiles && (
+            <div className="mt-3 p-2 bg-green-100 dark:bg-green-900/20 rounded-md">
+              <p className="text-xs text-green-700 dark:text-green-300">
+                ✅ Successfully downloaded {downloadInfo.filesDownloaded} of {downloadInfo.totalFiles} files
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    )
+  }
+  
+  if (completed) {
+    return (
+      <Card className="border-green-500/20 bg-green-500/5">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="h-4 w-4 text-green-500" />
+            <CardTitle className="text-sm font-medium text-card-foreground">
+              Course Materials Downloaded
+            </CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <p className="text-xs text-muted-foreground">{message}</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (smartMatch && smartMatch.bestMatches) {
+    return (
+      <Card className="border-purple-500/20 bg-purple-500/5">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-purple-500" />
+            <CardTitle className="text-sm font-medium text-card-foreground">
+              Smart Material Selection
+            </CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <p className="text-xs text-muted-foreground mb-3">{smartMatch.explanation}</p>
+          
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-card-foreground">AI Selected Materials:</p>
+            <div className="space-y-1">
+              {smartMatch.bestMatches.map((match: any, index: number) => (
+                <div key={index} className="flex items-center gap-2 p-2 rounded-md bg-muted/50">
+                  <Badge variant="outline" className="text-xs">
+                    {match.index}
+                  </Badge>
+                  <div className="flex-1">
+                    <p className="text-xs text-muted-foreground">{match.reason}</p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className="text-xs text-muted-foreground">Confidence:</span>
+                      <div className="flex-1 bg-muted rounded-full h-1.5">
+                        <div 
+                          className="bg-purple-500 h-1.5 rounded-full" 
+                          style={{ width: `${match.confidence * 100}%` }}
+                        />
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {Math.round(match.confidence * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded-md">
+            <div className="flex items-start gap-2">
+              <Info className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+              <div className="text-xs text-blue-700">
+                <p className="font-medium mb-1">Selection String:</p>
+                <code className="bg-blue-500/20 px-1 py-0.5 rounded text-xs">
+                  {smartMatch.selectionString}
+                </code>
+                <p className="mt-1">Processing download...</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+  
+  return (
+    <Card className="border-blue-500/20 bg-blue-500/5">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <GraduationCap className="h-4 w-4 text-blue-500" />
+            <CardTitle className="text-sm font-medium text-card-foreground">
+              Course Page - {step?.charAt(0).toUpperCase() + step?.slice(1)} Selection
+            </CardTitle>
+          </div>
+          {nextStep && (
+            <Badge variant="secondary" className="text-xs">
+              Next: {nextStep}
+            </Badge>
+          )}
+        </div>
+        {prompt && (
+          <p className="text-xs text-muted-foreground mt-2">{prompt}</p>
+        )}
+      </CardHeader>
+      <CardContent className="pt-0">        {options && options.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-card-foreground mb-3">
+              {step === 'materials' ? '📚 Available Course Materials:' : 'Available Options:'}
+            </p>
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {options.map((option: any, index: number) => (
+                <div
+                  key={index}
+                  className={`flex items-center gap-2 p-2 rounded-md transition-colors ${
+                    step === 'materials' 
+                      ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800' 
+                      : 'bg-muted/50 hover:bg-muted'
+                  }`}
+                >
+                  <Badge variant="outline" className="text-xs min-w-8 justify-center">
+                    {option.number}
+                  </Badge>
+                  <div className="flex-1">
+                    {step === 'materials' && option.date && option.topic ? (
+                      <div>
+                        <p className="text-xs font-medium text-card-foreground">
+                          📅 {option.date}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {option.topic}
+                        </p>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        {option.description}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>            <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-md">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                <div className="text-xs text-amber-700 flex-1">
+                  <p className="font-medium mb-1">How to Download Materials:</p>
+                  {step === 'materials' ? (
+                    <div className="space-y-2">
+                      <p>You can download course materials by specifying:</p>
+                      <ul className="list-disc list-inside space-y-1 text-xs">
+                        <li><strong>"Download all"</strong> - Downloads all {options.length} materials</li>
+                        <li><strong>"Download 1,3,5"</strong> - Downloads specific materials by number</li>
+                        <li><strong>"Download 1-5"</strong> - Downloads a range of materials</li>
+                        <li><strong>"Download recent 3"</strong> - Downloads the 3 most recent materials</li>
+                      </ul>
+                      <p className="mt-2 font-medium">Example: "Download all materials" or "Download materials 1,2,3"</p>
+                    </div>
+                  ) : (
+                    <p>Please continue the conversation and specify which {step} you'd like to select (e.g., "Select option 2" or "I want the first one").</p>
+                  )}
+                  
+                  {canResume && interactiveState === 'waiting_for_input' && (
+                    <div className="mt-3 space-y-2">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={selectedOption}
+                          onChange={(e) => setSelectedOption(e.target.value)}
+                          placeholder={
+                            step === 'materials' 
+                              ? 'e.g., "0" for all, "1,3,5" for specific, "1-3" for range'
+                              : `Enter option number (1-${options?.length || 0})`
+                          }
+                          className="flex-1 px-2 py-1 text-xs border border-amber-300 rounded bg-white/80 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                          disabled={isProcessing}
+                        />
+                        <Button
+                          size="sm"
+                          onClick={handleContinue}
+                          disabled={isProcessing || !selectedOption.trim()}
+                          className="px-3 py-1 text-xs h-auto"
+                        >
+                          {isProcessing ? 'Processing...' : step === 'materials' ? 'Download' : 'Continue'}
+                        </Button>                      </div>
+                      
+                      {step === 'materials' && (
+                        <div className="flex flex-wrap gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedOption('0')}
+                            className="px-2 py-1 text-xs h-auto"
+                          >
+                            All Materials
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedOption('1-3')}
+                            className="px-2 py-1 text-xs h-auto"
+                          >
+                            Recent 3
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedOption('1-5')}
+                            className="px-2 py-1 text-xs h-auto"
+                          >
+                            First 5
+                          </Button>
+                        </div>
+                      )}
+                      
+                      {error && (
+                        <p className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200">
+                          {error}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-4 text-muted-foreground">
+            <BookOpen className="h-6 w-6 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">Processing {step} step...</p>
+          </div>
+        )}
+      </CardContent>
     </Card>
   )
 }
@@ -840,8 +1149,7 @@ const PureArtifactDisplay = ({ title, icon, data, type, className, onLoginClick 
     return (      <div className={cn(
         "grid gap-3",
         type === 'mess-menu' || type === 'vtop-data' ? "grid-cols-1" : "md:grid-cols-2 lg:grid-cols-3"
-      )}>{displayItems.map((item, index) => {
-          switch (type) {
+      )}>{displayItems.map((item, index) => {          switch (type) {
             case 'papers':
               return <PaperCard key={index} paper={item} />
             case 'faculty':
@@ -849,11 +1157,13 @@ const PureArtifactDisplay = ({ title, icon, data, type, className, onLoginClick 
             case 'companies':
               return <CompanyCard key={index} company={item} />
             case 'placements':
-              return <PlacementCard key={index} placement={item} />            
+              return <PlacementCard key={index} placement={item} />
             case 'mess-menu':
               return <MessMenuCard key={index} menuData={item} />
             case 'vtop-data':
               return <VTOPDataCard key={index} vtopData={item} onLoginClick={onLoginClick} />
+            case 'interactive-course-page':
+              return <InteractiveCoursePageCard key={index} workflowData={item} />
             default:
               return (
                 <Card key={index} className="hover:shadow-md transition-shadow">

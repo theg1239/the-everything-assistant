@@ -252,16 +252,21 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
     
     if (process.env.NODE_ENV !== 'production') {
       console.log(`CLI stdout: ${output}`);
-    }
-
-    // Check for various interactive prompts and respond automatically
+    }    // Check for various interactive prompts and respond automatically
     if (!processingComplete && interactionCount < maxInteractions) {
       const response = handleInteractivePrompt(currentPrompt, command, flags);
       if (response !== null) {
         if (process.env.NODE_ENV !== 'production') {
-          console.log(`Sending automated response: ${response}`);
+          console.log(`Sending automated response: ${response === '\x03' ? 'Ctrl+C' : response}`);
         }
-        child.stdin.write(response + '\n');
+        
+        // Send Ctrl+C without newline, other responses with newline
+        if (response === '\x03') {
+          child.stdin.write(response);
+        } else {
+          child.stdin.write(response + '\n');
+        }
+        
         currentPrompt = ''; // Reset prompt buffer
         interactionCount++;
       }
@@ -275,11 +280,24 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
       console.log(`CLI stderr: ${output}`);
     }
   });
-
   child.on('close', (code) => {
     processingComplete = true;
     if (process.env.NODE_ENV !== 'production') {
       console.log(`CLI process closed with code: ${code}`);
+    }
+
+    // Handle Ctrl+C termination gracefully
+    if (code === 130 || code === null) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('Process terminated by Ctrl+C, returning credentials required error');
+      }
+      return reject({
+        error: "VTOP credentials required",
+        requiresCredentials: true,
+        command: command,
+        message: "Please provide your VTOP username and password to access VTOP data.",
+        args: ['proxy', cliArgs[1], '***', command, ...cliArgs.slice(4)]
+      });
     }
 
     if (code !== 0) {
@@ -377,7 +395,8 @@ function handleInteractivePrompt(prompt, command, flags) {
       }
     }
     
-    return '1';
+    // Send Ctrl+C to terminate if no match found
+    return '\x03';
   }
   
   if (lowerPrompt.includes('choose a course') || 
@@ -388,7 +407,8 @@ function handleInteractivePrompt(prompt, command, flags) {
       return flags.course.toString();
     }
     
-    return '1';
+    // Send Ctrl+C to terminate
+    return '\x03';
   }
   
   if (lowerPrompt.includes('choose a faculty') ||
@@ -399,7 +419,8 @@ function handleInteractivePrompt(prompt, command, flags) {
       return flags.faculty.toString();
     }
     
-    return '1';
+    // Send Ctrl+C to terminate
+    return '\x03';
   }
   
   if (lowerPrompt.includes('choose a class') ||
@@ -411,7 +432,8 @@ function handleInteractivePrompt(prompt, command, flags) {
       return flags.classGroup.toString();
     }
     
-    return '1';
+    // Send Ctrl+C to terminate
+    return '\x03';
   }
   
   if (lowerPrompt.includes('enter a number') ||
@@ -419,21 +441,24 @@ function handleInteractivePrompt(prompt, command, flags) {
       lowerPrompt.includes('select by entering') ||
       (lowerPrompt.includes('enter') && lowerPrompt.includes('number'))) {
     
-    return '1';
+    // Send Ctrl+C to terminate
+    return '\x03';
   }
   
   if (lowerPrompt.includes('(yes/no)') || 
       lowerPrompt.includes('(y/n)') ||
       lowerPrompt.includes('proceed')) {
     
-    return 'yes';
+    // Send Ctrl+C to terminate
+    return '\x03';
   }
   
   if (lowerPrompt.includes("type 'exit'") || 
       lowerPrompt.includes('exit to quit') ||
       lowerPrompt.includes('exit to cancel')) {
     
-    return '1';
+    // Send Ctrl+C to terminate
+    return '\x03';
   }
     return null;
 }
@@ -517,9 +542,1504 @@ function findBestSemesterMatch(prompt, flags) {
       }
     }
   }
+    return null;
+}
+
+function resolveSemesterQuery(semesterQuery, semesterOptions) {
+  if (!semesterQuery || !semesterOptions || semesterOptions.length === 0) {
+    return null;
+  }
   
-  return null;
-}app.post('/vtop', async (req, res) => {
+  const query = semesterQuery.toLowerCase().trim();
+  
+  // Handle "latest" or "current" - return the first option (most recent)
+  if (query.includes('latest') || query.includes('current') || query.includes('ongoing')) {
+    return semesterOptions[0].number;
+  }
+  
+  // Handle specific semester numbers (e.g., "semester 3", "3rd semester")
+  const numberMatch = query.match(/(?:semester\s*)?(\d+)(?:rd|th|st|nd)?/);
+  if (numberMatch) {
+    const requestedNumber = parseInt(numberMatch[1]);
+    const found = semesterOptions.find(opt => 
+      opt.description.toLowerCase().includes(`semester ${requestedNumber}`) ||
+      opt.description.toLowerCase().includes(`sem ${requestedNumber}`) ||
+      opt.description.toLowerCase().includes(`${requestedNumber}`)
+    );
+    if (found) {
+      return found.number;
+    }
+  }
+  
+  // Handle semester names (fall, winter, summer, spring)
+  const seasonMap = {
+    'fall': ['fall', 'autumn'],
+    'winter': ['winter'],
+    'summer': ['summer'],
+    'spring': ['spring']
+  };
+  
+  for (const [season, variants] of Object.entries(seasonMap)) {
+    if (variants.some(variant => query.includes(variant))) {
+      const found = semesterOptions.find(opt => 
+        variants.some(variant => opt.description.toLowerCase().includes(variant))
+      );
+      if (found) {
+        return found.number;
+      }
+    }
+  }
+  
+  // Handle year-based queries (e.g., "2024", "2025")
+  const yearMatch = query.match(/20\d{2}/);
+  if (yearMatch) {
+    const year = yearMatch[0];
+    const found = semesterOptions.find(opt => 
+      opt.description.includes(year)
+    );
+    if (found) {
+      return found.number;
+    }
+  }
+    return null;
+}
+
+// Fuzzy matching function to calculate similarity between query and description
+function calculateFuzzyMatchScore(query, description) {
+  if (!query || !description) return 0;
+  
+  query = query.toLowerCase().trim();
+  description = description.toLowerCase().trim();
+  
+  // Exact match gets highest score
+  if (description.includes(query)) {
+    return 1.0;
+  }
+  
+  // Split into words and calculate various matching metrics
+  const queryWords = query.split(/\s+/).filter(word => word.length > 1);
+  const descWords = description.split(/\s+/).filter(word => word.length > 1);
+  
+  if (queryWords.length === 0) return 0;
+  
+  let exactWordMatches = 0;
+  let partialWordMatches = 0;
+  let abbreviationMatches = 0;
+  
+  // Check for exact word matches and partial matches
+  for (const queryWord of queryWords) {
+    let foundExactMatch = false;
+    let foundPartialMatch = false;
+    
+    for (const descWord of descWords) {
+      // Exact word match
+      if (queryWord === descWord) {
+        exactWordMatches++;
+        foundExactMatch = true;
+        break;
+      }
+      // Partial word match (either word contains the other)
+      else if (queryWord.length > 2 && (descWord.includes(queryWord) || queryWord.includes(descWord))) {
+        if (!foundPartialMatch) {
+          partialWordMatches++;
+          foundPartialMatch = true;
+        }
+      }
+    }
+    
+    // Check for abbreviation matches (e.g., "CSE" matching "Computer Science")
+    if (!foundExactMatch && !foundPartialMatch && queryWord.length <= 4) {
+      const abbreviationPattern = new RegExp(queryWord.split('').join('.*'), 'i');
+      if (abbreviationPattern.test(description.replace(/\s+/g, ''))) {
+        abbreviationMatches++;
+      }
+    }
+  }
+  
+  // Calculate weighted score
+  const totalWords = queryWords.length;
+  const exactScore = exactWordMatches / totalWords;
+  const partialScore = (partialWordMatches / totalWords) * 0.7;
+  const abbreviationScore = (abbreviationMatches / totalWords) * 0.5;
+  
+  // Bonus for course code matches (e.g., "BMEE204L")
+  let courseCodeBonus = 0;
+  const courseCodePattern = /[A-Z]{4}\d{3}[A-Z]?/g;
+  const queryCodeMatches = query.match(courseCodePattern);
+  const descCodeMatches = description.match(courseCodePattern);
+  
+  if (queryCodeMatches && descCodeMatches) {
+    for (const queryCode of queryCodeMatches) {
+      for (const descCode of descCodeMatches) {
+        if (queryCode === descCode) {
+          courseCodeBonus = 0.8; // High bonus for exact course code match
+          break;
+        }
+      }
+    }
+  }
+  
+  // Calculate final score
+  let finalScore = Math.max(exactScore, partialScore + abbreviationScore) + courseCodeBonus;
+  
+  // Apply length penalty for very short queries to avoid false positives
+  if (query.length < 4) {
+    finalScore *= 0.8;
+  }
+  
+  // Cap the score at 1.0
+  return Math.min(finalScore, 1.0);
+}
+
+async function executeInteractiveCoursePageWorkflow(username, password, step, flags, sessionData) {
+  // Handle session resumption
+  if (sessionData && typeof sessionData === 'string') {
+    try {
+      const parsedSession = JSON.parse(sessionData);
+      if (parsedSession.username === username && parsedSession.flags) {
+        // Merge session flags with current flags, giving priority to current flags
+        flags = { ...parsedSession.flags, ...flags };
+        console.log('Resuming session from step:', parsedSession.currentStep);
+        
+        // If we have a target step and now have the necessary prerequisites, progress toward it
+        if (parsedSession.targetStep && parsedSession.targetStep !== step) {
+          const targetStep = parsedSession.targetStep;
+          const stepOrder = ['semester', 'course', 'faculty', 'materials'];
+          const currentStepIndex = stepOrder.indexOf(step);
+          const targetStepIndex = stepOrder.indexOf(targetStep);
+          
+          // Check if we can now progress toward the target step
+          if (targetStepIndex > currentStepIndex) {
+            const requiredFlags = {
+              'course': ['semester'],
+              'faculty': ['semester', 'course'], 
+              'materials': ['semester', 'course', 'faculty']
+            };
+            
+            // Check what's the furthest step we can go with current flags
+            let nextPossibleStep = step;
+            for (let i = currentStepIndex + 1; i <= targetStepIndex; i++) {
+              const stepName = stepOrder[i];
+              const required = requiredFlags[stepName] || [];
+              const hasAllRequired = required.every(flag => flags && flags[flag]);
+              
+              if (hasAllRequired) {
+                nextPossibleStep = stepName;
+              } else {
+                break;
+              }
+            }
+            
+            if (nextPossibleStep !== step) {
+              console.log(`Auto-progressing from ${step} to ${nextPossibleStep} toward target ${targetStep}`);
+              step = nextPossibleStep;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to parse session data:', error.message);
+    }
+  }
+
+  // Validate prerequisite steps - course-page MUST follow: semester → course → faculty → materials
+  const stepOrder = ['semester', 'course', 'faculty', 'materials'];
+  const currentStepIndex = stepOrder.indexOf(step);
+  
+  if (currentStepIndex > 0) {
+    // Check if all prerequisite steps have been completed
+    const requiredFlags = {
+      'course': ['semester'],
+      'faculty': ['semester', 'course'], 
+      'materials': ['semester', 'course', 'faculty']
+    };
+    
+    const required = requiredFlags[step] || [];
+    const missing = required.filter(flag => !flags || !flags[flag]);
+      if (missing.length > 0) {
+      // Redirect to the first missing prerequisite step, but preserve all flags
+      const firstMissing = missing[0];
+      console.log(`Step "${step}" requires prerequisite "${firstMissing}". Redirecting to "${firstMissing}" step with preserved context.`);
+      
+      // Create session data that includes the original target step and all queries
+      const preservedSession = {
+        originalStep: step,
+        targetStep: step,
+        username: username,
+        flags: flags,
+        timestamp: Date.now()
+      };
+      
+      return await executeInteractiveCoursePageWorkflow(
+        username, 
+        password, 
+        firstMissing, 
+        flags, 
+        JSON.stringify(preservedSession)
+      );
+    }
+  }
+
+  // Handle smart search step
+  if (step === 'smart-search' && flags && flags.materialQuery) {
+    try {
+      // Parse session data to get available materials
+      let materials = [];
+      if (sessionData) {
+        const parsed = JSON.parse(sessionData);
+        materials = parsed.materials || [];
+      }
+      
+      if (materials.length === 0) {
+        return {
+          success: false,
+          error: 'No materials data available for smart search',
+          message: 'Please complete the previous steps first'
+        };
+      }
+
+      // Call the smart matching API
+      const matchResponse = await fetch('http://localhost:3000/api/smart-match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: flags.materialQuery,
+          options: materials,
+          type: 'materials'
+        })
+      });
+
+      if (!matchResponse.ok) {
+        throw new Error('Smart matching service unavailable');
+      }
+
+      const matchResult = await matchResponse.json();
+      
+      // Now execute the download with the smart selection
+      return await executeInteractiveCoursePageWorkflow(
+        username, 
+        password, 
+        'download', 
+        { 
+          ...flags, 
+          materialSelection: matchResult.selectionString 
+        }, 
+        sessionData
+      );
+    } catch (error) {
+      console.error('Smart search error:', error);
+      return {
+        success: false,
+        error: 'Smart search failed',
+        message: 'Could not process natural language query. Please select materials manually.'
+      };
+    }
+  }
+
+  // Handle download step with file serving
+  if (step === 'download' && flags && flags.materialSelection) {
+    try {
+      // Execute the actual download
+      const downloadResult = await executeInteractiveCoursePageWorkflow(
+        username, 
+        password, 
+        'materials', 
+        flags, 
+        sessionData
+      );
+
+      if (downloadResult.success && downloadResult.completed) {
+        // Check if files were downloaded and register them for serving
+        const downloadPath = path.join(__dirname, 'downloads'); // Assuming downloads go here
+        const files = [];
+        
+        // This would need to be adapted based on where cli-top saves files
+        // For now, return the result with file serving info
+        return {
+          ...downloadResult,
+          downloadInfo: {
+            message: 'Files downloaded successfully',
+            localPath: downloadPath,
+            // In a real implementation, you'd scan the download directory
+            // and register files with the file-serve endpoint
+            files: []
+          }
+        };
+      }
+
+      return downloadResult;
+    } catch (error) {
+      console.error('Download step error:', error);
+      return {
+        success: false,
+        error: 'Download failed',
+        message: 'Could not complete the download process'
+      };
+    }
+  }  // Handle prerequisite steps enforcement
+  // Course-page workflow MUST follow: semester → course → faculty → materials
+  
+  // If we're trying to do course step but don't have semester, get semester first
+  if (step === 'course' && (!flags || !flags.semester)) {
+    console.log('Course step requested but no semester selected. Getting semester options first.');
+    return await executeInteractiveCoursePageWorkflow(username, password, 'semester', flags, sessionData);
+  }
+  
+  // If we're trying to do faculty step but don't have semester or course, handle prerequisites
+  if (step === 'faculty' && (!flags || !flags.semester || !flags.course)) {
+    console.log('Faculty step requested but missing prerequisites (semester/course).');
+    
+    // If we have semesterQuery but no semester, start with semester selection
+    if (flags && flags.semesterQuery && !flags.semester) {
+      console.log('Starting with semester selection due to semesterQuery');
+      return await executeInteractiveCoursePageWorkflow(username, password, 'semester', flags, sessionData);
+    }
+    
+    // If we have semester but no course, go to course step
+    if (flags && flags.semester && !flags.course) {
+      console.log('Have semester, moving to course selection');
+      return await executeInteractiveCoursePageWorkflow(username, password, 'course', flags, sessionData);
+    }
+    
+    // Missing both, start from semester
+    console.log('Missing both semester and course, starting from semester');
+    return await executeInteractiveCoursePageWorkflow(username, password, 'semester', flags, sessionData);
+  }
+  
+  // If we're trying to do materials step but missing prerequisites
+  if (step === 'materials' && (!flags || !flags.semester || !flags.course || !flags.faculty)) {
+    console.log('Materials step requested but missing prerequisites.');
+    
+    // Determine which step we need to go to first
+    if (!flags || !flags.semester) {
+      return await executeInteractiveCoursePageWorkflow(username, password, 'semester', flags, sessionData);
+    } else if (!flags.course) {
+      return await executeInteractiveCoursePageWorkflow(username, password, 'course', flags, sessionData);
+    } else if (!flags.faculty) {
+      return await executeInteractiveCoursePageWorkflow(username, password, 'faculty', flags, sessionData);
+    }
+  }
+  
+  // Special handling for semesterQuery when step is "course" (after prerequisite check)
+  if (step === 'course' && flags && flags.semesterQuery && !flags.semester) {
+    console.log(`Step is "course" but semesterQuery provided: ${flags.semesterQuery}. Getting semester options first.`);
+    
+    // First get semester options by running without semester flag
+    const tempResult = await executeInteractiveCoursePageWorkflow(username, password, 'semester', {}, sessionData);
+    if (tempResult.success && tempResult.options) {
+      const resolvedSemester = resolveSemesterQuery(flags.semesterQuery, tempResult.options);
+      if (resolvedSemester) {
+        console.log(`Resolved semesterQuery "${flags.semesterQuery}" to semester ${resolvedSemester}`);
+        flags.semester = resolvedSemester;
+        // Remove semesterQuery since we now have a specific semester
+        delete flags.semesterQuery;
+      } else {
+        // Couldn't resolve, return semester options for user to choose
+        return {
+          ...tempResult,
+          message: `Could not automatically resolve "${flags.semesterQuery}". Please select a semester:`
+        };
+      }
+    } else {
+      return tempResult; // Return error from semester step
+    }
+  }
+  // Smart course matching when courseQuery is provided
+  if (step === 'course' && flags && flags.courseQuery && !flags.course) {
+    console.log(`Smart course matching for query: ${flags.courseQuery}`);
+    
+    // Get course options first
+    const tempResult = await executeInteractiveCoursePageWorkflow(username, password, 'course', 
+      { ...flags, courseQuery: undefined }, sessionData);
+    
+    if (tempResult.success && tempResult.options) {
+      try {
+        const matchResponse = await fetch('http://localhost:3000/api/smart-match', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: flags.courseQuery,
+            options: tempResult.options,
+            type: 'course'
+          })
+        });
+
+        if (matchResponse.ok) {
+          const matchResult = await matchResponse.json();
+          if (matchResult.bestMatches && matchResult.bestMatches.length > 0) {
+            const bestMatch = matchResult.bestMatches[0];
+            if (bestMatch.confidence >= 0.7) {
+              console.log(`Auto-selected course: ${bestMatch.index} (confidence: ${bestMatch.confidence})`);
+              flags.course = bestMatch.index;
+              delete flags.courseQuery;
+              // Proceed to faculty step
+              return await executeInteractiveCoursePageWorkflow(username, password, 'faculty', flags, sessionData);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Smart course matching failed:', error);
+      }      // If smart matching is not available or confidence is low, try fuzzy keyword matching
+      const query = flags.courseQuery.toLowerCase();
+      let bestMatch = null;
+      let bestScore = 0;
+      
+      for (const option of tempResult.options) {
+        const description = option.description.toLowerCase();
+        const score = calculateFuzzyMatchScore(query, description);
+        
+        if (score > bestScore && score >= 0.4) { // Minimum threshold of 40%
+          bestScore = score;
+          bestMatch = option;
+        }
+      }
+      
+      if (bestMatch && bestScore >= 0.4) {
+        console.log(`Auto-selected course via fuzzy matching: ${bestMatch.number} (${bestMatch.description}) - score: ${bestScore.toFixed(2)}`);
+        flags.course = bestMatch.number;
+        delete flags.courseQuery;
+        // Proceed to faculty step
+        return await executeInteractiveCoursePageWorkflow(username, password, 'faculty', flags, sessionData);
+      }
+    }
+    
+    return tempResult; // Return course options for manual selection
+  }
+
+  // Smart faculty matching when facultyQuery is provided
+  if (step === 'faculty' && flags && flags.facultyQuery && !flags.faculty) {
+    console.log(`Smart faculty matching for query: ${flags.facultyQuery}`);
+    
+    // Get faculty options first
+    const tempResult = await executeInteractiveCoursePageWorkflow(username, password, 'faculty', 
+      { ...flags, facultyQuery: undefined }, sessionData);
+    
+    if (tempResult.success && tempResult.options) {
+      try {
+        const matchResponse = await fetch('http://localhost:3000/api/smart-match', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: flags.facultyQuery,
+            options: tempResult.options,
+            type: 'faculty'
+          })
+        });
+
+        if (matchResponse.ok) {
+          const matchResult = await matchResponse.json();
+          if (matchResult.bestMatches && matchResult.bestMatches.length > 0) {
+            const bestMatch = matchResult.bestMatches[0];
+            if (bestMatch.confidence >= 0.6) {
+              console.log(`Auto-selected faculty: ${bestMatch.index} (confidence: ${bestMatch.confidence})`);
+              flags.faculty = bestMatch.index;
+              delete flags.facultyQuery;
+              // Proceed to materials step
+              return await executeInteractiveCoursePageWorkflow(username, password, 'materials', flags, sessionData);
+            }
+          }
+        }      } catch (error) {
+        console.error('Smart faculty matching failed:', error);
+      }
+        // If smart matching is not available or confidence is low, try fuzzy keyword matching
+      const query = flags.facultyQuery.toLowerCase();
+      let bestMatch = null;
+      let bestScore = 0;
+      
+      for (const option of tempResult.options) {
+        const description = option.description.toLowerCase();
+        const score = calculateFuzzyMatchScore(query, description);
+        
+        if (score > bestScore && score >= 0.3) { // Lower threshold for faculty names (30%)
+          bestScore = score;
+          bestMatch = option;
+        }
+      }
+      
+      if (bestMatch && bestScore >= 0.3) {
+        console.log(`Auto-selected faculty via fuzzy matching: ${bestMatch.number} (${bestMatch.description}) - score: ${bestScore.toFixed(2)}`);
+        flags.faculty = bestMatch.number;
+        delete flags.facultyQuery;
+        // Proceed to materials step
+        return await executeInteractiveCoursePageWorkflow(username, password, 'materials', flags, sessionData);
+      }
+    }
+    
+    return tempResult; // Return faculty options for manual selection
+  }
+
+  const cliArgs = ['proxy', username, password, 'course-page'];
+  
+  // Handle semesterQuery for intelligent semester selection
+  if (flags && flags.semesterQuery && !flags.semester) {
+    // If we have a semesterQuery but no specific semester number, we need to resolve it
+    // For now, we'll start the workflow to get semester options and then match
+    // This is similar to how the regular VTOP commands handle fuzzy semester matching
+    console.log(`Resolving semesterQuery: ${flags.semesterQuery}`);
+  }
+  
+  // Add flags based on the current step and provided data
+  if (flags && typeof flags === 'object') {
+    for (const [key, value] of Object.entries(flags)) {
+      if (value !== undefined && value !== null && value !== '') {
+        if (key === 'semester' && value > 0) {
+          cliArgs.push('-s', value.toString());
+        } else if (key === 'course' && value > 0) {
+          cliArgs.push('-c', value.toString());
+        } else if (key === 'faculty' && value > 0) {
+          cliArgs.push('-f', value.toString());
+        }
+        // Note: semesterQuery is handled differently - we don't pass it directly to CLI
+      }
+    }
+  }
+  
+  return new Promise((resolve, reject) => {
+    if (!fs.existsSync(CLI_TOP_PATH)) {
+      return reject({
+        error: `CLI executable not found at path: ${CLI_TOP_PATH}`,
+        command: 'course-page-interactive',
+        step: step
+      });
+    }
+
+    const child = spawn(CLI_TOP_PATH, cliArgs, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      cwd: __dirname,
+    });    let stdout = '';
+    let stderr = '';
+    let currentOutput = '';
+    let hasReceivedPrompt = false;
+    let promptData = null;
+    let parsedSession = null;
+    let isResolved = false; // Track if we've already resolved
+    
+    // Parse session data once at the beginning
+    if (sessionData && typeof sessionData === 'string') {
+      try {
+        parsedSession = JSON.parse(sessionData);
+      } catch (error) {
+        console.warn('Failed to parse session data during CLI execution:', error.message);
+      }
+    }
+
+    child.stdout.on('data', (data) => {
+      const output = data.toString();
+      stdout += output;
+      currentOutput += output;
+      
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`Interactive CLI stdout: ${output}`);
+      }      // Parse different types of prompts based on step or content
+      // Check for semester selection
+      if (output.includes('Choose a semester') || (output.includes('semester') && output.includes('enter a number'))) {
+        const semesterOptions = parseSemesterOptions(currentOutput);
+        if (semesterOptions.length > 0 && !hasReceivedPrompt) {
+          hasReceivedPrompt = true;
+          promptData = {
+            type: 'semester',
+            options: semesterOptions,
+            prompt: 'Please select a semester:'
+          };
+          
+          // If we have a semesterQuery, try to resolve it automatically
+          if (flags && flags.semesterQuery) {
+            const resolvedSemester = resolveSemesterQuery(flags.semesterQuery, semesterOptions);
+            if (resolvedSemester) {
+              console.log(`Auto-resolved semester query "${flags.semesterQuery}" to option ${resolvedSemester}`);
+              flags.semester = resolvedSemester;
+            }
+          }
+        }
+      }      // Check for course selection - wait for the actual prompt text
+      else if (output.includes('Choose a Course (enter a number):') || output.includes('Choose a course (enter a number):')) {
+        const courseOptions = parseCourseOptions(currentOutput);
+        if (courseOptions.length > 0 && !hasReceivedPrompt) {
+          hasReceivedPrompt = true;
+          promptData = {
+            type: 'course',
+            options: courseOptions,
+            prompt: 'Please select a course:'
+          };
+          
+          console.log(`Course selection prompt detected with ${courseOptions.length} options`);
+          
+          // Try to auto-select if we have courseQuery
+          if (flags && flags.courseQuery) {
+            console.log(`Attempting to auto-select course for query: "${flags.courseQuery}"`);
+            const query = flags.courseQuery.toLowerCase();
+            let bestMatch = null;
+            let bestScore = 0;
+            
+            for (const option of courseOptions) {
+              const description = option.description.toLowerCase();
+              const score = calculateFuzzyMatchScore(query, description);
+              
+              console.log(`Checking option ${option.number}: "${option.description}" - score: ${score.toFixed(2)}`);
+              
+              if (score > bestScore && score >= 0.4) {
+                bestScore = score;
+                bestMatch = option;
+              }
+            }
+            
+            if (bestMatch && bestScore >= 0.4) {
+              console.log(`Auto-selected course via direct fuzzy matching: ${bestMatch.number} (${bestMatch.description}) - score: ${bestScore.toFixed(2)}`);
+              child.stdin.write(bestMatch.number.toString() + '\n');
+              hasReceivedPrompt = false;
+              promptData = null;
+              return; // Continue processing
+            } else {
+              console.log(`No suitable match found. Best score was ${bestScore.toFixed(2)} (threshold: 0.4)`);
+            }
+          }
+        }
+      }      // Check for faculty selection
+      else if (output.includes('Choose a faculty') || output.includes('Choose a Faculty') ||
+               output.includes('Enter a search term or number for Faculty') ||
+               (output.includes('faculty') && output.includes('enter a number')) ||
+               (output.includes('Faculty') && output.includes('search term'))) {
+        const facultyOptions = parseFacultyOptions(currentOutput);
+        if (facultyOptions.length > 0 && !hasReceivedPrompt) {
+          hasReceivedPrompt = true;
+          promptData = {
+            type: 'faculty',
+            options: facultyOptions,
+            prompt: 'Please select a faculty:'
+          };
+          
+          console.log(`Faculty selection prompt detected with ${facultyOptions.length} options`);
+          
+          // Try to auto-select if we have facultyQuery
+          if (flags && flags.facultyQuery) {
+            console.log(`Attempting to auto-select faculty for query: "${flags.facultyQuery}"`);
+            const query = flags.facultyQuery.toLowerCase();
+            let bestMatch = null;
+            let bestScore = 0;
+            
+            for (const option of facultyOptions) {
+              const description = option.description.toLowerCase();
+              const score = calculateFuzzyMatchScore(query, description);
+              
+              console.log(`Checking faculty option ${option.number}: "${option.description}" - score: ${score.toFixed(2)}`);
+              
+              if (score > bestScore && score >= 0.3) { // Lower threshold for faculty names (30%)
+                bestScore = score;
+                bestMatch = option;
+              }
+            }
+            
+            if (bestMatch && bestScore >= 0.3) {
+              console.log(`Auto-selected faculty via direct fuzzy matching: ${bestMatch.number} (${bestMatch.description}) - score: ${bestScore.toFixed(2)}`);
+              child.stdin.write(bestMatch.number.toString() + '\n');
+              hasReceivedPrompt = false;
+              promptData = null;
+              return; // Continue processing
+            } else {
+              console.log(`No suitable faculty match found. Best score was ${bestScore.toFixed(2)} (threshold: 0.3)`);
+            }
+          }
+        }
+      }      // Check for materials selection
+      else if (output.includes('Reference Materials') || output.includes('Materials') ||
+               output.includes('Select materials') || 
+               output.includes('Enter the index numbers of the topics to download')) {
+        const materialOptions = parseMaterialOptions(currentOutput);
+        if (materialOptions.length > 0 && !hasReceivedPrompt) {
+          hasReceivedPrompt = true;
+          promptData = {
+            type: 'materials',
+            options: materialOptions,
+            prompt: 'Select materials to download (e.g., "1-5", "0" for all, or "1,3,5"):'
+          };
+            console.log(`Materials selection prompt detected with ${materialOptions.length} options`);
+            // If we have a materialQuery, try to auto-select
+          if (flags && flags.materialQuery) {
+            console.log(`Attempting to auto-select materials for query: "${flags.materialQuery}"`);
+            const query = flags.materialQuery.toLowerCase();
+            let selectedIndices = [];
+            
+            // Special cases for bulk selection
+            if (query.includes('all') || query.includes('everything') || query.includes('bulk')) {
+              selectedIndices = ['0']; // 0 means bulk download in the CLI
+            } else {
+              // Try to match materials based on topic content
+              for (const option of materialOptions) {
+                const combinedText = `${option.topic || ''} ${option.description || ''}`.toLowerCase();
+                
+                // Check if the query matches the topic or description
+                if (combinedText.includes(query) || 
+                    query.split(/\s+/).some(word => word.length > 2 && combinedText.includes(word))) {
+                  selectedIndices.push(option.number.toString());
+                }
+              }
+              
+              // If no specific matches found, fallback to recent materials (first 3)
+              if (selectedIndices.length === 0) {
+                console.log(`No specific matches for "${query}", selecting recent materials`);
+                selectedIndices = materialOptions.slice(0, Math.min(3, materialOptions.length))
+                  .map(opt => opt.number.toString());
+              }
+            }
+            
+            if (selectedIndices.length > 0) {
+              const selectionString = selectedIndices.join(',');
+              console.log(`Auto-selected materials: ${selectionString} for query "${query}"`);
+              flags.materialSelection = selectionString;
+            }
+          } else {
+            // No materialQuery provided - return the options with properly formatted list
+            console.log('No materialQuery provided, returning materials options for user selection');
+            promptData.formattedList = formatMaterialsList(materialOptions);
+          }
+        }
+      }// If we have a selection to make based on flags, make it
+      if (hasReceivedPrompt && promptData && flags) {
+        let selection = null;
+        let shouldAutoProgress = false;
+        
+        if (promptData.type === 'semester' && flags.semester) {
+          selection = flags.semester.toString();
+          shouldAutoProgress = true;
+        } else if (promptData.type === 'course' && flags.course) {
+          selection = flags.course.toString();
+          shouldAutoProgress = true;
+        } else if (promptData.type === 'faculty' && flags.faculty) {
+          selection = flags.faculty.toString();
+          shouldAutoProgress = true;
+        } else if (promptData.type === 'materials' && flags.materialSelection) {
+          selection = flags.materialSelection;
+          shouldAutoProgress = true;
+        }
+          if (selection && shouldAutoProgress) {
+          if (process.env.NODE_ENV !== 'production') {
+            console.log(`Auto-progressing with selection: ${selection}`);
+          }
+          child.stdin.write(selection + '\n');
+          
+          // Mark that we're auto-progressing to avoid returning prompt data
+          hasReceivedPrompt = false;
+          promptData = null;} else {
+          // We have a prompt but no auto-selection, immediately return the prompt data
+          const sessionInfo = {
+            currentStep: step,
+            actualStep: promptData.type,
+            targetStep: parsedSession?.targetStep || step,
+            username: username,
+            flags: flags,
+            stepData: promptData,
+            timestamp: Date.now()
+          };
+          
+          // Terminate the CLI process since we need user input
+          child.kill();
+          
+          if (!isResolved) {
+            isResolved = true;
+            resolve({
+              success: true,
+              step: promptData.type, // Use the actual detected prompt type
+              data: promptData,
+              options: promptData.options,
+              prompt: promptData.prompt,
+              nextStep: getNextStep(promptData.type),
+              sessionData: JSON.stringify(sessionInfo),
+              message: `Please make your selection for ${promptData.type}`,
+              raw: false,
+              availableFlags: flags || {},
+              nextSteps: stepOrder.slice(stepOrder.indexOf(promptData.type) + 1),
+              canResume: true,
+              interactiveState: 'waiting_for_input'
+            });
+          }
+          return; // Early return to prevent further processing
+        }
+      }      
+      // Continue processing - if no prompt is detected, the process will continue
+    });
+
+    child.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });    child.on('close', async (code) => {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`Interactive CLI process closed with code: ${code}`);
+      }
+
+      // If we've already resolved (due to prompt detection), don't resolve again
+      if (isResolved) {
+        return;
+      }
+
+      if (hasReceivedPrompt && promptData) {
+        // Create session data to maintain state between calls
+        const sessionInfo = {
+          currentStep: step,
+          actualStep: promptData.type,
+          targetStep: parsedSession?.targetStep || step,
+          username: username,
+          flags: flags,
+          stepData: promptData,
+          timestamp: Date.now()
+        };
+        
+        isResolved = true;
+        resolve({
+          success: true,
+          step: promptData.type,
+          data: promptData,
+          options: promptData.options,
+          prompt: promptData.prompt,
+          nextStep: getNextStep(promptData.type),
+          sessionData: JSON.stringify(sessionInfo),
+          message: `Please make your selection for ${promptData.type}`,
+          raw: false,
+          availableFlags: flags || {},
+          nextSteps: stepOrder.slice(stepOrder.indexOf(promptData.type) + 1),
+          canResume: true,
+          interactiveState: 'waiting_for_input'
+        });      } else if (code === 0) {
+        // Command completed successfully - parse for download information and serve files
+        const downloadInfo = parseDownloadInfo(stdout);
+        
+        // Serve downloaded files temporarily
+        const servedFiles = await serveDownloadedFiles(downloadInfo.downloadPath, downloadInfo);
+        
+        // Clean CLI output after serving files so we know if served files are available
+        const cleanedOutput = cleanCliOutput(stdout, servedFiles.length > 0);
+        
+        const sessionInfo = {
+          currentStep: step,
+          username: username,
+          flags: flags,
+          completed: true,
+          downloadInfo: downloadInfo,
+          timestamp: Date.now()
+        };
+        
+        // Create a comprehensive completion message
+        let completionMessage = 'Course page workflow completed successfully';
+        if (downloadInfo.filesDownloaded > 0) {
+          completionMessage = `Successfully downloaded ${downloadInfo.filesDownloaded} course materials`;
+          if (servedFiles.length > 0) {
+            completionMessage += ` and made them available for download`;
+          }
+        }        // Build response downloadInfo structure - downloadPath is intentionally excluded
+        const responseDownloadInfo = {
+          filesDownloaded: downloadInfo.filesDownloaded,
+          totalFiles: downloadInfo.totalFiles,
+          servedFiles: servedFiles,
+          files: downloadInfo.files,
+          errors: downloadInfo.errors
+        };
+
+        isResolved = true;
+        resolve({
+          success: true,
+          step: step,
+          data: cleanedOutput,
+          message: completionMessage,
+          completed: true,
+          downloadInfo: responseDownloadInfo,
+          sessionData: JSON.stringify(sessionInfo),
+          interactiveState: 'completed',
+          raw: false // Now sending cleaned output
+        });        // Debug logging
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('Final response structure:');
+          console.log('- downloadInfo.filesDownloaded:', downloadInfo.filesDownloaded);
+          console.log('- downloadInfo.totalFiles:', downloadInfo.totalFiles);
+          console.log('- responseDownloadInfo.downloadPath:', responseDownloadInfo.downloadPath || 'EXCLUDED');
+          console.log('- downloadPath included in response:', !!responseDownloadInfo.downloadPath);
+          console.log('- servedFiles.length:', servedFiles.length);
+          if (servedFiles.length > 0) {
+            console.log('- First served file:', servedFiles[0]);
+            console.log('✅ Local downloadPath successfully excluded from response (served files available)');
+          }
+        }
+      } else {
+        if (!isResolved) {
+          isResolved = true;
+          reject({
+            error: stderr || stdout || `Process exited with code ${code}`,
+            command: 'course-page-interactive',
+            step: step
+          });
+        }
+      }
+    });    child.on('error', (err) => {
+      if (!isResolved) {
+        isResolved = true;
+        reject({
+          error: err.message,
+          command: 'course-page-interactive',
+          step: step
+        });
+      }
+    });    // Set timeout
+    setTimeout(() => {
+      child.kill();
+      if (!hasReceivedPrompt && !isResolved) {
+        isResolved = true;
+        reject({
+          error: 'Interactive workflow timeout',
+          command: 'course-page-interactive',
+          step: step
+        });
+      }
+    }, CLI_TIMEOUT);
+  });
+}
+
+function parseSemesterOptions(output) {
+  const options = [];
+  const lines = output.split('\n');
+  
+  for (const line of lines) {
+    const tableMatch = line.match(/^\s*(\d+)\s*│.*?│\s*(.+?)\s*$/);
+    if (tableMatch) {
+      options.push({
+        number: parseInt(tableMatch[1]),
+        description: tableMatch[2].trim(),
+        text: line.trim()
+      });
+    }
+  }
+  
+  return options;
+}
+
+function parseCourseOptions(output) {
+  const options = [];
+  const lines = output.split('\n');
+  
+  // Only process if we see the prompt line
+  const hasPromptLine = lines.some(line => 
+    line.includes('Choose a Course (enter a number):') || 
+    line.includes('Choose a course (enter a number):')
+  );
+  
+  if (!hasPromptLine) {
+    return options;
+  }
+  
+  // Find the course table header to start parsing from there
+  let startParsingIndex = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes('INDEX │ COURSE NAME') || 
+        lines[i].includes('INDEX') && lines[i].includes('COURSE')) {
+      startParsingIndex = i;
+      break;
+    }
+  }
+  
+  // If no table header found, try to find the prompt line
+  if (startParsingIndex === -1) {
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes('Choose a Course (enter a number):') || 
+          lines[i].includes('Choose a course (enter a number):')) {
+        startParsingIndex = i;
+        break;
+      }
+    }
+  }
+  
+  if (startParsingIndex === -1) {
+    return options;
+  }
+  
+  // Parse lines after the header/prompt
+  for (let i = startParsingIndex + 1; i < lines.length; i++) {
+    const line = lines[i];
+    
+    // Skip separator lines like "──────┼──────────────────"
+    if (line.includes('─') || line.trim() === '') {
+      continue;
+    }
+    
+    // Handle table format like "        1 │ BCHY101L - Engineering Chemistry - TH"
+    const tableMatch = line.match(/^\s*(\d+)\s*│\s*(.+?)\s*$/);
+    if (tableMatch) {
+      const description = tableMatch[2].trim();
+      
+      // Skip if this looks like semester data (contains semester ID patterns)
+      if (description.includes('VL20') || description.includes('Semester 20')) {
+        continue;
+      }
+      
+      // Skip if this is a header line
+      if (description.toUpperCase().includes('COURSE NAME') || 
+          description.toUpperCase().includes('SEMESTER ID')) {
+        continue;
+      }
+      
+      options.push({
+        number: parseInt(tableMatch[1]),
+        description: description,
+        text: line.trim()
+      });
+      continue;
+    }
+    
+    // Handle simple numbered format like "1. Course Name"
+    const simpleMatch = line.match(/^\s*(\d+)\.\s*(.+)$/);
+    if (simpleMatch) {
+      const description = simpleMatch[2].trim();
+      // Skip if this looks like semester data
+      if (description.includes('VL20') || description.includes('Semester 20')) {
+        continue;
+      }
+      
+      options.push({
+        number: parseInt(simpleMatch[1]),
+        description: description,
+        text: line.trim()
+      });
+    }
+  }
+  
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`Parsed ${options.length} course options:`, options.map(opt => `${opt.number}: ${opt.description}`));
+  }
+  
+  return options;
+}
+
+function parseFacultyOptions(output) {
+  const options = [];
+  const lines = output.split('\n');
+  
+  // Only process if we see the faculty prompt line
+  const hasFacultyPrompt = lines.some(line => 
+    line.includes('Enter a search term or number for Faculty') || 
+    line.includes('Choose a faculty') ||
+    line.includes('Choose a Faculty')
+  );
+  
+  if (!hasFacultyPrompt) {
+    return options;
+  }
+  
+  // Find the faculty table header to start parsing from there
+  let startParsingIndex = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes('INDEX │') && 
+        (lines[i].includes('NAME') || lines[i].includes('FACULTY'))) {
+      startParsingIndex = i;
+      break;
+    }
+  }
+  
+  // If no table header found, try to find the prompt line
+  if (startParsingIndex === -1) {
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes('Enter a search term or number for Faculty')) {
+        startParsingIndex = i;
+        break;
+      }
+    }
+  }
+  
+  if (startParsingIndex === -1) {
+    return options;
+  }
+  
+  // Parse lines after the header/prompt
+  for (let i = startParsingIndex + 1; i < lines.length; i++) {
+    const line = lines[i];
+    
+    // Skip separator lines like "──────┼──────────────────"
+    if (line.includes('─') || line.trim() === '') {
+      continue;
+    }
+    
+    // Handle table format like "        1 │ ANUJ KUMAR - SMEC │ G1/G2/TG1/TG2"
+    const tableMatch = line.match(/^\s*(\d+)\s*│\s*(.+?)\s*│/);
+    if (tableMatch) {
+      const description = tableMatch[2].trim();
+      
+      options.push({
+        number: parseInt(tableMatch[1]),
+        description: description,
+        text: line.trim()
+      });
+      continue;
+    }
+    
+    // Handle simple numbered format like "1. Faculty Name" (fallback)
+    const simpleMatch = line.match(/^\s*(\d+)\.\s*(.+)$/);
+    if (simpleMatch) {
+      const description = simpleMatch[2].trim();
+      
+      options.push({
+        number: parseInt(simpleMatch[1]),
+        description: description,
+        text: line.trim()
+      });
+    }
+  }
+  
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`Parsed ${options.length} faculty options:`, options.map(opt => `${opt.number}: ${opt.description}`));
+  }
+  
+  return options;
+}
+
+function parseMaterialOptions(output) {
+  const options = [];
+  const lines = output.split('\n');
+  
+  // Only process if we see the materials prompt line
+  const hasMaterialPrompt = lines.some(line => 
+    line.includes('Enter the index numbers of the topics to download') ||
+    line.includes('Select materials') ||
+    line.includes('Reference Materials')
+  );
+  
+  if (!hasMaterialPrompt) {
+    return options;
+  }
+  
+  // Find the materials table header to start parsing from there
+  let startParsingIndex = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes('INDEX │') && 
+        (lines[i].includes('DATE') || lines[i].includes('TOPIC') || lines[i].includes('REF COUNT'))) {
+      startParsingIndex = i;
+      break;
+    }
+  }
+  
+  if (startParsingIndex === -1) {
+    return options;
+  }
+  
+  // Parse lines after the header
+  for (let i = startParsingIndex + 1; i < lines.length; i++) {
+    const line = lines[i];
+    
+    // Skip separator lines like "──────┼──────────────────"
+    if (line.includes('─') || line.trim() === '') {
+      continue;
+    }
+    
+    // Handle table format like "        1 │ 12-05-2025 │ Definition of fluid, Concept of continuum, Flui... │ 1"
+    const tableMatch = line.match(/^\s*(\d+)\s*│\s*([^│]+)\s*│\s*([^│]+)\s*│/);
+    if (tableMatch) {
+      const number = parseInt(tableMatch[1]);
+      const date = tableMatch[2].trim();
+      const topic = tableMatch[3].trim();
+      
+      options.push({
+        number: number,
+        description: `${date}: ${topic}`,
+        date: date,
+        topic: topic,
+        text: line.trim()
+      });
+      continue;
+    }
+    
+    // Handle simple numbered format as fallback
+    const simpleMatch = line.match(/^\s*(\d+)\.\s*(.+)$/);
+    if (simpleMatch) {
+      const number = parseInt(simpleMatch[1]);
+      const description = simpleMatch[2].trim();
+      
+      options.push({
+        number: number,
+        description: description,
+        text: line.trim()
+      });
+    }
+  }
+  
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`Parsed ${options.length} material options:`, options.map(opt => `${opt.number}: ${opt.description}`));
+  }
+  
+  return options;
+}
+
+// Store for temporary file serving
+const tempFiles = new Map(); // fileId -> { path, filename, expiry }
+
+// Clean up expired files every 30 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [fileId, fileInfo] of tempFiles.entries()) {
+    if (now > fileInfo.expiry) {
+      tempFiles.delete(fileId);
+      console.log(`Cleaned up expired file: ${fileInfo.filename}`);
+    }
+  }
+}, 30 * 60 * 1000);
+
+function cleanCliOutput(rawOutput, hasServedFiles = false) {
+  const lines = rawOutput.split('\n');
+  const cleanedLines = [];
+  
+  // Extract key information
+  let semester = '';
+  let course = '';
+  let faculty = '';
+  let downloadSummary = '';
+  let downloadPath = '';
+  let filesCount = 0;
+  
+  for (const line of lines) {
+    const trimmed = line.trim();
+    
+    // Extract semester selection
+    if (trimmed.includes('Your selected semester:')) {
+      const semesterMatch = trimmed.match(/Your selected semester:\s*(.+)/);
+      if (semesterMatch) {
+        semester = semesterMatch[1].trim();
+      }
+    }
+    
+    // Extract course selection
+    if (trimmed.includes('Your selected Course:')) {
+      const courseMatch = trimmed.match(/Your selected Course:\s*(.+)/);
+      if (courseMatch) {
+        course = courseMatch[1].trim();
+      }
+    }
+    
+    // Extract faculty selection
+    if (trimmed.includes('Your selected Faculty:')) {
+      const facultyMatch = trimmed.match(/Your selected Faculty:\s*(.+)/);
+      if (facultyMatch) {
+        faculty = facultyMatch[1].trim();
+      }
+    }
+    
+    // Extract download summary
+    if (trimmed.includes('Download Summary:')) {
+      downloadSummary = 'Download Summary:';
+    }
+    
+    if (trimmed.includes('Total files:')) {
+      const filesMatch = trimmed.match(/Total files:\s*(\d+)/);
+      if (filesMatch) {
+        filesCount = parseInt(filesMatch[1]);
+        downloadSummary += `\nTotal files: ${filesCount}`;
+      }
+    }
+    
+    if (trimmed.includes('Successfully downloaded:')) {
+      const downloadedMatch = trimmed.match(/Successfully downloaded:\s*(\d+)/);
+      if (downloadedMatch) {
+        downloadSummary += `\nSuccessfully downloaded: ${downloadedMatch[1]}`;
+      }
+    }
+      // Only include local path in output if no served files are available
+    if (trimmed.includes('Files have been saved to:')) {
+      const pathMatch = trimmed.match(/Files have been saved to:\s*(.+)/);
+      if (pathMatch) {
+        downloadPath = pathMatch[1].trim();
+        // Only add local path to summary if served files are NOT available
+        if (!hasServedFiles) {
+          downloadSummary += `\nFiles saved to: ${downloadPath}`;
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('📁 Including local path in cleaned output (no served files available)');
+          }
+        } else {
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('🚫 Excluding local path from cleaned output (served files available)');
+          }
+        }
+      }
+    }
+    
+    if (trimmed.includes('All files were downloaded successfully!')) {
+      downloadSummary += '\n✅ All files were downloaded successfully!';
+    }
+  }
+  
+  // Build formatted output
+  if (semester) cleanedLines.push(`📚 **Semester**: ${semester}`);
+  if (course) cleanedLines.push(`📖 **Course**: ${course}`);
+  if (faculty) cleanedLines.push(`👨‍🏫 **Faculty**: ${faculty}`);
+  
+  if (filesCount > 0) {
+    cleanedLines.push('');
+    cleanedLines.push(`📥 **Materials Downloaded**: ${filesCount} files`);
+    if (downloadSummary) {
+      cleanedLines.push('');
+      cleanedLines.push(downloadSummary);
+    }
+  }
+  
+  return cleanedLines.join('\n');
+}
+
+function formatMaterialsList(materials) {
+  if (!materials || materials.length === 0) {
+    return 'No materials found.';
+  }
+  
+  const formatted = materials.map(material => {
+    if (material.date && material.topic) {
+      return `${material.number}. ${material.date}: ${material.topic}`;
+    } else {
+      return `${material.number}. ${material.description}`;
+    }
+  });
+  
+  return formatted.join('\n');
+}
+
+async function serveDownloadedFiles(downloadPath, downloadInfo) {
+  const servedFiles = [];
+  
+  if (!downloadPath || !fs.existsSync(downloadPath)) {
+    console.log('Download path not found or doesn\'t exist:', downloadPath);
+    return servedFiles;
+  }
+  
+  try {
+    const files = fs.readdirSync(downloadPath);
+    console.log(`Found ${files.length} files to serve from: ${downloadPath}`);
+    
+    for (const filename of files) {
+      const filePath = path.join(downloadPath, filename);
+      const stat = fs.statSync(filePath);
+      
+      if (stat.isFile()) {
+        const fileId = uuidv4();
+        const expiry = Date.now() + (2 * 60 * 60 * 1000); // 2 hours
+        
+        tempFiles.set(fileId, {
+          path: filePath,
+          filename: filename,
+          expiry: expiry
+        });
+        
+        // Clean up expired files periodically
+        setTimeout(() => {
+          tempFiles.delete(fileId);
+        }, 2 * 60 * 60 * 1000);
+        
+        // Use environment variable for host or default to localhost
+        const host = process.env.PROXY_HOST || 'localhost';
+        const port = process.env.PORT || 3001;
+        
+        servedFiles.push({
+          name: filename,
+          downloadUrl: `http://${host}:${port}/download/${fileId}`,
+          size: stat.size,
+          expiry: new Date(expiry).toISOString()
+        });
+        
+        console.log(`Served file: ${filename} with ID: ${fileId}`);
+      }
+    }
+  } catch (error) {
+    console.error('Error serving downloaded files:', error);
+  }
+  
+  console.log(`Successfully served ${servedFiles.length} files`);
+  return servedFiles;
+}
+
+function parseDownloadInfo(output) {
+  const downloadInfo = {
+    filesDownloaded: 0,
+    totalFiles: 0,
+    downloadPath: null,
+    files: [],
+    errors: []
+  };
+  
+  const lines = output.split('\n');
+  
+  for (const line of lines) {
+    const trimmed = line.trim();
+    
+    // Parse download progress information
+    if (trimmed.includes('Downloaded:') || trimmed.includes('Downloading:')) {
+      const fileMatch = trimmed.match(/(?:Downloaded|Downloading):\s*(.+)/);
+      if (fileMatch) {
+        downloadInfo.files.push({
+          name: fileMatch[1].trim(),
+          status: trimmed.includes('Downloaded:') ? 'completed' : 'downloading'
+        });
+      }
+    }
+    
+    // Parse download summary - look for "Total files:" instead of "Total files downloaded:"
+    if (trimmed.includes('Total files:')) {
+      const countMatch = trimmed.match(/Total files:\s*(\d+)/);
+      if (countMatch) {
+        downloadInfo.totalFiles = parseInt(countMatch[1]);
+      }
+    }
+    
+    // Parse successfully downloaded count
+    if (trimmed.includes('Successfully downloaded:')) {
+      const countMatch = trimmed.match(/Successfully downloaded:\s*(\d+)/);
+      if (countMatch) {
+        downloadInfo.filesDownloaded = parseInt(countMatch[1]);
+      }
+    }
+    
+    // Parse download path - look for "Files have been saved to:" format
+    if (trimmed.includes('Files have been saved to:')) {
+      const pathMatch = trimmed.match(/Files have been saved to:\s*(.+)/);
+      if (pathMatch) {
+        downloadInfo.downloadPath = pathMatch[1].trim();
+      }
+    }
+    
+    // Also check for "Files saved to:" format (alternative)
+    if (trimmed.includes('Files saved to:') && !downloadInfo.downloadPath) {
+      const pathMatch = trimmed.match(/Files saved to:\s*(.+)/);
+      if (pathMatch) {
+        downloadInfo.downloadPath = pathMatch[1].trim();
+      }
+    }
+    
+    // Parse errors
+    if (trimmed.includes('Error:') || trimmed.includes('Failed:')) {
+      downloadInfo.errors.push(trimmed);
+    }
+  }
+  
+  // If we didn't get filesDownloaded but we have totalFiles and no errors, assume all downloaded
+  if (!downloadInfo.filesDownloaded && downloadInfo.totalFiles > 0 && downloadInfo.errors.length === 0) {
+    downloadInfo.filesDownloaded = downloadInfo.totalFiles;
+  }
+  
+  // If we don't have totalFiles but we have individual file entries, count them
+  if (!downloadInfo.totalFiles && downloadInfo.files.length > 0) {
+    downloadInfo.totalFiles = downloadInfo.files.length;
+  }
+  
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('Parsed download info:', {
+      filesDownloaded: downloadInfo.filesDownloaded,
+      totalFiles: downloadInfo.totalFiles,
+      downloadPath: downloadInfo.downloadPath,
+      filesCount: downloadInfo.files.length
+    });
+  }
+  
+  return downloadInfo;
+}
+
+function getNextStep(currentStep) {
+  const stepFlow = {
+    'semester': 'course',
+    'course': 'faculty', 
+    'faculty': 'materials',
+    'materials': 'complete'
+  };
+  
+  return stepFlow[currentStep] || 'complete';
+}
+
+app.post('/vtop', async (req, res) => {
   const { command, username, password, encryptedPassword, sessionKey, flags } = req.body;
   
   if (!command || !username) {
@@ -596,8 +2116,154 @@ function findBestSemesterMatch(prompt, flags) {
   } catch (error) {
     console.error('VTOP command execution failed:', error.error || error.message);
     const sanitizedError = sanitizeErrorForResponse(error, actualCommand);
+    return res.status(500).json(sanitizedError);  }
+});
+
+app.post('/vtop-interactive', async (req, res) => {
+  const { command, step, username, password, encryptedPassword, sessionKey, flags, sessionData } = req.body;
+  
+  if (!command || !step || !username) {
+    return res.status(400).json({ 
+      error: 'Missing required fields: command, step, username' 
+    });
+  }
+  
+  if (!password && (!encryptedPassword || !sessionKey)) {
+    return res.status(400).json({ 
+      error: 'Missing credentials: provide either password or encryptedPassword with sessionKey' 
+    });
+  }
+
+  let finalPassword;
+  try {
+    if (password) {
+      finalPassword = password;
+    } else {
+      finalPassword = decryptPassword(encryptedPassword, sessionKey);
+    }
+  } catch (error) {
+    return res.status(400).json({
+      error: 'Failed to decrypt password',
+      message: 'Invalid encryption or session key'
+    });
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`Executing interactive VTOP workflow: ${command}, step: ${step}`);
+  }
+  
+  try {
+    const result = await executeInteractiveCoursePageWorkflow(username, finalPassword, step, flags, sessionData);
+    res.json(result);
+  } catch (error) {
+    console.error('Interactive VTOP workflow failed:', error.error || error.message);
+    const sanitizedError = sanitizeErrorForResponse(error, `${command}-${step}`);
     return res.status(500).json(sanitizedError);
   }
+});
+
+app.post('/vtop-interactive-continue', async (req, res) => {
+  const { sessionData, selection, step } = req.body;
+  
+  if (!sessionData || !selection || !step) {
+    return res.status(400).json({ 
+      error: 'Missing required fields: sessionData, selection, step' 
+    });
+  }
+  
+  let parsedSession;
+  try {
+    parsedSession = JSON.parse(sessionData);
+  } catch (error) {
+    return res.status(400).json({
+      error: 'Invalid session data format'
+    });
+  }
+  
+  if (!parsedSession.username) {
+    return res.status(400).json({
+      error: 'Invalid session: missing username'
+    });
+  }
+  
+  let nextStep = getNextStep(step);
+  let updatedFlags = { ...parsedSession.flags };
+  
+  if (step === 'semester') {
+    updatedFlags.semester = parseInt(selection);
+  } else if (step === 'course') {
+    updatedFlags.course = parseInt(selection);
+  } else if (step === 'faculty') {
+    updatedFlags.faculty = parseInt(selection);
+  } else if (step === 'materials') {
+    updatedFlags.materialSelection = selection;
+    nextStep = 'download'; // Materials selection leads to download
+  }
+  
+  // Get credentials from session (they should be in the original request context)
+  // For security, we'll require the password to be provided again or use encrypted form
+  const password = req.body.password || req.body.encryptedPassword;
+  if (!password) {
+    return res.status(400).json({
+      error: 'Password required to continue workflow'
+    });
+  }
+  
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`Continuing interactive workflow from ${step} to ${nextStep} with selection: ${selection}`);
+  }
+  
+  try {
+    // Execute the next step with updated flags
+    const result = await executeInteractiveCoursePageWorkflow(
+      parsedSession.username, 
+      password, 
+      nextStep, 
+      updatedFlags, 
+      JSON.stringify(parsedSession)
+    );
+    res.json(result);
+  } catch (error) {
+    console.error('Interactive VTOP workflow continuation failed:', error.error || error.message);
+    const sanitizedError = sanitizeErrorForResponse(error, `${step}-continue`);
+    return res.status(500).json(sanitizedError);
+  }
+});
+
+app.get('/download/:fileId', (req, res) => {
+  const { fileId } = req.params;
+  
+  const fileInfo = tempFiles.get(fileId);
+  if (!fileInfo) {
+    return res.status(404).json({ error: 'File not found or expired' });
+  }
+  
+  // Check if file has expired
+  if (Date.now() > fileInfo.expiry) {
+    tempFiles.delete(fileId);
+    return res.status(410).json({ error: 'File has expired' });
+  }
+  
+  // Check if file still exists on disk
+  if (!fs.existsSync(fileInfo.path)) {
+    tempFiles.delete(fileId);
+    return res.status(404).json({ error: 'File no longer available' });
+  }
+  
+  // Set appropriate headers
+  res.setHeader('Content-Disposition', `attachment; filename="${fileInfo.filename}"`);
+  res.setHeader('Content-Type', 'application/octet-stream');
+  
+  // Stream the file
+  const fileStream = fs.createReadStream(fileInfo.path);
+  fileStream.pipe(res);
+  
+  fileStream.on('error', (error) => {
+    console.error('Error streaming file:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Error downloading file' });
+    }
+  });
 });
 
 app.get('/health', (req, res) => {

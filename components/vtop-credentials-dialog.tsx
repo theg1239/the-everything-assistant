@@ -121,10 +121,10 @@ export function VTOPCredentialsDialog({
           </div>
 
           <h4 className="mb-2 text-2xl font-medium text-white">VTOP Authentication</h4>
-          <p className="mb-6 text-slate-300">
+          {/* <p className="mb-6 text-slate-300">
             To execute the <code className="bg-slate-700 px-2 py-1 rounded text-sm">{command}</code> command, 
             please enter your VTOP credentials.
-          </p>
+          </p> */}
           
           <form onSubmit={handleSubmit} className="space-y-4 text-left">
             <div className="space-y-2">

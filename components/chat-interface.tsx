@@ -214,9 +214,9 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         console.log('VTOP credential submission result:', result)
         if (toolCallId) {
           updateToolResult(toolCallId, command, result.result)
-        }
-        const updatedMessages = messages.map((message: any) => {
-          if (message.toolInvocations) {            const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
+        }        const updatedMessages = messages.map((message: any) => {
+          if (message.toolInvocations) {            
+            const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
               if (toolInvocation.toolCallId && toolInvocation.toolCallId === toolCallId) {
                 console.log('Updating tool invocation with result:', result.result, 'for toolCallId:', toolCallId)
                 return {
@@ -227,17 +227,48 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               }
               return toolInvocation
             })
+            
+            const updatedParts = message.parts ? message.parts.map((part: any) => {
+              if (part.type === 'tool-invocation' && 
+                  part.toolInvocation?.toolCallId === toolCallId) {
+                return {
+                  ...part,
+                  toolInvocation: {
+                    ...part.toolInvocation,
+                    result: result.result,
+                    state: 'result'
+                  }
+                }
+              }
+              return part
+            }) : message.parts
+            
             return {
               ...message,
-              toolInvocations: updatedToolInvocations
+              toolInvocations: updatedToolInvocations,
+              parts: updatedParts
             }
           }
           return message
         })
-        
-        setMessages([...updatedMessages])
+          setMessages([...updatedMessages])
         
         if (result.result && result.result.success !== false && (result.result.data || result.result.output)) {
+          if (chatId) {
+            setTimeout(async () => {
+              try {
+                const refreshResponse = await fetch(`/api/chats/${chatId}`)
+                if (refreshResponse.ok) {
+                  const chatData = await refreshResponse.json()
+                  if (chatData.messages) {
+                    setMessages(chatData.messages)
+                  }
+                }
+              } catch (error) {
+                //console.warn('Failed to refresh conversation after VTOP data retrieval:', error)
+              }
+            }, 500)
+          }
         } else if (result.result && result.result.success === false) {
           const errorMessage = result.result.error || result.result.message || 'Unknown error occurred'
           if (errorMessage.includes('Invalid LoginId/Password') || errorMessage.includes('Login failed')) {

@@ -15,10 +15,18 @@ export const maxDuration = 60
 
 async function parseVTOPData(rawData: any, command: string, userContext: string = '') {
   try {
+    // if (process.env.NODE_ENV !== 'production') {
+    //   console.log('parseVTOPData received:', {
+    //     hasDownloadInfo: !!rawData.downloadInfo,
+    //     hasServedFiles: !!(rawData.downloadInfo?.servedFiles),
+    //     servedFilesLength: rawData.downloadInfo?.servedFiles?.length || 0,
+    //     command
+    //   });
+    // }
+    
     const vtopParseSchema = z.object({
       success: z.boolean(),
       formatted_content: z.string(),
-      // optional here to avoid schema `required` mismatch
       structured_data: z
         .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
         .optional(),
@@ -35,6 +43,34 @@ USER'S ORIGINAL REQUEST: ${userContext}
 Command: ${command}
 Raw Data: ${JSON.stringify(rawData)}
 
+SPECIAL HANDLING FOR COURSE MATERIALS/DOWNLOADS:
+${rawData.downloadInfo && rawData.downloadInfo.servedFiles && rawData.downloadInfo.servedFiles.length > 0 ? `
+🔥 CRITICAL: DOWNLOAD FILES ARE AVAILABLE AND MUST BE INCLUDED!
+
+SERVED FILES WITH DOWNLOAD LINKS:
+${rawData.downloadInfo.servedFiles.map((file: any) => {
+  const cleanName = file.name.replace(/_\d+\.(pdf|pptx|docx|txt)$/i, '.$1');
+  return `- <strong>${cleanName}</strong> <span style=  "color: #6b7280; font-size: 0.875rem;">(${(file.size / 1024 / 1024).toFixed(2)} MB)</span> <a href="${file.downloadUrl}" download="${file.name}">Download</a>`;
+}).join('\n')}
+
+FILES SUMMARY:
+- Total Downloaded: ${rawData.downloadInfo.filesDownloaded || rawData.downloadInfo.servedFiles.length}
+- Total Available: ${rawData.downloadInfo.totalFiles || rawData.downloadInfo.servedFiles.length}
+- Available via temporary download links (expires in 2 hours)
+
+⚠️ MANDATORY: You MUST include these download links in your formatted_content as clickable HTML links!
+⚠️ DO NOT mention any local paths - only use the served download URLs!
+` : rawData.downloadInfo && rawData.downloadInfo.downloadPath ? `
+LOCAL FILES DOWNLOADED:
+- Files Downloaded: ${rawData.downloadInfo.filesDownloaded || 0}
+- Local Path: ${rawData.downloadInfo.downloadPath}
+(Note: No served links available)
+` : ''}
+
+${rawData.data && typeof rawData.data === 'string' && rawData.data.includes('📚') ? `
+COURSE MATERIALS CONTEXT: This appears to be course materials/topics. Format these as a clear list with proper structure.
+` : ''}
+
 Please parse this VTOP data and return a structured response with:
 - success: true if parsing was successful
 - formatted_content: A natural language description with proper formatting that directly addresses the user's original request
@@ -46,25 +82,39 @@ IMPORTANT: Use the user's original request to understand what they were looking 
 - If they asked about "attendance for chemistry", highlight chemistry attendance specifically
 - If they asked about "summer semester grades", emphasize that semester's performance
 - If they asked about "upcoming exams", focus on dates and timing
+- If they asked about course materials or "pull up course page", include download links prominently
 
 get rid of any mentions about the existence of an ICS file even if it has been provided to you in the prompt, you must not include any such information in your output.
 
 FORMATTING GUIDELINES:
-1. Use natural language sentences and paragraphs, not tables or lists
+1. Use bullet points and lists for better readability when showing multiple items
 2. If you need to present tabular data, use HTML table tags: <table>, <tr>, <td>, <th>
-3. Use HTML formatting tags like <strong>, <em>, <br>, <p> for better presentation
+3. Use HTML formatting tags like <strong>, <em>, <br>, <p>, <ul>, <li> for better presentation
 4. For profile data: Write in natural sentences about the person's details
 5. For attendance: Describe attendance in conversational language
-6. For marks/grades: Explain performance in narrative form
+6. For marks/grades: Explain performance in narrative form with lists for multiple subjects
 7. For receipts/financial data: Describe transactions naturally with HTML tables if needed
-8. For timetable: Present schedule information conversationally
-9. Make it engaging and easy to read, like explaining to a friend
-10. Always relate back to what the user originally asked for
+8. For timetable: Present schedule information with clear time blocks and lists
+9. For course materials/topics: Use bullet points or numbered lists for clarity
+10. For download links: Always include clickable download links when available
+11. Make it engaging and easy to read, like explaining to a friend
+12. Always relate back to what the user originally asked for
+
+DO NOT USE ASTERIKS, use HTML tags only for formatting. Nothing else. Do not include text like "You've downloaded <x> files already"
+DO NOT include text like "Please select the materials to download by entering their corresponding numbers (e.g., "1-5", "0" for all, or "1,3,5").", just prompt the user to ask if they want to download specific materials or all of them.
+Reformat the titles of the files based on the topics, like "Boundary layers, Laminar flow and turbulent flow, _1.pptx" should be reformatted to just "Boundary layers, Laminar flow and turbulent flow.pptx" without the "_1" suffix.
+
+SPECIAL HANDLING FOR COURSE PAGE/MATERIALS:
+- If downloadInfo.servedFiles exists, ALWAYS include download links
+- Format course materials as a numbered list with topics and dates
+- Include clear download buttons/links for each file
+- Ask if the user wants to download specific materials when showing options
 
 Example formats:
 - Receipts: "Here are your recent payments to VIT: <table><tr><th>Date</th><th>Amount</th><th>Description</th></tr>..."
 - Attendance: "Your attendance looks good overall. In Mathematics, you have 85% attendance which is above the required 75%..."
 - Timetable for "Thursday classes": "Looking at your Thursday schedule specifically, you have..."
+- Course Materials: "Here are the available materials:<ul><li>Topic 1 - <a href='download-link'>Download</a></li></ul>"
 
 Make the formatted_content engaging and conversational while being informative and contextually relevant to the user's request.
 `,
@@ -91,14 +141,21 @@ export async function POST(req: Request) {
     }
     const { messages, id: chatId, directToolCall } = await req.json()
 
-    // ---- Direct tool call handling ----
+    let chat = chatId
+      ? await getChat(chatId, session.user.id)
+      : null
+    if (!chat) {
+      const title = extractTitleFromContent(messages[0]?.content || "New Chat")
+      const path = generateChatPath()
+      chat = await createChat(session.user.id, title, path)
+    }
+
     if (directToolCall) {
       const tools = createVITTools()
       const tool = tools[directToolCall.toolName as keyof typeof tools]
 
       if (tool && typeof tool.execute === "function") {
-        try {
-          const result = await tool.execute(directToolCall.args, {
+        try {const result = await tool.execute(directToolCall.args, {
             toolCallId: directToolCall.toolCallId || Date.now().toString(),
             messages: messages || [],
           })
@@ -114,7 +171,6 @@ export async function POST(req: Request) {
                 ? result.command
                 : directToolCall.args?.command) as string
               
-              // Extract user context from the last 3 user messages for better context
               const userContext = messages && messages.length > 0 
                 ? messages
                     .filter((m: any) => m.role === 'user')
@@ -122,8 +178,7 @@ export async function POST(req: Request) {
                     .map((m: any) => m.content)
                     .join(' | ')
                 : ''
-              
-              const parsedData = await parseVTOPData(result.data, command, userContext)
+              const parsedData = await parseVTOPData(result, command, userContext)
 
               Object.assign(result, {
                 parsedData,
@@ -131,6 +186,25 @@ export async function POST(req: Request) {
                 structured_data: parsedData.structured_data,
                 summary: parsedData.summary,
               })
+              const assistantResponse = (result as any).formatted_content || 
+                                      (result as any).summary || 
+                                      `Successfully retrieved your ${command} data from VTOP.`
+              
+              const toolInvocation = {
+                toolCallId: directToolCall.toolCallId || Date.now().toString(),
+                toolName: directToolCall.toolName,
+                args: directToolCall.args,
+                result: result,
+                state: 'result'
+              }
+
+              await saveMessage(
+                chat.id, 
+                "assistant", 
+                assistantResponse, 
+                [toolInvocation], 
+                Date.now().toString()
+              )
             } catch (parseError) {
               console.error("Failed to parse VTOP data:", parseError)
             }
@@ -154,9 +228,7 @@ export async function POST(req: Request) {
           { status: 400, headers: { "Content-Type": "application/json" } }
         )
       }
-    }
-
-    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+    }    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
       return new Response(
         JSON.stringify({
           error:
@@ -164,15 +236,6 @@ export async function POST(req: Request) {
         }),
         { status: 500, headers: { "Content-Type": "application/json" } }
       )
-    }
-
-    let chat = chatId
-      ? await getChat(chatId, session.user.id)
-      : null
-    if (!chat) {
-      const title = extractTitleFromContent(messages[0]?.content || "New Chat")
-      const path = generateChatPath()
-      chat = await createChat(session.user.id, title, path)
     }
 
     const userMessage = messages[messages.length - 1]
@@ -216,9 +279,9 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}`
                   dataContext = `Retrieved ${command} data from VTOP`
                 }
               }
-              
-              if (dataContext) {
+                if (dataContext) {
                 toolContext += `\n\n[VTOP ${command.toUpperCase()} DATA CONTEXT]:\n${dataContext}`
+                toolContext += `\n\n[IMPORTANT]: VTOP ${command} data was successfully retrieved above. Use this data to answer any follow-up questions about ${command}.`
               }
             }
             else if (toolCall.result.papers && toolCall.result.papers.length > 0) {
@@ -270,8 +333,7 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}`
                     .map((m: any) => m.content)
                     .join(' | ')
                 : ''
-              
-              const parsed = await parseVTOPData(tr.result.data, tr.args.command, userContext)
+                const parsed = await parseVTOPData(tr.result, tr.args.command, userContext)
               Object.assign(tr.result, {
                 parsedData: parsed,
                 formatted_content: parsed.formatted_content,
@@ -284,11 +346,9 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}`
           }
         }
 
-        // Persist the assistant message + any tool invocations
         const safeInvocations = JSON.parse(JSON.stringify(toolResults))
         await saveMessage(chat.id, "assistant", result.text, safeInvocations, result.response.id)
 
-        // If this was our first exchange, update the chat title
         if (messages.length <= 2) {
           const newTitle = extractTitleFromContent(userMessage.content)
           await updateChat(chat.id, newTitle)

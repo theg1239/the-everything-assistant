@@ -86,12 +86,25 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
           }
         }
       }
-      
-      // console.log('VTOP Tool Display - getArtifactConfig - Parsed data:', parsedData)
+        // console.log('VTOP Tool Display - getArtifactConfig - Parsed data:', parsedData)
       // console.log('VTOP Tool Display - getArtifactConfig - Parsed data type:', typeof parsedData)
-        return {
+      
+      const formatCommandName = (cmd: string) => {
+        const commandMap: { [key: string]: string } = {
+          'class-message': 'Class Message',
+          'exam-schedule': 'Exam Schedule', 
+          'library-dues': 'Library Dues',
+          'leave-status': 'Leave Status',
+          'nightslip': 'Night Slip',
+          'course-page': 'Course Page',
+          'da': 'Digital Assignment'
+        }
+        return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ')
+      }
+      
+      return {
         type: 'vtop-data' as const,
-        title: `VTOP ${command.charAt(0).toUpperCase() + command.slice(1)} Data`,
+        title: `VTOP ${formatCommandName(command)} Data`,
         icon: <GraduationCap className="h-5 w-5 text-blue-500" />,
         data: {
           command,
@@ -147,14 +160,26 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
       if (isCredentialError || isAuthError) {
         return null
       }
-      
-      if (errorMessage === '500' || errorMessage.toLowerCase().includes('request failed')) {
+        if (errorMessage === '500' || errorMessage.toLowerCase().includes('request failed')) {
         return null
+      }
+      
+      const formatCommandName = (cmd: string) => {
+        const commandMap: { [key: string]: string } = {
+          'class-message': 'Class Message',
+          'exam-schedule': 'Exam Schedule', 
+          'library-dues': 'Library Dues',
+          'leave-status': 'Leave Status',
+          'nightslip': 'Night Slip',
+          'course-page': 'Course Page',
+          'da': 'Digital Assignment'
+        }
+        return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ')
       }
       
       return {
         type: 'vtop-data' as const,
-        title: `VTOP ${(result.command || 'data').charAt(0).toUpperCase() + (result.command || 'data').slice(1)} Data`,
+        title: `VTOP ${formatCommandName(result.command || 'data')} Data`,
         icon: <GraduationCap className="h-5 w-5 text-blue-500" />,
         data: {
           command: result.command || 'data',
@@ -230,7 +255,31 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
       title: `${result.placements.length} Placement Records`,
       icon: <TrendingUp className="h-5 w-5 text-green-400" />,
       data: result.placements,
-      source: result.source || toolName || 'Placement Data'
+      source: result.source || toolName || 'Placement Data'    }  }
+    if ((toolName === 'interactiveCoursePage' || toolName === 'queryVTOP') && 
+      (result.type === 'interactive-course-page' || 
+       result.step || 
+       result.options || 
+       result.interactiveState)) {
+    const stepName = result.step ? result.step.charAt(0).toUpperCase() + result.step.slice(1) : 'Interactive Workflow'
+    return {
+      type: 'interactive-course-page' as const,
+      title: `Course Page - ${stepName}`,
+      icon: <GraduationCap className="h-5 w-5 text-blue-500" />,
+      data: {
+        step: result.step,
+        options: result.options,
+        prompt: result.prompt,
+        nextStep: result.nextStep,
+        sessionData: result.sessionData,
+        completed: result.completed,
+        message: result.message,
+        downloadInfo: result.downloadInfo,
+        smartMatch: result.smartMatch,
+        interactiveState: result.interactiveState,
+        canResume: result.canResume
+      },
+      source: 'VTOP Interactive'
     }
   }
   

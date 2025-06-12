@@ -47,6 +47,128 @@ function organizeMenuByMealType(menuItems: Array<{type: number, menu: string}>) 
   return mealTypes
 }
 
+async function handleIntelligentCoursePage(params: {
+  username: string
+  password: string
+  semesterQuery?: string
+  courseQuery?: string
+  facultyQuery?: string
+  materialQuery?: string
+  interactiveStep?: string
+  semester?: number
+  course?: number
+  faculty?: number
+  fuzzyIndex?: number
+}) {
+  const {
+    username,
+    password,
+    semesterQuery,
+    courseQuery,
+    facultyQuery,
+    materialQuery,
+    interactiveStep,
+    semester,
+    course,
+    faculty,
+    fuzzyIndex
+  } = params
+
+  let step = interactiveStep
+  if (!step) {
+    if (courseQuery && facultyQuery && materialQuery) {
+      step = "semester"
+    } else if (courseQuery && facultyQuery) {
+      step = "semester"
+    } else if (courseQuery) {
+      step = "semester"
+    } else {
+      if (!semester) {
+        step = "semester"
+      } else if (!course) {
+        step = "course"
+      } else if (!faculty) {
+        step = "faculty"
+      } else {
+        step = "materials"
+      }
+    }
+  }
+
+  const PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001'
+  
+  let requestBody: any = {
+    command: "course-page-interactive",
+    username,
+    step,
+    flags: {}
+  }
+
+  if (password.includes(':::')) {
+    const [encryptedPassword, sessionKey] = password.split(':::')
+    requestBody.encryptedPassword = encryptedPassword
+    requestBody.sessionKey = sessionKey
+  } else {
+    requestBody.password = password
+  }
+
+  if (semesterQuery) requestBody.flags.semesterQuery = semesterQuery
+  if (courseQuery) requestBody.flags.courseQuery = courseQuery
+  if (facultyQuery) requestBody.flags.facultyQuery = facultyQuery
+  if (materialQuery) requestBody.flags.materialQuery = materialQuery
+  
+  if (semester !== undefined) requestBody.flags.semester = semester
+  if (course !== undefined) requestBody.flags.course = course
+  if (faculty !== undefined) requestBody.flags.faculty = faculty
+  if (fuzzyIndex !== undefined) requestBody.flags.fuzzyIndex = fuzzyIndex
+
+  try {
+    const response = await fetch(`${PROXY_URL}/vtop-interactive`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      return {
+        success: false,
+        error: `VTOP interactive request failed: ${response.status}`,
+        message: errorData.error || `Failed to execute ${step} step`,
+        details: errorData,
+      }
+    }
+
+    const result = await response.json()
+    
+    return {
+      success: true,
+      command: "course-page",
+      step: step,
+      data: result.data || result.output,
+      options: result.options,
+      prompt: result.prompt,
+      nextStep: result.nextStep,
+      sessionData: result.sessionData,
+      completed: result.completed,
+      message: result.message || `Successfully completed ${step} step`,
+      downloadInfo: result.downloadInfo,
+      smartMatch: result.smartMatch,
+      raw: result.raw || false,
+      type: 'interactive-course-page'
+    }
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || "Network error",
+      message: "Unable to connect to VTOP proxy service for course materials.",
+      suggestion: "The VTOP proxy service may be offline. Please try again later.",
+    }
+  }
+}
+
 export function createVITTools() {
   return {
     findPastPapers: tool({
@@ -246,7 +368,7 @@ export function createVITTools() {
 
     queryVTOP: tool({
       description:
-        "Access VTOP (VIT's official portal) to get student information like grades, attendance, timetable, profile, marks, hostel info, library dues, exam schedules, and more. This tool automatically handles credential authentication and interactive command prompts through intelligent defaults. Use this tool whenever users request VTOP data - credentials will be prompted securely.",
+        "Access VTOP (VIT's official portal) to get student information like grades, attendance, timetable, profile, marks, hostel info, library dues, exam schedules, and more. This tool automatically handles credential authentication and interactive command prompts through intelligent defaults. For course materials, it supports smart natural language queries like 'anuj kumar's fluid mechanics notes' or 'week 5 assignments'. Use this tool whenever users request VTOP data - credentials will be prompted securely.",
       parameters: z.object({
         command: z
           .enum([
@@ -255,7 +377,7 @@ export function createVITTools() {
             "nightslip", "leave", "leave-status", "msg", "class-message", "da",
             "facility", "syllabus", "course-page"
           ])
-          .describe("VTOP command to execute - profile (student info), marks (semester marks), grades (semester grades), attendance (attendance %), timetable (class schedule), receipts (fee receipts), hostel (hostel info), cgpa (CGPA details), exams/exam-schedule (exam timetable), library-dues (library fines), calendar (academic calendar), nightslip (nightslip status), leave/leave-status (leave applications), msg/class-message (class announcements), da (digital assignments), facility (facility booking), syllabus (course syllabus), course-page (course materials)"),
+          .describe("VTOP command to execute - profile (student info), marks (semester marks), grades (semester grades), attendance (attendance %), timetable (class schedule), receipts (fee receipts), hostel (hostel info), cgpa (CGPA details), exams/exam-schedule (exam timetable), library-dues (library fines), calendar (academic calendar), nightslip (nightslip status), leave/leave-status (leave applications), msg/class-message (class announcements), da (digital assignments), facility (facility booking), syllabus (course syllabus), course-page (intelligent course materials with smart matching)"),
         username: z
           .string()
           .optional()
@@ -291,13 +413,25 @@ export function createVITTools() {
         courseQuery: z
           .string()
           .optional()
-          .describe("Course search query for syllabus command"),
+          .describe("Course search query for syllabus command, or natural language course description for smart course-page matching - e.g., 'fluid mechanics', 'data structures', 'computer networks'"),
+        facultyQuery: z
+          .string()
+          .optional()
+          .describe("Natural language faculty description for smart course-page matching - e.g., 'anuj kumar', 'dr. smith', 'professor with morning classes'"),
+        materialQuery: z
+          .string()
+          .optional()
+          .describe("Natural language material description for smart course-page selection - e.g., 'lecture notes from week 5', 'all assignments', 'mid-term study materials'"),
+        interactiveStep: z
+          .enum(["semester", "course", "faculty", "materials", "smart-search", "download"])
+          .optional()
+          .describe("For course-page command: specify which step of the interactive workflow to execute. Auto-determined based on provided parameters if not specified."),
         debug: z
           .boolean()
           .optional()
           .describe("Enable debug mode for troubleshooting"),
       }),
-      execute: async ({ command, username, password, semester, semesterQuery, course, faculty, classGroup, fuzzyIndex, courseQuery, debug }) => {
+      execute: async ({ command, username, password, semester, semesterQuery, course, faculty, classGroup, fuzzyIndex, courseQuery, facultyQuery, materialQuery, interactiveStep, debug }) => {
         try {
           if (!username || !password) {
             return {
@@ -307,6 +441,22 @@ export function createVITTools() {
               command,
               message: "Please provide your VTOP username and password to access VTOP data.",
             }
+          }
+
+          if (command === "course-page") {
+            return await handleIntelligentCoursePage({
+              username,
+              password,
+              semesterQuery,
+              courseQuery,
+              facultyQuery,
+              materialQuery,
+              interactiveStep,
+              semester,
+              course,
+              faculty,
+              fuzzyIndex
+            })
           }
 
           const flags: Record<string, any> = {}

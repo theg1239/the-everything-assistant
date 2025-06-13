@@ -46,6 +46,7 @@ here's what i can help you with in real-time:
 - get current faculty info from vit websites
 - fetch the latest placement stats and company details
 - find current admission requirements and deadlines
+- check today's mess menu for both men's and ladies' hostels (special, veg, nonveg mess)
 - access your vtop data securely (marks, attendance, timetable - you name it!)
 
 and honestly, if you need help with anything else vit-related, just ask! i'm pretty good at finding information and love helping students out.

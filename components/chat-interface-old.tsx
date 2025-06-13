@@ -1,22 +1,22 @@
-"use client"
+'use client'
 
-import { useState, useRef, useEffect, memo } from "react"
-import { useChat } from "ai/react"
-import { useRouter } from "next/navigation"
-import { AnimatePresence, motion } from "framer-motion"
-import { Menu, ArrowLeft, FileText, ChevronRight, Send } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { SuggestedQuestions } from "@/components/suggested-questions"
-import { ChatHeader } from "@/components/chat-header"
-import { MessageBubble } from "@/components/message-bubble"
-import { MultimodalInput } from "@/components/multimodal-input"
-import { Sidebar } from "@/components/sidebar"
-import { Canvas } from "@/components/canvas"
-import React from "react"
-import { cn } from "@/lib/utils"
-import { toast } from "sonner"
+import { useState, useRef, useEffect, memo } from 'react'
+import { useChat } from 'ai/react'
+import { useRouter } from 'next/navigation'
+import { AnimatePresence, motion } from 'framer-motion'
+import { Menu, ArrowLeft, FileText, ChevronRight, Send } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { SuggestedQuestions } from '@/components/suggested-questions'
+import { ChatHeader } from '@/components/chat-header'
+import { MessageBubble } from '@/components/message-bubble'
+import { MultimodalInput } from '@/components/multimodal-input'
+import { Sidebar } from '@/components/sidebar'
+import { Canvas } from '@/components/canvas'
+import React from 'react'
+import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 interface ChatInterfaceProps {
   initialMessages?: any[]
@@ -31,73 +31,74 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
-  
+
   const [optimisticChatId, setOptimisticChatId] = useState<string | undefined>(chatId)
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const savedSidebarState = localStorage.getItem('sidebarOpen');
+    if (typeof window === 'undefined') return
+    const savedSidebarState = localStorage.getItem('sidebarOpen')
     if (savedSidebarState !== null) {
-      setSidebarOpen(savedSidebarState === 'true');
+      setSidebarOpen(savedSidebarState === 'true')
     }
-  }, []);
+  }, [])
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    localStorage.setItem('sidebarOpen', String(sidebarOpen));
-  }, [sidebarOpen]);
+    if (typeof window === 'undefined') return
+    localStorage.setItem('sidebarOpen', String(sidebarOpen))
+  }, [sidebarOpen])
 
   useEffect(() => {
     if (sidebarOpen) {
-      document.body.classList.add('sidebar-open');
+      document.body.classList.add('sidebar-open')
     } else {
-      document.body.classList.remove('sidebar-open');
+      document.body.classList.remove('sidebar-open')
     }
     return () => {
-      document.body.classList.remove('sidebar-open');
-    };
-  }, [sidebarOpen]);
-  
-  useEffect(() => {
-    if (showFullChat && inputRef.current) {
-      inputRef.current.focus();
+      document.body.classList.remove('sidebar-open')
     }
-  }, [showFullChat]);
-  const { messages, input, handleInputChange, handleSubmit, isLoading, setInput, error, stop } = useChat({
-    api: "/api/chat",
-    initialMessages: initialMessages.map((msg) => ({
-      id: msg.id,
-      role: msg.role,
-      content: msg.content,
-      toolInvocations: msg.toolInvocations,
-    })),
-    body: optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : undefined,
-    onResponse: (response) => {
-      if (!showFullChat) {
-        setShowFullChat(true)
-      }
-      setErrorMessage(null)
-      const newChatId = response.headers.get("X-Chat-Id")
-      const newChatPath = response.headers.get("X-Chat-Path")
-      if (newChatId && newChatPath && !chatId) {
-        setOptimisticChatId(newChatId)
-        window.history.replaceState({}, '', newChatPath)
-      }
-    },
-    onError: (error) => {
-      console.error("Chat error:", error)
-      toast.error("Something went wrong. Please try again.")
-      setErrorMessage("something went wrong. please try again.")
-    },
-  })
+  }, [sidebarOpen])
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    if (showFullChat && inputRef.current) {
+      inputRef.current.focus()
+    }
+  }, [showFullChat])
+  const { messages, input, handleInputChange, handleSubmit, isLoading, setInput, error, stop } =
+    useChat({
+      api: '/api/chat',
+      initialMessages: initialMessages.map(msg => ({
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+        toolInvocations: msg.toolInvocations,
+      })),
+      body: optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : undefined,
+      onResponse: response => {
+        if (!showFullChat) {
+          setShowFullChat(true)
+        }
+        setErrorMessage(null)
+        const newChatId = response.headers.get('X-Chat-Id')
+        const newChatPath = response.headers.get('X-Chat-Path')
+        if (newChatId && newChatPath && !chatId) {
+          setOptimisticChatId(newChatId)
+          window.history.replaceState({}, '', newChatPath)
+        }
+      },
+      onError: error => {
+        console.error('Chat error:', error)
+        toast.error('Something went wrong. Please try again.')
+        setErrorMessage('something went wrong. please try again.')
+      },
+    })
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
   useEffect(() => {
     if (error) {
-      setErrorMessage("unable to connect. please check your connection and try again.")
+      setErrorMessage('unable to connect. please check your connection and try again.')
     }
   }, [error])
 
@@ -120,16 +121,16 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     setErrorMessage(null)
 
     setTimeout(() => {
-      const form = document.createElement("form")
-      const event = new Event("submit", { bubbles: true, cancelable: true })
-      Object.defineProperty(event, "target", { value: form, enumerable: true })
-      Object.defineProperty(event, "preventDefault", { value: () => {}, enumerable: true })
+      const form = document.createElement('form')
+      const event = new Event('submit', { bubbles: true, cancelable: true })
+      Object.defineProperty(event, 'target', { value: form, enumerable: true })
+      Object.defineProperty(event, 'preventDefault', { value: () => {}, enumerable: true })
       handleSubmit(event as any)
     }, 100)
   }
 
   const resetToHome = () => {
-    router.push("/")
+    router.push('/')
   }
 
   const openCanvas = () => {
@@ -140,11 +141,11 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     if (optimisticChatId && optimisticChatId !== chatId) {
       setShowFullChat(true)
       setErrorMessage(null)
-      setInput("")
+      setInput('')
     }
   }, [optimisticChatId, chatId])
 
-  const SidebarToggleButton = () => (
+  const SidebarToggleButton = () =>
     !sidebarOpen && (
       <motion.button
         initial={{ opacity: 0, x: -10 }}
@@ -157,10 +158,9 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         <ChevronRight className="w-5 h-5" />
       </motion.button>
     )
-  );
 
   const chatContainerClasses =
-    "chat-container h-full flex flex-col justify-between max-w-5xl w-full mx-auto px-4";
+    'chat-container h-full flex flex-col justify-between max-w-5xl w-full mx-auto px-4'
 
   if (!showFullChat) {
     return (
@@ -168,11 +168,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
         <SidebarToggleButton />
 
-        <motion.div
-          initial={{ opacity: 1 }}
-          className={chatContainerClasses}
-          key="home-view"
-        >
+        <motion.div initial={{ opacity: 1 }} className={chatContainerClasses} key="home-view">
           <div className="flex items-center justify-between py-4">
             <Button
               variant="ghost"
@@ -191,14 +187,16 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, ease: "easeOut" }}
+                transition={{ duration: 0.6, ease: 'easeOut' }}
                 className="text-center space-y-6"
               >
                 <div className="space-y-3">
-                  <h1 className="text-5xl font-extralight text-white tracking-wide">vit assistant</h1>
+                  <h1 className="text-5xl font-extralight text-white tracking-wide">
+                    vit assistant
+                  </h1>
                   <p className="text-slate-400 text-xl max-w-2xl mx-auto leading-relaxed">
-                    comprehensive knowledge base for vit vellore - courses, exams, faculty, placements, research, and
-                    everything you need to know
+                    comprehensive knowledge base for vit vellore - courses, exams, faculty,
+                    placements, research, and everything you need to know
                   </p>
                 </div>
               </motion.div>
@@ -206,7 +204,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
+                transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
                 className="w-full max-w-3xl"
               >
                 <SearchBar
@@ -217,7 +215,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                   placeholder="ask anything about vit vellore..."
                   ref={inputRef}
                 />
-              </motion.div>          
+              </motion.div>
               {errorMessage && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -228,10 +226,11 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                 </motion.div>
               )}
 
-              <SuggestedQuestions 
-                isFirstMessage={true} 
-                onQuestionClick={handleSuggestedQuestion} 
-                sidebarOpen={sidebarOpen} />
+              <SuggestedQuestions
+                isFirstMessage={true}
+                onQuestionClick={handleSuggestedQuestion}
+                sidebarOpen={sidebarOpen}
+              />
             </div>
           </div>
         </motion.div>
@@ -248,7 +247,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.4, ease: "easeOut" }}
+        transition={{ duration: 0.4, ease: 'easeOut' }}
         className={chatContainerClasses}
         key="chat-view"
       >
@@ -282,7 +281,12 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
             <h2 className="text-lg font-light text-white">vit assistant</h2>
           </div>
 
-          <Button variant="ghost" size="sm" onClick={openCanvas} className="text-slate-400 hover:text-white">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={openCanvas}
+            className="text-slate-400 hover:text-white"
+          >
             <FileText className="w-4 h-4 mr-2" />
             canvas
           </Button>
@@ -290,58 +294,59 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
 
         <ScrollArea className="flex-1 overflow-y-auto">
           <div className="flex flex-col p-6 space-y-6 bg-slate-800/10 backdrop-blur-xl custom-scrollbar w-full">
-          {errorMessage && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-red-500/20 border border-red-500/30 text-white rounded-xl p-4 text-center w-full mx-auto"
-            >
-              {errorMessage}
-            </motion.div>
-          )}
+            {errorMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-red-500/20 border border-red-500/30 text-white rounded-xl p-4 text-center w-full mx-auto"
+              >
+                {errorMessage}
+              </motion.div>
+            )}
 
-          <AnimatePresence>
-            {messages.map((message, index) => (
-              <MessageBubble
-                key={`${message.id}-${index}`}
-                message={{
-                  ...message,
-                  toolInvocations: message.toolInvocations
-                }}
-                chatId={optimisticChatId}
+            <AnimatePresence>
+              {messages.map((message, index) => (
+                <MessageBubble
+                  key={`${message.id}-${index}`}
+                  message={{
+                    ...message,
+                    toolInvocations: message.toolInvocations,
+                  }}
+                  chatId={optimisticChatId}
+                />
+              ))}
+            </AnimatePresence>
+
+            {isLoading && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center justify-center space-x-3 text-slate-400 w-full max-w-5xl mx-auto"
+              >
+                <div className="flex space-x-1">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <div
+                    className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"
+                    style={{ animationDelay: '0.2s' }}
+                  ></div>
+                  <div
+                    className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"
+                    style={{ animationDelay: '0.4s' }}
+                  ></div>
+                </div>
+                <span className="text-sm">thinking...</span>
+              </motion.div>
+            )}
+
+            <div ref={messagesEndRef} />
+
+            {!showFullChat && messages.length > 0 && messages.length < 4 && !isLoading && (
+              <SuggestedQuestions
+                isFirstMessage={false}
+                onQuestionClick={handleSuggestedQuestion}
+                sidebarOpen={sidebarOpen}
               />
-            ))}
-          </AnimatePresence>
-
-          {isLoading && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-center justify-center space-x-3 text-slate-400 w-full max-w-5xl mx-auto"
-            >
-              <div className="flex space-x-1">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                <div
-                  className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"
-                  style={{ animationDelay: "0.2s" }}
-                ></div>
-                <div
-                  className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"
-                  style={{ animationDelay: "0.4s" }}
-                ></div>
-              </div>
-              <span className="text-sm">thinking...</span>
-            </motion.div>
-          )}
-
-          <div ref={messagesEndRef} />
-
-          {!showFullChat && messages.length > 0 && messages.length < 4 && !isLoading && (
-            <SuggestedQuestions
-              isFirstMessage={false}
-              onQuestionClick={handleSuggestedQuestion}
-              sidebarOpen={sidebarOpen} />
-          )}
+            )}
           </div>
         </ScrollArea>
 
@@ -400,7 +405,7 @@ const SearchBar = React.forwardRef<HTMLInputElement, SearchBarProps>(
         </div>
       </form>
     )
-  },
+  }
 )
 
-SearchBar.displayName = "SearchBar"
+SearchBar.displayName = 'SearchBar'

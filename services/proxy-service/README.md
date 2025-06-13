@@ -5,16 +5,19 @@ A microservice that proxies requests to the VTOP CLI tool.
 ## Setup
 
 1. Install dependencies:
+
 ```bash
 npm install
 ```
 
 2. Start the service:
+
 ```bash
 npm start
 ```
 
 Or for development with auto-reload:
+
 ```bash
 npm run dev
 ```
@@ -22,9 +25,11 @@ npm run dev
 ## API Endpoints
 
 ### POST /vtop
+
 Execute a VTOP CLI command.
 
 **Request Body:**
+
 ```json
 {
   "command": "grades",
@@ -38,6 +43,7 @@ Execute a VTOP CLI command.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -47,13 +53,14 @@ Execute a VTOP CLI command.
 ```
 
 ### GET /commands
+
 List all available commands.
 
 ## Supported Commands
 
 - `profile` - Student profile information
 - `marks` - Marks for a semester
-- `grades` - Grades for a semester  
+- `grades` - Grades for a semester
 - `attendance` - Attendance details
 - `timetable` - Class timetable
 - `receipts` - Fee receipts

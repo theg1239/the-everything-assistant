@@ -1,8 +1,8 @@
-import { redirect } from "next/navigation"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { getChat, getMessages } from "@/lib/db"
-import { ChatInterface } from "@/components/chat-interface"
+import { redirect } from 'next/navigation'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { getChat, getMessages } from '@/lib/db'
+import { ChatInterface } from '@/components/chat-interface'
 
 interface ChatPageProps {
   params: Promise<{
@@ -14,14 +14,14 @@ export default async function ChatPage({ params }: ChatPageProps) {
   const session = await getServerSession(authOptions)
 
   if (!session?.user) {
-    redirect("/login")
+    redirect('/login')
   }
 
   const { id } = await params
   const chat = await getChat(id, session.user.id)
 
   if (!chat) {
-    redirect("/")
+    redirect('/')
   }
 
   const messages = await getMessages(id)
@@ -29,7 +29,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
   return (
     <div className="h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <ChatInterface
-        initialMessages={messages.map((msg) => ({
+        initialMessages={messages.map(msg => ({
           id: msg.id,
           role: msg.role,
           content: msg.content,

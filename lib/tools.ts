@@ -1,28 +1,28 @@
-import { tool } from "ai"
-import { z } from "zod"
-import { scrapePapersCodeChef } from "./scrapers/papers-codechef"
-import { scrapeVITPaperVault } from "./scrapers/vit-papervault"
-import { scrapeFacultyInfo } from "./scrapers/faculty-scraper"
-import { scrapePlacementInfo } from "./scrapers/placement-scraper"
-import { getMessMenu, formatMenuItems, getAvailableDateRange } from "./scrapers/mess-menu-scraper"
-import { getCourseCode } from "./question-generator"
+import { tool } from 'ai'
+import { z } from 'zod'
+import { scrapePapersCodeChef } from './scrapers/papers-codechef'
+import { scrapeVITPaperVault } from './scrapers/vit-papervault'
+import { scrapeFacultyInfo } from './scrapers/faculty-scraper'
+import { scrapePlacementInfo } from './scrapers/placement-scraper'
+import { getMessMenu, formatMenuItems, getAvailableDateRange } from './scrapers/mess-menu-scraper'
+import { getCourseCode } from './question-generator'
 
 // Helper function to organize menu items by meal type
-function organizeMenuByMealType(menuItems: Array<{type: number, menu: string}>) {
+function organizeMenuByMealType(menuItems: Array<{ type: number; menu: string }>) {
   const mealTypes: { [key: string]: string[] } = {
     breakfast: [],
     lunch: [],
     snacks: [],
-    dinner: []
+    dinner: [],
   }
-  
+
   const typeToMeal: { [key: number]: string } = {
     1: 'breakfast',
-    2: 'lunch', 
+    2: 'lunch',
     3: 'snacks',
-    4: 'dinner'
+    4: 'dinner',
   }
-  
+
   menuItems.forEach(item => {
     const mealType = typeToMeal[item.type]
     if (mealType) {
@@ -32,18 +32,18 @@ function organizeMenuByMealType(menuItems: Array<{type: number, menu: string}>) 
         .map(menuItem => menuItem.trim())
         .filter(menuItem => menuItem.length > 0 && !menuItem.match(/^[B,J\s]*$/))
         .map(menuItem => menuItem.charAt(0).toUpperCase() + menuItem.slice(1).toLowerCase())
-      
+
       mealTypes[mealType].push(...cleanedItems)
     }
   })
-  
+
   // Remove empty meal types
   Object.keys(mealTypes).forEach(key => {
     if (mealTypes[key].length === 0) {
       delete mealTypes[key]
     }
   })
-  
+
   return mealTypes
 }
 
@@ -71,37 +71,37 @@ async function handleIntelligentCoursePage(params: {
     semester,
     course,
     faculty,
-    fuzzyIndex
+    fuzzyIndex,
   } = params
 
   let step = interactiveStep
   if (!step) {
     if (courseQuery && facultyQuery && materialQuery) {
-      step = "semester"
+      step = 'semester'
     } else if (courseQuery && facultyQuery) {
-      step = "semester"
+      step = 'semester'
     } else if (courseQuery) {
-      step = "semester"
+      step = 'semester'
     } else {
       if (!semester) {
-        step = "semester"
+        step = 'semester'
       } else if (!course) {
-        step = "course"
+        step = 'course'
       } else if (!faculty) {
-        step = "faculty"
+        step = 'faculty'
       } else {
-        step = "materials"
+        step = 'materials'
       }
     }
   }
 
   const PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001'
-  
+
   let requestBody: any = {
-    command: "course-page-interactive",
+    command: 'course-page-interactive',
     username,
     step,
-    flags: {}
+    flags: {},
   }
 
   if (password.includes(':::')) {
@@ -116,7 +116,7 @@ async function handleIntelligentCoursePage(params: {
   if (courseQuery) requestBody.flags.courseQuery = courseQuery
   if (facultyQuery) requestBody.flags.facultyQuery = facultyQuery
   if (materialQuery) requestBody.flags.materialQuery = materialQuery
-  
+
   if (semester !== undefined) requestBody.flags.semester = semester
   if (course !== undefined) requestBody.flags.course = course
   if (faculty !== undefined) requestBody.flags.faculty = faculty
@@ -142,10 +142,10 @@ async function handleIntelligentCoursePage(params: {
     }
 
     const result = await response.json()
-    
+
     return {
       success: true,
-      command: "course-page",
+      command: 'course-page',
       step: step,
       data: result.data || result.output,
       options: result.options,
@@ -157,14 +157,14 @@ async function handleIntelligentCoursePage(params: {
       downloadInfo: result.downloadInfo,
       smartMatch: result.smartMatch,
       raw: result.raw || false,
-      type: 'interactive-course-page'
+      type: 'interactive-course-page',
     }
   } catch (error: any) {
     return {
       success: false,
-      error: error.message || "Network error",
-      message: "Unable to connect to VTOP proxy service for course materials.",
-      suggestion: "The VTOP proxy service may be offline. Please try again later.",
+      error: error.message || 'Network error',
+      message: 'Unable to connect to VTOP proxy service for course materials.',
+      suggestion: 'The VTOP proxy service may be offline. Please try again later.',
     }
   }
 }
@@ -173,19 +173,13 @@ export function createVITTools() {
   return {
     findPastPapers: tool({
       description:
-        "find past examination papers for VIT courses from real repositories. You can use course names or codes.",
+        'find past examination papers for VIT courses from real repositories. You can use course names or codes.',
       parameters: z.object({
         courseCode: z
           .string()
           .describe("course code like BCSE302L or course name like 'database systems'"),
-        examType: z
-          .string()
-          .optional()
-          .describe("exam type: cat1, cat2, fat, quiz"),
-        year: z
-          .string()
-          .optional()
-          .describe("academic year like 2023, 2022"),
+        examType: z.string().optional().describe('exam type: cat1, cat2, fat, quiz'),
+        year: z.string().optional().describe('academic year like 2023, 2022'),
       }),
       execute: async ({ courseCode, examType, year }) => {
         try {
@@ -204,8 +198,8 @@ export function createVITTools() {
           const papers: any[] = []
           const sources: any[] = []
 
-          results.forEach((r) => {
-            if (r.status === "fulfilled" && r.value.success) {
+          results.forEach(r => {
+            if (r.status === 'fulfilled' && r.value.success) {
               papers.push(...r.value.papers)
               sources.push(r.value.source)
             }
@@ -217,13 +211,13 @@ export function createVITTools() {
               courseCode,
               papers: [],
               message: `no papers found for ${courseCode}${
-                examType ? ` (${examType})` : ""
-              }${year ? ` from ${year}` : ""}. try checking the course code or contact faculty for materials.`,
+                examType ? ` (${examType})` : ''
+              }${year ? ` from ${year}` : ''}. try checking the course code or contact faculty for materials.`,
               suggestions: [
-                "verify the course code format (e.g., CSE1001, MAT1001)",
-                "check with course faculty for official materials",
-                "visit VIT library for physical copies",
-                "contact senior students or study groups",
+                'verify the course code format (e.g., CSE1001, MAT1001)',
+                'check with course faculty for official materials',
+                'visit VIT library for physical copies',
+                'contact senior students or study groups',
               ],
             }
           }
@@ -236,58 +230,47 @@ export function createVITTools() {
             papers,
             totalFound: papers.length,
             message: `found ${papers.length} papers for ${courseCode}${
-              examType ? ` (${examType})` : ""
-            }${year ? ` from ${year}` : ""}`,
+              examType ? ` (${examType})` : ''
+            }${year ? ` from ${year}` : ''}`,
             sources,
           }
         } catch (err: any) {
           const errorMessage =
-            typeof err === "object" && err?.message
+            typeof err === 'object' && err?.message
               ? err.message
-              : "unable to scrape papers at the moment. please try again later."
+              : 'unable to scrape papers at the moment. please try again later.'
           return {
             success: false,
             error: errorMessage,
-            message: "unable to scrape papers at the moment. please try again later.",
+            message: 'unable to scrape papers at the moment. please try again later.',
           }
         }
       },
     }),
 
     getFacultyInfo: tool({
-      description: "get current faculty information from VIT official websites",
-      parameters: z
-        .object({
-          department: z
-            .string()
-            .optional()
-            .describe("department like computer science, mechanical, electronics"),
-          facultyName: z
-            .string()
-            .optional()
-            .describe("specific faculty member name"),
-        }),
-      execute: async ({ department, facultyName }) =>
-        scrapeFacultyInfo(department, facultyName),
+      description: 'get current faculty information from VIT official websites',
+      parameters: z.object({
+        department: z
+          .string()
+          .optional()
+          .describe('department like computer science, mechanical, electronics'),
+        facultyName: z.string().optional().describe('specific faculty member name'),
+      }),
+      execute: async ({ department, facultyName }) => scrapeFacultyInfo(department, facultyName),
     }),
 
     getPlacementInfo: tool({
       description:
-        "get latest placement statistics and company information from VIT Placements Tracker",
+        'get latest placement statistics and company information from VIT Placements Tracker',
       parameters: z.object({
-        year: z
-          .string()
-          .optional()
-          .describe("academic year like 2024-25, 2023-24"),
+        year: z.string().optional().describe('academic year like 2024-25, 2023-24'),
         companyFilter: z
           .string()
           .optional()
-          .describe(
-            "filter results by company name (case-insensitive substring match)"
-          ),
+          .describe('filter results by company name (case-insensitive substring match)'),
       }),
-      execute: async ({ year, companyFilter }) =>
-        scrapePlacementInfo(year, companyFilter),
+      execute: async ({ year, companyFilter }) => scrapePlacementInfo(year, companyFilter),
     }),
 
     getMessMenu: tool({
@@ -295,19 +278,25 @@ export function createVITTools() {
         "get mess menu for VIT hostels (both men's and ladies' hostels). Use this when users ask about mess menu, today's food, what's for lunch/dinner/breakfast/snacks, tomorrow's menu, etc. Covers special mess, veg mess, and non-veg mess for both hostels. IMPORTANT: Always ask the user to specify hostelType and messType if not provided.",
       parameters: z.object({
         hostelType: z
-          .enum(["mens", "ladies"])
-          .describe("REQUIRED: type of hostel: mens (men's hostel) or ladies (ladies' hostel). Must be specified by user."),
+          .enum(['mens', 'ladies'])
+          .describe(
+            "REQUIRED: type of hostel: mens (men's hostel) or ladies (ladies' hostel). Must be specified by user."
+          ),
         messType: z
-          .enum(["special", "veg", "nonveg"])
-          .describe("REQUIRED: type of mess: special (premium food), veg (vegetarian), or nonveg (non-vegetarian). Must be specified by user."),
+          .enum(['special', 'veg', 'nonveg'])
+          .describe(
+            'REQUIRED: type of mess: special (premium food), veg (vegetarian), or nonveg (non-vegetarian). Must be specified by user.'
+          ),
         date: z
           .string()
           .optional()
-          .describe("date in YYYY-MM-DD format. If not provided, uses today's date. Can also accept 'today', 'tomorrow', etc."),
+          .describe(
+            "date in YYYY-MM-DD format. If not provided, uses today's date. Can also accept 'today', 'tomorrow', etc."
+          ),
         mealType: z
-          .enum(["breakfast", "lunch", "snacks", "dinner"])
+          .enum(['breakfast', 'lunch', 'snacks', 'dinner'])
           .optional()
-          .describe("specific meal type to filter. If not provided, returns all meals for the day"),
+          .describe('specific meal type to filter. If not provided, returns all meals for the day'),
       }),
       execute: async ({ hostelType, messType, date, mealType }) => {
         // Handle relative dates like 'today', 'tomorrow'
@@ -328,17 +317,17 @@ export function createVITTools() {
         }
 
         const result = await getMessMenu(hostelType, messType, processedDate, mealType)
-        
+
         if (result.success && result.data?.todayMenu) {
           // Transform the menu structure for UI display
           const organizedTodayMenu = organizeMenuByMealType(result.data.todayMenu.menu)
-          
+
           // For week menu, we only want to show today's organized menu, not the entire week
           // The UI component expects a single menu structure, not an array of daily menus
-          
+
           // Format the response with properly formatted menu items
           const formattedMenu = formatMenuItems(result.data.todayMenu.menu)
-          
+
           return {
             ...result,
             formattedMenu,
@@ -347,8 +336,8 @@ export function createVITTools() {
               todayMenu: organizedTodayMenu,
               // Remove weekMenu since it causes rendering issues and is not needed for the current UI
               weekMenu: undefined,
-              formattedMenu
-            }
+              formattedMenu,
+            },
           }
         } else if (!result.success && result.error) {
           // If there's an error, try to get available date range to help user
@@ -357,11 +346,11 @@ export function createVITTools() {
             return {
               ...result,
               message: `${result.message} Available menu dates: ${dateRange.start} to ${dateRange.end}`,
-              availableDateRange: dateRange
+              availableDateRange: dateRange,
             }
           }
         }
-        
+
         return result
       },
     }),
@@ -372,78 +361,126 @@ export function createVITTools() {
       parameters: z.object({
         command: z
           .enum([
-            "profile", "marks", "grades", "attendance", "timetable", "receipts", 
-            "hostel", "cgpa", "exams", "exam-schedule", "library-dues", "calendar",
-            "nightslip", "leave", "leave-status", "msg", "class-message", "da",
-            "facility", "syllabus", "course-page"
+            'profile',
+            'marks',
+            'grades',
+            'attendance',
+            'timetable',
+            'receipts',
+            'hostel',
+            'cgpa',
+            'exams',
+            'exam-schedule',
+            'library-dues',
+            'calendar',
+            'nightslip',
+            'leave',
+            'leave-status',
+            'msg',
+            'class-message',
+            'da',
+            'facility',
+            'syllabus',
+            'course-page',
           ])
-          .describe("VTOP command to execute - profile (student info), marks (semester marks), grades (semester grades), attendance (attendance %), timetable (class schedule), receipts (fee receipts), hostel (hostel info), cgpa (CGPA details), exams/exam-schedule (exam timetable), library-dues (library fines), calendar (academic calendar), nightslip (nightslip status), leave/leave-status (leave applications), msg/class-message (class announcements), da (digital assignments), facility (facility booking), syllabus (course syllabus), course-page (intelligent course materials with smart matching)"),
+          .describe(
+            'VTOP command to execute - profile (student info), marks (semester marks), grades (semester grades), attendance (attendance %), timetable (class schedule), receipts (fee receipts), hostel (hostel info), cgpa (CGPA details), exams/exam-schedule (exam timetable), library-dues (library fines), calendar (academic calendar), nightslip (nightslip status), leave/leave-status (leave applications), msg/class-message (class announcements), da (digital assignments), facility (facility booking), syllabus (course syllabus), course-page (intelligent course materials with smart matching)'
+          ),
         username: z
           .string()
           .optional()
-          .describe("VTOP username/registration number. Will be prompted securely if not provided."),
+          .describe(
+            'VTOP username/registration number. Will be prompted securely if not provided.'
+          ),
         password: z
           .string()
           .optional()
-          .describe("VTOP password. Will be prompted securely if not provided."),
+          .describe('VTOP password. Will be prompted securely if not provided.'),
         semester: z
           .number()
           .optional()
-          .describe("Semester number (1-8) for commands like marks, grades, attendance, timetable, exams, calendar. If not specified, user will be prompted to select from available semesters."),
+          .describe(
+            'Semester number (1-8) for commands like marks, grades, attendance, timetable, exams, calendar. If not specified, user will be prompted to select from available semesters.'
+          ),
         semesterQuery: z
           .string()
           .optional()
-          .describe("Text description of semester to search for (e.g., 'summer semester', 'fall 2024', 'current semester', 'latest'). Used for intelligent semester matching."),
+          .describe(
+            "Text description of semester to search for (e.g., 'summer semester', 'fall 2024', 'current semester', 'latest'). Used for intelligent semester matching."
+          ),
         course: z
           .number()
           .optional()
-          .describe("Course selection number for course-page command. Defaults to first course (1) if not specified."),
+          .describe(
+            'Course selection number for course-page command. Defaults to first course (1) if not specified.'
+          ),
         faculty: z
           .number()
           .optional()
-          .describe("Faculty selection number for course-page command. Defaults to first faculty (1) if not specified."),
+          .describe(
+            'Faculty selection number for course-page command. Defaults to first faculty (1) if not specified.'
+          ),
         classGroup: z
           .number()
           .optional()
-          .describe("Class group number for calendar command. Defaults to first group (1) if not specified."),
-        fuzzyIndex: z
-          .number()
-          .optional()
-          .describe("Fuzzy search index for course-page command"),
+          .describe(
+            'Class group number for calendar command. Defaults to first group (1) if not specified.'
+          ),
+        fuzzyIndex: z.number().optional().describe('Fuzzy search index for course-page command'),
         courseQuery: z
           .string()
           .optional()
-          .describe("Course search query for syllabus command, or natural language course description for smart course-page matching - e.g., 'fluid mechanics', 'data structures', 'computer networks'"),
+          .describe(
+            "Course search query for syllabus command, or natural language course description for smart course-page matching - e.g., 'fluid mechanics', 'data structures', 'computer networks'"
+          ),
         facultyQuery: z
           .string()
           .optional()
-          .describe("Natural language faculty description for smart course-page matching - e.g., 'anuj kumar', 'dr. smith', 'professor with morning classes'"),
+          .describe(
+            "Natural language faculty description for smart course-page matching - e.g., 'anuj kumar', 'dr. smith', 'professor with morning classes'"
+          ),
         materialQuery: z
           .string()
           .optional()
-          .describe("Natural language material description for smart course-page selection - e.g., 'lecture notes from week 5', 'all assignments', 'mid-term study materials'"),
+          .describe(
+            "Natural language material description for smart course-page selection - e.g., 'lecture notes from week 5', 'all assignments', 'mid-term study materials'"
+          ),
         interactiveStep: z
-          .enum(["semester", "course", "faculty", "materials", "smart-search", "download"])
+          .enum(['semester', 'course', 'faculty', 'materials', 'smart-search', 'download'])
           .optional()
-          .describe("For course-page command: specify which step of the interactive workflow to execute. Auto-determined based on provided parameters if not specified."),
-        debug: z
-          .boolean()
-          .optional()
-          .describe("Enable debug mode for troubleshooting"),
+          .describe(
+            'For course-page command: specify which step of the interactive workflow to execute. Auto-determined based on provided parameters if not specified.'
+          ),
+        debug: z.boolean().optional().describe('Enable debug mode for troubleshooting'),
       }),
-      execute: async ({ command, username, password, semester, semesterQuery, course, faculty, classGroup, fuzzyIndex, courseQuery, facultyQuery, materialQuery, interactiveStep, debug }) => {
+      execute: async ({
+        command,
+        username,
+        password,
+        semester,
+        semesterQuery,
+        course,
+        faculty,
+        classGroup,
+        fuzzyIndex,
+        courseQuery,
+        facultyQuery,
+        materialQuery,
+        interactiveStep,
+        debug,
+      }) => {
         try {
           if (!username || !password) {
             return {
               success: false,
-              error: "VTOP credentials required",
+              error: 'VTOP credentials required',
               requiresCredentials: true,
               command,
-              message: "Please provide your VTOP username and password to access VTOP data.",
+              message: 'Please provide your VTOP username and password to access VTOP data.',
             }
           }
 
-          if (command === "course-page") {
+          if (command === 'course-page') {
             return await handleIntelligentCoursePage({
               username,
               password,
@@ -455,12 +492,12 @@ export function createVITTools() {
               semester,
               course,
               faculty,
-              fuzzyIndex
+              fuzzyIndex,
             })
           }
 
           const flags: Record<string, any> = {}
-          
+
           if (semester !== undefined) flags.semester = semester
           if (semesterQuery) flags.semesterQuery = semesterQuery
           if (course !== undefined) flags.course = course
@@ -471,7 +508,7 @@ export function createVITTools() {
           if (debug) flags.debug = debug
 
           const PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001'
-          
+
           let requestBody: any = {
             command,
             username,
@@ -505,7 +542,7 @@ export function createVITTools() {
           }
 
           const result = await response.json()
-          
+
           if (result.success) {
             return {
               success: true,
@@ -517,7 +554,7 @@ export function createVITTools() {
           } else {
             return {
               success: false,
-              error: result.error || "Unknown error",
+              error: result.error || 'Unknown error',
               message: `Failed to retrieve ${command} data from VTOP`,
               command,
             }
@@ -525,9 +562,10 @@ export function createVITTools() {
         } catch (error: any) {
           return {
             success: false,
-            error: error.message || "Network error",
-            message: "Unable to connect to VTOP proxy service. Please ensure the service is running.",
-            suggestion: "The VTOP proxy service may be offline. Please try again later.",
+            error: error.message || 'Network error',
+            message:
+              'Unable to connect to VTOP proxy service. Please ensure the service is running.',
+            suggestion: 'The VTOP proxy service may be offline. Please try again later.',
           }
         }
       },

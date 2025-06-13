@@ -1,5 +1,5 @@
 .hamburger-button svg {
-  color: hsl(var(--foreground)); 
+  color: hsl(var(--foreground));
   stroke-width: 2px;
 }
 

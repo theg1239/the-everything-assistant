@@ -140,20 +140,22 @@ category 4 (management quota):
 ## FFCS (FULLY FLEXIBLE CREDIT SYSTEM) - DETAILED
 
 ### credit structure
-- theory courses: 3-4 credits (3 hours/week)
+- theory courses: 2-4 credits (3 hours/week)
 - lab courses: 1-2 credits (3-6 hours/week)
 - project courses: 2-6 credits
 - soft skill courses: 1-2 credits
 - minimum credits/semester: 16
-- maximum credits/semester: 27
-- total credits for graduation: 160 (b.tech)
+- maximum credits/semester: 27.5
+- total credits for graduation: 162 (b.tech)
 
-### course registration process
-1. pre-registration: online course selection
-2. faculty selection: choose preferred faculty
-3. timetable generation: automatic conflict resolution
-4. final registration: confirm course selection
-5. add/drop period: first week of semester
+### course registration process (only for b.tech second semester onwards)
+1. wishlist: online course wishlist
+2. ffcs dates and slot announced: login to the FFCS portal
+3. course selection: after picking mandatory courses, select the ones recommended by your HOD in the mail sent earlier
+4. course allocation: based on priority and availability, it's first come first serve
+5. confirmation: check allocated courses in the FFCS portal
+6. timetable generation: based on allocated courses
+8. add/drop period: first few days of the semester to adjust courses, slots, faculties, etc.
 
 ### grading system (detailed)
 - s grade: 10 points (90-100%) - outstanding
@@ -167,13 +169,15 @@ category 4 (management quota):
 - w grade: withdrawal (no impact on gpa)
 
 ### gpa calculation
-- sgpa = Σ(grade points × credits) / total credits (semester)
-- cgpa = Σ(grade points × credits) / total credits (cumulative)
+- sgpa = Σ(grade points * credits) / total credits (semester)
+- cgpa = Σ(grade points * credits) / total credits (cumulative)
 - minimum cgpa for graduation: 6.0
-- dean's list: cgpa ≥ 9.0
+- don't have to attend classes: cgpa ≥ 9.0
 - university rank: based on cgpa
 
 ## EXAMINATION SYSTEM (COMPREHENSIVE)
+
+there are three exams throughout a regular semester, two continuous assessment tests (cats), digital assignments (das), and a final assessment test (fat). there are also quizzes/surprise tests.
 
 ### continuous assessment tests (cat)
 cat 1:

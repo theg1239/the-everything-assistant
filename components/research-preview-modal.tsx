@@ -1,26 +1,26 @@
-'use client';
+'use client'
 
-import React, { useState, useEffect } from 'react';
-import { X, Beaker } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import React, { useState, useEffect } from 'react'
+import { X, Beaker } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 const ResearchPreviewModal: React.FC = () => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false)
 
   useEffect(() => {
-    const hasSeenWelcome = localStorage.getItem('has-seen-research-preview');
-    
+    const hasSeenWelcome = localStorage.getItem('has-seen-research-preview')
+
     if (!hasSeenWelcome) {
-      setIsOpen(true);
+      setIsOpen(true)
     }
-  }, []);
+  }, [])
 
   const handleClose = () => {
-    localStorage.setItem('has-seen-research-preview', 'true');
-    setIsOpen(false);
-  };
+    localStorage.setItem('has-seen-research-preview', 'true')
+    setIsOpen(false)
+  }
 
-  if (!isOpen) return null;
+  if (!isOpen) return null
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
       <div className="mx-4 w-full max-w-sm overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white shadow-xl border border-slate-700">
@@ -57,7 +57,7 @@ const ResearchPreviewModal: React.FC = () => {
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default ResearchPreviewModal;
+export default ResearchPreviewModal

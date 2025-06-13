@@ -1,4 +1,4 @@
-import { prisma } from "./prisma"
+import { prisma } from './prisma'
 
 export interface User {
   id: string
@@ -21,7 +21,7 @@ export interface Chat {
 export interface Message {
   id: string
   chatId: string
-  role: "user" | "assistant" | "system"
+  role: 'user' | 'assistant' | 'system'
   content: string
   toolInvocations?: any
   created_at: Date
@@ -50,7 +50,7 @@ export async function getUser(email: string): Promise<User | null> {
     })
     return user as User
   } catch (error) {
-    console.error("Error getting user:", error)
+    console.error('Error getting user:', error)
     return null
   }
 }
@@ -70,11 +70,11 @@ export async function getChats(userId: string): Promise<Chat[]> {
   try {
     const chats = await prisma.chat.findMany({
       where: { userId },
-      orderBy: { updated_at: "desc" },
+      orderBy: { updated_at: 'desc' },
     })
     return chats as Chat[]
   } catch (error) {
-    console.error("Error getting chats:", error)
+    console.error('Error getting chats:', error)
     return []
   }
 }
@@ -89,7 +89,7 @@ export async function getChat(id: string, userId: string): Promise<Chat | null> 
     })
     return chat as Chat | null
   } catch (error) {
-    console.error("Error getting chat:", error)
+    console.error('Error getting chat:', error)
     return null
   }
 }
@@ -128,31 +128,31 @@ export async function getMessages(chatId: string): Promise<Message[]> {
   try {
     const messages = await prisma.message.findMany({
       where: { chatId },
-      orderBy: { created_at: "asc" },
+      orderBy: { created_at: 'asc' },
     })
-    return messages.map((msg) => ({
+    return messages.map(msg => ({
       ...msg,
       toolInvocations: msg.tool_invocations ?? undefined,
     })) as Message[]
   } catch (error) {
-    console.error("Error getting messages:", error)
+    console.error('Error getting messages:', error)
     return []
   }
 }
 
 export async function saveMessage(
   chatId: string,
-  role: "user" | "assistant" | "system",
+  role: 'user' | 'assistant' | 'system',
   content: string,
   toolInvocations?: any,
-  messageId?: string,
+  messageId?: string
 ): Promise<Message> {
   let safeToolInvocations = undefined
   if (toolInvocations) {
     try {
       safeToolInvocations = JSON.parse(JSON.stringify(toolInvocations))
     } catch (e) {
-      console.error("Failed to serialize toolInvocations for DB:", e)
+      console.error('Failed to serialize toolInvocations for DB:', e)
       safeToolInvocations = undefined
     }
   }
@@ -172,11 +172,11 @@ export async function getCanvasDocuments(chatId: string): Promise<CanvasDocument
   try {
     const documents = await prisma.canvasDocument.findMany({
       where: { chatId },
-      orderBy: { created_at: "desc" },
+      orderBy: { created_at: 'desc' },
     })
     return documents as CanvasDocument[]
   } catch (error) {
-    console.error("Error getting canvas documents:", error)
+    console.error('Error getting canvas documents:', error)
     return []
   }
 }
@@ -185,7 +185,7 @@ export async function createCanvasDocument(
   chatId: string,
   title: string,
   content: string,
-  type = "document",
+  type = 'document'
 ): Promise<CanvasDocument> {
   const document = await prisma.canvasDocument.create({
     data: {
@@ -198,7 +198,11 @@ export async function createCanvasDocument(
   return document as CanvasDocument
 }
 
-export async function updateCanvasDocument(id: string, title: string, content: string): Promise<void> {
+export async function updateCanvasDocument(
+  id: string,
+  title: string,
+  content: string
+): Promise<void> {
   await prisma.canvasDocument.update({
     where: { id },
     data: {
@@ -227,36 +231,40 @@ export async function getVote(chatId: string, messageId: string): Promise<Vote |
     })
     return vote as Vote
   } catch (error) {
-    console.error("Error getting vote:", error)
+    console.error('Error getting vote:', error)
     return null
   }
 }
 
-export async function saveVote(chatId: string, messageId: string, isUpvoted: boolean): Promise<void> {
+export async function saveVote(
+  chatId: string,
+  messageId: string,
+  isUpvoted: boolean
+): Promise<void> {
   try {
     const message = await prisma.message.findUnique({
-      where: { id: messageId }
+      where: { id: messageId },
     })
-    
+
     if (!message) {
       console.error(`Message with ID ${messageId} not found`)
       throw new Error(`Message with ID ${messageId} not found`)
     }
-    
+
     const chat = await prisma.chat.findUnique({
-      where: { id: chatId }
+      where: { id: chatId },
     })
-    
+
     if (!chat) {
       console.error(`Chat with ID ${chatId} not found`)
       throw new Error(`Chat with ID ${chatId} not found`)
     }
-    
+
     if (message.chatId !== chatId) {
       console.error(`Message ${messageId} does not belong to chat ${chatId}`)
       throw new Error(`Message ${messageId} does not belong to chat ${chatId}`)
     }
-    
+
     await prisma.vote.upsert({
       where: {
         chatId_messageId: {

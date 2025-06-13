@@ -1,17 +1,16 @@
-import { streamText, generateObject } from "ai"
-import { google } from "@ai-sdk/google"
-import { createVITTools } from "@/lib/tools"
-import { VIT_SYSTEM_PROMPT } from "@/lib/prompts"
-import { VIT_COMPREHENSIVE_KNOWLEDGE } from "@/lib/knowledge-base"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { getChat, createChat, saveMessage, updateChat } from "@/lib/db"
-import { generateChatPath, extractTitleFromContent } from "@/lib/utils"
-import { z } from "zod"
+import { streamText, generateObject } from 'ai'
+import { google } from '@ai-sdk/google'
+import { createVITTools } from '@/lib/tools'
+import { VIT_SYSTEM_PROMPT } from '@/lib/prompts'
+import { VIT_COMPREHENSIVE_KNOWLEDGE } from '@/lib/knowledge-base'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { getChat, createChat, saveMessage, updateChat } from '@/lib/db'
+import { generateChatPath, extractTitleFromContent } from '@/lib/utils'
+import { z } from 'zod'
 
-export const runtime = "nodejs"
+export const runtime = 'nodejs'
 export const maxDuration = 60
-
 
 async function parseVTOPData(rawData: any, command: string, userContext: string = '') {
   try {
@@ -23,7 +22,7 @@ async function parseVTOPData(rawData: any, command: string, userContext: string 
     //     command
     //   });
     // }
-    
+
     const vtopParseSchema = z.object({
       success: z.boolean(),
       formatted_content: z.string(),
@@ -34,7 +33,7 @@ async function parseVTOPData(rawData: any, command: string, userContext: string 
     })
 
     const result = await generateObject({
-      model: google("gemini-2.0-flash"),
+      model: google('gemini-2.0-flash-lite'),
       schema: vtopParseSchema,
       prompt: `
 You are a helpful assistant that parses VTOP (VIT Online Portal) data and formats it in a clean, natural language format.
@@ -44,14 +43,20 @@ Command: ${command}
 Raw Data: ${JSON.stringify(rawData)}
 
 SPECIAL HANDLING FOR COURSE MATERIALS/DOWNLOADS:
-${rawData.downloadInfo && rawData.downloadInfo.servedFiles && rawData.downloadInfo.servedFiles.length > 0 ? `
+${
+  rawData.downloadInfo &&
+  rawData.downloadInfo.servedFiles &&
+  rawData.downloadInfo.servedFiles.length > 0
+    ? `
 🔥 CRITICAL: DOWNLOAD FILES ARE AVAILABLE AND MUST BE INCLUDED!
 
 SERVED FILES WITH DOWNLOAD LINKS:
-${rawData.downloadInfo.servedFiles.map((file: any) => {
-  const cleanName = file.name.replace(/_\d+\.(pdf|pptx|docx|txt)$/i, '.$1');
-  return `- <strong>${cleanName}</strong> <span style=  "color: #6b7280; font-size: 0.875rem;">(${(file.size / 1024 / 1024).toFixed(2)} MB)</span> <a href="${file.downloadUrl}" download="${file.name}">Download</a>`;
-}).join('\n')}
+${rawData.downloadInfo.servedFiles
+  .map((file: any) => {
+    const cleanName = file.name.replace(/_\d+\.(pdf|pptx|docx|txt)$/i, '.$1')
+    return `- <strong>${cleanName}</strong> <span style=  "color: #6b7280; font-size: 0.875rem;">(${(file.size / 1024 / 1024).toFixed(2)} MB)</span> <a href="${file.downloadUrl}" download="${file.name}">Download</a>`
+  })
+  .join('\n')}
 
 FILES SUMMARY:
 - Total Downloaded: ${rawData.downloadInfo.filesDownloaded || rawData.downloadInfo.servedFiles.length}
@@ -60,16 +65,24 @@ FILES SUMMARY:
 
 ⚠️ MANDATORY: You MUST include these download links in your formatted_content as clickable HTML links!
 ⚠️ DO NOT mention any local paths - only use the served download URLs!
-` : rawData.downloadInfo && rawData.downloadInfo.downloadPath ? `
+`
+    : rawData.downloadInfo && rawData.downloadInfo.downloadPath
+      ? `
 LOCAL FILES DOWNLOADED:
 - Files Downloaded: ${rawData.downloadInfo.filesDownloaded || 0}
 - Local Path: ${rawData.downloadInfo.downloadPath}
 (Note: No served links available)
-` : ''}
+`
+      : ''
+}
 
-${rawData.data && typeof rawData.data === 'string' && rawData.data.includes('📚') ? `
+${
+  rawData.data && typeof rawData.data === 'string' && rawData.data.includes('📚')
+    ? `
 COURSE MATERIALS CONTEXT: This appears to be course materials/topics. Format these as a clear list with proper structure.
-` : ''}
+`
+    : ''
+}
 
 Please parse this VTOP data and return a structured response with:
 - success: true if parsing was successful
@@ -122,13 +135,13 @@ Make the formatted_content engaging and conversational while being informative a
 
     return result.object
   } catch (error) {
-    console.error("Error parsing VTOP data with AI SDK:", error)
+    console.error('Error parsing VTOP data with AI SDK:', error)
     return {
       success: false,
-      error: "Failed to parse VTOP data",
-      formatted_content: "Unable to parse the data at this time.",
+      error: 'Failed to parse VTOP data',
+      formatted_content: 'Unable to parse the data at this time.',
       structured_data: {},
-      summary: "Parsing failed",
+      summary: 'Parsing failed',
     }
   }
 }
@@ -137,15 +150,13 @@ export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
-      return new Response("Unauthorized", { status: 401 })
+      return new Response('Unauthorized', { status: 401 })
     }
     const { messages, id: chatId, directToolCall } = await req.json()
 
-    let chat = chatId
-      ? await getChat(chatId, session.user.id)
-      : null
+    let chat = chatId ? await getChat(chatId, session.user.id) : null
     if (!chat) {
-      const title = extractTitleFromContent(messages[0]?.content || "New Chat")
+      const title = extractTitleFromContent(messages[0]?.content || 'New Chat')
       const path = generateChatPath()
       chat = await createChat(session.user.id, title, path)
     }
@@ -154,30 +165,32 @@ export async function POST(req: Request) {
       const tools = createVITTools()
       const tool = tools[directToolCall.toolName as keyof typeof tools]
 
-      if (tool && typeof tool.execute === "function") {
-        try {const result = await tool.execute(directToolCall.args, {
+      if (tool && typeof tool.execute === 'function') {
+        try {
+          const result = await tool.execute(directToolCall.args, {
             toolCallId: directToolCall.toolCallId || Date.now().toString(),
             messages: messages || [],
           })
 
           if (
-            directToolCall.toolName === "queryVTOP" &&
+            directToolCall.toolName === 'queryVTOP' &&
             result.success &&
-            "data" in result &&
+            'data' in result &&
             result.data
           ) {
             try {
-              const command = ("command" in result
-                ? result.command
-                : directToolCall.args?.command) as string
-              
-              const userContext = messages && messages.length > 0 
-                ? messages
-                    .filter((m: any) => m.role === 'user')
-                    .slice(-3)
-                    .map((m: any) => m.content)
-                    .join(' | ')
-                : ''
+              const command = (
+                'command' in result ? result.command : directToolCall.args?.command
+              ) as string
+
+              const userContext =
+                messages && messages.length > 0
+                  ? messages
+                      .filter((m: any) => m.role === 'user')
+                      .slice(-3)
+                      .map((m: any) => m.content)
+                      .join(' | ')
+                  : ''
               const parsedData = await parseVTOPData(result, command, userContext)
 
               Object.assign(result, {
@@ -186,67 +199,63 @@ export async function POST(req: Request) {
                 structured_data: parsedData.structured_data,
                 summary: parsedData.summary,
               })
-              const assistantResponse = (result as any).formatted_content || 
-                                      (result as any).summary || 
-                                      `Successfully retrieved your ${command} data from VTOP.`
-              
+              const assistantResponse =
+                (result as any).formatted_content ||
+                (result as any).summary ||
+                `Successfully retrieved your ${command} data from VTOP.`
+
               const toolInvocation = {
                 toolCallId: directToolCall.toolCallId || Date.now().toString(),
                 toolName: directToolCall.toolName,
                 args: directToolCall.args,
                 result: result,
-                state: 'result'
+                state: 'result',
               }
 
               await saveMessage(
-                chat.id, 
-                "assistant", 
-                assistantResponse, 
-                [toolInvocation], 
+                chat.id,
+                'assistant',
+                assistantResponse,
+                [toolInvocation],
                 Date.now().toString()
               )
             } catch (parseError) {
-              console.error("Failed to parse VTOP data:", parseError)
+              console.error('Failed to parse VTOP data:', parseError)
             }
           }
 
           return new Response(JSON.stringify({ success: true, result }), {
-            headers: { "Content-Type": "application/json" },
+            headers: { 'Content-Type': 'application/json' },
           })
         } catch (error: any) {
           return new Response(
             JSON.stringify({
               success: false,
-              error: error.message || "Tool execution failed",
+              error: error.message || 'Tool execution failed',
             }),
-            { status: 500, headers: { "Content-Type": "application/json" } }
+            { status: 500, headers: { 'Content-Type': 'application/json' } }
           )
         }
       } else {
-        return new Response(
-          JSON.stringify({ success: false, error: "Tool not found" }),
-          { status: 400, headers: { "Content-Type": "application/json" } }
-        )
+        return new Response(JSON.stringify({ success: false, error: 'Tool not found' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        })
       }
-    }    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+    }
+    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
       return new Response(
         JSON.stringify({
           error:
-            "API key not configured. Please add GOOGLE_GENERATIVE_AI_API_KEY to your environment variables.",
+            'API key not configured. Please add GOOGLE_GENERATIVE_AI_API_KEY to your environment variables.',
         }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
       )
     }
 
     const userMessage = messages[messages.length - 1]
-    if (userMessage.role === "user") {
-      await saveMessage(
-        chat.id,
-        "user",
-        userMessage.content,
-        undefined,
-        userMessage.id
-      )
+    if (userMessage.role === 'user') {
+      await saveMessage(chat.id, 'user', userMessage.content, undefined, userMessage.id)
     }
 
     const tools = createVITTools()
@@ -256,15 +265,19 @@ ADDITIONAL COMPREHENSIVE KNOWLEDGE:
 ${VIT_COMPREHENSIVE_KNOWLEDGE}`
 
     const enhancedMessages = messages.map((message: any) => {
-      if (message.role === 'assistant' && message.toolInvocations && message.toolInvocations.length > 0) {
+      if (
+        message.role === 'assistant' &&
+        message.toolInvocations &&
+        message.toolInvocations.length > 0
+      ) {
         let toolContext = ''
-        
+
         for (const toolCall of message.toolInvocations) {
           if (toolCall.result) {
             if (toolCall.toolName === 'queryVTOP' && toolCall.result.success) {
               const command = toolCall.result.command || toolCall.args?.command || 'data'
               let dataContext = ''
-              
+
               if (toolCall.result.formatted_content) {
                 dataContext = toolCall.result.formatted_content
               } else if (toolCall.result.summary) {
@@ -279,30 +292,26 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}`
                   dataContext = `Retrieved ${command} data from VTOP`
                 }
               }
-                if (dataContext) {
+              if (dataContext) {
                 toolContext += `\n\n[VTOP ${command.toUpperCase()} DATA CONTEXT]:\n${dataContext}`
                 toolContext += `\n\n[IMPORTANT]: VTOP ${command} data was successfully retrieved above. Use this data to answer any follow-up questions about ${command}.`
               }
-            }
-            else if (toolCall.result.papers && toolCall.result.papers.length > 0) {
+            } else if (toolCall.result.papers && toolCall.result.papers.length > 0) {
               toolContext += `\n\n[PAPERS DATA CONTEXT]:\nFound ${toolCall.result.papers.length} past papers`
-            }
-            else if (toolCall.result.faculty && toolCall.result.faculty.length > 0) {
+            } else if (toolCall.result.faculty && toolCall.result.faculty.length > 0) {
               toolContext += `\n\n[FACULTY DATA CONTEXT]:\nFound ${toolCall.result.faculty.length} faculty members`
-            }
-            else if (toolCall.result.companies && toolCall.result.companies.length > 0) {
+            } else if (toolCall.result.companies && toolCall.result.companies.length > 0) {
               toolContext += `\n\n[COMPANIES DATA CONTEXT]:\nFound ${toolCall.result.companies.length} companies`
-            }
-            else if (toolCall.result.data && toolCall.result.data.todayMenu) {
+            } else if (toolCall.result.data && toolCall.result.data.todayMenu) {
               toolContext += `\n\n[MESS MENU DATA CONTEXT]:\nRetrieved mess menu for ${toolCall.result.data.messType}`
             }
           }
         }
-        
+
         if (toolContext) {
           return {
             ...message,
-            content: (message.content || '') + toolContext
+            content: (message.content || '') + toolContext,
           }
         }
       }
@@ -310,30 +319,31 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}`
     })
 
     const resultStream = await streamText({
-      model: google("gemini-2.0-flash"),
-      messages: [{ role: "system", content: combinedSystemPrompt }, ...enhancedMessages],
+      model: google('gemini-2.0-flash'),
+      messages: [{ role: 'system', content: combinedSystemPrompt }, ...enhancedMessages],
       tools,
       temperature: 0.7,
       maxTokens: 4096,
-      toolChoice: "auto",
-      onFinish: async (result) => {
-        const toolResults = (result as any).toolResults ?? (result.toolCalls ?? [])
+      toolChoice: 'auto',
+      onFinish: async result => {
+        const toolResults = (result as any).toolResults ?? result.toolCalls ?? []
         for (const tr of toolResults) {
           if (
-            tr.toolName === "queryVTOP" &&
+            tr.toolName === 'queryVTOP' &&
             tr.result?.success &&
             tr.result.data &&
             !tr.result.parsedData
           ) {
             try {
-              const userContext = messages && messages.length > 0 
-                ? messages
-                    .filter((m: any) => m.role === 'user')
-                    .slice(-3)
-                    .map((m: any) => m.content)
-                    .join(' | ')
-                : ''
-                const parsed = await parseVTOPData(tr.result, tr.args.command, userContext)
+              const userContext =
+                messages && messages.length > 0
+                  ? messages
+                      .filter((m: any) => m.role === 'user')
+                      .slice(-3)
+                      .map((m: any) => m.content)
+                      .join(' | ')
+                  : ''
+              const parsed = await parseVTOPData(tr.result, tr.args.command, userContext)
               Object.assign(tr.result, {
                 parsedData: parsed,
                 formatted_content: parsed.formatted_content,
@@ -341,13 +351,13 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}`
                 summary: parsed.summary,
               })
             } catch (e) {
-              console.error("Failed to parse VTOP data in stream:", e)
+              console.error('Failed to parse VTOP data in stream:', e)
             }
           }
         }
 
         const safeInvocations = JSON.parse(JSON.stringify(toolResults))
-        await saveMessage(chat.id, "assistant", result.text, safeInvocations, result.response.id)
+        await saveMessage(chat.id, 'assistant', result.text, safeInvocations, result.response.id)
 
         if (messages.length <= 2) {
           const newTitle = extractTitleFromContent(userMessage.content)
@@ -358,15 +368,15 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}`
 
     return resultStream.toDataStreamResponse({
       headers: {
-        "X-Chat-Id": chat.id,
-        "X-Chat-Path": chat.path,
+        'X-Chat-Id': chat.id,
+        'X-Chat-Path': chat.path,
       },
     })
   } catch (error: any) {
-    console.error("Chat API error:", error)
+    console.error('Chat API error:', error)
     return new Response(
-      JSON.stringify({ error: error.message || "An unexpected error occurred" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      JSON.stringify({ error: error.message || 'An unexpected error occurred' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
     )
   }
 }

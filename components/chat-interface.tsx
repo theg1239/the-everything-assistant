@@ -1,22 +1,22 @@
-"use client"
+'use client'
 
-import { useState, useRef, useEffect, memo } from "react"
-import { useChat } from "ai/react"
-import { useRouter } from "next/navigation"
-import { AnimatePresence, motion } from "framer-motion"
-import { FileText, Plus } from "lucide-react"
-import { HamburgerButton } from "@/components/hamburger-button"
-import { Button } from "@/components/ui/button"
-import { SuggestedQuestions } from "@/components/suggested-questions"
-import { ChatHeader } from "@/components/chat-header"
-import { MessageBubble } from "@/components/message-bubble"
-import { MultimodalInput } from "@/components/multimodal-input"
-import { Sidebar } from "@/components/sidebar"
-import { Canvas } from "@/components/canvas"
-import ResearchPreviewModal from "@/components/research-preview-modal"
-import { VTOPToolHandler } from "@/components/vtop-tool-handler"
-import { VTOPProvider, useVTOP } from "@/components/vtop-context"
-import { toast } from "sonner"
+import { useState, useRef, useEffect, memo } from 'react'
+import { useChat } from 'ai/react'
+import { useRouter } from 'next/navigation'
+import { AnimatePresence, motion } from 'framer-motion'
+import { FileText, Plus } from 'lucide-react'
+import { HamburgerButton } from '@/components/hamburger-button'
+import { Button } from '@/components/ui/button'
+import { SuggestedQuestions } from '@/components/suggested-questions'
+import { ChatHeader } from '@/components/chat-header'
+import { MessageBubble } from '@/components/message-bubble'
+import { MultimodalInput } from '@/components/multimodal-input'
+import { Sidebar } from '@/components/sidebar'
+import { Canvas } from '@/components/canvas'
+import ResearchPreviewModal from '@/components/research-preview-modal'
+import { VTOPToolHandler } from '@/components/vtop-tool-handler'
+import { VTOPProvider, useVTOP } from '@/components/vtop-context'
+import { toast } from 'sonner'
 
 interface ChatInterfaceProps {
   initialMessages?: any[]
@@ -27,7 +27,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const [showFullChat, setShowFullChat] = useState(initialMessages.length > 0)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [canvasOpen, setCanvasOpen] = useState(false)
-  const [canvasContent, setCanvasContent] = useState<string>("")
+  const [canvasContent, setCanvasContent] = useState<string>('')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [hasUserInitiatedConversation, setHasUserInitiatedConversation] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -36,21 +36,21 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const { updateToolResult } = useVTOP()
 
   useEffect(() => {
-    if (typeof window === "undefined") return
-    const saved = localStorage.getItem("sidebarOpen")
-    if (saved !== null) setSidebarOpen(saved === "true")
+    if (typeof window === 'undefined') return
+    const saved = localStorage.getItem('sidebarOpen')
+    if (saved !== null) setSidebarOpen(saved === 'true')
   }, [])
 
   useEffect(() => {
-    if (typeof window === "undefined") return
-    localStorage.setItem("sidebarOpen", String(sidebarOpen))
+    if (typeof window === 'undefined') return
+    localStorage.setItem('sidebarOpen', String(sidebarOpen))
   }, [sidebarOpen])
 
   useEffect(() => {
-    const hasUser = initialMessages.some((m) => m.role === "user")
+    const hasUser = initialMessages.some(m => m.role === 'user')
     setHasUserInitiatedConversation(hasUser)
-  }, [initialMessages])  
-    const {
+  }, [initialMessages])
+  const {
     messages,
     input,
     handleInputChange,
@@ -63,42 +63,38 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     setMessages,
     reload,
   } = useChat({
-    api: "/api/chat",
-    initialMessages: initialMessages.map((msg) => ({
+    api: '/api/chat',
+    initialMessages: initialMessages.map(msg => ({
       id: msg.id,
       role: msg.role,
       content: msg.content,
       toolInvocations: msg.toolInvocations,
     })),
-    body: optimisticChatId
-      ? { id: optimisticChatId }
-      : chatId
-      ? { id: chatId }
-      : undefined,
-    onResponse: (res) => {
+    body: optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : undefined,
+    onResponse: res => {
       if (!showFullChat) setShowFullChat(true)
       setErrorMessage(null)
-      const newId = res.headers.get("X-Chat-Id")
-      const newPath = res.headers.get("X-Chat-Path")
+      const newId = res.headers.get('X-Chat-Id')
+      const newPath = res.headers.get('X-Chat-Path')
       if (newId && newPath && !chatId) {
         setOptimisticChatId(newId)
-        window.history.replaceState({}, "", newPath)
+        window.history.replaceState({}, '', newPath)
       }
     },
-    onError: (err) => {
+    onError: err => {
       console.error(err)
-      toast.error("Something went wrong. Please try again.")
-      setErrorMessage("Unable to connect. Please check your connection and try again.")
+      toast.error('Something went wrong. Please try again.')
+      setErrorMessage('Unable to connect. Please check your connection and try again.')
     },
   })
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isLoading])
 
   useEffect(() => {
     if (error) {
-      setErrorMessage("Unable to connect. Please check your connection and try again.")
+      setErrorMessage('Unable to connect. Please check your connection and try again.')
     }
   }, [error])
 
@@ -112,7 +108,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     originalHandleSubmit(e)
   }
   const handleSuggestedQuestion = async (question: string) => {
-    setInput("")
+    setInput('')
     if (!showFullChat) setShowFullChat(true)
     setErrorMessage(null)
     setHasUserInitiatedConversation(true)
@@ -124,25 +120,25 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   }
 
   const resetToHome = () => {
-    router.push("/")
+    router.push('/')
   }
 
   const openCanvas = () => {
     setCanvasOpen(true)
-  }  
+  }
   const createCanvasFromMessage = (content: string) => {
     setCanvasContent(content)
     setCanvasOpen(true)
-  }  
-    
+  }
+
   const handleLoginClick = () => {
     const triggerEvent = new CustomEvent('vtopLoginTrigger', {
-      detail: { command: 'attendance' }
+      detail: { command: 'attendance' },
     })
     window.dispatchEvent(triggerEvent)
   }
-    const handleVTOPCredentials = async (
-    credentials: { username: string; encryptedPassword: string }, 
+  const handleVTOPCredentials = async (
+    credentials: { username: string; encryptedPassword: string },
     originalToolCall: any
   ) => {
     try {
@@ -153,7 +149,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       }
 
       const toolCallId = originalToolCall.toolCallId || Date.now().toString()
-     //console.log('Handling VTOP credentials for toolCallId:', toolCallId, 'command:', command)
+      //console.log('Handling VTOP credentials for toolCallId:', toolCallId, 'command:', command)
       const updatedMessagesForLoading = messages.map((message: any) => {
         if (message.toolInvocations) {
           const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
@@ -163,19 +159,19 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                 ...toolInvocation,
                 toolCallId: toolCallId, // Ensure toolCallId is set
                 state: 'call', // Set to loading state
-                result: undefined // Clear the credentials required result
+                result: undefined, // Clear the credentials required result
               }
             }
             return toolInvocation
           })
           return {
             ...message,
-            toolInvocations: updatedToolInvocations
+            toolInvocations: updatedToolInvocations,
           }
         }
         return message
       })
-      
+
       setMessages([...updatedMessagesForLoading])
 
       // const loadingToast = toast.loading(`Executing VTOP ${command} command...`)
@@ -192,8 +188,9 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               id: Date.now().toString(),
               role: 'user',
               content: `show me my vtop ${command}`,
-            }
-          ],          directToolCall: {
+            },
+          ],
+          directToolCall: {
             toolName: 'queryVTOP',
             args: {
               command,
@@ -201,59 +198,74 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               password: credentials.encryptedPassword,
               ...originalToolCall.args,
             },
-            toolCallId: toolCallId
+            toolCallId: toolCallId,
           },
-          id: chatId || optimisticChatId,        }),
+          id: chatId || optimisticChatId,
+        }),
       })
 
       // toast.dismiss(loadingToast)
-      
+
       if (response.ok) {
         const result = await response.json()
-        
+
         console.log('VTOP credential submission result:', result)
         if (toolCallId) {
           updateToolResult(toolCallId, command, result.result)
-        }        const updatedMessages = messages.map((message: any) => {
-          if (message.toolInvocations) {            
+        }
+        const updatedMessages = messages.map((message: any) => {
+          if (message.toolInvocations) {
             const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
               if (toolInvocation.toolCallId && toolInvocation.toolCallId === toolCallId) {
-                console.log('Updating tool invocation with result:', result.result, 'for toolCallId:', toolCallId)
+                console.log(
+                  'Updating tool invocation with result:',
+                  result.result,
+                  'for toolCallId:',
+                  toolCallId
+                )
                 return {
                   ...toolInvocation,
                   result: result.result,
-                  state: 'result'
+                  state: 'result',
                 }
               }
               return toolInvocation
             })
-            
-            const updatedParts = message.parts ? message.parts.map((part: any) => {
-              if (part.type === 'tool-invocation' && 
-                  part.toolInvocation?.toolCallId === toolCallId) {
-                return {
-                  ...part,
-                  toolInvocation: {
-                    ...part.toolInvocation,
-                    result: result.result,
-                    state: 'result'
+
+            const updatedParts = message.parts
+              ? message.parts.map((part: any) => {
+                  if (
+                    part.type === 'tool-invocation' &&
+                    part.toolInvocation?.toolCallId === toolCallId
+                  ) {
+                    return {
+                      ...part,
+                      toolInvocation: {
+                        ...part.toolInvocation,
+                        result: result.result,
+                        state: 'result',
+                      },
+                    }
                   }
-                }
-              }
-              return part
-            }) : message.parts
-            
+                  return part
+                })
+              : message.parts
+
             return {
               ...message,
               toolInvocations: updatedToolInvocations,
-              parts: updatedParts
+              parts: updatedParts,
             }
           }
           return message
         })
-          setMessages([...updatedMessages])
-        
-        if (result.result && result.result.success !== false && (result.result.data || result.result.output)) {
+        setMessages([...updatedMessages])
+
+        if (
+          result.result &&
+          result.result.success !== false &&
+          (result.result.data || result.result.output)
+        ) {
           if (chatId) {
             setTimeout(async () => {
               try {
@@ -270,28 +282,31 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
             }, 500)
           }
         } else if (result.result && result.result.success === false) {
-          const errorMessage = result.result.error || result.result.message || 'Unknown error occurred'
-          if (errorMessage.includes('Invalid LoginId/Password') || errorMessage.includes('Login failed')) {
-            toast.error("Invalid VTOP credentials. Please check your username and password.")
+          const errorMessage =
+            result.result.error || result.result.message || 'Unknown error occurred'
+          if (
+            errorMessage.includes('Invalid LoginId/Password') ||
+            errorMessage.includes('Login failed')
+          ) {
+            toast.error('Invalid VTOP credentials. Please check your username and password.')
           } else {
             // toast.error(`VTOP Error: ${errorMessage}`)
           }
         } else {
           // toast.success(`VTOP ${command} command executed successfully!`)
         }
-        
       } else {
-        toast.error("Failed to retrieve VTOP data. Please try again.")
+        toast.error('Failed to retrieve VTOP data. Please try again.')
       }
     } catch (error) {
       console.error('Error executing VTOP tool:', error)
-      toast.error("An error occurred while retrieving VTOP data.")
+      toast.error('An error occurred while retrieving VTOP data.')
     }
   }
 
   if (!showFullChat) {
     return (
-      <VTOPToolHandler 
+      <VTOPToolHandler
         toolInvocations={messages[messages.length - 1]?.toolInvocations}
         onCredentialsSubmit={handleVTOPCredentials}
       >
@@ -302,7 +317,10 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
           <div className="relative z-10 flex flex-col h-full">
             <header className="flex-shrink-0 sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border">
               <div className="flex h-14 items-center px-4 gap-2">
-                <HamburgerButton onClick={() => setSidebarOpen(!sidebarOpen)} className="md:hidden" />
+                <HamburgerButton
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  className="md:hidden"
+                />
               </div>
             </header>
             <div className="flex-1 flex flex-col items-center justify-center px-4 space-y-8">
@@ -310,7 +328,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
+                transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
                 className="w-full max-w-3xl"
               >
                 <MultimodalInput
@@ -322,7 +340,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                   stop={stop}
                 />
               </motion.div>
-              
+
               {errorMessage && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -332,8 +350,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                   {errorMessage}
                 </motion.div>
               )}
-              
-              {isLoading && input.trim() !== "" && (
+
+              {isLoading && input.trim() !== '' && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -343,17 +361,17 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                     <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
                     <div
                       className="w-2 h-2 bg-primary rounded-full animate-pulse"
-                      style={{ animationDelay: "0.2s" }}
+                      style={{ animationDelay: '0.2s' }}
                     ></div>
                     <div
                       className="w-2 h-2 bg-primary rounded-full animate-pulse"
-                      style={{ animationDelay: "0.4s" }}
+                      style={{ animationDelay: '0.4s' }}
                     ></div>
                   </div>
                   <span className="text-sm">thinking...</span>
                 </motion.div>
               )}
-              
+
               <SuggestedQuestions
                 isFirstMessage={true}
                 onQuestionClick={handleSuggestedQuestion}
@@ -367,7 +385,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   }
 
   return (
-    <VTOPToolHandler 
+    <VTOPToolHandler
       toolInvocations={messages[messages.length - 1]?.toolInvocations}
       onCredentialsSubmit={handleVTOPCredentials}
     >
@@ -377,15 +395,15 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         isOpen={canvasOpen}
         onClose={() => {
           setCanvasOpen(false)
-          setCanvasContent("")
+          setCanvasContent('')
         }}
         chatId={optimisticChatId}
         initialDocument={
           canvasContent
             ? {
-                title: "New Document",
+                title: 'New Document',
                 content: canvasContent,
-                type: "document",
+                type: 'document',
               }
             : undefined
         }
@@ -398,7 +416,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
             <Button
               variant="outline"
               onClick={() => {
-                router.push("/")
+                router.push('/')
                 router.refresh()
               }}
               className="h-9"
@@ -424,7 +442,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                 >
                   {errorMessage}
                 </motion.div>
-              )}              <AnimatePresence>
+              )}{' '}
+              <AnimatePresence>
                 {messages.map((message, idx) => (
                   <MessageBubble
                     key={`${message.id}-${idx}`}
@@ -435,28 +454,28 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                   />
                 ))}
               </AnimatePresence>
-              
-              {isLoading && messages.length > 0 && messages[messages.length - 1].role === "user" && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center justify-center space-x-3 text-muted-foreground py-4"
-                >
-                  <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
-                    <div
-                      className="w-2 h-2 bg-primary rounded-full animate-pulse"
-                      style={{ animationDelay: "0.2s" }}
-                    ></div>
-                    <div
-                      className="w-2 h-2 bg-primary rounded-full animate-pulse"
-                      style={{ animationDelay: "0.4s" }}
-                    ></div>
-                  </div>
-                  <span className="text-sm">thinking...</span>
-                </motion.div>
-              )}
-
+              {isLoading &&
+                messages.length > 0 &&
+                messages[messages.length - 1].role === 'user' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center justify-center space-x-3 text-muted-foreground py-4"
+                  >
+                    <div className="flex space-x-1">
+                      <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
+                      <div
+                        className="w-2 h-2 bg-primary rounded-full animate-pulse"
+                        style={{ animationDelay: '0.2s' }}
+                      ></div>
+                      <div
+                        className="w-2 h-2 bg-primary rounded-full animate-pulse"
+                        style={{ animationDelay: '0.4s' }}
+                      ></div>
+                    </div>
+                    <span className="text-sm">thinking...</span>
+                  </motion.div>
+                )}
               <div ref={messagesEndRef} />
             </div>
           </div>

@@ -1,15 +1,15 @@
-"use client"
+'use client'
 
-import type React from "react"
-import { useState, useEffect } from "react"
-import { useRouter, usePathname } from "next/navigation"
-import { signOut, useSession } from "next-auth/react"
-import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { MessageSquare, Plus, Settings, LogOut, Trash2, User, ChevronLeft } from "lucide-react"
-import { motion, AnimatePresence } from "framer-motion"
-import { cn } from "@/lib/utils"
-import { formatDate } from "@/lib/utils"
+import type React from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
+import { signOut, useSession } from 'next-auth/react'
+import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { MessageSquare, Plus, Settings, LogOut, Trash2, User, ChevronLeft } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { cn } from '@/lib/utils'
+import { formatDate } from '@/lib/utils'
 
 interface Chat {
   id: string
@@ -46,13 +46,13 @@ export function Sidebar(props: SidebarProps) {
 
   const fetchChats = async () => {
     try {
-      const response = await fetch("/api/chats")
+      const response = await fetch('/api/chats')
       if (response.ok) {
         const data = await response.json()
         setChats(data)
       }
     } catch (error) {
-      console.error("Error fetching chats:", error)
+      console.error('Error fetching chats:', error)
     } finally {
       setLoading(false)
     }
@@ -63,25 +63,25 @@ export function Sidebar(props: SidebarProps) {
     e.stopPropagation()
     try {
       const response = await fetch(`/api/chat/${chatId}`, {
-        method: "DELETE",
+        method: 'DELETE',
       })
       if (response.ok) {
-        setChats(chats.filter((chat) => chat.id !== chatId))
+        setChats(chats.filter(chat => chat.id !== chatId))
         if (pathname === `/chat/${chatId}`) {
-          router.push("/")
+          router.push('/')
         }
       }
     } catch (error) {
-      console.error("Error deleting chat:", error)
+      console.error('Error deleting chat:', error)
     }
   }
 
   const startNewChat = () => {
     const tempId = `temp-${Date.now()}`
-    setChats((prev) => [
+    setChats(prev => [
       {
         id: tempId,
-        title: "New Chat",
+        title: 'New Chat',
         path: `/chat/${tempId}`,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -89,7 +89,7 @@ export function Sidebar(props: SidebarProps) {
       ...prev,
     ])
     setSelectedChatId(tempId)
-    router.push("/")
+    router.push('/')
     if (window.innerWidth < 768) {
       onToggle()
     }
@@ -111,7 +111,7 @@ export function Sidebar(props: SidebarProps) {
             initial={{ x: -300 }}
             animate={{ x: 0 }}
             exit={{ x: -300 }}
-            transition={{ type: "spring", damping: 30, stiffness: 300 }}
+            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
             className="fixed left-0 top-0 z-50 h-full w-[var(--sidebar-width)] bg-background border-r border-border flex flex-col shadow-xl overflow-hidden"
             onMouseEnter={() => setHovering(true)}
             onMouseLeave={() => setHovering(false)}
@@ -134,13 +134,16 @@ export function Sidebar(props: SidebarProps) {
                 <ChevronLeft className="h-5 w-5" />
               </Button>
             </div>
-            
+
             <div className="p-4 border-b border-border">
               {loading ? (
-                <div className="h-10 bg-muted/60 rounded-lg sidebar-loading-item" style={{ '--delay': 0 } as React.CSSProperties}></div>
+                <div
+                  className="h-10 bg-muted/60 rounded-lg sidebar-loading-item"
+                  style={{ '--delay': 0 } as React.CSSProperties}
+                ></div>
               ) : (
-                <Button 
-                  onClick={startNewChat} 
+                <Button
+                  onClick={startNewChat}
                   className="w-full bg-primary hover:bg-primary/90 text-primary-foreground border-0 rounded-lg transition-all duration-200"
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -155,10 +158,10 @@ export function Sidebar(props: SidebarProps) {
                   <div className="h-full w-full flex flex-col space-y-3">
                     <div className="flex flex-col space-y-2">
                       {[...Array(8)].map((_, i) => (
-                        <div 
-                          key={i} 
-                          className="h-12 bg-muted/60 rounded-lg sidebar-loading-item" 
-                          style={{ '--delay': i } as React.CSSProperties} 
+                        <div
+                          key={i}
+                          className="h-12 bg-muted/60 rounded-lg sidebar-loading-item"
+                          style={{ '--delay': i } as React.CSSProperties}
                         >
                           <div className="flex items-center p-3">
                             <div className="w-4 h-4 rounded-full bg-muted-foreground/20 mr-3"></div>
@@ -177,19 +180,21 @@ export function Sidebar(props: SidebarProps) {
                       <MessageSquare className="h-8 w-8 opacity-50" />
                     </div>
                     <p className="text-sm font-medium mb-1">No chat history</p>
-                    <p className="text-xs text-muted-foreground">Start a conversation to see your history here</p>
+                    <p className="text-xs text-muted-foreground">
+                      Start a conversation to see your history here
+                    </p>
                   </div>
                 ) : (
-                  chats.map((chat) => (
+                  chats.map(chat => (
                     <motion.div
                       key={chat.id}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       className={cn(
-                        "group relative flex items-center p-3 rounded-lg cursor-pointer transition-all",
-                        (selectedChatId === chat.id || pathname === `/chat/${chat.id}`)
-                          ? "bg-muted text-foreground shadow-sm"
-                          : "hover:bg-muted/50 text-muted-foreground hover:text-foreground",
+                        'group relative flex items-center p-3 rounded-lg cursor-pointer transition-all',
+                        selectedChatId === chat.id || pathname === `/chat/${chat.id}`
+                          ? 'bg-muted text-foreground shadow-sm'
+                          : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
                       )}
                       onClick={() => {
                         setSelectedChatId(chat.id)
@@ -202,13 +207,15 @@ export function Sidebar(props: SidebarProps) {
                       <MessageSquare className="h-4 w-4 mr-3 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{chat.title}</p>
-                        <p className="text-xs text-muted-foreground">{formatDate(chat.updatedAt)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(chat.updatedAt)}
+                        </p>
                       </div>
                       <Button
                         variant="ghost"
                         size="sm"
                         className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 hover:bg-destructive hover:text-destructive-foreground"
-                        onClick={(e) => deleteChat(chat.id, e)}
+                        onClick={e => deleteChat(chat.id, e)}
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>
@@ -238,8 +245,8 @@ export function Sidebar(props: SidebarProps) {
                   <div className="flex items-center space-x-3 mb-3">
                     {session?.user?.image ? (
                       <img
-                        src={session.user.image || "/placeholder.svg"}
-                        alt={session.user.name || "User"}
+                        src={session.user.image || '/placeholder.svg'}
+                        alt={session.user.name || 'User'}
                         className="h-8 w-8 rounded-full"
                       />
                     ) : (
@@ -248,8 +255,12 @@ export function Sidebar(props: SidebarProps) {
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-foreground truncate">{session?.user?.name || "User"}</p>
-                      <p className="text-xs text-muted-foreground truncate">{session?.user?.email}</p>
+                      <p className="text-sm text-foreground truncate">
+                        {session?.user?.name || 'User'}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {session?.user?.email}
+                      </p>
                     </div>
                   </div>
                 </>
@@ -257,7 +268,11 @@ export function Sidebar(props: SidebarProps) {
 
               {!loading && (
                 <div className="space-y-1">
-                  <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
+                  >
                     <Settings className="h-4 w-4 mr-2" />
                     Settings
                   </Button>

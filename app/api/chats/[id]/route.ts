@@ -1,22 +1,19 @@
-import { getChat, getMessages } from "@/lib/db"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { getChat, getMessages } from '@/lib/db'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
-      return new Response("Unauthorized", { status: 401 })
+      return new Response('Unauthorized', { status: 401 })
     }
 
     const { id } = await params
     const chat = await getChat(id, session.user.id)
 
     if (!chat) {
-      return new Response("Chat not found", { status: 404 })
+      return new Response('Chat not found', { status: 404 })
     }
 
     const messages = await getMessages(id)
@@ -27,7 +24,7 @@ export async function GET(
       path: chat.path,
       createdAt: chat.created_at,
       updatedAt: chat.updated_at,
-      messages: messages.map((msg) => ({
+      messages: messages.map(msg => ({
         id: msg.id,
         role: msg.role,
         content: msg.content,
@@ -36,7 +33,7 @@ export async function GET(
       })),
     })
   } catch (error) {
-    console.error("Error fetching chat:", error)
-    return new Response("Internal Server Error", { status: 500 })
+    console.error('Error fetching chat:', error)
+    return new Response('Internal Server Error', { status: 500 })
   }
 }

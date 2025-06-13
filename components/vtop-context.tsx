@@ -1,6 +1,6 @@
-"use client"
+'use client'
 
-import React, { createContext, useContext, useState, useCallback } from "react"
+import React, { createContext, useContext, useState, useCallback } from 'react'
 
 interface VTOPToolResult {
   toolCallId: string
@@ -31,16 +31,19 @@ export function VTOPProvider({ children }: { children: React.ReactNode }) {
         toolCallId,
         command,
         result,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       })
       return newMap
     })
     setVersion(prev => prev + 1)
   }, [])
 
-  const getToolResult = useCallback((toolCallId: string) => {
-    return toolResults.get(toolCallId)
-  }, [toolResults])
+  const getToolResult = useCallback(
+    (toolCallId: string) => {
+      return toolResults.get(toolCallId)
+    },
+    [toolResults]
+  )
 
   const clearToolResult = useCallback((toolCallId: string) => {
     setToolResults(prev => {
@@ -50,13 +53,15 @@ export function VTOPProvider({ children }: { children: React.ReactNode }) {
     })
   }, [])
   return (
-    <VTOPContext.Provider value={{
-      toolResults,
-      updateToolResult,
-      getToolResult,
-      clearToolResult,
-      version
-    }}>
+    <VTOPContext.Provider
+      value={{
+        toolResults,
+        updateToolResult,
+        getToolResult,
+        clearToolResult,
+        version,
+      }}
+    >
       {children}
     </VTOPContext.Provider>
   )

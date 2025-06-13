@@ -20,6 +20,7 @@
     "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-scroll-area": "latest",
     "@radix-ui/react-slot": "latest",
+    "@radix-ui/react-tooltip": "^1.2.7",
     "@sparticuz/chromium": "latest",
     "@tailwindcss/typography": "latest",
     "@types/crypto-js": "^4.2.2",
@@ -54,6 +55,7 @@
     "eslint": "^8.56.0",
     "eslint-config-next": "14.1.0",
     "postcss": "^8.4.33",
+    "prettier": "^3.5.3",
     "prisma": "^5.10.2",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.3.3"

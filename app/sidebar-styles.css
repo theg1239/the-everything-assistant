@@ -14,7 +14,9 @@
   padding: 0.5rem;
   color: #94a3b8;
   transition: all 0.2s ease-in-out;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
 .sidebar-toggle-collapsed:hover {

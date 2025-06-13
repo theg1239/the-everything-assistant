@@ -1,21 +1,21 @@
-"use client"
+'use client'
 
-import React from "react"
-import { Button } from "@/components/ui/button"
+import React from 'react'
+import { Button } from '@/components/ui/button'
 
 interface HamburgerButtonProps {
   onClick: () => void
   className?: string
 }
 
-export function HamburgerButton({ onClick, className = "" }: HamburgerButtonProps) {
+export function HamburgerButton({ onClick, className = '' }: HamburgerButtonProps) {
   return (
     <Button
       variant="outline"
       size="icon"
       onClick={onClick}
       className={`text-foreground hover:bg-muted ${className}`}
-      style={{ 
+      style={{
         zIndex: 100,
         position: 'relative',
         minWidth: '40px',
@@ -23,17 +23,19 @@ export function HamburgerButton({ onClick, className = "" }: HamburgerButtonProp
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        border: '1px solid hsl(var(--border))'
+        border: '1px solid hsl(var(--border))',
       }}
-    >      <svg 
-        xmlns="http://www.w3.org/2000/svg" 
-        width="24" 
-        height="24" 
-        viewBox="0 0 24 24" 
-        fill="none" 
-        stroke="currentColor" 
-        strokeWidth="2" 
-        strokeLinecap="round" 
+    >
+      {' '}
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
         strokeLinejoin="round"
       >
         <line x1="4" y1="6" x2="20" y2="6"></line>

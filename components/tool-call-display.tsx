@@ -299,7 +299,7 @@ const ToolCallLoadingState = ({ toolCalls }: { toolCalls: any[] }) => (
     exit={{ opacity: 0, y: -10 }}
     className="mt-3"
   >
-    <Card className="overflow-hidden border-border/50 bg-muted/30">
+    <Card className="w-full overflow-hidden border-border/50 bg-muted/30">
       <CardContent className="p-4">
         <div className="flex items-center space-x-3">
           <div className="relative">
@@ -386,7 +386,7 @@ const ToolCallResultsSummary = ({
           animate={{ opacity: 1, y: 0 }}
           className="mt-3"
         >
-          <Card className="border-red-500/20 bg-red-500/5">
+          <Card className="w-full border-red-500/20 bg-red-500/5">
             <CardContent className="p-4">
               <div className="flex items-center space-x-3">
                 <AlertCircle className="h-5 w-5 text-red-400" />
@@ -487,7 +487,7 @@ const ToolCallResultsSummary = ({
           animate={{ opacity: 1, y: 0 }}
           className="mt-3"
         >
-          <Card className="overflow-hidden border-blue-500/20 bg-blue-500/5">
+          <Card className="w-full overflow-hidden border-blue-500/20 bg-blue-500/5">
             <CardContent className="p-4">
               <div className="flex items-center space-x-3">
                 <div className="relative">
@@ -530,7 +530,7 @@ const ToolCallResultsSummary = ({
         animate={{ opacity: 1, y: 0 }}
         className="mt-3"
       >
-        <Card className="border-orange-500/20 bg-orange-500/5">
+        <Card className="w-full border-orange-500/20 bg-orange-500/5">
           <CardContent className="p-4">
             <div className="flex items-center space-x-3">
               <AlertCircle className="h-5 w-5 text-orange-400" />

@@ -483,7 +483,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
     )
   }
   return (
-    <Card className="hover:shadow-sm transition-all duration-200 border-border bg-card">
+    <Card className="w-full hover:shadow-sm transition-all duration-200 border-border bg-card">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">          <CardTitle className="text-sm font-medium text-card-foreground flex items-center gap-2">
             <GraduationCap className="h-4 w-4 text-blue-500" />
@@ -505,7 +505,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
   )
 }
 const PaperCard = ({ paper }: { paper: any }) => (  
-  <Card className="hover:shadow-sm transition-all duration-200 border-border bg-card">
+  <Card className="w-full hover:shadow-sm transition-all duration-200 border-border bg-card">
     <CardHeader className="pb-3">
       <CardTitle className="text-sm font-medium line-clamp-2 text-card-foreground">
         {paper.title}
@@ -568,7 +568,7 @@ const PaperCard = ({ paper }: { paper: any }) => (
 )
 
 const FacultyCard = ({ faculty }: { faculty: any }) => (
-  <Card className="hover:shadow-sm transition-all duration-200 border-border bg-card">
+  <Card className="w-full hover:shadow-sm transition-all duration-200 border-border bg-card">
     <CardHeader className="pb-3">
       <div className="space-y-2">
         <CardTitle className="text-sm font-medium text-card-foreground">
@@ -613,7 +613,7 @@ const FacultyCard = ({ faculty }: { faculty: any }) => (
 )
 
 const CompanyCard = ({ company }: { company: any }) => (
-  <Card className="hover:shadow-sm transition-all duration-200 border-border bg-card">
+  <Card className="w-full hover:shadow-sm transition-all duration-200 border-border bg-card">
     <CardHeader className="pb-3">
       <div className="space-y-2">
         <CardTitle className="text-sm font-medium text-card-foreground">
@@ -655,7 +655,7 @@ const CompanyCard = ({ company }: { company: any }) => (
 )
 
 const PlacementCard = ({ placement }: { placement: any }) => (
-  <Card className="hover:shadow-sm transition-all duration-200 border-border bg-card">
+  <Card className="w-full hover:shadow-sm transition-all duration-200 border-border bg-card">
     <CardHeader className="pb-3">
       <div className="space-y-2">
         <CardTitle className="text-sm font-medium text-card-foreground">
@@ -762,7 +762,7 @@ const MessMenuCard = ({ menuData }: { menuData: any }) => {
   }
 
   return (
-    <Card className="hover:shadow-sm transition-all duration-200 border-border bg-card">
+    <Card className="w-full hover:shadow-sm transition-all duration-200 border-border bg-card">
       <CardHeader className="pb-3">
         <div className="space-y-2">
           <div className="flex items-center gap-2">
@@ -1146,10 +1146,16 @@ const PureArtifactDisplay = ({ title, icon, data, type, className, onLoginClick 
     }    const items = Array.isArray(data) ? data : [data]
     const displayItems = isExpanded ? items : items.slice(0, 3)
 
-    return (      <div className={cn(
-        "grid gap-3",
-        type === 'mess-menu' || type === 'vtop-data' ? "grid-cols-1" : "md:grid-cols-2 lg:grid-cols-3"
-      )}>{displayItems.map((item, index) => {          switch (type) {
+    return (
+        <div
+        className={cn(
+          "grid gap-3 grid-cols-1",
+          type === 'mess-menu' || type === 'vtop-data'
+            ? ""
+            : "md:grid-cols-2 lg:grid-cols-3"
+        )}
+      >
+          {displayItems.map((item, index) => {          switch (type) {
             case 'papers':
               return <PaperCard key={index} paper={item} />
             case 'faculty':

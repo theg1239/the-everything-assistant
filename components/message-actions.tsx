@@ -1,9 +1,9 @@
-"use client"
+'use client'
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { ThumbsUp, ThumbsDown, Copy, FileText } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { ThumbsUp, ThumbsDown, Copy, FileText } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface MessageActionsProps {
   messageId: string
@@ -12,16 +12,21 @@ interface MessageActionsProps {
   onCreateCanvas?: (content: string) => void
 }
 
-export function MessageActions({ messageId, chatId, content, onCreateCanvas }: MessageActionsProps) {
+export function MessageActions({
+  messageId,
+  chatId,
+  content,
+  onCreateCanvas,
+}: MessageActionsProps) {
   const [vote, setVote] = useState<boolean | null>(null)
   const [copied, setCopied] = useState(false)
 
   const handleVote = async (isUpvoted: boolean) => {
     try {
-      await fetch("/api/vote", {
-        method: "POST",
+      await fetch('/api/vote', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           chatId,
@@ -31,7 +36,7 @@ export function MessageActions({ messageId, chatId, content, onCreateCanvas }: M
       })
       setVote(isUpvoted)
     } catch (error) {
-      console.error("Error voting:", error)
+      console.error('Error voting:', error)
     }
   }
 
@@ -41,7 +46,7 @@ export function MessageActions({ messageId, chatId, content, onCreateCanvas }: M
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch (error) {
-      console.error("Error copying:", error)
+      console.error('Error copying:', error)
     }
   }
 
@@ -57,7 +62,10 @@ export function MessageActions({ messageId, chatId, content, onCreateCanvas }: M
         variant="ghost"
         size="sm"
         onClick={() => handleVote(true)}
-        className={cn("h-8 w-8 p-0 text-slate-400 hover:text-green-400", vote === true && "text-green-400")}
+        className={cn(
+          'h-8 w-8 p-0 text-slate-400 hover:text-green-400',
+          vote === true && 'text-green-400'
+        )}
       >
         <ThumbsUp className="h-3 w-3" />
       </Button>
@@ -66,7 +74,10 @@ export function MessageActions({ messageId, chatId, content, onCreateCanvas }: M
         variant="ghost"
         size="sm"
         onClick={() => handleVote(false)}
-        className={cn("h-8 w-8 p-0 text-slate-400 hover:text-red-400", vote === false && "text-red-400")}
+        className={cn(
+          'h-8 w-8 p-0 text-slate-400 hover:text-red-400',
+          vote === false && 'text-red-400'
+        )}
       >
         <ThumbsDown className="h-3 w-3" />
       </Button>

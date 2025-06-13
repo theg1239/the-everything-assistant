@@ -1,16 +1,22 @@
-import { NextRequest, NextResponse } from "next/server"
-import { generateObject } from "ai"
-import { google } from "@ai-sdk/google"
-import { z } from "zod"
+import { NextRequest, NextResponse } from 'next/server'
+import { generateObject } from 'ai'
+import { google } from '@ai-sdk/google'
+import { z } from 'zod'
 
 const smartMatchSchema = z.object({
-  bestMatches: z.array(z.object({
-    index: z.number(),
-    confidence: z.number().min(0).max(1),
-    reason: z.string()
-  })).describe("Array of best matching items with confidence scores"),
-  selectionString: z.string().describe("Formatted selection string for CLI (e.g., '1,3,5' or '2-7')"),
-  explanation: z.string().describe("Human-readable explanation of the selection")
+  bestMatches: z
+    .array(
+      z.object({
+        index: z.number(),
+        confidence: z.number().min(0).max(1),
+        reason: z.string(),
+      })
+    )
+    .describe('Array of best matching items with confidence scores'),
+  selectionString: z
+    .string()
+    .describe("Formatted selection string for CLI (e.g., '1,3,5' or '2-7')"),
+  explanation: z.string().describe('Human-readable explanation of the selection'),
 })
 
 export async function POST(req: NextRequest) {
@@ -28,7 +34,7 @@ export async function POST(req: NextRequest) {
     const formattedOptions = options.map((option: any, index: number) => ({
       index: index + 1,
       description: option.description || option.text || `Option ${index + 1}`,
-      number: option.number || index + 1
+      number: option.number || index + 1,
     }))
 
     const result = await generateObject({
@@ -77,15 +83,14 @@ Be intelligent about partial matches and context clues.
     })
 
     return NextResponse.json(result.object)
-
   } catch (error) {
     console.error('Smart matching error:', error)
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to perform smart matching',
         bestMatches: [],
-        selectionString: "0",
-        explanation: "Could not process the request. Defaulting to all items."
+        selectionString: '0',
+        explanation: 'Could not process the request. Defaulting to all items.',
       },
       { status: 500 }
     )

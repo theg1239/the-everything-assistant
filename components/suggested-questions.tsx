@@ -1,9 +1,9 @@
-"use client"
+'use client'
 
-import { motion } from "framer-motion"
-import { Button } from "@/components/ui/button"
-import { getRandomQuestions } from "@/lib/question-generator"
-import { useEffect, useState } from "react"
+import { motion } from 'framer-motion'
+import { Button } from '@/components/ui/button'
+import { getRandomQuestions } from '@/lib/question-generator'
+import { useEffect, useState } from 'react'
 
 interface SuggestedQuestionsProps {
   isFirstMessage: boolean
@@ -11,9 +11,13 @@ interface SuggestedQuestionsProps {
   sidebarOpen?: boolean
 }
 
-export function SuggestedQuestions({ isFirstMessage, onQuestionClick, sidebarOpen = false }: SuggestedQuestionsProps) {
+export function SuggestedQuestions({
+  isFirstMessage,
+  onQuestionClick,
+  sidebarOpen = false,
+}: SuggestedQuestionsProps) {
   const [questions, setQuestions] = useState<string[]>([])
-  
+
   useEffect(() => {
     setQuestions(getRandomQuestions(6, isFirstMessage))
   }, [isFirstMessage])
@@ -22,7 +26,7 @@ export function SuggestedQuestions({ isFirstMessage, onQuestionClick, sidebarOpe
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, delay: 0.4, ease: "easeOut" }}
+      transition={{ duration: 0.6, delay: 0.4, ease: 'easeOut' }}
       className="flex flex-wrap gap-2 justify-center w-full max-w-2xl mx-auto px-4"
     >
       {questions.map((question, index) => (

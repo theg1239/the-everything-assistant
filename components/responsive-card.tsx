@@ -1,12 +1,12 @@
-"use client"
+'use client'
 
-import type React from "react"
+import type React from 'react'
 
-import { useState } from "react"
-import { ChevronDown, ChevronUp, ExternalLink } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
+import { useState } from 'react'
+import { ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 interface ResponsiveCardProps {
   title: string
@@ -42,7 +42,7 @@ export function ResponsiveCard({
   const needsExpansion = contentHeight !== null && contentHeight > maxHeight
 
   return (
-    <Card className={cn("overflow-hidden border-border bg-card", className)}>
+    <Card className={cn('overflow-hidden border-border bg-card', className)}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -56,8 +56,11 @@ export function ResponsiveCard({
         <div
           ref={contentRef}
           className={cn(
-            "transition-all duration-300",
-            !showFullContent && needsExpansion && !isExpanded && "max-h-[300px] overflow-hidden relative",
+            'transition-all duration-300',
+            !showFullContent &&
+              needsExpansion &&
+              !isExpanded &&
+              'max-h-[300px] overflow-hidden relative'
           )}
         >
           {children}
@@ -69,7 +72,12 @@ export function ResponsiveCard({
 
         {needsExpansion && !showFullContent && (
           <div className="mt-2 flex justify-center">
-            <Button variant="ghost" size="sm" onClick={() => setIsExpanded(!isExpanded)} className="text-xs">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="text-xs"
+            >
               {isExpanded ? (
                 <>
                   <ChevronUp className="h-3 w-3 mr-1" />
@@ -83,16 +91,21 @@ export function ResponsiveCard({
               )}
             </Button>
 
-            <Button variant="outline" size="sm" onClick={() => setShowFullContent(true)} className="text-xs ml-2">
+            {/* <Button variant="outline" size="sm" onClick={() => setShowFullContent(true)} className="text-xs ml-2">
               <ExternalLink className="h-3 w-3 mr-1" />
               View Full
-            </Button>
+            </Button> */}
           </div>
         )}
 
         {showFullContent && (
           <div className="mt-2 flex justify-center">
-            <Button variant="outline" size="sm" onClick={() => setShowFullContent(false)} className="text-xs">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowFullContent(false)}
+              className="text-xs"
+            >
               Close Full View
             </Button>
           </div>

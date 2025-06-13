@@ -1,7 +1,7 @@
-"use client"
+'use client'
 
-import { memo } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { memo } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Loader2,
   Sparkles,
@@ -12,13 +12,13 @@ import {
   GraduationCap,
   TrendingUp,
   UtensilsCrossed,
-} from "lucide-react"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { ArtifactDisplay } from "./artifact-display"
-import { useVTOP } from "./vtop-context"
-import { useMediaQuery } from "@/hooks/use-media-query"
+} from 'lucide-react'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { ArtifactDisplay } from './artifact-display'
+import { useVTOP } from './vtop-context'
+import { useMediaQuery } from '@/hooks/use-media-query'
 
 interface ToolCallDisplayProps {
   toolCalls: any[]
@@ -26,52 +26,56 @@ interface ToolCallDisplayProps {
 }
 
 const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) => {
-  if (toolName === "queryVTOP") {
+  if (toolName === 'queryVTOP') {
     if (result.data || result.output) {
       const vtopData = result.data || result.output
-      const command = result.command || "unknown"
+      const command = result.command || 'unknown'
 
       let parsedData = vtopData
-      if (typeof vtopData === "string") {
-        if (vtopData.includes("│") && vtopData.includes("──")) {
-          const lines = vtopData.split("\n").filter((line) => line.trim() && !line.includes("──"))
+      if (typeof vtopData === 'string') {
+        if (vtopData.includes('│') && vtopData.includes('──')) {
+          const lines = vtopData.split('\n').filter(line => line.trim() && !line.includes('──'))
 
           if (lines.length > 1) {
             const firstLine = lines[0]
-              .split("│")
-              .map((h) => h.trim())
-              .filter((h) => h)
-            if (firstLine.length === 2 && firstLine[0] === "FIELD" && firstLine[1] === "INFORMATION") {
+              .split('│')
+              .map(h => h.trim())
+              .filter(h => h)
+            if (
+              firstLine.length === 2 &&
+              firstLine[0] === 'FIELD' &&
+              firstLine[1] === 'INFORMATION'
+            ) {
               const profileData: any = {}
               const dataLines = lines.slice(1)
 
-              dataLines.forEach((line) => {
+              dataLines.forEach(line => {
                 const cells = line
-                  .split("│")
-                  .map((c) => c.trim())
-                  .filter((c) => c)
+                  .split('│')
+                  .map(c => c.trim())
+                  .filter(c => c)
                 if (cells.length >= 2) {
-                  const fieldName = cells[0].replace(/\[32m|\[0m/g, "")
-                  const fieldValue = cells[1].replace(/\[32m|\[0m/g, "")
+                  const fieldName = cells[0].replace(/\[32m|\[0m/g, '')
+                  const fieldValue = cells[1].replace(/\[32m|\[0m/g, '')
                   profileData[fieldName] = fieldValue
                 }
               })
               parsedData = profileData
             } else {
-              const headers = firstLine.filter((h) => h !== "INDEX")
-              const rows = lines.slice(1).map((line) => {
+              const headers = firstLine.filter(h => h !== 'INDEX')
+              const rows = lines.slice(1).map(line => {
                 const cells = line
-                  .split("│")
-                  .map((c) => c.trim())
-                  .filter((c) => c)
+                  .split('│')
+                  .map(c => c.trim())
+                  .filter(c => c)
                 const row: any = {}
                 headers.forEach((header, index) => {
-                  if (cells[index + (firstLine.includes("INDEX") ? 1 : 0)]) {
-                    let cellValue = cells[index + (firstLine.includes("INDEX") ? 1 : 0)]
+                  if (cells[index + (firstLine.includes('INDEX') ? 1 : 0)]) {
+                    let cellValue = cells[index + (firstLine.includes('INDEX') ? 1 : 0)]
                     cellValue = cellValue
-                      .replace(/\[32m|\[0m|\[31m|\[33m|\[34m|\[35m|\[36m|\[37m/g, "") // Remove ANSI color codes
-                      .replace(/[^\x20-\x7E]/g, " ") // Replace non-ASCII characters with space
-                      .replace(/\s+/g, " ") // Normalize whitespace
+                      .replace(/\[32m|\[0m|\[31m|\[33m|\[34m|\[35m|\[36m|\[37m/g, '') // Remove ANSI color codes
+                      .replace(/[^\x20-\x7E]/g, ' ') // Replace non-ASCII characters with space
+                      .replace(/\s+/g, ' ') // Normalize whitespace
                       .trim()
                     row[header] = cellValue
                   }
@@ -92,19 +96,19 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
 
       const formatCommandName = (cmd: string) => {
         const commandMap: { [key: string]: string } = {
-          "class-message": "Class Message",
-          "exam-schedule": "Exam Schedule",
-          "library-dues": "Library Dues",
-          "leave-status": "Leave Status",
-          nightslip: "Night Slip",
-          "course-page": "Course Page",
-          da: "Digital Assignment",
+          'class-message': 'Class Message',
+          'exam-schedule': 'Exam Schedule',
+          'library-dues': 'Library Dues',
+          'leave-status': 'Leave Status',
+          nightslip: 'Night Slip',
+          'course-page': 'Course Page',
+          da: 'Digital Assignment',
         }
-        return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, " ")
+        return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ')
       }
 
       return {
-        type: "vtop-data" as const,
+        type: 'vtop-data' as const,
         title: `VTOP ${formatCommandName(command)} Data`,
         icon: <GraduationCap className="h-5 w-5 text-blue-500" />,
         data: {
@@ -119,7 +123,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
           error: result.error,
           message: result.message,
         },
-        source: "VTOP",
+        source: 'VTOP',
       }
     }
 
@@ -128,24 +132,34 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     }
 
     if (result.success === false || result.error) {
-      let errorMessage = result.error || result.message || ""
+      let errorMessage = result.error || result.message || ''
 
-      if (!errorMessage || errorMessage === "500" || errorMessage.toLowerCase().includes("request failed")) {
+      if (
+        !errorMessage ||
+        errorMessage === '500' ||
+        errorMessage.toLowerCase().includes('request failed')
+      ) {
         const rawData = result.output || result.data
-        if (typeof rawData === "string") {
-          if (rawData.includes("Login failed") || rawData.includes("session could not be established")) {
-            errorMessage = "Login failed - incorrect username/password"
-          } else if (rawData.includes("Invalid LoginId/Password")) {
-            errorMessage = "Invalid LoginId/Password"
-          } else if (rawData.includes("credentials required") || rawData.includes("VTOP credentials required")) {
-            errorMessage = "VTOP credentials required"
-          } else if (rawData.includes("error") || rawData.includes("Error")) {
-            const lines = rawData.split("\n")
+        if (typeof rawData === 'string') {
+          if (
+            rawData.includes('Login failed') ||
+            rawData.includes('session could not be established')
+          ) {
+            errorMessage = 'Login failed - incorrect username/password'
+          } else if (rawData.includes('Invalid LoginId/Password')) {
+            errorMessage = 'Invalid LoginId/Password'
+          } else if (
+            rawData.includes('credentials required') ||
+            rawData.includes('VTOP credentials required')
+          ) {
+            errorMessage = 'VTOP credentials required'
+          } else if (rawData.includes('error') || rawData.includes('Error')) {
+            const lines = rawData.split('\n')
             const errorLine = lines.find(
-              (line) =>
-                line.toLowerCase().includes("error") ||
-                line.toLowerCase().includes("failed") ||
-                line.toLowerCase().includes("invalid"),
+              line =>
+                line.toLowerCase().includes('error') ||
+                line.toLowerCase().includes('failed') ||
+                line.toLowerCase().includes('invalid')
             )
             if (errorLine) {
               errorMessage = errorLine.trim()
@@ -155,50 +169,50 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
       }
 
       const isCredentialError =
-        errorMessage.includes("VTOP credentials required") ||
-        errorMessage.includes("credentials") ||
-        (errorMessage.includes("500") && !errorMessage.includes("server error"))
+        errorMessage.includes('VTOP credentials required') ||
+        errorMessage.includes('credentials') ||
+        (errorMessage.includes('500') && !errorMessage.includes('server error'))
       const isAuthError =
-        errorMessage.includes("Invalid LoginId/Password") ||
-        errorMessage.includes("Login failed") ||
-        errorMessage.includes("session could not be established") ||
-        errorMessage.includes("incorrect username/password") ||
-        errorMessage.includes("authentication")
+        errorMessage.includes('Invalid LoginId/Password') ||
+        errorMessage.includes('Login failed') ||
+        errorMessage.includes('session could not be established') ||
+        errorMessage.includes('incorrect username/password') ||
+        errorMessage.includes('authentication')
 
       if (isCredentialError || isAuthError) {
         return null
       }
 
-      if (errorMessage === "500" || errorMessage.toLowerCase().includes("request failed")) {
+      if (errorMessage === '500' || errorMessage.toLowerCase().includes('request failed')) {
         return null
       }
 
       const formatCommandName = (cmd: string) => {
         const commandMap: { [key: string]: string } = {
-          "class-message": "Class Message",
-          "exam-schedule": "Exam Schedule",
-          "library-dues": "Library Dues",
-          "leave-status": "Leave Status",
-          nightslip: "Night Slip",
-          "course-page": "Course Page",
-          da: "Digital Assignment",
+          'class-message': 'Class Message',
+          'exam-schedule': 'Exam Schedule',
+          'library-dues': 'Library Dues',
+          'leave-status': 'Leave Status',
+          nightslip: 'Night Slip',
+          'course-page': 'Course Page',
+          da: 'Digital Assignment',
         }
-        return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, " ")
+        return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ')
       }
 
       return {
-        type: "vtop-data" as const,
-        title: `VTOP ${formatCommandName(result.command || "data")} Data`,
+        type: 'vtop-data' as const,
+        title: `VTOP ${formatCommandName(result.command || 'data')} Data`,
         icon: <GraduationCap className="h-5 w-5 text-blue-500" />,
         data: {
-          command: result.command || "data",
+          command: result.command || 'data',
           requiresCredentials: false,
           success: false,
           error: errorMessage,
           message: result.message,
           rawOutput: result.output || result.data,
         },
-        source: "VTOP Portal",
+        source: 'VTOP Portal',
       }
     }
 
@@ -207,20 +221,20 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
 
   if (result.papers && result.papers.length > 0) {
     return {
-      type: "papers" as const,
+      type: 'papers' as const,
       title: `${result.papers.length} Past Papers`,
       icon: <GraduationCap className="h-5 w-5 text-blue-400" />,
       data: result.papers.map((paper: any) => ({
         ...paper,
         link: paper.link || paper.url || paper.pdfUrl || paper.downloadUrl,
       })),
-      source: result.source || toolName || "Database Search",
+      source: result.source || toolName || 'Database Search',
     }
   }
 
   if (result.data && result.data.todayMenu && result.data.messType) {
     return {
-      type: "mess-menu" as const,
+      type: 'mess-menu' as const,
       title: `${result.data.messType} - ${result.data.hostelType}`,
       icon: <UtensilsCrossed className="h-5 w-5 text-orange-400" />,
       data: {
@@ -234,47 +248,52 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         formattedMenu: result.formattedMenu || result.data.formattedMenu,
         message: result.message,
       },
-      source: toolName || "Mess Menu System",
+      source: toolName || 'Mess Menu System',
     }
   }
 
   if (result.faculty && result.faculty.length > 0) {
     return {
-      type: "faculty" as const,
+      type: 'faculty' as const,
       title: `${result.faculty.length} Faculty Members`,
       icon: <Users className="h-5 w-5 text-purple-400" />,
       data: result.faculty,
-      source: result.source || toolName || "Faculty Directory",
+      source: result.source || toolName || 'Faculty Directory',
     }
   }
 
   if (result.companies && result.companies.length > 0) {
     return {
-      type: "companies" as const,
+      type: 'companies' as const,
       title: `${result.companies.length} Companies`,
       icon: <Building2 className="h-5 w-5 text-cyan-400" />,
       data: result.companies,
-      source: result.source || toolName || "Company Database",
+      source: result.source || toolName || 'Company Database',
     }
   }
 
   if (result.placements && result.placements.length > 0) {
     return {
-      type: "placements" as const,
+      type: 'placements' as const,
       title: `${result.placements.length} Placement Records`,
       icon: <TrendingUp className="h-5 w-5 text-green-400" />,
       data: result.placements,
-      source: result.source || toolName || "Placement Data",
+      source: result.source || toolName || 'Placement Data',
     }
   }
 
   if (
-    (toolName === "interactiveCoursePage" || toolName === "queryVTOP") &&
-    (result.type === "interactive-course-page" || result.step || result.options || result.interactiveState)
+    (toolName === 'interactiveCoursePage' || toolName === 'queryVTOP') &&
+    (result.type === 'interactive-course-page' ||
+      result.step ||
+      result.options ||
+      result.interactiveState)
   ) {
-    const stepName = result.step ? result.step.charAt(0).toUpperCase() + result.step.slice(1) : "Interactive Workflow"
+    const stepName = result.step
+      ? result.step.charAt(0).toUpperCase() + result.step.slice(1)
+      : 'Interactive Workflow'
     return {
-      type: "interactive-course-page" as const,
+      type: 'interactive-course-page' as const,
       title: `Course Page - ${stepName}`,
       icon: <GraduationCap className="h-5 w-5 text-blue-500" />,
       data: {
@@ -290,21 +309,21 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         interactiveState: result.interactiveState,
         canResume: result.canResume,
       },
-      source: "VTOP Interactive",
+      source: 'VTOP Interactive',
     }
   }
 
   return {
-    type: "general" as const,
-    title: "Search Results",
+    type: 'general' as const,
+    title: 'Search Results',
     icon: <FileSearch className="h-5 w-5 text-slate-400" />,
     data: result,
-    source: result.source || toolName || "Search",
+    source: result.source || toolName || 'Search',
   }
 }
 
 const ToolCallLoadingState = ({ toolCalls }: { toolCalls: any[] }) => {
-  const isMobile = useMediaQuery("(max-width: 640px)")
+  const isMobile = useMediaQuery('(max-width: 640px)')
 
   return (
     <motion.div
@@ -320,9 +339,11 @@ const ToolCallLoadingState = ({ toolCalls }: { toolCalls: any[] }) => {
               <Loader2 className="h-5 w-5 text-primary animate-spin" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-foreground truncate">Searching for data...</div>
+              <div className="text-sm font-medium text-foreground truncate">
+                Searching for data...
+              </div>
               <div className="text-xs text-muted-foreground mt-1">
-                Running {toolCalls.length} tool{toolCalls.length > 1 ? "s" : ""}
+                Running {toolCalls.length} tool{toolCalls.length > 1 ? 's' : ''}
               </div>
             </div>
             <Sparkles className="h-4 w-4 text-muted-foreground animate-pulse" />
@@ -340,46 +361,52 @@ const ToolCallResultsSummary = ({
   toolCalls: any[]
   onLoginClick?: () => void
 }) => {
-  const completedTools = toolCalls.filter((tool) => tool.result)
-  const isMobile = useMediaQuery("(max-width: 640px)")
+  const completedTools = toolCalls.filter(tool => tool.result)
+  const isMobile = useMediaQuery('(max-width: 640px)')
 
   const enrichedToolCalls = toolCalls
   const artifacts = enrichedToolCalls
-    .filter((tool) => tool.result)
-    .map((tool) => getArtifactConfig(tool.result, tool.toolName, tool.toolCallId))
+    .filter(tool => tool.result)
+    .map(tool => getArtifactConfig(tool.result, tool.toolName, tool.toolCallId))
     .filter(
       (config): config is NonNullable<typeof config> =>
         config !== null &&
         config !== undefined &&
         config.data &&
-        (Array.isArray(config.data) ? config.data.length > 0 : true),
+        (Array.isArray(config.data) ? config.data.length > 0 : true)
     )
 
-  const failedTools = enrichedToolCalls.filter((tool) => {
+  const failedTools = enrichedToolCalls.filter(tool => {
     if (tool.result && tool.result.success === false) {
-      if (tool.toolName === "queryVTOP") {
-        let errorMessage = tool.result.error || tool.result.message || ""
+      if (tool.toolName === 'queryVTOP') {
+        let errorMessage = tool.result.error || tool.result.message || ''
 
-        if (!errorMessage || errorMessage === "500") {
+        if (!errorMessage || errorMessage === '500') {
           const rawData = tool.result.output || tool.result.data
-          if (typeof rawData === "string") {
-            if (rawData.includes("Login failed") || rawData.includes("session could not be established")) {
-              errorMessage = "Login failed - incorrect username/password"
-            } else if (rawData.includes("Invalid LoginId/Password")) {
-              errorMessage = "Invalid LoginId/Password"
-            } else if (rawData.includes("credentials required") || rawData.includes("VTOP credentials required")) {
-              errorMessage = "VTOP credentials required"
+          if (typeof rawData === 'string') {
+            if (
+              rawData.includes('Login failed') ||
+              rawData.includes('session could not be established')
+            ) {
+              errorMessage = 'Login failed - incorrect username/password'
+            } else if (rawData.includes('Invalid LoginId/Password')) {
+              errorMessage = 'Invalid LoginId/Password'
+            } else if (
+              rawData.includes('credentials required') ||
+              rawData.includes('VTOP credentials required')
+            ) {
+              errorMessage = 'VTOP credentials required'
             }
           }
         }
 
         const isCredentialError =
-          errorMessage.includes("VTOP credentials required") || errorMessage.includes("credentials")
+          errorMessage.includes('VTOP credentials required') || errorMessage.includes('credentials')
         const isAuthError =
-          errorMessage.includes("Invalid LoginId/Password") ||
-          errorMessage.includes("Login failed") ||
-          errorMessage.includes("session could not be established") ||
-          errorMessage.includes("incorrect username/password")
+          errorMessage.includes('Invalid LoginId/Password') ||
+          errorMessage.includes('Login failed') ||
+          errorMessage.includes('session could not be established') ||
+          errorMessage.includes('incorrect username/password')
 
         if (isAuthError) {
           tool.result.error = errorMessage
@@ -395,8 +422,10 @@ const ToolCallResultsSummary = ({
   if (artifacts.length === 0 && completedTools.length > 0) {
     if (failedTools.length > 0) {
       const firstFailedTool = failedTools[0]
-      const errorMessage = firstFailedTool.result.error || firstFailedTool.result.message || "An error occurred"
-      const isAuthError = errorMessage.includes("Invalid LoginId/Password") || errorMessage.includes("Login failed")
+      const errorMessage =
+        firstFailedTool.result.error || firstFailedTool.result.message || 'An error occurred'
+      const isAuthError =
+        errorMessage.includes('Invalid LoginId/Password') || errorMessage.includes('Login failed')
 
       return (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3">
@@ -406,17 +435,20 @@ const ToolCallResultsSummary = ({
                 <AlertCircle className="h-5 w-5 text-red-400" />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-foreground truncate">
-                    {firstFailedTool.toolName === "queryVTOP" ? "VTOP Error" : "Search Error"}
+                    {firstFailedTool.toolName === 'queryVTOP' ? 'VTOP Error' : 'Search Error'}
                   </div>
-                  <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{errorMessage}</div>
+                  <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                    {errorMessage}
+                  </div>
                 </div>
                 {isAuthError && onLoginClick && (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      const command = firstFailedTool.result.command || firstFailedTool.args?.command || "data"
-                      const triggerEvent = new CustomEvent("vtopLoginTrigger", {
+                      const command =
+                        firstFailedTool.result.command || firstFailedTool.args?.command || 'data'
+                      const triggerEvent = new CustomEvent('vtopLoginTrigger', {
                         detail: {
                           command,
                           toolCallId: firstFailedTool.toolCallId,
@@ -437,42 +469,51 @@ const ToolCallResultsSummary = ({
     }
 
     const vtopCredentialTools = enrichedToolCalls.filter(
-      (tool) =>
-        tool.toolName === "queryVTOP" &&
+      tool =>
+        tool.toolName === 'queryVTOP' &&
         tool.result &&
         (tool.result.requiresCredentials === true ||
           (tool.result.error &&
             (() => {
-              let errorMessage = tool.result.error || tool.result.message || ""
+              let errorMessage = tool.result.error || tool.result.message || ''
 
-              if (!errorMessage || errorMessage === "500") {
+              if (!errorMessage || errorMessage === '500') {
                 const rawData = tool.result.output || tool.result.data
-                if (typeof rawData === "string") {
-                  if (rawData.includes("credentials required") || rawData.includes("VTOP credentials required")) {
-                    errorMessage = "VTOP credentials required"
+                if (typeof rawData === 'string') {
+                  if (
+                    rawData.includes('credentials required') ||
+                    rawData.includes('VTOP credentials required')
+                  ) {
+                    errorMessage = 'VTOP credentials required'
                   }
                 }
               }
 
-              return errorMessage.includes("VTOP credentials required") || errorMessage.includes("credentials")
+              return (
+                errorMessage.includes('VTOP credentials required') ||
+                errorMessage.includes('credentials')
+              )
             })() &&
             !(() => {
-              const errorMessage = tool.result.error || tool.result.message || ""
-              if (!errorMessage || errorMessage === "500") {
+              const errorMessage = tool.result.error || tool.result.message || ''
+              if (!errorMessage || errorMessage === '500') {
                 const rawData = tool.result.output || tool.result.data
-                if (typeof rawData === "string") {
-                  if (rawData.includes("Login failed") || rawData.includes("session could not be established")) {
+                if (typeof rawData === 'string') {
+                  if (
+                    rawData.includes('Login failed') ||
+                    rawData.includes('session could not be established')
+                  ) {
                     return true
                   }
                 }
               }
               return (
-                errorMessage.includes("Invalid LoginId/Password") ||
-                errorMessage.includes("Login failed") ||
-                errorMessage.includes("session could not be established") ||
-                errorMessage.includes("incorrect username/password")
+                errorMessage.includes('Invalid LoginId/Password') ||
+                errorMessage.includes('Login failed') ||
+                errorMessage.includes('session could not be established') ||
+                errorMessage.includes('incorrect username/password')
               )
-            })())),
+            })()))
     )
 
     if (vtopCredentialTools.length > 0) {
@@ -481,20 +522,22 @@ const ToolCallResultsSummary = ({
         tool.result.command ||
         tool.args?.command ||
         tool.function?.arguments?.command ||
-        (typeof tool.function?.arguments === "string" ? JSON.parse(tool.function.arguments)?.command : null) ||
-        "data"
+        (typeof tool.function?.arguments === 'string'
+          ? JSON.parse(tool.function.arguments)?.command
+          : null) ||
+        'data'
 
       const formatCommandName = (cmd: string) => {
         const commandMap: { [key: string]: string } = {
-          "class-message": "Class Message",
-          "exam-schedule": "Exam Schedule",
-          "library-dues": "Library Dues",
-          "leave-status": "Leave Status",
-          nightslip: "Night Slip",
-          da: "Digital Assignment",
-          "course-page": "Course Page",
+          'class-message': 'Class Message',
+          'exam-schedule': 'Exam Schedule',
+          'library-dues': 'Library Dues',
+          'leave-status': 'Leave Status',
+          nightslip: 'Night Slip',
+          da: 'Digital Assignment',
+          'course-page': 'Course Page',
         }
-        return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, " ")
+        return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ')
       }
 
       return (
@@ -506,7 +549,9 @@ const ToolCallResultsSummary = ({
                   <GraduationCap className="h-5 w-5 text-blue-500" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-foreground truncate">Authentication Required</div>
+                  <div className="text-sm font-medium text-foreground truncate">
+                    Authentication Required
+                  </div>
                   <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
                     Please log in to VTOP to access your {formatCommandName(command)} data
                   </div>
@@ -514,7 +559,7 @@ const ToolCallResultsSummary = ({
                 {onLoginClick && (
                   <Button
                     onClick={() => {
-                      const triggerEvent = new CustomEvent("vtopLoginTrigger", {
+                      const triggerEvent = new CustomEvent('vtopLoginTrigger', {
                         detail: {
                           command,
                           toolCallId: tool.toolCallId,
@@ -543,7 +588,9 @@ const ToolCallResultsSummary = ({
               <AlertCircle className="h-5 w-5 text-orange-400" />
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-foreground truncate">Search completed</div>
-                <div className="text-xs text-muted-foreground mt-1">No results found for your query</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  No results found for your query
+                </div>
               </div>
             </div>
           </CardContent>
@@ -589,33 +636,33 @@ const ToolCallResultsSummary = ({
 const PureToolCallDisplay = ({ toolCalls, onLoginClick }: ToolCallDisplayProps) => {
   const { getToolResult, version } = useVTOP()
 
-  const enrichedToolCalls = toolCalls.map((tool) => {
-    if (tool.toolName === "queryVTOP" && tool.toolCallId) {
+  const enrichedToolCalls = toolCalls.map(tool => {
+    if (tool.toolName === 'queryVTOP' && tool.toolCallId) {
       const contextResult = getToolResult(tool.toolCallId)
       if (contextResult && contextResult.result) {
         return {
           ...tool,
           result: contextResult.result,
-          state: "result",
+          state: 'result',
         }
       }
     }
     return tool
   })
 
-  const allCompleted = enrichedToolCalls.every((toolCall) => {
+  const allCompleted = enrichedToolCalls.every(toolCall => {
     if (!toolCall.result) {
       return false
     }
 
-    if (toolCall.toolName === "queryVTOP") {
+    if (toolCall.toolName === 'queryVTOP') {
       const isCredentialRequired =
         toolCall.result.requiresCredentials === true ||
         (toolCall.result.error &&
-          (toolCall.result.error.includes("VTOP credentials required") ||
-            toolCall.result.error.includes("credentials") ||
-            toolCall.result.error.includes("Invalid LoginId/Password") ||
-            toolCall.result.error.includes("Login failed")))
+          (toolCall.result.error.includes('VTOP credentials required') ||
+            toolCall.result.error.includes('credentials') ||
+            toolCall.result.error.includes('Invalid LoginId/Password') ||
+            toolCall.result.error.includes('Login failed')))
 
       if (isCredentialRequired) {
         return true
@@ -623,12 +670,13 @@ const PureToolCallDisplay = ({ toolCalls, onLoginClick }: ToolCallDisplayProps) 
 
       return (
         toolCall.result &&
-        toolCall.state === "result" &&
+        toolCall.state === 'result' &&
         (toolCall.result.data || toolCall.result.output || toolCall.result.error)
       )
     }
 
-    const hasValidResult = toolCall.result && !toolCall.result.requiresCredentials && toolCall.state === "result"
+    const hasValidResult =
+      toolCall.result && !toolCall.result.requiresCredentials && toolCall.state === 'result'
 
     return hasValidResult
   })

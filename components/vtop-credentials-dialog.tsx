@@ -1,8 +1,8 @@
-import React, { useState } from "react"
-import { createPortal } from "react-dom"
-import { X, Eye, EyeOff, Shield, Lock } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import CryptoJS from "crypto-js"
+import React, { useState } from 'react'
+import { createPortal } from 'react-dom'
+import { X, Eye, EyeOff, Shield, Lock } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import CryptoJS from 'crypto-js'
 
 interface VTOPCredentialsDialogProps {
   isOpen: boolean
@@ -14,20 +14,20 @@ interface VTOPCredentialsDialogProps {
 const getEncryptionKey = () => {
   let sessionKey = sessionStorage.getItem('vtop_session_key')
   if (!sessionKey) {
-    sessionKey = CryptoJS.lib.WordArray.random(256/8).toString()
+    sessionKey = CryptoJS.lib.WordArray.random(256 / 8).toString()
     sessionStorage.setItem('vtop_session_key', sessionKey)
   }
   return sessionKey
 }
 
-export function VTOPCredentialsDialog({ 
-  isOpen, 
-  onClose, 
-  onSubmit, 
-  command 
+export function VTOPCredentialsDialog({
+  isOpen,
+  onClose,
+  onSubmit,
+  command,
 }: VTOPCredentialsDialogProps) {
-  const [username, setUsername] = useState("")
-  const [password, setPassword] = useState("")
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [rememberCredentials, setRememberCredentials] = useState(false)
@@ -43,7 +43,7 @@ export function VTOPCredentialsDialog({
       const saved = localStorage.getItem('vtop_credentials')
       if (saved) {
         const parsed = JSON.parse(saved)
-        setUsername(parsed.username || "")
+        setUsername(parsed.username || '')
         setRememberCredentials(true)
       }
     } catch (error) {
@@ -57,33 +57,32 @@ export function VTOPCredentialsDialog({
   }
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!username || !password) {
       return
     }
 
     setIsSubmitting(true)
-    
+
     try {
       const encryptionKey = getEncryptionKey()
       const encryptedPassword = CryptoJS.AES.encrypt(password, encryptionKey).toString()
-      
+
       if (rememberCredentials) {
         saveCredentials()
       }
-      
+
       // Format: encryptedPassword:::sessionKey
       const credentialsPayload = {
         username,
-        encryptedPassword: `${encryptedPassword}:::${encryptionKey}`
+        encryptedPassword: `${encryptedPassword}:::${encryptionKey}`,
       }
-      
-      setPassword("")
-      
+
+      setPassword('')
+
       onClose()
-      
+
       onSubmit(credentialsPayload)
-      
     } catch (error) {
     } finally {
       setIsSubmitting(false)
@@ -97,7 +96,7 @@ export function VTOPCredentialsDialog({
   }, [isOpen])
 
   if (!mounted) return null
-  
+
   if (!isOpen) return null
   const modalContent = (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
@@ -125,7 +124,7 @@ export function VTOPCredentialsDialog({
             To execute the <code className="bg-slate-700 px-2 py-1 rounded text-sm">{command}</code> command, 
             please enter your VTOP credentials.
           </p> */}
-          
+
           <form onSubmit={handleSubmit} className="space-y-4 text-left">
             <div className="space-y-2">
               <label htmlFor="username" className="text-sm font-medium text-slate-200">
@@ -136,13 +135,13 @@ export function VTOPCredentialsDialog({
                 type="text"
                 placeholder="e.g., 21BCE1234"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                onChange={e => setUsername(e.target.value)}
                 required
                 autoComplete="username"
                 className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
               />
             </div>
-            
+
             <div className="space-y-2">
               <label htmlFor="password" className="text-sm font-medium text-slate-200">
                 VTOP Password
@@ -150,10 +149,10 @@ export function VTOPCredentialsDialog({
               <div className="relative">
                 <input
                   id="password"
-                  type={showPassword ? "text" : "password"}
+                  type={showPassword ? 'text' : 'password'}
                   placeholder="Enter your VTOP password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={e => setPassword(e.target.value)}
                   required
                   autoComplete="current-password"
                   className="w-full px-4 py-3 pr-12 bg-slate-700 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
@@ -163,11 +162,7 @@ export function VTOPCredentialsDialog({
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
                   onClick={() => setShowPassword(!showPassword)}
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
-                  )}
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
             </div>
@@ -177,7 +172,7 @@ export function VTOPCredentialsDialog({
                 type="checkbox"
                 id="remember"
                 checked={rememberCredentials}
-                onChange={(e) => setRememberCredentials(e.target.checked)}
+                onChange={e => setRememberCredentials(e.target.checked)}
                 className="rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 h-4 w-4"
               />
               <label htmlFor="remember" className="text-sm text-slate-300">
@@ -190,7 +185,10 @@ export function VTOPCredentialsDialog({
                 <Lock className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
                 <div className="text-xs text-slate-300">
                   {/* <p className="font-medium text-slate-200 mb-1">Security Notice:</p> */}
-                  <p>Your password is encrypted and never stored. Only your username can be remembered.</p>
+                  <p>
+                    Your password is encrypted and never stored. Only your username can be
+                    remembered.
+                  </p>
                 </div>
               </div>
             </div>
@@ -200,7 +198,7 @@ export function VTOPCredentialsDialog({
               disabled={!username || !password || isSubmitting}
               className="w-full rounded-full bg-gradient-to-r from-slate-700 to-slate-800 px-6 py-3 font-medium text-white shadow-lg transition-colors hover:from-slate-600 hover:to-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? "Authenticating..." : "Continue"}
+              {isSubmitting ? 'Authenticating...' : 'Continue'}
             </Button>
           </form>
         </div>

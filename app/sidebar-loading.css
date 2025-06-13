@@ -21,13 +21,16 @@
 
 .sidebar-loading-item,
 .sidebar-loading-profile div {
-  background: linear-gradient(90deg, 
-    var(--muted, rgba(0, 0, 0, 0.1)), 
-    var(--muted-hover, rgba(0, 0, 0, 0.15)), 
+  background: linear-gradient(
+    90deg,
+    var(--muted, rgba(0, 0, 0, 0.1)),
+    var(--muted-hover, rgba(0, 0, 0, 0.15)),
     var(--muted, rgba(0, 0, 0, 0.1))
   );
   background-size: 200% 100%;
-  animation: pulse 2s infinite, gradient 2s infinite;
+  animation:
+    pulse 2s infinite,
+    gradient 2s infinite;
   animation-delay: calc(var(--delay, 0) * 100ms);
 }
 

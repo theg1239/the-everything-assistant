@@ -1,0 +1,16 @@
+node_modules/
+.next/
+.vercel/
+.git/
+*.lock
+*.log
+dist/
+build/
+coverage/
+.env*
+*.min.js
+*.min.css
+public/
+.turbo/
+tsconfig.tsbuildinfo
+node_modules

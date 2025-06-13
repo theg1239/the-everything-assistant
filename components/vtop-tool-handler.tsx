@@ -1,48 +1,60 @@
-"use client"
+'use client'
 
-import React, { useState, useEffect } from "react"
-import { VTOPCredentialsDialog } from "./vtop-credentials-dialog"
+import React, { useState, useEffect } from 'react'
+import { VTOPCredentialsDialog } from './vtop-credentials-dialog'
 
 interface VTOPToolHandlerProps {
   children: React.ReactNode
   toolInvocations?: any[]
-  onCredentialsSubmit?: (credentials: { username: string; encryptedPassword: string }, originalToolCall: any) => void
+  onCredentialsSubmit?: (
+    credentials: { username: string; encryptedPassword: string },
+    originalToolCall: any
+  ) => void
 }
 
-export function VTOPToolHandler({ children, toolInvocations, onCredentialsSubmit }: VTOPToolHandlerProps) {
+export function VTOPToolHandler({
+  children,
+  toolInvocations,
+  onCredentialsSubmit,
+}: VTOPToolHandlerProps) {
   const [showCredentialsDialog, setShowCredentialsDialog] = useState(false)
   const [pendingToolCall, setPendingToolCall] = useState<any>(null)
-  const [command, setCommand] = useState("")
+  const [command, setCommand] = useState('')
   const [processedToolCalls, setProcessedToolCalls] = useState<Set<string>>(new Set())
   useEffect(() => {
     const handleVTOPLoginTrigger = (event: CustomEvent) => {
       const { command: triggerCommand, toolCallId: triggerToolCallId } = event.detail
-      
+
       let vtopToolCall = null
-      
+
       if (triggerToolCallId) {
-        vtopToolCall = toolInvocations?.find((tool) => tool.toolCallId === triggerToolCallId)
+        vtopToolCall = toolInvocations?.find(tool => tool.toolCallId === triggerToolCallId)
       }
-      
+
       if (!vtopToolCall) {
-        vtopToolCall = toolInvocations?.find((tool) => 
-          tool.toolName === 'queryVTOP' && 
-          tool.result && 
-          (tool.result.requiresCredentials === true || 
-           (tool.result.error && (
-             tool.result.error.includes('VTOP credentials required') ||
-             tool.result.error.includes('credentials') ||
-             tool.result.error.includes('Invalid LoginId/Password') ||
-             tool.result.error.includes('Login failed')
-           ))) &&
-          !tool.result.data &&
-          !tool.result.output
+        vtopToolCall = toolInvocations?.find(
+          tool =>
+            tool.toolName === 'queryVTOP' &&
+            tool.result &&
+            (tool.result.requiresCredentials === true ||
+              (tool.result.error &&
+                (tool.result.error.includes('VTOP credentials required') ||
+                  tool.result.error.includes('credentials') ||
+                  tool.result.error.includes('Invalid LoginId/Password') ||
+                  tool.result.error.includes('Login failed')))) &&
+            !tool.result.data &&
+            !tool.result.output
         )
       }
-      
+
       if (vtopToolCall) {
         //console.log('Found VTOP tool call that needs credentials:', vtopToolCall)
-        setCommand(vtopToolCall.result.command || vtopToolCall.args?.command || triggerCommand || 'attendance')
+        setCommand(
+          vtopToolCall.result.command ||
+            vtopToolCall.args?.command ||
+            triggerCommand ||
+            'attendance'
+        )
         setPendingToolCall(vtopToolCall)
         setShowCredentialsDialog(true)
       } else {
@@ -52,22 +64,21 @@ export function VTOPToolHandler({ children, toolInvocations, onCredentialsSubmit
           toolName: 'queryVTOP',
           args: { command: triggerCommand || 'attendance' },
           result: { requiresCredentials: true, command: triggerCommand || 'attendance' },
-          toolCallId: triggerToolCallId || Date.now().toString()
+          toolCallId: triggerToolCallId || Date.now().toString(),
         })
         setShowCredentialsDialog(true)
       }
     }
-    
+
     window.addEventListener('vtopLoginTrigger', handleVTOPLoginTrigger as EventListener)
-      return () => {
+    return () => {
       window.removeEventListener('vtopLoginTrigger', handleVTOPLoginTrigger as EventListener)
     }
   }, [toolInvocations])
-    useEffect(() => {
+  useEffect(() => {
     if (toolInvocations) {
       // disable automatic credential detection - we now rely on manual button clicks
       // this was causing automatic dialog opening when we want users to click the login button
-      
       // Keep this code commented for reference but don't auto-trigger
       /*
       const vtopToolCall = toolInvocations.find(
@@ -90,7 +101,10 @@ export function VTOPToolHandler({ children, toolInvocations, onCredentialsSubmit
     }
   }, [toolInvocations, showCredentialsDialog, processedToolCalls])
 
-  const handleCredentialsSubmit = (credentials: { username: string; encryptedPassword: string }) => {
+  const handleCredentialsSubmit = (credentials: {
+    username: string
+    encryptedPassword: string
+  }) => {
     if (onCredentialsSubmit && pendingToolCall) {
       onCredentialsSubmit(credentials, pendingToolCall)
     }

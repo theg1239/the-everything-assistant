@@ -57,7 +57,9 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
     font-optical-sizing: auto;
   }
 }
@@ -185,7 +187,9 @@ html {
 
 .card-hover-effect:hover {
   transform: translateY(-2px);
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
 
 /* Subtle pulse animation for status indicators */
@@ -277,7 +281,7 @@ button:focus-visible {
     max-width: none;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  
+
   @media (max-width: 768px) {
     .sidebar-open .max-w-5xl {
       margin-left: 0;
@@ -285,7 +289,7 @@ button:focus-visible {
       max-width: 80rem;
     }
   }
-  
+
   /* Collapsed sidebar button */
   .sidebar-toggle-collapsed {
     position: fixed;
@@ -299,14 +303,16 @@ button:focus-visible {
     padding: 0.5rem;
     color: #94a3b8;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    box-shadow:
+      0 10px 15px -3px rgba(0, 0, 0, 0.1),
+      0 4px 6px -2px rgba(0, 0, 0, 0.05);
     transform: translateX(0);
   }
-  
+
   .sidebar-toggle-collapsed:hover {
     color: #ffffff;
   }
-  
+
   /* Smooth transitions for all gradient elements */
   .gradient-transition {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -349,7 +355,7 @@ button:focus-visible {
   .tool-scrollbar::-webkit-scrollbar-thumb:hover {
     background: linear-gradient(to bottom, rgba(59, 130, 246, 0.7), rgba(139, 92, 246, 0.7));
   }
-  
+
   /* Chat layout fixes */
   .chat-container {
     display: flex;

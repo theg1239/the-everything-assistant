@@ -1,13 +1,13 @@
-"use client"
+'use client'
 
-import type React from "react"
-import { useRef, useEffect, useCallback, memo, useState } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { ArrowUpIcon, StopCircleIcon, PaperclipIcon, MicIcon, ImageIcon } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { cn } from "@/lib/utils"
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip"
+import type React from 'react'
+import { useRef, useEffect, useCallback, memo, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { ArrowUpIcon, StopCircleIcon, PaperclipIcon, MicIcon, ImageIcon } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { cn } from '@/lib/utils'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 
 interface MultimodalInputProps {
   input: string
@@ -39,15 +39,15 @@ const PureMultimodalInput = ({
 
   const adjustHeight = useCallback(() => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = "auto"
+      textareaRef.current.style.height = 'auto'
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight + 2, 200)}px`
     }
   }, [])
 
   const resetHeight = useCallback(() => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = "auto"
-      textareaRef.current.style.height = "60px"
+      textareaRef.current.style.height = 'auto'
+      textareaRef.current.style.height = '60px'
     }
   }, [])
 
@@ -68,23 +68,23 @@ const PureMultimodalInput = ({
         adjustHeight()
       }
     },
-    [setInput, adjustHeight, maxLength],
+    [setInput, adjustHeight, maxLength]
   )
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "Enter" && !e.shiftKey) {
+      if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
         if (input.trim() && !isLoading) {
           const form = e.currentTarget.form
           if (form) {
-            const submitEvent = new Event("submit", { bubbles: true, cancelable: true })
+            const submitEvent = new Event('submit', { bubbles: true, cancelable: true })
             form.dispatchEvent(submitEvent)
           }
         }
       }
     },
-    [input, isLoading],
+    [input, isLoading]
   )
 
   const onSubmit = useCallback(
@@ -95,7 +95,7 @@ const PureMultimodalInput = ({
         resetHeight()
       }
     },
-    [input, isLoading, handleSubmit, resetHeight],
+    [input, isLoading, handleSubmit, resetHeight]
   )
 
   const characterCount = input.length
@@ -106,16 +106,15 @@ const PureMultimodalInput = ({
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={cn("relative w-full", className)}
+      className={cn('relative w-full', className)}
     >
       <form onSubmit={onSubmit} className="relative">
         <div
           className={cn(
-            "relative flex flex-col w-full border rounded-xl bg-background/70 backdrop-blur-sm overflow-hidden transition-all duration-200",
-            isFocused ? "shadow-sm" : "border-input hover:border-ring/50",
+            'relative flex flex-col w-full border rounded-xl bg-background/70 backdrop-blur-sm overflow-hidden transition-all duration-200',
+            isFocused ? 'shadow-sm' : 'border-input hover:border-ring/50'
           )}
-        > 
-
+        >
           <div className="relative flex items-end w-full">
             <Textarea
               ref={textareaRef}
@@ -126,13 +125,13 @@ const PureMultimodalInput = ({
               onBlur={() => setIsFocused(false)}
               placeholder={placeholder}
               className={cn(
-                "min-h-[60px] max-h-[200px] w-full resize-none border-0 bg-transparent px-4 py-3 text-sm",
-                "ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
-                showAttachments ? "pt-1" : "pt-3",
+                'min-h-[60px] max-h-[200px] w-full resize-none border-0 bg-transparent px-4 py-3 text-sm',
+                'ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
+                showAttachments ? 'pt-1' : 'pt-3'
               )}
               disabled={isLoading}
               autoComplete="off"
-              style={{ height: "60px" }}
+              style={{ height: '60px' }}
               maxLength={maxLength}
               aria-label="Message input"
             />

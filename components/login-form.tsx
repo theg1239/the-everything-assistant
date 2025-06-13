@@ -1,29 +1,29 @@
-"use client"
+'use client'
 
-import { signIn } from "next-auth/react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { motion } from "framer-motion"
+import { signIn } from 'next-auth/react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { motion } from 'framer-motion'
 
 export function LoginForm() {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, ease: "easeOut" }}
+      transition={{ duration: 0.6, ease: 'easeOut' }}
       className="w-full max-w-md"
     >
       <Card className="bg-slate-800/40 backdrop-blur-xl border-slate-700/30">
         <CardHeader className="text-center space-y-4">
           <CardTitle className="text-2xl font-light text-white">vit assistant</CardTitle>
           <CardDescription className="text-slate-400">
-            sign in to access your personalized vit vellore ai assistant
-            ask for past papers, faculty details and more!
+            sign in to access your personalized vit vellore ai assistant ask for past papers,
+            faculty details and more!
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Button
-            onClick={() => signIn("google", { callbackUrl: "/" })}
+            onClick={() => signIn('google', { callbackUrl: '/' })}
             className="w-full bg-white hover:bg-gray-100 text-gray-900 font-medium py-3"
             size="lg"
           >

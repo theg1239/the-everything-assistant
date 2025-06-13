@@ -1,12 +1,12 @@
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { saveVote } from "@/lib/db"
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { saveVote } from '@/lib/db'
 
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
-      return new Response("Unauthorized", { status: 401 })
+      return new Response('Unauthorized', { status: 401 })
     }
 
     const { chatId, messageId, isUpvoted } = await request.json()
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
 
     return Response.json({ success: true })
   } catch (error) {
-    console.error("Error saving vote:", error)
-    return new Response("Internal Server Error", { status: 500 })
+    console.error('Error saving vote:', error)
+    return new Response('Internal Server Error', { status: 500 })
   }
 }

@@ -28,16 +28,19 @@ Get your Google AI API key from [Google AI Studio](https://makersuite.google.com
 ## Tool Capabilities
 
 ### Past Paper Finder
+
 - Searches multiple repositories automatically
 - Filters by course code, exam type, and year
 - Returns organized results with download links
 
 ### Faculty Information Scraper
+
 - Scrapes real-time faculty data
 - Searches by department or faculty name
 - Returns contact information and specializations
 
 ### General VIT Information
+
 - Scrapes current information from official VIT websites
 - Covers admissions, placements, events, and news
 - Provides up-to-date information

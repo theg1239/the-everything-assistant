@@ -1,42 +1,37 @@
-import puppeteer from "puppeteer-core";
-import chromium from "@sparticuz/chromium";
-import path from "path";
-import { getServerSession } from "next-auth";
-import { authOptions } from "../auth";
+import puppeteer from 'puppeteer-core'
+import chromium from '@sparticuz/chromium'
+import path from 'path'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '../auth'
 
 export interface PlacementStatistics {
-  totalOffers: number;
-  uniqueOffers: number;
-  superDreamOffers: number;
-  dreamOffers: number;
-  totalCompanies: number;
-  highestPackage: string;
-  averagePackage: string;
-  year: string;
-  branch?: string;
+  totalOffers: number
+  uniqueOffers: number
+  superDreamOffers: number
+  dreamOffers: number
+  totalCompanies: number
+  highestPackage: string
+  averagePackage: string
+  year: string
+  branch?: string
 }
 
 export async function scrapePlacementStats(
   year?: string,
   branch?: string
 ): Promise<PlacementStatistics | null> {
-  const session = await getServerSession(authOptions);
+  const session = await getServerSession(authOptions)
 
-  let browser;
+  let browser
   try {
-    const chromiumBinDir = path.join(
-      "/var/task/node_modules/@sparticuz/chromium/bin"
-    );
+    const chromiumBinDir = path.join('/var/task/node_modules/@sparticuz/chromium/bin')
 
-    let execPath: string;
+    let execPath: string
     try {
-      execPath = await chromium.executablePath(chromiumBinDir);
+      execPath = await chromium.executablePath(chromiumBinDir)
     } catch (fallbackError) {
-      console.warn(
-        `Couldn't find Chromium in ${chromiumBinDir}, falling back:`,
-        fallbackError
-      );
-      execPath = await chromium.executablePath();
+      console.warn(`Couldn't find Chromium in ${chromiumBinDir}, falling back:`, fallbackError)
+      execPath = await chromium.executablePath()
     }
 
     browser = await puppeteer.launch({
@@ -44,32 +39,34 @@ export async function scrapePlacementStats(
       defaultViewport: chromium.defaultViewport,
       executablePath: execPath,
       headless: chromium.headless,
-    });
+    })
 
-    const page = await browser.newPage();
+    const page = await browser.newPage()
     await page.setUserAgent(
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    );
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    )
 
-    const url = "https://vit-placements-tracker.streamlit.app/";
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 15000 });
+    const url = 'https://vit-placements-tracker.streamlit.app/'
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 15000 })
 
-    await page.waitForSelector('[data-testid="stMetric"]', { timeout: 15000 });
+    await page.waitForSelector('[data-testid="stMetric"]', { timeout: 15000 })
 
     const stats = await page.evaluate(() => {
-      const metrics = Array.from(document.querySelectorAll('[data-testid="stMetric"]'));
+      const metrics = Array.from(document.querySelectorAll('[data-testid="stMetric"]'))
       const extractNumber = (str: string) => {
-        const match = str.match(/[\d,]+\.?\d*/);
-        return match ? match[0].replace(/,/g, '') : '0';
-      };
+        const match = str.match(/[\d,]+\.?\d*/)
+        return match ? match[0].replace(/,/g, '') : '0'
+      }
 
-      const highestPackage = Array.from(document.querySelectorAll('[data-testid="stText"]'))
-        .find(el => el.textContent?.includes('Highest Package'))
-        ?.textContent?.match(/[\d.]+\s*LPA/)?.[0] || 'N/A';
-      
-      const averagePackage = Array.from(document.querySelectorAll('[data-testid="stText"]'))
-        .find(el => el.textContent?.includes('Average Package'))
-        ?.textContent?.match(/[\d.]+\s*LPA/)?.[0] || 'N/A';
+      const highestPackage =
+        Array.from(document.querySelectorAll('[data-testid="stText"]'))
+          .find(el => el.textContent?.includes('Highest Package'))
+          ?.textContent?.match(/[\d.]+\s*LPA/)?.[0] || 'N/A'
+
+      const averagePackage =
+        Array.from(document.querySelectorAll('[data-testid="stText"]'))
+          .find(el => el.textContent?.includes('Average Package'))
+          ?.textContent?.match(/[\d.]+\s*LPA/)?.[0] || 'N/A'
 
       return {
         totalOffers: parseInt(extractNumber(metrics[0]?.textContent || '0')),
@@ -80,16 +77,16 @@ export async function scrapePlacementStats(
         highestPackage,
         averagePackage,
         year: new Date().getFullYear().toString(),
-      };
-    });
+      }
+    })
 
-    return stats;
+    return stats
   } catch (error) {
-    console.error("Error scraping placement stats:", error);
-    return null;
+    console.error('Error scraping placement stats:', error)
+    return null
   } finally {
     if (browser) {
-      await browser.close();
+      await browser.close()
     }
   }
 }

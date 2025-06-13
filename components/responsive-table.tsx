@@ -1,11 +1,11 @@
-"use client"
+'use client'
 
-import type React from "react"
+import type React from 'react'
 
-import { useState } from "react"
-import { ChevronDown, ChevronUp } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
+import { useState } from 'react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 interface Column {
   key: string
@@ -28,13 +28,13 @@ export function ResponsiveTable({
   columns,
   className,
   rowClassName,
-  emptyMessage = "No data available",
+  emptyMessage = 'No data available',
   maxMobileColumns = 3,
 }: ResponsiveTableProps) {
   const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({})
 
   const toggleRow = (index: number) => {
-    setExpandedRows((prev) => ({
+    setExpandedRows(prev => ({
       ...prev,
       [index]: !prev[index],
     }))
@@ -49,18 +49,18 @@ export function ResponsiveTable({
   }
 
   return (
-    <div className={cn("w-full overflow-hidden", className)}>
+    <div className={cn('w-full overflow-hidden', className)}>
       {/* Desktop view - full table */}
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
             <tr className="border-b border-border">
-              {columns.map((column) => (
+              {columns.map(column => (
                 <th
                   key={column.key}
                   className={cn(
-                    "px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider",
-                    column.className,
+                    'px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider',
+                    column.className
                   )}
                 >
                   {column.header}
@@ -72,10 +72,16 @@ export function ResponsiveTable({
             {data.map((row, rowIndex) => (
               <tr
                 key={rowIndex}
-                className={cn("border-b border-border hover:bg-muted/50 transition-colors", rowClassName)}
+                className={cn(
+                  'border-b border-border hover:bg-muted/50 transition-colors',
+                  rowClassName
+                )}
               >
-                {columns.map((column) => (
-                  <td key={`${rowIndex}-${column.key}`} className={cn("px-4 py-3 text-sm", column.className)}>
+                {columns.map(column => (
+                  <td
+                    key={`${rowIndex}-${column.key}`}
+                    className={cn('px-4 py-3 text-sm', column.className)}
+                  >
                     {column.render ? column.render(row[column.key], row) : row[column.key]}
                   </td>
                 ))}
@@ -92,11 +98,19 @@ export function ResponsiveTable({
           const visibleColumns = isExpanded ? columns : columns.slice(0, maxMobileColumns)
 
           return (
-            <div key={rowIndex} className={cn("border border-border rounded-lg overflow-hidden bg-card", rowClassName)}>
+            <div
+              key={rowIndex}
+              className={cn(
+                'border border-border rounded-lg overflow-hidden bg-card',
+                rowClassName
+              )}
+            >
               <div className="space-y-2 p-3">
-                {visibleColumns.map((column) => (
+                {visibleColumns.map(column => (
                   <div key={column.key} className="flex flex-col">
-                    <span className="text-xs font-medium text-muted-foreground">{column.header}</span>
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {column.header}
+                    </span>
                     <div className="text-sm">
                       {column.render ? column.render(row[column.key], row) : row[column.key]}
                     </div>
@@ -106,7 +120,12 @@ export function ResponsiveTable({
 
               {columns.length > maxMobileColumns && (
                 <div className="border-t border-border p-2 flex justify-center">
-                  <Button variant="ghost" size="sm" onClick={() => toggleRow(rowIndex)} className="text-xs h-7 px-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggleRow(rowIndex)}
+                    className="text-xs h-7 px-2"
+                  >
                     {isExpanded ? (
                       <>
                         <ChevronUp className="h-3 w-3 mr-1" />

@@ -164,6 +164,13 @@ function generateQuestionsByCategory(): { [key: string]: string[] } {
       'what sports facilities are available?',
       'what are the dining options on campus?',
       'what medical facilities are available?',
+      "what's today's mess menu?",
+      "what's for lunch in men's hostel special mess?",
+      "show me today's dinner menu for ladies hostel",
+      "what's for breakfast tomorrow?",
+      'check the veg mess menu for today',
+      'show me nonveg mess menu',
+      "what's the special mess menu for this week?",
     ],
     research: [
       'what research opportunities are available?',

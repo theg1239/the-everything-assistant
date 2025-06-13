@@ -272,7 +272,6 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
       console.log(`CLI stdout: ${output}`)
     }
     if (!processingComplete && interactionCount < maxInteractions) {
-      // Special handling for auto-terminating commands (DA, facility)
       const shouldAutoTerminate =
         (command === 'da' && output.includes('Choose a subject (enter a number):')) ||
         (command === 'facility' &&
@@ -291,7 +290,6 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
         autoCtrlCSent = true
         child.stdin.write('\x03')
 
-        // Force terminate the process after a shorter delay for more immediate response
         setTimeout(() => {
           if (!processingComplete) {
             if (process.env.NODE_ENV !== 'production') {
@@ -300,9 +298,8 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
               )
             }
             processingComplete = true
-            child.kill('SIGKILL') // Use SIGKILL for more forceful termination
+            child.kill('SIGKILL')
 
-            // Return the data we have so far
             setTimeout(() => {
               try {
                 const jsonOutput = JSON.parse(stdout)
@@ -918,7 +915,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           downloadInfo: {
             message: 'Files downloaded successfully',
             localPath: downloadPath,
-            // and register files with the file-serve endpoint
             files: [],
           },
         }
@@ -933,10 +929,8 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
         message: 'Could not complete the download process',
       }
     }
-  } // Handle prerequisite steps enforcement
-  // Course-page workflow MUST follow: semester → course → faculty → materials
+  }
 
-  // If we're trying to do course step but don't have semester, get semester first
   if (step === 'course' && (!flags || !flags.semester)) {
     console.log('Course step requested but no semester selected. Getting semester options first.')
     return await executeInteractiveCoursePageWorkflow(
@@ -948,11 +942,9 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
     )
   }
 
-  // If we're trying to do faculty step but don't have semester or course, handle prerequisites
   if (step === 'faculty' && (!flags || !flags.semester || !flags.course)) {
     console.log('Faculty step requested but missing prerequisites (semester/course).')
 
-    // If we have semesterQuery but no semester, start with semester selection
     if (flags && flags.semesterQuery && !flags.semester) {
       console.log('Starting with semester selection due to semesterQuery')
       return await executeInteractiveCoursePageWorkflow(
@@ -964,7 +956,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
       )
     }
 
-    // If we have semester but no course, go to course step
     if (flags && flags.semester && !flags.course) {
       console.log('Have semester, moving to course selection')
       return await executeInteractiveCoursePageWorkflow(
@@ -976,7 +967,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
       )
     }
 
-    // Missing both, start from semester
     console.log('Missing both semester and course, starting from semester')
     return await executeInteractiveCoursePageWorkflow(
       username,
@@ -987,11 +977,9 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
     )
   }
 
-  // If we're trying to do materials step but missing prerequisites
   if (step === 'materials' && (!flags || !flags.semester || !flags.course || !flags.faculty)) {
     console.log('Materials step requested but missing prerequisites.')
 
-    // Determine which step we need to go to first
     if (!flags || !flags.semester) {
       return await executeInteractiveCoursePageWorkflow(
         username,
@@ -1019,13 +1007,11 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
     }
   }
 
-  // Special handling for semesterQuery when step is "course" (after prerequisite check)
   if (step === 'course' && flags && flags.semesterQuery && !flags.semester) {
     console.log(
       `Step is "course" but semesterQuery provided: ${flags.semesterQuery}. Getting semester options first.`
     )
 
-    // First get semester options by running without semester flag
     const tempResult = await executeInteractiveCoursePageWorkflow(
       username,
       password,
@@ -1040,24 +1026,20 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           `Resolved semesterQuery "${flags.semesterQuery}" to semester ${resolvedSemester}`
         )
         flags.semester = resolvedSemester
-        // Remove semesterQuery since we now have a specific semester
         delete flags.semesterQuery
       } else {
-        // Couldn't resolve, return semester options for user to choose
         return {
           ...tempResult,
           message: `Could not automatically resolve "${flags.semesterQuery}". Please select a semester:`,
         }
       }
     } else {
-      return tempResult // Return error from semester step
+      return tempResult
     }
   }
-  // Smart course matching when courseQuery is provided
   if (step === 'course' && flags && flags.courseQuery && !flags.course) {
     console.log(`Smart course matching for query: ${flags.courseQuery}`)
 
-    // Get course options first
     const tempResult = await executeInteractiveCoursePageWorkflow(
       username,
       password,
@@ -1088,7 +1070,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
               )
               flags.course = bestMatch.index
               delete flags.courseQuery
-              // Proceed to faculty step
               return await executeInteractiveCoursePageWorkflow(
                 username,
                 password,
@@ -1101,7 +1082,7 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
         }
       } catch (error) {
         console.error('Smart course matching failed:', error)
-      } // If smart matching is not available or confidence is low, try fuzzy keyword matching
+      }
       const query = flags.courseQuery.toLowerCase()
       let bestMatch = null
       let bestScore = 0
@@ -1111,7 +1092,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
         const score = calculateFuzzyMatchScore(query, description)
 
         if (score > bestScore && score >= 0.4) {
-          // Minimum threshold of 40%
           bestScore = score
           bestMatch = option
         }
@@ -1123,7 +1103,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
         )
         flags.course = bestMatch.number
         delete flags.courseQuery
-        // Proceed to faculty step
         return await executeInteractiveCoursePageWorkflow(
           username,
           password,
@@ -1134,14 +1113,12 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
       }
     }
 
-    return tempResult // Return course options for manual selection
+    return tempResult
   }
 
-  // Smart faculty matching when facultyQuery is provided
   if (step === 'faculty' && flags && flags.facultyQuery && !flags.faculty) {
     console.log(`Smart faculty matching for query: ${flags.facultyQuery}`)
 
-    // Get faculty options first
     const tempResult = await executeInteractiveCoursePageWorkflow(
       username,
       password,
@@ -1172,7 +1149,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
               )
               flags.faculty = bestMatch.index
               delete flags.facultyQuery
-              // Proceed to materials step
               return await executeInteractiveCoursePageWorkflow(
                 username,
                 password,
@@ -1186,7 +1162,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
       } catch (error) {
         console.error('Smart faculty matching failed:', error)
       }
-      // If smart matching is not available or confidence is low, try fuzzy keyword matching
       const query = flags.facultyQuery.toLowerCase()
       let bestMatch = null
       let bestScore = 0
@@ -1196,7 +1171,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
         const score = calculateFuzzyMatchScore(query, description)
 
         if (score > bestScore && score >= 0.3) {
-          // Lower threshold for faculty names (30%)
           bestScore = score
           bestMatch = option
         }
@@ -1208,7 +1182,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
         )
         flags.faculty = bestMatch.number
         delete flags.facultyQuery
-        // Proceed to materials step
         return await executeInteractiveCoursePageWorkflow(
           username,
           password,
@@ -1219,20 +1192,15 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
       }
     }
 
-    return tempResult // Return faculty options for manual selection
+    return tempResult
   }
 
   const cliArgs = ['proxy', username, password, 'course-page']
 
-  // Handle semesterQuery for intelligent semester selection
   if (flags && flags.semesterQuery && !flags.semester) {
-    // If we have a semesterQuery but no specific semester number, we need to resolve it
-    // For now, we'll start the workflow to get semester options and then match
-    // This is similar to how the regular VTOP commands handle fuzzy semester matching
     console.log(`Resolving semesterQuery: ${flags.semesterQuery}`)
   }
 
-  // Add flags based on the current step and provided data
   if (flags && typeof flags === 'object') {
     for (const [key, value] of Object.entries(flags)) {
       if (value !== undefined && value !== null && value !== '') {
@@ -1243,7 +1211,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
         } else if (key === 'faculty' && value > 0) {
           cliArgs.push('-f', value.toString())
         }
-        // Note: semesterQuery is handled differently - we don't pass it directly to CLI
       }
     }
   }
@@ -1267,9 +1234,8 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
     let hasReceivedPrompt = false
     let promptData = null
     let parsedSession = null
-    let isResolved = false // Track if we've already resolved
+    let isResolved = false
 
-    // Parse session data once at the beginning
     if (sessionData && typeof sessionData === 'string') {
       try {
         parsedSession = JSON.parse(sessionData)
@@ -1285,8 +1251,7 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
 
       if (process.env.NODE_ENV !== 'production') {
         console.log(`Interactive CLI stdout: ${output}`)
-      } // Parse different types of prompts based on step or content
-      // Check for semester selection
+      }
       if (
         output.includes('Choose a semester') ||
         (output.includes('semester') && output.includes('enter a number'))
@@ -1300,7 +1265,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
             prompt: 'Please select a semester:',
           }
 
-          // If we have a semesterQuery, try to resolve it automatically
           if (flags && flags.semesterQuery) {
             const resolvedSemester = resolveSemesterQuery(flags.semesterQuery, semesterOptions)
             if (resolvedSemester) {
@@ -1311,7 +1275,7 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
             }
           }
         }
-      } // Check for course selection - wait for the actual prompt text
+      }
       else if (
         output.includes('Choose a Course (enter a number):') ||
         output.includes('Choose a course (enter a number):')
@@ -1327,7 +1291,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
 
           console.log(`Course selection prompt detected with ${courseOptions.length} options`)
 
-          // Try to auto-select if we have courseQuery
           if (flags && flags.courseQuery) {
             console.log(`Attempting to auto-select course for query: "${flags.courseQuery}"`)
             const query = flags.courseQuery.toLowerCase()
@@ -1355,7 +1318,7 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
               child.stdin.write(bestMatch.number.toString() + '\n')
               hasReceivedPrompt = false
               promptData = null
-              return // Continue processing
+              return
             } else {
               console.log(
                 `No suitable match found. Best score was ${bestScore.toFixed(2)} (threshold: 0.4)`
@@ -1363,7 +1326,7 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
             }
           }
         }
-      } // Check for faculty selection
+      }
       else if (
         output.includes('Choose a faculty') ||
         output.includes('Choose a Faculty') ||
@@ -1382,7 +1345,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
 
           console.log(`Faculty selection prompt detected with ${facultyOptions.length} options`)
 
-          // Try to auto-select if we have facultyQuery
           if (flags && flags.facultyQuery) {
             console.log(`Attempting to auto-select faculty for query: "${flags.facultyQuery}"`)
             const query = flags.facultyQuery.toLowerCase()
@@ -1398,7 +1360,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
               )
 
               if (score > bestScore && score >= 0.3) {
-                // Lower threshold for faculty names (30%)
                 bestScore = score
                 bestMatch = option
               }
@@ -1411,7 +1372,7 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
               child.stdin.write(bestMatch.number.toString() + '\n')
               hasReceivedPrompt = false
               promptData = null
-              return // Continue processing
+              return
             } else {
               console.log(
                 `No suitable faculty match found. Best score was ${bestScore.toFixed(2)} (threshold: 0.3)`
@@ -1419,7 +1380,7 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
             }
           }
         }
-      } // Check for materials selection
+      }
       else if (
         output.includes('Reference Materials') ||
         output.includes('Materials') ||
@@ -1435,22 +1396,18 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
             prompt: 'Select materials to download (e.g., "1-5", "0" for all, or "1,3,5"):',
           }
           console.log(`Materials selection prompt detected with ${materialOptions.length} options`)
-          // If we have a materialQuery, try to auto-select
           if (flags && flags.materialQuery) {
             console.log(`Attempting to auto-select materials for query: "${flags.materialQuery}"`)
             const query = flags.materialQuery.toLowerCase()
             let selectedIndices = []
 
-            // Special cases for bulk selection
             if (query.includes('all') || query.includes('everything') || query.includes('bulk')) {
-              selectedIndices = ['0'] // 0 means bulk download in the CLI
+              selectedIndices = ['0']
             } else {
-              // Try to match materials based on topic content
               for (const option of materialOptions) {
                 const combinedText =
                   `${option.topic || ''} ${option.description || ''}`.toLowerCase()
 
-                // Check if the query matches the topic or description
                 if (
                   combinedText.includes(query) ||
                   query.split(/\s+/).some(word => word.length > 2 && combinedText.includes(word))
@@ -1459,7 +1416,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
                 }
               }
 
-              // If no specific matches found, fallback to recent materials (first 3)
               if (selectedIndices.length === 0) {
                 console.log(`No specific matches for "${query}", selecting recent materials`)
                 selectedIndices = materialOptions
@@ -1474,12 +1430,11 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
               flags.materialSelection = selectionString
             }
           } else {
-            // No materialQuery provided - return the options with properly formatted list
             console.log('No materialQuery provided, returning materials options for user selection')
             promptData.formattedList = formatMaterialsList(materialOptions)
           }
         }
-      } // If we have a selection to make based on flags, make it
+      }
       if (hasReceivedPrompt && promptData && flags) {
         let selection = null
         let shouldAutoProgress = false
@@ -1503,11 +1458,9 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           }
           child.stdin.write(selection + '\n')
 
-          // Mark that we're auto-progressing to avoid returning prompt data
           hasReceivedPrompt = false
           promptData = null
         } else {
-          // We have a prompt but no auto-selection, immediately return the prompt data
           const sessionInfo = {
             currentStep: step,
             actualStep: promptData.type,
@@ -1518,7 +1471,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
             timestamp: Date.now(),
           }
 
-          // Terminate the CLI process since we need user input
           child.kill()
 
           if (!isResolved) {
@@ -1624,8 +1576,8 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           downloadInfo: responseDownloadInfo,
           sessionData: JSON.stringify(sessionInfo),
           interactiveState: 'completed',
-          raw: false, // Now sending cleaned output
-        }) // Debug logging
+          raw: false,
+        })
         if (process.env.NODE_ENV !== 'production') {
           console.log('Final response structure:')
           console.log('- downloadInfo.filesDownloaded:', downloadInfo.filesDownloaded)
@@ -1663,7 +1615,7 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           step: step,
         })
       }
-    }) // Set timeout
+    })
     setTimeout(() => {
       child.kill()
       if (!hasReceivedPrompt && !isResolved) {
@@ -1700,7 +1652,6 @@ function parseCourseOptions(output) {
   const options = []
   const lines = output.split('\n')
 
-  // Only process if we see the prompt line
   const hasPromptLine = lines.some(
     line =>
       line.includes('Choose a Course (enter a number):') ||
@@ -1711,7 +1662,6 @@ function parseCourseOptions(output) {
     return options
   }
 
-  // Find the course table header to start parsing from there
   let startParsingIndex = -1
   for (let i = 0; i < lines.length; i++) {
     if (
@@ -1723,7 +1673,6 @@ function parseCourseOptions(output) {
     }
   }
 
-  // If no table header found, try to find the prompt line
   if (startParsingIndex === -1) {
     for (let i = 0; i < lines.length; i++) {
       if (
@@ -1740,26 +1689,21 @@ function parseCourseOptions(output) {
     return options
   }
 
-  // Parse lines after the header/prompt
   for (let i = startParsingIndex + 1; i < lines.length; i++) {
     const line = lines[i]
 
-    // Skip separator lines like "──────┼──────────────────"
     if (line.includes('─') || line.trim() === '') {
       continue
     }
 
-    // Handle table format like "        1 │ BCHY101L - Engineering Chemistry - TH"
     const tableMatch = line.match(/^\s*(\d+)\s*│\s*(.+?)\s*$/)
     if (tableMatch) {
       const description = tableMatch[2].trim()
 
-      // Skip if this looks like semester data (contains semester ID patterns)
       if (description.includes('VL20') || description.includes('Semester 20')) {
         continue
       }
 
-      // Skip if this is a header line
       if (
         description.toUpperCase().includes('COURSE NAME') ||
         description.toUpperCase().includes('SEMESTER ID')
@@ -1775,11 +1719,9 @@ function parseCourseOptions(output) {
       continue
     }
 
-    // Handle simple numbered format like "1. Course Name"
     const simpleMatch = line.match(/^\s*(\d+)\.\s*(.+)$/)
     if (simpleMatch) {
       const description = simpleMatch[2].trim()
-      // Skip if this looks like semester data
       if (description.includes('VL20') || description.includes('Semester 20')) {
         continue
       }
@@ -1806,7 +1748,6 @@ function parseFacultyOptions(output) {
   const options = []
   const lines = output.split('\n')
 
-  // Only process if we see the faculty prompt line
   const hasFacultyPrompt = lines.some(
     line =>
       line.includes('Enter a search term or number for Faculty') ||
@@ -1818,7 +1759,6 @@ function parseFacultyOptions(output) {
     return options
   }
 
-  // Find the faculty table header to start parsing from there
   let startParsingIndex = -1
   for (let i = 0; i < lines.length; i++) {
     if (
@@ -1830,7 +1770,6 @@ function parseFacultyOptions(output) {
     }
   }
 
-  // If no table header found, try to find the prompt line
   if (startParsingIndex === -1) {
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].includes('Enter a search term or number for Faculty')) {
@@ -1844,16 +1783,13 @@ function parseFacultyOptions(output) {
     return options
   }
 
-  // Parse lines after the header/prompt
   for (let i = startParsingIndex + 1; i < lines.length; i++) {
     const line = lines[i]
 
-    // Skip separator lines like "──────┼──────────────────"
     if (line.includes('─') || line.trim() === '') {
       continue
     }
 
-    // Handle table format like "        1 │ ANUJ KUMAR - SMEC │ G1/G2/TG1/TG2"
     const tableMatch = line.match(/^\s*(\d+)\s*│\s*(.+?)\s*│/)
     if (tableMatch) {
       const description = tableMatch[2].trim()
@@ -1866,7 +1802,6 @@ function parseFacultyOptions(output) {
       continue
     }
 
-    // Handle simple numbered format like "1. Faculty Name" (fallback)
     const simpleMatch = line.match(/^\s*(\d+)\.\s*(.+)$/)
     if (simpleMatch) {
       const description = simpleMatch[2].trim()
@@ -1893,7 +1828,6 @@ function parseMaterialOptions(output) {
   const options = []
   const lines = output.split('\n')
 
-  // Only process if we see the materials prompt line
   const hasMaterialPrompt = lines.some(
     line =>
       line.includes('Enter the index numbers of the topics to download') ||
@@ -1905,7 +1839,6 @@ function parseMaterialOptions(output) {
     return options
   }
 
-  // Find the materials table header to start parsing from there
   let startParsingIndex = -1
   for (let i = 0; i < lines.length; i++) {
     if (
@@ -1921,16 +1854,13 @@ function parseMaterialOptions(output) {
     return options
   }
 
-  // Parse lines after the header
   for (let i = startParsingIndex + 1; i < lines.length; i++) {
     const line = lines[i]
 
-    // Skip separator lines like "──────┼──────────────────"
     if (line.includes('─') || line.trim() === '') {
       continue
     }
 
-    // Handle table format like "        1 │ 12-05-2025 │ Definition of fluid, Concept of continuum, Flui... │ 1"
     const tableMatch = line.match(/^\s*(\d+)\s*│\s*([^│]+)\s*│\s*([^│]+)\s*│/)
     if (tableMatch) {
       const number = parseInt(tableMatch[1])
@@ -1947,7 +1877,6 @@ function parseMaterialOptions(output) {
       continue
     }
 
-    // Handle simple numbered format as fallback
     const simpleMatch = line.match(/^\s*(\d+)\.\s*(.+)$/)
     if (simpleMatch) {
       const number = parseInt(simpleMatch[1])
@@ -1971,7 +1900,7 @@ function parseMaterialOptions(output) {
   return options
 }
 
-const tempFiles = new Map() // fileId -> { path, filename, expiry }
+const tempFiles = new Map()
 
 function getBaseUrl() {
   if (process.env.NODE_ENV === 'production') {
@@ -2000,7 +1929,6 @@ function cleanCliOutput(rawOutput, hasServedFiles = false) {
   const lines = rawOutput.split('\n')
   const cleanedLines = []
 
-  // Extract key information
   let semester = ''
   let course = ''
   let faculty = ''
@@ -2011,7 +1939,6 @@ function cleanCliOutput(rawOutput, hasServedFiles = false) {
   for (const line of lines) {
     const trimmed = line.trim()
 
-    // Extract semester selection
     if (trimmed.includes('Your selected semester:')) {
       const semesterMatch = trimmed.match(/Your selected semester:\s*(.+)/)
       if (semesterMatch) {
@@ -2019,7 +1946,6 @@ function cleanCliOutput(rawOutput, hasServedFiles = false) {
       }
     }
 
-    // Extract course selection
     if (trimmed.includes('Your selected Course:')) {
       const courseMatch = trimmed.match(/Your selected Course:\s*(.+)/)
       if (courseMatch) {
@@ -2027,7 +1953,6 @@ function cleanCliOutput(rawOutput, hasServedFiles = false) {
       }
     }
 
-    // Extract faculty selection
     if (trimmed.includes('Your selected Faculty:')) {
       const facultyMatch = trimmed.match(/Your selected Faculty:\s*(.+)/)
       if (facultyMatch) {
@@ -2035,7 +1960,6 @@ function cleanCliOutput(rawOutput, hasServedFiles = false) {
       }
     }
 
-    // Extract download summary
     if (trimmed.includes('Download Summary:')) {
       downloadSummary = 'Download Summary:'
     }
@@ -2054,12 +1978,10 @@ function cleanCliOutput(rawOutput, hasServedFiles = false) {
         downloadSummary += `\nSuccessfully downloaded: ${downloadedMatch[1]}`
       }
     }
-    // Only include local path in output if no served files are available
     if (trimmed.includes('Files have been saved to:')) {
       const pathMatch = trimmed.match(/Files have been saved to:\s*(.+)/)
       if (pathMatch) {
         downloadPath = pathMatch[1].trim()
-        // Only add local path to summary if served files are NOT available
         if (!hasServedFiles) {
           downloadSummary += `\nFiles saved to: ${downloadPath}`
           if (process.env.NODE_ENV !== 'production') {
@@ -2078,7 +2000,6 @@ function cleanCliOutput(rawOutput, hasServedFiles = false) {
     }
   }
 
-  // Build formatted output
   if (semester) cleanedLines.push(`📚 **Semester**: ${semester}`)
   if (course) cleanedLines.push(`📖 **Course**: ${course}`)
   if (faculty) cleanedLines.push(`👨‍🏫 **Faculty**: ${faculty}`)

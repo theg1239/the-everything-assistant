@@ -184,9 +184,9 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                   }
 
                   const getStatusColor = (percent: number) => {
-                    if (percent >= 85) return 'text-green-600 bg-green-50 border-green-200'
-                    if (percent >= 75) return 'text-amber-600 bg-amber-50 border-amber-200'
-                    return 'text-red-600 bg-red-50 border-red-200'
+                    if (percent >= 85) return 'text-green-400 bg-green-500/10 border-green-500/20'
+                    if (percent >= 75) return 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                    return 'text-red-400 bg-red-500/10 border-red-500/20'
                   }
 
                   const getProgressColor = (percent: number) => {
@@ -215,7 +215,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                       </div>
 
                       <div className="mb-3">
-                        <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div className="w-full bg-muted/40 rounded-full h-2">
                           <div
                             className={`h-2 rounded-full transition-all duration-300 ${getProgressColor(percentage)}`}
                             style={{ width: `${Math.min(percentage, 100)}%` }}
@@ -261,10 +261,10 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
 
                           {alert && (
                             <div
-                              className={`text-xs font-medium p-2 rounded ${
+                              className={`text-xs font-medium p-2 rounded border ${
                                 alert.includes('Can miss') || alert.includes('safe')
-                                  ? 'bg-green-100 text-green-700 border border-green-200'
-                                  : 'bg-red-100 text-red-700 border border-red-200'
+                                  ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                                  : 'bg-red-500/10 text-red-400 border-red-500/20'
                               }`}
                             >
                               <div className="flex items-center gap-1">
@@ -280,15 +280,15 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
 
                           <div className="mt-2 text-xs text-muted-foreground">
                             {percentage >= 85 && (
-                              <span className="text-green-600">✓ Excellent attendance</span>
+                              <span className="text-green-400">✓ Excellent attendance</span>
                             )}
                             {percentage >= 75 && percentage < 85 && (
-                              <span className="text-amber-600">
+                              <span className="text-amber-400">
                                 ⚠ Good attendance, stay consistent
                               </span>
                             )}
                             {percentage < 75 && (
-                              <span className="text-red-600">⚠ Below minimum requirement</span>
+                              <span className="text-red-400">⚠ Below minimum requirement</span>
                             )}
                           </div>
 

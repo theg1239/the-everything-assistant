@@ -1,17 +1,16 @@
 'use client'
 
 import { usePathname, useSearchParams } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, Suspense } from 'react'
 
-export default function ScrollToTop() {
+// Wrapper component that uses searchParams
+function ScrollToTopInner() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
   useEffect(() => {
-    // Scroll to top on page navigation
     window.scrollTo(0, 0)
     
-    // Add a small delay to ensure rendering is complete
     const timeoutId = setTimeout(() => {
       window.scrollTo(0, 0)
     }, 100)
@@ -20,4 +19,13 @@ export default function ScrollToTop() {
   }, [pathname, searchParams])
 
   return null
+}
+
+// Main component with Suspense boundary
+export default function ScrollToTop() {
+  return (
+    <Suspense fallback={null}>
+      <ScrollToTopInner />
+    </Suspense>
+  )
 }

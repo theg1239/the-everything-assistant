@@ -252,13 +252,15 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     }
   }
 
-  if (result.success === false && result.error && (
-    result.error.includes('Menu not available') || 
-    result.error.includes('mess menu') ||
-    toolName === 'getMensMealPlan' ||
-    toolName === 'getWomensMealPlan' ||
-    result.message?.includes('mess menu')
-  )) {
+  if (
+    result.success === false &&
+    result.error &&
+    (result.error.includes('Menu not available') ||
+      result.error.includes('mess menu') ||
+      toolName === 'getMensMealPlan' ||
+      toolName === 'getWomensMealPlan' ||
+      result.message?.includes('mess menu'))
+  ) {
     return {
       type: 'error' as const,
       title: 'Mess Menu Not Available',
@@ -331,11 +333,12 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         canResume: result.canResume,
       },
       source: 'VTOP Interactive',
-    }  }
+    }
+  }
 
   if (result.success === false && (result.error || result.message)) {
     const errorMessage = result.message || result.error || 'An error occurred'
-    
+
     return {
       type: 'error' as const,
       title: 'Search Error',

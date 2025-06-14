@@ -72,7 +72,8 @@ async function handleIntelligentCoursePage(params: {
     semester,
     course,
     faculty,
-    fuzzyIndex,    messages,
+    fuzzyIndex,
+    messages,
   } = params
 
   let contextualSemesterQuery = semesterQuery
@@ -81,19 +82,19 @@ async function handleIntelligentCoursePage(params: {
   let contextualMaterialQuery = materialQuery
   let previousOptions = null
   let previousStepType = null
-  
+
   if (messages && messages.length > 0) {
     const recentMessages = messages.slice(-10)
-    
+
     for (const message of recentMessages.reverse()) {
       if (message.toolInvocations) {
         for (const toolCall of message.toolInvocations) {
           if (toolCall.toolName === 'queryVTOP' && toolCall.result && toolCall.result.success) {
             const result = toolCall.result
-            
+
             if (result.step && result.data) {
               previousStepType = result.step
-              
+
               if (typeof result.data === 'string') {
                 try {
                   const parsedData = JSON.parse(result.data)
@@ -102,41 +103,53 @@ async function handleIntelligentCoursePage(params: {
                   }
                 } catch (e) {
                   if (result.formatted_content) {
-                    previousOptions = extractOptionsFromContent(result.formatted_content, result.step)
+                    previousOptions = extractOptionsFromContent(
+                      result.formatted_content,
+                      result.step
+                    )
                   }
                 }
               } else if (result.data.options && Array.isArray(result.data.options)) {
                 previousOptions = result.data.options
               }
-              
+
               if (!contextualSemesterQuery && result.formatted_content) {
-                const semesterMatch = result.formatted_content.match(/(summer|fall|winter)\s*semester/i)
+                const semesterMatch = result.formatted_content.match(
+                  /(summer|fall|winter)\s*semester/i
+                )
                 if (semesterMatch) {
                   contextualSemesterQuery = semesterMatch[0].toLowerCase()
                 }
-              }              
+              }
               if (previousOptions && previousStepType) {
                 const userMessage = messages[messages.length - 1]
                 if (userMessage && userMessage.role === 'user' && userMessage.content) {
                   const userContent = userMessage.content.toLowerCase().trim()
-                  
+
                   if (previousStepType === 'course' && !contextualCourseQuery) {
                     const cleanedContent = userContent
-                      .replace(/^(i would like to|i want to|show me|view|get|select|choose)\s*/i, '')
+                      .replace(
+                        /^(i would like to|i want to|show me|view|get|select|choose)\s*/i,
+                        ''
+                      )
                       .replace(/\s*(course|materials?|page)$/i, '')
                       .trim()
-                    
+
                     if (cleanedContent) {
                       contextualCourseQuery = cleanedContent
                     }
                   } else if (previousStepType === 'faculty' && !contextualFacultyQuery) {
                     const cleanedContent = userContent
-                      .replace(/^(i would like to|i want to|show me|view|get|select|choose)\s*/i, '')
+                      .replace(
+                        /^(i would like to|i want to|show me|view|get|select|choose)\s*/i,
+                        ''
+                      )
                       .replace(/\s*(faculty|professor|teacher)$/i, '')
                       .trim()
-                      if (cleanedContent) {
+                    if (cleanedContent) {
                       contextualFacultyQuery = cleanedContent
-                    }                  } else if (previousStepType === 'materials' && !contextualMaterialQuery) {
+                    }
+                  } else if (previousStepType === 'materials' && !contextualMaterialQuery) {
                     const extractedSelection = extractMaterialSelection(userContent)
                     if (extractedSelection) {
                       contextualMaterialQuery = extractedSelection
@@ -155,8 +168,12 @@ async function handleIntelligentCoursePage(params: {
   }
 
   function extractMaterialSelection(userContent: string): string | null {
-    if (userContent.includes('all') || userContent.includes('everything') || 
-        userContent.includes('bulk download') || userContent.includes('download all')) {
+    if (
+      userContent.includes('all') ||
+      userContent.includes('everything') ||
+      userContent.includes('bulk download') ||
+      userContent.includes('download all')
+    ) {
       return 'all'
     } else if (userContent.match(/\d+[-,\s]*\d*/)) {
       const numberPattern = userContent.match(/(\d+[-,\s]*\d*)/g)
@@ -174,26 +191,30 @@ async function handleIntelligentCoursePage(params: {
 
   function extractOptionsFromContent(content: string, stepType: string): any[] | null {
     if (!content || typeof content !== 'string') return null
-    
+
     const lines = content.split('\n')
     const options = []
-    
+
     for (const line of lines) {
       const match = line.match(/^\s*(\d+)\s*[│|]\s*(.+)/)
       if (match) {
         const [, number, description] = match
         options.push({
           number: parseInt(number),
-          description: description.trim()
+          description: description.trim(),
         })
       }
     }
-      return options.length > 0 ? options : null
+    return options.length > 0 ? options : null
   }
 
   let step = interactiveStep
   if (!step) {
-    if ((contextualCourseQuery || courseQuery) && (contextualFacultyQuery || facultyQuery) && (contextualMaterialQuery || materialQuery)) {
+    if (
+      (contextualCourseQuery || courseQuery) &&
+      (contextualFacultyQuery || facultyQuery) &&
+      (contextualMaterialQuery || materialQuery)
+    ) {
       step = 'semester'
     } else if ((contextualCourseQuery || courseQuery) && (contextualFacultyQuery || facultyQuery)) {
       step = 'semester'
@@ -238,11 +259,13 @@ async function handleIntelligentCoursePage(params: {
   }
   if (contextualFacultyQuery || facultyQuery) {
     requestBody.flags.facultyQuery = contextualFacultyQuery || facultyQuery
-    if (contextualFacultyQuery) console.log('Using contextual faculty query:', contextualFacultyQuery)
+    if (contextualFacultyQuery)
+      console.log('Using contextual faculty query:', contextualFacultyQuery)
   }
   if (contextualMaterialQuery || materialQuery) {
     requestBody.flags.materialQuery = contextualMaterialQuery || materialQuery
-    if (contextualMaterialQuery) console.log('Using contextual material query:', contextualMaterialQuery)
+    if (contextualMaterialQuery)
+      console.log('Using contextual material query:', contextualMaterialQuery)
   }
 
   if (semester !== undefined) requestBody.flags.semester = semester
@@ -580,7 +603,8 @@ export function createVITTools() {
             'For course-page command: specify which step of the interactive workflow to execute. Auto-determined based on provided parameters if not specified.'
           ),
         debug: z.boolean().optional().describe('Enable debug mode for troubleshooting'),
-      }),      execute: async (
+      }),
+      execute: async (
         {
           command,
           username,

@@ -6,7 +6,6 @@ import { useSession } from 'next-auth/react'
 
 const PureChatHeader = () => {
   const { data: session } = useSession()
-  
 
   return (
     <motion.div

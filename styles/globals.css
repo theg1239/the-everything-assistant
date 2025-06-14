@@ -11,7 +11,7 @@
     ring: none !important;
     ring-offset: none !important;
   }
-  
+
   textarea:focus {
     border: none !important;
     outline: none !important;
@@ -24,14 +24,15 @@
   :root {
     --app-height: 100vh;
   }
-  
+
   @supports (-webkit-touch-callout: none) {
     :root {
       --app-height: -webkit-fill-available;
     }
   }
-  
-  html, body {
+
+  html,
+  body {
     height: 100%;
     height: var(--app-height);
     overflow: hidden;
@@ -40,7 +41,7 @@
     overscroll-behavior-y: none;
     -webkit-overflow-scrolling: touch;
   }
-  
+
   /* Remove rubber-band scroll on Safari */
   .chat-content {
     overflow-y: auto;
@@ -49,7 +50,7 @@
     height: 100%;
     height: var(--app-height);
   }
-  
+
   /* Ensure header is always visible */
   .chat-page-header {
     position: sticky;
@@ -59,7 +60,7 @@
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     padding-top: env(safe-area-inset-top, 1rem);
   }
-  
+
   /* Fix input area positioning */
   .input-area {
     position: sticky;
@@ -72,409 +73,410 @@
     padding-bottom: env(safe-area-inset-bottom, 1rem);
   }
 
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 262.1 83.3% 57.8%;
-    --primary-foreground: 210 20% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 262.1 83.3% 57.8%;
-    --radius: 0.75rem;
-    --sidebar-width: 320px;
-    --sidebar-transition: transform 0.3s ease, opacity 0.3s ease;
-  }
+  @layer base {
+    :root {
+      --background: 0 0% 100%;
+      --foreground: 240 10% 3.9%;
+      --card: 0 0% 100%;
+      --card-foreground: 240 10% 3.9%;
+      --popover: 0 0% 100%;
+      --popover-foreground: 240 10% 3.9%;
+      --primary: 262.1 83.3% 57.8%;
+      --primary-foreground: 210 20% 98%;
+      --secondary: 240 4.8% 95.9%;
+      --secondary-foreground: 240 5.9% 10%;
+      --muted: 240 4.8% 95.9%;
+      --muted-foreground: 240 3.8% 46.1%;
+      --accent: 240 4.8% 95.9%;
+      --accent-foreground: 240 5.9% 10%;
+      --destructive: 0 84.2% 60.2%;
+      --destructive-foreground: 0 0% 98%;
+      --border: 240 5.9% 90%;
+      --input: 240 5.9% 90%;
+      --ring: 262.1 83.3% 57.8%;
+      --radius: 0.75rem;
+      --sidebar-width: 320px;
+      --sidebar-transition: transform 0.3s ease, opacity 0.3s ease;
+    }
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 84% 4.9%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 94.1%;
-  }
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-    font-feature-settings:
-      'rlig' 1,
-      'calt' 1;
-    font-optical-sizing: auto;
-  }
-}
-
-/* Remove all input focus styles */
-input:focus,
-input:focus-visible,
-.focus\:ring-0:focus {
-  outline: none !important;
-  ring: none !important;
-  border: none !important;
-  box-shadow: none !important;
-  --tw-ring-shadow: none !important;
-  --tw-ring-offset-shadow: none !important;
-}
-
-/* Force remove all borders and focus styles from textarea */
-textarea,
-textarea:focus,
-textarea:focus-visible,
-textarea:focus-within,
-textarea:active,
-textarea.textarea,
-textarea.textarea:focus,
-textarea.textarea:focus-visible,
-textarea.textarea:focus-within,
-textarea.textarea:active {
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;  --tw-ring-width: 0 !important;
-  --tw-ring-offset-width: 0 !important;
-  --tw-ring-offset-width: 0 !important;
-  --tw-ring-offset-color: transparent !important;
-  --tw-ring-color: transparent !important;
-  --tw-ring-offset-shadow: 0 0 #0000 !important;
-  --tw-ring-shadow: 0 0 #0000 !important;
-}
-
-/* Additional override for Tailwind's focus-visible utilities */
-.focus\:border:focus,
-.focus\:ring:focus,
-.focus-visible\:border:focus-visible,
-.focus-visible\:ring:focus-visible,
-.focus-within\:border:focus-within,
-.focus-within\:ring:focus-within {
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
-  --tw-ring-offset-width: 0 !important;
-  --tw-ring-color: transparent !important;
-  --tw-ring-shadow: none !important;
-}
-
-html {
-  scroll-behavior: smooth;
-}
-
-::-webkit-scrollbar {
-  width: 4px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.2);
-  border-radius: 2px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 116, 139, 0.4);
-}
-
-/* Text selection */
-::selection {
-  background: rgba(59, 130, 246, 0.2);
-  color: white;
-}
-
-/* Improved typography */
-.prose {
-  line-height: 1.7;
-  letter-spacing: 0.01em;
-}
-
-/* Enhanced animations */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-fade-in-up {
-  animation: fadeInUp 0.6s ease-out;
-}
-
-/* Gradient text effect */
-.gradient-text {
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* Enhanced glassmorphism */
-.glass-effect {
-  background: rgba(15, 23, 42, 0.3);
-  border: 1px solid rgba(100, 116, 139, 0.1);
-}
-
-/* Enhanced gradient animations for tool responses */
-@keyframes gradient-shift {
-  0%,
-  100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-}
-
-.animate-gradient {
-  background-size: 200% 200%;
-  animation: gradient-shift 3s ease infinite;
-}
-
-/* Improved glass morphism effects */
-.glass-effect-strong {
-  background: rgba(15, 23, 42, 0.7);
-  border: 1px solid rgba(100, 116, 139, 0.2);
-}
-
-/* Text line clamping utilities */
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.line-clamp-3 {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-/* Enhanced hover effects for cards */
-.card-hover-effect {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.card-hover-effect:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    0 20px 25px -5px rgba(0, 0, 0, 0.1),
-    0 10px 10px -5px rgba(0, 0, 0, 0.04);
-}
-
-/* Subtle pulse animation for status indicators */
-@keyframes pulse-glow {
-  0%,
-  100% {
-    opacity: 1;
-    box-shadow: 0 0 5px currentColor;
-  }
-  50% {
-    opacity: 0.8;
-    box-shadow: 0 0 10px currentColor;
-  }
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
-}
-
-/* Loading animation improvements */
-@keyframes pulse-smooth {
-  0%,
-  100% {
-    opacity: 0.4;
-    transform: scale(0.95);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.animate-pulse-smooth {
-  animation: pulse-smooth 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* Enhanced button hover effects */
-button {
-  transform-origin: center;
-}
-
-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-}
-
-button:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-/* Improved spacing and typography */
-.container {
-  max-width: 1400px;
-}
-
-/* Enhanced mobile responsiveness */
-@media (max-width: 768px) {
-  .container {
-    padding-left: 1rem;
-    padding-right: 1rem;
-  }
-
-  .text-5xl {
-    font-size: 2.5rem;
-  }
-
-  .text-xl {
-    font-size: 1.125rem;
-  }
-}
-
-/* Ensure no borders or outlines on focus */
-*:focus,
-*:focus-visible {
-  outline: none !important;
-  box-shadow: none !important;
-}
-
-/* Custom focus styles only where needed */
-button:focus-visible {
-  outline: 2px solid rgba(59, 130, 246, 0.4);
-  outline-offset: 2px;
-}
-
-/* Sidebar and chat interface transitions */
-@layer utilities {
-  .sidebar-open .max-w-5xl {
-    margin-left: 20rem;
-    margin-right: 1rem;
-    max-width: none;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  @media (max-width: 768px) {
-    .sidebar-open .max-w-5xl {
-      margin-left: 0;
-      margin-right: 0;
-      max-width: 80rem;
+    .dark {
+      --background: 222.2 84% 4.9%;
+      --foreground: 210 40% 98%;
+      --card: 222.2 84% 4.9%;
+      --card-foreground: 210 40% 98%;
+      --popover: 222.2 84% 4.9%;
+      --popover-foreground: 210 40% 98%;
+      --primary: 217.2 91.2% 59.8%;
+      --primary-foreground: 222.2 84% 4.9%;
+      --secondary: 217.2 32.6% 17.5%;
+      --secondary-foreground: 210 40% 98%;
+      --muted: 217.2 32.6% 17.5%;
+      --muted-foreground: 215 20.2% 65.1%;
+      --accent: 217.2 32.6% 17.5%;
+      --accent-foreground: 210 40% 98%;
+      --destructive: 0 62.8% 30.6%;
+      --destructive-foreground: 210 40% 98%;
+      --border: 217.2 32.6% 17.5%;
+      --input: 217.2 32.6% 17.5%;
+      --ring: 224.3 76.3% 94.1%;
     }
   }
 
-  /* Collapsed sidebar button */
-  .sidebar-toggle-collapsed {
-    position: fixed;
-    left: 1rem;
-    top: 1rem;
-    z-index: 50;
-    background-color: rgba(30, 41, 59, 0.9);
-    border: 1px solid rgba(51, 65, 85, 0.5);
-    border-radius: 9999px;
-    padding: 0.5rem;
-    color: #94a3b8;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow:
-      0 10px 15px -3px rgba(0, 0, 0, 0.1),
-      0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    transform: translateX(0);
+  @layer base {
+    * {
+      @apply border-border;
+    }
+    body {
+      @apply bg-background text-foreground;
+      font-feature-settings:
+        'rlig' 1,
+        'calt' 1;
+      font-optical-sizing: auto;
+    }
   }
 
-  .sidebar-toggle-collapsed:hover {
-    color: #ffffff;
+  /* Remove all input focus styles */
+  input:focus,
+  input:focus-visible,
+  .focus\:ring-0:focus {
+    outline: none !important;
+    ring: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    --tw-ring-shadow: none !important;
+    --tw-ring-offset-shadow: none !important;
   }
 
-  /* Smooth transitions for all gradient elements */
-  .gradient-transition {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Force remove all borders and focus styles from textarea */
+  textarea,
+  textarea:focus,
+  textarea:focus-visible,
+  textarea:focus-within,
+  textarea:active,
+  textarea.textarea,
+  textarea.textarea:focus,
+  textarea.textarea:focus-visible,
+  textarea.textarea:focus-within,
+  textarea.textarea:active {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    --tw-ring-width: 0 !important;
+    --tw-ring-offset-width: 0 !important;
+    --tw-ring-offset-width: 0 !important;
+    --tw-ring-offset-color: transparent !important;
+    --tw-ring-color: transparent !important;
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
   }
 
-  /* Shared scrollbar styling */
-  .custom-scrollbar {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+  /* Additional override for Tailwind's focus-visible utilities */
+  .focus\:border:focus,
+  .focus\:ring:focus,
+  .focus-visible\:border:focus-visible,
+  .focus-visible\:ring:focus-visible,
+  .focus-within\:border:focus-within,
+  .focus-within\:ring:focus-within {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    --tw-ring-offset-width: 0 !important;
+    --tw-ring-color: transparent !important;
+    --tw-ring-shadow: none !important;
   }
 
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
+  html {
+    scroll-behavior: smooth;
   }
 
-  .custom-scrollbar::-webkit-scrollbar-track {
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
     background: transparent;
   }
 
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background-color: rgba(148, 163, 184, 0.3);
-    border-radius: 10px;
+  ::-webkit-scrollbar-thumb {
+    background: rgba(100, 116, 139, 0.2);
+    border-radius: 2px;
   }
 
-  /* Enhanced scrollbar for tool results */
-  .tool-scrollbar::-webkit-scrollbar {
-    width: 6px;
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.4);
   }
 
-  .tool-scrollbar::-webkit-scrollbar-track {
-    background: rgba(30, 41, 59, 0.3);
-    border-radius: 10px;
+  /* Text selection */
+  ::selection {
+    background: rgba(59, 130, 246, 0.2);
+    color: white;
   }
 
-  .tool-scrollbar::-webkit-scrollbar-thumb {
-    background: linear-gradient(to bottom, rgba(59, 130, 246, 0.5), rgba(139, 92, 246, 0.5));
-    border-radius: 10px;
+  /* Improved typography */
+  .prose {
+    line-height: 1.7;
+    letter-spacing: 0.01em;
   }
 
-  .tool-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(to bottom, rgba(59, 130, 246, 0.7), rgba(139, 92, 246, 0.7));
+  /* Enhanced animations */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
-  /* Chat layout fixes */
-  .chat-container {
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
-    width: 100%;
-    position: relative;
-    max-width: 100%;
-    transition: all 0.3s ease-in-out;
-    overflow-x: hidden;
+  .animate-fade-in-up {
+    animation: fadeInUp 0.6s ease-out;
   }
 
-  .chat-container > div {
-    width: 100%;
-    max-width: 100%;
+  /* Gradient text effect */
+  .gradient-text {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
-}
+
+  /* Enhanced glassmorphism */
+  .glass-effect {
+    background: rgba(15, 23, 42, 0.3);
+    border: 1px solid rgba(100, 116, 139, 0.1);
+  }
+
+  /* Enhanced gradient animations for tool responses */
+  @keyframes gradient-shift {
+    0%,
+    100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+
+  .animate-gradient {
+    background-size: 200% 200%;
+    animation: gradient-shift 3s ease infinite;
+  }
+
+  /* Improved glass morphism effects */
+  .glass-effect-strong {
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(100, 116, 139, 0.2);
+  }
+
+  /* Text line clamping utilities */
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Enhanced hover effects for cards */
+  .card-hover-effect {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .card-hover-effect:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 20px 25px -5px rgba(0, 0, 0, 0.1),
+      0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  }
+
+  /* Subtle pulse animation for status indicators */
+  @keyframes pulse-glow {
+    0%,
+    100% {
+      opacity: 1;
+      box-shadow: 0 0 5px currentColor;
+    }
+    50% {
+      opacity: 0.8;
+      box-shadow: 0 0 10px currentColor;
+    }
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  /* Loading animation improvements */
+  @keyframes pulse-smooth {
+    0%,
+    100% {
+      opacity: 0.4;
+      transform: scale(0.95);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .animate-pulse-smooth {
+    animation: pulse-smooth 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* Enhanced button hover effects */
+  button {
+    transform-origin: center;
+  }
+
+  button:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+
+  button:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  /* Improved spacing and typography */
+  .container {
+    max-width: 1400px;
+  }
+
+  /* Enhanced mobile responsiveness */
+  @media (max-width: 768px) {
+    .container {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+
+    .text-5xl {
+      font-size: 2.5rem;
+    }
+
+    .text-xl {
+      font-size: 1.125rem;
+    }
+  }
+
+  /* Ensure no borders or outlines on focus */
+  *:focus,
+  *:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Custom focus styles only where needed */
+  button:focus-visible {
+    outline: 2px solid rgba(59, 130, 246, 0.4);
+    outline-offset: 2px;
+  }
+
+  /* Sidebar and chat interface transitions */
+  @layer utilities {
+    .sidebar-open .max-w-5xl {
+      margin-left: 20rem;
+      margin-right: 1rem;
+      max-width: none;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    @media (max-width: 768px) {
+      .sidebar-open .max-w-5xl {
+        margin-left: 0;
+        margin-right: 0;
+        max-width: 80rem;
+      }
+    }
+
+    /* Collapsed sidebar button */
+    .sidebar-toggle-collapsed {
+      position: fixed;
+      left: 1rem;
+      top: 1rem;
+      z-index: 50;
+      background-color: rgba(30, 41, 59, 0.9);
+      border: 1px solid rgba(51, 65, 85, 0.5);
+      border-radius: 9999px;
+      padding: 0.5rem;
+      color: #94a3b8;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow:
+        0 10px 15px -3px rgba(0, 0, 0, 0.1),
+        0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      transform: translateX(0);
+    }
+
+    .sidebar-toggle-collapsed:hover {
+      color: #ffffff;
+    }
+
+    /* Smooth transitions for all gradient elements */
+    .gradient-transition {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Shared scrollbar styling */
+    .custom-scrollbar {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background-color: rgba(148, 163, 184, 0.3);
+      border-radius: 10px;
+    }
+
+    /* Enhanced scrollbar for tool results */
+    .tool-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .tool-scrollbar::-webkit-scrollbar-track {
+      background: rgba(30, 41, 59, 0.3);
+      border-radius: 10px;
+    }
+
+    .tool-scrollbar::-webkit-scrollbar-thumb {
+      background: linear-gradient(to bottom, rgba(59, 130, 246, 0.5), rgba(139, 92, 246, 0.5));
+      border-radius: 10px;
+    }
+
+    .tool-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(to bottom, rgba(59, 130, 246, 0.7), rgba(139, 92, 246, 0.7));
+    }
+
+    /* Chat layout fixes */
+    .chat-container {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      width: 100%;
+      position: relative;
+      max-width: 100%;
+      transition: all 0.3s ease-in-out;
+      overflow-x: hidden;
+    }
+
+    .chat-container > div {
+      width: 100%;
+      max-width: 100%;
+    }
+  }
 }

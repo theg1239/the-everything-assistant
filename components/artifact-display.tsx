@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, memo, useRef, useEffect } from 'react'
-import ReactDOM from 'react-dom';
+import ReactDOM from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   FileSearch,
@@ -740,12 +740,13 @@ const PaperCard = ({ paper, onViewPdf }: { paper: any; onViewPdf: (url: string) 
               size="sm"
               className="h-7 px-3 text-xs"
               onClick={() => {
-                const urlToView = paper.link || paper.url || paper.pdfUrl || paper.downloadUrl;
-                console.log('[PaperCard] View Paper clicked. URL:', urlToView);
-                onViewPdf(urlToView);
+                const urlToView = paper.link || paper.url || paper.pdfUrl || paper.downloadUrl
+                console.log('[PaperCard] View Paper clicked. URL:', urlToView)
+                onViewPdf(urlToView)
               }}
             >
-              <ExternalLink className="h-3 w-3 mr-1" /> {/* Corrected: Assuming ExternalLink is the intended icon from lucide-react or a custom component. If not, this needs to be adjusted. */}
+              <ExternalLink className="h-3 w-3 mr-1" />{' '}
+              {/* Corrected: Assuming ExternalLink is the intended icon from lucide-react or a custom component. If not, this needs to be adjusted. */}
               View Paper
             </Button>
           )}
@@ -1093,16 +1094,16 @@ const MessMenuCard = ({ menuData }: { menuData: any }) => {
 const ErrorCard = ({ errorData }: { errorData: any }) => {
   const { error, message, availableDateRange } = errorData
   const isMobile = useMediaQuery('(max-width: 640px)')
-    
+
   const getErrorMessage = () => {
     if (message && message.includes('mess menu')) {
-      return "The requested mess menu is not available for this date. Please try a different date from the available range below."
+      return 'The requested mess menu is not available for this date. Please try a different date from the available range below.'
     }
-    
-    if (error && error.includes('Menu not available')) {  
-      return "The requested mess menu is not available for this date. Please try a different date from the available range below."
+
+    if (error && error.includes('Menu not available')) {
+      return 'The requested mess menu is not available for this date. Please try a different date from the available range below.'
     }
-    
+
     if (message) {
       return message
     }
@@ -1114,19 +1115,19 @@ const ErrorCard = ({ errorData }: { errorData: any }) => {
 
   const formatDateRange = (range: any) => {
     if (!range || !range.start || !range.end) return null
-    
+
     try {
       const startDate = new Date(range.start)
       const endDate = new Date(range.end)
-      const startFormatted = startDate.toLocaleDateString('en-US', { 
-        month: 'short', 
+      const startFormatted = startDate.toLocaleDateString('en-US', {
+        month: 'short',
         day: 'numeric',
-        year: 'numeric'
+        year: 'numeric',
       })
-      const endFormatted = endDate.toLocaleDateString('en-US', { 
-        month: 'short', 
+      const endFormatted = endDate.toLocaleDateString('en-US', {
+        month: 'short',
         day: 'numeric',
-        year: 'numeric'
+        year: 'numeric',
       })
       return `${startFormatted} to ${endFormatted}`
     } catch {
@@ -1136,39 +1137,49 @@ const ErrorCard = ({ errorData }: { errorData: any }) => {
   return (
     <div className="w-full max-w-none">
       <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg overflow-hidden">
-        <div className={cn("p-4 sm:p-6")}>
-          <div className={cn(
-            "text-red-700 dark:text-red-300 leading-relaxed",
-            isMobile ? "text-sm" : "text-base"
-          )}>
+        <div className={cn('p-4 sm:p-6')}>
+          <div
+            className={cn(
+              'text-red-700 dark:text-red-300 leading-relaxed',
+              isMobile ? 'text-sm' : 'text-base'
+            )}
+          >
             {getErrorMessage()}
           </div>
         </div>
-        
+
         {availableDateRange && (
           <div className="border-t border-red-200 dark:border-red-700 bg-red-100 dark:bg-red-900/30">
-            <div className={cn("p-4 sm:p-6")}>
-              <div className={cn(
-                "flex items-center mb-2 sm:mb-3",
-                isMobile ? "flex-col items-start space-y-2" : "flex-row"
-              )}>
+            <div className={cn('p-4 sm:p-6')}>
+              <div
+                className={cn(
+                  'flex items-center mb-2 sm:mb-3',
+                  isMobile ? 'flex-col items-start space-y-2' : 'flex-row'
+                )}
+              >
                 <div className="flex items-center">
-                  <Info className={cn(
-                    "text-red-600 dark:text-red-400 flex-shrink-0",
-                    isMobile ? "h-4 w-4 mr-2" : "h-5 w-5 mr-3"
-                  )} />
-                  <span className={cn(
-                    "font-medium text-red-800 dark:text-red-200",
-                    isMobile ? "text-sm" : "text-base"
-                  )}>
+                  <Info
+                    className={cn(
+                      'text-red-600 dark:text-red-400 flex-shrink-0',
+                      isMobile ? 'h-4 w-4 mr-2' : 'h-5 w-5 mr-3'
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      'font-medium text-red-800 dark:text-red-200',
+                      isMobile ? 'text-sm' : 'text-base'
+                    )}
+                  >
                     Available Dates
                   </span>
                 </div>
               </div>
-              <div className={cn(
-                "text-red-700 dark:text-red-300",
-                isMobile ? "text-sm ml-6" : "text-base ml-8"
-              )}>
+              <div
+                className={cn(
+                  'text-red-700 dark:text-red-300',
+                  isMobile ? 'text-sm ml-6' : 'text-base ml-8'
+                )}
+              >
                 {formatDateRange(availableDateRange)}
               </div>
             </div>
@@ -1180,27 +1191,27 @@ const ErrorCard = ({ errorData }: { errorData: any }) => {
 }
 
 const ModalPortal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isMounted, setIsMounted] = useState(false);
-  const elRef = useRef<HTMLDivElement | null>(null);
+  const [isMounted, setIsMounted] = useState(false)
+  const elRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    setIsMounted(true);
-    elRef.current = document.createElement('div');
-    document.body.appendChild(elRef.current);
+    setIsMounted(true)
+    elRef.current = document.createElement('div')
+    document.body.appendChild(elRef.current)
 
     return () => {
       if (elRef.current) {
-        document.body.removeChild(elRef.current);
+        document.body.removeChild(elRef.current)
       }
-    };
-  }, []);
+    }
+  }, [])
 
   if (!isMounted || !elRef.current) {
-    return null;
+    return null
   }
 
-  return ReactDOM.createPortal(children, elRef.current);
-};
+  return ReactDOM.createPortal(children, elRef.current)
+}
 
 const PureArtifactDisplay = ({
   title,
@@ -1231,13 +1242,13 @@ const PureArtifactDisplay = ({
 
   const handleViewPdf = (url: string) => {
     //console.log('[PureArtifactDisplay] handleViewPdf called with URL:', url);
-    const embedUrl = url.replace('/view?usp=sharing', '/preview').replace('/view', '/preview');
+    const embedUrl = url.replace('/view?usp=sharing', '/preview').replace('/view', '/preview')
     //console.log('[PureArtifactDisplay] Setting PDF embed URL to:', embedUrl);
-    setPdfUrl(embedUrl);
-  };
+    setPdfUrl(embedUrl)
+  }
 
   const handleClosePdf = () => {
-    console.log('[PureArtifactDisplay] Closing PDF view.');
+    console.log('[PureArtifactDisplay] Closing PDF view.')
     setPdfUrl(null)
   }
 
@@ -1266,7 +1277,9 @@ const PureArtifactDisplay = ({
     const hasMoreItems = isMobile && items.length > 3 && !showAllItems && !isFullscreen
 
     return (
-      <>        <div
+      <>
+        {' '}
+        <div
           className={cn(
             'grid gap-3',
             type === 'mess-menu' || type === 'vtop-data' || type === 'error'
@@ -1277,7 +1290,8 @@ const PureArtifactDisplay = ({
                   ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
                   : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
           )}
-        >{displayItems.map((item, index) => {
+        >
+          {displayItems.map((item, index) => {
             switch (type) {
               case 'papers':
                 return <PaperCard key={index} paper={item} onViewPdf={handleViewPdf} />
@@ -1306,7 +1320,6 @@ const PureArtifactDisplay = ({
             }
           })}
         </div>
-
         {hasMoreItems && (
           <div className="mt-4 text-center">
             <Button
@@ -1418,11 +1431,7 @@ const PureArtifactDisplay = ({
                   <span className="sr-only">Close PDF preview</span>
                 </Button>
               </div>
-              <iframe
-                src={pdfUrl}
-                title="PDF Preview"
-                className="w-full h-full border-0"
-              />
+              <iframe src={pdfUrl} title="PDF Preview" className="w-full h-full border-0" />
             </motion.div>
           </motion.div>
         </ModalPortal>

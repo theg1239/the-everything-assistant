@@ -93,8 +93,9 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     // Mark initial render as complete after first render
     if (isInitialRender) {
       setIsInitialRender(false)
-    }  }, [isInitialRender])
-  
+    }
+  }, [isInitialRender])
+
   useEffect(() => {
     // Only auto-scroll when user is actively typing and sending messages
     // This prevents auto-scrolling on initial page load
@@ -113,28 +114,28 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
 
   // Create an auto-scroll function to monitor streaming content
   const contentRef = useRef<HTMLDivElement | null>(null)
-  
+
   useEffect(() => {
     // Auto-scroll during streaming by monitoring content changes
     if (isLoading && !isInitialRender) {
       // Set up a mutation observer to watch for content changes
       const targetNode = contentRef.current
       if (!targetNode) return
-      
+
       // Create a mutation observer to detect new content
       const observer = new MutationObserver(() => {
         // Scroll to the end when content changes
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
       })
-      
+
       // Start observing the target node for content changes
-      observer.observe(targetNode, { 
-        childList: true, 
-        subtree: true, 
+      observer.observe(targetNode, {
+        childList: true,
+        subtree: true,
         characterData: true,
-        attributes: false
+        attributes: false,
       })
-      
+
       // Clean up observer on effect cleanup
       return () => {
         observer.disconnect()
@@ -359,34 +360,35 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     if (chatId || optimisticChatId) {
       // This is a chat page, so scroll to top
       window.scrollTo(0, 0)
-      
+
       // Also use setTimeout to ensure browser has time to render
       setTimeout(() => {
         window.scrollTo(0, 0)
       }, 100)
     }
-  }, [chatId, optimisticChatId])  // Override auto-scrolling to preserve header visibility
+  }, [chatId, optimisticChatId]) // Override auto-scrolling to preserve header visibility
   useEffect(() => {
     if (chatId || optimisticChatId) {
       // Create a function to manually force scroll to top
       const forceScrollToTop = () => {
-        window.scrollTo(0, 0);
-      };
-      
+        window.scrollTo(0, 0)
+      }
+
       // Execute it on mount
-      forceScrollToTop();
-      
+      forceScrollToTop()
+
       // And after a delay to ensure rendering is complete
-      const timeoutId = setTimeout(forceScrollToTop, 100);
-      
+      const timeoutId = setTimeout(forceScrollToTop, 100)
+
       return () => {
-        clearTimeout(timeoutId);
-      };
+        clearTimeout(timeoutId)
+      }
     }
-  }, [chatId, optimisticChatId]);
+  }, [chatId, optimisticChatId])
 
   if (!showFullChat) {
-    return (      <VTOPToolHandler
+    return (
+      <VTOPToolHandler
         toolInvocations={messages[messages.length - 1]?.toolInvocations}
         onCredentialsSubmit={handleVTOPCredentials}
       >
@@ -416,7 +418,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                   setInput={setInput}
                   handleSubmit={handleFormSubmit}
                   isLoading={isLoading}
-                  placeholder='ask anything...'
+                  placeholder="ask anything..."
                   stop={stop}
                 />
               </motion.div>
@@ -486,7 +488,9 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                 type: 'document',
               }
             : undefined
-        }      />      <div className="flex flex-col h-[100dvh] bg-background text-foreground mobile-viewport-fix overflow-hidden">
+        }
+      />{' '}
+      <div className="flex flex-col h-[100dvh] bg-background text-foreground mobile-viewport-fix overflow-hidden">
         <header className="flex-shrink-0 fixed top-0 left-0 right-0 z-40 bg-background/95 border-b border-border chat-page-header">
           <div className="flex h-14 items-center px-4 gap-2">
             <HamburgerButton onClick={() => setSidebarOpen(!sidebarOpen)} className="md:block" />
@@ -506,7 +510,10 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               Canvas
             </Button>
           </div>
-        </header><div className="flex-1 relative overflow-hidden pt-1">          <div className="absolute inset-0 overflow-y-auto pb-[200px] md:pb-[180px] overflow-fix chat-content">
+        </header>
+        <div className="flex-1 relative overflow-hidden pt-1">
+          {' '}
+          <div className="absolute inset-0 overflow-y-auto pb-[200px] md:pb-[180px] overflow-fix chat-content">
             <div ref={contentRef} className="max-w-3xl mx-auto px-4 space-y-6 pt-5">
               {errorMessage && (
                 <motion.div
@@ -548,31 +555,32 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                       ></div>
                     </div>
                     <span className="text-sm">thinking...</span>
-                  </motion.div>                )}
-              <div 
-                ref={messagesEndRef} 
-                className={isLoading ? "h-20" : "h-0"} 
-                aria-hidden="true" 
-              />
+                  </motion.div>
+                )}
+              <div ref={messagesEndRef} className={isLoading ? 'h-20' : 'h-0'} aria-hidden="true" />
             </div>
           </div>
         </div>
-        
-        <ScrollToTopButton />          <div className="flex-shrink-0 fixed bottom-0 left-0 right-0 z-30 mobile-pb-fix input-area pb-6">
-            <div className="absolute inset-0 pointer-events-none" style={{
+        <ScrollToTopButton />{' '}
+        <div className="flex-shrink-0 fixed bottom-0 left-0 right-0 z-30 mobile-pb-fix input-area pb-6">
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
               background: 'linear-gradient(to bottom, transparent, rgb(2, 6, 23) 50%)',
-              borderTop: 'none'
-            }}></div>            <div className="relative z-10">
-              <MultimodalInput
-                input={input}
-                setInput={setInput}
-                handleSubmit={handleFormSubmit}
-                isLoading={isLoading}
-                placeholder="ask anything..."
-                stop={stop}
-              />
-            </div>
+              borderTop: 'none',
+            }}
+          ></div>{' '}
+          <div className="relative z-10">
+            <MultimodalInput
+              input={input}
+              setInput={setInput}
+              handleSubmit={handleFormSubmit}
+              isLoading={isLoading}
+              placeholder="ask anything..."
+              stop={stop}
+            />
           </div>
+        </div>
       </div>
     </VTOPToolHandler>
   )

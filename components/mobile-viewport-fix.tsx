@@ -9,16 +9,18 @@ export default function MobileViewportFix() {
       const viewport = window.visualViewport
       const height = viewport ? viewport.height : window.innerHeight
       doc.style.setProperty('--app-height', `${height}px`)
-      
-      if (document.activeElement?.tagName !== 'INPUT' && 
-          document.activeElement?.tagName !== 'TEXTAREA') {
+
+      if (
+        document.activeElement?.tagName !== 'INPUT' &&
+        document.activeElement?.tagName !== 'TEXTAREA'
+      ) {
         window.scrollTo(0, 0)
       }
     }
 
     const handleKeyboardVisibility = (isVisible: boolean) => {
       document.body.classList.toggle('keyboard-visible', isVisible)
-      
+
       if (!isVisible) {
         requestAnimationFrame(() => {
           window.scrollTo(0, 0)
@@ -28,7 +30,7 @@ export default function MobileViewportFix() {
 
     const handleViewportChange = () => {
       setAppHeight()
-      
+
       const viewport = window.visualViewport
       if (viewport) {
         const isKeyboardVisible = viewport.height < window.innerHeight * 0.8
@@ -59,7 +61,7 @@ export default function MobileViewportFix() {
 
     // Initial setup
     setAppHeight()
-    
+
     // Event listeners
     window.addEventListener('resize', setAppHeight)
     const viewport = window.visualViewport

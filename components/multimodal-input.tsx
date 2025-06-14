@@ -121,7 +121,8 @@ const PureMultimodalInput = ({
   const characterCount = input.length
   const showCharacterCount = maxLength && characterCount > 0
   const isNearLimit = maxLength && characterCount > maxLength * 0.8
-  return (    <motion.div
+  return (
+    <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       className={cn('relative w-full flex justify-center', className)}
@@ -132,7 +133,9 @@ const PureMultimodalInput = ({
             'relative flex flex-col w-full rounded-2xl bg-background/70 backdrop-blur-sm overflow-hidden transition-all duration-200 border border-slate-800/50',
             isFocused ? 'border-slate-700/50' : ''
           )}
-        >          <div className="relative flex items-end w-full">
+        >
+          {' '}
+          <div className="relative flex items-end w-full">
             <Textarea
               ref={textareaRef}
               value={input}

@@ -201,7 +201,6 @@ async function executeVTOPCommand(username, password, command, flags) {
       )
     }
 
-    // For non-interactive commands, use the original execFile approach
     const { execFile } = require('child_process')
     execFile(CLI_TOP_PATH, cliArgs, options, (err, stdout, stderr) => {
       if (process.env.NODE_ENV !== 'production') {
@@ -222,7 +221,8 @@ async function executeVTOPCommand(username, password, command, flags) {
           command: command,
           args: ['proxy', username, '***', command, ...cliArgs.slice(4)],
         })
-      }      if (process.env.NODE_ENV !== 'production') {
+      }
+      if (process.env.NODE_ENV !== 'production') {
         console.log(`Command output: ${stdout}`)
       }
 
@@ -233,7 +233,7 @@ async function executeVTOPCommand(username, password, command, flags) {
         if (process.env.NODE_ENV !== 'production') {
           console.warn('Output is not JSON, treating as plain text:', parseErr.message)
         }
-        
+
         const cleanedOutput = cleanVTOPOutput(stdout, command)
         resolve({
           success: true,
@@ -303,7 +303,8 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
             setTimeout(() => {
               try {
                 const jsonOutput = JSON.parse(stdout)
-                resolve(jsonOutput)              } catch (parseErr) {
+                resolve(jsonOutput)
+              } catch (parseErr) {
                 resolve({
                   success: true,
                   command: command,
@@ -313,7 +314,7 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
               }
             }, 50)
           }
-        }, 500) // Reduced timeout to 500ms for faster response
+        }, 500)
         return
       }
 
@@ -362,7 +363,8 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
             console.log(
               `${command.toUpperCase()} command output is not JSON, treating as plain text`
             )
-          }          return resolve({
+          }
+          return resolve({
             success: true,
             command: command,
             output: cleanVTOPOutput(stdout, command),
@@ -397,7 +399,8 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
     } catch (parseErr) {
       if (process.env.NODE_ENV !== 'production') {
         console.warn('Output is not JSON, treating as plain text:', parseErr.message)
-      }      resolve({
+      }
+      resolve({
         success: true,
         command: command,
         output: cleanVTOPOutput(stdout, command),
@@ -910,7 +913,7 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
   }
   if (step === 'materials' && flags && flags.materialQuery && !flags.materialSelection) {
     console.log(`Processing materialQuery: "${flags.materialQuery}" for materials step`)
-    
+
     const query = flags.materialQuery.toLowerCase()
     if (query.includes('all') || query.includes('everything') || query.includes('bulk')) {
       console.log('User requested all materials, setting selection to "0"')
@@ -921,7 +924,7 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
 
   if (step === 'download' && flags && flags.materialSelection) {
     console.log(`Executing download with selection: ${flags.materialSelection}`)
-    
+
     step = 'materials'
   }
 
@@ -1269,8 +1272,7 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
             }
           }
         }
-      }
-      else if (
+      } else if (
         output.includes('Choose a Course (enter a number):') ||
         output.includes('Choose a course (enter a number):')
       ) {
@@ -1280,8 +1282,9 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           promptData = {
             type: 'course',
             options: courseOptions,
-            prompt: 'Please select a course:',          }
-          
+            prompt: 'Please select a course:',
+          }
+
           console.log(`Course selection prompt detected with ${courseOptions.length} options`)
 
           // Auto-select if there's only one course option
@@ -1330,8 +1333,7 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
             }
           }
         }
-      }
-      else if (
+      } else if (
         output.includes('Choose a faculty') ||
         output.includes('Choose a Faculty') ||
         output.includes('Enter a search term or number for Faculty') ||
@@ -1344,8 +1346,9 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           promptData = {
             type: 'faculty',
             options: facultyOptions,
-            prompt: 'Please select a faculty:',          }
-          
+            prompt: 'Please select a faculty:',
+          }
+
           console.log(`Faculty selection prompt detected with ${facultyOptions.length} options`)
 
           if (facultyOptions.length === 1) {
@@ -1393,8 +1396,7 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
             }
           }
         }
-      }
-      else if (
+      } else if (
         output.includes('Reference Materials') ||
         output.includes('Materials') ||
         output.includes('Select materials') ||
@@ -1435,7 +1437,8 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
                   .slice(0, Math.min(3, materialOptions.length))
                   .map(opt => opt.number.toString())
               }
-            }            if (selectedIndices.length > 0) {
+            }
+            if (selectedIndices.length > 0) {
               const selectionString = selectedIndices.join(',')
               console.log(`Auto-selected materials: ${selectionString} for query "${query}"`)
               child.stdin.write(selectionString + '\n')
@@ -1605,7 +1608,7 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           if (servedFiles.length > 0) {
             console.log('- First served file:', servedFiles[0])
             console.log(
-              '✅ Local downloadPath successfully excluded from response (served files available)'
+              'Local downloadPath successfully excluded from response (served files available)'
             )
           }
         }
@@ -1942,7 +1945,7 @@ setInterval(
 function cleanCliOutput(rawOutput, hasServedFiles = false) {
   // For interactive course page workflows, we need more selective cleaning
   // Don't use the general cleanVTOPOutput function as it's too aggressive for interactive data
-  
+
   const lines = rawOutput.split('\n')
   const cleanedLines = []
 
@@ -1957,18 +1960,20 @@ function cleanCliOutput(rawOutput, hasServedFiles = false) {
   const filteredLines = []
   for (const line of lines) {
     const trimmed = line.trim()
-    
+
     // Skip debug and login information
-    if (trimmed.includes('Proxy command:') ||
-        trimmed.includes('Proxy executing') ||
-        trimmed.includes('Attempting login') ||
-        trimmed.includes('Helper -') ||
-        trimmed.includes('Login successful') ||
-        trimmed.includes('captcha') ||
-        trimmed.match(/^\{"command"/)) {
+    if (
+      trimmed.includes('Proxy command:') ||
+      trimmed.includes('Proxy executing') ||
+      trimmed.includes('Attempting login') ||
+      trimmed.includes('Helper -') ||
+      trimmed.includes('Login successful') ||
+      trimmed.includes('captcha') ||
+      trimmed.match(/^\{"command"/)
+    ) {
       continue
     }
-    
+
     filteredLines.push(line)
   }
 
@@ -2510,10 +2515,10 @@ app.use((req, res) => {
 const PORT = process.env.PORT || 3001
 
 function performStartupChecks() {
-  console.log(`🔧 CLI Path: ${CLI_TOP_PATH}`)
+  console.log(`CLI Path: ${CLI_TOP_PATH}`)
 
   if (!fs.existsSync(CLI_TOP_PATH)) {
-    console.error(`❌ CLI executable not found at: ${CLI_TOP_PATH}`)
+    console.error(`CLI executable not found at: ${CLI_TOP_PATH}`)
     console.error('Please ensure the cli-top executable is available in the correct location.')
     process.exit(1)
   }
@@ -2521,20 +2526,20 @@ function performStartupChecks() {
   if (process.platform !== 'win32') {
     try {
       fs.chmodSync(CLI_TOP_PATH, '755')
-      console.log('✅ Executable permissions set for CLI tool')
+      console.log('Executable permissions set for CLI tool')
     } catch (chmodErr) {
-      console.warn('⚠️  Could not set executable permissions:', chmodErr.message)
+      console.warn('Could not set executable permissions:', chmodErr.message)
     }
   }
 
-  console.log('✅ CLI executable found and configured')
+  console.log('CLI executable found and configured')
 }
 
 performStartupChecks()
 
 const server = app.listen(PORT, () => {
-  console.log(`🚀 VTOP Proxy Service running on port ${PORT}`)
-  console.log(`📖 Environment: ${process.env.NODE_ENV || 'development'}`)
+  console.log(`VTOP Proxy Service running on port ${PORT}`)
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`)
 })
 
 process.on('SIGTERM', () => {
@@ -2555,9 +2560,9 @@ function cleanVTOPOutput(output, command) {
   if (!output || typeof output !== 'string') return output
 
   let cleaned = output
-  
+
   cleaned = cleaned.replace(/\x1b\[[0-9;]*[mGKH]/g, '')
-  
+
   cleaned = cleaned.replace(/^Proxy command:.*$/gm, '')
   cleaned = cleaned.replace(/^Proxy executing command:.*$/gm, '')
   cleaned = cleaned.replace(/^username: \w+.*$/gm, '')
@@ -2567,52 +2572,56 @@ function cleanVTOPOutput(output, command) {
   cleaned = cleaned.replace(/^No captcha image found.*$/gm, '')
   cleaned = cleaned.replace(/^Login successful for user:.*$/gm, '')
   cleaned = cleaned.replace(/^\{"command":".*","success":true\}$/gm, '')
-  
+
   cleaned = cleaned.replace(/^Your selected semester:.*$/gm, '')
   cleaned = cleaned.replace(/^Your selected Course:.*$/gm, '')
   cleaned = cleaned.replace(/^Your selected Faculty:.*$/gm, '')
-  
+
   cleaned = cleaned.replace(/^Choose a semester \(enter a number\):.*$/gm, '')
   cleaned = cleaned.replace(/^Choose a Course \(enter a number\):.*$/gm, '')
   cleaned = cleaned.replace(/^Enter a search term.*$/gm, '')
-  
+
   cleaned = cleaned.replace(/\n\s*\n\s*\n+/g, '\n\n')
   cleaned = cleaned.replace(/^\s+|\s+$/g, '')
-  
+
   if (command === 'marks') {
     const lines = cleaned.split('\n')
     const meaningfulLines = []
-    
+
     for (const line of lines) {
       const trimmedLine = line.trim()
-      
-      if (!trimmedLine || 
-          trimmedLine.startsWith('Proxy') ||
-          trimmedLine.startsWith('Helper') ||
-          trimmedLine.startsWith('Login') ||
-          trimmedLine.startsWith('Attempting') ||
-          trimmedLine.startsWith('captcha') ||
-          trimmedLine.startsWith('Choose') ||
-          trimmedLine.startsWith('Your selected') ||
-          trimmedLine.match(/^\{"command"/)) {
+
+      if (
+        !trimmedLine ||
+        trimmedLine.startsWith('Proxy') ||
+        trimmedLine.startsWith('Helper') ||
+        trimmedLine.startsWith('Login') ||
+        trimmedLine.startsWith('Attempting') ||
+        trimmedLine.startsWith('captcha') ||
+        trimmedLine.startsWith('Choose') ||
+        trimmedLine.startsWith('Your selected') ||
+        trimmedLine.match(/^\{"command"/)
+      ) {
         continue
       }
-      
-      if (trimmedLine.includes(' - ') || 
-          trimmedLine.includes('TITLE') ||
-          trimmedLine.includes('/') ||
-          trimmedLine.includes('Quiz') ||
-          trimmedLine.includes('Mid Term') ||
-          trimmedLine.includes('Assignment') ||
-          trimmedLine.match(/^\d+$/) ||
-          trimmedLine.match(/[0-9]+\.[0-9]+/) ||
-          trimmedLine.length > 5) {
+
+      if (
+        trimmedLine.includes(' - ') ||
+        trimmedLine.includes('TITLE') ||
+        trimmedLine.includes('/') ||
+        trimmedLine.includes('Quiz') ||
+        trimmedLine.includes('Mid Term') ||
+        trimmedLine.includes('Assignment') ||
+        trimmedLine.match(/^\d+$/) ||
+        trimmedLine.match(/[0-9]+\.[0-9]+/) ||
+        trimmedLine.length > 5
+      ) {
         meaningfulLines.push(trimmedLine)
       }
     }
-    
+
     cleaned = meaningfulLines.join('\n')
   }
-  
+
   return cleaned
 }

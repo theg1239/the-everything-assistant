@@ -23,9 +23,14 @@ export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
-}>) {  return (    <html lang="en" suppressHydrationWarning>
+}>) {
+  return (
+    <html lang="en" suppressHydrationWarning>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, height=device-height" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, height=device-height"
+        />
         <style>{`
           :root {
             --vh: 1vh;
@@ -79,7 +84,8 @@ export default function RootLayout({
             attribute="class"
             defaultTheme="dark"
             enableSystem
-            disableTransitionOnChange          >
+            disableTransitionOnChange
+          >
             <MobileViewportFix />
             <ScrollToTop />
             {children}

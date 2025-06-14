@@ -10,11 +10,11 @@ function ScrollToTopInner() {
 
   useEffect(() => {
     window.scrollTo(0, 0)
-    
+
     const timeoutId = setTimeout(() => {
       window.scrollTo(0, 0)
     }, 100)
-    
+
     return () => clearTimeout(timeoutId)
   }, [pathname, searchParams])
 

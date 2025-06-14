@@ -7,7 +7,8 @@
 }
 
 /* Global layout fixes */
-html, body {
+html,
+body {
   height: 100%;
   width: 100%;
   margin: 0;
@@ -74,12 +75,12 @@ main {
       height: var(--viewport-height);
       padding-bottom: 60px;
     }
-    
+
     .input-area {
       position: fixed;
       bottom: 0;
     }
-    
+
     .chat-page-header {
       position: absolute;
     }

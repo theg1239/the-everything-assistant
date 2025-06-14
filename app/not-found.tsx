@@ -17,12 +17,11 @@ function NotFoundContent() {
         </CardHeader>
         <CardContent className="flex flex-col items-center space-y-4">
           <p className="text-center text-muted-foreground">
-            Sorry, we couldn't find the page you were looking for. Please check the URL or go back to the homepage.
+            Sorry, we couldn't find the page you were looking for. Please check the URL or go back
+            to the homepage.
           </p>
           <Button asChild>
-            <Link href="/">
-              Return to Home
-            </Link>
+            <Link href="/">Return to Home</Link>
           </Button>
         </CardContent>
       </Card>
@@ -32,7 +31,9 @@ function NotFoundContent() {
 
 export default function NotFound() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-[100dvh]">Loading...</div>}>
+    <Suspense
+      fallback={<div className="flex items-center justify-center min-h-[100dvh]">Loading...</div>}
+    >
       <NotFoundContent />
     </Suspense>
   )

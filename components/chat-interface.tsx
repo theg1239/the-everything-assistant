@@ -311,8 +311,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         onCredentialsSubmit={handleVTOPCredentials}
       >
         <ResearchPreviewModal />
-        <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
-        <div className="flex flex-col h-[100dvh] bg-background text-foreground relative overflow-hidden mobile-viewport-fix">
+        <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />        <div className="flex flex-col h-[100dvh] bg-background text-foreground relative overflow-hidden mobile-viewport-fix">
           <div className="absolute inset-0 bg-gradient-to-br from-background via-muted/20 to-background" />
           <div className="relative z-10 flex flex-col h-full">
             <header className="flex-shrink-0 sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border">
@@ -323,7 +322,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                 />
               </div>
             </header>
-            <div className="flex-1 flex flex-col items-center justify-center px-4 space-y-8 overflow-y-auto">
+            <div className="flex-1 flex flex-col items-center justify-center px-4 space-y-8 overflow-y-auto overflow-fix">
               <ChatHeader />
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -407,9 +406,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               }
             : undefined
         }
-      />
-
-      <div className="flex flex-col h-[100dvh] bg-background text-foreground mobile-viewport-fix">
+      />      <div className="flex flex-col h-[100dvh] bg-background text-foreground mobile-viewport-fix overflow-hidden">
         <header className="flex-shrink-0 sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border">
           <div className="flex h-14 items-center px-4 gap-2">
             <HamburgerButton onClick={() => setSidebarOpen(!sidebarOpen)} className="md:block" />
@@ -429,8 +426,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               Canvas
             </Button>
           </div>
-        </header>        <div className="flex-1 overflow-hidden relative">
-          <div className="h-full overflow-y-auto pb-[120px] md:pb-[100px] overflow-fix">
+        </header>        <div className="flex-1 relative overflow-hidden">
+          <div className="absolute inset-0 overflow-y-auto pb-[120px] md:pb-[100px] overflow-fix">
             <div className="max-w-3xl mx-auto px-4 py-4 space-y-4">
               {errorMessage && (
                 <motion.div
@@ -477,9 +474,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               <div ref={messagesEndRef} />
             </div>
           </div>
-        </div>
-
-        <div className="flex-shrink-0 border-t border-border bg-background/95 backdrop-blur fixed bottom-0 left-0 right-0 z-30 mobile-pb-fix">
+        </div>        <div className="flex-shrink-0 border-t border-border bg-background/95 backdrop-blur fixed bottom-0 left-0 right-0 z-30 mobile-pb-fix">
           <div className="max-w-3xl mx-auto px-4 py-3">
             <MultimodalInput
               input={input}

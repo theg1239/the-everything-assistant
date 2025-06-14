@@ -3,6 +3,16 @@
   --app-height: 100%;
 }
 
+/* Prevent scrolling on the main page */
+html, body {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
 @media screen and (max-width: 768px) {
   :root {
     --app-height: 100vh; /* Fallback */
@@ -17,12 +27,22 @@
   .mobile-pb-fix {
     padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
   }
-  
   /* Ensure content is always visible */
   .overflow-fix {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     padding-bottom: 120px;
+    touch-action: pan-y;
+    overscroll-behavior-y: contain;
+  }
+  
+  /* Disable scrolling everywhere except in .overflow-fix */
+  * {
+    touch-action: none;
+  }
+  
+  .overflow-fix * {
+    touch-action: auto;
   }
   
   /* Prevent scrolling on the body when modal is open */
@@ -42,5 +62,12 @@
   body.keyboard-visible .mobile-pb-fix {
     position: sticky;
     bottom: 0;
+  }
+}
+
+/* Fix for iOS Safari 100vh issue */
+@supports (-webkit-touch-callout: none) {
+  .mobile-viewport-fix {
+    height: -webkit-fill-available;
   }
 }

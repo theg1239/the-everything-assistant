@@ -24,15 +24,26 @@ export default function MobileViewportFix() {
         document.body.classList.remove('keyboard-visible')
       }
     }
-
+    
     document.addEventListener('focusin', setKeyboardVisible)
     document.addEventListener('focusout', setKeyboardVisible)
+    
+    // Prevent overscroll/bounce effect
+    const preventOverscroll = (e: TouchEvent) => {
+      // Only prevent default if this is not in an overflow-fix element
+      if (!e.target || !(e.target as Element).closest('.overflow-fix')) {
+        e.preventDefault()
+      }
+    }
+    
+    document.addEventListener('touchmove', preventOverscroll as EventListener, { passive: false })
 
     return () => {
       window.removeEventListener('resize', setAppHeight)
       window.removeEventListener('orientationchange', setAppHeight)
       document.removeEventListener('focusin', setKeyboardVisible)
       document.removeEventListener('focusout', setKeyboardVisible)
+      document.removeEventListener('touchmove', preventOverscroll as EventListener)
     }
   }, [])
 

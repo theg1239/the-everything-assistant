@@ -59,6 +59,7 @@ async function handleIntelligentCoursePage(params: {
   course?: number
   faculty?: number
   fuzzyIndex?: number
+  messages?: any[]
 }) {
   const {
     username,
@@ -71,16 +72,132 @@ async function handleIntelligentCoursePage(params: {
     semester,
     course,
     faculty,
-    fuzzyIndex,
+    fuzzyIndex,    messages,
   } = params
+
+  let contextualSemesterQuery = semesterQuery
+  let contextualCourseQuery = courseQuery
+  let contextualFacultyQuery = facultyQuery
+  let contextualMaterialQuery = materialQuery
+  let previousOptions = null
+  let previousStepType = null
+  
+  if (messages && messages.length > 0) {
+    const recentMessages = messages.slice(-10)
+    
+    for (const message of recentMessages.reverse()) {
+      if (message.toolInvocations) {
+        for (const toolCall of message.toolInvocations) {
+          if (toolCall.toolName === 'queryVTOP' && toolCall.result && toolCall.result.success) {
+            const result = toolCall.result
+            
+            if (result.step && result.data) {
+              previousStepType = result.step
+              
+              if (typeof result.data === 'string') {
+                try {
+                  const parsedData = JSON.parse(result.data)
+                  if (parsedData.options && Array.isArray(parsedData.options)) {
+                    previousOptions = parsedData.options
+                  }
+                } catch (e) {
+                  if (result.formatted_content) {
+                    previousOptions = extractOptionsFromContent(result.formatted_content, result.step)
+                  }
+                }
+              } else if (result.data.options && Array.isArray(result.data.options)) {
+                previousOptions = result.data.options
+              }
+              
+              if (!contextualSemesterQuery && result.formatted_content) {
+                const semesterMatch = result.formatted_content.match(/(summer|fall|winter)\s*semester/i)
+                if (semesterMatch) {
+                  contextualSemesterQuery = semesterMatch[0].toLowerCase()
+                }
+              }              
+              if (previousOptions && previousStepType) {
+                const userMessage = messages[messages.length - 1]
+                if (userMessage && userMessage.role === 'user' && userMessage.content) {
+                  const userContent = userMessage.content.toLowerCase().trim()
+                  
+                  if (previousStepType === 'course' && !contextualCourseQuery) {
+                    const cleanedContent = userContent
+                      .replace(/^(i would like to|i want to|show me|view|get|select|choose)\s*/i, '')
+                      .replace(/\s*(course|materials?|page)$/i, '')
+                      .trim()
+                    
+                    if (cleanedContent) {
+                      contextualCourseQuery = cleanedContent
+                    }
+                  } else if (previousStepType === 'faculty' && !contextualFacultyQuery) {
+                    const cleanedContent = userContent
+                      .replace(/^(i would like to|i want to|show me|view|get|select|choose)\s*/i, '')
+                      .replace(/\s*(faculty|professor|teacher)$/i, '')
+                      .trim()
+                      if (cleanedContent) {
+                      contextualFacultyQuery = cleanedContent
+                    }                  } else if (previousStepType === 'materials' && !contextualMaterialQuery) {
+                    const extractedSelection = extractMaterialSelection(userContent)
+                    if (extractedSelection) {
+                      contextualMaterialQuery = extractedSelection
+                    }
+                  } else if (previousStepType === 'semester' && !contextualSemesterQuery) {
+                    contextualSemesterQuery = userContent
+                  }
+                }
+                break
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  function extractMaterialSelection(userContent: string): string | null {
+    if (userContent.includes('all') || userContent.includes('everything') || 
+        userContent.includes('bulk download') || userContent.includes('download all')) {
+      return 'all'
+    } else if (userContent.match(/\d+[-,\s]*\d*/)) {
+      const numberPattern = userContent.match(/(\d+[-,\s]*\d*)/g)
+      if (numberPattern) {
+        return numberPattern.join(',')
+      }
+    } else if (userContent.includes('first') && userContent.match(/\d+/)) {
+      const num = userContent.match(/\d+/)?.[0]
+      if (num) {
+        return `1-${num}`
+      }
+    }
+    return null
+  }
+
+  function extractOptionsFromContent(content: string, stepType: string): any[] | null {
+    if (!content || typeof content !== 'string') return null
+    
+    const lines = content.split('\n')
+    const options = []
+    
+    for (const line of lines) {
+      const match = line.match(/^\s*(\d+)\s*[│|]\s*(.+)/)
+      if (match) {
+        const [, number, description] = match
+        options.push({
+          number: parseInt(number),
+          description: description.trim()
+        })
+      }
+    }
+      return options.length > 0 ? options : null
+  }
 
   let step = interactiveStep
   if (!step) {
-    if (courseQuery && facultyQuery && materialQuery) {
+    if ((contextualCourseQuery || courseQuery) && (contextualFacultyQuery || facultyQuery) && (contextualMaterialQuery || materialQuery)) {
       step = 'semester'
-    } else if (courseQuery && facultyQuery) {
+    } else if ((contextualCourseQuery || courseQuery) && (contextualFacultyQuery || facultyQuery)) {
       step = 'semester'
-    } else if (courseQuery) {
+    } else if (contextualCourseQuery || courseQuery) {
       step = 'semester'
     } else {
       if (!semester) {
@@ -111,11 +228,22 @@ async function handleIntelligentCoursePage(params: {
   } else {
     requestBody.password = password
   }
-
-  if (semesterQuery) requestBody.flags.semesterQuery = semesterQuery
-  if (courseQuery) requestBody.flags.courseQuery = courseQuery
-  if (facultyQuery) requestBody.flags.facultyQuery = facultyQuery
-  if (materialQuery) requestBody.flags.materialQuery = materialQuery
+  if (contextualSemesterQuery) {
+    requestBody.flags.semesterQuery = contextualSemesterQuery
+    console.log('Using contextual semester query:', contextualSemesterQuery)
+  }
+  if (contextualCourseQuery) {
+    requestBody.flags.courseQuery = contextualCourseQuery
+    console.log('Using contextual course query:', contextualCourseQuery)
+  }
+  if (contextualFacultyQuery || facultyQuery) {
+    requestBody.flags.facultyQuery = contextualFacultyQuery || facultyQuery
+    if (contextualFacultyQuery) console.log('Using contextual faculty query:', contextualFacultyQuery)
+  }
+  if (contextualMaterialQuery || materialQuery) {
+    requestBody.flags.materialQuery = contextualMaterialQuery || materialQuery
+    if (contextualMaterialQuery) console.log('Using contextual material query:', contextualMaterialQuery)
+  }
 
   if (semester !== undefined) requestBody.flags.semester = semester
   if (course !== undefined) requestBody.flags.course = course
@@ -452,23 +580,25 @@ export function createVITTools() {
             'For course-page command: specify which step of the interactive workflow to execute. Auto-determined based on provided parameters if not specified.'
           ),
         debug: z.boolean().optional().describe('Enable debug mode for troubleshooting'),
-      }),
-      execute: async ({
-        command,
-        username,
-        password,
-        semester,
-        semesterQuery,
-        course,
-        faculty,
-        classGroup,
-        fuzzyIndex,
-        courseQuery,
-        facultyQuery,
-        materialQuery,
-        interactiveStep,
-        debug,
-      }) => {
+      }),      execute: async (
+        {
+          command,
+          username,
+          password,
+          semester,
+          semesterQuery,
+          course,
+          faculty,
+          classGroup,
+          fuzzyIndex,
+          courseQuery,
+          facultyQuery,
+          materialQuery,
+          interactiveStep,
+          debug,
+        },
+        context
+      ) => {
         try {
           if (!username || !password) {
             return {
@@ -493,6 +623,7 @@ export function createVITTools() {
               course,
               faculty,
               fuzzyIndex,
+              messages: context?.messages || [],
             })
           }
 

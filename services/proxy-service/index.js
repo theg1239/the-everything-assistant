@@ -222,9 +222,7 @@ async function executeVTOPCommand(username, password, command, flags) {
           command: command,
           args: ['proxy', username, '***', command, ...cliArgs.slice(4)],
         })
-      }
-
-      if (process.env.NODE_ENV !== 'production') {
+      }      if (process.env.NODE_ENV !== 'production') {
         console.log(`Command output: ${stdout}`)
       }
 
@@ -235,11 +233,13 @@ async function executeVTOPCommand(username, password, command, flags) {
         if (process.env.NODE_ENV !== 'production') {
           console.warn('Output is not JSON, treating as plain text:', parseErr.message)
         }
+        
+        const cleanedOutput = cleanVTOPOutput(stdout, command)
         resolve({
           success: true,
           command: command,
-          output: stdout,
-          raw: true,
+          output: cleanedOutput,
+          raw: false,
         })
       }
     })
@@ -260,8 +260,8 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
   let currentPrompt = ''
   let processingComplete = false
   let interactionCount = 0
-  const maxInteractions = 10 // Prevent infinite loops
-  let autoCtrlCSent = false // Track if we've sent Ctrl+C for auto-terminating commands
+  const maxInteractions = 10
+  let autoCtrlCSent = false
 
   child.stdout.on('data', data => {
     const output = data.toString()
@@ -303,13 +303,12 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
             setTimeout(() => {
               try {
                 const jsonOutput = JSON.parse(stdout)
-                resolve(jsonOutput)
-              } catch (parseErr) {
+                resolve(jsonOutput)              } catch (parseErr) {
                 resolve({
                   success: true,
                   command: command,
-                  output: stdout,
-                  raw: true,
+                  output: cleanVTOPOutput(stdout, command),
+                  raw: false,
                 })
               }
             }, 50)
@@ -349,7 +348,6 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
       console.log(`CLI process closed with code: ${code}`)
     }
     if (code === 130 || code === null) {
-      // Special handling for auto-terminating commands - Ctrl+C termination is expected and successful
       if (command === 'da' || command === 'facility') {
         if (process.env.NODE_ENV !== 'production') {
           console.log(
@@ -364,12 +362,11 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
             console.log(
               `${command.toUpperCase()} command output is not JSON, treating as plain text`
             )
-          }
-          return resolve({
+          }          return resolve({
             success: true,
             command: command,
-            output: stdout,
-            raw: true,
+            output: cleanVTOPOutput(stdout, command),
+            raw: false,
           })
         }
       }
@@ -400,12 +397,11 @@ function executeInteractiveCommand(cliPath, cliArgs, options, command, flags, re
     } catch (parseErr) {
       if (process.env.NODE_ENV !== 'production') {
         console.warn('Output is not JSON, treating as plain text:', parseErr.message)
-      }
-      resolve({
+      }      resolve({
         success: true,
         command: command,
-        output: stdout,
-        raw: true,
+        output: cleanVTOPOutput(stdout, command),
+        raw: false,
       })
     }
   })
@@ -693,10 +689,28 @@ function calculateFuzzyMatchScore(query, description) {
     return 1.0
   }
 
+  const cleanQuery = query
+    .replace(/\b(engineering|advanced|basic|introduction to|intro to)\b/g, '')
+    .trim()
+  const cleanDescription = description
+    .replace(/\b(engineering|advanced|basic|introduction to|intro to)\b/g, '')
+    .trim()
+
+  if (cleanDescription.includes(cleanQuery)) {
+    return 0.95
+  }
+
   const queryWords = query.split(/\s+/).filter(word => word.length > 1)
   const descWords = description.split(/\s+/).filter(word => word.length > 1)
 
   if (queryWords.length === 0) return 0
+
+  for (let i = 0; i <= descWords.length - queryWords.length; i++) {
+    const sequence = descWords.slice(i, i + queryWords.length).join(' ')
+    if (sequence === query) {
+      return 0.9
+    }
+  }
 
   let exactWordMatches = 0
   let partialWordMatches = 0
@@ -729,7 +743,6 @@ function calculateFuzzyMatchScore(query, description) {
       }
     }
   }
-
   const totalWords = queryWords.length
   const exactScore = exactWordMatches / totalWords
   const partialScore = (partialWordMatches / totalWords) * 0.7
@@ -895,40 +908,21 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
       }
     }
   }
+  if (step === 'materials' && flags && flags.materialQuery && !flags.materialSelection) {
+    console.log(`Processing materialQuery: "${flags.materialQuery}" for materials step`)
+    
+    const query = flags.materialQuery.toLowerCase()
+    if (query.includes('all') || query.includes('everything') || query.includes('bulk')) {
+      console.log('User requested all materials, setting selection to "0"')
+      flags.materialSelection = '0'
+      delete flags.materialQuery
+    }
+  }
 
   if (step === 'download' && flags && flags.materialSelection) {
-    try {
-      const downloadResult = await executeInteractiveCoursePageWorkflow(
-        username,
-        password,
-        'materials',
-        flags,
-        sessionData
-      )
-
-      if (downloadResult.success && downloadResult.completed) {
-        const downloadPath = path.join(__dirname, 'downloads')
-        const files = []
-
-        return {
-          ...downloadResult,
-          downloadInfo: {
-            message: 'Files downloaded successfully',
-            localPath: downloadPath,
-            files: [],
-          },
-        }
-      }
-
-      return downloadResult
-    } catch (error) {
-      console.error('Download step error:', error)
-      return {
-        success: false,
-        error: 'Download failed',
-        message: 'Could not complete the download process',
-      }
-    }
+    console.log(`Executing download with selection: ${flags.materialSelection}`)
+    
+    step = 'materials'
   }
 
   if (step === 'course' && (!flags || !flags.semester)) {
@@ -1286,10 +1280,20 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           promptData = {
             type: 'course',
             options: courseOptions,
-            prompt: 'Please select a course:',
-          }
-
+            prompt: 'Please select a course:',          }
+          
           console.log(`Course selection prompt detected with ${courseOptions.length} options`)
+
+          // Auto-select if there's only one course option
+          if (courseOptions.length === 1) {
+            console.log(
+              `Only one course option available: ${courseOptions[0].description}. Auto-selecting.`
+            )
+            child.stdin.write('1\n')
+            hasReceivedPrompt = false
+            promptData = null
+            return
+          }
 
           if (flags && flags.courseQuery) {
             console.log(`Attempting to auto-select course for query: "${flags.courseQuery}"`)
@@ -1340,10 +1344,19 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           promptData = {
             type: 'faculty',
             options: facultyOptions,
-            prompt: 'Please select a faculty:',
-          }
-
+            prompt: 'Please select a faculty:',          }
+          
           console.log(`Faculty selection prompt detected with ${facultyOptions.length} options`)
+
+          if (facultyOptions.length === 1) {
+            console.log(
+              `Only one faculty option available: ${facultyOptions[0].description}. Auto-selecting.`
+            )
+            child.stdin.write('1\n')
+            hasReceivedPrompt = false
+            promptData = null
+            return
+          }
 
           if (flags && flags.facultyQuery) {
             console.log(`Attempting to auto-select faculty for query: "${flags.facultyQuery}"`)
@@ -1422,12 +1435,13 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
                   .slice(0, Math.min(3, materialOptions.length))
                   .map(opt => opt.number.toString())
               }
-            }
-
-            if (selectedIndices.length > 0) {
+            }            if (selectedIndices.length > 0) {
               const selectionString = selectedIndices.join(',')
               console.log(`Auto-selected materials: ${selectionString} for query "${query}"`)
-              flags.materialSelection = selectionString
+              child.stdin.write(selectionString + '\n')
+              hasReceivedPrompt = false
+              promptData = null
+              return
             }
           } else {
             console.log('No materialQuery provided, returning materials options for user selection')
@@ -1904,10 +1918,10 @@ const tempFiles = new Map()
 
 function getBaseUrl() {
   if (process.env.NODE_ENV === 'production') {
-    console.log('🌐 Using production API base URL: https://the-everything-assistant.vercel.app')
+    console.log('Using production API base URL: https://the-everything-assistant.vercel.app')
     return 'https://the-everything-assistant.vercel.app'
   } else {
-    console.log('🏠 Using development API base URL: http://localhost:3000')
+    console.log('Using development API base URL: http://localhost:3000')
     return 'http://localhost:3000'
   }
 }
@@ -1926,6 +1940,9 @@ setInterval(
 )
 
 function cleanCliOutput(rawOutput, hasServedFiles = false) {
+  // For interactive course page workflows, we need more selective cleaning
+  // Don't use the general cleanVTOPOutput function as it's too aggressive for interactive data
+  
   const lines = rawOutput.split('\n')
   const cleanedLines = []
 
@@ -1936,7 +1953,26 @@ function cleanCliOutput(rawOutput, hasServedFiles = false) {
   let downloadPath = ''
   let filesCount = 0
 
+  // First pass: extract important information and clean debug lines
+  const filteredLines = []
   for (const line of lines) {
+    const trimmed = line.trim()
+    
+    // Skip debug and login information
+    if (trimmed.includes('Proxy command:') ||
+        trimmed.includes('Proxy executing') ||
+        trimmed.includes('Attempting login') ||
+        trimmed.includes('Helper -') ||
+        trimmed.includes('Login successful') ||
+        trimmed.includes('captcha') ||
+        trimmed.match(/^\{"command"/)) {
+      continue
+    }
+    
+    filteredLines.push(line)
+  }
+
+  for (const line of filteredLines) {
     const trimmed = line.trim()
 
     if (trimmed.includes('Your selected semester:')) {
@@ -2514,3 +2550,69 @@ process.on('SIGINT', () => {
     console.log('Process terminated')
   })
 })
+
+function cleanVTOPOutput(output, command) {
+  if (!output || typeof output !== 'string') return output
+
+  let cleaned = output
+  
+  cleaned = cleaned.replace(/\x1b\[[0-9;]*[mGKH]/g, '')
+  
+  cleaned = cleaned.replace(/^Proxy command:.*$/gm, '')
+  cleaned = cleaned.replace(/^Proxy executing command:.*$/gm, '')
+  cleaned = cleaned.replace(/^username: \w+.*$/gm, '')
+  cleaned = cleaned.replace(/^args: \[.*\]$/gm, '')
+  cleaned = cleaned.replace(/^Attempting login for user:.*$/gm, '')
+  cleaned = cleaned.replace(/^\(Helper - .*?\):.*$/gm, '')
+  cleaned = cleaned.replace(/^No captcha image found.*$/gm, '')
+  cleaned = cleaned.replace(/^Login successful for user:.*$/gm, '')
+  cleaned = cleaned.replace(/^\{"command":".*","success":true\}$/gm, '')
+  
+  cleaned = cleaned.replace(/^Your selected semester:.*$/gm, '')
+  cleaned = cleaned.replace(/^Your selected Course:.*$/gm, '')
+  cleaned = cleaned.replace(/^Your selected Faculty:.*$/gm, '')
+  
+  cleaned = cleaned.replace(/^Choose a semester \(enter a number\):.*$/gm, '')
+  cleaned = cleaned.replace(/^Choose a Course \(enter a number\):.*$/gm, '')
+  cleaned = cleaned.replace(/^Enter a search term.*$/gm, '')
+  
+  cleaned = cleaned.replace(/\n\s*\n\s*\n+/g, '\n\n')
+  cleaned = cleaned.replace(/^\s+|\s+$/g, '')
+  
+  if (command === 'marks') {
+    const lines = cleaned.split('\n')
+    const meaningfulLines = []
+    
+    for (const line of lines) {
+      const trimmedLine = line.trim()
+      
+      if (!trimmedLine || 
+          trimmedLine.startsWith('Proxy') ||
+          trimmedLine.startsWith('Helper') ||
+          trimmedLine.startsWith('Login') ||
+          trimmedLine.startsWith('Attempting') ||
+          trimmedLine.startsWith('captcha') ||
+          trimmedLine.startsWith('Choose') ||
+          trimmedLine.startsWith('Your selected') ||
+          trimmedLine.match(/^\{"command"/)) {
+        continue
+      }
+      
+      if (trimmedLine.includes(' - ') || 
+          trimmedLine.includes('TITLE') ||
+          trimmedLine.includes('/') ||
+          trimmedLine.includes('Quiz') ||
+          trimmedLine.includes('Mid Term') ||
+          trimmedLine.includes('Assignment') ||
+          trimmedLine.match(/^\d+$/) ||
+          trimmedLine.match(/[0-9]+\.[0-9]+/) ||
+          trimmedLine.length > 5) {
+        meaningfulLines.push(trimmedLine)
+      }
+    }
+    
+    cleaned = meaningfulLines.join('\n')
+  }
+  
+  return cleaned
+}

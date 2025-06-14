@@ -252,6 +252,27 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     }
   }
 
+  if (result.success === false && result.error && (
+    result.error.includes('Menu not available') || 
+    result.error.includes('mess menu') ||
+    toolName === 'getMensMealPlan' ||
+    toolName === 'getWomensMealPlan' ||
+    result.message?.includes('mess menu')
+  )) {
+    return {
+      type: 'error' as const,
+      title: 'Mess Menu Not Available',
+      icon: <AlertCircle className="h-5 w-5 text-red-400" />,
+      data: {
+        error: result.error,
+        message: result.message,
+        availableDateRange: result.availableDateRange,
+        success: false,
+      },
+      source: toolName || 'Mess Menu System',
+    }
+  }
+
   if (result.faculty && result.faculty.length > 0) {
     return {
       type: 'faculty' as const,
@@ -310,6 +331,22 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         canResume: result.canResume,
       },
       source: 'VTOP Interactive',
+    }  }
+
+  if (result.success === false && (result.error || result.message)) {
+    const errorMessage = result.message || result.error || 'An error occurred'
+    
+    return {
+      type: 'error' as const,
+      title: 'Search Error',
+      icon: <AlertCircle className="h-5 w-5 text-red-400" />,
+      data: {
+        error: result.error,
+        message: result.message,
+        success: false,
+        ...result,
+      },
+      source: toolName || 'Search',
     }
   }
 

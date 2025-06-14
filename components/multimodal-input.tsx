@@ -54,11 +54,33 @@ const PureMultimodalInput = ({
   useEffect(() => {
     if (textareaRef.current) {
       adjustHeight()
-      if (autoFocus) {
+      if (autoFocus && window.innerWidth >= 768) {
         textareaRef.current.focus()
       }
     }
   }, [adjustHeight, autoFocus])
+
+  // Handle viewport resize and adjust for mobile
+  useEffect(() => {
+    const handleResize = () => {
+      adjustHeight()
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [adjustHeight])
+
+  // Handle visibility changes (when mobile keyboard appears/disappears)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && textareaRef.current) {
+        setTimeout(adjustHeight, 100)
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [adjustHeight])
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -102,8 +124,7 @@ const PureMultimodalInput = ({
   const showCharacterCount = maxLength && characterCount > 0
   const isNearLimit = maxLength && characterCount > maxLength * 0.8
 
-  return (
-    <motion.div
+  return (    <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       className={cn('relative w-full', className)}
@@ -114,8 +135,7 @@ const PureMultimodalInput = ({
             'relative flex flex-col w-full border rounded-xl bg-background/70 backdrop-blur-sm overflow-hidden transition-all duration-200',
             isFocused ? 'shadow-sm' : 'border-input hover:border-ring/50'
           )}
-        >
-          <div className="relative flex items-end w-full">
+        >          <div className="relative flex items-end w-full">
             <Textarea
               ref={textareaRef}
               value={input}
@@ -127,6 +147,7 @@ const PureMultimodalInput = ({
               className={cn(
                 'min-h-[60px] max-h-[200px] w-full resize-none border-0 bg-transparent px-4 py-3 text-sm',
                 'ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
+                'pb-2 pt-3',
                 showAttachments ? 'pt-1' : 'pt-3'
               )}
               disabled={isLoading}

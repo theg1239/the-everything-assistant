@@ -1,0 +1,46 @@
+/* Fix for mobile viewport issues with browser UI */
+:root {
+  --app-height: 100%;
+}
+
+@media screen and (max-width: 768px) {
+  :root {
+    --app-height: 100vh; /* Fallback */
+  }
+  
+  /* Use dynamic viewport height for mobile */
+  .mobile-viewport-fix {
+    height: var(--app-height);
+  }
+
+  /* Add padding for mobile keyboard */
+  .mobile-pb-fix {
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 16px));
+  }
+  
+  /* Ensure content is always visible */
+  .overflow-fix {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 120px;
+  }
+  
+  /* Prevent scrolling on the body when modal is open */
+  body.modal-open {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+  }
+  
+  /* Additional mobile fixes for chat interface */
+  /* Ensure the input area stays visible on mobile */
+  body.keyboard-visible .mobile-viewport-fix {
+    height: auto;
+    min-height: 100%;
+  }
+  
+  body.keyboard-visible .mobile-pb-fix {
+    position: sticky;
+    bottom: 0;
+  }
+}

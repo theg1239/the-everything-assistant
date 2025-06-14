@@ -655,6 +655,15 @@ function resolveSemesterQuery(semesterQuery, semesterOptions) {
     }
   }
 
+  // Check for year in the query first
+  const yearMatch = query.match(/20\d{2}[-\/]?\d{0,2}/)
+  let yearFilter = null
+  if (yearMatch) {
+    const yearStr = yearMatch[0]
+    // Handle formats like "2024-25" or "2024"
+    yearFilter = opt => opt.description.toLowerCase().includes(yearStr.toLowerCase())
+  }
+
   // For season queries (fall, winter, summer, spring) - check for multiple matches
   const seasonMap = {
     fall: ['fall', 'autumn'],
@@ -666,12 +675,18 @@ function resolveSemesterQuery(semesterQuery, semesterOptions) {
   for (const [season, variants] of Object.entries(seasonMap)) {
     if (variants.some(variant => query.includes(variant))) {
       // Find ALL matching options for this season
-      const allMatches = semesterOptions.filter(opt =>
+      let allMatches = semesterOptions.filter(opt =>
         variants.some(variant => opt.description.toLowerCase().includes(variant))
       )
       
+      // If we have a year filter, apply it to narrow down the results
+      if (yearFilter) {
+        allMatches = allMatches.filter(yearFilter)
+      }
+      
       // If there's exactly one match, auto-select it
       if (allMatches.length === 1) {
+        console.log(`Resolved ${season} semester query to:`, allMatches[0].description)
         return allMatches[0].number
       }
       
@@ -680,14 +695,21 @@ function resolveSemesterQuery(semesterQuery, semesterOptions) {
         console.log(`Multiple ${season} semesters found:`, allMatches.map(m => m.description))
         return null // This will trigger the user selection prompt
       }
+      
+      // If no matches after filtering, continue to other logic
+      if (allMatches.length === 0) {
+        console.log(`No ${season} semesters found matching the query`)
+        return null
+      }
     }
   }
 
-  // For year-specific queries (e.g., "2024")
-  const yearMatch = query.match(/20\d{2}/)
-  if (yearMatch) {
-    const year = yearMatch[0]
-    const allMatches = semesterOptions.filter(opt => opt.description.includes(year))
+  // For year-only queries (e.g., "2024")
+  if (yearMatch && !seasonMap.fall.some(v => query.includes(v)) && 
+      !seasonMap.winter.some(v => query.includes(v)) && 
+      !seasonMap.summer.some(v => query.includes(v)) && 
+      !seasonMap.spring.some(v => query.includes(v))) {
+    const allMatches = semesterOptions.filter(yearFilter)
     
     // If there's exactly one match for the year, auto-select it
     if (allMatches.length === 1) {
@@ -696,7 +718,7 @@ function resolveSemesterQuery(semesterQuery, semesterOptions) {
     
     // If there are multiple matches for the year, don't auto-select
     if (allMatches.length > 1) {
-      console.log(`Multiple semesters found for year ${year}:`, allMatches.map(m => m.description))
+      console.log(`Multiple semesters found for year query:`, allMatches.map(m => m.description))
       return null // This will trigger the user selection prompt
     }
   }
@@ -1575,9 +1597,24 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           interactiveState: 'waiting_for_input',
         })
       } else if (code === 0) {
-        const downloadInfo = parseDownloadInfo(stdout)
+        // Only parse download info if we're in materials step or if there's evidence of actual downloads
+        const shouldParseDownloadInfo = step === 'materials' || 
+                                       stdout.includes('Downloaded') || 
+                                       stdout.includes('Downloading') ||
+                                       stdout.includes('files downloaded') ||
+                                       stdout.includes('download complete')
 
-        const servedFiles = await serveDownloadedFiles(downloadInfo.downloadPath, downloadInfo)
+        const downloadInfo = shouldParseDownloadInfo ? parseDownloadInfo(stdout) : {
+          filesDownloaded: 0,
+          totalFiles: 0,
+          downloadPath: null,
+          files: [],
+          errors: []
+        }
+
+        const servedFiles = shouldParseDownloadInfo ? 
+                           await serveDownloadedFiles(downloadInfo.downloadPath, downloadInfo) : 
+                           []
 
         const cleanedOutput = cleanCliOutput(stdout, servedFiles.length > 0)
 

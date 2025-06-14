@@ -210,6 +210,9 @@ async function handleIntelligentCoursePage(params: {
 
   let step = interactiveStep
   if (!step) {
+    console.log('Determining step - semester:', semester, 'course:', course, 'faculty:', faculty)
+    console.log('Contextual queries - semester:', contextualSemesterQuery, 'course:', contextualCourseQuery)
+    
     if (
       (contextualCourseQuery || courseQuery) &&
       (contextualFacultyQuery || facultyQuery) &&
@@ -221,7 +224,11 @@ async function handleIntelligentCoursePage(params: {
     } else if (contextualCourseQuery || courseQuery) {
       step = 'semester'
     } else {
-      if (!semester) {
+      // If we have a semesterQuery but no resolved semester number, stay on semester step
+      if (contextualSemesterQuery && !semester) {
+        console.log('Have semesterQuery but no semester number, staying on semester step')
+        step = 'semester'
+      } else if (!semester) {
         step = 'semester'
       } else if (!course) {
         step = 'course'
@@ -231,6 +238,7 @@ async function handleIntelligentCoursePage(params: {
         step = 'materials'
       }
     }
+    console.log('Determined step:', step)
   }
 
   const PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001'

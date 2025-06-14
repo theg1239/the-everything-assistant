@@ -84,6 +84,21 @@ COURSE MATERIALS CONTEXT: This appears to be course materials/topics. Format the
     : ''
 }
 
+${
+  rawData.step === 'materials' && rawData.options && Array.isArray(rawData.options)
+    ? `
+MATERIALS LIST DETECTED: The data contains a materials list with ${rawData.options.length} items. 
+Extract and format each material entry from the options array. Each option may contain:
+- number: the item number
+- description: material description (may include date and topic)
+- topic: specific topic name
+- date: material date
+
+Format these as a clear, readable list showing the date and topic for each material.
+`
+    : ''
+}
+
 Please parse this VTOP data and return a structured response with:
 - success: true if parsing was successful
 - formatted_content: A natural language description with proper formatting that directly addresses the user's original request
@@ -122,6 +137,14 @@ SPECIAL HANDLING FOR COURSE PAGE/MATERIALS:
 - Format course materials as a numbered list with topics and dates
 - Include clear download buttons/links for each file
 - Ask if the user wants to download specific materials when showing options
+- If the data contains materials options (step=materials, options array), format the materials list immediately
+- When showing materials list, display the actual topics and dates, not generic text
+
+MATERIALS LIST FORMATTING:
+- If step='materials' and options array exists, extract and format each material entry
+- Show format: "Date: Topic/Description" 
+- Use numbered or bulleted lists for clear presentation
+- Always ask if user wants to download specific materials or all of them
 
 Example formats:
 - Receipts: "Here are your recent payments to VIT: <table><tr><th>Date</th><th>Amount</th><th>Description</th></tr>..."

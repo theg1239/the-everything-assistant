@@ -5,9 +5,11 @@ import './globals.css'
 import './sidebar-styles.css'
 import './hamburger-styles.css'
 import './sidebar-loading.css'
+import './mobile-fixes.css'
 import { ThemeProvider } from '@/components/theme-provider'
 import { SessionProvider } from '@/components/session-provider'
 import { Toaster } from 'sonner'
+import MobileViewportFix from '@/components/mobile-viewport-fix'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -21,17 +23,19 @@ export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
-}>) {
-  return (
+}>) {  return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
-        <SessionProvider>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+      </head>
+      <body className={inter.className}>        <SessionProvider>
           <ThemeProvider
             attribute="class"
             defaultTheme="dark"
             enableSystem
             disableTransitionOnChange
           >
+            <MobileViewportFix />
             {children}
             <Toaster position="top-right" />
           </ThemeProvider>

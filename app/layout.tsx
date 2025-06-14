@@ -10,6 +10,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { SessionProvider } from '@/components/session-provider'
 import { Toaster } from 'sonner'
 import MobileViewportFix from '@/components/mobile-viewport-fix'
+import ScrollToTop from '@/components/scroll-to-top'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -27,8 +28,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-      </head>
-      <body className={inter.className}>
+      </head>      <body className={inter.className}>
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -41,6 +41,10 @@ export default function RootLayout({
                 setAppHeight();
                 // Reset scroll position
                 window.scrollTo(0, 0);
+                // Force another scroll after a small delay
+                setTimeout(function() {
+                  window.scrollTo(0, 0);
+                }, 100);
                 // Listen for resize
                 window.addEventListener('resize', setAppHeight);
               })();
@@ -52,9 +56,9 @@ export default function RootLayout({
             attribute="class"
             defaultTheme="dark"
             enableSystem
-            disableTransitionOnChange
-          >
+            disableTransitionOnChange          >
             <MobileViewportFix />
+            <ScrollToTop />
             {children}
             <Toaster position="top-right" />
           </ThemeProvider>

@@ -7,17 +7,24 @@ export default function MobileViewportFix() {
     // Fix for mobile browser address bar issues
     const setAppHeight = () => {
       document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`)
-    }
-
-    // Set initial height
+    }    // Set initial height
     setAppHeight()
 
     // Update height on resize and orientation change
     window.addEventListener('resize', setAppHeight)
-    window.addEventListener('orientationchange', setAppHeight)
+    window.addEventListener('orientationchange', () => {
+      setAppHeight()
+      // Scroll to top after orientation change to ensure header visibility
+      window.scrollTo(0, 0)
+    })
     
     // Prevent automatic scrolling to bottom on page load
     window.scrollTo(0, 0)
+    
+    // Also apply a small delay to ensure browser has fully rendered
+    setTimeout(() => {
+      window.scrollTo(0, 0)
+    }, 100)
 
     // Handle mobile keyboard appearance
     const setKeyboardVisible = () => {

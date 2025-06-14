@@ -17,6 +17,7 @@ import ResearchPreviewModal from '@/components/research-preview-modal'
 import { VTOPToolHandler } from '@/components/vtop-tool-handler'
 import { VTOPProvider, useVTOP } from '@/components/vtop-context'
 import { toast } from 'sonner'
+import ScrollToTopButton from '@/components/scroll-to-top-button'
 
 interface ChatInterfaceProps {
   initialMessages?: any[]
@@ -94,10 +95,10 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       setIsInitialRender(false)
     }
   }, [isInitialRender])
-
   useEffect(() => {
-    // Only auto-scroll when messages change or during loading, but not on initial load
-    if (!isInitialRender && messages.length > 0) {
+    // Only auto-scroll when user is actively typing and sending messages
+    // This prevents auto-scrolling on initial page load
+    if (!isInitialRender && messages.length > 0 && messages[messages.length - 1].role === 'user') {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
   }, [messages, isLoading, isInitialRender])
@@ -314,6 +315,37 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     }
   }
 
+  // Add an effect to scroll to top when a chat page is first loaded
+  useEffect(() => {
+    if (chatId || optimisticChatId) {
+      // This is a chat page, so scroll to top
+      window.scrollTo(0, 0)
+      
+      // Also use setTimeout to ensure browser has time to render
+      setTimeout(() => {
+        window.scrollTo(0, 0)
+      }, 100)
+    }
+  }, [chatId, optimisticChatId])  // Override auto-scrolling to preserve header visibility
+  useEffect(() => {
+    if (chatId || optimisticChatId) {
+      // Create a function to manually force scroll to top
+      const forceScrollToTop = () => {
+        window.scrollTo(0, 0);
+      };
+      
+      // Execute it on mount
+      forceScrollToTop();
+      
+      // And after a delay to ensure rendering is complete
+      const timeoutId = setTimeout(forceScrollToTop, 100);
+      
+      return () => {
+        clearTimeout(timeoutId);
+      };
+    }
+  }, [chatId, optimisticChatId]);
+
   if (!showFullChat) {
     return (      <VTOPToolHandler
         toolInvocations={messages[messages.length - 1]?.toolInvocations}
@@ -415,9 +447,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                 type: 'document',
               }
             : undefined
-        }      />
-      <div className="flex flex-col h-[100dvh] bg-background text-foreground mobile-viewport-fix overflow-hidden">
-        <header className="flex-shrink-0 sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border">
+        }      />      <div className="flex flex-col h-[100dvh] bg-background text-foreground mobile-viewport-fix overflow-hidden">
+        <header className="flex-shrink-0 sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border chat-page-header">
           <div className="flex h-14 items-center px-4 gap-2">
             <HamburgerButton onClick={() => setSidebarOpen(!sidebarOpen)} className="md:block" />
             <Button
@@ -436,9 +467,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               Canvas
             </Button>
           </div>
-        </header>
-          <div className="flex-1 relative overflow-hidden">
-          <div className="absolute inset-0 overflow-y-auto pb-[120px] md:pb-[100px] overflow-fix">
+        </header>          <div className="flex-1 relative overflow-hidden pt-1">
+          <div className="absolute inset-0 overflow-y-auto pb-[120px] md:pb-[100px] overflow-fix chat-content">
             <div className="max-w-3xl mx-auto px-4 py-4 space-y-4 pt-5">
               {errorMessage && (
                 <motion.div
@@ -485,7 +515,11 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               <div ref={messagesEndRef} />
             </div>
           </div>
-        </div>        <div className="flex-shrink-0 border-t border-border bg-background/95 backdrop-blur fixed bottom-0 left-0 right-0 z-30 mobile-pb-fix">
+        </div>
+        
+        <ScrollToTopButton />
+        
+        <div className="flex-shrink-0 border-t border-border bg-background/95 backdrop-blur fixed bottom-0 left-0 right-0 z-30 mobile-pb-fix">
           <div className="max-w-3xl mx-auto px-4 py-3">
             <MultimodalInput
               input={input}

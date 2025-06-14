@@ -93,8 +93,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     // Mark initial render as complete after first render
     if (isInitialRender) {
       setIsInitialRender(false)
-    }
-  }, [isInitialRender])
+    }  }, [isInitialRender])
+  
   useEffect(() => {
     // Only auto-scroll when user is actively typing and sending messages
     // This prevents auto-scrolling on initial page load
@@ -102,6 +102,45 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
   }, [messages, isLoading, isInitialRender])
+
+  // Add auto-scroll during message streaming
+  useEffect(() => {
+    // Auto-scroll during message streaming (when AI is responding)
+    if (!isInitialRender && messages.length > 0 && isLoading) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [messages, isLoading, isInitialRender])
+
+  // Create an auto-scroll function to monitor streaming content
+  const contentRef = useRef<HTMLDivElement | null>(null)
+  
+  useEffect(() => {
+    // Auto-scroll during streaming by monitoring content changes
+    if (isLoading && !isInitialRender) {
+      // Set up a mutation observer to watch for content changes
+      const targetNode = contentRef.current
+      if (!targetNode) return
+      
+      // Create a mutation observer to detect new content
+      const observer = new MutationObserver(() => {
+        // Scroll to the end when content changes
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      })
+      
+      // Start observing the target node for content changes
+      observer.observe(targetNode, { 
+        childList: true, 
+        subtree: true, 
+        characterData: true,
+        attributes: false
+      })
+      
+      // Clean up observer on effect cleanup
+      return () => {
+        observer.disconnect()
+      }
+    }
+  }, [isLoading, isInitialRender])
 
   useEffect(() => {
     if (error) {
@@ -448,7 +487,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               }
             : undefined
         }      />      <div className="flex flex-col h-[100dvh] bg-background text-foreground mobile-viewport-fix overflow-hidden">
-        <header className="flex-shrink-0 sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border chat-page-header">
+        <header className="flex-shrink-0 fixed top-0 left-0 right-0 z-40 bg-background/95 backdrop-blur border-b border-border chat-page-header">
           <div className="flex h-14 items-center px-4 gap-2">
             <HamburgerButton onClick={() => setSidebarOpen(!sidebarOpen)} className="md:block" />
             <Button
@@ -467,9 +506,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               Canvas
             </Button>
           </div>
-        </header>          <div className="flex-1 relative overflow-hidden pt-1">
-          <div className="absolute inset-0 overflow-y-auto pb-[120px] md:pb-[100px] overflow-fix chat-content">
-            <div className="max-w-3xl mx-auto px-4 py-4 space-y-4 pt-5">
+        </header><div className="flex-1 relative overflow-hidden pt-1">          <div className="absolute inset-0 overflow-y-auto pb-[120px] md:pb-[100px] overflow-fix chat-content">
+            <div ref={contentRef} className="max-w-3xl mx-auto px-4 py-4 space-y-4 pt-5">
               {errorMessage && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -510,16 +548,18 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                       ></div>
                     </div>
                     <span className="text-sm">thinking...</span>
-                  </motion.div>
-                )}
-              <div ref={messagesEndRef} />
+                  </motion.div>                )}
+              <div 
+                ref={messagesEndRef} 
+                className={isLoading ? "h-20" : "h-0"} 
+                aria-hidden="true" 
+              />
             </div>
           </div>
         </div>
         
         <ScrollToTopButton />
-        
-        <div className="flex-shrink-0 border-t border-border bg-background/95 backdrop-blur fixed bottom-0 left-0 right-0 z-30 mobile-pb-fix">
+          <div className="flex-shrink-0 border-t border-border bg-background/95 backdrop-blur fixed bottom-0 left-0 right-0 z-30 mobile-pb-fix input-area">
           <div className="max-w-3xl mx-auto px-4 py-3">
             <MultimodalInput
               input={input}

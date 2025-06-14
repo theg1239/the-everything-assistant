@@ -17,7 +17,6 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'vit vellore ai assistant',
   description: 'comprehensive ai assistant for vit vellore with extensive knowledge base',
-  generator: 'v0.dev',
 }
 
 export default function RootLayout({
@@ -25,27 +24,39 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {  return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
+    <html lang="en" suppressHydrationWarning>      <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
       </head>      <body className={inter.className}>
         <script
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
-                // Initial setup for mobile viewport issues
                 function setAppHeight() {
                   document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
                 }
-                // Set on page load
                 setAppHeight();
-                // Reset scroll position
                 window.scrollTo(0, 0);
-                // Force another scroll after a small delay
                 setTimeout(function() {
                   window.scrollTo(0, 0);
                 }, 100);
-                // Listen for resize
+                
+                document.addEventListener('focusin', function(e) {
+                  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+                    setTimeout(function() {
+                      var rect = e.target.getBoundingClientRect();
+                      if (rect.top < 100) {
+                        window.scrollBy(0, rect.top - 120);
+                      }
+                    }, 300);
+                  }
+                });
+                
+                document.addEventListener('click', function(e) {
+                  if (e.target && e.target.tagName === 'A') {
+                    window.scrollTo(0, 0);
+                  }
+                });
+                
                 window.addEventListener('resize', setAppHeight);
               })();
             `,

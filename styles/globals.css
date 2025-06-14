@@ -3,6 +3,63 @@
 @tailwind utilities;
 
 @layer base {
+  /* Mobile viewport fixes */
+  :root {
+    --app-height: 100vh;
+  }
+  
+  @supports (-webkit-touch-callout: none) {
+    :root {
+      --app-height: -webkit-fill-available;
+    }
+  }
+  
+  html, body {
+    height: 100%;
+    height: var(--app-height);
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    overscroll-behavior-y: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Remove rubber-band scroll on Safari */
+  .chat-content {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: none;
+    height: 100%;
+    height: var(--app-height);
+  }
+  
+  /* Ensure header is always visible */
+  .chat-page-header {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background-color: hsl(var(--background));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: env(safe-area-inset-top, 1rem);
+  }
+  
+  /* Fix input area positioning */
+  .input-area {
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    background-color: hsl(var(--background));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: env(safe-area-inset-bottom, 1rem);
+  }
+
+@layer base {
   :root {
     --background: 0 0% 100%;
     --foreground: 240 10% 3.9%;
@@ -372,4 +429,5 @@ button:focus-visible {
     width: 100%;
     max-width: 100%;
   }
+}
 }

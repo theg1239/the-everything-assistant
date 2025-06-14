@@ -1,65 +1,101 @@
-/* Fix for header visibility on chat pages */
+/* Reset viewport handling */
+:root {
+  --app-height: 100%;
+  --header-height: 60px;
+  --safe-top: env(safe-area-inset-top, 15px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Global layout fixes */
+html, body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  position: fixed;
+  overscroll-behavior: none;
+}
+
+/* Main container setup */
+main {
+  height: 100vh;
+  height: var(--app-height);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Header styling */
 .chat-page-header {
-  position: sticky;
+  position: absolute;
   top: 0;
+  left: 0;
+  right: 0;
+  height: calc(var(--header-height) + var(--safe-top));
+  padding-top: var(--safe-top);
   z-index: 40;
   background-color: var(--background);
   backdrop-filter: blur(8px);
-  padding-top: env(safe-area-inset-top, 15px); /* Add safe area padding for notches */
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
 }
 
-/* Ensure content doesn't start under the header */
+/* Content area */
 .chat-content {
-  padding-top: 80px; /* Increased padding to provide more space */
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-top: calc(var(--header-height) + var(--safe-top));
+  padding-bottom: calc(60px + var(--safe-bottom));
+  height: 100%;
+  position: relative;
 }
 
-/* Make sure header is visible on initial load */
-html, body {
-  scroll-padding-top: 80px;
+/* Input area */
+.input-area {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--background);
+  padding: 10px;
+  padding-bottom: calc(10px + var(--safe-bottom));
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  z-index: 30;
 }
 
-/* Fix for mobile keyboard visibility */
-.keyboard-visible .mobile-viewport-fix {
-  height: calc(var(--app-height, 100vh) - 60px) !important;
-}
-
-/* Prevent header from scrolling underneath the browser chrome on focus */
+/* Mobile keyboard handling */
 @media (max-width: 768px) {
-  .chat-page-header {
-    position: fixed; 
-    top: 0;
-    left: 0;
-    right: 0;
-    width: 100%;
-    padding-top: env(safe-area-inset-top, 15px);
-    height: auto;
-    min-height: 60px;
-  }
-  
-  /* Make content area account for fixed header */
-  .chat-content {
-    padding-top: 100px !important; /* Further increased for fixed header on dynamic chat pages */
-  }
-  
-  /* Ensure input is visible when keyboard is shown */
-  .keyboard-visible .input-area {
-    bottom: 0;
-    position: fixed;
-    padding-bottom: env(safe-area-inset-bottom, 10px);
-    z-index: 50;
-  }
-  
-  /* Avoid page jumps when switching between pages */
-  body {
-    overflow-y: hidden;
+  .keyboard-visible {
+    .chat-content {
+      height: var(--viewport-height);
+      padding-bottom: 60px;
+    }
+    
+    .input-area {
+      position: fixed;
+      bottom: 0;
+    }
+    
+    .chat-page-header {
+      position: absolute;
+    }
   }
 }
 
-/* Fix for header when keyboard is active */
-.keyboard-active {
-  position: absolute !important;
-  transform: translateY(-100%);
-  opacity: 0;
-  transition: opacity 0.2s ease;
+/* Disable elastic scroll on iOS */
+.chat-content {
+  overscroll-behavior-y: contain;
+  scroll-padding-bottom: calc(60px + var(--safe-bottom));
+}
+
+/* Fix for iPhone notch/dynamic island areas */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .chat-page-header {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
 }

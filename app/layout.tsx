@@ -23,10 +23,22 @@ export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
-}>) {  return (
-    <html lang="en" suppressHydrationWarning>      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-      </head>      <body className={inter.className}>
+}>) {  return (    <html lang="en" suppressHydrationWarning>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, height=device-height" />
+        <style>{`
+          :root {
+            --vh: 1vh;
+          }
+          #__next {
+            height: 100vh;
+            height: calc(var(--vh, 1vh) * 100);
+            overflow: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+        `}</style>
+      </head>
+      <body className={`${inter.className} h-full overflow-hidden`}>
         <script
           dangerouslySetInnerHTML={{
             __html: `

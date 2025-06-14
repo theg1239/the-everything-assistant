@@ -26,3 +26,5 @@ ai-chatbot
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+ai-chatbot-main

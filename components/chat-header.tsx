@@ -6,16 +6,15 @@ import { SparklesIcon } from 'lucide-react'
 
 const PureChatHeader = () => {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -20 }}
+    <motion.div      initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, ease: 'easeOut' }}
-      className="text-center py-8"
+      className="text-center py-6 md:py-8 mt-4 md:mt-0"
     >
-      <div className="flex items-center justify-center mb-4">
-        <h1 className="text-4xl font-light text-foreground tracking-wide">vit assistant</h1>
+      <div className="flex items-center justify-center mb-3 md:mb-4">
+        <h1 className="text-3xl md:text-4xl font-light text-foreground tracking-wide">vit assistant</h1>
       </div>
-      <p className="text-muted-foreground text-lg max-w-2xl mx-auto leading-relaxed">
+      <p className="text-muted-foreground text-base md:text-lg max-w-2xl mx-auto leading-relaxed px-4">
         comprehensive knowledge base for vit vellore - courses, exams, faculty, placements,
         research, and everything you need to know
       </p>

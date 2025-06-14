@@ -18,7 +18,6 @@ html, body {
   
   .mobile-viewport-fix {
     height: var(--app-height);
-    min-height: -webkit-fill-available;
   }
 
   .mobile-pb-fix {

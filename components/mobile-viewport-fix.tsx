@@ -15,6 +15,9 @@ export default function MobileViewportFix() {
     // Update height on resize and orientation change
     window.addEventListener('resize', setAppHeight)
     window.addEventListener('orientationchange', setAppHeight)
+    
+    // Prevent automatic scrolling to bottom on page load
+    window.scrollTo(0, 0)
 
     // Handle mobile keyboard appearance
     const setKeyboardVisible = () => {

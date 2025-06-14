@@ -30,6 +30,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const [canvasContent, setCanvasContent] = useState<string>('')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [hasUserInitiatedConversation, setHasUserInitiatedConversation] = useState(false)
+  const [isInitialRender, setIsInitialRender] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const [optimisticChatId, setOptimisticChatId] = useState<string | undefined>(chatId)
@@ -87,10 +88,19 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       setErrorMessage('Unable to connect. Please check your connection and try again.')
     },
   })
+  useEffect(() => {
+    // Mark initial render as complete after first render
+    if (isInitialRender) {
+      setIsInitialRender(false)
+    }
+  }, [isInitialRender])
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, isLoading])
+    // Only auto-scroll when messages change or during loading, but not on initial load
+    if (!isInitialRender && messages.length > 0) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [messages, isLoading, isInitialRender])
 
   useEffect(() => {
     if (error) {
@@ -305,13 +315,13 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   }
 
   if (!showFullChat) {
-    return (
-      <VTOPToolHandler
+    return (      <VTOPToolHandler
         toolInvocations={messages[messages.length - 1]?.toolInvocations}
         onCredentialsSubmit={handleVTOPCredentials}
       >
         <ResearchPreviewModal />
-        <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />        <div className="flex flex-col h-[100dvh] bg-background text-foreground relative overflow-hidden mobile-viewport-fix">
+        <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
+        <div className="flex flex-col h-[100dvh] bg-background text-foreground relative overflow-hidden mobile-viewport-fix">
           <div className="absolute inset-0 bg-gradient-to-br from-background via-muted/20 to-background" />
           <div className="relative z-10 flex flex-col h-full">
             <header className="flex-shrink-0 sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border">
@@ -322,7 +332,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                 />
               </div>
             </header>
-            <div className="flex-1 flex flex-col items-center justify-center px-4 space-y-8 overflow-y-auto overflow-fix">
+            <div className="flex-1 flex flex-col items-center justify-center px-4 space-y-8 overflow-y-auto overflow-fix pt-6 md:pt-0">
               <ChatHeader />
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -405,8 +415,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                 type: 'document',
               }
             : undefined
-        }
-      />      <div className="flex flex-col h-[100dvh] bg-background text-foreground mobile-viewport-fix overflow-hidden">
+        }      />
+      <div className="flex flex-col h-[100dvh] bg-background text-foreground mobile-viewport-fix overflow-hidden">
         <header className="flex-shrink-0 sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border">
           <div className="flex h-14 items-center px-4 gap-2">
             <HamburgerButton onClick={() => setSidebarOpen(!sidebarOpen)} className="md:block" />
@@ -426,9 +436,10 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               Canvas
             </Button>
           </div>
-        </header>        <div className="flex-1 relative overflow-hidden">
+        </header>
+          <div className="flex-1 relative overflow-hidden">
           <div className="absolute inset-0 overflow-y-auto pb-[120px] md:pb-[100px] overflow-fix">
-            <div className="max-w-3xl mx-auto px-4 py-4 space-y-4">
+            <div className="max-w-3xl mx-auto px-4 py-4 space-y-4 pt-5">
               {errorMessage && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}

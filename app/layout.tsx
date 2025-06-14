@@ -28,7 +28,26 @@ export default function RootLayout({
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
       </head>
-      <body className={inter.className}>        <SessionProvider>
+      <body className={inter.className}>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                // Initial setup for mobile viewport issues
+                function setAppHeight() {
+                  document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
+                }
+                // Set on page load
+                setAppHeight();
+                // Reset scroll position
+                window.scrollTo(0, 0);
+                // Listen for resize
+                window.addEventListener('resize', setAppHeight);
+              })();
+            `,
+          }}
+        />
+        <SessionProvider>
           <ThemeProvider
             attribute="class"
             defaultTheme="dark"

@@ -635,10 +635,12 @@ function resolveSemesterQuery(semesterQuery, semesterOptions) {
 
   const query = semesterQuery.toLowerCase().trim()
 
+  // For "latest", "current", "ongoing" - always auto-select the first option
   if (query.includes('latest') || query.includes('current') || query.includes('ongoing')) {
     return semesterOptions[0].number
   }
 
+  // For specific semester numbers (e.g., "semester 1", "3rd semester")
   const numberMatch = query.match(/(?:semester\s*)?(\d+)(?:rd|th|st|nd)?/)
   if (numberMatch) {
     const requestedNumber = parseInt(numberMatch[1])
@@ -653,6 +655,7 @@ function resolveSemesterQuery(semesterQuery, semesterOptions) {
     }
   }
 
+  // For season queries (fall, winter, summer, spring) - check for multiple matches
   const seasonMap = {
     fall: ['fall', 'autumn'],
     winter: ['winter'],
@@ -662,23 +665,42 @@ function resolveSemesterQuery(semesterQuery, semesterOptions) {
 
   for (const [season, variants] of Object.entries(seasonMap)) {
     if (variants.some(variant => query.includes(variant))) {
-      const found = semesterOptions.find(opt =>
+      // Find ALL matching options for this season
+      const allMatches = semesterOptions.filter(opt =>
         variants.some(variant => opt.description.toLowerCase().includes(variant))
       )
-      if (found) {
-        return found.number
+      
+      // If there's exactly one match, auto-select it
+      if (allMatches.length === 1) {
+        return allMatches[0].number
+      }
+      
+      // If there are multiple matches, don't auto-select - let user choose
+      if (allMatches.length > 1) {
+        console.log(`Multiple ${season} semesters found:`, allMatches.map(m => m.description))
+        return null // This will trigger the user selection prompt
       }
     }
   }
 
+  // For year-specific queries (e.g., "2024")
   const yearMatch = query.match(/20\d{2}/)
   if (yearMatch) {
     const year = yearMatch[0]
-    const found = semesterOptions.find(opt => opt.description.includes(year))
-    if (found) {
-      return found.number
+    const allMatches = semesterOptions.filter(opt => opt.description.includes(year))
+    
+    // If there's exactly one match for the year, auto-select it
+    if (allMatches.length === 1) {
+      return allMatches[0].number
+    }
+    
+    // If there are multiple matches for the year, don't auto-select
+    if (allMatches.length > 1) {
+      console.log(`Multiple semesters found for year ${year}:`, allMatches.map(m => m.description))
+      return null // This will trigger the user selection prompt
     }
   }
+
   return null
 }
 

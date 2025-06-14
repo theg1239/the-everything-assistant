@@ -15,7 +15,7 @@ import ScrollToTop from '@/components/scroll-to-top'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'vit vellore ai assistant',
+  title: 'vit assistant',
   description: 'comprehensive ai assistant for vit vellore with extensive knowledge base',
 }
 

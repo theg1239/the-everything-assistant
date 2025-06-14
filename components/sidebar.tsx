@@ -147,7 +147,7 @@ export function Sidebar(props: SidebarProps) {
                   className="w-full bg-primary hover:bg-primary/90 text-primary-foreground border-0 rounded-lg transition-all duration-200"
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  New Chat
+                  new chat
                 </Button>
               )}
             </div>
@@ -274,7 +274,7 @@ export function Sidebar(props: SidebarProps) {
                     className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
                   >
                     <Settings className="h-4 w-4 mr-2" />
-                    Settings
+                    settings
                   </Button>
                   <Button
                     variant="ghost"
@@ -283,7 +283,7 @@ export function Sidebar(props: SidebarProps) {
                     onClick={() => signOut()}
                   >
                     <LogOut className="h-4 w-4 mr-2" />
-                    Sign Out
+                    sign out
                   </Button>
                 </div>
               )}

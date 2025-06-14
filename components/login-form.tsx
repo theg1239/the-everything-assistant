@@ -17,8 +17,7 @@ export function LoginForm() {
         <CardHeader className="text-center space-y-4">
           <CardTitle className="text-2xl font-light text-white">vit assistant</CardTitle>
           <CardDescription className="text-slate-400">
-            sign in to access your personalized vit vellore ai assistant ask for past papers,
-            faculty details and more!
+            sign in to access your personalized vit vellore ai assistant ask anything!
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

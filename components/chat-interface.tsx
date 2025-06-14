@@ -416,6 +416,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                   setInput={setInput}
                   handleSubmit={handleFormSubmit}
                   isLoading={isLoading}
+                  placeholder='ask anything...'
                   stop={stop}
                 />
               </motion.div>

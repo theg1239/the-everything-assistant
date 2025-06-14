@@ -395,7 +395,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         <div className="flex flex-col h-[100dvh] bg-background text-foreground relative overflow-hidden mobile-viewport-fix">
           <div className="absolute inset-0 bg-gradient-to-br from-background via-muted/20 to-background" />
           <div className="relative z-10 flex flex-col h-full">
-            <header className="flex-shrink-0 sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border">
+            <header className="flex-shrink-0 sticky top-0 z-40">
               <div className="flex h-14 items-center px-4 gap-2">
                 <HamburgerButton
                   onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -416,7 +416,6 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                   setInput={setInput}
                   handleSubmit={handleFormSubmit}
                   isLoading={isLoading}
-                  placeholder="ask me for past papers..."
                   stop={stop}
                 />
               </motion.div>
@@ -487,7 +486,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               }
             : undefined
         }      />      <div className="flex flex-col h-[100dvh] bg-background text-foreground mobile-viewport-fix overflow-hidden">
-        <header className="flex-shrink-0 fixed top-0 left-0 right-0 z-40 bg-background/95 backdrop-blur border-b border-border chat-page-header">
+        <header className="flex-shrink-0 fixed top-0 left-0 right-0 z-40 bg-background/95 border-b border-border chat-page-header">
           <div className="flex h-14 items-center px-4 gap-2">
             <HamburgerButton onClick={() => setSidebarOpen(!sidebarOpen)} className="md:block" />
             <Button
@@ -506,8 +505,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               Canvas
             </Button>
           </div>
-        </header><div className="flex-1 relative overflow-hidden pt-1">          <div className="absolute inset-0 overflow-y-auto pb-[120px] md:pb-[100px] overflow-fix chat-content">
-            <div ref={contentRef} className="max-w-3xl mx-auto px-4 py-4 space-y-4 pt-5">
+        </header><div className="flex-1 relative overflow-hidden pt-1">          <div className="absolute inset-0 overflow-y-auto pb-[200px] md:pb-[180px] overflow-fix chat-content">
+            <div ref={contentRef} className="max-w-3xl mx-auto px-4 space-y-6 pt-5">
               {errorMessage && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -558,19 +557,21 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
           </div>
         </div>
         
-        <ScrollToTopButton />
-          <div className="flex-shrink-0 border-t border-border bg-background/95 backdrop-blur fixed bottom-0 left-0 right-0 z-30 mobile-pb-fix input-area">
-          <div className="max-w-3xl mx-auto px-4 py-3">
-            <MultimodalInput
-              input={input}
-              setInput={setInput}
-              handleSubmit={handleFormSubmit}
-              isLoading={isLoading}
-              placeholder="continue the conversation..."
-              stop={stop}
-            />
+        <ScrollToTopButton />          <div className="flex-shrink-0 fixed bottom-0 left-0 right-0 z-30 mobile-pb-fix input-area pb-6">
+            <div className="absolute inset-0 pointer-events-none" style={{
+              background: 'linear-gradient(to bottom, transparent, rgb(2, 6, 23) 50%)',
+              borderTop: 'none'
+            }}></div>            <div className="relative z-10">
+              <MultimodalInput
+                input={input}
+                setInput={setInput}
+                handleSubmit={handleFormSubmit}
+                isLoading={isLoading}
+                placeholder="ask anything..."
+                stop={stop}
+              />
+            </div>
           </div>
-        </div>
       </div>
     </VTOPToolHandler>
   )

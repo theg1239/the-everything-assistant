@@ -41,13 +41,13 @@ const PureMessageBubble = ({
           'flex gap-4 w-full group-data-[role=user]/message:ml-auto group-data-[role=user]/message:max-w-2xl group-data-[role=user]/message:w-fit'
         )}
       >
-        {message.role === 'assistant' && (
+        {/* {message.role === 'assistant' && (
           <div className="size-8 flex items-center rounded-full justify-center ring-1 shrink-0 ring-border bg-background">
             <div className="translate-y-px">
               <SparklesIcon size={14} />
             </div>
           </div>
-        )}
+        )} */}
 
         <div className="flex flex-col gap-4 w-full">
           {message.toolInvocations && message.toolInvocations.length > 0 && (

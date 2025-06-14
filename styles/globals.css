@@ -3,6 +3,23 @@
 @tailwind utilities;
 
 @layer base {
+  /* Reset textarea styles */
+  textarea {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    ring: none !important;
+    ring-offset: none !important;
+  }
+  
+  textarea:focus {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    ring: none !important;
+    ring-offset: none !important;
+  }
+
   /* Mobile viewport fixes */
   :root {
     --app-height: 100vh;
@@ -39,8 +56,6 @@
     top: 0;
     z-index: 40;
     background-color: hsl(var(--background));
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     padding-top: env(safe-area-inset-top, 1rem);
   }
@@ -53,8 +68,6 @@
     right: 0;
     z-index: 30;
     background-color: hsl(var(--background));
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     padding-bottom: env(safe-area-inset-bottom, 1rem);
   }
@@ -133,6 +146,43 @@ input:focus-visible,
   --tw-ring-offset-shadow: none !important;
 }
 
+/* Force remove all borders and focus styles from textarea */
+textarea,
+textarea:focus,
+textarea:focus-visible,
+textarea:focus-within,
+textarea:active,
+textarea.textarea,
+textarea.textarea:focus,
+textarea.textarea:focus-visible,
+textarea.textarea:focus-within,
+textarea.textarea:active {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;  --tw-ring-width: 0 !important;
+  --tw-ring-offset-width: 0 !important;
+  --tw-ring-offset-width: 0 !important;
+  --tw-ring-offset-color: transparent !important;
+  --tw-ring-color: transparent !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+
+/* Additional override for Tailwind's focus-visible utilities */
+.focus\:border:focus,
+.focus\:ring:focus,
+.focus-visible\:border:focus-visible,
+.focus-visible\:ring:focus-visible,
+.focus-within\:border:focus-within,
+.focus-within\:ring:focus-within {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-offset-width: 0 !important;
+  --tw-ring-color: transparent !important;
+  --tw-ring-shadow: none !important;
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -193,7 +243,6 @@ html {
 /* Enhanced glassmorphism */
 .glass-effect {
   background: rgba(15, 23, 42, 0.3);
-  backdrop-filter: blur(20px);
   border: 1px solid rgba(100, 116, 139, 0.1);
 }
 
@@ -216,7 +265,6 @@ html {
 /* Improved glass morphism effects */
 .glass-effect-strong {
   background: rgba(15, 23, 42, 0.7);
-  backdrop-filter: blur(24px);
   border: 1px solid rgba(100, 116, 139, 0.2);
 }
 
@@ -354,7 +402,6 @@ button:focus-visible {
     top: 1rem;
     z-index: 50;
     background-color: rgba(30, 41, 59, 0.9);
-    backdrop-filter: blur(12px);
     border: 1px solid rgba(51, 65, 85, 0.5);
     border-radius: 9999px;
     padding: 0.5rem;

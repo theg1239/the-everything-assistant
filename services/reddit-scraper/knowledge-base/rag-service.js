@@ -124,8 +124,7 @@ class RAGService {
     }
     
     return [...new Set(topics)];
-  }
-  diversifyResults(results) {
+  }  diversifyResults(results) {
     const diverseResults = [];
     const seenIds = new Set();
     const seenContentHashes = new Set();
@@ -134,7 +133,12 @@ class RAGService {
     const subredditCount = {};
     const authorCount = {};
     
-    const sortedResults = results.sort((a, b) => b.similarity - a.similarity);
+    const normalizedResults = results.map(result => ({
+      ...result,
+      similarity: parseFloat(result.similarity) || 0
+    }));
+    
+    const sortedResults = normalizedResults.sort((a, b) => b.similarity - a.similarity);
     
     for (const result of sortedResults) {
       if (seenIds.has(result.reddit_id)) continue;
@@ -317,9 +321,7 @@ ${context}`;
       similarity: result.similarity,
       created: result.created_utc
     }));
-  }
-
-  calculateConfidence(searchResults) {
+  }  calculateConfidence(searchResults) {
     if (searchResults.length === 0) return 0;
     
     // Calculate confidence based on:
@@ -327,13 +329,34 @@ ${context}`;
     // 2. Average similarity score
     // 3. Average upvotes/score
     
-    const avgSimilarity = searchResults.reduce((sum, r) => sum + r.similarity, 0) / searchResults.length;
-    const avgScore = searchResults.reduce((sum, r) => sum + (r.score || 0), 0) / searchResults.length;
-    const resultsCount = Math.min(searchResults.length, 10) / 10;
+    logger.info(`Calculating confidence for ${searchResults.length} results`);
     
-    const confidence = (avgSimilarity * 0.5) + (Math.min(avgScore / 10, 1) * 0.3) + (resultsCount * 0.2);
+    const validResults = searchResults.filter(r => r.similarity !== undefined && r.similarity !== null);
     
-    return Math.round(confidence * 100);
+    if (validResults.length === 0) {
+      logger.warn('No results with valid similarity scores, using baseline confidence');
+      const baselineConfidence = Math.min(50, 20 + (searchResults.length * 5)); // 20-50% based on result count
+      logger.info(`Baseline confidence: ${baselineConfidence}%`);
+      return baselineConfidence;
+    }
+    
+    const similarities = validResults.map(r => parseFloat(r.similarity) || 0);
+    const scores = validResults.map(r => parseInt(r.score) || 0);
+    
+    const avgSimilarity = similarities.reduce((sum, s) => sum + s, 0) / similarities.length;
+    const avgScore = scores.reduce((sum, s) => sum + s, 0) / scores.length;
+    const resultsCount = Math.min(validResults.length, 10) / 10;
+    
+    logger.info(`Avg similarity: ${avgSimilarity}, Avg score: ${avgScore}, Results count factor: ${resultsCount}`);
+    
+    const normalizedSimilarity = Math.max(0, Math.min(1, avgSimilarity));
+    
+    const confidence = (normalizedSimilarity * 0.5) + (Math.min(avgScore / 10, 1) * 0.3) + (resultsCount * 0.2);
+    
+    const finalConfidence = Math.round(Math.max(15, Math.min(100, confidence * 100)));
+    logger.info(`Final confidence: ${finalConfidence}%`);
+    
+    return finalConfidence;
   }
 
   async getRecommendations(query, limit = 5) {

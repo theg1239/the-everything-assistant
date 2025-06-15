@@ -938,7 +938,7 @@ export function createVITTools() {
               ? `Found ${results.totalResults} relevant discussions from Reddit educational communities` 
               : results.message,
             note: results.success 
-              ? 'Response based on Reddit discussions. Higher confidence indicates more relevant source material.' 
+              ? 'Response based on Reddit discussions. Might be inaccurate.' 
               : 'Unable to find relevant information in the Reddit knowledge base.'
           }
         } catch (error: any) {

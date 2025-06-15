@@ -50,6 +50,7 @@ interface ArtifactDisplayProps {
     | 'general'
     | 'interactive-course-page'
     | 'reddit-knowledge'
+    | 'reddit-overview'
     | 'error'
   className?: string
   onLoginClick?: () => void
@@ -1190,9 +1191,10 @@ const ErrorCard = ({ errorData }: { errorData: any }) => {
 
 const RedditKnowledgeCard = ({ data }: { data: any }) => {
   const [showAllSources, setShowAllSources] = useState(false)
+  const [showAllTrending, setShowAllTrending] = useState(false)
   const isMobile = useMediaQuery('(max-width: 640px)')
   
-  const { response, sources = [], confidence = 0, totalResults = 0, note } = data
+  const { response, sources = [], trending = [], confidence = 0, totalResults = 0, note, isBroadQuery = false } = data
 
   const getConfidenceColor = (conf: number) => {
     if (conf >= 80) return 'text-emerald-600 dark:text-emerald-400'
@@ -1225,7 +1227,7 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
     }
   }
 
-  const displaySources = showAllSources ? sources : sources.slice(0, 3)
+  const displaySources = showAllSources ? sources : sources.slice(0, 6)
 
   return (
     <div className="w-full space-y-4">
@@ -1248,9 +1250,10 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
           </div>
 
           <div className="prose prose-sm max-w-none dark:prose-invert">
-            <div className="text-foreground leading-relaxed whitespace-pre-wrap">
-              {response}
-            </div>
+            <div 
+              className="text-foreground leading-relaxed [&_ul]:list-disc [&_ul]:ml-6 [&_li]:mb-1 [&_strong]:font-semibold [&_em]:italic"
+              dangerouslySetInnerHTML={{ __html: response }}
+            />
           </div>
 
           {note && (
@@ -1268,7 +1271,7 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
               <h4 className="text-sm font-medium text-foreground">
                 Sources ({sources.length})
               </h4>
-              {sources.length > 3 && !showAllSources && (
+              {sources.length > 6 && !showAllSources && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -1341,12 +1344,276 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
             ))}
           </div>
 
-          {showAllSources && sources.length > 3 && (
+          {showAllSources && sources.length > 6 && (
             <div className="p-3 border-t border-border">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowAllSources(false)}
+                className="text-xs h-7 w-full"
+              >
+                <ChevronUp className="h-3 w-3 mr-1" />
+                Show fewer
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {trending.length > 0 && isBroadQuery && (
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="p-4 border-b border-border">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-orange-400" />
+                Trending Topics ({trending.length})
+              </h4>
+              {trending.length > 5 && !showAllTrending && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAllTrending(true)}
+                  className="text-xs h-7"
+                >
+                  Show all
+                </Button>
+              )}
+            </div>
+          </div>
+          
+          <div className="divide-y divide-border">
+            {(showAllTrending ? trending : trending.slice(0, 5)).map((post: any, index: number) => (
+              <div key={index} className="p-4 hover:bg-muted/50 transition-colors">
+                <div className="flex items-start gap-3">
+                  <div className="flex flex-col items-center gap-1 min-w-0">
+                    <Badge variant="outline" className="text-xs px-1.5 py-0.5">
+                      {post.type || 'post'}
+                    </Badge>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <ChevronUp className="h-3 w-3" />
+                      {post.score || 0}
+                    </div>
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-medium text-primary">r/{post.subreddit}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatTimeAgo(post.created)}
+                      </span>
+                    </div>
+
+                    <h5 className="text-sm font-medium text-foreground mb-1 overflow-hidden" style={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      lineHeight: '1.4em',
+                      maxHeight: '2.8em'
+                    }}>
+                      {post.title}
+                    </h5>
+
+                    {post.author && (
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <User className="h-3 w-3" />
+                        u/{post.author}
+                      </div>
+                    )}
+                  </div>
+
+                  {post.url && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 flex-shrink-0"
+                      onClick={() => window.open(post.url, '_blank')}
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {showAllTrending && trending.length > 5 && (
+            <div className="p-3 border-t border-border">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAllTrending(false)}
+                className="text-xs h-7 w-full"
+              >
+                <ChevronUp className="h-3 w-3 mr-1" />
+                Show fewer
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const RedditOverviewCard = ({ data }: { data: any }) => {
+  const [showAllTrending, setShowAllTrending] = useState(false)
+  const isMobile = useMediaQuery('(max-width: 640px)')
+  
+  const { trending = [], stats = {}, summary = '', message } = data
+
+  const formatTimeAgo = (dateString: string) => {
+    try {
+      const date = new Date(dateString)
+      const now = new Date()
+      const diffMs = now.getTime() - date.getTime()
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+      
+      if (diffDays === 0) return 'Today'
+      if (diffDays === 1) return 'Yesterday'
+      if (diffDays < 30) return `${diffDays} days ago`
+      if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`
+      return `${Math.floor(diffDays / 365)} years ago`
+    } catch {
+      return 'Unknown'
+    }
+  }
+
+  const displayTrending = showAllTrending ? trending : trending.slice(0, 5)
+
+  return (
+    <div className="w-full space-y-4">
+      <div className="bg-card border border-border rounded-lg overflow-hidden">
+        <div className="p-4 sm:p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <TrendingUp className="h-5 w-5 text-orange-400" />
+            <h3 className="text-lg font-semibold text-foreground">Reddit Overview</h3>
+          </div>
+
+          {summary && (
+            <div className="mb-4 p-3 bg-muted/50 border border-border rounded-md">
+              <p className="text-sm text-foreground">{summary}</p>
+            </div>
+          )}
+
+          {Object.keys(stats).length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+              {stats.totalPosts !== undefined && (
+                <div className="text-center p-3 bg-muted/30 rounded-md">
+                  <div className="text-lg font-bold text-foreground">{stats.totalPosts.toLocaleString()}</div>
+                  <div className="text-xs text-muted-foreground">Posts</div>
+                </div>
+              )}
+              {stats.totalComments !== undefined && (
+                <div className="text-center p-3 bg-muted/30 rounded-md">
+                  <div className="text-lg font-bold text-foreground">{stats.totalComments.toLocaleString()}</div>
+                  <div className="text-xs text-muted-foreground">Comments</div>
+                </div>
+              )}
+              {stats.activeSubreddits !== undefined && (
+                <div className="text-center p-3 bg-muted/30 rounded-md">
+                  <div className="text-lg font-bold text-foreground">{stats.activeSubreddits}</div>
+                  <div className="text-xs text-muted-foreground">Subreddits</div>
+                </div>
+              )}
+              {stats.lastUpdated && (
+                <div className="text-center p-3 bg-muted/30 rounded-md">
+                  <div className="text-sm font-bold text-foreground">{formatTimeAgo(stats.lastUpdated)}</div>
+                  <div className="text-xs text-muted-foreground">Last Updated</div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {trending.length > 0 && (
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="p-4 border-b border-border">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-orange-400" />
+                Trending Topics ({trending.length})
+              </h4>
+              {trending.length > 5 && !showAllTrending && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAllTrending(true)}
+                  className="text-xs h-7"
+                >
+                  Show all
+                </Button>
+              )}
+            </div>
+          </div>
+          
+          <div className="divide-y divide-border">
+            {displayTrending.map((post: any, index: number) => (
+              <div key={index} className="p-4 hover:bg-muted/50 transition-colors">
+                <div className="flex items-start gap-3">
+                  <div className="flex flex-col items-center gap-1 min-w-0">
+                    <Badge variant="outline" className="text-xs px-1.5 py-0.5">
+                      {post.type || 'post'}
+                    </Badge>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <ChevronUp className="h-3 w-3" />
+                      {post.score || 0}
+                    </div>
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-medium text-primary">r/{post.subreddit}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatTimeAgo(post.created)}
+                      </span>
+                    </div>
+
+                    <h5 className="text-sm font-medium text-foreground mb-1 overflow-hidden" style={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      lineHeight: '1.4em',
+                      maxHeight: '2.8em'
+                    }}>
+                      {post.title}
+                    </h5>
+
+                    {post.author && (
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <User className="h-3 w-3" />
+                        u/{post.author}
+                      </div>
+                    )}
+
+                    {post.content && post.content.length > 0 && (
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                        {post.content.substring(0, 100)}...
+                      </p>
+                    )}
+                  </div>
+
+                  {post.url && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 flex-shrink-0"
+                      onClick={() => window.open(post.url, '_blank')}
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {showAllTrending && trending.length > 5 && (
+            <div className="p-3 border-t border-border">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAllTrending(false)}
                 className="text-xs h-7 w-full"
               >
                 <ChevronUp className="h-3 w-3 mr-1" />
@@ -1452,7 +1719,7 @@ const PureArtifactDisplay = ({
         <div
           className={cn(
             'grid gap-3',
-            type === 'mess-menu' || type === 'vtop-data' || type === 'reddit-knowledge' || type === 'error'
+            type === 'mess-menu' || type === 'vtop-data' || type === 'reddit-knowledge' || type === 'reddit-overview' || type === 'error'
               ? 'grid-cols-1'
               : isMobile
                 ? 'grid-cols-1'
@@ -1477,6 +1744,8 @@ const PureArtifactDisplay = ({
                 return <VTOPDataCard key={index} vtopData={item} onLoginClick={onLoginClick} />
               case 'reddit-knowledge':
                 return <RedditKnowledgeCard key={index} data={item} />
+              case 'reddit-overview':
+                return <RedditOverviewCard key={index} data={item} />
               case 'error':
                 return <ErrorCard key={index} errorData={item} />
               default:

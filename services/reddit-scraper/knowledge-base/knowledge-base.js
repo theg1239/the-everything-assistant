@@ -421,12 +421,15 @@ class KnowledgeBase {
       }
     }
   }
-
   async vectorSearch(query, limit = 10) {
     const queryEmbedding = await this.generateEmbedding(query);
     if (!Array.isArray(queryEmbedding) || queryEmbedding.length !== this.embeddingDim) {
       throw new Error(`Invalid search embedding dimension: got ${queryEmbedding.length}`);
     }
+    
+    const postLimit = Math.ceil(limit * 0.5);
+    const commentLimit = Math.ceil(limit * 0.4);
+    const chunkLimit = Math.ceil(limit * 0.2);
     
     const searchSQL = `
       WITH post_results AS (
@@ -449,7 +452,7 @@ class KnowledgeBase {
         FROM reddit_comments
         WHERE embedding IS NOT NULL AND embedding <=> $1 < $2
         ORDER BY similarity DESC
-        LIMIT $3
+        LIMIT $4
       ),
       chunk_results AS (
         SELECT
@@ -463,7 +466,7 @@ class KnowledgeBase {
         FROM knowledge_chunks
         WHERE embedding IS NOT NULL AND embedding <=> $1 < $2
         ORDER BY similarity DESC
-        LIMIT $3
+        LIMIT $5
       )
       SELECT * FROM (
         SELECT * FROM post_results
@@ -473,13 +476,16 @@ class KnowledgeBase {
         SELECT * FROM chunk_results
       ) AS combined
       ORDER BY similarity DESC
-      LIMIT $3
+      LIMIT $6
     `;
     
     const result = await this.pool.query(searchSQL, [
       `[${queryEmbedding.join(',')}]`,
       1 - this.similarityThreshold,
-      limit
+      postLimit,
+      commentLimit,
+      chunkLimit,
+      limit * 2
     ]);
     
     return result.rows.map(r => ({

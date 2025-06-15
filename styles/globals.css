@@ -479,4 +479,26 @@
       max-width: 100%;
     }
   }
+
+  /* Mobile header visibility fixes */
+  @media (max-width: 768px) {
+    .mobile-new-chat-header-visible {
+      /* Ensure header stays visible during new chat transitions */
+      scroll-behavior: auto !important;
+    }
+    
+    .mobile-prevent-auto-scroll {
+      /* Prevent automatic scrolling on mobile for new chats */
+      scroll-behavior: auto !important;
+      scroll-margin-top: 0 !important;
+      scroll-padding-top: 0 !important;
+    }
+    
+    .mobile-chat-container {
+      /* Optimize mobile chat container */
+      touch-action: pan-y;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
+    }
+  }
 }

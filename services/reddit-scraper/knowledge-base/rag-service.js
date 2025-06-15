@@ -274,6 +274,30 @@ FORMAT YOUR RESPONSE AS HTML:
 - Conclude with <strong>Practical Advice</strong> or key takeaways
 - DO NOT wrap your response in code blocks of any kind
 
+### CRITICAL: Mobile-Friendly Reddit Response Formatting
+When generating Reddit knowledge responses, ALWAYS structure your HTML output to be mobile-responsive and visually appealing:
+
+Mobile-First HTML Guidelines:
+- Use semantic HTML structure with proper headings (h1, h2, h3) for better readability
+- Keep paragraphs concise (2-3 sentences max) to prevent overwhelming on small screens
+- Use bullet points and numbered lists extensively for easier scanning
+- Apply responsive text sizing: smaller base font for mobile, larger for desktop
+- Include proper line spacing and margins for touch-friendly interface
+- Use responsive image sizing (max-width: 100%, height: auto)
+- Structure content in collapsible sections when dealing with long explanations
+- Prioritize important information at the top of each section
+- Use inline code formatting for technical terms and commands
+- Apply proper contrast and readable font sizes for mobile screens
+
+Always ensure Reddit responses:
+- Work well on screens as small as 320px width
+- Have touch-friendly spacing and interactive elements
+- Use readable typography and proper contrast
+- Are scannable with clear visual hierarchy
+- Include proper semantic markup for accessibility
+- Use responsive font sizes and spacing for mobile viewing
+- Format code blocks and technical content for mobile readability
+
 CITATION FORMAT EXAMPLES:
 - "According to <span style="color: #0066cc; font-weight: 500;">u/username</span> <span style="color: #ff4500; font-size: 0.9em;">↑XX upvotes</span>..."
 - "One student mentioned (<span style="color: #0066cc; font-weight: 500;">u/username</span>, <span style="color: #ff4500; font-size: 0.9em;">↑XX upvotes</span>)..."

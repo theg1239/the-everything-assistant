@@ -1244,28 +1244,40 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
   const displaySources = showAllSources ? sources : sources.slice(0, 6)
 
   return (
-    <div className="w-full space-y-4">
+    <div className="w-full space-y-4 reddit-card-mobile">
       <div className="bg-card border border-border rounded-lg overflow-hidden">
-        <div className="p-4 sm:p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
+        <div className="p-3 sm:p-6">
+          <div className="flex items-start justify-between mb-4 gap-2">
+            <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1 reddit-confidence-badge">
               <div className={cn(
-                'px-2 py-1 rounded-md text-xs font-medium border',
+                'px-2 py-1 rounded-md text-xs font-medium border flex-shrink-0',
                 getConfidenceBg(displayConfidence)
               )}>
                 <span className={getConfidenceColor(displayConfidence)}>
                   {displayConfidence}% confidence
                 </span>
               </div>
-              <Badge variant="secondary" className="text-xs">
+              <Badge variant="secondary" className="text-xs flex-shrink-0">
                 {totalResults} sources
               </Badge>
             </div>
           </div>
 
-          <div className="prose prose-sm max-w-none dark:prose-invert">
+          <div className="prose prose-sm max-w-none dark:prose-invert reddit-response-content">
             <div 
-              className="text-foreground leading-relaxed [&_ul]:list-disc [&_ul]:ml-6 [&_li]:mb-1 [&_strong]:font-semibold [&_em]:italic"
+              className="text-foreground leading-relaxed 
+                [&_ul]:list-disc [&_ul]:ml-4 sm:[&_ul]:ml-6 [&_li]:mb-1 
+                [&_strong]:font-semibold [&_em]:italic
+                [&_p]:mb-3 [&_h1]:text-lg sm:[&_h1]:text-xl [&_h1]:font-bold [&_h1]:mb-3
+                [&_h2]:text-base sm:[&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mb-2
+                [&_h3]:text-sm sm:[&_h3]:text-base [&_h3]:font-medium [&_h3]:mb-2
+                [&_code]:text-xs sm:[&_code]:text-sm [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded
+                [&_pre]:text-xs sm:[&_pre]:text-sm [&_pre]:bg-muted [&_pre]:p-2 sm:[&_pre]:p-3 [&_pre]:rounded [&_pre]:overflow-x-auto
+                [&_blockquote]:border-l-2 [&_blockquote]:border-muted-foreground [&_blockquote]:pl-3 sm:[&_blockquote]:pl-4 [&_blockquote]:italic
+                [&_table]:text-xs sm:[&_table]:text-sm [&_table]:w-full [&_table]:border-collapse
+                [&_th]:border [&_th]:border-border [&_th]:p-1 sm:[&_th]:p-2 [&_th]:bg-muted [&_th]:font-medium
+                [&_td]:border [&_td]:border-border [&_td]:p-1 sm:[&_td]:p-2
+                [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded"
               dangerouslySetInnerHTML={{ __html: cleanedResponse }}
             />
           </div>
@@ -1280,7 +1292,7 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
 
       {sources.length > 0 && (
         <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <div className="p-4 border-b border-border">
+          <div className="p-3 sm:p-4 border-b border-border">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-medium text-foreground">
                 Sources ({sources.length})
@@ -1300,19 +1312,19 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
           
           <div className="divide-y divide-border">
             {displaySources.map((source: any, index: number) => (
-              <div key={index} className="p-4 hover:bg-muted/50 transition-colors">
-                <div className="flex items-start gap-3">
-                  <div className="flex flex-col items-center gap-1 min-w-0">
+              <div key={index} className="p-3 sm:p-4 hover:bg-muted/50 transition-colors reddit-source-item">
+                <div className="flex items-start gap-2 sm:gap-3">
+                  <div className="flex flex-col items-center gap-1 min-w-0 flex-shrink-0">
                     <Badge variant="outline" className="text-xs px-1.5 py-0.5">
                       {source.type}
                     </Badge>
-                    <div className="text-xs text-muted-foreground">
-                      {Math.round(source.similarity * 100)}% match
+                    <div className="text-xs text-muted-foreground text-center">
+                      {Math.round(source.similarity * 100)}%
                     </div>
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-1 reddit-source-meta">
                       <span className="text-xs font-medium text-primary">r/{source.subreddit}</span>
                       {source.upvotes > 0 && (
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -1325,12 +1337,12 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
                       </span>
                     </div>
 
-                    <h5 className="text-sm font-medium text-foreground mb-1 overflow-hidden" style={{
+                    <h5 className="text-sm font-medium text-foreground mb-1 overflow-hidden reddit-post-title" style={{
                       display: '-webkit-box',
-                      WebkitLineClamp: 2,
+                      WebkitLineClamp: isMobile ? 3 : 2,
                       WebkitBoxOrient: 'vertical',
                       lineHeight: '1.4em',
-                      maxHeight: '2.8em'
+                      maxHeight: isMobile ? '4.2em' : '2.8em'
                     }}>
                       {source.title}
                     </h5>
@@ -1338,7 +1350,7 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
                     {source.author && (
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">
                         <User className="h-3 w-3" />
-                        u/{source.author}
+                        <span className="truncate">u/{source.author}</span>
                       </div>
                     )}
                   </div>
@@ -1376,11 +1388,13 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
 
       {trending.length > 0 && isBroadQuery && (
         <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <div className="p-4 border-b border-border">
+          <div className="p-3 sm:p-4 border-b border-border">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-orange-400" />
-                Trending Topics ({trending.length})
+                <span className="hidden xs:inline">Trending Topics</span>
+                <span className="xs:hidden">Trending</span>
+                <span className="text-xs">({trending.length})</span>
               </h4>
               {trending.length > 5 && !showAllTrending && (
                 <Button
@@ -1397,9 +1411,9 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
           
           <div className="divide-y divide-border">
             {(showAllTrending ? trending : trending.slice(0, 5)).map((post: any, index: number) => (
-              <div key={index} className="p-4 hover:bg-muted/50 transition-colors">
-                <div className="flex items-start gap-3">
-                  <div className="flex flex-col items-center gap-1 min-w-0">
+              <div key={index} className="p-3 sm:p-4 hover:bg-muted/50 transition-colors">
+                <div className="flex items-start gap-2 sm:gap-3">
+                  <div className="flex flex-col items-center gap-1 min-w-0 flex-shrink-0">
                     <Badge variant="outline" className="text-xs px-1.5 py-0.5">
                       {post.type || 'post'}
                     </Badge>
@@ -1410,7 +1424,7 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-1">
                       <span className="text-xs font-medium text-primary">r/{post.subreddit}</span>
                       <span className="text-xs text-muted-foreground">
                         {formatTimeAgo(post.created)}
@@ -1419,10 +1433,10 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
 
                     <h5 className="text-sm font-medium text-foreground mb-1 overflow-hidden" style={{
                       display: '-webkit-box',
-                      WebkitLineClamp: 2,
+                      WebkitLineClamp: isMobile ? 3 : 2,
                       WebkitBoxOrient: 'vertical',
                       lineHeight: '1.4em',
-                      maxHeight: '2.8em'
+                      maxHeight: isMobile ? '4.2em' : '2.8em'
                     }}>
                       {post.title}
                     </h5>
@@ -1430,7 +1444,7 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
                     {post.author && (
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">
                         <User className="h-3 w-3" />
-                        u/{post.author}
+                        <span className="truncate">u/{post.author}</span>
                       </div>
                     )}
                   </div>
@@ -1497,9 +1511,9 @@ const RedditOverviewCard = ({ data }: { data: any }) => {
   return (
     <div className="w-full space-y-4">
       <div className="bg-card border border-border rounded-lg overflow-hidden">
-        <div className="p-4 sm:p-6">
+        <div className="p-3 sm:p-6">
           <div className="flex items-center gap-3 mb-4">
-            <TrendingUp className="h-5 w-5 text-orange-400" />
+            <TrendingUp className="h-5 w-5 text-orange-400 flex-shrink-0" />
             <h3 className="text-lg font-semibold text-foreground">Reddit Overview</h3>
           </div>
 
@@ -1510,29 +1524,29 @@ const RedditOverviewCard = ({ data }: { data: any }) => {
           )}
 
           {Object.keys(stats).length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
               {stats.totalPosts !== undefined && (
-                <div className="text-center p-3 bg-muted/30 rounded-md">
-                  <div className="text-lg font-bold text-foreground">{stats.totalPosts.toLocaleString()}</div>
+                <div className="text-center p-2 sm:p-3 bg-muted/30 rounded-md">
+                  <div className="text-base sm:text-lg font-bold text-foreground">{stats.totalPosts.toLocaleString()}</div>
                   <div className="text-xs text-muted-foreground">Posts</div>
                 </div>
               )}
               {stats.totalComments !== undefined && (
-                <div className="text-center p-3 bg-muted/30 rounded-md">
-                  <div className="text-lg font-bold text-foreground">{stats.totalComments.toLocaleString()}</div>
+                <div className="text-center p-2 sm:p-3 bg-muted/30 rounded-md">
+                  <div className="text-base sm:text-lg font-bold text-foreground">{stats.totalComments.toLocaleString()}</div>
                   <div className="text-xs text-muted-foreground">Comments</div>
                 </div>
               )}
               {stats.activeSubreddits !== undefined && (
-                <div className="text-center p-3 bg-muted/30 rounded-md">
-                  <div className="text-lg font-bold text-foreground">{stats.activeSubreddits}</div>
+                <div className="text-center p-2 sm:p-3 bg-muted/30 rounded-md">
+                  <div className="text-base sm:text-lg font-bold text-foreground">{stats.activeSubreddits}</div>
                   <div className="text-xs text-muted-foreground">Subreddits</div>
                 </div>
               )}
               {stats.lastUpdated && (
-                <div className="text-center p-3 bg-muted/30 rounded-md">
-                  <div className="text-sm font-bold text-foreground">{formatTimeAgo(stats.lastUpdated)}</div>
-                  <div className="text-xs text-muted-foreground">Last Updated</div>
+                <div className="text-center p-2 sm:p-3 bg-muted/30 rounded-md">
+                  <div className="text-xs sm:text-sm font-bold text-foreground">{formatTimeAgo(stats.lastUpdated)}</div>
+                  <div className="text-xs text-muted-foreground">Updated</div>
                 </div>
               )}
             </div>
@@ -1542,11 +1556,13 @@ const RedditOverviewCard = ({ data }: { data: any }) => {
 
       {trending.length > 0 && (
         <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <div className="p-4 border-b border-border">
+          <div className="p-3 sm:p-4 border-b border-border">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-orange-400" />
-                Trending Topics ({trending.length})
+                <span className="hidden xs:inline">Trending Topics</span>
+                <span className="xs:hidden">Trending</span>
+                <span className="text-xs">({trending.length})</span>
               </h4>
               {trending.length > 5 && !showAllTrending && (
                 <Button
@@ -1563,9 +1579,9 @@ const RedditOverviewCard = ({ data }: { data: any }) => {
           
           <div className="divide-y divide-border">
             {displayTrending.map((post: any, index: number) => (
-              <div key={index} className="p-4 hover:bg-muted/50 transition-colors">
-                <div className="flex items-start gap-3">
-                  <div className="flex flex-col items-center gap-1 min-w-0">
+              <div key={index} className="p-3 sm:p-4 hover:bg-muted/50 transition-colors">
+                <div className="flex items-start gap-2 sm:gap-3">
+                  <div className="flex flex-col items-center gap-1 min-w-0 flex-shrink-0">
                     <Badge variant="outline" className="text-xs px-1.5 py-0.5">
                       {post.type || 'post'}
                     </Badge>
@@ -1576,7 +1592,7 @@ const RedditOverviewCard = ({ data }: { data: any }) => {
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-1">
                       <span className="text-xs font-medium text-primary">r/{post.subreddit}</span>
                       <span className="text-xs text-muted-foreground">
                         {formatTimeAgo(post.created)}
@@ -1585,10 +1601,10 @@ const RedditOverviewCard = ({ data }: { data: any }) => {
 
                     <h5 className="text-sm font-medium text-foreground mb-1 overflow-hidden" style={{
                       display: '-webkit-box',
-                      WebkitLineClamp: 2,
+                      WebkitLineClamp: isMobile ? 3 : 2,
                       WebkitBoxOrient: 'vertical',
                       lineHeight: '1.4em',
-                      maxHeight: '2.8em'
+                      maxHeight: isMobile ? '4.2em' : '2.8em'
                     }}>
                       {post.title}
                     </h5>
@@ -1596,7 +1612,7 @@ const RedditOverviewCard = ({ data }: { data: any }) => {
                     {post.author && (
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">
                         <User className="h-3 w-3" />
-                        u/{post.author}
+                        <span className="truncate">u/{post.author}</span>
                       </div>
                     )}
                   </div>

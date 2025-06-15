@@ -18,6 +18,7 @@ import { VTOPToolHandler } from '@/components/vtop-tool-handler'
 import { VTOPProvider, useVTOP } from '@/components/vtop-context'
 import { toast } from 'sonner'
 import ScrollToTopButton from '@/components/scroll-to-top-button'
+import { cn } from '@/lib/utils'
 
 const useViewportHeight = () => {
   const mainRef = useRef<HTMLDivElement>(null)
@@ -124,16 +125,17 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     const saved = localStorage.getItem('sidebarOpen')
     if (saved !== null) setSidebarOpen(saved === 'true')
   }, [])
-
   useEffect(() => {
     if (typeof window === 'undefined') return
     localStorage.setItem('sidebarOpen', String(sidebarOpen))
   }, [sidebarOpen])
+  
   useEffect(() => {
     const hasUser = initialMessages.some(m => m.role === 'user')
     setHasUserInitiatedConversation(hasUser)
     // If there are initial messages, this is not a new chat
-    setIsFirstMessageInNewChat(false)
+    // If no initial messages, this is a new chat and first message should not auto-scroll on mobile
+    setIsFirstMessageInNewChat(initialMessages.length === 0)
   }, [initialMessages])
   const {
     messages,
@@ -212,14 +214,21 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       }
     }
   }, [messages, isLoading, isInitialRender, isMobile, hasUserInitiatedConversation, isFirstMessageInNewChat])
-
   useEffect(() => {
     if (isLoading && !isInitialRender) {
       const targetNode = contentRef.current
       if (!targetNode) return
 
       const observer = new MutationObserver(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        // On mobile, prevent auto-scroll for the first message in a new chat
+        if (isMobile && isFirstMessageInNewChat) {
+          return
+        }
+        
+        // On mobile, only scroll if user has initiated conversation
+        if (!isMobile || hasUserInitiatedConversation) {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        }
       })
 
       observer.observe(targetNode, {
@@ -233,7 +242,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         observer.disconnect()
       }
     }
-  }, [isLoading, isInitialRender])
+  }, [isLoading, isInitialRender, isMobile, hasUserInitiatedConversation, isFirstMessageInNewChat])
 
   useEffect(() => {
     if (error) {
@@ -470,6 +479,16 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     }
   }, [chatId, optimisticChatId])
 
+  // Ensure header visibility when transitioning to full chat on mobile
+  useEffect(() => {
+    if (showFullChat && isMobile && isFirstMessageInNewChat) {
+      // Small delay to ensure DOM has updated
+      setTimeout(() => {
+        window.scrollTo(0, 0)
+      }, 50)
+    }
+  }, [showFullChat, isMobile, isFirstMessageInNewChat])
+
   if (!showFullChat) {
     return (
       <VTOPToolHandler
@@ -600,8 +619,12 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               Canvas
             </Button>
           </div>
-        </header><div className="flex-1 relative overflow-hidden">
-          <div className="absolute inset-0 overflow-y-auto chat-content">
+        </header>        <div className="flex-1 relative overflow-hidden">
+          <div className={cn(
+            "absolute inset-0 overflow-y-auto chat-content",
+            isMobile && "mobile-chat-container",
+            isMobile && isFirstMessageInNewChat && "mobile-prevent-auto-scroll"
+          )}>
             <div ref={contentRef} className="max-w-3xl mx-auto px-4 space-y-6 pt-5">
               {errorMessage && (
                 <motion.div

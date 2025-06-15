@@ -2,9 +2,13 @@
   "name": "vit-vellore-ai-chatbot-advanced",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "22.x",
+    "npm": "10.x"
+  },
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "npx prisma generate && next build && cd services/reddit-scraper && npm install",
+    "build": "npx prisma generate && next build && cd services/reddit-scraper && npm install --legacy-peer-deps",
     "start": "next start",
     "lint": "next lint",
     "format": "npx prettier --write .",
@@ -12,7 +16,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "heroku-postbuild": "cd services/reddit-scraper && npm install"
+    "heroku-postbuild": "cd services/reddit-scraper && npm install --legacy-peer-deps"
   },
   "dependencies": {
     "@ai-sdk/google": "latest",
@@ -32,7 +36,7 @@
     "crypto-js": "^4.2.0",
     "dotenv": "^16.3.1",
     "framer-motion": "latest",
-    "lucide-react": "^0.323.0",
+    "lucide-react": "latest",
     "nanoid": "latest",
     "next": "^15.3.3",
     "next-auth": "^4.24.11",

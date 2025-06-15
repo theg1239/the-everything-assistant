@@ -1,0 +1,43 @@
+{
+  "name": "reddit-scraper-service",
+  "version": "1.0.0",
+  "description": "Reddit scraper service with RAG knowledge base for student information",
+  "main": "index.js",    "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "scrape": "node cli.js scrape",
+    "test": "node test-service.js",
+    "cli": "node cli.js",
+    "init": "node cli.js init",
+    "stats": "node cli.js stats",
+    "status": "node cli.js status",
+    "migrate": "node migrate-vector-dimensions.js"
+  },
+  "bin": {
+    "reddit-scraper": "./cli.js"
+  },
+  "dependencies": {
+    "express": "latest",
+    "node-cron": "latest",
+    "axios": "latest",
+    "cheerio": "latest",
+    "sharp": "latest",
+    "ai": "latest",
+    "@ai-sdk/google": "latest",
+    "pg": "latest",
+    "dotenv": "latest",
+    "jimp": "latest",
+    "winston": "latest",
+    "cors": "latest",
+    "helmet": "latest",
+    "rate-limiter-flexible": "latest",
+    "redis": "latest",
+    "commander": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "nodemon": "latest",
+    "jest": "latest"
+  },
+  "license": "MIT"
+}

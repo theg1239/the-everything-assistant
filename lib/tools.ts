@@ -7,6 +7,28 @@ import { scrapePlacementInfo } from './scrapers/placement-scraper'
 import { getMessMenu, formatMenuItems, getAvailableDateRange } from './scrapers/mess-menu-scraper'
 import { getCourseCode } from './question-generator'
 
+async function searchRedditKnowledge(query: string, limit: number = 10) {
+  try {
+    const response = await fetch('http://localhost:3002/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query, limit }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Reddit knowledge base service unavailable: ${response.status}`)
+    }
+
+    const data = await response.json()
+    return data.results || []
+  } catch (error) {
+    console.error('Error accessing Reddit knowledge base:', error)
+    return []
+  }
+}
+
 // Helper function to organize menu items by meal type
 function organizeMenuByMealType(menuItems: Array<{ type: number; menu: string }>) {
   const mealTypes: { [key: string]: string[] } = {
@@ -768,6 +790,65 @@ export function createVITTools() {
             message:
               'Unable to connect to VTOP proxy service. Please ensure the service is running.',
             suggestion: 'The VTOP proxy service may be offline. Please try again later.',
+          }
+        }
+      },
+    }),
+
+    searchRedditKnowledge: tool({
+      description: 'Search the Reddit knowledge base for student and academic information from various educational subreddits. This contains community-validated information from students about studying, courses, exams, college life, and academic advice.',
+      parameters: z.object({
+        query: z.string().describe('The search query for finding relevant information from Reddit discussions about academics, studying, college life, etc.'),
+        limit: z.number().optional().default(10).describe('Maximum number of results to return (default: 10)'),
+      }),
+      execute: async ({ query, limit = 10 }) => {
+        try {
+          const results = await searchRedditKnowledge(query, limit)
+          
+          if (results.length === 0) {
+            return {
+              success: true,
+              results: [],
+              message: 'No relevant information found in the Reddit knowledge base for this query.',
+              totalResults: 0,
+            }
+          }
+
+          const formattedResults = results.map((result: any) => ({
+            type: result.type, // 'post', 'comment', or 'chunk'
+            subreddit: result.subreddit,
+            title: result.title,
+            content: result.content ? result.content.substring(0, 500) + (result.content.length > 500 ? '...' : '') : '',
+            author: result.author,
+            score: result.score,
+            upvotes: result.upvotes,
+            similarity: result.similarity,
+            url: result.url,
+            created: result.created_utc,
+            tags: result.tags,
+          }))
+
+          const avgSimilarity = results.reduce((sum: number, r: any) => sum + (r.similarity || 0), 0) / results.length
+          const avgScore = results.reduce((sum: number, r: any) => sum + (r.score || 0), 0) / results.length
+          
+          return {
+            success: true,
+            results: formattedResults,
+            totalResults: results.length,
+            message: `Found ${results.length} relevant discussions from Reddit educational communities`,
+            statistics: {
+              averageSimilarity: Math.round(avgSimilarity * 100) / 100,
+              averageScore: Math.round(avgScore),
+              subreddits: [...new Set(results.map((r: any) => r.subreddit))],
+            },
+            note: 'Results are ranked by relevance and community validation (upvotes). Higher scores indicate more community-validated information.',
+          }
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message || 'Failed to search Reddit knowledge base',
+            message: 'Unable to access the Reddit knowledge base. The service may be temporarily unavailable.',
+            suggestion: 'Please try again later or check if the Reddit scraper service is running.',
           }
         }
       },

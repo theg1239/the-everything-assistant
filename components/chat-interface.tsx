@@ -19,6 +19,36 @@ import { VTOPProvider, useVTOP } from '@/components/vtop-context'
 import { toast } from 'sonner'
 import ScrollToTopButton from '@/components/scroll-to-top-button'
 
+const useViewportHeight = () => {
+  const mainRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const setVh = () => {
+      const vh = window.innerHeight * 0.01
+      document.documentElement.style.setProperty('--vh', `${vh}px`)
+      
+      const viewport = window.visualViewport
+      const height = viewport ? viewport.height : window.innerHeight
+      document.documentElement.style.setProperty('--app-height', `${height}px`)
+      
+      if (mainRef.current) {
+        mainRef.current.style.height = `calc(var(--vh, 1vh) * 100)`
+      }
+    }
+
+    setVh()
+    window.addEventListener('resize', setVh)
+    window.addEventListener('orientationchange', () => setTimeout(setVh, 100))
+    
+    return () => {
+      window.removeEventListener('resize', setVh)
+      window.removeEventListener('orientationchange', () => setTimeout(setVh, 100))
+    }
+  }, [])
+
+  return mainRef
+}
+
 interface ChatInterfaceProps {
   initialMessages?: any[]
   chatId?: string
@@ -33,9 +63,12 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const [hasUserInitiatedConversation, setHasUserInitiatedConversation] = useState(false)
   const [isInitialRender, setIsInitialRender] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const [optimisticChatId, setOptimisticChatId] = useState<string | undefined>(chatId)
   const { updateToolResult } = useVTOP()
+  
+  const mainRef = useViewportHeight()
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -101,13 +134,10 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     }
   }, [messages, isLoading, isInitialRender])
 
-  useEffect(() => {
-    if (!isInitialRender && messages.length > 0 && isLoading) {
+  useEffect(() => {    if (!isInitialRender && messages.length > 0 && isLoading) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
   }, [messages, isLoading, isInitialRender])
-
-  const contentRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (isLoading && !isInitialRender) {
@@ -464,10 +494,12 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               }
             : undefined
         }
-      />{' '}
-      <div className="flex flex-col h-[100dvh] bg-background text-foreground mobile-viewport-fix overflow-hidden">
-        <header className="flex-shrink-0 fixed top-0 left-0 right-0 z-40 bg-background/95 border-b border-border chat-page-header">
-          <div className="flex h-14 items-center px-4 gap-2">
+      />{' '}      <div 
+        ref={mainRef}
+        className="flex flex-col h-[calc(var(--vh,1vh)*100)] bg-background text-foreground overflow-hidden"
+        style={{ height: 'var(--app-height, 100vh)' }}
+      >        <header className="flex-shrink-0 fixed top-0 left-0 right-0 z-40 bg-background/95 border-b border-border chat-page-header">
+          <div className="flex h-14 items-center px-4 gap-2" style={{ height: 'var(--header-height, 60px)' }}>
             <HamburgerButton onClick={() => setSidebarOpen(!sidebarOpen)} className="md:block" />
             <Button
               variant="outline"
@@ -485,10 +517,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               Canvas
             </Button>
           </div>
-        </header>
-        <div className="flex-1 relative overflow-hidden pt-1">
-          {' '}
-          <div className="absolute inset-0 overflow-y-auto pb-[200px] md:pb-[180px] overflow-fix chat-content">
+        </header>        <div className="flex-1 relative overflow-hidden">
+          <div className="absolute inset-0 overflow-y-auto chat-content">
             <div ref={contentRef} className="max-w-3xl mx-auto px-4 space-y-6 pt-5">
               {errorMessage && (
                 <motion.div
@@ -536,8 +566,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
             </div>
           </div>
         </div>
-        <ScrollToTopButton />{' '}
-        <div className="flex-shrink-0 fixed bottom-0 left-0 right-0 z-30 mobile-pb-fix input-area pb-6">
+        <ScrollToTopButton />{' '}        <div className="flex-shrink-0 fixed bottom-0 left-0 right-0 z-30 input-area">
           <div
             className="absolute inset-0 pointer-events-none"
             style={{

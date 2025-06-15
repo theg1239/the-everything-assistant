@@ -535,7 +535,6 @@ Format as JSON.`;
     const kb = new KnowledgeBase();
     await kb.initialize();    for (const post of posts) {
       try {
-        // Debug: Log post structure for first post
         if (posts.indexOf(post) === 0) {
           logger.info(`Debug: First post structure - ID: ${post.id}, Comments: ${post.comments?.length || 0}`);
           if (post.comments && post.comments.length > 0) {

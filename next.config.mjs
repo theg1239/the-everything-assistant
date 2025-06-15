@@ -10,6 +10,9 @@ const nextConfig = {
     unoptimized: true,
   },
   serverExternalPackages: ['playwright-core', '@sparticuz/chromium'],
+    outputFileTracingExcludes: {
+      '*': ['./ai-chatbot-main/**/*'],
+    },
 }
 
 export default nextConfig

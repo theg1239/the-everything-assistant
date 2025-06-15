@@ -15,9 +15,8 @@ class RedditScraper {
       timeout: 30000,
       headers: { 'User-Agent': this.userAgent }
     });
-
-    this.embeddingModel = google.embedding('gemini-embedding-exp-03-07');
-    this.embeddingDim = 3072;
+    this.embeddingModel = google.embedding('text-embedding-004');
+    this.embeddingDim = 768;
 
     if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
       throw new Error(
@@ -34,13 +33,12 @@ class RedditScraper {
       sessionTracker: null
     };
   }
-
   async scrapeSubreddit(subreddit, options = {}) {
     try {
       const {
         limit = 25,
-        sort = 'hot',
-        timeframe = 'day',
+        sort = 'best',
+        timeframe = 'DAY',
         includeComments = true,
         maxCommentsPerPost = 50
       } = options;
@@ -169,31 +167,51 @@ class RedditScraper {
       const v = c === 'x' ? r : (r & 0x3) | 0x8;
       return v.toString(16);
     });
-  }
-
-  async fetchPosts(subreddit, options = {}) {
+  }  async fetchPosts(subreddit, options = {}) {
     try {
-      const { limit = 25, sort = 'best', timeframe = 'DAY' } = options;
+      const { 
+        limit = 25, 
+        sort = 'best',
+        timeframe = 'DAY',
+        maxPages = parseInt(process.env.MAX_PAGES_PER_SUBREDDIT) || 10 
+      } = options;
+      
       let allPosts = [];
       let after = null;
       let feedLength = 4;
+      let distance = 0;
+      let adPostsServed = 1;
+      let adDistance = 1;
       const seenPostIds = new Set();
       let consecutiveEmpty = 0;
+      let pageCount = 0;
       const maxEmpty = 3;
 
-      while (allPosts.length < limit && consecutiveEmpty < maxEmpty) {
+      logger.info(`Starting to fetch posts from r/${subreddit} (limit: ${limit}, maxPages: ${maxPages}, sort: ${sort})`);
+
+      while (allPosts.length < limit && consecutiveEmpty < maxEmpty && pageCount < maxPages) {
+        pageCount++;
         const url = `${this.baseUrl}/svc/shreddit/community-more-posts/${sort}/`;
         const params = new URLSearchParams({
           t: timeframe,
           name: subreddit,
-          adDistance: '2',
-          ad_posts_served: '1',
           navigationSessionId: this.sessionData.navigationSessionId,
           feedLength: feedLength.toString()
         });
-        if (after) params.append('after', after);
 
-        logger.info(`Fetching posts from: ${url}?${params}`);
+        if (after) {
+          params.append('after', after);
+          params.append('distance', distance.toString());
+          params.append('ad_posts_served', adPostsServed.toString());
+          params.append('adDistance', adDistance.toString());
+        } else {
+          params.append('adDistance', '1');
+          params.append('ad_posts_served', '1');
+        }
+
+        logger.info(`Page ${pageCount}: Fetching posts from: ${url}?${params.toString()}`);
+        logger.debug(`Pagination state: after="${after || 'none'}", feedLength=${feedLength}, distance=${distance}`);
+        
         const rsp = await this.session.get(`${url}?${params}`, {
           headers: {
             Accept: 'text/vnd.reddit.partial+html, text/html;q=0.9',
@@ -211,54 +229,119 @@ class RedditScraper {
             Referer: `${this.baseUrl}/r/${subreddit}/`,
             'Referrer-Policy': 'strict-origin-when-cross-origin'
           }
-        });
-
-        const posts = this.parsePosts(rsp.data);
+        });        const posts = this.parsePosts(rsp.data);
+        logger.info(`Page ${pageCount}: Parsed ${posts.length} posts from response`);
+        
+        if (posts.length > 0) {
+          const firstFewIds = posts.slice(0, 3).map(p => p.id).join(', ');
+          logger.debug(`Page ${pageCount}: First few post IDs: ${firstFewIds}`);
+        }
+        
         if (posts.length === 0) {
           consecutiveEmpty++;
-          if (consecutiveEmpty >= maxEmpty) break;
+          logger.warn(`Page ${pageCount}: No posts found (consecutiveEmpty: ${consecutiveEmpty}/${maxEmpty})`);
+          if (consecutiveEmpty >= maxEmpty) {
+            logger.info('Breaking due to consecutive empty responses');
+            break;
+          }
         } else {
           consecutiveEmpty = 0;
         }
 
         const newOnes = posts.filter((p) => {
-          if (seenPostIds.has(p.id)) return false;
+          if (seenPostIds.has(p.id)) {
+            logger.debug(`Skipping duplicate post: ${p.id}`);
+            return false;
+          }
           seenPostIds.add(p.id);
           return true;
         });
-        if (newOnes.length === 0 && posts.length > 0) break;
+        
+        logger.info(`Page ${pageCount}: Found ${newOnes.length} new posts (${posts.length - newOnes.length} duplicates)`);
+        
+        if (newOnes.length === 0 && posts.length > 0) {
+          logger.warn('All posts on this page are duplicates - this might indicate pagination issues');
+          if (pageCount === 2 && sort === 'best') {
+            logger.info('Switching to "hot" sort to try different pagination');
+          }
+          break;
+        }
 
         allPosts = allPosts.concat(newOnes);
+        
         feedLength += posts.length;
+        distance = feedLength - 4;
 
         const $ = cheerio.load(rsp.data);
-        const last = $('shreddit-post').last();
-        if (last.length) {
-          after = this.extractPaginationToken(rsp.data, last);
+        const lastPost = $('shreddit-post').last();
+        const newAfter = lastPost.length ? this.extractPaginationToken(rsp.data, lastPost) : null;
+        
+        logger.debug(`Page ${pageCount}: Extracted pagination token: ${newAfter ? newAfter.substring(0, 30) + '...' : 'none'}`);
+        
+        if (!newAfter) {
+          logger.info('No more pagination token found, ending pagination');
+          break;
         }
-        if (!after) break;
+        
+        if (newAfter === after) {
+          logger.warn('Pagination token unchanged, ending pagination to prevent infinite loop');
+          break;
+        }
+        
+        after = newAfter;
+        
+        if (pageCount > 1) {
+          adDistance = Math.min(adDistance + 1, 2);
+        }
+        
         await new Promise((r) => setTimeout(r, 500));
       }
 
       logger.info(
-        `Fetched ${allPosts.length} unique posts out of ${seenPostIds.size} total seen`
+        `Pagination complete for r/${subreddit}: ${allPosts.length} unique posts collected from ${pageCount} pages (${seenPostIds.size} total seen)`
       );
+      
+      if (pageCount >= maxPages) {
+        logger.info(`Reached maximum page limit (${maxPages})`);
+      }
+      
       return allPosts.slice(0, limit);
     } catch (error) {
       logger.error('Error fetching posts:', error.message);
       throw error;
     }
-  }
-
-  extractPaginationToken(html, lastPost) {
+  }  extractPaginationToken(html, lastPost) {
     try {
-      const postId = lastPost.attr('id');
-      if (postId) {
-        return (
-          Buffer.from(`t3_${postId}`)
-            .toString('base64') + '%3D%3D'
-        );
+      let postId = lastPost.attr('id');
+      
+      if (!postId) {
+        postId = lastPost.attr('thingid') || lastPost.attr('thing-id') || lastPost.attr('post-id');
       }
+      
+      if (!postId) {
+        const htmlStr = lastPost.toString();
+        const idMatch = htmlStr.match(/id="([^"]+)"/);
+        if (idMatch) postId = idMatch[1];
+      }
+      
+      if (!postId) {
+        const $ = require('cheerio').load(html);
+        const allPosts = $('shreddit-post');
+        if (allPosts.length > 0) {
+          const lastPostHtml = allPosts.last().toString();
+          const t3Match = lastPostHtml.match(/t3_([a-zA-Z0-9]+)/);
+          if (t3Match) postId = t3Match[1];
+        }
+      }
+      
+      if (postId) {
+        const cleanId = postId.replace(/^t3_/, '');
+        const token = Buffer.from(`t3_${cleanId}`).toString('base64');
+        logger.debug(`Extracted pagination token from post ID: ${cleanId} -> ${token}`);
+        return token;
+      }
+      
+      logger.warn('Could not extract pagination token - no post ID found');
       return null;
     } catch (error) {
       logger.error('Error extracting pagination token:', error.message);
@@ -505,23 +588,29 @@ Format as JSON.`;
   delay(ms) {
     return new Promise((r) => setTimeout(r, ms));
   }
-
   async scrapeAllTargetSubreddits() {
     const targetSubreddits = (process.env.TARGET_SUBREDDITS || 'Vit')
       .split(',')
       .map((s) => s.trim());
     const maxPostsPerSubreddit =
-      parseInt(process.env.MAX_POSTS_PER_SUBREDDIT) || 25;
+      parseInt(process.env.MAX_POSTS_PER_SUBREDDIT) || 50;
+    const maxPagesPerSubreddit = 
+      parseInt(process.env.MAX_PAGES_PER_SUBREDDIT) || 10;
 
-    logger.info('Starting scraping of all target subreddits');
+    logger.info(`Starting scraping of all target subreddits (${targetSubreddits.length} subreddits, max ${maxPostsPerSubreddit} posts each, max ${maxPagesPerSubreddit} pages each)`);
+    
     for (const subreddit of targetSubreddits) {
       if (!subreddit) continue;
       try {
+        logger.info(`Starting scrape of r/${subreddit}`);
         const posts = await this.scrapeSubreddit(subreddit, {
           limit: maxPostsPerSubreddit,
-          includeComments: true
+          includeComments: true,
+          maxPages: maxPagesPerSubreddit
         });
+        logger.info(`Scraped ${posts.length} posts from r/${subreddit}, now processing...`);
         await this.processPosts(posts, subreddit);
+        logger.info(`Completed processing r/${subreddit}`);
         await this.delay(2000);
       } catch (error) {
         logger.error(`Failed to scrape subreddit ${subreddit}:`, error);

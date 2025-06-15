@@ -2,7 +2,7 @@
 
 import React, { useState, memo, useRef, useEffect } from 'react'
 import ReactDOM from 'react-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import {
   FileSearch,
   ChevronDown,
@@ -22,15 +22,12 @@ import {
   UtensilsCrossed,
   Clock,
   User,
-  Hash,
   BookOpen,
   BarChart3,
   CheckCircle,
   AlertTriangle,
-  FileText,
-  Sparkles,
   Info,
-} from 'lucide-react' // Ensure ExternalLink is imported if it's a lucide icon, or correct the usage
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -52,6 +49,7 @@ interface ArtifactDisplayProps {
     | 'vtop-data'
     | 'general'
     | 'interactive-course-page'
+    | 'reddit-knowledge'
     | 'error'
   className?: string
   onLoginClick?: () => void
@@ -1190,6 +1188,178 @@ const ErrorCard = ({ errorData }: { errorData: any }) => {
   )
 }
 
+const RedditKnowledgeCard = ({ data }: { data: any }) => {
+  const [showAllSources, setShowAllSources] = useState(false)
+  const isMobile = useMediaQuery('(max-width: 640px)')
+  
+  const { response, sources = [], confidence = 0, totalResults = 0, note } = data
+
+  const getConfidenceColor = (conf: number) => {
+    if (conf >= 80) return 'text-emerald-600 dark:text-emerald-400'
+    if (conf >= 60) return 'text-blue-600 dark:text-blue-400'
+    if (conf >= 40) return 'text-amber-600 dark:text-amber-400'
+    return 'text-red-600 dark:text-red-400'
+  }
+
+  const getConfidenceBg = (conf: number) => {
+    if (conf >= 80) return 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800'
+    if (conf >= 60) return 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800'
+    if (conf >= 40) return 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800'
+    return 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'
+  }
+
+  const formatTimeAgo = (dateString: string) => {
+    try {
+      const date = new Date(dateString)
+      const now = new Date()
+      const diffMs = now.getTime() - date.getTime()
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+      
+      if (diffDays === 0) return 'Today'
+      if (diffDays === 1) return 'Yesterday'
+      if (diffDays < 30) return `${diffDays} days ago`
+      if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`
+      return `${Math.floor(diffDays / 365)} years ago`
+    } catch {
+      return 'Unknown'
+    }
+  }
+
+  const displaySources = showAllSources ? sources : sources.slice(0, 3)
+
+  return (
+    <div className="w-full space-y-4">
+      <div className="bg-card border border-border rounded-lg overflow-hidden">
+        <div className="p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className={cn(
+                'px-2 py-1 rounded-md text-xs font-medium border',
+                getConfidenceBg(confidence)
+              )}>
+                <span className={getConfidenceColor(confidence)}>
+                  {confidence}% confidence
+                </span>
+              </div>
+              <Badge variant="secondary" className="text-xs">
+                {totalResults} sources
+              </Badge>
+            </div>
+          </div>
+
+          <div className="prose prose-sm max-w-none dark:prose-invert">
+            <div className="text-foreground leading-relaxed whitespace-pre-wrap">
+              {response}
+            </div>
+          </div>
+
+          {note && (
+            <div className="mt-4 p-3 bg-muted/50 border border-border rounded-md">
+              <p className="text-xs text-muted-foreground">{note}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {sources.length > 0 && (
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="p-4 border-b border-border">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-medium text-foreground">
+                Sources ({sources.length})
+              </h4>
+              {sources.length > 3 && !showAllSources && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAllSources(true)}
+                  className="text-xs h-7"
+                >
+                  Show all
+                </Button>
+              )}
+            </div>
+          </div>
+          
+          <div className="divide-y divide-border">
+            {displaySources.map((source: any, index: number) => (
+              <div key={index} className="p-4 hover:bg-muted/50 transition-colors">
+                <div className="flex items-start gap-3">
+                  <div className="flex flex-col items-center gap-1 min-w-0">
+                    <Badge variant="outline" className="text-xs px-1.5 py-0.5">
+                      {source.type}
+                    </Badge>
+                    <div className="text-xs text-muted-foreground">
+                      {Math.round(source.similarity * 100)}% match
+                    </div>
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-medium text-primary">r/{source.subreddit}</span>
+                      {source.upvotes > 0 && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <ChevronUp className="h-3 w-3" />
+                          {source.upvotes}
+                        </div>
+                      )}
+                      <span className="text-xs text-muted-foreground">
+                        {formatTimeAgo(source.created)}
+                      </span>
+                    </div>
+
+                    <h5 className="text-sm font-medium text-foreground mb-1 overflow-hidden" style={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      lineHeight: '1.4em',
+                      maxHeight: '2.8em'
+                    }}>
+                      {source.title}
+                    </h5>
+
+                    {source.author && (
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <User className="h-3 w-3" />
+                        u/{source.author}
+                      </div>
+                    )}
+                  </div>
+
+                  {source.url && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 flex-shrink-0"
+                      onClick={() => window.open(source.url, '_blank')}
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {showAllSources && sources.length > 3 && (
+            <div className="p-3 border-t border-border">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAllSources(false)}
+                className="text-xs h-7 w-full"
+              >
+                <ChevronUp className="h-3 w-3 mr-1" />
+                Show fewer
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const ModalPortal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isMounted, setIsMounted] = useState(false)
   const elRef = useRef<HTMLDivElement | null>(null)
@@ -1282,7 +1452,7 @@ const PureArtifactDisplay = ({
         <div
           className={cn(
             'grid gap-3',
-            type === 'mess-menu' || type === 'vtop-data' || type === 'error'
+            type === 'mess-menu' || type === 'vtop-data' || type === 'reddit-knowledge' || type === 'error'
               ? 'grid-cols-1'
               : isMobile
                 ? 'grid-cols-1'
@@ -1305,6 +1475,8 @@ const PureArtifactDisplay = ({
                 return <MessMenuCard key={index} menuData={item} />
               case 'vtop-data':
                 return <VTOPDataCard key={index} vtopData={item} onLoginClick={onLoginClick} />
+              case 'reddit-knowledge':
+                return <RedditKnowledgeCard key={index} data={item} />
               case 'error':
                 return <ErrorCard key={index} errorData={item} />
               default:

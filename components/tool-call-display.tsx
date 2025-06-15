@@ -353,6 +353,39 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     }
   }
 
+  if (toolName === 'searchRedditKnowledge') {
+    if (result.success && result.response) {
+      return {
+        type: 'reddit-knowledge' as const,
+        title: `Reddit Knowledge - ${result.totalResults || 0} sources`,
+        icon: <FileSearch className="h-5 w-5 text-orange-400" />,
+        data: {
+          response: result.response,
+          sources: result.sources || [],
+          confidence: result.confidence || 0,
+          totalResults: result.totalResults || 0,
+          message: result.message,
+          note: result.note,
+          success: true,
+        },
+        source: 'Reddit Knowledge Base',
+      }
+    } else {
+      return {
+        type: 'error' as const,
+        title: 'Reddit Search Error',
+        icon: <AlertCircle className="h-5 w-5 text-red-400" />,
+        data: {
+          error: result.error || 'Failed to search Reddit knowledge base',
+          message: result.message,
+          suggestion: result.suggestion,
+          success: false,
+        },
+        source: 'Reddit Knowledge Base',
+      }
+    }
+  }
+
   return {
     type: 'general' as const,
     title: 'Search Results',

@@ -94,47 +94,71 @@ class RAGService {
     
     return context.trim();
   }
-
   formatResultForContext(result) {
-    const source = `[${result.type.toUpperCase()}] r/${result.subreddit}`;
-    const score = result.upvotes ? `(Score: ${result.score}, Upvotes: ${result.upvotes})` : '';
-    const author = result.author ? `by u/${result.author}` : '';
+    const sourceType = result.type.toUpperCase();
+    const subreddit = `r/${result.subreddit}`;
+    const author = result.author ? `u/${result.author}` : 'Unknown';
+    const upvotes = result.upvotes || 0;
+    const score = result.score || 0;
+    
+    const engagement = upvotes > 0 ? `↑${upvotes} upvotes` : `${score} points`;
     
     let content = '';
     if (result.type === 'post') {
-      content = `Title: ${result.title}\nContent: ${result.content || 'No text content'}`;
+      content = `POST TITLE: ${result.title}\nPOST CONTENT: ${result.content || '[No text content - possibly image/link post]'}`;
+    } else if (result.type === 'comment') {
+      content = `COMMENT: ${result.content}`;
     } else {
-      content = result.content;
+      content = `CONTENT: ${result.content}`;
     }
     
-    return `${source} ${author} ${score}
+    return `[${sourceType}] ${subreddit} | ${author} | ${engagement}
 ${content}
 ---`;
-  }  async generateAIResponse(query, context, conversationHistory, isFallback = false) {
+  }async generateAIResponse(query, context, conversationHistory, isFallback = false) {
     const systemPrompt = isFallback 
-      ? `You are an intelligent assistant that helps students by providing information from Reddit discussions. You have access to a knowledge base of Reddit posts and comments from academic and student-focused subreddits.
+      ? `You are an intelligent assistant specializing in student life and academic information. You help students by analyzing Reddit discussions from educational communities.
 
-The search results below are from a broader keyword search since no direct matches were found for the user's query. Please be honest about this limitation while still being helpful.
+IMPORTANT: The search results below are from a broader keyword search since no direct matches were found for the user's query. Be transparent about this limitation.
 
-Your task is to:
-1. Answer the user's question using the provided context from Reddit, noting that these are broader results
-2. Be helpful and honest about the limited relevance of the results
-3. Consider upvotes/downvotes as indicators of community validation
-4. Mention different perspectives if they exist in the data
-5. Suggest alternative search terms or topics that might yield better results
-6. Focus on being helpful for students and academic purposes
+RESPONSE GUIDELINES:
+1. Structure: Use clear bullet points and organize information logically
+2. Transparency: Acknowledge when information is limited or from broader search
+3. Context: Always mention the source username and upvote count when citing information
+4. Validation: Prioritize information from highly-upvoted posts/comments
+5. Helpfulness: Suggest more specific search terms if current results are limited
+6. Student Focus: Frame answers in context of student needs and concerns
+7. Do not use asterisks for emphasis, use bullet points instead 
+
+FORMAT YOUR RESPONSE AS:
+- Start with a brief summary of what you found
+- Use bullet points with clear categories (e.g., Academics, Campus Life, Facilities)
+- Include usernames and scores: (u/username, ↑XX upvotes)
+- End with suggestions for better search terms if results are limited
 
 Context from Reddit (broader keyword search):
 ${context}`
-      : `You are an intelligent assistant that helps students by providing information from Reddit discussions. You have access to a knowledge base of Reddit posts and comments from academic and student-focused subreddits.
+      : `You are an intelligent assistant specializing in student life and academic information. You help students by analyzing Reddit discussions from educational communities.
 
-Your task is to:
-1. Answer the user's question using the provided context from Reddit
-2. Be helpful, accurate, and cite sources when possible
-3. Consider upvotes/downvotes as indicators of community validation
-4. Mention different perspectives if they exist in the data
-5. Be honest if the information is limited or contradictory
-6. Focus on being helpful for students and academic purposes
+RESPONSE GUIDELINES:
+1. Structure: Use clear bullet points and organize information by topic
+2. Attribution: Always cite usernames and upvote counts for credibility
+3. Balance: Present multiple perspectives when available
+4. Validation: Emphasize information from highly-upvoted comments (community validated)
+5. Completeness: Address all aspects of the user's question when possible
+6. Student Context: Frame everything in terms of practical student needs
+
+FORMAT YOUR RESPONSE AS:
+- Start with a direct answer to the user's question
+- Use clear categories with bullet points (e.g., Academics, Campus Life, Facilities, Student Experience)
+- Include source attribution: (u/username, ↑XX upvotes, XX points)
+- Highlight conflicting opinions or varying experiences
+- Conclude with practical advice or key takeaways
+
+CITATION FORMAT: When mentioning information, use this format:
+- For posts: "According to u/username (↑XX upvotes)..."
+- For comments: "One student mentioned (u/username, ↑XX upvotes)..."
+- For high-engagement content: "A highly-upvoted comment by u/username (↑XX upvotes)..."
 
 Context from Reddit:
 ${context}`;
@@ -146,12 +170,10 @@ ${context}`;
       }
     ];
 
-    // Add conversation history
     conversationHistory.forEach(msg => {
       messages.push(msg);
     });
 
-    // Add current query
     messages.push({
       role: 'user',
       content: query

@@ -1,6 +1,28 @@
-import { createCanvasDocument, updateCanvasDocument } from '@/lib/db'
+import { createCanvasDocument, updateCanvasDocument, getCanvasDocuments } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+
+export async function GET(request: Request) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return new Response('Unauthorized', { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const chatId = searchParams.get('chatId')
+
+    if (!chatId) {
+      return new Response('Chat ID is required', { status: 400 })
+    }
+
+    const documents = await getCanvasDocuments(chatId)
+    return Response.json(documents)
+  } catch (error) {
+    console.error('Error fetching canvas documents:', error)
+    return new Response('Internal Server Error', { status: 500 })
+  }
+}
 
 export async function POST(request: Request) {
   try {

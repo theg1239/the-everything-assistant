@@ -11,7 +11,7 @@ interface HamburgerButtonProps {
 export function HamburgerButton({ onClick, className = '' }: HamburgerButtonProps) {
   return (
     <Button
-      variant="outline"
+      variant="ghost"
       size="icon"
       onClick={onClick}
       className={`text-foreground hover:bg-muted ${className}`}

@@ -502,7 +502,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
           <div className="flex h-14 items-center px-4 gap-2" style={{ height: 'var(--header-height, 60px)' }}>
             <HamburgerButton onClick={() => setSidebarOpen(!sidebarOpen)} className="md:block" />
             <Button
-              variant="outline"
+              variant="ghost"
               onClick={() => {
                 router.push('/')
                 router.refresh()

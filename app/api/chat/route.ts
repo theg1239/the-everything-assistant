@@ -99,6 +99,48 @@ Format these as a clear, readable list showing the date and topic for each mater
     : ''
 }
 
+${
+  rawData.step === 'semester' && rawData.options && Array.isArray(rawData.options)
+    ? `
+SEMESTER SELECTION DETECTED: The data contains a semester list with ${rawData.options.length} options.
+Extract and format each semester option from the options array. Each option contains:
+- number: the selection number
+- description: semester description (e.g., "Fall Semester 2023-24 - VLR")
+
+Format these as a numbered list that the user can choose from. Include clear instruction for the user to select by number.
+Example format:
+1 │ VL20232401 │ Fall Semester 2023-24 - VLR
+2 │ VL20232405 │ Winter Semester 2023-24 - VLR
+
+Always include the phrase "Which semester would you like to view? You can select by entering the corresponding number."
+`
+    : ''
+}
+
+${
+  rawData.step === 'course' && rawData.options && Array.isArray(rawData.options)
+    ? `
+COURSE SELECTION DETECTED: The data contains a course list with ${rawData.options.length} options.
+Extract and format each course option from the options array. Each option contains:
+- number: the selection number  
+- description: course description (e.g., "BCSE101E - Computer Programming: Python - ETH")
+
+Format these as a numbered list that the user can choose from.
+`
+    : ''
+}
+
+${
+  rawData.step === 'faculty' && rawData.options && Array.isArray(rawData.options)
+    ? `
+FACULTY SELECTION DETECTED: The data contains a faculty list with ${rawData.options.length} options.
+Extract and format each faculty option from the options array for user selection.
+`
+    : ''
+}
+
+
+
 Please parse this VTOP data and return a structured response with:
 - success: true if parsing was successful
 - formatted_content: A natural language description with proper formatting that directly addresses the user's original request
@@ -140,6 +182,18 @@ SPECIAL HANDLING FOR COURSE PAGE/MATERIALS:
 - If the data contains materials options (step=materials, options array), format the materials list immediately
 - When showing materials list, display the actual topics and dates, not generic text
 
+SEMESTER SELECTION FORMATTING:
+- If step='semester' and options array exists, ALWAYS format the semester options as a clear numbered list
+- Use format: Semester Name | Year 
+- Include clear instruction: "Which semester would you like to view?"
+- Example: "Fall Semester | 2023-24"
+- Format multiple semesters as a list. Ensure they aren't in single lines or whatever, they should be in a pretty list format.
+
+COURSE/FACULTY SELECTION FORMATTING:
+- If step='course' or step='faculty' and options array exists, format as numbered list
+- Show all available options clearly for user selection
+- Include selection instruction
+
 MATERIALS LIST FORMATTING:
 - If step='materials' and options array exists, extract and format each material entry
 - Show format: "Date: Topic/Description" 
@@ -151,6 +205,7 @@ Example formats:
 - Attendance: "Your attendance looks good overall. In Mathematics, you have 85% attendance which is above the required 75%..."
 - Timetable for "Thursday classes": "Looking at your Thursday schedule specifically, you have..."
 - Course Materials: "Here are the available materials:<ul><li>Topic 1 - <a href='download-link'>Download</a></li></ul>"
+- Semester Selection: "Please select the semester you want to view:<br>Fall Semester | 2023-24<br>Winter Semester | 2023-24<br>Which semester would you like to view?"
 
 Make the formatted_content engaging and conversational while being informative and contextually relevant to the user's request.
 `,

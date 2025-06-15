@@ -972,6 +972,11 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
     step = 'materials'
   }
 
+  if (step === 'semester' && flags && flags.semester) {
+    console.log(`Semester step with resolved semester ${flags.semester}, proceeding to show courses`)
+    step = 'course'
+  }
+
   if (step === 'course' && (!flags || !flags.semester)) {
     console.log('Course step requested but no semester selected. Getting semester options first.')
     return await executeInteractiveCoursePageWorkflow(
@@ -1241,6 +1246,8 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
   if (flags && flags.semesterQuery && !flags.semester) {
     console.log(`Resolving semesterQuery: ${flags.semesterQuery}`)
   }
+
+  console.log(`CLI args will be: ${cliArgs.join(' ')}`)
 
   if (flags && typeof flags === 'object') {
     for (const [key, value] of Object.entries(flags)) {
@@ -1563,6 +1570,9 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
     child.on('close', async code => {
       if (process.env.NODE_ENV !== 'production') {
         console.log(`Interactive CLI process closed with code: ${code}`)
+        console.log(`stdout: ${stdout.substring(0, 200)}...`)
+        console.log(`hasReceivedPrompt: ${hasReceivedPrompt}`)
+        console.log(`promptData: ${promptData ? JSON.stringify(promptData) : 'null'}`)
       }
 
       if (isResolved) {
@@ -1603,6 +1613,10 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
                                        stdout.includes('Downloading') ||
                                        stdout.includes('files downloaded') ||
                                        stdout.includes('download complete')
+
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`shouldParseDownloadInfo: ${shouldParseDownloadInfo} (step: ${step})`)
+        }
 
         const downloadInfo = shouldParseDownloadInfo ? parseDownloadInfo(stdout) : {
           filesDownloaded: 0,
@@ -1654,7 +1668,7 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           interactiveState: 'completed',
           raw: false,
         })
-        if (process.env.NODE_ENV !== 'production') {
+        if (process.env.NODE_ENV !== 'production' && shouldParseDownloadInfo) {
           console.log('Final response structure:')
           console.log('- downloadInfo.filesDownloaded:', downloadInfo.filesDownloaded)
           console.log('- downloadInfo.totalFiles:', downloadInfo.totalFiles)
@@ -2262,7 +2276,9 @@ function parseDownloadInfo(output) {
     downloadInfo.totalFiles = downloadInfo.files.length
   }
 
-  if (process.env.NODE_ENV !== 'production') {
+  // Only log in development and when there's actual download activity
+  if (process.env.NODE_ENV !== 'production' && 
+      (downloadInfo.filesDownloaded > 0 || downloadInfo.totalFiles > 0 || downloadInfo.files.length > 0)) {
     console.log('Parsed download info:', {
       filesDownloaded: downloadInfo.filesDownloaded,
       totalFiles: downloadInfo.totalFiles,
@@ -2397,6 +2413,7 @@ app.post('/vtop-interactive', async (req, res) => {
 
   if (process.env.NODE_ENV !== 'production') {
     console.log(`Executing interactive VTOP workflow: ${command}, step: ${step}`)
+    console.log('Request flags:', flags)
   }
 
   try {

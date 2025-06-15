@@ -233,14 +233,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          messages: [
-            ...messages,
-            {
-              id: Date.now().toString(),
-              role: 'user',
-              content: `show me my vtop ${command}`,
-            },
-          ],
+          messages: messages,
           directToolCall: {
             toolName: 'queryVTOP',
             args: {

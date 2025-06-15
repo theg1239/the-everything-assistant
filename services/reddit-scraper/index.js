@@ -34,7 +34,12 @@ const redditScraper = new RedditScraper();
 const knowledgeBase = new KnowledgeBase();
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV,
+    initialScrapeEnabled: process.env.ENABLE_INITIAL_SCRAPE === 'true'
+  });
 });
 
 app.post('/search', async (req, res) => {
@@ -67,16 +72,28 @@ app.post('/scrape', async (req, res) => {
   try {
     const { subreddit } = req.body;
     
+    logger.info(`Manual scrape requested for: ${subreddit || 'all subreddits'}`);
+    
     if (subreddit) {
       await redditScraper.scrapeSubreddit(subreddit);
+      logger.info(`Scraping completed for subreddit: ${subreddit}`);
     } else {
       await redditScraper.scrapeAllTargetSubreddits();
+      logger.info('Scraping completed for all target subreddits');
     }
     
-    res.json({ message: 'Scraping initiated' });
+    res.json({ 
+      message: 'Scraping completed successfully',
+      subreddit: subreddit || 'all',
+      timestamp: new Date().toISOString()
+    });
   } catch (error) {
     logger.error('Manual scrape error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ 
+      error: 'Scraping failed',
+      message: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 });
 
@@ -112,13 +129,21 @@ app.listen(PORT, () => {
   knowledgeBase.initialize().then(() => {
     logger.info('Knowledge base initialized');
     
-    if (process.env.NODE_ENV === 'development') {
-      setTimeout(() => {
-        redditScraper.scrapeAllTargetSubreddits().catch(error => {
+    if (process.env.NODE_ENV === 'development' && process.env.ENABLE_INITIAL_SCRAPE === 'true') {
+      logger.info('Starting initial scrape in development mode...');
+      setTimeout(async () => {
+        try {
+          await redditScraper.scrapeAllTargetSubreddits();
+          logger.info('Initial scrape completed successfully');
+        } catch (error) {
           logger.error('Initial scrape failed:', error);
-        });
+        }
       }, 5000);
+    } else {
+      logger.info('Initial scrape skipped (set ENABLE_INITIAL_SCRAPE=true to enable)');
     }
+  }).catch(error => {
+    logger.error('Knowledge base initialization failed:', error);
   });
 });
 

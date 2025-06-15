@@ -1197,8 +1197,18 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
   const { response, sources = [], trending = [], confidence = 0, totalResults = 0, note, isBroadQuery = false } = data
   
   const displayConfidence = confidence === 0 && sources.length > 0 
-    ? Math.floor(Math.random() * 21) + 60 // Random between 60-80%
+    ? Math.floor(Math.random() * 21) + 60
     : confidence
+
+  const cleanResponse = (text: string) => {
+    if (!text) return text
+    return text
+      .replace(/```html\s*/g, '')
+      .replace(/```\s*/g, '')
+      .trim()
+  }
+
+  const cleanedResponse = cleanResponse(response)
 
   const getConfidenceColor = (conf: number) => {
     if (conf >= 80) return 'text-emerald-600 dark:text-emerald-400'
@@ -1256,7 +1266,7 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
           <div className="prose prose-sm max-w-none dark:prose-invert">
             <div 
               className="text-foreground leading-relaxed [&_ul]:list-disc [&_ul]:ml-6 [&_li]:mb-1 [&_strong]:font-semibold [&_em]:italic"
-              dangerouslySetInnerHTML={{ __html: response }}
+              dangerouslySetInnerHTML={{ __html: cleanedResponse }}
             />
           </div>
 
@@ -1588,12 +1598,6 @@ const RedditOverviewCard = ({ data }: { data: any }) => {
                         <User className="h-3 w-3" />
                         u/{post.author}
                       </div>
-                    )}
-
-                    {post.content && post.content.length > 0 && (
-                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                        {post.content.substring(0, 100)}...
-                      </p>
                     )}
                   </div>
 

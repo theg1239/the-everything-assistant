@@ -237,6 +237,7 @@ RESPONSE GUIDELINES:
 5. Helpfulness: Suggest more specific search terms if current results are limited
 6. Student Focus: Frame answers in context of student needs and concerns
 7. Use HTML formatting: <strong> for emphasis, <ul><li> for bullet points
+8. IMPORTANT: Do NOT wrap your response in code blocks
 
 FORMAT YOUR RESPONSE AS HTML:
 - Use <strong>Section Headers</strong> for main topics
@@ -245,6 +246,7 @@ FORMAT YOUR RESPONSE AS HTML:
 - Include upvotes in this format: <span style="color: #ff4500; font-size: 0.9em;">↑XX upvotes</span>
 - Use <em> for emphasis on important points
 - End with suggestions for better search terms if results are limited
+- DO NOT wrap your response in code blocks of any kind
 
 Context from Reddit (broader keyword search):
 ${context}`
@@ -258,6 +260,7 @@ RESPONSE GUIDELINES:
 5. Completeness: Address all aspects of the user's question when possible
 6. Student Context: Frame everything in terms of practical student needs
 7. Use proper HTML formatting throughout
+8. IMPORTANT: Do NOT wrap your response in code blocks (no HTML code blocks)
 
 FORMAT YOUR RESPONSE AS HTML:
 - Start with a direct answer to the user's question
@@ -269,6 +272,7 @@ FORMAT YOUR RESPONSE AS HTML:
   • For points: <span style="color: #888; font-size: 0.9em;">XX points</span>
 - Use <em> for emphasis on important details
 - Conclude with <strong>Practical Advice</strong> or key takeaways
+- DO NOT wrap your response in code blocks of any kind
 
 CITATION FORMAT EXAMPLES:
 - "According to <span style="color: #0066cc; font-weight: 500;">u/username</span> <span style="color: #ff4500; font-size: 0.9em;">↑XX upvotes</span>..."
@@ -292,9 +296,7 @@ ${context}`;
     messages.push({
       role: 'user',
       content: query
-    });
-
-    try {
+    });    try {
       const result = await generateText({
         model: this.chatModel,
         messages: messages,
@@ -302,7 +304,12 @@ ${context}`;
         temperature: 0.7
       });
 
-      return result.text;
+      const cleanResponse = result.text
+        .replace(/```html\s*/g, '')
+        .replace(/```\s*/g, '')
+        .trim();
+
+      return cleanResponse;
     } catch (error) {
       logger.error('Error generating AI response:', error);
       return 'I apologize, but I encountered an error while generating a response. Please try again.';

@@ -4,5 +4,6 @@ declare namespace NodeJS {
     GOOGLE_CLIENT_SECRET: string
     NEXTAUTH_SECRET: string
     NODE_ENV: 'development' | 'production' | 'test'
+    REDDIT_API_URL: string
   }
 }

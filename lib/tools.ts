@@ -9,7 +9,8 @@ import { getCourseCode } from './question-generator'
 
 async function searchRedditKnowledge(query: string, limit: number = 10) {
   try {
-    const response = await fetch('http://localhost:3002/api/ask', {
+    const apiUrl = process.env.REDDIT_API_URL || 'http://localhost:3002'
+    const response = await fetch(`${apiUrl}/api/ask`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -50,7 +51,8 @@ async function searchRedditKnowledge(query: string, limit: number = 10) {
 
 async function searchRedditRaw(query: string, limit: number = 10) {
   try {
-    const response = await fetch('http://localhost:3002/api/search', {
+    const apiUrl = process.env.REDDIT_API_URL || 'http://localhost:3002'
+    const response = await fetch(`${apiUrl}/api/search`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -72,7 +74,8 @@ async function searchRedditRaw(query: string, limit: number = 10) {
 
 async function getTrendingRedditTopics() {
   try {
-    const response = await fetch('http://localhost:3002/api/trending', {
+    const apiUrl = process.env.REDDIT_API_URL || 'http://localhost:3002'
+    const response = await fetch(`${apiUrl}/api/trending`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -93,9 +96,10 @@ async function getTrendingRedditTopics() {
 
 async function getRedditOverview() {
   try {
+    const apiUrl = process.env.REDDIT_API_URL || 'http://localhost:3002'
     const [trendingResponse, statsResponse] = await Promise.all([
-      fetch('http://localhost:3002/api/trending'),
-      fetch('http://localhost:3002/api/stats')
+      fetch(`${apiUrl}/api/trending`),
+      fetch(`${apiUrl}/api/stats`)
     ])
 
     const trending = trendingResponse.ok ? (await trendingResponse.json()).trending || [] : []

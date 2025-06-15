@@ -387,15 +387,43 @@ class RedditScraper {
           }
 
           const flair = $post.find('shreddit-post-flair .flair-content');
-          if (flair.length) post.flair = flair.text().trim();
-
-          if (post.postType === 'image') {
-            const img = $post.find('img').first();
-            if (img.length) {
-              post.imageUrl = img.attr('src');
-              post.imageAlt = img.attr('alt');
+          if (flair.length) post.flair = flair.text().trim();          if (post.postType === 'image') {
+            let img = null;
+            
+            const contentImg = $post.find('[slot="media"] img, .media-container img, .image-container img').first();
+            if (contentImg.length) {
+              img = contentImg;
+            } else {
+              const allImages = $post.find('img');
+              img = allImages.filter((i, elem) => {
+                const src = $(elem).attr('src') || '';
+                const alt = $(elem).attr('alt') || '';
+                
+                return !src.includes('snoovatar') && 
+                       !src.includes('avatar') && 
+                       !src.includes('icon') &&
+                       !src.includes('emoji') &&
+                       !alt.toLowerCase().includes('avatar') &&
+                       !alt.toLowerCase().includes('icon') &&
+                       !alt.toLowerCase().includes('user') &&
+                       src.length > 50;
+              }).first();
             }
-          } else if (post.postType === 'video') {
+            
+            if (img && img.length) {
+              const imageUrl = img.attr('src');
+              const imageAlt = img.attr('alt');
+              
+              if (imageUrl && 
+                  (imageUrl.includes('i.redd.it') || 
+                   imageUrl.includes('preview.redd.it') || 
+                   imageUrl.includes('external-preview.redd.it')) &&
+                  !imageUrl.includes('snoovatar')) {
+                post.imageUrl = imageUrl;
+                post.imageAlt = imageAlt;
+              }
+            }
+          }else if (post.postType === 'video') {
             const vid = $post.find('shreddit-player-2');
             if (vid.length) {
               post.videoSrc = vid.attr('src');
@@ -656,49 +684,61 @@ Format as JSON.`;
           images: post.images || [],
           extracted_text: post.content || '',
           tags: post.flair ? [post.flair] : []
-        };
-
-        if (post.postType === 'image' && post.imageUrl) {
-          logger.info(`Analyzing image for post ${post.id}: ${post.imageUrl}`);
-          try {
-            const imageAnalysis = await this.downloadAndAnalyzeImage(post.imageUrl, {
-              title: post.title,
-              subreddit: subredditName
-            });
-            
-            if (imageAnalysis) {
-              postData.images = [{
-                url: post.imageUrl,
-                alt: post.imageAlt || '',
-                analysis: imageAnalysis
-              }];
+        };        if (post.postType === 'image' && post.imageUrl) {
+          const isValidImageUrl = post.imageUrl && 
+            !post.imageUrl.includes('snoovatar') &&
+            !post.imageUrl.includes('/avatars/') &&
+            !post.imageUrl.includes('icon') &&
+            !post.imageUrl.includes('emoji') &&
+            (post.imageUrl.includes('i.redd.it') || 
+             post.imageUrl.includes('preview.redd.it') || 
+             post.imageUrl.includes('external-preview.redd.it')) &&
+            post.imageUrl.length > 100;
+          
+          if (isValidImageUrl) {
+            logger.info(`Analyzing image for post ${post.id}: ${post.imageUrl}`);
+            try {
+              const imageAnalysis = await this.downloadAndAnalyzeImage(post.imageUrl, {
+                title: post.title,
+                subreddit: subredditName
+              });
               
-              const imageText = [
-                imageAnalysis.description,
-                imageAnalysis.visible_text,
-                imageAnalysis.educational_content
-              ].filter(text => text && text.trim()).join(' ');
-              
-              if (imageText) {
-                postData.extracted_text = [postData.extracted_text, imageText].filter(Boolean).join(' ');
+              if (imageAnalysis) {
+                postData.images = [{
+                  url: post.imageUrl,
+                  alt: post.imageAlt || '',
+                  analysis: imageAnalysis
+                }];
+                
+                const imageText = [
+                  imageAnalysis.description,
+                  imageAnalysis.visible_text,
+                  imageAnalysis.educational_content
+                ].filter(text => text && text.trim()).join(' ');
+                
+                if (imageText) {
+                  postData.extracted_text = [postData.extracted_text, imageText].filter(Boolean).join(' ');
+                }
+                  logger.info(`Image analysis completed for post ${post.id}: relevance=${imageAnalysis.student_relevance}/10`);
+              } else {
+                logger.info(`No image analysis result for post ${post.id}`);
+                postData.images = [{
+                  url: post.imageUrl,
+                  alt: post.imageAlt || '',
+                  analysis: null
+                }];
               }
-              
-              logger.info(`Image analysis completed for post ${post.id}: relevance=${imageAnalysis.student_relevance}/10`);
-            } else {
+            } catch (error) {
+              logger.error(`Failed to analyze image for post ${post.id}:`, error.message);
               postData.images = [{
                 url: post.imageUrl,
                 alt: post.imageAlt || '',
-                analysis: null
+                analysis: null,
+                error: error.message
               }];
             }
-          } catch (error) {
-            logger.error(`Failed to analyze image for post ${post.id}:`, error.message);
-            postData.images = [{
-              url: post.imageUrl,
-              alt: post.imageAlt || '',
-              analysis: null,
-              error: error.message
-            }];
+          } else if (post.postType === 'image' && post.imageUrl) {
+            logger.info(`Skipping image analysis for post ${post.id}: invalid image URL (likely avatar or UI element): ${post.imageUrl}`);
           }
         }
 

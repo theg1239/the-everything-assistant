@@ -29,14 +29,10 @@ export interface MessMenuResponse {
   error?: string
 }
 
-/* ────────────────⟡  constants  ⟡─────────────── */
-
 const MESS_ENDPOINTS = {
-  // Men's Hostel (Hostel 1)
   'mens-special': 'https://messit.vinnovateit.com/menu-data/hostel-1-mess-1.json',
   'mens-veg': 'https://messit.vinnovateit.com/menu-data/hostel-1-mess-2.json',
   'mens-nonveg': 'https://messit.vinnovateit.com/menu-data/hostel-1-mess-3.json',
-  // Ladies' Hostel (Hostel 2)
   'ladies-special': 'https://messit.vinnovateit.com/menu-data/hostel-2-mess-1.json',
   'ladies-veg': 'https://messit.vinnovateit.com/menu-data/hostel-2-mess-2.json',
   'ladies-nonveg': 'https://messit.vinnovateit.com/menu-data/hostel-2-mess-3.json',
@@ -69,11 +65,9 @@ export async function getMessMenu(
   mealType?: 'breakfast' | 'lunch' | 'snacks' | 'dinner'
 ): Promise<MessMenuResponse> {
   try {
-    // Default to men's hostel and special mess if not specified
     const selectedHostel = hostelType || 'mens'
     const selectedMess = messType || 'special'
 
-    // Construct the endpoint key
     const endpointKey = `${selectedHostel}-${selectedMess}` as keyof typeof MESS_ENDPOINTS
     const endpoint = MESS_ENDPOINTS[endpointKey]
 
@@ -89,7 +83,6 @@ export async function getMessMenu(
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
       },
-      // Add timeout to prevent hanging
       signal: AbortSignal.timeout(10000),
     })
 
@@ -101,13 +94,11 @@ export async function getMessMenu(
 
     if (!menuData || !menuData.menu || !Array.isArray(menuData.menu)) {
       throw new Error('Invalid menu data structure received')
-    } // Get today's date in YYYY-MM-DD format
+    }
     const today = requestedDate || new Date().toISOString().split('T')[0]
 
-    // Find today's menu
     const todayMenu = menuData.menu.find(day => day.date === today)
 
-    // If menu is not found for the requested date, return error
     if (!todayMenu) {
       const dateObj = new Date(today)
       const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long' })
@@ -122,10 +113,9 @@ export async function getMessMenu(
         message: `Could not find mess menu for ${dayName}, ${formattedDate} at ${MESS_TYPES[menuData.mess as keyof typeof MESS_TYPES]} in ${HOSTEL_TYPES[menuData.hostel as keyof typeof HOSTEL_TYPES]}.`,
         error: `Menu not available for date: ${today}`,
       }
-    } // Get the week's menu (next 7 days from today)
+    }
     const weekMenu = getWeekMenu(menuData.menu, today)
 
-    // Filter by meal type if specified
     const filteredTodayMenu = filterByMealType(todayMenu, mealType)
     const filteredWeekMenu = weekMenu
       .map(day => filterByMealType(day, mealType))
@@ -159,8 +149,6 @@ export async function getMessMenu(
     }
   }
 }
-
-/* ────────────────⟡  helper functions  ⟡─────────────── */
 
 function getWeekMenu(allMenus: DayMenu[], startDate: string): DayMenu[] {
   const start = new Date(startDate)
@@ -238,20 +226,17 @@ function formatMenuItems(menuItems: MenuItem[]): string {
     .map(item => {
       const mealTypeName = MEAL_TYPES[item.type as keyof typeof MEAL_TYPES] || `Meal ${item.type}`
 
-      // Clean up the menu text by removing extra spaces and standardizing formatting
       let cleanMenu = item.menu
-        .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-        .replace(/,\s*,/g, ',') // Remove duplicate commas
-        .replace(/\s*,\s*/g, ', ') // Standardize comma spacing
+        .replace(/\s+/g, ' ')
+        .replace(/,\s*,/g, ',')
+        .replace(/\s*,\s*/g, ', ')
         .trim()
 
-      // Split items by commas and clean them up
       const menuItems = cleanMenu
         .split(',')
         .map(item => item.trim())
-        .filter(item => item.length > 0 && !item.match(/^[B,J\s]*$/)) // Remove meaningless items like "B,B,J"
+        .filter(item => item.length > 0 && !item.match(/^[B,J\s]*$/))
         .map(item => {
-          // Capitalize first letter of each item
           return item.charAt(0).toUpperCase() + item.slice(1).toLowerCase()
         })
 
@@ -262,10 +247,8 @@ function formatMenuItems(menuItems: MenuItem[]): string {
     .join('\n\n')
 }
 
-// Export helper for formatting (can be used in tools.ts)
 export { formatMenuItems, MEAL_TYPES }
 
-// Export a function to get available date range
 export async function getAvailableDateRange(
   hostelType: 'mens' | 'ladies' = 'mens',
   messType: 'special' | 'veg' | 'nonveg' = 'special'

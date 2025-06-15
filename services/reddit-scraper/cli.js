@@ -196,6 +196,14 @@ program
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - parseInt(options.days));
       
+      const subredditsToUpdate = await kb.pool.query(`
+        SELECT DISTINCT subreddit 
+        FROM reddit_posts 
+        WHERE created_utc >= $1
+      `, [cutoffDate]);
+      
+      console.log(`Found ${subredditsToUpdate.rows.length} subreddits that will be affected`);
+      
       const result = await kb.pool.query(`
         DELETE FROM reddit_posts 
         WHERE created_utc < $1
@@ -218,7 +226,24 @@ program
       
       console.log(`Deleted ${chunkResult.rowCount} orphaned chunks`);
       
+      console.log('Updating subreddit statistics...');
+      let updatedCount = 0;
+      
+      for (const row of subredditsToUpdate.rows) {
+        await kb.updateSubredditStats(kb.pool, row.subreddit);
+        updatedCount++;
+      }
+      
+      const removedStatsResult = await kb.pool.query(`
+        DELETE FROM subreddit_stats 
+        WHERE subreddit NOT IN (SELECT DISTINCT subreddit FROM reddit_posts)
+      `);
+      
+      console.log(`Updated stats for ${updatedCount} subreddits`);
+      console.log(`Removed stats for ${removedStatsResult.rowCount} subreddits with no remaining posts`);
+      
       await kb.cleanup();
+      console.log('✅ Cleanup completed successfully');
     } catch (error) {
       console.error('❌ Cleanup failed:', error.message);
       process.exit(1);

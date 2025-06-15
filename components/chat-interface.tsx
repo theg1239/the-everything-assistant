@@ -21,7 +21,6 @@ import ScrollToTopButton from '@/components/scroll-to-top-button'
 
 const useViewportHeight = () => {
   const mainRef = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
     const setVh = () => {
       const vh = window.innerHeight * 0.01
@@ -35,18 +34,29 @@ const useViewportHeight = () => {
         mainRef.current.style.height = `calc(var(--vh, 1vh) * 100)`
       }
       
-      if (window.innerWidth <= 768) {
+      if (window.innerWidth <= 768 && (!window.visualViewport || window.visualViewport.scale <= 1)) {
         window.scrollTo(0, 0)
       }
+    }
+
+    const handleVisualViewportChange = () => {
+      setVh()
     }
 
     setVh()
     window.addEventListener('resize', setVh)
     window.addEventListener('orientationchange', () => setTimeout(setVh, 100))
     
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleVisualViewportChange)
+    }
+    
     return () => {
       window.removeEventListener('resize', setVh)
       window.removeEventListener('orientationchange', () => setTimeout(setVh, 100))
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleVisualViewportChange)
+      }
     }
   }, [])
 
@@ -67,6 +77,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const [hasUserInitiatedConversation, setHasUserInitiatedConversation] = useState(false)
   const [isInitialRender, setIsInitialRender] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
+  const [isZoomed, setIsZoomed] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -74,24 +85,37 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const { updateToolResult } = useVTOP()
   
   const mainRef = useViewportHeight()
-  useEffect(() => {
+    useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth <= 768)
     }
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
     
-    if (window.innerWidth <= 768) {
-      window.scrollTo(0, 0)
-      document.body.style.overflow = 'hidden'
-      
-      return () => {
-        window.removeEventListener('resize', checkMobile)
-        document.body.style.overflow = ''
+    const checkZoom = () => {
+      if (window.visualViewport) {
+        const scale = window.visualViewport.scale || 1
+        setIsZoomed(scale > 1.1)
       }
     }
     
-    return () => window.removeEventListener('resize', checkMobile)
+    checkMobile()
+    checkZoom()
+    
+    window.addEventListener('resize', checkMobile)
+    
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', checkZoom)
+    }
+    
+    if (window.innerWidth <= 768 && document.readyState === 'complete') {
+      setTimeout(() => window.scrollTo(0, 0), 50)
+    }
+    
+    return () => {
+      window.removeEventListener('resize', checkMobile)
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', checkZoom)
+      }
+    }
   }, [])
 
   useEffect(() => {
@@ -534,16 +558,14 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         }
       />{' '}      <div 
         ref={mainRef}
-        className="flex flex-col h-[calc(var(--vh,1vh)*100)] bg-background text-foreground overflow-hidden"
+        className="flex flex-col h-[calc(var(--vh,1vh)*100)] bg-background text-foreground overflow-hidden mobile-viewport-fix"
         style={{ 
           height: 'var(--app-height, 100vh)',
-          position: isMobile ? 'fixed' : 'relative',
+          position: 'relative',
           width: '100%',
-          top: 0,
-          left: 0
         }}
-      ><header className="flex-shrink-0 fixed top-0 left-0 right-0 z-40 bg-background/95 border-b border-border chat-page-header">
-          <div className="flex h-14 items-center px-4 gap-2" style={{ height: 'var(--header-height, 60px)' }}>
+      ><header className="flex-shrink-0 sticky top-0 z-40 bg-background/95 border-b border-border chat-page-header">
+          <div className="flex h-14 items-center px-4 gap-2">
             <HamburgerButton onClick={() => setSidebarOpen(!sidebarOpen)} className="md:block" />
             <Button
               variant="ghost"
@@ -561,7 +583,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               Canvas
             </Button>
           </div>
-        </header>        <div className="flex-1 relative overflow-hidden">
+        </header><div className="flex-1 relative overflow-hidden">
           <div className="absolute inset-0 overflow-y-auto chat-content">
             <div ref={contentRef} className="max-w-3xl mx-auto px-4 space-y-6 pt-5">
               {errorMessage && (
@@ -610,14 +632,15 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
             </div>
           </div>
         </div>
-        <ScrollToTopButton />{' '}        <div className="flex-shrink-0 fixed bottom-0 left-0 right-0 z-30 input-area">
+        <ScrollToTopButton />{' '}        <div className="flex-shrink-0 sticky bottom-0 z-30 input-area">
           <div
             className="absolute inset-0 pointer-events-none"
             style={{
               background: 'linear-gradient(to bottom, transparent, rgb(2, 6, 23) 50%)',
               borderTop: 'none',
             }}
-          ></div>{' '}
+          ></div>
+
           <div className="relative z-10">
             <MultimodalInput
               input={input}

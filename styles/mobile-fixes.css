@@ -100,3 +100,40 @@ main {
     padding-right: env(safe-area-inset-right);
   }
 }
+
+/* Zoom handling - prevent interference */
+@media (max-width: 768px) {
+  .mobile-viewport-fix {
+    position: relative !important;
+    transform: none !important;
+    overflow: hidden;
+    isolation: isolate; /* Create new stacking context to prevent interference */
+  }
+
+  /* Prevent unwanted overlays during zoom */
+  * {
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Ensure proper stacking during zoom */
+  .chat-page-header,
+  .input-area {
+    isolation: isolate;
+    will-change: auto;
+  }
+
+  /* Disable problematic animations during potential zoom */
+  @media (prefers-reduced-motion: no-preference) {
+    .mobile-viewport-fix * {
+      transition-duration: 0.15s;
+    }
+  }
+}
+
+/* Additional zoom stability */
+html {
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}

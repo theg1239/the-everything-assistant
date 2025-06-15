@@ -211,8 +211,13 @@ async function handleIntelligentCoursePage(params: {
   let step = interactiveStep
   if (!step) {
     console.log('Determining step - semester:', semester, 'course:', course, 'faculty:', faculty)
-    console.log('Contextual queries - semester:', contextualSemesterQuery, 'course:', contextualCourseQuery)
-    
+    console.log(
+      'Contextual queries - semester:',
+      contextualSemesterQuery,
+      'course:',
+      contextualCourseQuery
+    )
+
     if (
       (contextualCourseQuery || courseQuery) &&
       (contextualFacultyQuery || facultyQuery) &&
@@ -232,27 +237,36 @@ async function handleIntelligentCoursePage(params: {
         step = 'semester'
       } else if (!course) {
         const shouldCompleteSemesterSelection = semester && previousStepType === 'semester'
-        
-        const semesterAutoResolved = contextualSemesterQuery && semester && 
-          messages && messages.length > 0 &&
-          messages[messages.length - 1]?.content?.toLowerCase().includes(contextualSemesterQuery.toLowerCase())
-        
-        const userJustSelectedSemester = messages && messages.length > 0 && 
-          previousStepType === 'semester' && 
+
+        const semesterAutoResolved =
+          contextualSemesterQuery &&
+          semester &&
+          messages &&
+          messages.length > 0 &&
+          messages[messages.length - 1]?.content
+            ?.toLowerCase()
+            .includes(contextualSemesterQuery.toLowerCase())
+
+        const userJustSelectedSemester =
+          messages &&
+          messages.length > 0 &&
+          previousStepType === 'semester' &&
           /^\s*\d+\s*$/.test(messages[messages.length - 1]?.content || '')
-        
+
         console.log('Semester selection debug:')
         console.log('- previousStepType:', previousStepType)
         console.log('- last message content:', messages?.[messages.length - 1]?.content)
         console.log('- shouldCompleteSemesterSelection:', shouldCompleteSemesterSelection)
         console.log('- userJustSelectedSemester:', userJustSelectedSemester)
         console.log('- semesterAutoResolved:', semesterAutoResolved)
-        
+
         if (shouldCompleteSemesterSelection || userJustSelectedSemester) {
           console.log('Completing semester selection, staying on semester step')
           step = 'semester'
         } else if (semesterAutoResolved) {
-          console.log('Semester was auto-resolved from query, staying on semester step to show selection')
+          console.log(
+            'Semester was auto-resolved from query, staying on semester step to show selection'
+          )
           step = 'semester'
         } else {
           step = 'course'

@@ -678,24 +678,27 @@ function resolveSemesterQuery(semesterQuery, semesterOptions) {
       let allMatches = semesterOptions.filter(opt =>
         variants.some(variant => opt.description.toLowerCase().includes(variant))
       )
-      
+
       // If we have a year filter, apply it to narrow down the results
       if (yearFilter) {
         allMatches = allMatches.filter(yearFilter)
       }
-      
+
       // If there's exactly one match, auto-select it
       if (allMatches.length === 1) {
         console.log(`Resolved ${season} semester query to:`, allMatches[0].description)
         return allMatches[0].number
       }
-      
+
       // If there are multiple matches, don't auto-select - let user choose
       if (allMatches.length > 1) {
-        console.log(`Multiple ${season} semesters found:`, allMatches.map(m => m.description))
+        console.log(
+          `Multiple ${season} semesters found:`,
+          allMatches.map(m => m.description)
+        )
         return null // This will trigger the user selection prompt
       }
-      
+
       // If no matches after filtering, continue to other logic
       if (allMatches.length === 0) {
         console.log(`No ${season} semesters found matching the query`)
@@ -705,20 +708,26 @@ function resolveSemesterQuery(semesterQuery, semesterOptions) {
   }
 
   // For year-only queries (e.g., "2024")
-  if (yearMatch && !seasonMap.fall.some(v => query.includes(v)) && 
-      !seasonMap.winter.some(v => query.includes(v)) && 
-      !seasonMap.summer.some(v => query.includes(v)) && 
-      !seasonMap.spring.some(v => query.includes(v))) {
+  if (
+    yearMatch &&
+    !seasonMap.fall.some(v => query.includes(v)) &&
+    !seasonMap.winter.some(v => query.includes(v)) &&
+    !seasonMap.summer.some(v => query.includes(v)) &&
+    !seasonMap.spring.some(v => query.includes(v))
+  ) {
     const allMatches = semesterOptions.filter(yearFilter)
-    
+
     // If there's exactly one match for the year, auto-select it
     if (allMatches.length === 1) {
       return allMatches[0].number
     }
-    
+
     // If there are multiple matches for the year, don't auto-select
     if (allMatches.length > 1) {
-      console.log(`Multiple semesters found for year query:`, allMatches.map(m => m.description))
+      console.log(
+        `Multiple semesters found for year query:`,
+        allMatches.map(m => m.description)
+      )
       return null // This will trigger the user selection prompt
     }
   }
@@ -973,7 +982,9 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
   }
 
   if (step === 'semester' && flags && flags.semester) {
-    console.log(`Semester step with resolved semester ${flags.semester}, proceeding to show courses`)
+    console.log(
+      `Semester step with resolved semester ${flags.semester}, proceeding to show courses`
+    )
     step = 'course'
   }
 
@@ -1608,27 +1619,30 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
         })
       } else if (code === 0) {
         // Only parse download info if we're in materials step or if there's evidence of actual downloads
-        const shouldParseDownloadInfo = step === 'materials' || 
-                                       stdout.includes('Downloaded') || 
-                                       stdout.includes('Downloading') ||
-                                       stdout.includes('files downloaded') ||
-                                       stdout.includes('download complete')
+        const shouldParseDownloadInfo =
+          step === 'materials' ||
+          stdout.includes('Downloaded') ||
+          stdout.includes('Downloading') ||
+          stdout.includes('files downloaded') ||
+          stdout.includes('download complete')
 
         if (process.env.NODE_ENV !== 'production') {
           console.log(`shouldParseDownloadInfo: ${shouldParseDownloadInfo} (step: ${step})`)
         }
 
-        const downloadInfo = shouldParseDownloadInfo ? parseDownloadInfo(stdout) : {
-          filesDownloaded: 0,
-          totalFiles: 0,
-          downloadPath: null,
-          files: [],
-          errors: []
-        }
+        const downloadInfo = shouldParseDownloadInfo
+          ? parseDownloadInfo(stdout)
+          : {
+              filesDownloaded: 0,
+              totalFiles: 0,
+              downloadPath: null,
+              files: [],
+              errors: [],
+            }
 
-        const servedFiles = shouldParseDownloadInfo ? 
-                           await serveDownloadedFiles(downloadInfo.downloadPath, downloadInfo) : 
-                           []
+        const servedFiles = shouldParseDownloadInfo
+          ? await serveDownloadedFiles(downloadInfo.downloadPath, downloadInfo)
+          : []
 
         const cleanedOutput = cleanCliOutput(stdout, servedFiles.length > 0)
 
@@ -2277,8 +2291,12 @@ function parseDownloadInfo(output) {
   }
 
   // Only log in development and when there's actual download activity
-  if (process.env.NODE_ENV !== 'production' && 
-      (downloadInfo.filesDownloaded > 0 || downloadInfo.totalFiles > 0 || downloadInfo.files.length > 0)) {
+  if (
+    process.env.NODE_ENV !== 'production' &&
+    (downloadInfo.filesDownloaded > 0 ||
+      downloadInfo.totalFiles > 0 ||
+      downloadInfo.files.length > 0)
+  ) {
     console.log('Parsed download info:', {
       filesDownloaded: downloadInfo.filesDownloaded,
       totalFiles: downloadInfo.totalFiles,

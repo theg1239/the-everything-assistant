@@ -77,6 +77,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const [hasUserInitiatedConversation, setHasUserInitiatedConversation] = useState(false)
   const [isInitialRender, setIsInitialRender] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
+  const [isFirstMessageInNewChat, setIsFirstMessageInNewChat] = useState(false)
   const [isZoomed, setIsZoomed] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -128,10 +129,11 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     if (typeof window === 'undefined') return
     localStorage.setItem('sidebarOpen', String(sidebarOpen))
   }, [sidebarOpen])
-
   useEffect(() => {
     const hasUser = initialMessages.some(m => m.role === 'user')
     setHasUserInitiatedConversation(hasUser)
+    // If there are initial messages, this is not a new chat
+    setIsFirstMessageInNewChat(false)
   }, [initialMessages])
   const {
     messages,
@@ -185,21 +187,31 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   }, [isInitialRender, isMobile])
   useEffect(() => {
     if (!isInitialRender && messages.length > 0 && messages[messages.length - 1].role === 'user') {
+      // On mobile, prevent auto-scroll for the first message in a new chat to keep header visible
+      if (isMobile && isFirstMessageInNewChat) {
+        setIsFirstMessageInNewChat(false) // Reset the flag after first message
+        return // Don't scroll on first message of new chat on mobile
+      }
+      
       // On mobile, only scroll if user has initiated conversation to prevent header hiding
       if (!isMobile || hasUserInitiatedConversation) {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
       }
     }
-  }, [messages, isLoading, isInitialRender, isMobile, hasUserInitiatedConversation])
-
+  }, [messages, isLoading, isInitialRender, isMobile, hasUserInitiatedConversation, isFirstMessageInNewChat])
   useEffect(() => {
     if (!isInitialRender && messages.length > 0 && isLoading) {
+      // On mobile, prevent auto-scroll for the first message in a new chat to keep header visible
+      if (isMobile && isFirstMessageInNewChat) {
+        return // Don't scroll during loading of first message of new chat on mobile
+      }
+      
       // On mobile, only scroll if user has initiated conversation
       if (!isMobile || hasUserInitiatedConversation) {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
       }
     }
-  }, [messages, isLoading, isInitialRender, isMobile, hasUserInitiatedConversation])
+  }, [messages, isLoading, isInitialRender, isMobile, hasUserInitiatedConversation, isFirstMessageInNewChat])
 
   useEffect(() => {
     if (isLoading && !isInitialRender) {
@@ -228,19 +240,24 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       setErrorMessage('Unable to connect. Please check your connection and try again.')
     }
   }, [error])
-
   const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!input.trim()) return
 
-    if (!showFullChat) setShowFullChat(true)
+    if (!showFullChat) {
+      setShowFullChat(true)
+      setIsFirstMessageInNewChat(true) // Mark this as first message in new chat
+    }
     setErrorMessage(null)
     setHasUserInitiatedConversation(true)
     originalHandleSubmit(e)
   }
   const handleSuggestedQuestion = async (question: string) => {
     setInput('')
-    if (!showFullChat) setShowFullChat(true)
+    if (!showFullChat) {
+      setShowFullChat(true)
+      setIsFirstMessageInNewChat(true) // Mark this as first message in new chat
+    }
     setErrorMessage(null)
     setHasUserInitiatedConversation(true)
 
@@ -470,21 +487,6 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                   onClick={() => setSidebarOpen(!sidebarOpen)}
                   className="md:hidden"
                 />
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    router.push('/')
-                    router.refresh()
-                  }}
-                  className="h-9 hidden sm:flex"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Chat
-                </Button>
-                <Button variant="ghost" onClick={openCanvas} className="ml-auto h-9">
-                  <FileText className="h-4 w-4 mr-2" />
-                  Canvas
-                </Button>
               </div>
             </header>
             <div className="flex-1 flex flex-col items-center justify-center px-4 space-y-8 overflow-y-auto overflow-fix pt-6 md:pt-0">

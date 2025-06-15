@@ -470,6 +470,21 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                   onClick={() => setSidebarOpen(!sidebarOpen)}
                   className="md:hidden"
                 />
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    router.push('/')
+                    router.refresh()
+                  }}
+                  className="h-9 hidden sm:flex"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Chat
+                </Button>
+                <Button variant="ghost" onClick={openCanvas} className="ml-auto h-9">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Canvas
+                </Button>
               </div>
             </header>
             <div className="flex-1 flex flex-col items-center justify-center px-4 space-y-8 overflow-y-auto overflow-fix pt-6 md:pt-0">

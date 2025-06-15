@@ -48,7 +48,6 @@ async function searchRedditKnowledge(query: string, limit: number = 10) {
   }
 }
 
-// Additional function for raw search results
 async function searchRedditRaw(query: string, limit: number = 10) {
   try {
     const response = await fetch('http://localhost:3002/api/search', {
@@ -166,7 +165,6 @@ async function searchRedditWithContext(query: string) {
   }
 }
 
-// Helper function to organize menu items by meal type
 function organizeMenuByMealType(menuItems: Array<{ type: number; menu: string }>) {
   const mealTypes: { [key: string]: string[] } = {
     breakfast: [],
@@ -185,7 +183,6 @@ function organizeMenuByMealType(menuItems: Array<{ type: number; menu: string }>
   menuItems.forEach(item => {
     const mealType = typeToMeal[item.type]
     if (mealType) {
-      // Clean and split menu items
       const cleanedItems = item.menu
         .split(',')
         .map(menuItem => menuItem.trim())
@@ -196,7 +193,6 @@ function organizeMenuByMealType(menuItems: Array<{ type: number; menu: string }>
     }
   })
 
-  // Remove empty meal types
   Object.keys(mealTypes).forEach(key => {
     if (mealTypes[key].length === 0) {
       delete mealTypes[key]
@@ -388,7 +384,6 @@ async function handleIntelligentCoursePage(params: {
     } else if (contextualCourseQuery || courseQuery) {
       step = 'semester'
     } else {
-      // If we have a semesterQuery but no resolved semester number, stay on semester step
       if (contextualSemesterQuery && !semester) {
         console.log('Have semesterQuery but no semester number, staying on semester step')
         step = 'semester'
@@ -656,7 +651,6 @@ export function createVITTools() {
           .describe('specific meal type to filter. If not provided, returns all meals for the day'),
       }),
       execute: async ({ hostelType, messType, date, mealType }) => {
-        // Handle relative dates like 'today', 'tomorrow'
         let processedDate = date
         if (date) {
           const today = new Date()
@@ -676,13 +670,8 @@ export function createVITTools() {
         const result = await getMessMenu(hostelType, messType, processedDate, mealType)
 
         if (result.success && result.data?.todayMenu) {
-          // Transform the menu structure for UI display
           const organizedTodayMenu = organizeMenuByMealType(result.data.todayMenu.menu)
 
-          // For week menu, we only want to show today's organized menu, not the entire week
-          // The UI component expects a single menu structure, not an array of daily menus
-
-          // Format the response with properly formatted menu items
           const formattedMenu = formatMenuItems(result.data.todayMenu.menu)
 
           return {
@@ -691,13 +680,11 @@ export function createVITTools() {
             data: {
               ...result.data,
               todayMenu: organizedTodayMenu,
-              // Remove weekMenu since it causes rendering issues and is not needed for the current UI
               weekMenu: undefined,
               formattedMenu,
             },
           }
         } else if (!result.success && result.error) {
-          // If there's an error, try to get available date range to help user
           const dateRange = await getAvailableDateRange(hostelType, messType)
           if (dateRange) {
             return {

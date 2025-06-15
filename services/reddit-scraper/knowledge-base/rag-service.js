@@ -12,8 +12,7 @@ class RAGService {
     try {
       logger.info(`Generating RAG response for query: "${query}"`);
       
-      // Use a larger search to get more diverse results
-      const searchResults = await this.knowledgeBase.search(query, 30);
+      const searchResults = await this.knowledgeBase.search(query, 40);
       
       if (searchResults.length === 0) {
         logger.info('No direct results found, trying broader search...');
@@ -21,10 +20,15 @@ class RAGService {
         const keywords = query.toLowerCase().split(/\s+/).filter(word => word.length > 3);
         let fallbackResults = [];
         
-        for (const keyword of keywords.slice(0, 3)) {
-          const keywordResults = await this.knowledgeBase.search(keyword, 15);
+        for (const keyword of keywords.slice(0, 5)) {
+          const keywordResults = await this.knowledgeBase.search(keyword, 20);
           fallbackResults = fallbackResults.concat(keywordResults);
-          if (fallbackResults.length >= 30) break;
+        }
+        
+        const topicKeywords = this.extractTopicKeywords(query);
+        for (const topic of topicKeywords) {
+          const topicResults = await this.knowledgeBase.search(topic, 10);
+          fallbackResults = fallbackResults.concat(topicResults);
         }
         
         // Diversify results by ensuring we get different types and sources
@@ -51,8 +55,32 @@ class RAGService {
         };
       }
 
-      // Diversify the search results to avoid repetitive sources
       const diverseResults = this.diversifyResults(searchResults);
+      
+      if (diverseResults.length < 5) {
+        logger.info('Not enough diverse results, expanding search...');
+        const keywords = query.toLowerCase().split(/\s+/).filter(word => word.length > 3);
+        let expandedResults = [...searchResults];
+        
+        for (const keyword of keywords.slice(0, 3)) {
+          const keywordResults = await this.knowledgeBase.search(keyword, 15);
+          expandedResults = expandedResults.concat(keywordResults);
+        }
+        
+        const expandedDiverse = this.diversifyResults(expandedResults);
+        if (expandedDiverse.length > diverseResults.length) {
+          const context = this.buildContext(expandedDiverse);
+          const response = await this.generateAIResponse(query, context, conversationHistory);
+          
+          return {
+            response: response,
+            sources: this.formatSources(expandedDiverse.slice(0, 8)),
+            confidence: this.calculateConfidence(expandedDiverse) * 0.9,
+            searchResults: expandedDiverse.length
+          };
+        }
+      }
+      
       const context = this.buildContext(diverseResults);
       const response = await this.generateAIResponse(query, context, conversationHistory);
       
@@ -73,9 +101,34 @@ class RAGService {
     }
   }
 
+  extractTopicKeywords(query) {
+    const topicMap = {
+      'library': ['study', 'books', 'reading', 'research', 'academic'],
+      'hostel': ['accommodation', 'room', 'warden', 'mess', 'facilities'],
+      'food': ['mess', 'dining', 'menu', 'cafeteria', 'canteen'],
+      'faculty': ['professor', 'teacher', 'staff', 'instructor'],
+      'placement': ['job', 'career', 'interview', 'company', 'recruitment'],
+      'exam': ['test', 'assessment', 'marks', 'grade', 'evaluation'],
+      'club': ['activity', 'event', 'society', 'organization'],
+      'campus': ['infrastructure', 'building', 'facility', 'location']
+    };
+    
+    const queryLower = query.toLowerCase();
+    const topics = [];
+    
+    for (const [topic, keywords] of Object.entries(topicMap)) {
+      if (queryLower.includes(topic) || keywords.some(keyword => queryLower.includes(keyword))) {
+        topics.push(topic);
+        topics.push(...keywords.slice(0, 2));
+      }
+    }
+    
+    return [...new Set(topics)];
+  }
   diversifyResults(results) {
     const diverseResults = [];
     const seenIds = new Set();
+    const seenContentHashes = new Set();
     const seenTitles = new Set();
     const typeCount = { post: 0, comment: 0, chunk: 0 };
     const subredditCount = {};
@@ -86,30 +139,46 @@ class RAGService {
     for (const result of sortedResults) {
       if (seenIds.has(result.reddit_id)) continue;
       
+      const contentHash = this.createContentHash(result.content || result.title || '');
+      if (seenContentHashes.has(contentHash)) continue;
+      
       if (result.type === 'post' && result.title) {
         const titleKey = result.title.toLowerCase().slice(0, 50);
         if (seenTitles.has(titleKey)) continue;
         seenTitles.add(titleKey);
       }
       
-      if (typeCount[result.type] >= 12) continue;
+      if (typeCount[result.type] >= 6) continue;
       
       const subredditKey = result.subreddit || 'unknown';
-      if ((subredditCount[subredditKey] || 0) >= 8) continue;
+      if ((subredditCount[subredditKey] || 0) >= 5) continue;
       
       const authorKey = result.author || 'unknown';
-      if ((authorCount[authorKey] || 0) >= 4) continue;
+      if ((authorCount[authorKey] || 0) >= 2) continue;
       
       diverseResults.push(result);
       seenIds.add(result.reddit_id);
+      seenContentHashes.add(contentHash);
       typeCount[result.type]++;
       subredditCount[subredditKey] = (subredditCount[subredditKey] || 0) + 1;
       authorCount[authorKey] = (authorCount[authorKey] || 0) + 1;
       
-      if (diverseResults.length >= 20) break;
+      if (diverseResults.length >= 15) break;
     }
     
     return diverseResults;
+  }
+
+  createContentHash(content) {
+    if (!content) return '';
+    
+    const normalized = content
+      .toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    return normalized.slice(0, 100);
   }
 
   buildContext(searchResults) {

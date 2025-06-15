@@ -388,11 +388,19 @@ class KnowledgeBase {
       logger.error('Error generating embedding:', error);
       return new Array(this.embeddingDim).fill(0);
     }
-  }
-  async search(query, limit = 10) {
+  }  async search(query, limit = 10) {
     const startTime = Date.now();
     
     try {
+      const diverseResults = await this.diverseSearch(query, limit);
+      
+      if (diverseResults.length > 0) {
+        const responseTime = Date.now() - startTime;
+        await this.logSearchQuery(query, diverseResults.length, responseTime);
+        return diverseResults.slice(0, limit);
+      }
+      
+      logger.info(`No diverse results found for "${query}", trying fallback vector search...`);
       const vectorResults = await this.vectorSearch(query, limit);
       
       if (vectorResults.length > 0) {
@@ -685,6 +693,120 @@ class KnowledgeBase {
 
   async cleanup() {
     await this.pool.end();
+  }
+  async diverseSearch(query, limit = 10) {
+    try {
+      const strategies = [
+        { name: 'vector', fn: () => this.vectorSearch(query, limit) },
+        { name: 'text', fn: () => this.textSearch(query, limit) },
+        { name: 'keywords', fn: () => this.searchByKeywords(query, limit) }
+      ];
+      
+      let allResults = [];
+      
+      for (const strategy of strategies) {
+        try {
+          logger.info(`Trying ${strategy.name} search strategy...`);
+          const results = await strategy.fn();
+          if (results && results.length > 0) {
+            logger.info(`${strategy.name} search found ${results.length} results`);
+            allResults = allResults.concat(results);
+          }
+        } catch (error) {
+          logger.warn(`${strategy.name} search strategy failed:`, error.message);
+        }
+      }
+      
+      if (allResults.length === 0) {
+        logger.info('No results from any search strategy');
+        return [];
+      }
+      
+      const uniqueResults = this.removeDuplicates(allResults);
+      logger.info(`After deduplication: ${uniqueResults.length} unique results`);
+      
+      return uniqueResults
+        .sort((a, b) => (b.similarity || 0) - (a.similarity || 0))
+        .slice(0, limit * 2);
+        
+    } catch (error) {
+      logger.error('Error in diverse search:', error);
+      return [];
+    }
+  }  async searchByKeywords(query, limit = 10) {
+    const keywords = query.toLowerCase()
+      .split(/\s+/)
+      .filter(word => word.length > 3)
+      .slice(0, 3);
+    
+    if (keywords.length === 0) return [];
+    
+    try {
+      const postSQL = `
+        SELECT 'post' as type, reddit_id, subreddit, title, content, author, 
+               score, upvotes, created_utc, url, tags, 0.8 as similarity
+        FROM reddit_posts 
+        WHERE (LOWER(title) LIKE $1 OR LOWER(content) LIKE $1)
+           OR (LOWER(title) LIKE $2 OR LOWER(content) LIKE $2)  
+           OR (LOWER(title) LIKE $3 OR LOWER(content) LIKE $3)
+        ORDER BY score DESC, upvotes DESC
+        LIMIT $4
+      `;
+      
+      // Search comments
+      const commentSQL = `
+        SELECT 'comment' as type, reddit_id, subreddit, content as title, content, author,
+               score, upvotes, created_utc, NULL as url, tags, 0.7 as similarity
+        FROM reddit_comments 
+        WHERE (LOWER(content) LIKE $1 OR LOWER(content) LIKE $2 OR LOWER(content) LIKE $3)
+        ORDER BY score DESC, upvotes DESC
+        LIMIT $4
+      `;
+      
+      const keywordParams = keywords.map(keyword => `%${keyword}%`);
+      
+      while (keywordParams.length < 3) {
+        keywordParams.push('%nonexistentterm%');
+      }
+      
+      const params = [...keywordParams, Math.ceil(limit / 2)];
+      
+      const [postResult, commentResult] = await Promise.all([
+        this.pool.query(postSQL, params),
+        this.pool.query(commentSQL, params)
+      ]);
+      
+      const allResults = [
+        ...(postResult.rows || []),
+        ...(commentResult.rows || [])
+      ];
+      
+      return allResults.slice(0, limit);
+      
+    } catch (error) {
+      logger.error('Error in searchByKeywords:', error);
+      return [];
+    }
+  }
+
+  removeDuplicates(results) {
+    const seen = new Set();
+    const seenContent = new Set();
+    const unique = [];
+    
+    for (const result of results) {
+      const id = result.reddit_id;
+      if (seen.has(id)) continue;
+      
+      const contentKey = (result.content || result.title || '').toLowerCase().slice(0, 100);
+      if (seenContent.has(contentKey)) continue;
+      
+      seen.add(id);
+      seenContent.add(contentKey);
+      unique.push(result);
+    }
+    
+    return unique;
   }
 }
 

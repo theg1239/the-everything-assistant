@@ -9,7 +9,49 @@ import { getCourseCode } from './question-generator'
 
 async function searchRedditKnowledge(query: string, limit: number = 10) {
   try {
-    const response = await fetch('http://localhost:3002/search', {
+    const response = await fetch('http://localhost:3002/api/ask', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Reddit knowledge base service unavailable: ${response.status}`)
+    }
+
+    const data = await response.json()
+    
+    if (data.success) {
+      return {
+        success: true,
+        response: data.response,
+        sources: data.sources || [],
+        confidence: data.confidence || 0,
+        totalResults: data.searchResults || 0
+      }
+    } else {
+      return {
+        success: false,
+        message: data.error || 'Unknown error occurred',
+        totalResults: 0
+      }
+    }
+  } catch (error) {
+    console.error('Error accessing Reddit knowledge base:', error)
+    return {
+      success: false,
+      message: 'Reddit knowledge base service is currently unavailable. Please try again later.',
+      totalResults: 0
+    }
+  }
+}
+
+// Additional function for raw search results
+async function searchRedditRaw(query: string, limit: number = 10) {
+  try {
+    const response = await fetch('http://localhost:3002/api/search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -796,52 +838,26 @@ export function createVITTools() {
     }),
 
     searchRedditKnowledge: tool({
-      description: 'Search the Reddit knowledge base for student and academic information from various educational subreddits. This contains community-validated information from students about studying, courses, exams, college life, and academic advice.',
+      description: 'Search the Reddit knowledge base for student and academic information from various educational subreddits. This provides AI-powered responses based on community-validated information from students about studying, courses, exams, college life, and academic advice.',
       parameters: z.object({
         query: z.string().describe('The search query for finding relevant information from Reddit discussions about academics, studying, college life, etc.'),
-        limit: z.number().optional().default(10).describe('Maximum number of results to return (default: 10)'),
       }),
-      execute: async ({ query, limit = 10 }) => {
+      execute: async ({ query }) => {
         try {
-          const results = await searchRedditKnowledge(query, limit)
-          
-          if (results.length === 0) {
-            return {
-              success: true,
-              results: [],
-              message: 'No relevant information found in the Reddit knowledge base for this query.',
-              totalResults: 0,
-            }
-          }
-
-          const formattedResults = results.map((result: any) => ({
-            type: result.type, // 'post', 'comment', or 'chunk'
-            subreddit: result.subreddit,
-            title: result.title,
-            content: result.content ? result.content.substring(0, 500) + (result.content.length > 500 ? '...' : '') : '',
-            author: result.author,
-            score: result.score,
-            upvotes: result.upvotes,
-            similarity: result.similarity,
-            url: result.url,
-            created: result.created_utc,
-            tags: result.tags,
-          }))
-
-          const avgSimilarity = results.reduce((sum: number, r: any) => sum + (r.similarity || 0), 0) / results.length
-          const avgScore = results.reduce((sum: number, r: any) => sum + (r.score || 0), 0) / results.length
+          const results = await searchRedditKnowledge(query)
           
           return {
-            success: true,
-            results: formattedResults,
-            totalResults: results.length,
-            message: `Found ${results.length} relevant discussions from Reddit educational communities`,
-            statistics: {
-              averageSimilarity: Math.round(avgSimilarity * 100) / 100,
-              averageScore: Math.round(avgScore),
-              subreddits: [...new Set(results.map((r: any) => r.subreddit))],
-            },
-            note: 'Results are ranked by relevance and community validation (upvotes). Higher scores indicate more community-validated information.',
+            success: results.success,
+            response: results.response,
+            sources: results.sources || [],
+            confidence: results.confidence || 0,
+            totalResults: results.totalResults || 0,
+            message: results.success 
+              ? `Found ${results.totalResults} relevant discussions from Reddit educational communities` 
+              : results.message,
+            note: results.success 
+              ? 'AI-powered response based on Reddit discussions. Higher confidence indicates more relevant source material.' 
+              : 'Unable to find relevant information in the Reddit knowledge base.'
           }
         } catch (error: any) {
           return {

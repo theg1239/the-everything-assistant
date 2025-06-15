@@ -9,21 +9,55 @@ class RAGService {
     this.maxContextLength = parseInt(process.env.MAX_CONTEXT_LENGTH) || 4000;
     this.chatModel = google('gemini-2.0-flash');
   }
-
   async generateResponse(query, conversationHistory = []) {
     try {
+      logger.info(`Generating RAG response for query: "${query}"`);
+      
       const searchResults = await this.knowledgeBase.search(query, 15);
       
       if (searchResults.length === 0) {
+        logger.info('No direct results found, trying broader search...');
+        
+        const keywords = query.toLowerCase().split(/\s+/).filter(word => word.length > 3);
+        let fallbackResults = [];
+        
+        for (const keyword of keywords.slice(0, 3)) {
+          const keywordResults = await this.knowledgeBase.search(keyword, 5);
+          fallbackResults = fallbackResults.concat(keywordResults);
+          if (fallbackResults.length >= 10) break;
+        }
+        
+        const uniqueResults = [];
+        const seenIds = new Set();
+        for (const result of fallbackResults) {
+          if (!seenIds.has(result.reddit_id)) {
+            seenIds.add(result.reddit_id);
+            uniqueResults.push(result);
+          }
+        }
+        
+        if (uniqueResults.length === 0) {
+          return {
+            response: "I couldn't find any relevant information in the Reddit knowledge base for your query. The database contains discussions from r/Vit, but nothing closely matches your search terms. Try rephrasing your question or asking about more general VIT topics.",
+            sources: [],
+            confidence: 0,
+            searchResults: 0
+          };
+        }
+        
+        const context = this.buildContext(uniqueResults);
+        const response = await this.generateAIResponse(query, context, conversationHistory, true);
+        
         return {
-          response: "I couldn't find any relevant information in the knowledge base for your query.",
-          sources: [],
-          confidence: 0
+          response: response,
+          sources: this.formatSources(uniqueResults.slice(0, 5)),
+          confidence: this.calculateConfidence(uniqueResults) * 0.7,
+          searchResults: uniqueResults.length,
+          note: "Results found using broader keyword search"
         };
       }
 
       const context = this.buildContext(searchResults);
-      
       const response = await this.generateAIResponse(query, context, conversationHistory);
       
       return {
@@ -34,7 +68,12 @@ class RAGService {
       };
     } catch (error) {
       logger.error('Error generating RAG response:', error);
-      throw error;
+      return {
+        response: "I apologize, but I encountered an error while searching the knowledge base. Please try again with a different query.",
+        sources: [],
+        confidence: 0,
+        error: error.message
+      };
     }
   }
 
@@ -71,12 +110,23 @@ class RAGService {
     return `${source} ${author} ${score}
 ${content}
 ---`;
-  }
-  async generateAIResponse(query, context, conversationHistory) {
-    const messages = [
-      {
-        role: 'system',
-        content: `You are an intelligent assistant that helps students by providing information from Reddit discussions. You have access to a knowledge base of Reddit posts and comments from academic and student-focused subreddits.
+  }  async generateAIResponse(query, context, conversationHistory, isFallback = false) {
+    const systemPrompt = isFallback 
+      ? `You are an intelligent assistant that helps students by providing information from Reddit discussions. You have access to a knowledge base of Reddit posts and comments from academic and student-focused subreddits.
+
+The search results below are from a broader keyword search since no direct matches were found for the user's query. Please be honest about this limitation while still being helpful.
+
+Your task is to:
+1. Answer the user's question using the provided context from Reddit, noting that these are broader results
+2. Be helpful and honest about the limited relevance of the results
+3. Consider upvotes/downvotes as indicators of community validation
+4. Mention different perspectives if they exist in the data
+5. Suggest alternative search terms or topics that might yield better results
+6. Focus on being helpful for students and academic purposes
+
+Context from Reddit (broader keyword search):
+${context}`
+      : `You are an intelligent assistant that helps students by providing information from Reddit discussions. You have access to a knowledge base of Reddit posts and comments from academic and student-focused subreddits.
 
 Your task is to:
 1. Answer the user's question using the provided context from Reddit
@@ -87,7 +137,12 @@ Your task is to:
 6. Focus on being helpful for students and academic purposes
 
 Context from Reddit:
-${context}`
+${context}`;
+
+    const messages = [
+      {
+        role: 'system',
+        content: systemPrompt
       }
     ];
 
@@ -143,7 +198,6 @@ ${context}`
     const avgScore = searchResults.reduce((sum, r) => sum + (r.score || 0), 0) / searchResults.length;
     const resultsCount = Math.min(searchResults.length, 10) / 10;
     
-    // Weighted combination
     const confidence = (avgSimilarity * 0.5) + (Math.min(avgScore / 10, 1) * 0.3) + (resultsCount * 0.2);
     
     return Math.round(confidence * 100);
@@ -153,7 +207,6 @@ ${context}`
     try {
       const searchResults = await this.knowledgeBase.search(query, limit * 2);
       
-      // Filter and rank results for recommendations
       const recommendations = searchResults
         .filter(result => result.similarity > 0.7)
         .slice(0, limit)

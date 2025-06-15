@@ -9,10 +9,9 @@ class KnowledgeBase {
   constructor() {
     this.pool = new Pool({
       connectionString: process.env.DATABASE_URL
-    });
-    this.embeddingModel = google.embedding('text-embedding-004');
+    });    this.embeddingModel = google.embedding('text-embedding-004');
     this.embeddingDim = 768;
-    this.similarityThreshold = parseFloat(process.env.SIMILARITY_THRESHOLD) || 0.8;
+    this.similarityThreshold = parseFloat(process.env.SIMILARITY_THRESHOLD) || 0.5;
     this.maxContextLength = parseInt(process.env.MAX_CONTEXT_LENGTH) || 4000;
   }
 
@@ -390,13 +389,45 @@ class KnowledgeBase {
       return new Array(this.embeddingDim).fill(0);
     }
   }
-
   async search(query, limit = 10) {
     const startTime = Date.now();
+    
+    try {
+      const vectorResults = await this.vectorSearch(query, limit);
+      
+      if (vectorResults.length > 0) {
+        const responseTime = Date.now() - startTime;
+        await this.logSearchQuery(query, vectorResults.length, responseTime);
+        return vectorResults;
+      }
+      
+      logger.info(`No vector results found for "${query}", trying text search...`);
+      const textResults = await this.textSearch(query, limit);
+      
+      const responseTime = Date.now() - startTime;
+      await this.logSearchQuery(query, textResults.length, responseTime);
+      return textResults;
+      
+    } catch (error) {
+      logger.error('Error in search:', error);
+      try {
+        const textResults = await this.textSearch(query, limit);
+        const responseTime = Date.now() - startTime;
+        await this.logSearchQuery(query, textResults.length, responseTime);
+        return textResults;
+      } catch (textError) {
+        logger.error('Text search also failed:', textError);
+        return [];
+      }
+    }
+  }
+
+  async vectorSearch(query, limit = 10) {
     const queryEmbedding = await this.generateEmbedding(query);
     if (!Array.isArray(queryEmbedding) || queryEmbedding.length !== this.embeddingDim) {
       throw new Error(`Invalid search embedding dimension: got ${queryEmbedding.length}`);
     }
+    
     const searchSQL = `
       WITH post_results AS (
         SELECT
@@ -405,7 +436,7 @@ class KnowledgeBase {
           score, upvotes, created_utc, url, tags,
           1 - (embedding <=> $1) AS similarity
         FROM reddit_posts
-        WHERE embedding <=> $1 < $2
+        WHERE embedding IS NOT NULL AND embedding <=> $1 < $2
         ORDER BY similarity DESC
         LIMIT $3
       ),
@@ -416,7 +447,7 @@ class KnowledgeBase {
           author, score, upvotes, created_utc, NULL AS url, tags,
           1 - (embedding <=> $1) AS similarity
         FROM reddit_comments
-        WHERE embedding <=> $1 < $2
+        WHERE embedding IS NOT NULL AND embedding <=> $1 < $2
         ORDER BY similarity DESC
         LIMIT $3
       ),
@@ -430,7 +461,7 @@ class KnowledgeBase {
           NULL AS url, ARRAY[]::text[] AS tags,
           1 - (embedding <=> $1) AS similarity
         FROM knowledge_chunks
-        WHERE embedding <=> $1 < $2
+        WHERE embedding IS NOT NULL AND embedding <=> $1 < $2
         ORDER BY similarity DESC
         LIMIT $3
       )
@@ -444,17 +475,99 @@ class KnowledgeBase {
       ORDER BY similarity DESC
       LIMIT $3
     `;
+    
     const result = await this.pool.query(searchSQL, [
       `[${queryEmbedding.join(',')}]`,
       1 - this.similarityThreshold,
       limit
     ]);
-    const responseTime = Date.now() - startTime;
-    await this.logSearchQuery(query, result.rows.length, responseTime);
+    
     return result.rows.map(r => ({
       ...r,
       similarity: parseFloat(r.similarity.toFixed(3))
     }));
+  }
+
+  async textSearch(query, limit = 10) {
+    logger.info(`Performing text search for: "${query}"`);
+    
+    const searchTerms = query.toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter(term => term.length > 2)
+      .slice(0, 5);
+    
+    if (searchTerms.length === 0) {
+      return [];
+    }
+    
+    const tsQuery = searchTerms.map(term => `'${term}':*`).join(' & ');
+    
+    const textSearchSQL = `
+      WITH post_results AS (
+        SELECT
+          'post' AS type,
+          reddit_id, subreddit, title, content, author,
+          score, upvotes, created_utc, url, tags,
+          ts_rank(to_tsvector('english', COALESCE(title, '') || ' ' || COALESCE(content, '')), to_tsquery('english', $1)) AS similarity
+        FROM reddit_posts
+        WHERE to_tsvector('english', COALESCE(title, '') || ' ' || COALESCE(content, '')) @@ to_tsquery('english', $1)
+        ORDER BY similarity DESC, score DESC
+        LIMIT $2
+      ),
+      comment_results AS (
+        SELECT
+          'comment' AS type,
+          reddit_id, subreddit, LEFT(content, 100) AS title, content,
+          author, score, upvotes, created_utc, NULL AS url, tags,
+          ts_rank(to_tsvector('english', content), to_tsquery('english', $1)) AS similarity
+        FROM reddit_comments
+        WHERE to_tsvector('english', content) @@ to_tsquery('english', $1)
+        ORDER BY similarity DESC, score DESC
+        LIMIT $2
+      )
+      SELECT * FROM (
+        SELECT * FROM post_results
+        UNION ALL
+        SELECT * FROM comment_results
+      ) AS combined
+      ORDER BY similarity DESC, score DESC
+      LIMIT $2
+    `;
+    
+    try {
+      const result = await this.pool.query(textSearchSQL, [tsQuery, limit]);
+      return result.rows.map(r => ({
+        ...r,
+        similarity: parseFloat(r.similarity.toFixed(3))
+      }));
+    } catch (error) {
+      logger.error('Text search failed, trying simpler search:', error.message);
+      
+      const simpleSearchSQL = `
+        SELECT
+          'post' AS type,
+          reddit_id, subreddit, title, content, author,
+          score, upvotes, created_utc, url, tags,
+          0.5 AS similarity
+        FROM reddit_posts
+        WHERE title ILIKE $1 OR content ILIKE $1
+        UNION ALL
+        SELECT
+          'comment' AS type,
+          reddit_id, subreddit, LEFT(content, 100) AS title, content,
+          author, score, upvotes, created_utc, NULL AS url, tags,
+          0.4 AS similarity
+        FROM reddit_comments
+        WHERE content ILIKE $1
+        ORDER BY similarity DESC, score DESC
+        LIMIT $2
+      `;
+      
+      const searchPattern = `%${query}%`;
+      const result = await this.pool.query(simpleSearchSQL, [searchPattern, limit]);
+      return result.rows;
+    }
   }
 
   async logSearchQuery(query, resultsCount, responseTimeMs, userIp = null) {

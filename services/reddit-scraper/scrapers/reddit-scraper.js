@@ -5,6 +5,7 @@ const cheerio = require('cheerio');
 const logger = require('../utils/logger');
 const { generateText, embed } = require('ai');
 const { google } = require('@ai-sdk/google');
+const ImageAnalyzer = require('./image-analyzer');
 
 class RedditScraper {
   constructor() {
@@ -17,6 +18,8 @@ class RedditScraper {
     });
     this.embeddingModel = google.embedding('text-embedding-004');
     this.embeddingDim = 768;
+    this.imageAnalyzer = new ImageAnalyzer();
+    this.imageAnalysisEnabled = process.env.IMAGE_ANALYSIS_ENABLED === 'true';
 
     if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
       throw new Error(
@@ -633,9 +636,7 @@ Format as JSON.`;
         
         const minUpvotesThreshold =
           parseInt(process.env.MIN_UPVOTES_THRESHOLD) || 5;
-        if (post.score < minUpvotesThreshold) continue;
-
-        const postData = {
+        if (post.score < minUpvotesThreshold) continue;        const postData = {
           reddit_id: post.id,
           subreddit: subredditName,
           title: post.title,
@@ -655,7 +656,53 @@ Format as JSON.`;
           images: post.images || [],
           extracted_text: post.content || '',
           tags: post.flair ? [post.flair] : []
-        };        const postId = await kb.storePost(postData);
+        };
+
+        if (post.postType === 'image' && post.imageUrl) {
+          logger.info(`Analyzing image for post ${post.id}: ${post.imageUrl}`);
+          try {
+            const imageAnalysis = await this.downloadAndAnalyzeImage(post.imageUrl, {
+              title: post.title,
+              subreddit: subredditName
+            });
+            
+            if (imageAnalysis) {
+              postData.images = [{
+                url: post.imageUrl,
+                alt: post.imageAlt || '',
+                analysis: imageAnalysis
+              }];
+              
+              const imageText = [
+                imageAnalysis.description,
+                imageAnalysis.visible_text,
+                imageAnalysis.educational_content
+              ].filter(text => text && text.trim()).join(' ');
+              
+              if (imageText) {
+                postData.extracted_text = [postData.extracted_text, imageText].filter(Boolean).join(' ');
+              }
+              
+              logger.info(`Image analysis completed for post ${post.id}: relevance=${imageAnalysis.student_relevance}/10`);
+            } else {
+              postData.images = [{
+                url: post.imageUrl,
+                alt: post.imageAlt || '',
+                analysis: null
+              }];
+            }
+          } catch (error) {
+            logger.error(`Failed to analyze image for post ${post.id}:`, error.message);
+            postData.images = [{
+              url: post.imageUrl,
+              alt: post.imageAlt || '',
+              analysis: null,
+              error: error.message
+            }];
+          }
+        }
+
+        const postId = await kb.storePost(postData);
 
         if (post.comments && post.comments.length > 0) {
           logger.info(`Processing ${post.comments.length} comments for post ${postData.reddit_id}`);
@@ -696,9 +743,7 @@ Format as JSON.`;
           }
         } else {
           logger.info(`No comments to process for post ${postData.reddit_id}`);
-        }
-
-        logger.info(
+        }        logger.info(
           `Processed and stored post: ${post.title} with ${
             post.comments?.length || 0
           } comments`
@@ -707,6 +752,77 @@ Format as JSON.`;
         logger.error(`Failed to process post ${post.id}:`, error.message);
         logger.error('Full error details:', error);
       }
+    }
+  }
+
+  async downloadAndAnalyzeImage(imageUrl, postContext = {}) {
+    if (!this.imageAnalysisEnabled) {
+      logger.debug('Image analysis disabled, skipping image download');
+      return null;
+    }
+
+    if (!imageUrl || !imageUrl.startsWith('http')) {
+      logger.debug('Invalid image URL, skipping analysis');
+      return null;
+    }
+
+    try {
+      logger.info(`Downloading and analyzing image: ${imageUrl}`);
+      
+      const response = await this.session.get(imageUrl, {
+        responseType: 'arraybuffer',
+        timeout: 15000,
+        headers: {
+          'Accept': 'image/*',
+          'User-Agent': this.userAgent
+        }
+      });
+
+      if (!response.data || response.data.length === 0) {
+        logger.warn('Downloaded image is empty');
+        return null;
+      }
+
+      const imageBuffer = Buffer.from(response.data);
+      
+      if (imageBuffer.length > 10 * 1024 * 1024) {
+        logger.warn(`Image too large (${imageBuffer.length} bytes), skipping analysis`);
+        return null;
+      }
+
+      logger.debug(`Downloaded image: ${imageBuffer.length} bytes`);
+
+      const analysis = await this.imageAnalyzer.analyzeImage(imageBuffer);
+      
+      if (analysis && !analysis.error) {
+        logger.info(`Image analysis complete: ${analysis.description.substring(0, 100)}...`);
+        
+        const altText = await this.imageAnalyzer.analyzeImageForAccessibility(imageBuffer);
+        
+        return {
+          ...analysis,
+          alt_text_generated: altText,
+          analyzed_at: new Date().toISOString(),
+          image_size_bytes: imageBuffer.length,
+          post_context: {
+            title: postContext.title,
+            subreddit: postContext.subreddit
+          }
+        };
+      } else {
+        logger.warn('Image analysis failed or returned error');
+        return null;
+      }
+
+    } catch (error) {
+      if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+        logger.warn(`Image download failed - network error: ${error.message}`);
+      } else if (error.response && error.response.status >= 400) {
+        logger.warn(`Image download failed - HTTP ${error.response.status}: ${imageUrl}`);
+      } else {
+        logger.error(`Image analysis error: ${error.message}`);
+      }
+      return null;
     }
   }
 }

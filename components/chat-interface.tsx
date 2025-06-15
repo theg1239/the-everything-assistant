@@ -90,45 +90,34 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     },
   })
   useEffect(() => {
-    // Mark initial render as complete after first render
     if (isInitialRender) {
       setIsInitialRender(false)
     }
   }, [isInitialRender])
 
   useEffect(() => {
-    // Only auto-scroll when user is actively typing and sending messages
-    // This prevents auto-scrolling on initial page load
     if (!isInitialRender && messages.length > 0 && messages[messages.length - 1].role === 'user') {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
   }, [messages, isLoading, isInitialRender])
 
-  // Add auto-scroll during message streaming
   useEffect(() => {
-    // Auto-scroll during message streaming (when AI is responding)
     if (!isInitialRender && messages.length > 0 && isLoading) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
   }, [messages, isLoading, isInitialRender])
 
-  // Create an auto-scroll function to monitor streaming content
   const contentRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    // Auto-scroll during streaming by monitoring content changes
     if (isLoading && !isInitialRender) {
-      // Set up a mutation observer to watch for content changes
       const targetNode = contentRef.current
       if (!targetNode) return
 
-      // Create a mutation observer to detect new content
       const observer = new MutationObserver(() => {
-        // Scroll to the end when content changes
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
       })
 
-      // Start observing the target node for content changes
       observer.observe(targetNode, {
         childList: true,
         subtree: true,
@@ -136,7 +125,6 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         attributes: false,
       })
 
-      // Clean up observer on effect cleanup
       return () => {
         observer.disconnect()
       }
@@ -208,9 +196,9 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               //console.log('Clearing credentials state for toolCallId:', toolCallId)
               return {
                 ...toolInvocation,
-                toolCallId: toolCallId, // Ensure toolCallId is set
-                state: 'call', // Set to loading state
-                result: undefined, // Clear the credentials required result
+                toolCallId: toolCallId,
+                state: 'call',
+                result: undefined,
               }
             }
             return toolInvocation
@@ -348,29 +336,23 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     }
   }
 
-  // Add an effect to scroll to top when a chat page is first loaded
   useEffect(() => {
     if (chatId || optimisticChatId) {
-      // This is a chat page, so scroll to top
       window.scrollTo(0, 0)
 
-      // Also use setTimeout to ensure browser has time to render
       setTimeout(() => {
         window.scrollTo(0, 0)
       }, 100)
     }
-  }, [chatId, optimisticChatId]) // Override auto-scrolling to preserve header visibility
+  }, [chatId, optimisticChatId])
   useEffect(() => {
     if (chatId || optimisticChatId) {
-      // Create a function to manually force scroll to top
       const forceScrollToTop = () => {
         window.scrollTo(0, 0)
       }
 
-      // Execute it on mount
       forceScrollToTop()
 
-      // And after a delay to ensure rendering is complete
       const timeoutId = setTimeout(forceScrollToTop, 100)
 
       return () => {

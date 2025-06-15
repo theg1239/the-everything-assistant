@@ -34,6 +34,10 @@ const useViewportHeight = () => {
       if (mainRef.current) {
         mainRef.current.style.height = `calc(var(--vh, 1vh) * 100)`
       }
+      
+      if (window.innerWidth <= 768) {
+        window.scrollTo(0, 0)
+      }
     }
 
     setVh()
@@ -62,6 +66,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [hasUserInitiatedConversation, setHasUserInitiatedConversation] = useState(false)
   const [isInitialRender, setIsInitialRender] = useState(true)
+  const [isMobile, setIsMobile] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -69,6 +74,25 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const { updateToolResult } = useVTOP()
   
   const mainRef = useViewportHeight()
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768)
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    
+    if (window.innerWidth <= 768) {
+      window.scrollTo(0, 0)
+      document.body.style.overflow = 'hidden'
+      
+      return () => {
+        window.removeEventListener('resize', checkMobile)
+        document.body.style.overflow = ''
+      }
+    }
+    
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -122,22 +146,36 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       setErrorMessage('Unable to connect. Please check your connection and try again.')
     },
   })
+  
   useEffect(() => {
     if (isInitialRender) {
       setIsInitialRender(false)
+      
+      // Ensure header is visible on mobile after initial render
+      if (isMobile) {
+        setTimeout(() => {
+          window.scrollTo(0, 0)
+        }, 100)
+      }
     }
-  }, [isInitialRender])
-
+  }, [isInitialRender, isMobile])
   useEffect(() => {
     if (!isInitialRender && messages.length > 0 && messages[messages.length - 1].role === 'user') {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      // On mobile, only scroll if user has initiated conversation to prevent header hiding
+      if (!isMobile || hasUserInitiatedConversation) {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      }
     }
-  }, [messages, isLoading, isInitialRender])
+  }, [messages, isLoading, isInitialRender, isMobile, hasUserInitiatedConversation])
 
-  useEffect(() => {    if (!isInitialRender && messages.length > 0 && isLoading) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  useEffect(() => {
+    if (!isInitialRender && messages.length > 0 && isLoading) {
+      // On mobile, only scroll if user has initiated conversation
+      if (!isMobile || hasUserInitiatedConversation) {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      }
     }
-  }, [messages, isLoading, isInitialRender])
+  }, [messages, isLoading, isInitialRender, isMobile, hasUserInitiatedConversation])
 
   useEffect(() => {
     if (isLoading && !isInitialRender) {
@@ -497,8 +535,14 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       />{' '}      <div 
         ref={mainRef}
         className="flex flex-col h-[calc(var(--vh,1vh)*100)] bg-background text-foreground overflow-hidden"
-        style={{ height: 'var(--app-height, 100vh)' }}
-      >        <header className="flex-shrink-0 fixed top-0 left-0 right-0 z-40 bg-background/95 border-b border-border chat-page-header">
+        style={{ 
+          height: 'var(--app-height, 100vh)',
+          position: isMobile ? 'fixed' : 'relative',
+          width: '100%',
+          top: 0,
+          left: 0
+        }}
+      ><header className="flex-shrink-0 fixed top-0 left-0 right-0 z-40 bg-background/95 border-b border-border chat-page-header">
           <div className="flex h-14 items-center px-4 gap-2" style={{ height: 'var(--header-height, 60px)' }}>
             <HamburgerButton onClick={() => setSidebarOpen(!sidebarOpen)} className="md:block" />
             <Button

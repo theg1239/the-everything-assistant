@@ -184,3 +184,62 @@
     contain: layout style;
   }
 }
+
+/* New structured Reddit response styling */
+.reddit-response {
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+.reddit-response h3 {
+  color: #1a202c;
+  font-weight: 600;
+  margin: 1rem 0 0.5rem 0;
+  font-size: 1.1rem;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 0.25rem;
+}
+
+.reddit-response h3:first-child {
+  margin-top: 0;
+}
+
+.reddit-response p {
+  margin: 0.5rem 0;
+  line-height: 1.6;
+  color: #2d3748;
+}
+
+.reddit-response ul {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}
+
+.reddit-response li {
+  margin: 0.375rem 0;
+  line-height: 1.5;
+  color: #2d3748;
+}
+
+/* Mobile optimizations for Reddit response */
+@media (max-width: 640px) {
+  .reddit-response h3 {
+    font-size: 1rem;
+    margin: 0.875rem 0 0.375rem 0;
+  }
+  
+  .reddit-response p {
+    font-size: 0.875rem;
+    margin: 0.375rem 0;
+  }
+  
+  .reddit-response li {
+    font-size: 0.875rem;
+    margin: 0.25rem 0;
+  }
+  
+  .reddit-response ul {
+    padding-left: 1rem;
+  }
+}

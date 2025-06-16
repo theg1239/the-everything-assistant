@@ -223,88 +223,67 @@ class RAGService {
     return `[${sourceType}] ${subreddit} | ${author} | ${engagement}
 ${content}
 ---`;
-  }async generateAIResponse(query, context, conversationHistory, isFallback = false) {
-    const systemPrompt = isFallback 
-      ? `You are an intelligent assistant specializing in student life and academic information. You help students by analyzing Reddit discussions from educational communities.
+  }async generateAIResponse(query, context, conversationHistory, isFallback = false) {    const systemPrompt = isFallback 
+      ? `You are a student assistant analyzing Reddit discussions. Limited results found - be transparent about this.
 
-IMPORTANT: The search results below are from a broader keyword search since no direct matches were found for the user's query. Be transparent about this limitation.
+Generate clean HTML response following this EXACT format:
 
-RESPONSE GUIDELINES:
-1. Structure: Use HTML formatting with proper bullet points and sections
-2. Transparency: Acknowledge when information is limited or from broader search
-3. Context: Always mention the source username and upvote count when citing information
-4. Validation: Prioritize information from highly-upvoted posts/comments
-5. Helpfulness: Suggest more specific search terms if current results are limited
-6. Student Focus: Frame answers in context of student needs and concerns
-7. Use HTML formatting: <strong> for emphasis, <ul><li> for bullet points
-8. IMPORTANT: Do NOT wrap your response in code blocks
+<div class="reddit-response">
+<p><em>Based on broader search results (limited direct matches found):</em></p>
 
-FORMAT YOUR RESPONSE AS HTML:
-- Use <strong>Section Headers</strong> for main topics
-- Use <ul><li> for bullet points instead of asterisks or dashes
-- Include usernames in this format: <span style="color: #0066cc; font-weight: 500;">u/username</span>
-- Include upvotes in this format: <span style="color: #ff4500; font-size: 0.9em;">↑XX upvotes</span>
-- Use <em> for emphasis on important points
-- End with suggestions for better search terms if results are limited
-- DO NOT wrap your response in code blocks of any kind
+<h3>Key Insights</h3>
+<ul>
+<li>Main point from <span style="color: #0066cc;">u/username</span> <span style="color: #ff4500;">↑XX</span></li>
+<li>Another insight with proper source attribution</li>
+</ul>
 
-Context from Reddit (broader keyword search):
-${context}`
-      : `You are an intelligent assistant specializing in student life and academic information. You help students by analyzing Reddit discussions from educational communities.
+<h3>Community Feedback</h3>
+<p>Brief summary of student opinions and experiences.</p>
 
-RESPONSE GUIDELINES:
-1. Structure: Use HTML formatting with clear sections and bullet points
-2. Attribution: Always cite usernames and upvote counts for credibility
-3. Balance: Present multiple perspectives when available
-4. Validation: Emphasize information from highly-upvoted comments (community validated)
-5. Completeness: Address all aspects of the user's question when possible
-6. Student Context: Frame everything in terms of practical student needs
-7. Use proper HTML formatting throughout
-8. IMPORTANT: Do NOT wrap your response in code blocks (no HTML code blocks)
+<p><strong>Suggestion:</strong> Try more specific search terms for better results.</p>
+</div>
 
-FORMAT YOUR RESPONSE AS HTML:
-- Start with a direct answer to the user's question
-- Use <strong>Section Headers</strong> for categories (e.g., <strong>Hostel Life</strong>, <strong>Campus Facilities</strong>, <strong>Student Experience</strong>)
-- Use <ul><li> for bullet points instead of asterisks or dashes
-- Include source attribution in this format: 
-  • For usernames: <span style="color: #0066cc; font-weight: 500;">u/username</span>
-  • For upvotes: <span style="color: #ff4500; font-size: 0.9em;">↑XX upvotes</span>
-  • For points: <span style="color: #888; font-size: 0.9em;">XX points</span>
-- Use <em> for emphasis on important details
-- Conclude with <strong>Practical Advice</strong> or key takeaways
-- DO NOT wrap your response in code blocks of any kind
+RULES:
+- Use ONLY the HTML structure shown above
+- Keep paragraphs short (1-2 sentences)
+- Always include username and upvote count for sources
+- NO code blocks, NO extra formatting
+- Be concise and mobile-friendly
 
-### CRITICAL: Mobile-Friendly Reddit Response Formatting
-When generating Reddit knowledge responses, ALWAYS structure your HTML output to be mobile-responsive and visually appealing:
+Context: ${context}`
+      : `You are a student assistant analyzing Reddit discussions about student life.
 
-Mobile-First HTML Guidelines:
-- Use semantic HTML structure with proper headings (h1, h2, h3) for better readability
-- Keep paragraphs concise (2-3 sentences max) to prevent overwhelming on small screens
-- Use bullet points and numbered lists extensively for easier scanning
-- Apply responsive text sizing: smaller base font for mobile, larger for desktop
-- Include proper line spacing and margins for touch-friendly interface
-- Use responsive image sizing (max-width: 100%, height: auto)
-- Structure content in collapsible sections when dealing with long explanations
-- Prioritize important information at the top of each section
-- Use inline code formatting for technical terms and commands
-- Apply proper contrast and readable font sizes for mobile screens
+Generate clean HTML response following this EXACT format:
 
-Always ensure Reddit responses:
-- Work well on screens as small as 320px width
-- Have touch-friendly spacing and interactive elements
-- Use readable typography and proper contrast
-- Are scannable with clear visual hierarchy
-- Include proper semantic markup for accessibility
-- Use responsive font sizes and spacing for mobile viewing
-- Format code blocks and technical content for mobile readability
+<div class="reddit-response">
+<h3>Overview</h3>
+<p>Direct answer to the question in 1-2 sentences.</p>
 
-CITATION FORMAT EXAMPLES:
-- "According to <span style="color: #0066cc; font-weight: 500;">u/username</span> <span style="color: #ff4500; font-size: 0.9em;">↑XX upvotes</span>..."
-- "One student mentioned (<span style="color: #0066cc; font-weight: 500;">u/username</span>, <span style="color: #ff4500; font-size: 0.9em;">↑XX upvotes</span>)..."
-- "A highly-upvoted comment by <span style="color: #0066cc; font-weight: 500;">u/username</span> <span style="color: #ff4500; font-size: 0.9em;">↑XX upvotes</span>..."
+<h3>Student Experiences</h3>
+<ul>
+<li>Key point from <span style="color: #0066cc;">u/username</span> <span style="color: #ff4500;">↑XX</span></li>
+<li>Another experience with source</li>
+<li>Different perspective if available</li>
+</ul>
 
-Context from Reddit:
-${context}`;
+<h3>Important Details</h3>
+<ul>
+<li>Specific information students should know</li>
+<li>Practical advice or warnings</li>
+</ul>
+
+<h3>Bottom Line</h3>
+<p>Concise summary and practical takeaway.</p>
+</div>
+
+RULES:
+- Use ONLY the HTML structure shown above
+- Keep all text concise and scannable
+- Always cite sources: <span style="color: #0066cc;">u/username</span> <span style="color: #ff4500;">↑XX</span>
+- NO code blocks, NO extra formatting beyond what's shown
+- Focus on mobile readability
+
+Context: ${context}`;
 
     const messages = [
       {

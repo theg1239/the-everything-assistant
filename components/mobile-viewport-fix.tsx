@@ -43,6 +43,9 @@ export default function MobileViewportFix() {
       if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') {
         handleKeyboardVisibility(true)
         requestAnimationFrame(() => {
+          const pageScrollable = document.documentElement.scrollHeight > window.innerHeight
+          if (window.scrollY === 0 && !pageScrollable) return
+
           target.scrollIntoView({ behavior: 'smooth', block: 'center' })
         })
       }

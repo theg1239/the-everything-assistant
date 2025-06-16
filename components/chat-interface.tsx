@@ -354,7 +354,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       if (response.ok) {
         const result = await response.json()
 
-        console.log('VTOP credential submission result:', result)
+        //console.log('VTOP credential submission result:', result)
         if (toolCallId) {
           updateToolResult(toolCallId, command, result.result)
         }
@@ -362,12 +362,12 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
           if (message.toolInvocations) {
             const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
               if (toolInvocation.toolCallId && toolInvocation.toolCallId === toolCallId) {
-                console.log(
-                  'Updating tool invocation with result:',
-                  result.result,
-                  'for toolCallId:',
-                  toolCallId
-                )
+                // console.log(
+                //   'Updating tool invocation with result:',
+                //   result.result,
+                //   'for toolCallId:',
+                //   toolCallId
+                // )
                 return {
                   ...toolInvocation,
                   result: result.result,

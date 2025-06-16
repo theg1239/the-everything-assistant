@@ -369,13 +369,13 @@ async function handleIntelligentCoursePage(params: {
 
   let step = interactiveStep
   if (!step) {
-    console.log('Determining step - semester:', semester, 'course:', course, 'faculty:', faculty)
-    console.log(
-      'Contextual queries - semester:',
-      contextualSemesterQuery,
-      'course:',
-      contextualCourseQuery
-    )
+    // console.log('Determining step - semester:', semester, 'course:', course, 'faculty:', faculty)
+    // console.log(
+    //   'Contextual queries - semester:',
+    //   contextualSemesterQuery,
+    //   'course:',
+    //   contextualCourseQuery
+    // )
 
     if (
       (contextualCourseQuery || courseQuery) &&
@@ -389,7 +389,7 @@ async function handleIntelligentCoursePage(params: {
       step = 'semester'
     } else {
       if (contextualSemesterQuery && !semester) {
-        console.log('Have semesterQuery but no semester number, staying on semester step')
+        // console.log('Have semesterQuery but no semester number, staying on semester step')
         step = 'semester'
       } else if (!semester) {
         step = 'semester'
@@ -411,20 +411,20 @@ async function handleIntelligentCoursePage(params: {
           previousStepType === 'semester' &&
           /^\s*\d+\s*$/.test(messages[messages.length - 1]?.content || '')
 
-        console.log('Semester selection debug:')
-        console.log('- previousStepType:', previousStepType)
-        console.log('- last message content:', messages?.[messages.length - 1]?.content)
-        console.log('- shouldCompleteSemesterSelection:', shouldCompleteSemesterSelection)
-        console.log('- userJustSelectedSemester:', userJustSelectedSemester)
-        console.log('- semesterAutoResolved:', semesterAutoResolved)
+        // console.log('Semester selection debug:')
+        // console.log('- previousStepType:', previousStepType)
+        // console.log('- last message content:', messages?.[messages.length - 1]?.content)
+        // console.log('- shouldCompleteSemesterSelection:', shouldCompleteSemesterSelection)
+        // console.log('- userJustSelectedSemester:', userJustSelectedSemester)
+        // console.log('- semesterAutoResolved:', semesterAutoResolved)
 
         if (shouldCompleteSemesterSelection || userJustSelectedSemester) {
-          console.log('Completing semester selection, staying on semester step')
+          // console.log('Completing semester selection, staying on semester step')
           step = 'semester'
         } else if (semesterAutoResolved) {
-          console.log(
-            'Semester was auto-resolved from query, staying on semester step to show selection'
-          )
+          // console.log(
+          //   'Semester was auto-resolved from query, staying on semester step to show selection'
+          // )
           step = 'semester'
         } else {
           step = 'course'
@@ -435,7 +435,7 @@ async function handleIntelligentCoursePage(params: {
         step = 'materials'
       }
     }
-    console.log('Determined step:', step)
+    // console.log('Determined step:', step)
   }
 
   const PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001'
@@ -456,11 +456,11 @@ async function handleIntelligentCoursePage(params: {
   }
   if (contextualSemesterQuery) {
     requestBody.flags.semesterQuery = contextualSemesterQuery
-    console.log('Using contextual semester query:', contextualSemesterQuery)
+    // console.log('Using contextual semester query:', contextualSemesterQuery)
   }
   if (contextualCourseQuery) {
     requestBody.flags.courseQuery = contextualCourseQuery
-    console.log('Using contextual course query:', contextualCourseQuery)
+    // console.log('Using contextual course query:', contextualCourseQuery)
   }
   if (contextualFacultyQuery || facultyQuery) {
     requestBody.flags.facultyQuery = contextualFacultyQuery || facultyQuery

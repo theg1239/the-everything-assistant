@@ -740,7 +740,7 @@ const PaperCard = ({ paper, onViewPdf }: { paper: any; onViewPdf: (url: string) 
               className="h-7 px-3 text-xs"
               onClick={() => {
                 const urlToView = paper.link || paper.url || paper.pdfUrl || paper.downloadUrl
-                console.log('[PaperCard] View Paper clicked. URL:', urlToView)
+                //console.log('[PaperCard] View Paper clicked. URL:', urlToView)
                 onViewPdf(urlToView)
               }}
             >
@@ -1717,7 +1717,7 @@ const PureArtifactDisplay = ({
   }
 
   const handleClosePdf = () => {
-    console.log('[PureArtifactDisplay] Closing PDF view.')
+    //console.log('[PureArtifactDisplay] Closing PDF view.')
     setPdfUrl(null)
   }
 

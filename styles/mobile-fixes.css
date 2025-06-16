@@ -30,7 +30,7 @@ main {
 
 /* Header styling */
 .chat-page-header {
-  position: absolute;
+  position: sticky;
   top: 0;
   left: 0;
   right: 0;
@@ -57,7 +57,7 @@ main {
 
 /* Input area */
 .input-area {
-  position: absolute;
+  position: sticky;
   bottom: 0;
   left: 0;
   right: 0;
@@ -82,7 +82,7 @@ main {
     }
 
     .chat-page-header {
-      position: absolute;
+      /* Preserve sticky positioning when keyboard is visible */
     }
   }
 }

@@ -50,7 +50,7 @@ main {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding-top: calc(var(--header-height) + var(--safe-top));
-  padding-bottom: calc(60px + var(--safe-bottom));
+  padding-bottom: calc(80px + var(--safe-bottom)); /* Increased for floating input */
   height: 100%;
   position: relative;
 }
@@ -61,11 +61,57 @@ main {
   bottom: 0;
   left: 0;
   right: 0;
-  background: var(--background);
-  padding: 10px;
-  padding-bottom: calc(10px + var(--safe-bottom));
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  padding: 0;
+  border: none;
   z-index: 30;
+}
+
+/* Mobile input area - floating style */
+@media (max-width: 768px) {
+  .input-area {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    background: transparent !important;
+    padding: 12px !important;
+    padding-bottom: calc(12px + var(--safe-bottom)) !important;
+    border: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    z-index: 50 !important;
+  }
+  
+  /* Remove background gradients and borders on mobile */
+  .input-area::before,
+  .input-area::after {
+    display: none !important;
+  }
+  
+  /* Make the input truly floating */
+  .input-area > div {
+    margin: 0 auto !important;
+    max-width: calc(100vw - 24px) !important;
+    background: rgba(0, 0, 0, 0.95) !important;
+    backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 24px !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+  }
+  
+  .input-area form {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+  }
+  
+  /* Ensure the input container spans full width on mobile */
+  .input-area .relative.max-w-3xl {
+    max-width: none !important;
+    padding: 0 !important;
+  }
 }
 
 /* Mobile keyboard handling */
@@ -79,11 +125,39 @@ main {
     .input-area {
       position: fixed;
       bottom: 0;
+    }    .chat-page-header {
+      position: sticky;
+      top: 0;
     }
+  }
+}
 
-    .chat-page-header {
-      /* Preserve sticky positioning when keyboard is visible */
-    }
+/* Prevent empty padding at bottom on mobile */
+@media (max-width: 768px) {
+  .chat-content {
+    /* Increased bottom padding for floating input */
+    padding-bottom: calc(100px + var(--safe-bottom)) !important;
+    /* Remove top padding since header is sticky */
+    padding-top: 0 !important;
+  }
+  
+  /* Ensure messages container doesn't create excessive space */
+  .chat-content > div > div {
+    min-height: fit-content;
+    padding-top: 0.5rem !important;
+    padding-bottom: 1.5rem !important;
+  }
+  
+  /* Prevent auto-scroll behavior on mobile */
+  .mobile-no-auto-scroll {
+    scroll-behavior: auto !important;
+  }
+  
+  /* Maintain header visibility */
+  .mobile-header-sticky {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 50 !important;
   }
 }
 

@@ -183,52 +183,47 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       if (isMobile) {
         setTimeout(() => {
           window.scrollTo(0, 0)
-        }, 100)
-      }
+        }, 100)      }
     }
   }, [isInitialRender, isMobile])
+  
   useEffect(() => {
     if (!isInitialRender && messages.length > 0 && messages[messages.length - 1].role === 'user') {
-      // On mobile, prevent auto-scroll for the first message in a new chat to keep header visible
-      if (isMobile && isFirstMessageInNewChat) {
-        setIsFirstMessageInNewChat(false) // Reset the flag after first message
-        return // Don't scroll on first message of new chat on mobile
+      // Completely disable auto-scroll on mobile to maintain header visibility
+      if (isMobile) {
+        return // Don't auto-scroll on mobile at all
       }
       
-      // On mobile, only scroll if user has initiated conversation to prevent header hiding
-      if (!isMobile || hasUserInitiatedConversation) {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-      }
+      // On desktop, scroll normally
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [messages, isLoading, isInitialRender, isMobile, hasUserInitiatedConversation, isFirstMessageInNewChat])
+  }, [messages, isLoading, isInitialRender, isMobile])
+  
   useEffect(() => {
     if (!isInitialRender && messages.length > 0 && isLoading) {
-      // On mobile, prevent auto-scroll for the first message in a new chat to keep header visible
-      if (isMobile && isFirstMessageInNewChat) {
-        return // Don't scroll during loading of first message of new chat on mobile
+      // Completely disable auto-scroll on mobile to maintain header visibility
+      if (isMobile) {
+        return // Don't auto-scroll on mobile during loading
       }
       
-      // On mobile, only scroll if user has initiated conversation
-      if (!isMobile || hasUserInitiatedConversation) {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-      }
+      // On desktop, scroll normally during loading
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [messages, isLoading, isInitialRender, isMobile, hasUserInitiatedConversation, isFirstMessageInNewChat])
+  }, [messages, isLoading, isInitialRender, isMobile])
+  
   useEffect(() => {
     if (isLoading && !isInitialRender) {
       const targetNode = contentRef.current
       if (!targetNode) return
 
       const observer = new MutationObserver(() => {
-        // On mobile, prevent auto-scroll for the first message in a new chat
-        if (isMobile && isFirstMessageInNewChat) {
-          return
+        // Completely disable auto-scroll on mobile to maintain header visibility
+        if (isMobile) {
+          return // Don't auto-scroll on mobile during mutations
         }
         
-        // On mobile, only scroll if user has initiated conversation
-        if (!isMobile || hasUserInitiatedConversation) {
-          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-        }
+        // On desktop, scroll normally
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
       })
 
       observer.observe(targetNode, {
@@ -242,7 +237,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         observer.disconnect()
       }
     }
-  }, [isLoading, isInitialRender, isMobile, hasUserInitiatedConversation, isFirstMessageInNewChat])
+  }, [isLoading, isInitialRender, isMobile])
 
   useEffect(() => {
     if (error) {
@@ -600,7 +595,10 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
           position: 'relative',
           width: '100%',
         }}
-      ><header className="flex-shrink-0 sticky top-0 z-40 bg-background/95 border-b border-border chat-page-header">
+      ><header className={cn(
+        "flex-shrink-0 sticky top-0 z-40 bg-background/95 border-b border-border chat-page-header",
+        isMobile && "mobile-header-sticky"
+      )}>
           <div className="flex h-14 items-center px-4 gap-2">
             <HamburgerButton onClick={() => setSidebarOpen(!sidebarOpen)} className="md:block" />
             <Button
@@ -622,10 +620,12 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         </header>        <div className="flex-1 relative overflow-hidden">
           <div className={cn(
             "absolute inset-0 overflow-y-auto chat-content",
-            isMobile && "mobile-chat-container",
+            isMobile && "mobile-chat-container mobile-no-auto-scroll",
             isMobile && isFirstMessageInNewChat && "mobile-prevent-auto-scroll"
-          )}>
-            <div ref={contentRef} className="max-w-3xl mx-auto px-4 space-y-6 pt-5">
+          )}>            <div ref={contentRef} className={cn(
+              "max-w-3xl mx-auto px-4 space-y-6",
+              isMobile ? "pt-2 pb-6" : "pt-5", // Reduce top and bottom padding on mobile
+            )}>
               {errorMessage && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -672,14 +672,19 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
             </div>
           </div>
         </div>
-        <ScrollToTopButton />{' '}        <div className="flex-shrink-0 sticky bottom-0 z-30 input-area">
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              background: 'linear-gradient(to bottom, transparent, rgb(2, 6, 23) 50%)',
-              borderTop: 'none',
-            }}
-          ></div>
+        <ScrollToTopButton />{' '}        <div className={cn(
+          "flex-shrink-0 sticky bottom-0 z-30",
+          isMobile ? "input-area" : "input-area"
+        )}>
+          {!isMobile && (
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background: 'linear-gradient(to bottom, transparent, rgb(2, 6, 23) 50%)',
+                borderTop: 'none',
+              }}
+            ></div>
+          )}
 
           <div className="relative z-10">
             <MultimodalInput

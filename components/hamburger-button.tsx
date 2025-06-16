@@ -4,7 +4,7 @@ import React from 'react'
 import { Button } from '@/components/ui/button'
 
 interface HamburgerButtonProps {
-  onClick: () => void
+  onClick: React.MouseEventHandler<HTMLButtonElement>
   className?: string
 }
 

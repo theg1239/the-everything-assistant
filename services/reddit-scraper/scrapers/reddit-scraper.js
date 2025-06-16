@@ -669,10 +669,9 @@ Format as JSON.`;
           subreddit: subredditName,
           title: post.title,
           content: post.content || '',
-          author: post.author,
-          created_utc: new Date(
-            parseInt(post.createdTimestamp) * 1000
-          ),
+          author: post.author,          created_utc: post.createdTimestamp && !isNaN(parseInt(post.createdTimestamp))
+            ? new Date(parseInt(post.createdTimestamp) * 1000)
+            : new Date(),
           upvotes: Math.max(0, post.score),
           downvotes: 0,
           score: post.score,
@@ -762,8 +761,7 @@ Format as JSON.`;
               parent_comment_id: comment.parentId,
               subreddit: subredditName,
               author: comment.author || 'unknown',
-              content: comment.content,
-              created_utc: comment.timestamp
+              content: comment.content,              created_utc: comment.timestamp && !isNaN(parseInt(comment.timestamp))
                 ? new Date(parseInt(comment.timestamp) * 1000)
                 : new Date(),
               upvotes: comment.score || 0,

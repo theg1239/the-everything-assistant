@@ -8,6 +8,38 @@
   hyphens: auto;
 }
 
+/* Enhanced styling for new Reddit response format */
+.reddit-response {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
+  color: inherit;
+}
+
+.reddit-response h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 1rem 0 0.5rem 0;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.reddit-response ul {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}
+
+.reddit-response li {
+  margin: 0.5rem 0;
+  line-height: 1.5;
+}
+
+.reddit-response p {
+  margin: 0.75rem 0;
+  line-height: 1.6;
+}
+
 /* Mobile-optimized Reddit response content */
 .reddit-response-content {
   /* Better text rendering on mobile */

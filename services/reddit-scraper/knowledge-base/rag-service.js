@@ -223,65 +223,66 @@ class RAGService {
     return `[${sourceType}] ${subreddit} | ${author} | ${engagement}
 ${content}
 ---`;
-  }async generateAIResponse(query, context, conversationHistory, isFallback = false) {    const systemPrompt = isFallback 
+  }async generateAIResponse(query, context, conversationHistory, isFallback = false) {
+    const systemPrompt = isFallback 
       ? `You are a student assistant analyzing Reddit discussions. Limited results found - be transparent about this.
 
-Generate clean HTML response following this EXACT format:
+Generate a clean, structured response in HTML format. Follow this EXACT structure:
 
 <div class="reddit-response">
 <p><em>Based on broader search results (limited direct matches found):</em></p>
 
-<h3>Key Insights</h3>
+<h3> Key Insights</h3>
 <ul>
-<li>Main point from <span style="color: #0066cc;">u/username</span> <span style="color: #ff4500;">↑XX</span></li>
+<li>Main point from <span style="color: #0066cc; font-weight: 500;">u/username</span> <span style="color: #ff4500; font-size: 0.9em;">↑XX upvotes</span></li>
 <li>Another insight with proper source attribution</li>
 </ul>
 
-<h3>Community Feedback</h3>
+<h3> Community Feedback</h3>
 <p>Brief summary of student opinions and experiences.</p>
 
-<p><strong>Suggestion:</strong> Try more specific search terms for better results.</p>
+<p><strong> Suggestion:</strong> Try more specific search terms for better results.</p>
 </div>
 
-RULES:
-- Use ONLY the HTML structure shown above
-- Keep paragraphs short (1-2 sentences)
-- Always include username and upvote count for sources
-- NO code blocks, NO extra formatting
-- Be concise and mobile-friendly
+CRITICAL RULES:
+- Output ONLY HTML - no markdown, no code blocks, no backticks
+- Use the exact structure shown above
+- Always include username and upvote count for credibility
+- Keep paragraphs short (1-2 sentences max)
+- Use proper HTML tags, NOT markdown
 
 Context: ${context}`
       : `You are a student assistant analyzing Reddit discussions about student life.
 
-Generate clean HTML response following this EXACT format:
+Generate a clean, well-structured response in HTML format. Follow this EXACT structure:
 
 <div class="reddit-response">
-<h3>Overview</h3>
+<h3>📌 Overview</h3>
 <p>Direct answer to the question in 1-2 sentences.</p>
 
-<h3>Student Experiences</h3>
+<h3>👥 Student Experiences</h3>
 <ul>
-<li>Key point from <span style="color: #0066cc;">u/username</span> <span style="color: #ff4500;">↑XX</span></li>
-<li>Another experience with source</li>
+<li>Key point from <span style="color: #0066cc; font-weight: 500;">u/username</span> <span style="color: #ff4500; font-size: 0.9em;">↑XX upvotes</span></li>
+<li>Another experience with source attribution</li>
 <li>Different perspective if available</li>
 </ul>
 
-<h3>Important Details</h3>
+<h3>⚠️ Important Details</h3>
 <ul>
 <li>Specific information students should know</li>
 <li>Practical advice or warnings</li>
 </ul>
 
-<h3>Bottom Line</h3>
-<p>Concise summary and practical takeaway.</p>
+<h3>✅ Bottom Line</h3>
+<p>Concise summary and practical takeaway for students.</p>
 </div>
 
-RULES:
-- Use ONLY the HTML structure shown above
-- Keep all text concise and scannable
-- Always cite sources: <span style="color: #0066cc;">u/username</span> <span style="color: #ff4500;">↑XX</span>
-- NO code blocks, NO extra formatting beyond what's shown
-- Focus on mobile readability
+CRITICAL RULES:
+- Output ONLY HTML - no markdown, no code blocks, no backticks  
+- Use the exact structure shown above
+- Always cite sources: <span style="color: #0066cc; font-weight: 500;">u/username</span> <span style="color: #ff4500; font-size: 0.9em;">↑XX upvotes</span>
+- Keep all text concise and mobile-friendly
+- Use proper HTML tags, NOT markdown
 
 Context: ${context}`;
 
@@ -307,15 +308,22 @@ Context: ${context}`;
         temperature: 0.7
       });
 
-      const cleanResponse = result.text
+      // Clean the response to ensure it's proper HTML
+      let cleanResponse = result.text
         .replace(/```html\s*/g, '')
         .replace(/```\s*/g, '')
+        .replace(/`/g, '')
         .trim();
+
+      // Ensure the response is wrapped in the reddit-response div
+      if (!cleanResponse.includes('reddit-response')) {
+        cleanResponse = `<div class="reddit-response">${cleanResponse}</div>`;
+      }
 
       return cleanResponse;
     } catch (error) {
       logger.error('Error generating AI response:', error);
-      return 'I apologize, but I encountered an error while generating a response. Please try again.';
+      return '<div class="reddit-response"><p>I apologize, but I encountered an error while generating a response. Please try again.</p></div>';
     }
   }
 

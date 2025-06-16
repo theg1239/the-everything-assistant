@@ -827,8 +827,12 @@ const PureToolCallDisplay = ({ toolCalls, onLoginClick }: ToolCallDisplayProps) 
       )
     }
 
+    if (toolCall.toolName === 'searchRedditKnowledge' || toolCall.toolName === 'searchRedditWithContext') {
+      return toolCall.result && (toolCall.result.success || toolCall.result.error)
+    }
+
     const hasValidResult =
-      toolCall.result && !toolCall.result.requiresCredentials && toolCall.state === 'result'
+      toolCall.result && !toolCall.result.requiresCredentials && (toolCall.state === 'result' || toolCall.type === 'tool-result')
 
     return hasValidResult
   })

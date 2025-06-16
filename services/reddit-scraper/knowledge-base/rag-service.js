@@ -7,7 +7,7 @@ class RAGService {
   constructor() {
     this.knowledgeBase = new KnowledgeBase();
     this.maxContextLength = parseInt(process.env.MAX_CONTEXT_LENGTH) || 4000;
-    this.chatModel = google('gemini-2.0-flash');
+    this.chatModel = google('gemini-2.0-flash-lite');
   }  async generateResponse(query, conversationHistory = []) {
     try {
       logger.info(`Generating RAG response for query: "${query}"`);
@@ -257,7 +257,7 @@ Context: ${context}`
 Generate a clean, well-structured response in HTML format. Follow this EXACT structure:
 
 <div class="reddit-response">
-<h3>📌 Overview</h3>
+<h3>Overview</h3>
 <p>Direct answer to the question in 1-2 sentences.</p>
 
 <h3>Student Experiences</h3>
@@ -284,6 +284,8 @@ CRITICAL RULES:
 - Keep all text concise and mobile-friendly
 - Use proper HTML tags, NOT markdown
 - Try to not omit anything important from the context
+- Do not hallucinate usernames or upvote counts, if you do not have them, don't include them
+- When you're talking about posts, don't just say stuff like "the first post says this" and all that, instead, use the actual content of the post, but keep it elaborated and concise
 
 Context: ${context}`;
 
@@ -305,18 +307,16 @@ Context: ${context}`;
       const result = await generateText({
         model: this.chatModel,
         messages: messages,
-        maxTokens: 1000,
+        maxTokens: 3000,
         temperature: 0.7
       });
 
-      // Clean the response to ensure it's proper HTML
       let cleanResponse = result.text
         .replace(/```html\s*/g, '')
         .replace(/```\s*/g, '')
         .replace(/`/g, '')
         .trim();
 
-      // Ensure the response is wrapped in the reddit-response div
       if (!cleanResponse.includes('reddit-response')) {
         cleanResponse = `<div class="reddit-response">${cleanResponse}</div>`;
       }

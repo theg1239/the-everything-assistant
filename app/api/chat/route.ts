@@ -1,4 +1,4 @@
-import { streamText, generateObject } from 'ai'
+import { streamText, generateObject, generateText } from 'ai'
 import { google } from '@ai-sdk/google'
 import { createVITTools } from '@/lib/tools'
 import { VIT_SYSTEM_PROMPT } from '@/lib/prompts'
@@ -11,6 +11,58 @@ import { z } from 'zod'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
+
+async function generateChatTitle(userMessage: string): Promise<string> {
+  try {
+    //console.log('Generating title for:', userMessage.substring(0, 50) + '...')
+    
+    const cleanMessage = userMessage.trim().toLowerCase()
+    if (cleanMessage.length < 10 || 
+        ['hi', 'hello', 'hey', 'test', 'help'].includes(cleanMessage)) {
+      console.log('⏭Skipping title generation for simple message')
+      return extractTitleFromContent(userMessage)
+    }
+
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Title generation timeout')), 10000)
+    )
+    
+    const modelPromise = generateText({
+      model: google('gemma-3-12b-it'),
+      prompt: `Generate a concise, descriptive title for a chat conversation based on the user's first message. The title should:
+- Be 3-8 words maximum
+- Capture the main topic or intent
+- Be specific but not overly detailed
+- Avoid generic phrases like "New Chat" or "User Question"
+- Use title case formatting
+
+User's first message: "${userMessage}"
+
+Examples:
+- "What's the mess menu today?" → "Today's Mess Menu"
+- "How do I register for courses?" → "Course Registration Help"
+- "Tell me about VIT placements" → "VIT Placement Information"
+- "What are my exam schedules?" → "Exam Schedule Query"
+
+Respond with ONLY the title, nothing else.`,
+      maxTokens: 50,
+    })
+    
+    const result = await Promise.race([modelPromise, timeoutPromise]) as any
+    const generatedTitle = result.text
+    const cleanTitle = generatedTitle.trim().replace(/^["']|["']$/g, '')
+    
+    if (cleanTitle && cleanTitle.length <= 60 && cleanTitle.length >= 3) {
+      //console.log('Using AI-generated title:', cleanTitle)
+      return cleanTitle
+    }
+    
+    return extractTitleFromContent(userMessage)
+  } catch (error) {
+    console.error('Title generation failed:', error instanceof Error ? error.message : String(error))
+    return extractTitleFromContent(userMessage)
+  }
+}
 
 async function parseVTOPData(rawData: any, command: string, userContext: string = '') {
   try {
@@ -234,9 +286,23 @@ export async function POST(req: Request) {
 
     let chat = chatId ? await getChat(chatId, session.user.id) : null
     if (!chat) {
-      const title = extractTitleFromContent(messages[0]?.content || 'New Chat')
+      const tempTitle = extractTitleFromContent(messages[0]?.content || 'New Chat')
       const path = generateChatPath()
-      chat = await createChat(session.user.id, title, path)
+      chat = await createChat(session.user.id, tempTitle, path)
+      
+      const userMessage = messages[0]?.content || ''
+      if (userMessage.trim()) {
+        generateChatTitle(userMessage)
+          .then(async (properTitle) => {
+            if (properTitle !== tempTitle) {
+              await updateChat(chat!.id, properTitle)
+              console.log('Chat title updated successfully:', properTitle)
+            }
+          })
+          .catch((error) => {
+            console.error('Failed to update chat title:', error)
+          })
+      }
     }
 
     if (directToolCall) {
@@ -436,11 +502,6 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}`
 
         const safeInvocations = JSON.parse(JSON.stringify(toolResults))
         await saveMessage(chat.id, 'assistant', result.text, safeInvocations, result.response.id)
-
-        if (messages.length <= 2) {
-          const newTitle = extractTitleFromContent(userMessage.content)
-          await updateChat(chat.id, newTitle)
-        }
       },
     })
 

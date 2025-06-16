@@ -13,6 +13,7 @@ import { MessageBubble } from '@/components/message-bubble'
 import { MultimodalInput } from '@/components/multimodal-input'
 import { Sidebar } from '@/components/sidebar'
 import { Canvas } from '@/components/canvas'
+import { extractTitleFromContent } from '@/lib/utils'
 import ResearchPreviewModal from '@/components/research-preview-modal'
 import { VTOPToolHandler } from '@/components/vtop-tool-handler'
 import { VTOPProvider, useVTOP } from '@/components/vtop-context'
@@ -155,8 +156,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       id: msg.id,
       role: msg.role,
       content: msg.content,
-      toolInvocations: msg.toolInvocations,
-    })),
+      toolInvocations: msg.toolInvocations,    })),
     body: optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : undefined,
     onResponse: res => {
       if (!showFullChat) setShowFullChat(true)
@@ -166,6 +166,17 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       if (newId && newPath && !chatId) {
         setOptimisticChatId(newId)
         window.history.replaceState({}, '', newPath)
+          // Dispatch event for new chat creation
+        const newChatEvent = new CustomEvent('newChatCreated', {
+          detail: {
+            id: newId,
+            title: extractTitleFromContent(messages[0]?.content || 'New Chat'),
+            path: newPath,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }
+        })
+        window.dispatchEvent(newChatEvent)
       }
     },
     onError: err => {

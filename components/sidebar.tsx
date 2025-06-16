@@ -6,7 +6,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { MessageSquare, Plus, Settings, LogOut, Trash2, User, ChevronLeft } from 'lucide-react'
+import { MessageSquare, Plus, Settings, LogOut, Trash2, User, ChevronLeft, Loader2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/utils'
@@ -28,14 +28,23 @@ export function Sidebar(props: SidebarProps) {
   const { isOpen, onToggle } = props as { isOpen: boolean; onToggle: () => void }
   const [chats, setChats] = useState<Chat[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(true)
   const [hovering, setHovering] = useState(false)
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null)
   const router = useRouter()
   const pathname = usePathname()
   const { data: session } = useSession()
 
+  const redactName = (name: string) => {
+    if (!name) return 'User'
+    const parts = name.split(' ')
+    if (parts.length <= 3) return name
+    return parts.slice(0, 3).join(' ')
+  }
+
   useEffect(() => {
-    fetchChats()
+    fetchChats(true) // Reset and fetch initial chats
   }, [])
 
   useEffect(() => {
@@ -44,17 +53,82 @@ export function Sidebar(props: SidebarProps) {
     else setSelectedChatId(null)
   }, [pathname])
 
-  const fetchChats = async () => {
+  // Listen for new chat creation
+  useEffect(() => {
+    const handleNewChat = (event: CustomEvent) => {
+      const newChat = event.detail
+      setChats(prevChats => [newChat, ...prevChats])
+    }
+
+    window.addEventListener('newChatCreated', handleNewChat as EventListener)
+    return () => {
+      window.removeEventListener('newChatCreated', handleNewChat as EventListener)
+    }
+  }, [])
+
+  // Listen for chat title updates
+  useEffect(() => {
+    const handleChatTitleUpdate = (event: CustomEvent) => {
+      const { chatId, title } = event.detail
+      setChats(prevChats => 
+        prevChats.map(chat => 
+          chat.id === chatId ? { ...chat, title } : chat
+        )
+      )
+    }
+
+    window.addEventListener('chatTitleUpdated', handleChatTitleUpdate as EventListener)
+    return () => {
+      window.removeEventListener('chatTitleUpdated', handleChatTitleUpdate as EventListener)
+    }
+  }, [])
+
+  const fetchChats = async (reset: boolean = false) => {
     try {
-      const response = await fetch('/api/chats')
+      if (reset) {
+        setLoading(true)
+        setHasMore(true)
+      } else {
+        setLoadingMore(true)
+      }
+
+      const offset = reset ? 0 : chats.length
+      const response = await fetch(`/api/chats?limit=15&offset=${offset}`)
+      
       if (response.ok) {
         const data = await response.json()
-        setChats(data)
+        
+        if (reset) {
+          setChats(data)
+        } else {
+          setChats(prevChats => [...prevChats, ...data])
+        }
+        
+        // If we got less than 15 items, we've reached the end
+        if (data.length < 15) {
+          setHasMore(false)
+        }
       }
     } catch (error) {
       console.error('Error fetching chats:', error)
     } finally {
       setLoading(false)
+      setLoadingMore(false)
+    }
+  }
+
+  const loadMoreChats = () => {
+    if (!loadingMore && hasMore) {
+      fetchChats(false)
+    }
+  }
+
+  // Handle scroll to detect when user reaches bottom
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget
+    // Trigger load more when user is within 100px of the bottom
+    if (scrollHeight - scrollTop - clientHeight < 100 && hasMore && !loadingMore) {
+      loadMoreChats()
     }
   }
 
@@ -152,7 +226,7 @@ export function Sidebar(props: SidebarProps) {
               )}
             </div>
 
-            <ScrollArea className="flex-1 p-4">
+            <ScrollArea className="flex-1 p-4" onScrollCapture={handleScroll}>
               <div className="space-y-1">
                 {loading ? (
                   <div className="h-full w-full flex flex-col space-y-3">
@@ -185,42 +259,54 @@ export function Sidebar(props: SidebarProps) {
                     </p>
                   </div>
                 ) : (
-                  chats.map(chat => (
-                    <motion.div
-                      key={chat.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className={cn(
-                        'group relative flex items-center p-3 rounded-lg cursor-pointer transition-all',
-                        selectedChatId === chat.id || pathname === `/chat/${chat.id}`
-                          ? 'bg-muted text-foreground shadow-sm'
-                          : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
-                      )}
-                      onClick={() => {
-                        setSelectedChatId(chat.id)
-                        router.replace(`/chat/${chat.id}`)
-                        if (window.innerWidth < 768) {
-                          onToggle()
-                        }
-                      }}
-                    >
-                      <MessageSquare className="h-4 w-4 mr-3 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{chat.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatDate(chat.updatedAt)}
-                        </p>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 hover:bg-destructive hover:text-destructive-foreground"
-                        onClick={e => deleteChat(chat.id, e)}
+                  <>
+                    {chats.map(chat => (
+                      <motion.div
+                        key={chat.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={cn(
+                          'group relative flex items-center p-3 rounded-lg cursor-pointer transition-all',
+                          selectedChatId === chat.id || pathname === `/chat/${chat.id}`
+                            ? 'bg-muted text-foreground shadow-sm'
+                            : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
+                        )}
+                        onClick={() => {
+                          setSelectedChatId(chat.id)
+                          router.replace(`/chat/${chat.id}`)
+                          if (window.innerWidth < 768) {
+                            onToggle()
+                          }
+                        }}
                       >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </motion.div>
-                  ))
+                        <MessageSquare className="h-4 w-4 mr-3 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{chat.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDate(chat.updatedAt)}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 hover:bg-destructive hover:text-destructive-foreground"
+                          onClick={e => deleteChat(chat.id, e)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </motion.div>
+                    ))}
+                    
+                    {/* Infinite scroll loading indicator */}
+                    {loadingMore && (
+                      <div className="flex justify-center py-4">
+                        <div className="flex items-center text-muted-foreground text-sm">
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Loading more chats...
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </ScrollArea>
@@ -256,7 +342,7 @@ export function Sidebar(props: SidebarProps) {
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-foreground truncate">
-                        {session?.user?.name || 'User'}
+                        {redactName(session?.user?.name || 'User')}
                       </p>
                       <p className="text-xs text-muted-foreground truncate">
                         {session?.user?.email}

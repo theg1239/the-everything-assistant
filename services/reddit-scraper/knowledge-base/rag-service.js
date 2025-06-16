@@ -260,20 +260,20 @@ Generate a clean, well-structured response in HTML format. Follow this EXACT str
 <h3>📌 Overview</h3>
 <p>Direct answer to the question in 1-2 sentences.</p>
 
-<h3>👥 Student Experiences</h3>
+<h3>Student Experiences</h3>
 <ul>
 <li>Key point from <span style="color: #0066cc; font-weight: 500;">u/username</span> <span style="color: #ff4500; font-size: 0.9em;">↑XX upvotes</span></li>
 <li>Another experience with source attribution</li>
 <li>Different perspective if available</li>
 </ul>
 
-<h3>⚠️ Important Details</h3>
+<h3>Important Details</h3>
 <ul>
 <li>Specific information students should know</li>
 <li>Practical advice or warnings</li>
 </ul>
 
-<h3>✅ Bottom Line</h3>
+<h3>Bottom Line</h3>
 <p>Concise summary and practical takeaway for students.</p>
 </div>
 
@@ -283,6 +283,7 @@ CRITICAL RULES:
 - Always cite sources: <span style="color: #0066cc; font-weight: 500;">u/username</span> <span style="color: #ff4500; font-size: 0.9em;">↑XX upvotes</span>
 - Keep all text concise and mobile-friendly
 - Use proper HTML tags, NOT markdown
+- Try to not omit anything important from the context
 
 Context: ${context}`;
 

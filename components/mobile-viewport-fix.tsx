@@ -43,13 +43,7 @@ export default function MobileViewportFix() {
       if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') {
         handleKeyboardVisibility(true)
         requestAnimationFrame(() => {
-          const chatContent = document.querySelector('.chat-content') as HTMLElement | null
-          const atTop = window.scrollY <= 0
-          const hasScrollableContent =
-            chatContent && chatContent.scrollHeight > chatContent.clientHeight + 10
-          if (!atTop && hasScrollableContent) {
-            target.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          }
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' })
         })
       }
     }

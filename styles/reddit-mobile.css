@@ -40,12 +40,36 @@
   line-height: 1.6;
 }
 
-/* Mobile-optimized Reddit response content */
+/* Improved text contrast for Reddit content */
 .reddit-response-content {
   /* Better text rendering on mobile */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  /* Ensure good contrast */
+  color: hsl(var(--card-foreground)) !important;
+}
+
+/* Dark mode text contrast fixes */
+@media (prefers-color-scheme: dark) {
+  .reddit-response-content {
+    color: #e5e7eb !important;
+  }
+  
+  .reddit-response-content h1,
+  .reddit-response-content h2,
+  .reddit-response-content h3,
+  .reddit-response-content h4,
+  .reddit-response-content h5,
+  .reddit-response-content h6 {
+    color: #f9fafb !important;
+  }
+  
+  .reddit-response-content p,
+  .reddit-response-content li,
+  .reddit-response-content span {
+    color: #e5e7eb !important;
+  }
 }
 
 /* Mobile typography for Reddit responses */
@@ -54,27 +78,30 @@
     font-size: 1.25rem !important;
     line-height: 1.4 !important;
     margin-bottom: 0.75rem !important;
+    color: hsl(var(--card-foreground)) !important;
   }
   
   .reddit-response-content h2 {
     font-size: 1.125rem !important;
     line-height: 1.4 !important;
     margin-bottom: 0.625rem !important;
+    color: hsl(var(--card-foreground)) !important;
   }
   
   .reddit-response-content h3 {
     font-size: 1rem !important;
     line-height: 1.4 !important;
     margin-bottom: 0.5rem !important;
+    color: hsl(var(--card-foreground)) !important;
   }
   
   .reddit-response-content p {
     font-size: 0.875rem !important;
     line-height: 1.5 !important;
     margin-bottom: 0.75rem !important;
+    color: hsl(var(--card-foreground)) !important;
   }
-  
-  .reddit-response-content ul,
+    .reddit-response-content ul,
   .reddit-response-content ol {
     padding-left: 1rem !important;
     margin-bottom: 0.75rem !important;
@@ -84,6 +111,7 @@
     font-size: 0.875rem !important;
     line-height: 1.5 !important;
     margin-bottom: 0.375rem !important;
+    color: hsl(var(--card-foreground)) !important;
   }
   
   .reddit-response-content code {
@@ -139,9 +167,26 @@
   .reddit-response-content pre {
     background-color: rgba(255, 255, 255, 0.1) !important;
   }
-  
-  .reddit-response-content blockquote {
+    .reddit-response-content blockquote {
     border-left-color: #374151 !important;
+  }
+  
+  /* Force high contrast text colors for dark mode */
+  .reddit-response-content,
+  .reddit-response-content p,
+  .reddit-response-content li,
+  .reddit-response-content span,
+  .reddit-response-content div {
+    color: #e5e7eb !important;
+  }
+  
+  .reddit-response-content h1,
+  .reddit-response-content h2,
+  .reddit-response-content h3,
+  .reddit-response-content h4,
+  .reddit-response-content h5,
+  .reddit-response-content h6 {
+    color: #f9fafb !important;
   }
 }
 
@@ -163,24 +208,35 @@
 }
 
 /* Mobile-specific spacing adjustments */
-@media (max-width: 640px) {
-  .reddit-card-mobile .reddit-confidence-badge {
+@media (max-width: 640px) {  .reddit-card-mobile .reddit-confidence-badge {
     /* Wrap badges on small screens */
     flex-wrap: wrap;
     gap: 0.25rem;
+    /* Ensure proper alignment */
+    align-items: center;
+    justify-content: flex-start;
   }
-  
-  .reddit-card-mobile .reddit-source-meta {
+    .reddit-card-mobile .reddit-source-meta {
     /* Stack metadata vertically on very small screens */
     flex-direction: column;
     align-items: flex-start;
     gap: 0.25rem;
+    margin-bottom: 0.375rem;
   }
   
   .reddit-card-mobile .reddit-post-title {
     /* Better line clamping for mobile */
     -webkit-line-clamp: 3;
     line-clamp: 3;
+  }
+  
+  /* Ensure proper spacing between elements */
+  .reddit-card-mobile .reddit-source-item {
+    padding: 0.75rem !important;
+  }
+  
+  .reddit-card-mobile .reddit-source-meta {
+    margin-bottom: 0.375rem;
   }
 }
 

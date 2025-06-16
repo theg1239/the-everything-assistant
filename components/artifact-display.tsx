@@ -1258,25 +1258,27 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
                 </span>
               </div>
               <Badge variant="secondary" className="text-xs flex-shrink-0">
-                {totalResults} sources
+                {totalResults} source{totalResults !== 1 ? 's' : ''}
               </Badge>
             </div>
           </div>
 
           <div className="prose prose-sm max-w-none dark:prose-invert reddit-response-content">
             <div 
-              className="text-foreground leading-relaxed 
+              className="text-card-foreground dark:text-gray-100 leading-relaxed 
                 [&_ul]:list-disc [&_ul]:ml-4 sm:[&_ul]:ml-6 [&_li]:mb-1 
                 [&_strong]:font-semibold [&_em]:italic
-                [&_p]:mb-3 [&_h1]:text-lg sm:[&_h1]:text-xl [&_h1]:font-bold [&_h1]:mb-3
-                [&_h2]:text-base sm:[&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mb-2
-                [&_h3]:text-sm sm:[&_h3]:text-base [&_h3]:font-medium [&_h3]:mb-2
-                [&_code]:text-xs sm:[&_code]:text-sm [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded
-                [&_pre]:text-xs sm:[&_pre]:text-sm [&_pre]:bg-muted [&_pre]:p-2 sm:[&_pre]:p-3 [&_pre]:rounded [&_pre]:overflow-x-auto
-                [&_blockquote]:border-l-2 [&_blockquote]:border-muted-foreground [&_blockquote]:pl-3 sm:[&_blockquote]:pl-4 [&_blockquote]:italic
+                [&_p]:mb-3 [&_p]:text-card-foreground [&_p]:dark:text-gray-100
+                [&_h1]:text-lg sm:[&_h1]:text-xl [&_h1]:font-bold [&_h1]:mb-3 [&_h1]:text-card-foreground [&_h1]:dark:text-white
+                [&_h2]:text-base sm:[&_h2]:text-lg [&_h2]:font-semibold [&_h2]:mb-2 [&_h2]:text-card-foreground [&_h2]:dark:text-white
+                [&_h3]:text-sm sm:[&_h3]:text-base [&_h3]:font-medium [&_h3]:mb-2 [&_h3]:text-card-foreground [&_h3]:dark:text-white
+                [&_li]:text-card-foreground [&_li]:dark:text-gray-100
+                [&_code]:text-xs sm:[&_code]:text-sm [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-card-foreground [&_code]:dark:text-gray-100
+                [&_pre]:text-xs sm:[&_pre]:text-sm [&_pre]:bg-muted [&_pre]:p-2 sm:[&_pre]:p-3 [&_pre]:rounded [&_pre]:overflow-x-auto [&_pre]:text-card-foreground [&_pre]:dark:text-gray-100
+                [&_blockquote]:border-l-2 [&_blockquote]:border-muted-foreground [&_blockquote]:pl-3 sm:[&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-card-foreground [&_blockquote]:dark:text-gray-200
                 [&_table]:text-xs sm:[&_table]:text-sm [&_table]:w-full [&_table]:border-collapse
-                [&_th]:border [&_th]:border-border [&_th]:p-1 sm:[&_th]:p-2 [&_th]:bg-muted [&_th]:font-medium
-                [&_td]:border [&_td]:border-border [&_td]:p-1 sm:[&_td]:p-2
+                [&_th]:border [&_th]:border-border [&_th]:p-1 sm:[&_th]:p-2 [&_th]:bg-muted [&_th]:font-medium [&_th]:text-card-foreground [&_th]:dark:text-gray-100
+                [&_td]:border [&_td]:border-border [&_td]:p-1 sm:[&_td]:p-2 [&_td]:text-card-foreground [&_td]:dark:text-gray-100
                 [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded"
               dangerouslySetInnerHTML={{ __html: cleanedResponse }}
             />
@@ -1325,8 +1327,10 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-1 reddit-source-meta">
-                      <span className="text-xs font-medium text-primary">r/{source.subreddit}</span>
-                      {source.upvotes > 0 && (
+                      <span className="text-xs font-medium text-primary">
+                        r/{source.subreddit === 'redtaganna' ? 'redtaganna' : source.subreddit}
+                      </span>
+                      {source.upvotes && source.upvotes > 0 && source.upvotes !== 'N/A' && !isNaN(Number(source.upvotes)) && (
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
                           <ChevronUp className="h-3 w-3" />
                           {source.upvotes}
@@ -1417,10 +1421,12 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
                     <Badge variant="outline" className="text-xs px-1.5 py-0.5">
                       {post.type || 'post'}
                     </Badge>
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <ChevronUp className="h-3 w-3" />
-                      {post.score || 0}
-                    </div>
+                    {post.score && post.score > 0 && post.score !== 'N/A' && !isNaN(Number(post.score)) && (
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <ChevronUp className="h-3 w-3" />
+                        {post.score}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -1585,10 +1591,12 @@ const RedditOverviewCard = ({ data }: { data: any }) => {
                     <Badge variant="outline" className="text-xs px-1.5 py-0.5">
                       {post.type || 'post'}
                     </Badge>
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <ChevronUp className="h-3 w-3" />
-                      {post.score || 0}
-                    </div>
+                    {post.score && post.score > 0 && post.score !== 'N/A' && !isNaN(Number(post.score)) && (
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <ChevronUp className="h-3 w-3" />
+                        {post.score}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex-1 min-w-0">

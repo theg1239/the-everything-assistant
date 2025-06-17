@@ -85,7 +85,7 @@ async function parseVTOPData(rawData: any, command: string, userContext: string 
     })
 
     const result = await generateObject({
-      model: google('gemini-2.0-flash-lite'),
+      model: google('gemini-2.5-flash-lite-preview-06-17'),
       schema: vtopParseSchema,
       prompt: `
 You are a helpful assistant that parses VTOP (VIT Online Portal) data and formats it in a clean, natural language format.
@@ -463,7 +463,7 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}`
     })
 
     const resultStream = await streamText({
-      model: google('gemini-2.0-flash'),
+      model: google('gemini-2.5-flash-lite-preview-06-17'),
       messages: [{ role: 'system', content: combinedSystemPrompt }, ...enhancedMessages],
       tools,
       temperature: 0.7,

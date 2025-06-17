@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const RAGService = require('./knowledge-base/rag-service');
+const AgenticRAGService = require('./knowledge-base/agentic-rag-service');
 const KnowledgeBase = require('./knowledge-base/knowledge-base');
 const logger = require('./utils/logger');
 
@@ -10,7 +11,10 @@ const port = process.env.PORT || 3002;
 app.use(cors());
 app.use(express.json());
 
-const ragService = new RAGService();
+// Use the new agentic RAG service by default
+const ragService = new AgenticRAGService();
+// Keep the old service for comparison/fallback if needed
+const legacyRagService = new RAGService();
 const knowledgeBase = new KnowledgeBase();
 
 app.get('/health', (req, res) => {
@@ -62,7 +66,7 @@ app.post('/api/search', async (req, res) => {
 
 app.post('/api/ask', async (req, res) => {
   try {
-    const { query, conversationHistory = [] } = req.body;
+    const { query, conversationHistory = [], useAgentic = true } = req.body;
     
     if (!query || typeof query !== 'string' || query.trim().length === 0) {
       return res.status(400).json({
@@ -71,9 +75,11 @@ app.post('/api/ask', async (req, res) => {
       });
     }
 
-    logger.info(`RAG request: "${query}"`);
+    logger.info(`RAG request: "${query}" (agentic: ${useAgentic})`);
     
-    const response = await ragService.generateResponse(query, conversationHistory);
+    // Use agentic RAG service by default, with option to fallback to legacy
+    const activeRagService = useAgentic ? ragService : legacyRagService;
+    const response = await activeRagService.generateResponse(query, conversationHistory);
     
     res.json({
       success: true,
@@ -81,7 +87,10 @@ app.post('/api/ask', async (req, res) => {
       sources: response.sources,
       confidence: response.confidence,
       searchResults: response.searchResults,
+      searchAttempts: response.searchAttempts,
+      refinedQueries: response.refinedQueries,
       note: response.note,
+      serviceUsed: useAgentic ? 'agentic' : 'legacy',
       query: query
     });
     
@@ -151,6 +160,50 @@ app.get('/api/trending', async (req, res) => {
   }
 });
 
+app.post('/api/compare', async (req, res) => {
+  try {
+    const { query, conversationHistory = [] } = req.body;
+    
+    if (!query || typeof query !== 'string' || query.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Query is required and must be a non-empty string'
+      });
+    }
+
+    logger.info(`Comparison request: "${query}"`);
+    
+    // Run both services in parallel for comparison
+    const [agenticResponse, legacyResponse] = await Promise.allSettled([
+      ragService.generateResponse(query, conversationHistory),
+      legacyRagService.generateResponse(query, conversationHistory)
+    ]);
+    
+    res.json({
+      success: true,
+      agentic: {
+        status: agenticResponse.status,
+        result: agenticResponse.status === 'fulfilled' ? agenticResponse.value : null,
+        error: agenticResponse.status === 'rejected' ? agenticResponse.reason.message : null
+      },
+      legacy: {
+        status: legacyResponse.status,
+        result: legacyResponse.status === 'fulfilled' ? legacyResponse.value : null,
+        error: legacyResponse.status === 'rejected' ? legacyResponse.reason.message : null
+      },
+      query: query
+    });
+    
+  } catch (error) {
+    logger.error('Comparison API error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error during comparison',
+      message: error.message
+    });
+  }
+});
+
 app.use((error, req, res, next) => {
   logger.error('Unhandled error:', error);
   res.status(500).json({
@@ -167,6 +220,7 @@ app.listen(port, () => {
   logger.info('  POST /api/ask - RAG-powered Q&A');
   logger.info('  GET  /api/stats - Database statistics');
   logger.info('  GET  /api/trending - Trending topics');
+  logger.info('  POST /api/compare - Compare agentic vs legacy RAG');
 });
 
 module.exports = app;

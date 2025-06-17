@@ -2,7 +2,17 @@
 
 ## Overview
 
-The Reddit Knowledge Base system provides AI-powered search and responses based on scraped Reddit content from educational subreddits (primarily r/Vit). It combines continuous web scraping, vector embeddings, and RAG (Retrieval-Augmented Generation) to deliver intelligent responses to user queries.
+The Reddit Knowledge Base system provides AI-powered search and responses based on scraped Reddit content from educational subreddits (primarily r/Vit). It features an **Agentic RAG (Retrieval-Augmented Generation)** system that uses multiple AI agents to intelligently refine searches and deliver highly relevant responses.
+
+## Agentic RAG System
+
+The system includes an **intelligent multi-agent RAG** that:
+- **Recursively refines search queries** when initial results are poor
+- **Scores result relevance** using AI to filter out irrelevant content  
+- **Never fabricates data** - only uses real usernames, upvotes, and sources
+- **Provides transparent search metadata** showing refinement attempts
+
+**See [AGENTIC_RAG.md](./AGENTIC_RAG.md) for detailed documentation**
 
 ## Architecture
 

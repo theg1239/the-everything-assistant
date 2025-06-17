@@ -30,7 +30,6 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Format options for AI processing
     const formattedOptions = options.map((option: any, index: number) => ({
       index: index + 1,
       description: option.description || option.text || `Option ${index + 1}`,
@@ -38,7 +37,7 @@ export async function POST(req: NextRequest) {
     }))
 
     const result = await generateObject({
-      model: google('gemini-2.0-flash'),
+      model: google('gemini-2.5-flash-lite-preview-06-17'),
       schema: smartMatchSchema,
       prompt: `
 You are an intelligent assistant that matches user queries to available options for VTOP course materials.

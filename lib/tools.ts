@@ -23,28 +23,35 @@ async function searchRedditKnowledge(query: string, limit: number = 10) {
     }
 
     const data = await response.json()
-    
-    if (data.success) {
+      if (data.success) {
       return {
         success: true,
         response: data.response,
         sources: data.sources || [],
         confidence: data.confidence || 0,
-        totalResults: data.searchResults || 0
+        totalResults: data.searchResults || 0,
+        searchAttempts: data.searchAttempts || 1,
+        refinedQueries: data.refinedQueries || [],
+        serviceUsed: data.serviceUsed || 'agentic'
       }
     } else {
       return {
         success: false,
         message: data.error || 'Unknown error occurred',
-        totalResults: 0
+        totalResults: 0,
+        searchAttempts: 0,
+        refinedQueries: [],
+        serviceUsed: 'unknown'
       }
-    }
-  } catch (error) {
+    }  } catch (error) {
     console.error('Error accessing Reddit knowledge base:', error)
     return {
       success: false,
       message: 'Reddit knowledge base service is currently unavailable. Please try again later.',
-      totalResults: 0
+      totalResults: 0,
+      searchAttempts: 0,
+      refinedQueries: [],
+      serviceUsed: 'unknown'
     }
   }
 }
@@ -928,8 +935,7 @@ export function createVITTools() {
       parameters: z.object({
         query: z.string().describe('The search query for finding relevant information from Reddit discussions about academics, studying, college life, etc.'),
       }),
-      execute: async ({ query }) => {
-        try {
+      execute: async ({ query }) => {        try {
           const results = await searchRedditKnowledge(query)
           
           return {
@@ -938,8 +944,11 @@ export function createVITTools() {
             sources: results.sources || [],
             confidence: results.confidence || 0,
             totalResults: results.totalResults || 0,
+            searchAttempts: results.searchAttempts || 1,
+            refinedQueries: results.refinedQueries || [],
+            serviceUsed: results.serviceUsed || 'agentic',
             message: results.success 
-              ? `Found ${results.totalResults} relevant discussions from Reddit educational communities` 
+              ? `Found ${results.totalResults} relevant discussions using ${results.searchAttempts} search attempt${results.searchAttempts > 1 ? 's' : ''}` 
               : results.message,
             note: results.success 
               ? 'Response based on Reddit discussions. Might be inaccurate.' 

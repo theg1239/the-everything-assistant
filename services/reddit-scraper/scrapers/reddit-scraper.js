@@ -176,7 +176,7 @@ class RedditScraper {
         limit = 25, 
         sort = 'best',
         timeframe = 'DAY',
-        maxPages = parseInt(process.env.MAX_PAGES_PER_SUBREDDIT) || 10 
+        maxPages = parseInt(process.env.MAX_PAGES_PER_SUBREDDIT) || 50
       } = options;
       
       let allPosts = [];
@@ -352,6 +352,28 @@ class RedditScraper {
     }
   }
 
+  parseTimestamp(timestampStr) {
+    if (!timestampStr) return new Date();
+    
+    if (typeof timestampStr === 'string' && timestampStr.includes('T')) {
+      const isoDate = new Date(timestampStr);
+      if (!isNaN(isoDate.getTime())) {
+        return isoDate;
+      }
+    }
+    
+    const unixTimestamp = parseInt(timestampStr);
+    if (!isNaN(unixTimestamp)) {
+      if (unixTimestamp > 1000000000000) {
+        return new Date(unixTimestamp);
+      } else {
+        return new Date(unixTimestamp * 1000);
+      }
+    }
+    
+    return new Date();
+  }
+
   parsePosts(html) {
     try {
       const $ = cheerio.load(html);
@@ -371,13 +393,19 @@ class RedditScraper {
             postType: $post.attr('post-type'),
             domain: $post.attr('domain'),
             permalink: $post.attr('permalink'),
-            contentHref: $post.attr('content-href'),
-            createdTimestamp: $post.attr('created-timestamp'),
+            contentHref: $post.attr('content-href'),            createdTimestamp: $post.attr('created-timestamp'),
             voteType: $post.attr('vote-type') || '',
             isEmbeddable: $post.attr('is-embeddable') === 'true',
             feedIndex: parseInt($post.attr('feedIndex')) || 0,
             authorIcon: $post.attr('icon')
           };
+
+          if (!post.createdTimestamp) {
+            const timeago = $post.find('faceplate-timeago');
+            if (timeago.length) {
+              post.createdTimestamp = timeago.attr('ts');
+            }
+          }
 
           const txt = $post.find('[slot="text-body"]');
           if (txt.length) {
@@ -668,10 +696,8 @@ Format as JSON.`;
           reddit_id: post.id,
           subreddit: subredditName,
           title: post.title,
-          content: post.content || '',
-          author: post.author,          created_utc: post.createdTimestamp && !isNaN(parseInt(post.createdTimestamp))
-            ? new Date(parseInt(post.createdTimestamp) * 1000)
-            : new Date(),
+          content: post.content || '',          author: post.author,
+          created_utc: this.parseTimestamp(post.createdTimestamp),
           upvotes: Math.max(0, post.score),
           downvotes: 0,
           score: post.score,
@@ -760,10 +786,8 @@ Format as JSON.`;
               post_reddit_id: postData.reddit_id,
               parent_comment_id: comment.parentId,
               subreddit: subredditName,
-              author: comment.author || 'unknown',
-              content: comment.content,              created_utc: comment.timestamp && !isNaN(parseInt(comment.timestamp))
-                ? new Date(parseInt(comment.timestamp) * 1000)
-                : new Date(),
+              author: comment.author || 'unknown',              content: comment.content,
+              created_utc: this.parseTimestamp(comment.timestamp),
               upvotes: comment.score || 0,
               downvotes: 0,
               score: comment.score || 0,

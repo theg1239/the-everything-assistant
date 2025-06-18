@@ -2,7 +2,8 @@
   "name": "reddit-scraper-service",
   "version": "1.0.0",
   "description": "Reddit scraper service with RAG knowledge base for student information",
-  "main": "index.js",    "scripts": {
+  "main": "index.js",
+  "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
     "scrape": "node cli.js scrape",

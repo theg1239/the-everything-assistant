@@ -66,7 +66,11 @@ export async function createUser(email: string, name: string, image?: string): P
   return user as User
 }
 
-export async function getChats(userId: string, limit: number = 15, offset: number = 0): Promise<Chat[]> {
+export async function getChats(
+  userId: string,
+  limit: number = 15,
+  offset: number = 0
+): Promise<Chat[]> {
   try {
     const chats = await prisma.chat.findMany({
       where: { userId },

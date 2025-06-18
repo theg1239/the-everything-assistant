@@ -15,18 +15,17 @@ export const maxDuration = 60
 async function generateChatTitle(userMessage: string): Promise<string> {
   try {
     //console.log('Generating title for:', userMessage.substring(0, 50) + '...')
-    
+
     const cleanMessage = userMessage.trim().toLowerCase()
-    if (cleanMessage.length < 10 || 
-        ['hi', 'hello', 'hey', 'test', 'help'].includes(cleanMessage)) {
+    if (cleanMessage.length < 10 || ['hi', 'hello', 'hey', 'test', 'help'].includes(cleanMessage)) {
       console.log('⏭Skipping title generation for simple message')
       return extractTitleFromContent(userMessage)
     }
 
-    const timeoutPromise = new Promise((_, reject) => 
+    const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Title generation timeout')), 10000)
     )
-    
+
     const modelPromise = generateText({
       model: google('gemma-3-12b-it'),
       prompt: `Generate a concise, descriptive title for a chat conversation based on the user's first message. The title should:
@@ -47,19 +46,22 @@ Examples:
 Respond with ONLY the title, nothing else.`,
       maxTokens: 50,
     })
-    
-    const result = await Promise.race([modelPromise, timeoutPromise]) as any
+
+    const result = (await Promise.race([modelPromise, timeoutPromise])) as any
     const generatedTitle = result.text
     const cleanTitle = generatedTitle.trim().replace(/^["']|["']$/g, '')
-    
+
     if (cleanTitle && cleanTitle.length <= 60 && cleanTitle.length >= 3) {
       //console.log('Using AI-generated title:', cleanTitle)
       return cleanTitle
     }
-    
+
     return extractTitleFromContent(userMessage)
   } catch (error) {
-    console.error('Title generation failed:', error instanceof Error ? error.message : String(error))
+    console.error(
+      'Title generation failed:',
+      error instanceof Error ? error.message : String(error)
+    )
     return extractTitleFromContent(userMessage)
   }
 }
@@ -289,17 +291,17 @@ export async function POST(req: Request) {
       const tempTitle = extractTitleFromContent(messages[0]?.content || 'New Chat')
       const path = generateChatPath()
       chat = await createChat(session.user.id, tempTitle, path)
-      
+
       const userMessage = messages[0]?.content || ''
       if (userMessage.trim()) {
         generateChatTitle(userMessage)
-          .then(async (properTitle) => {
+          .then(async properTitle => {
             if (properTitle !== tempTitle) {
               await updateChat(chat!.id, properTitle)
               console.log('Chat title updated successfully:', properTitle)
             }
           })
-          .catch((error) => {
+          .catch(error => {
             console.error('Failed to update chat title:', error)
           })
       }

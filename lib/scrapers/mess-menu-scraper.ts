@@ -61,10 +61,12 @@ export async function getMessMenu(
     const hostelNum = hostelType === 'ladies' ? 2 : 1
     const messNum = messType === 'veg' ? 2 : messType === 'nonveg' ? 3 : 1
 
-    console.log(`Fetching menu from ${hostelType || 'mens'} hostel, ${messType || 'special'} mess...`)
+    console.log(
+      `Fetching menu from ${hostelType || 'mens'} hostel, ${messType || 'special'} mess...`
+    )
 
     const endpoint = `${BASE_ENDPOINT}/?hostel=${hostelNum}&mess=${messNum}`
-    
+
     const response = await fetch(endpoint, {
       headers: {
         Accept: 'application/json',

@@ -5,6 +5,7 @@ This directory contains an improved **Agentic RAG (Retrieval-Augmented Generatio
 ## Problem Solved
 
 The original RAG system had several issues:
+
 - **Poor relevance**: Often returned irrelevant results with high confidence scores
 - **Fabricated data**: Would make up usernames, upvote counts, and sources
 - **Static search**: No ability to improve queries when initial search failed
@@ -15,11 +16,13 @@ The original RAG system had several issues:
 The new system uses **3 specialized AI agents** that work together:
 
 ### 1. Query Relevance Agent
+
 - **Purpose**: Analyzes how well each search result answers the original query
 - **Method**: Scores each result from 0.0 to 1.0 for relevance
 - **Output**: Relevance scores for filtering and ranking results
 
-### 2. Query Refinement Agent  
+### 2. Query Refinement Agent
+
 - **Purpose**: Generates improved search queries when initial results are poor
 - **Method**: Analyzes failed searches and creates better queries using:
   - Different keywords and synonyms
@@ -28,6 +31,7 @@ The new system uses **3 specialized AI agents** that work together:
 - **Output**: Refined search queries for subsequent iterations
 
 ### 3. Result Quality Agent
+
 - **Purpose**: Assesses overall quality of the result set
 - **Method**: Evaluates based on:
   - Number of results found
@@ -64,16 +68,19 @@ The new system uses **3 specialized AI agents** that work together:
 ## Key Features
 
 ### Recursive Search Improvement
+
 - **Maximum 3 iterations** to find better results
 - **Keeps best results** across all search attempts
 - **Stops early** when high-quality results are found
 
 ### Real Source Attribution
+
 - **No fabricated data** - only uses actual usernames/upvotes from results
 - **Transparent search process** - shows refined queries used
 - **Confidence based on actual relevance** - not just similarity scores
 
 ### Intelligent Query Generation
+
 - **Context-aware refinements** based on what was/wasn't found
 - **Domain-specific improvements** using Reddit discussion patterns
 - **Fallback strategies** when AI refinement fails
@@ -81,7 +88,9 @@ The new system uses **3 specialized AI agents** that work together:
 ## API Endpoints
 
 ### `/api/ask` (Enhanced)
+
 Uses agentic RAG by default:
+
 ```json
 {
   "query": "nice places to eat at vit",
@@ -91,6 +100,7 @@ Uses agentic RAG by default:
 ```
 
 Response includes:
+
 ```json
 {
   "success": true,
@@ -104,7 +114,9 @@ Response includes:
 ```
 
 ### `/api/compare` (New)
+
 Compare agentic vs legacy RAG side-by-side:
+
 ```json
 {
   "query": "your search query"
@@ -120,6 +132,7 @@ node test-agentic.js
 ```
 
 This will show:
+
 - Search attempts made
 - Queries refined
 - Relevance scores
@@ -128,22 +141,26 @@ This will show:
 ## Configuration
 
 Environment variables:
+
 - `MAX_CONTEXT_LENGTH`: Maximum context for AI responses (default: 4000)
 - `GOOGLE_GENERATIVE_AI_API_KEY`: Required for AI agents
 
 Agent parameters (in code):
+
 - `maxIterations`: Maximum search refinement attempts (default: 3)
 - `relevanceThreshold`: Minimum relevance to keep results (default: 0.6)
 
 ## Benefits
 
 ### For Users
+
 - **More relevant results** that actually answer their questions
 - **Transparent search process** showing how results were found
 - **Real source attribution** without fabricated data
 - **Better coverage** through query refinement
 
 ### For Developers
+
 - **Modular agent design** easy to extend and modify
 - **Configurable thresholds** for different use cases
 - **Comprehensive metadata** for debugging and improvement

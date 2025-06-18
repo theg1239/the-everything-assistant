@@ -355,10 +355,11 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
 
   if (toolName === 'searchRedditKnowledge') {
     if (result.success && result.response) {
-      const displayConfidence = (result.confidence === 0 && result.sources?.length > 0) 
-        ? Math.floor(Math.random() * 21) + 60 // Random between 60-80%
-        : result.confidence || 0;
-        
+      const displayConfidence =
+        result.confidence === 0 && result.sources?.length > 0
+          ? Math.floor(Math.random() * 21) + 60 // Random between 60-80%
+          : result.confidence || 0
+
       return {
         type: 'reddit-knowledge' as const,
         title: `Reddit Knowledge - ${result.totalResults || 0} sources`,
@@ -393,18 +394,21 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
   if (toolName === 'searchRedditWithContext') {
     if (result.success && result.response) {
       // Show a random confidence percentage (60-80%) if backend returns 0%
-      const displayConfidence = (result.confidence === 0 && result.sources?.length > 0) 
-        ? Math.floor(Math.random() * 21) + 60 // Random between 60-80%
-        : result.confidence || 0;
-        
+      const displayConfidence =
+        result.confidence === 0 && result.sources?.length > 0
+          ? Math.floor(Math.random() * 21) + 60 // Random between 60-80%
+          : result.confidence || 0
+
       return {
         type: 'reddit-knowledge' as const,
-        title: result.isBroadQuery 
-          ? `Reddit Trends & Discussions - ${result.totalResults || 0} sources` 
+        title: result.isBroadQuery
+          ? `Reddit Trends & Discussions - ${result.totalResults || 0} sources`
           : `Reddit Knowledge - ${result.totalResults || 0} sources`,
-        icon: result.isBroadQuery 
-          ? <TrendingUp className="h-5 w-5 text-orange-400" />
-          : <FileSearch className="h-5 w-5 text-orange-400" />,
+        icon: result.isBroadQuery ? (
+          <TrendingUp className="h-5 w-5 text-orange-400" />
+        ) : (
+          <FileSearch className="h-5 w-5 text-orange-400" />
+        ),
         data: {
           response: result.response,
           sources: result.sources || [],
@@ -827,12 +831,17 @@ const PureToolCallDisplay = ({ toolCalls, onLoginClick }: ToolCallDisplayProps) 
       )
     }
 
-    if (toolCall.toolName === 'searchRedditKnowledge' || toolCall.toolName === 'searchRedditWithContext') {
+    if (
+      toolCall.toolName === 'searchRedditKnowledge' ||
+      toolCall.toolName === 'searchRedditWithContext'
+    ) {
       return toolCall.result && (toolCall.result.success || toolCall.result.error)
     }
 
     const hasValidResult =
-      toolCall.result && !toolCall.result.requiresCredentials && (toolCall.state === 'result' || toolCall.type === 'tool-result')
+      toolCall.result &&
+      !toolCall.result.requiresCredentials &&
+      (toolCall.state === 'result' || toolCall.type === 'tool-result')
 
     return hasValidResult
   })

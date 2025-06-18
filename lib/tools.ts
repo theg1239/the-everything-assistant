@@ -23,7 +23,7 @@ async function searchRedditKnowledge(query: string, limit: number = 10) {
     }
 
     const data = await response.json()
-      if (data.success) {
+    if (data.success) {
       return {
         success: true,
         response: data.response,
@@ -32,7 +32,7 @@ async function searchRedditKnowledge(query: string, limit: number = 10) {
         totalResults: data.searchResults || 0,
         searchAttempts: data.searchAttempts || 1,
         refinedQueries: data.refinedQueries || [],
-        serviceUsed: data.serviceUsed || 'agentic'
+        serviceUsed: data.serviceUsed || 'agentic',
       }
     } else {
       return {
@@ -41,9 +41,10 @@ async function searchRedditKnowledge(query: string, limit: number = 10) {
         totalResults: 0,
         searchAttempts: 0,
         refinedQueries: [],
-        serviceUsed: 'unknown'
+        serviceUsed: 'unknown',
       }
-    }  } catch (error) {
+    }
+  } catch (error) {
     console.error('Error accessing Reddit knowledge base:', error)
     return {
       success: false,
@@ -51,7 +52,7 @@ async function searchRedditKnowledge(query: string, limit: number = 10) {
       totalResults: 0,
       searchAttempts: 0,
       refinedQueries: [],
-      serviceUsed: 'unknown'
+      serviceUsed: 'unknown',
     }
   }
 }
@@ -106,7 +107,7 @@ async function getRedditOverview() {
     const apiUrl = process.env.REDDIT_API_URL || 'http://localhost:3002'
     const [trendingResponse, statsResponse] = await Promise.all([
       fetch(`${apiUrl}/api/trending`),
-      fetch(`${apiUrl}/api/stats`)
+      fetch(`${apiUrl}/api/stats`),
     ])
 
     const trending = trendingResponse.ok ? (await trendingResponse.json()).trending || [] : []
@@ -116,13 +117,13 @@ async function getRedditOverview() {
       success: true,
       trending,
       stats,
-      summary: `Currently tracking ${stats.totalPosts || 0} posts and ${stats.totalComments || 0} comments from VIT community discussions.`
+      summary: `Currently tracking ${stats.totalPosts || 0} posts and ${stats.totalComments || 0} comments from VIT community discussions.`,
     }
   } catch (error) {
     console.error('Error getting Reddit overview:', error)
     return {
       success: false,
-      error: 'Unable to fetch Reddit overview'
+      error: 'Unable to fetch Reddit overview',
     }
   }
 }
@@ -130,38 +131,62 @@ async function getRedditOverview() {
 async function searchRedditWithContext(query: string) {
   try {
     const broadQueryKeywords = [
-      'what\'s happening', 'what is happening', 'currently', 'current', 'trending', 'recent', 'latest', 'now', 'today',
-      'active', 'popular', 'hot topics', 'hot', 'discussions', 'activity', 'updates', 'news',
-      'look up reddit', 'check reddit', 'reddit overview', 'happening on reddit', 'reddit activity',
-      'tell me about', 'overview', 'summary', 'whats going on', 'what\'s going on'
+      "what's happening",
+      'what is happening',
+      'currently',
+      'current',
+      'trending',
+      'recent',
+      'latest',
+      'now',
+      'today',
+      'active',
+      'popular',
+      'hot topics',
+      'hot',
+      'discussions',
+      'activity',
+      'updates',
+      'news',
+      'look up reddit',
+      'check reddit',
+      'reddit overview',
+      'happening on reddit',
+      'reddit activity',
+      'tell me about',
+      'overview',
+      'summary',
+      'whats going on',
+      "what's going on",
     ]
-    
-    const isBroadQuery = broadQueryKeywords.some(keyword => 
-      query.toLowerCase().includes(keyword.toLowerCase())
-    ) || query.toLowerCase().includes('reddit') && (
-      query.toLowerCase().includes('current') || 
-      query.toLowerCase().includes('happening') ||
-      query.toLowerCase().includes('trending') ||
-      query.toLowerCase().includes('latest') ||
-      query.toLowerCase().includes('now') ||
-      query.toLowerCase().includes('today')
-    )
+
+    const isBroadQuery =
+      broadQueryKeywords.some(keyword => query.toLowerCase().includes(keyword.toLowerCase())) ||
+      (query.toLowerCase().includes('reddit') &&
+        (query.toLowerCase().includes('current') ||
+          query.toLowerCase().includes('happening') ||
+          query.toLowerCase().includes('trending') ||
+          query.toLowerCase().includes('latest') ||
+          query.toLowerCase().includes('now') ||
+          query.toLowerCase().includes('today')))
 
     if (isBroadQuery) {
       const [trendingTopics, searchResults] = await Promise.all([
         getTrendingRedditTopics(),
-        searchRedditKnowledge('VIT college life discussions recent trends')
+        searchRedditKnowledge('VIT college life discussions recent trends'),
       ])
 
       return {
         success: true,
-        response: searchResults.response || 'Here are the current trending topics and recent discussions from Reddit.',
+        response:
+          searchResults.response ||
+          'Here are the current trending topics and recent discussions from Reddit.',
         sources: searchResults.sources,
         trending: trendingTopics,
         confidence: searchResults.confidence,
         totalResults: searchResults.totalResults,
         isBroadQuery: true,
-        message: `Found recent VIT discussions and ${trendingTopics.length} trending topics`
+        message: `Found recent VIT discussions and ${trendingTopics.length} trending topics`,
       }
     } else {
       return await searchRedditKnowledge(query)
@@ -171,7 +196,7 @@ async function searchRedditWithContext(query: string) {
     return {
       success: false,
       error: error?.message || 'Failed to search Reddit',
-      message: 'Unable to access Reddit knowledge base'
+      message: 'Unable to access Reddit knowledge base',
     }
   }
 }
@@ -931,13 +956,19 @@ export function createVITTools() {
     }),
 
     searchRedditKnowledge: tool({
-      description: 'Search the Reddit knowledge base for student and academic information from various educational subreddits. This provides AI-powered responses based on community-validated information from students about studying, courses, exams, college life, and academic advice.',
+      description:
+        'Search the Reddit knowledge base for student and academic information from various educational subreddits. This provides AI-powered responses based on community-validated information from students about studying, courses, exams, college life, and academic advice.',
       parameters: z.object({
-        query: z.string().describe('The search query for finding relevant information from Reddit discussions about academics, studying, college life, etc.'),
+        query: z
+          .string()
+          .describe(
+            'The search query for finding relevant information from Reddit discussions about academics, studying, college life, etc.'
+          ),
       }),
-      execute: async ({ query }) => {        try {
+      execute: async ({ query }) => {
+        try {
           const results = await searchRedditKnowledge(query)
-          
+
           return {
             success: results.success,
             response: results.response,
@@ -947,18 +978,19 @@ export function createVITTools() {
             searchAttempts: results.searchAttempts || 1,
             refinedQueries: results.refinedQueries || [],
             serviceUsed: results.serviceUsed || 'agentic',
-            message: results.success 
-              ? `Found ${results.totalResults} relevant discussions using ${results.searchAttempts} search attempt${results.searchAttempts > 1 ? 's' : ''}` 
+            message: results.success
+              ? `Found ${results.totalResults} relevant discussions using ${results.searchAttempts} search attempt${results.searchAttempts > 1 ? 's' : ''}`
               : results.message,
-            note: results.success 
-              ? 'Response based on Reddit discussions. Might be inaccurate.' 
-              : 'Unable to find relevant information in the Reddit knowledge base.'
+            note: results.success
+              ? 'Response based on Reddit discussions. Might be inaccurate.'
+              : 'Unable to find relevant information in the Reddit knowledge base.',
           }
         } catch (error: any) {
           return {
             success: false,
             error: error.message || 'Failed to search Reddit knowledge base',
-            message: 'Unable to access the Reddit knowledge base. The service may be temporarily unavailable.',
+            message:
+              'Unable to access the Reddit knowledge base. The service may be temporarily unavailable.',
             suggestion: 'Please try again later or check if the Reddit scraper service is running.',
           }
         }
@@ -966,14 +998,19 @@ export function createVITTools() {
     }),
 
     searchRedditWithContext: tool({
-      description: 'Search Reddit with enhanced capabilities to handle trending topics and broader queries about current events, popular discussions, and more. This combines trending topic retrieval with the knowledge base search for comprehensive results.',
+      description:
+        'Search Reddit with enhanced capabilities to handle trending topics and broader queries about current events, popular discussions, and more. This combines trending topic retrieval with the knowledge base search for comprehensive results.',
       parameters: z.object({
-        query: z.string().describe('The search query for finding relevant information from Reddit discussions, or broad queries about current trends and popular topics.'),
+        query: z
+          .string()
+          .describe(
+            'The search query for finding relevant information from Reddit discussions, or broad queries about current trends and popular topics.'
+          ),
       }),
       execute: async ({ query }) => {
         try {
           const results = await searchRedditWithContext(query)
-          
+
           return {
             success: results.success,
             response: results.response,
@@ -982,11 +1019,11 @@ export function createVITTools() {
             confidence: results.confidence || 0,
             totalResults: results.totalResults || 0,
             isBroadQuery: (results as any).isBroadQuery || false,
-            message: results.success 
-              ? `Found ${results.totalResults} relevant discussions${(results as any).trending?.length ? ` and ${(results as any).trending.length} trending topics` : ''}` 
+            message: results.success
+              ? `Found ${results.totalResults} relevant discussions${(results as any).trending?.length ? ` and ${(results as any).trending.length} trending topics` : ''}`
               : results.message,
-            note: results.success 
-              ? 'Response includes trending topics and recent discussions. Higher confidence indicates more relevant source material.' 
+            note: results.success
+              ? 'Response includes trending topics and recent discussions. Higher confidence indicates more relevant source material.'
               : 'Unable to find relevant information in the Reddit knowledge base.',
           }
         } catch (error: any) {
@@ -1001,26 +1038,28 @@ export function createVITTools() {
     }),
 
     getRedditOverview: tool({
-      description: 'Get an overview of Reddit activity and trending topics. This provides insights into popular discussions, recent trends, and overall Reddit activity related to VIT and other educational topics.',
+      description:
+        'Get an overview of Reddit activity and trending topics. This provides insights into popular discussions, recent trends, and overall Reddit activity related to VIT and other educational topics.',
       parameters: z.object({}),
       execute: async () => {
         try {
           const overview = await getRedditOverview()
-          
+
           return {
             success: overview.success,
             trending: overview.trending || [],
             stats: overview.stats || {},
             summary: overview.summary || '',
-            message: overview.success 
-              ? 'Successfully retrieved Reddit overview data' 
+            message: overview.success
+              ? 'Successfully retrieved Reddit overview data'
               : overview.error,
           }
         } catch (error: any) {
           return {
             success: false,
             error: error.message || 'Failed to get Reddit overview',
-            message: 'Unable to access Reddit overview. The service may be temporarily unavailable.',
+            message:
+              'Unable to access Reddit overview. The service may be temporarily unavailable.',
             suggestion: 'Please try again later or check if the Reddit scraper service is running.',
           }
         }

@@ -6,7 +6,16 @@ import { useRouter, usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { MessageSquare, Plus, Settings, LogOut, Trash2, User, ChevronLeft, Loader2 } from 'lucide-react'
+import {
+  MessageSquare,
+  Plus,
+  Settings,
+  LogOut,
+  Trash2,
+  User,
+  ChevronLeft,
+  Loader2,
+} from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/utils'
@@ -70,11 +79,7 @@ export function Sidebar(props: SidebarProps) {
   useEffect(() => {
     const handleChatTitleUpdate = (event: CustomEvent) => {
       const { chatId, title } = event.detail
-      setChats(prevChats => 
-        prevChats.map(chat => 
-          chat.id === chatId ? { ...chat, title } : chat
-        )
-      )
+      setChats(prevChats => prevChats.map(chat => (chat.id === chatId ? { ...chat, title } : chat)))
     }
 
     window.addEventListener('chatTitleUpdated', handleChatTitleUpdate as EventListener)
@@ -94,16 +99,16 @@ export function Sidebar(props: SidebarProps) {
 
       const offset = reset ? 0 : chats.length
       const response = await fetch(`/api/chats?limit=15&offset=${offset}`)
-      
+
       if (response.ok) {
         const data = await response.json()
-        
+
         if (reset) {
           setChats(data)
         } else {
           setChats(prevChats => [...prevChats, ...data])
         }
-        
+
         // If we got less than 15 items, we've reached the end
         if (data.length < 15) {
           setHasMore(false)
@@ -296,7 +301,7 @@ export function Sidebar(props: SidebarProps) {
                         </Button>
                       </motion.div>
                     ))}
-                    
+
                     {/* Infinite scroll loading indicator */}
                     {loadingMore && (
                       <div className="flex justify-center py-4">

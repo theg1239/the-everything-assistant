@@ -27,16 +27,19 @@ const useViewportHeight = () => {
     const setVh = () => {
       const vh = window.innerHeight * 0.01
       document.documentElement.style.setProperty('--vh', `${vh}px`)
-      
+
       const viewport = window.visualViewport
       const height = viewport ? viewport.height : window.innerHeight
       document.documentElement.style.setProperty('--app-height', `${height}px`)
-      
+
       if (mainRef.current) {
         mainRef.current.style.height = `calc(var(--vh, 1vh) * 100)`
       }
-      
-      if (window.innerWidth <= 768 && (!window.visualViewport || window.visualViewport.scale <= 1)) {
+
+      if (
+        window.innerWidth <= 768 &&
+        (!window.visualViewport || window.visualViewport.scale <= 1)
+      ) {
         window.scrollTo(0, 0)
       }
     }
@@ -48,11 +51,11 @@ const useViewportHeight = () => {
     setVh()
     window.addEventListener('resize', setVh)
     window.addEventListener('orientationchange', () => setTimeout(setVh, 100))
-    
+
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', handleVisualViewportChange)
     }
-    
+
     return () => {
       window.removeEventListener('resize', setVh)
       window.removeEventListener('orientationchange', () => setTimeout(setVh, 100))
@@ -86,33 +89,33 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const router = useRouter()
   const [optimisticChatId, setOptimisticChatId] = useState<string | undefined>(chatId)
   const { updateToolResult } = useVTOP()
-  
+
   const mainRef = useViewportHeight()
-    useEffect(() => {
+  useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth <= 768)
     }
-    
+
     const checkZoom = () => {
       if (window.visualViewport) {
         const scale = window.visualViewport.scale || 1
         setIsZoomed(scale > 1.1)
       }
     }
-    
+
     checkMobile()
     checkZoom()
-    
+
     window.addEventListener('resize', checkMobile)
-    
+
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', checkZoom)
     }
-    
+
     if (window.innerWidth <= 768 && document.readyState === 'complete') {
       setTimeout(() => window.scrollTo(0, 0), 50)
     }
-    
+
     return () => {
       window.removeEventListener('resize', checkMobile)
       if (window.visualViewport) {
@@ -130,7 +133,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     if (typeof window === 'undefined') return
     localStorage.setItem('sidebarOpen', String(sidebarOpen))
   }, [sidebarOpen])
-  
+
   useEffect(() => {
     const hasUser = initialMessages.some(m => m.role === 'user')
     setHasUserInitiatedConversation(hasUser)
@@ -156,7 +159,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       id: msg.id,
       role: msg.role,
       content: msg.content,
-      toolInvocations: msg.toolInvocations,    })),
+      toolInvocations: msg.toolInvocations,
+    })),
     body: optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : undefined,
     onResponse: res => {
       if (!showFullChat) setShowFullChat(true)
@@ -166,7 +170,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       if (newId && newPath && !chatId) {
         setOptimisticChatId(newId)
         window.history.replaceState({}, '', newPath)
-          // Dispatch event for new chat creation
+        // Dispatch event for new chat creation
         const newChatEvent = new CustomEvent('newChatCreated', {
           detail: {
             id: newId,
@@ -174,7 +178,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
             path: newPath,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
-          }
+          },
         })
         window.dispatchEvent(newChatEvent)
       }
@@ -185,43 +189,44 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       setErrorMessage('Unable to connect. Please check your connection and try again.')
     },
   })
-  
+
   useEffect(() => {
     if (isInitialRender) {
       setIsInitialRender(false)
-      
+
       // Ensure header is visible on mobile after initial render
       if (isMobile) {
         setTimeout(() => {
           window.scrollTo(0, 0)
-        }, 100)      }
+        }, 100)
+      }
     }
   }, [isInitialRender, isMobile])
-  
+
   useEffect(() => {
     if (!isInitialRender && messages.length > 0 && messages[messages.length - 1].role === 'user') {
       // Completely disable auto-scroll on mobile to maintain header visibility
       if (isMobile) {
         return // Don't auto-scroll on mobile at all
       }
-      
+
       // On desktop, scroll normally
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
   }, [messages, isLoading, isInitialRender, isMobile])
-  
+
   useEffect(() => {
     if (!isInitialRender && messages.length > 0 && isLoading) {
       // Completely disable auto-scroll on mobile to maintain header visibility
       if (isMobile) {
         return // Don't auto-scroll on mobile during loading
       }
-      
+
       // On desktop, scroll normally during loading
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
   }, [messages, isLoading, isInitialRender, isMobile])
-  
+
   useEffect(() => {
     if (isLoading && !isInitialRender) {
       const targetNode = contentRef.current
@@ -232,7 +237,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         if (isMobile) {
           return // Don't auto-scroll on mobile during mutations
         }
-        
+
         // On desktop, scroll normally
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
       })
@@ -598,18 +603,22 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               }
             : undefined
         }
-      />{' '}      <div 
+      />{' '}
+      <div
         ref={mainRef}
         className="flex flex-col h-[calc(var(--vh,1vh)*100)] bg-background text-foreground overflow-hidden mobile-viewport-fix"
-        style={{ 
+        style={{
           height: 'var(--app-height, 100vh)',
           position: 'relative',
           width: '100%',
         }}
-      ><header className={cn(
-        "flex-shrink-0 sticky top-0 z-40 bg-background/95 border-b border-border chat-page-header",
-        isMobile && "mobile-header-sticky"
-      )}>
+      >
+        <header
+          className={cn(
+            'flex-shrink-0 sticky top-0 z-40 bg-background/95 border-b border-border chat-page-header',
+            isMobile && 'mobile-header-sticky'
+          )}
+        >
           <div className="flex h-14 items-center px-4 gap-2">
             <HamburgerButton onClick={() => setSidebarOpen(!sidebarOpen)} className="md:block" />
             <Button
@@ -628,15 +637,23 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               Canvas
             </Button>
           </div>
-        </header>        <div className="flex-1 relative overflow-hidden">
-          <div className={cn(
-            "absolute inset-0 overflow-y-auto chat-content",
-            isMobile && "mobile-chat-container mobile-no-auto-scroll",
-            isMobile && isFirstMessageInNewChat && "mobile-prevent-auto-scroll"
-          )}>            <div ref={contentRef} className={cn(
-              "max-w-3xl mx-auto px-4 space-y-6",
-              isMobile ? "pt-2 pb-6" : "pt-5", // Reduce top and bottom padding on mobile
-            )}>
+        </header>{' '}
+        <div className="flex-1 relative overflow-hidden">
+          <div
+            className={cn(
+              'absolute inset-0 overflow-y-auto chat-content',
+              isMobile && 'mobile-chat-container mobile-no-auto-scroll',
+              isMobile && isFirstMessageInNewChat && 'mobile-prevent-auto-scroll'
+            )}
+          >
+            {' '}
+            <div
+              ref={contentRef}
+              className={cn(
+                'max-w-3xl mx-auto px-4 space-y-6',
+                isMobile ? 'pt-2 pb-6' : 'pt-5' // Reduce top and bottom padding on mobile
+              )}
+            >
               {errorMessage && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -683,10 +700,13 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
             </div>
           </div>
         </div>
-        <ScrollToTopButton />{' '}        <div className={cn(
-          "flex-shrink-0 sticky bottom-0 z-30",
-          isMobile ? "input-area" : "input-area"
-        )}>
+        <ScrollToTopButton />{' '}
+        <div
+          className={cn(
+            'flex-shrink-0 sticky bottom-0 z-30',
+            isMobile ? 'input-area' : 'input-area'
+          )}
+        >
           {!isMobile && (
             <div
               className="absolute inset-0 pointer-events-none"

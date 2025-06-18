@@ -82,13 +82,13 @@ main {
     backdrop-filter: none !important;
     z-index: 50 !important;
   }
-  
+
   /* Remove background gradients and borders on mobile */
   .input-area::before,
   .input-area::after {
     display: none !important;
   }
-  
+
   /* Make the input truly floating */
   .input-area > div {
     margin: 0 auto !important;
@@ -99,14 +99,14 @@ main {
     border-radius: 24px !important;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
   }
-  
+
   .input-area form {
     padding: 0 !important;
     margin: 0 !important;
     max-width: none !important;
     width: 100% !important;
   }
-  
+
   /* Ensure the input container spans full width on mobile */
   .input-area .relative.max-w-3xl {
     max-width: none !important;
@@ -125,7 +125,8 @@ main {
     .input-area {
       position: fixed;
       bottom: 0;
-    }    .chat-page-header {
+    }
+    .chat-page-header {
       position: sticky;
       top: 0;
     }
@@ -140,19 +141,19 @@ main {
     /* Remove top padding since header is sticky */
     padding-top: 0 !important;
   }
-  
+
   /* Ensure messages container doesn't create excessive space */
   .chat-content > div > div {
     min-height: fit-content;
     padding-top: 0.5rem !important;
     padding-bottom: 1.5rem !important;
   }
-  
+
   /* Prevent auto-scroll behavior on mobile */
   .mobile-no-auto-scroll {
     scroll-behavior: auto !important;
   }
-  
+
   /* Maintain header visibility */
   .mobile-header-sticky {
     position: sticky !important;

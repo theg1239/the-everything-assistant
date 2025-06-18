@@ -4,7 +4,21 @@ import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { X, Save, FileText, Download, Edit3, Copy, RefreshCw, Type, Bold, Italic, Link2, List, Code } from 'lucide-react'
+import {
+  X,
+  Save,
+  FileText,
+  Download,
+  Edit3,
+  Copy,
+  RefreshCw,
+  Type,
+  Bold,
+  Italic,
+  Link2,
+  List,
+  Code,
+} from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
 import { toast } from 'sonner'
@@ -117,56 +131,59 @@ function CanvasContent({ isOpen, onClose, chatId, initialDocument }: CanvasProps
     URL.revokeObjectURL(url)
     toast.success('Document downloaded!')
   }, [document])
-  const insertMarkdown = useCallback((type: string) => {
-    const textarea = window.document.querySelector('textarea') as HTMLTextAreaElement
-    if (!textarea) return
+  const insertMarkdown = useCallback(
+    (type: string) => {
+      const textarea = window.document.querySelector('textarea') as HTMLTextAreaElement
+      if (!textarea) return
 
-    const start = textarea.selectionStart
-    const end = textarea.selectionEnd
-    const text = document.content
-    const before = text.substring(0, start)
-    const selected = text.substring(start, end)
-    const after = text.substring(end)
+      const start = textarea.selectionStart
+      const end = textarea.selectionEnd
+      const text = document.content
+      const before = text.substring(0, start)
+      const selected = text.substring(start, end)
+      const after = text.substring(end)
 
-    let newText = ''
-    let newCursorPos = start
+      let newText = ''
+      let newCursorPos = start
 
-    switch (type) {
-      case 'bold':
-        newText = `${before}**${selected || 'bold text'}**${after}`
-        newCursorPos = start + 2 + (selected || 'bold text').length + 2
-        break
-      case 'italic':
-        newText = `${before}*${selected || 'italic text'}*${after}`
-        newCursorPos = start + 1 + (selected || 'italic text').length + 1
-        break
-      case 'code':
-        newText = `${before}\`${selected || 'code'}\`${after}`
-        newCursorPos = start + 1 + (selected || 'code').length + 1
-        break
-      case 'heading':
-        newText = `${before}## ${selected || 'Heading'}${after}`
-        newCursorPos = start + 3 + (selected || 'Heading').length
-        break
-      case 'link':
-        newText = `${before}[${selected || 'link text'}](url)${after}`
-        newCursorPos = start + 1 + (selected || 'link text').length + 2
-        break
-      case 'list':
-        newText = `${before}- ${selected || 'List item'}${after}`
-        newCursorPos = start + 2 + (selected || 'List item').length
-        break
-      default:
-        return
-    }
+      switch (type) {
+        case 'bold':
+          newText = `${before}**${selected || 'bold text'}**${after}`
+          newCursorPos = start + 2 + (selected || 'bold text').length + 2
+          break
+        case 'italic':
+          newText = `${before}*${selected || 'italic text'}*${after}`
+          newCursorPos = start + 1 + (selected || 'italic text').length + 1
+          break
+        case 'code':
+          newText = `${before}\`${selected || 'code'}\`${after}`
+          newCursorPos = start + 1 + (selected || 'code').length + 1
+          break
+        case 'heading':
+          newText = `${before}## ${selected || 'Heading'}${after}`
+          newCursorPos = start + 3 + (selected || 'Heading').length
+          break
+        case 'link':
+          newText = `${before}[${selected || 'link text'}](url)${after}`
+          newCursorPos = start + 1 + (selected || 'link text').length + 2
+          break
+        case 'list':
+          newText = `${before}- ${selected || 'List item'}${after}`
+          newCursorPos = start + 2 + (selected || 'List item').length
+          break
+        default:
+          return
+      }
 
-    setDocument(prev => ({ ...prev, content: newText }))
-    
-    setTimeout(() => {
-      textarea.focus()
-      textarea.setSelectionRange(newCursorPos, newCursorPos)
-    }, 0)
-  }, [document.content])
+      setDocument(prev => ({ ...prev, content: newText }))
+
+      setTimeout(() => {
+        textarea.focus()
+        textarea.setSelectionRange(newCursorPos, newCursorPos)
+      }, 0)
+    },
+    [document.content]
+  )
 
   const handleClose = useCallback(() => {
     onClose?.()
@@ -180,7 +197,7 @@ function CanvasContent({ isOpen, onClose, chatId, initialDocument }: CanvasProps
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-start justify-center p-2 sm:p-4 md:items-center overflow-y-auto"
-          onClick={(e) => e.target === e.currentTarget && handleClose()}
+          onClick={e => e.target === e.currentTarget && handleClose()}
         >
           <motion.div
             initial={{ scale: 0.95, opacity: 0, y: 20 }}
@@ -188,7 +205,7 @@ function CanvasContent({ isOpen, onClose, chatId, initialDocument }: CanvasProps
             exit={{ scale: 0.95, opacity: 0, y: 20 }}
             transition={{ duration: 0.2 }}
             className="bg-background border border-border rounded-xl w-full max-w-4xl h-[95vh] md:h-[90vh] flex flex-col overflow-hidden shadow-2xl my-2 md:my-0"
-            onClick={(e) => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
           >
             {/* Mobile-First Header */}
             <div className="flex-shrink-0 p-3 sm:p-4 border-b border-border bg-card">
@@ -202,7 +219,7 @@ function CanvasContent({ isOpen, onClose, chatId, initialDocument }: CanvasProps
                 >
                   <X className="h-4 w-4" />
                 </Button>
-                
+
                 <div className="flex items-center space-x-1">
                   {isSaving && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
                   <Button
@@ -250,7 +267,8 @@ function CanvasContent({ isOpen, onClose, chatId, initialDocument }: CanvasProps
                   placeholder="Document title..."
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  {document.content.length} characters • {document.content.split(/\s+/).filter(Boolean).length} words
+                  {document.content.length} characters •{' '}
+                  {document.content.split(/\s+/).filter(Boolean).length} words
                 </p>
               </div>
 
@@ -363,24 +381,38 @@ function CanvasContent({ isOpen, onClose, chatId, initialDocument }: CanvasProps
                     <ReactMarkdown
                       components={{
                         h1: ({ children }) => (
-                          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-4 sm:mb-6 pb-2 border-b border-border">{children}</h1>
+                          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-4 sm:mb-6 pb-2 border-b border-border">
+                            {children}
+                          </h1>
                         ),
                         h2: ({ children }) => (
-                          <h2 className="text-xl sm:text-2xl font-semibold text-foreground mb-3 sm:mb-4 mt-6 sm:mt-8">{children}</h2>
+                          <h2 className="text-xl sm:text-2xl font-semibold text-foreground mb-3 sm:mb-4 mt-6 sm:mt-8">
+                            {children}
+                          </h2>
                         ),
                         h3: ({ children }) => (
-                          <h3 className="text-lg sm:text-xl font-medium text-foreground mb-2 sm:mb-3 mt-4 sm:mt-6">{children}</h3>
+                          <h3 className="text-lg sm:text-xl font-medium text-foreground mb-2 sm:mb-3 mt-4 sm:mt-6">
+                            {children}
+                          </h3>
                         ),
                         p: ({ children }) => (
-                          <p className="text-foreground mb-3 sm:mb-4 leading-relaxed text-sm sm:text-base">{children}</p>
+                          <p className="text-foreground mb-3 sm:mb-4 leading-relaxed text-sm sm:text-base">
+                            {children}
+                          </p>
                         ),
                         ul: ({ children }) => (
-                          <ul className="list-disc pl-4 sm:pl-6 mb-3 sm:mb-4 text-foreground space-y-1">{children}</ul>
+                          <ul className="list-disc pl-4 sm:pl-6 mb-3 sm:mb-4 text-foreground space-y-1">
+                            {children}
+                          </ul>
                         ),
                         ol: ({ children }) => (
-                          <ol className="list-decimal pl-4 sm:pl-6 mb-3 sm:mb-4 text-foreground space-y-1">{children}</ol>
+                          <ol className="list-decimal pl-4 sm:pl-6 mb-3 sm:mb-4 text-foreground space-y-1">
+                            {children}
+                          </ol>
                         ),
-                        li: ({ children }) => <li className="leading-relaxed text-sm sm:text-base">{children}</li>,
+                        li: ({ children }) => (
+                          <li className="leading-relaxed text-sm sm:text-base">{children}</li>
+                        ),
                         code: ({ children }) => (
                           <code className="bg-muted px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-xs sm:text-sm font-mono border">
                             {children}
@@ -397,24 +429,36 @@ function CanvasContent({ isOpen, onClose, chatId, initialDocument }: CanvasProps
                           </blockquote>
                         ),
                         a: ({ children, href }) => (
-                          <a href={href} className="text-primary hover:text-primary/80 underline text-sm sm:text-base" target="_blank" rel="noopener noreferrer">
+                          <a
+                            href={href}
+                            className="text-primary hover:text-primary/80 underline text-sm sm:text-base"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
                             {children}
                           </a>
                         ),
                         table: ({ children }) => (
                           <div className="overflow-x-auto mb-3 sm:mb-4">
-                            <table className="min-w-full divide-y divide-border text-sm">{children}</table>
+                            <table className="min-w-full divide-y divide-border text-sm">
+                              {children}
+                            </table>
                           </div>
                         ),
                         th: ({ children }) => (
-                          <th className="px-2 sm:px-4 py-1 sm:py-2 bg-muted text-left text-xs sm:text-sm font-medium text-foreground">{children}</th>
+                          <th className="px-2 sm:px-4 py-1 sm:py-2 bg-muted text-left text-xs sm:text-sm font-medium text-foreground">
+                            {children}
+                          </th>
                         ),
                         td: ({ children }) => (
-                          <td className="px-2 sm:px-4 py-1 sm:py-2 text-xs sm:text-sm text-foreground border-t border-border">{children}</td>
+                          <td className="px-2 sm:px-4 py-1 sm:py-2 text-xs sm:text-sm text-foreground border-t border-border">
+                            {children}
+                          </td>
                         ),
                       }}
                     >
-                      {document.content || '*No content yet. Switch to edit mode to start writing.*'}
+                      {document.content ||
+                        '*No content yet. Switch to edit mode to start writing.*'}
                     </ReactMarkdown>
                   </div>
                 </div>
@@ -435,22 +479,34 @@ function CanvasContent({ isOpen, onClose, chatId, initialDocument }: CanvasProps
                       <ReactMarkdown
                         components={{
                           h1: ({ children }) => (
-                            <h1 className="text-xl font-bold text-foreground mb-3 pb-1 border-b border-border">{children}</h1>
+                            <h1 className="text-xl font-bold text-foreground mb-3 pb-1 border-b border-border">
+                              {children}
+                            </h1>
                           ),
                           h2: ({ children }) => (
-                            <h2 className="text-lg font-semibold text-foreground mb-2 mt-4">{children}</h2>
+                            <h2 className="text-lg font-semibold text-foreground mb-2 mt-4">
+                              {children}
+                            </h2>
                           ),
                           h3: ({ children }) => (
-                            <h3 className="text-base font-medium text-foreground mb-2 mt-3">{children}</h3>
+                            <h3 className="text-base font-medium text-foreground mb-2 mt-3">
+                              {children}
+                            </h3>
                           ),
                           p: ({ children }) => (
-                            <p className="text-foreground mb-2 leading-relaxed text-sm">{children}</p>
+                            <p className="text-foreground mb-2 leading-relaxed text-sm">
+                              {children}
+                            </p>
                           ),
                           ul: ({ children }) => (
-                            <ul className="list-disc pl-4 mb-2 text-foreground text-sm">{children}</ul>
+                            <ul className="list-disc pl-4 mb-2 text-foreground text-sm">
+                              {children}
+                            </ul>
                           ),
                           ol: ({ children }) => (
-                            <ol className="list-decimal pl-4 mb-2 text-foreground text-sm">{children}</ol>
+                            <ol className="list-decimal pl-4 mb-2 text-foreground text-sm">
+                              {children}
+                            </ol>
                           ),
                           li: ({ children }) => <li className="mb-1 text-sm">{children}</li>,
                           code: ({ children }) => (

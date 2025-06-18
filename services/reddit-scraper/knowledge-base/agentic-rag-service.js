@@ -7,8 +7,8 @@ class AgenticRAGService {  constructor() {
     this.knowledgeBase = new KnowledgeBase();
     this.maxContextLength = parseInt(process.env.MAX_CONTEXT_LENGTH) || 6000;
     this.chatModel = google('gemini-2.5-flash-lite-preview-06-17');
-    this.maxIterations = 3; // Maximum number of search refinement iterations
-    this.relevanceThreshold = 0.6; // Minimum relevance score to consider results good
+    this.maxIterations = 3;
+    this.relevanceThreshold = 0.6;
   }
 
   async generateResponse(query, conversationHistory = []) {

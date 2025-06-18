@@ -11,9 +11,7 @@ const port = process.env.PORT || 3002;
 app.use(cors());
 app.use(express.json());
 
-// Use the new agentic RAG service by default
 const ragService = new AgenticRAGService();
-// Keep the old service for comparison/fallback if needed
 const legacyRagService = new RAGService();
 const knowledgeBase = new KnowledgeBase();
 
@@ -77,7 +75,6 @@ app.post('/api/ask', async (req, res) => {
 
     logger.info(`RAG request: "${query}" (agentic: ${useAgentic})`);
     
-    // Use agentic RAG service by default, with option to fallback to legacy
     const activeRagService = useAgentic ? ragService : legacyRagService;
     const response = await activeRagService.generateResponse(query, conversationHistory);
     
@@ -173,7 +170,6 @@ app.post('/api/compare', async (req, res) => {
 
     logger.info(`Comparison request: "${query}"`);
     
-    // Run both services in parallel for comparison
     const [agenticResponse, legacyResponse] = await Promise.allSettled([
       ragService.generateResponse(query, conversationHistory),
       legacyRagService.generateResponse(query, conversationHistory)

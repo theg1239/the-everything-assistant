@@ -29,14 +29,7 @@ export interface MessMenuResponse {
   error?: string
 }
 
-const MESS_ENDPOINTS = {
-  'mens-special': 'https://messit.vinnovateit.com/menu-data/hostel-1-mess-1.json',
-  'mens-veg': 'https://messit.vinnovateit.com/menu-data/hostel-1-mess-2.json',
-  'mens-nonveg': 'https://messit.vinnovateit.com/menu-data/hostel-1-mess-3.json',
-  'ladies-special': 'https://messit.vinnovateit.com/menu-data/hostel-2-mess-1.json',
-  'ladies-veg': 'https://messit.vinnovateit.com/menu-data/hostel-2-mess-2.json',
-  'ladies-nonveg': 'https://messit.vinnovateit.com/menu-data/hostel-2-mess-3.json',
-}
+const BASE_ENDPOINT = 'https://messit-backend.vinnovateit.com'
 
 const HOSTEL_TYPES = {
   1: "Men's Hostel",
@@ -65,18 +58,13 @@ export async function getMessMenu(
   mealType?: 'breakfast' | 'lunch' | 'snacks' | 'dinner'
 ): Promise<MessMenuResponse> {
   try {
-    const selectedHostel = hostelType || 'mens'
-    const selectedMess = messType || 'special'
+    const hostelNum = hostelType === 'ladies' ? 2 : 1
+    const messNum = messType === 'veg' ? 2 : messType === 'nonveg' ? 3 : 1
 
-    const endpointKey = `${selectedHostel}-${selectedMess}` as keyof typeof MESS_ENDPOINTS
-    const endpoint = MESS_ENDPOINTS[endpointKey]
+    console.log(`Fetching menu from ${hostelType || 'mens'} hostel, ${messType || 'special'} mess...`)
 
-    if (!endpoint) {
-      throw new Error(`Invalid hostel/mess combination: ${selectedHostel}-${selectedMess}`)
-    }
-
-    console.log(`Fetching menu from ${selectedHostel} hostel, ${selectedMess} mess...`)
-
+    const endpoint = `${BASE_ENDPOINT}/?hostel=${hostelNum}&mess=${messNum}`
+    
     const response = await fetch(endpoint, {
       headers: {
         Accept: 'application/json',
@@ -95,6 +83,7 @@ export async function getMessMenu(
     if (!menuData || !menuData.menu || !Array.isArray(menuData.menu)) {
       throw new Error('Invalid menu data structure received')
     }
+
     const today = requestedDate || new Date().toISOString().split('T')[0]
 
     const todayMenu = menuData.menu.find(day => day.date === today)
@@ -114,6 +103,7 @@ export async function getMessMenu(
         error: `Menu not available for date: ${today}`,
       }
     }
+
     const weekMenu = getWeekMenu(menuData.menu, today)
 
     const filteredTodayMenu = filterByMealType(todayMenu, mealType)
@@ -254,10 +244,10 @@ export async function getAvailableDateRange(
   messType: 'special' | 'veg' | 'nonveg' = 'special'
 ): Promise<{ start: string; end: string } | null> {
   try {
-    const endpointKey = `${hostelType}-${messType}` as keyof typeof MESS_ENDPOINTS
-    const endpoint = MESS_ENDPOINTS[endpointKey]
+    const hostelNum = hostelType === 'ladies' ? 2 : 1
+    const messNum = messType === 'veg' ? 2 : messType === 'nonveg' ? 3 : 1
 
-    if (!endpoint) return null
+    const endpoint = `${BASE_ENDPOINT}/?hostel=${hostelNum}&mess=${messNum}`
 
     const response = await fetch(endpoint, {
       headers: { Accept: 'application/json' },

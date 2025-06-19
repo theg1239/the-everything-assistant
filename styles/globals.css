@@ -3,7 +3,6 @@
 @tailwind utilities;
 
 @layer base {
-  /* Reset textarea styles */
   textarea {
     border: none !important;
     outline: none !important;
@@ -20,7 +19,6 @@
     ring-offset: none !important;
   }
 
-  /* Mobile viewport fixes */
   :root {
     --app-height: 100vh;
   }
@@ -42,7 +40,6 @@
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Remove rubber-band scroll on Safari */
   .chat-content {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
@@ -51,7 +48,6 @@
     height: var(--app-height);
   }
 
-  /* Ensure header is always visible */
   .chat-page-header {
     position: sticky;
     top: 0;
@@ -61,7 +57,6 @@
     padding-top: env(safe-area-inset-top, 1rem);
   }
 
-  /* Fix input area positioning */
   .input-area {
     position: sticky;
     bottom: 0;
@@ -135,7 +130,6 @@
     }
   }
 
-  /* Remove all input focus styles */
   input:focus,
   input:focus-visible,
   .focus\:ring-0:focus {
@@ -147,7 +141,6 @@
     --tw-ring-offset-shadow: none !important;
   }
 
-  /* Force remove all borders and focus styles from textarea */
   textarea,
   textarea:focus,
   textarea:focus-visible,
@@ -170,7 +163,6 @@
     --tw-ring-shadow: 0 0 #0000 !important;
   }
 
-  /* Additional override for Tailwind's focus-visible utilities */
   .focus\:border:focus,
   .focus\:ring:focus,
   .focus-visible\:border:focus-visible,
@@ -206,19 +198,16 @@
     background: rgba(100, 116, 139, 0.4);
   }
 
-  /* Text selection */
   ::selection {
     background: rgba(59, 130, 246, 0.2);
     color: white;
   }
 
-  /* Improved typography */
   .prose {
     line-height: 1.7;
     letter-spacing: 0.01em;
   }
 
-  /* Enhanced animations */
   @keyframes fadeInUp {
     from {
       opacity: 0;
@@ -234,7 +223,6 @@
     animation: fadeInUp 0.6s ease-out;
   }
 
-  /* Gradient text effect */
   .gradient-text {
     background: linear-gradient(135deg, #3b82f6, #8b5cf6);
     -webkit-background-clip: text;
@@ -242,13 +230,11 @@
     background-clip: text;
   }
 
-  /* Enhanced glassmorphism */
   .glass-effect {
     background: rgba(15, 23, 42, 0.3);
     border: 1px solid rgba(100, 116, 139, 0.1);
   }
 
-  /* Enhanced gradient animations for tool responses */
   @keyframes gradient-shift {
     0%,
     100% {
@@ -264,13 +250,11 @@
     animation: gradient-shift 3s ease infinite;
   }
 
-  /* Improved glass morphism effects */
   .glass-effect-strong {
     background: rgba(15, 23, 42, 0.7);
     border: 1px solid rgba(100, 116, 139, 0.2);
   }
 
-  /* Text line clamping utilities */
   .line-clamp-2 {
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -287,7 +271,6 @@
     overflow: hidden;
   }
 
-  /* Enhanced hover effects for cards */
   .card-hover-effect {
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
@@ -299,7 +282,6 @@
       0 10px 10px -5px rgba(0, 0, 0, 0.04);
   }
 
-  /* Subtle pulse animation for status indicators */
   @keyframes pulse-glow {
     0%,
     100% {
@@ -316,7 +298,6 @@
     animation: pulse-glow 2s ease-in-out infinite;
   }
 
-  /* Loading animation improvements */
   @keyframes pulse-smooth {
     0%,
     100% {
@@ -333,7 +314,6 @@
     animation: pulse-smooth 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
 
-  /* Enhanced button hover effects */
   button {
     transform-origin: center;
   }
@@ -346,12 +326,10 @@
     transform: translateY(0);
   }
 
-  /* Improved spacing and typography */
   .container {
     max-width: 1400px;
   }
 
-  /* Enhanced mobile responsiveness */
   @media (max-width: 768px) {
     .container {
       padding-left: 1rem;
@@ -367,20 +345,17 @@
     }
   }
 
-  /* Ensure no borders or outlines on focus */
   *:focus,
   *:focus-visible {
     outline: none !important;
     box-shadow: none !important;
   }
 
-  /* Custom focus styles only where needed */
   button:focus-visible {
     outline: 2px solid rgba(59, 130, 246, 0.4);
     outline-offset: 2px;
   }
 
-  /* Sidebar and chat interface transitions */
   @layer utilities {
     .sidebar-open .max-w-5xl {
       margin-left: 20rem;
@@ -397,7 +372,6 @@
       }
     }
 
-    /* Collapsed sidebar button */
     .sidebar-toggle-collapsed {
       position: fixed;
       left: 1rem;
@@ -419,12 +393,10 @@
       color: #ffffff;
     }
 
-    /* Smooth transitions for all gradient elements */
     .gradient-transition {
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    /* Shared scrollbar styling */
     .custom-scrollbar {
       scrollbar-width: thin;
       scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
@@ -443,7 +415,6 @@
       border-radius: 10px;
     }
 
-    /* Enhanced scrollbar for tool results */
     .tool-scrollbar::-webkit-scrollbar {
       width: 6px;
     }
@@ -462,7 +433,6 @@
       background: linear-gradient(to bottom, rgba(59, 130, 246, 0.7), rgba(139, 92, 246, 0.7));
     }
 
-    /* Chat layout fixes */
     .chat-container {
       display: flex;
       flex-direction: column;
@@ -480,22 +450,18 @@
     }
   }
 
-  /* Mobile header visibility fixes */
   @media (max-width: 768px) {
     .mobile-new-chat-header-visible {
-      /* Ensure header stays visible during new chat transitions */
       scroll-behavior: auto !important;
     }
 
     .mobile-prevent-auto-scroll {
-      /* Prevent automatic scrolling on mobile for new chats */
       scroll-behavior: auto !important;
       scroll-margin-top: 0 !important;
       scroll-padding-top: 0 !important;
     }
 
     .mobile-chat-container {
-      /* Optimize mobile chat container */
       touch-action: pan-y;
       -webkit-overflow-scrolling: touch;
       overscroll-behavior-y: contain;

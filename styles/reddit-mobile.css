@@ -1,14 +1,9 @@
-/* Reddit Artifact Display Mobile Enhancements */
-
-/* Mobile-specific improvements for Reddit knowledge and overview cards */
 .reddit-card-mobile {
-  /* Ensure content doesn't overflow on small screens */
   word-wrap: break-word;
   overflow-wrap: break-word;
   hyphens: auto;
 }
 
-/* Enhanced styling for new Reddit response format */
 .reddit-response {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   line-height: 1.6;
@@ -40,17 +35,13 @@
   line-height: 1.6;
 }
 
-/* Improved text contrast for Reddit content */
 .reddit-response-content {
-  /* Better text rendering on mobile */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  /* Ensure good contrast */
   color: hsl(var(--card-foreground)) !important;
 }
 
-/* Dark mode text contrast fixes */
 @media (prefers-color-scheme: dark) {
   .reddit-response-content {
     color: #e5e7eb !important;
@@ -72,7 +63,6 @@
   }
 }
 
-/* Mobile typography for Reddit responses */
 @media (max-width: 640px) {
   .reddit-response-content h1 {
     font-size: 1.25rem !important;
@@ -158,7 +148,6 @@
   }
 }
 
-/* Dark mode adjustments for mobile Reddit content */
 @media (max-width: 640px) and (prefers-color-scheme: dark) {
   .reddit-response-content code {
     background-color: rgba(255, 255, 255, 0.1) !important;
@@ -171,7 +160,6 @@
     border-left-color: #374151 !important;
   }
 
-  /* Force high contrast text colors for dark mode */
   .reddit-response-content,
   .reddit-response-content p,
   .reddit-response-content li,
@@ -190,35 +178,27 @@
   }
 }
 
-/* Touch-friendly interactive elements */
 @media (max-width: 640px) {
   .reddit-card-mobile .reddit-source-item,
   .reddit-card-mobile .reddit-trending-item {
-    /* Increase touch target size */
     min-height: 44px;
-    /* Better touch feedback */
     -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
   }
 
   .reddit-card-mobile button {
-    /* Ensure buttons are touch-friendly */
     min-height: 44px;
     min-width: 44px;
   }
 }
 
-/* Mobile-specific spacing adjustments */
 @media (max-width: 640px) {
   .reddit-card-mobile .reddit-confidence-badge {
-    /* Wrap badges on small screens */
     flex-wrap: wrap;
     gap: 0.25rem;
-    /* Ensure proper alignment */
     align-items: center;
     justify-content: flex-start;
   }
   .reddit-card-mobile .reddit-source-meta {
-    /* Stack metadata vertically on very small screens */
     flex-direction: column;
     align-items: flex-start;
     gap: 0.25rem;
@@ -226,12 +206,10 @@
   }
 
   .reddit-card-mobile .reddit-post-title {
-    /* Better line clamping for mobile */
     -webkit-line-clamp: 3;
     line-clamp: 3;
   }
 
-  /* Ensure proper spacing between elements */
   .reddit-card-mobile .reddit-source-item {
     padding: 0.75rem !important;
   }
@@ -241,10 +219,8 @@
   }
 }
 
-/* Accessibility improvements for mobile */
 @media (max-width: 640px) {
   .reddit-card-mobile {
-    /* Better focus indicators on mobile */
     outline-offset: 2px;
   }
 
@@ -254,27 +230,22 @@
     outline-offset: 2px;
   }
 
-  /* Ensure sufficient color contrast for mobile viewing */
   .reddit-card-mobile .text-muted-foreground {
     opacity: 0.8;
   }
 }
 
-/* Performance optimizations for mobile */
 @media (max-width: 640px) {
   .reddit-card-mobile {
-    /* Optimize rendering performance */
     will-change: auto;
     transform: translateZ(0);
   }
 
   .reddit-card-mobile .reddit-response-content {
-    /* Optimize text rendering */
     contain: layout style;
   }
 }
 
-/* New structured Reddit response styling */
 .reddit-response {
   max-width: 100%;
   overflow-wrap: break-word;
@@ -311,7 +282,6 @@
   color: #2d3748;
 }
 
-/* Mobile optimizations for Reddit response */
 @media (max-width: 640px) {
   .reddit-response h3 {
     font-size: 1rem;

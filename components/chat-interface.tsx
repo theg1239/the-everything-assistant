@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, memo } from 'react'
 import { useChat } from 'ai/react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { FileText, Plus } from 'lucide-react'
 import { HamburgerButton } from '@/components/hamburger-button'
@@ -90,6 +91,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const [showFollowUpSuggestions, setShowFollowUpSuggestions] = useState(false)
   const [lastAssistantMessage, setLastAssistantMessage] = useState<string>('')
   const [lastUserMessage, setLastUserMessage] = useState<string>('')
+  const [userPreferences, setUserPreferences] = useState<any>({ followUpSuggestions: true })
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -97,6 +99,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const currentChatIdRef = useRef<string | undefined>(chatId)
   const { updateToolResult } = useVTOP()
   const { rateLimitError, clearRateLimitError, checkForRateLimitError } = useRateLimit()
+  const { data: session } = useSession()
 
   const mainRef = useViewportHeight()
   useEffect(() => {
@@ -145,12 +148,31 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   useEffect(() => {
     currentChatIdRef.current = optimisticChatId || chatId
   }, [optimisticChatId, chatId])
-
   useEffect(() => {
     const hasUser = initialMessages.some(m => m.role === 'user')
     setHasUserInitiatedConversation(hasUser)
     setIsFirstMessageInNewChat(initialMessages.length === 0)
   }, [initialMessages])
+
+  useEffect(() => {
+    const loadPreferences = async () => {
+      if (!session?.user?.email) return
+      
+      try {
+        const response = await fetch('/api/user/preferences')
+        if (response.ok) {
+          const data = await response.json()
+          setUserPreferences(data.preferences)
+        }
+      } catch (error) {
+        console.error('Error loading user preferences:', error)
+      }
+    }
+
+    if (session?.user?.email) {
+      loadPreferences()
+    }
+  }, [session?.user?.email])
   const {
     messages,
     input,
@@ -200,10 +222,11 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         chatId, 
         isFirstMessageInNewChat 
       })
-      
-      if (message.role === 'assistant' && message.content) {
+        if (message.role === 'assistant' && message.content) {
         setLastAssistantMessage(message.content)
-        setShowFollowUpSuggestions(true)
+        if (userPreferences.followUpSuggestions !== false) {
+          setShowFollowUpSuggestions(true)
+        }
       }
       
       if (currentChatId && isFirstMessageInNewChat) {
@@ -580,9 +603,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         onCredentialsSubmit={handleVTOPCredentials}
       >
         <ResearchPreviewModal />
-        <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
-        <div className="flex flex-col h-[100dvh] bg-background text-foreground relative overflow-hidden mobile-viewport-fix">
-          <div className="absolute inset-0 bg-gradient-to-br from-background via-muted/20 to-background" />
+        <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />        <div className="flex flex-col h-[100dvh] bg-transparent text-foreground relative overflow-hidden mobile-viewport-fix">
           <div className="relative z-10 flex flex-col h-full">
             <header className="flex-shrink-0 sticky top-0 z-40">
               <div className="flex h-14 items-center px-4 gap-2">
@@ -680,7 +701,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       />{' '}
       <div
         ref={mainRef}
-        className="flex flex-col h-[calc(var(--vh,1vh)*100)] bg-background text-foreground overflow-hidden mobile-viewport-fix"
+        className="flex flex-col h-[calc(var(--vh,1vh)*100)] bg-transparent text-foreground overflow-hidden mobile-viewport-fix"
         style={{
           height: 'var(--app-height, 100vh)',
           position: 'relative',
@@ -689,7 +710,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       >
         <header
           className={cn(
-            'flex-shrink-0 sticky top-0 z-40 bg-background/95 border-b border-border chat-page-header',
+            'flex-shrink-0 sticky top-0 z-40 bg-black/20 backdrop-blur-sm border-b border-border/50 chat-page-header',
             isMobile && 'mobile-header-sticky'
           )}
         >

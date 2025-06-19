@@ -7,23 +7,24 @@ import { motion } from 'framer-motion'
 
 export function LoginForm() {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, ease: 'easeOut' }}
-      className="w-full max-w-md"
-    >
-      <Card className="bg-slate-800/40 backdrop-blur-xl border-slate-700/30">
-        <CardHeader className="text-center space-y-4">
-          <CardTitle className="text-2xl font-light text-white">the everything assistant</CardTitle>
-          <CardDescription className="text-slate-400">
-            sign in to access your personalized vit vellore ai assistant, ask anything!
-          </CardDescription>
-        </CardHeader>
+    <div className="relative w-full max-w-md">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: 'easeOut' }}
+        className="relative z-10"
+      >
+        <Card className="bg-slate-900/80 backdrop-blur-xl border-slate-600/60 shadow-2xl shadow-purple-500/30 relative">
+          <CardHeader className="text-center space-y-4">
+            <CardTitle className="text-2xl font-light text-white drop-shadow-lg">the everything assistant</CardTitle>
+            <CardDescription className="text-slate-200">
+              sign in to access your personalized assistant, ask anything!
+            </CardDescription>
+          </CardHeader>
         <CardContent className="space-y-4">
           <Button
             onClick={() => signIn('google', { callbackUrl: '/' })}
-            className="w-full bg-white hover:bg-gray-100 text-gray-900 font-medium py-3"
+            className="w-full bg-white/95 hover:bg-white text-gray-900 font-medium py-3 shadow-lg hover:shadow-xl transition-all duration-200"
             size="lg"
           >
             <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
@@ -47,11 +48,12 @@ export function LoginForm() {
             continue with google
           </Button>
 
-          <div className="text-xs text-slate-500 text-center">
+          <div className="text-xs text-slate-300 text-center">
             by signing in, you agree to our terms of service and privacy policy
           </div>
         </CardContent>
       </Card>
     </motion.div>
+  </div>
   )
 }

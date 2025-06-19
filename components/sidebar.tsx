@@ -312,7 +312,7 @@ export function Sidebar(props: SidebarProps) {
             animate={{ x: 0 }}
             exit={{ x: -300 }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="sidebar-container fixed left-0 top-0 z-50 h-full w-[var(--sidebar-width)] bg-background border-r border-border flex flex-col shadow-xl"
+            className="sidebar-container fixed left-0 top-0 z-50 h-full w-[var(--sidebar-width)] bg-black/30 backdrop-blur-md border-r border-border/50 flex flex-col shadow-xl"
             onMouseEnter={() => setHovering(true)}
             onMouseLeave={() => setHovering(false)}
             style={{ 

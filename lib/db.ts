@@ -5,6 +5,7 @@ export interface User {
   email: string
   name: string | null
   image: string | null
+  preferences?: any
   created_at: Date
   updated_at: Date
 }

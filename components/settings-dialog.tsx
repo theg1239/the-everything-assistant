@@ -32,11 +32,6 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
-interface SettingsDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-}
-
 export function SettingsDialog({ open, onOpenChange }: any) {
   const { data: session } = useSession()
   const [activeSection, setActiveSection] = useState('general')
@@ -50,6 +45,63 @@ export function SettingsDialog({ open, onOpenChange }: any) {
   const [restoringChats, setRestoringChats] = useState<Set<string>>(new Set())
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(false)
+  const [loadingPreferences, setLoadingPreferences] = useState(false)
+
+  useEffect(() => {
+    const loadPreferences = async () => {
+      if (!session?.user?.email) return
+      
+      setLoadingPreferences(true)
+      try {
+        const response = await fetch('/api/user/preferences')
+        if (response.ok) {
+          const data = await response.json()
+          const prefs = data.preferences
+          setFollowUpSuggestions(prefs.followUpSuggestions ?? true)
+        }
+      } catch (error) {
+        console.error('Error loading preferences:', error)
+      } finally {
+        setLoadingPreferences(false)
+      }
+    }
+
+    if (open && session?.user?.email) {
+      loadPreferences()
+    }
+  }, [open, session?.user?.email])
+
+  const savePreferences = async (newPreferences: any) => {
+    if (!session?.user?.email) return
+
+    try {
+      const response = await fetch('/api/user/preferences', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          preferences: newPreferences
+        })
+      })
+
+      if (response.ok) {
+        toast.success('Preferences saved successfully')
+      } else {
+        throw new Error('Failed to save preferences')
+      }
+    } catch (error) {
+      console.error('Error saving preferences:', error)
+      toast.error('Failed to save preferences')
+    }
+  }
+
+  const handleFollowUpSuggestionsChange = async (checked: boolean) => {
+    setFollowUpSuggestions(checked)
+    await savePreferences({
+      followUpSuggestions: checked
+    })
+  }
 
   const menuItems = [
     { id: 'general', label: 'general', icon: Settings },
@@ -68,8 +120,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
 
   const handleDeleteAllChats = async () => {
     if (!confirmDelete) {
-      setConfirmDelete(true)
-      // Reset confirmation after 3 seconds
+      setConfirmDelete(true)      
       setTimeout(() => setConfirmDelete(false), 3000)
       return
     }
@@ -82,11 +133,9 @@ export function SettingsDialog({ open, onOpenChange }: any) {
       })
         if (response.ok) {
         const result = await response.json()
-        // Trigger a page reload or emit an event to refresh the sidebar
         window.dispatchEvent(new CustomEvent('chatsDeleted', { detail: result }))
-        // Show success message
         toast.success(`${result.count} chats deleted successfully`)
-        onOpenChange(false) // Close the dialog
+        onOpenChange(false)
       } else {
         throw new Error('Failed to delete chats')
       }
@@ -100,7 +149,6 @@ export function SettingsDialog({ open, onOpenChange }: any) {
   const handleArchiveAllChats = async () => {
     if (!confirmArchive) {
       setConfirmArchive(true)
-      // Reset confirmation after 3 seconds
       setTimeout(() => setConfirmArchive(false), 3000)
       return
     }
@@ -113,11 +161,9 @@ export function SettingsDialog({ open, onOpenChange }: any) {
       })
         if (response.ok) {
         const result = await response.json()
-        // Trigger a page reload or emit an event to refresh the sidebar
         window.dispatchEvent(new CustomEvent('chatsArchived', { detail: result }))
-        // Show success message
         toast.success(`${result.count} chats archived successfully`)
-        onOpenChange(false) // Close the dialog
+        onOpenChange(false)
       } else {
         throw new Error('Failed to archive chats')
       }
@@ -179,8 +225,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
             <div>
               <h3 className="text-lg font-semibold mb-4">general settings</h3>
               
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
+              <div className="space-y-4">                <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label htmlFor="follow-up">show follow up suggestions in chats</Label>
                     <p className="text-sm text-muted-foreground">
@@ -190,7 +235,8 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                   <Switch
                     id="follow-up"
                     checked={followUpSuggestions}
-                    onCheckedChange={setFollowUpSuggestions}
+                    onCheckedChange={handleFollowUpSuggestionsChange}
+                    disabled={loadingPreferences}
                   />
                 </div>
               </div>

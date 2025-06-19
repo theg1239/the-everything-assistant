@@ -54,8 +54,8 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
           userLimit: errorData.error?.includes('user') || errorData.userLimit || 
                     errorMessage.toLowerCase().includes('user rate limit'),
           message: errorData.error || (errorMessage.toLowerCase().includes('user') 
-            ? 'You have exceeded your rate limit. Please wait before sending another message.' 
-            : 'Rate limit exceeded. Please try again later.')
+            ? 'you have exceeded your rate limit. please wait before sending another message.' 
+            : 'rate limit exceeded. please try again later.')
         }
 
         console.log('💾 Setting rate limit error:', rateLimitInfo)
@@ -68,8 +68,8 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
           isRateLimit: true,
           userLimit: isUserLimit,
           message: isUserLimit 
-            ? 'You have exceeded your rate limit. Please wait before sending another message.'
-            : 'Rate limit exceeded. Please try again later.'
+            ? 'you have exceeded your rate limit. please wait before sending another message.'
+            : 'rate limit exceeded. please try again later.'
         }
         console.log('Setting fallback rate limit error:', fallbackError)
         setRateLimitError(fallbackError)

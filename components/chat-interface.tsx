@@ -8,6 +8,7 @@ import { FileText, Plus } from 'lucide-react'
 import { HamburgerButton } from '@/components/hamburger-button'
 import { Button } from '@/components/ui/button'
 import { SuggestedQuestions } from '@/components/suggested-questions'
+import { FollowUpSuggestions } from '@/components/follow-up-suggestions'
 import { ChatHeader } from '@/components/chat-header'
 import { MessageBubble } from '@/components/message-bubble'
 import { MultimodalInput } from '@/components/multimodal-input'
@@ -86,6 +87,9 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const [isMobile, setIsMobile] = useState(false)
   const [isFirstMessageInNewChat, setIsFirstMessageInNewChat] = useState(false)
   const [isZoomed, setIsZoomed] = useState(false)
+  const [showFollowUpSuggestions, setShowFollowUpSuggestions] = useState(false)
+  const [lastAssistantMessage, setLastAssistantMessage] = useState<string>('')
+  const [lastUserMessage, setLastUserMessage] = useState<string>('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -196,6 +200,12 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         chatId, 
         isFirstMessageInNewChat 
       })
+      
+      if (message.role === 'assistant' && message.content) {
+        setLastAssistantMessage(message.content)
+        setShowFollowUpSuggestions(true)
+      }
+      
       if (currentChatId && isFirstMessageInNewChat) {
         setIsFirstMessageInNewChat(false)
         //console.log('⏱Starting title update check in 3 seconds...')
@@ -316,10 +326,13 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       }
     }
   }, [error, checkForRateLimitError])
-  
   const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!input.trim()) return
+
+    setShowFollowUpSuggestions(false)
+    
+    setLastUserMessage(input.trim())
 
     if (!showFullChat) {
       setShowFullChat(true)
@@ -329,9 +342,13 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     setHasUserInitiatedConversation(true)
     originalHandleSubmit(e)
   }
-  
   const handleSuggestedQuestion = async (question: string) => {
     setInput('')
+    
+    setShowFollowUpSuggestions(false)
+    
+    setLastUserMessage(question)
+    
     if (!showFullChat) {
       setShowFullChat(true)
       setIsFirstMessageInNewChat(true)    }
@@ -687,11 +704,11 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               className="h-9"
             >
               <Plus className="h-4 w-4 mr-2" />
-              New Chat
+              new chat
             </Button>
             <Button variant="ghost" onClick={openCanvas} className="ml-auto h-9">
               <FileText className="h-4 w-4 mr-2" />
-              Canvas
+              canvas
             </Button>
           </div>
         </header>{' '}
@@ -708,7 +725,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               ref={contentRef}
               className={cn(
                 'max-w-3xl mx-auto px-4 space-y-6',
-                isMobile ? 'pt-2 pb-6' : 'pt-5' // Reduce top and bottom padding on mobile
+                isMobile ? 'pt-2 pb-6' : 'pt-5'
               )}            >
               {errorMessage && (
                 <motion.div
@@ -753,8 +770,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                       ></div>
                     </div>
                     <span className="text-sm">thinking...</span>
-                  </motion.div>
-                )}
+                  </motion.div>                )}
+              
               <div ref={messagesEndRef} className={isLoading ? 'h-20' : 'h-0'} aria-hidden="true" />
             </div>
           </div>
@@ -774,9 +791,16 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                 borderTop: 'none',
               }}
             ></div>
-          )}
-
-          <div className="relative z-10">
+          )}          <div className="relative z-10">
+            <FollowUpSuggestions
+              lastAssistantMessage={lastAssistantMessage}
+              lastUserMessage={lastUserMessage}
+              isVisible={showFollowUpSuggestions && !isLoading}
+              onSuggestionClick={handleSuggestedQuestion}
+              onDismiss={() => setShowFollowUpSuggestions(false)}
+              isMobile={isMobile}
+            />
+            
             <MultimodalInput
               input={input}
               setInput={setInput}

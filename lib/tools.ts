@@ -636,30 +636,30 @@ export function createVITTools() {
       },
     }),
 
-    getFacultyInfo: tool({
-      description: 'get current faculty information from VIT official websites',
-      parameters: z.object({
-        department: z
-          .string()
-          .optional()
-          .describe('department like computer science, mechanical, electronics'),
-        facultyName: z.string().optional().describe('specific faculty member name'),
-      }),
-      execute: async ({ department, facultyName }) => scrapeFacultyInfo(department, facultyName),
-    }),
-
-    getPlacementInfo: tool({
-      description:
-        'get latest placement statistics and company information from VIT Placements Tracker',
-      parameters: z.object({
-        year: z.string().optional().describe('academic year like 2024-25, 2023-24'),
-        companyFilter: z
-          .string()
-          .optional()
-          .describe('filter results by company name (case-insensitive substring match)'),
-      }),
-      execute: async ({ year, companyFilter }) => scrapePlacementInfo(year, companyFilter),
-    }),
+    // getFacultyInfo: tool({
+    //   description: 'get current faculty information from VIT official websites',
+    //   parameters: z.object({
+    //     department: z
+    //       .string()
+    //       .optional()
+    //       .describe('department like computer science, mechanical, electronics'),
+    //     facultyName: z.string().optional().describe('specific faculty member name'),
+    //   }),
+    //   execute: async ({ department, facultyName }) => scrapeFacultyInfo(department, facultyName),
+    // }),
+    
+    // getPlacementInfo: tool({
+    //   description:
+    //     'get latest placement statistics and company information from VIT Placements Tracker',
+    //   parameters: z.object({
+    //     year: z.string().optional().describe('academic year like 2024-25, 2023-24'),
+    //     companyFilter: z
+    //       .string()
+    //       .optional()
+    //       .describe('filter results by company name (case-insensitive substring match)'),
+    //   }),
+    //   execute: async ({ year, companyFilter }) => scrapePlacementInfo(year, companyFilter),
+    // }),
 
     getMessMenu: tool({
       description:

@@ -65,13 +65,12 @@ export function Sidebar(props: SidebarProps) {
     else setSelectedChatId(null)
   }, [pathname])
 
-  // Listen for new chat creation
   useEffect(() => {
     const handleNewChat = (event: CustomEvent) => {
       const newChat = event.detail
-      console.log('📧 Sidebar received newChatCreated event:', newChat)
+      // console.log('Sidebar received newChatCreated event:', newChat)
       setChats(prevChats => {
-        console.log('📊 Adding new chat to list. Previous count:', prevChats.length)
+        // console.log('Adding new chat to list. Previous count:', prevChats.length)
         return [newChat, ...prevChats]
       })
     }
@@ -82,22 +81,21 @@ export function Sidebar(props: SidebarProps) {
     }
   }, [])
 
-  // Listen for chat title updates
   useEffect(() => {
     const handleChatTitleUpdate = (event: CustomEvent) => {
       const { chatId, title } = event.detail
-      console.log('📧 Sidebar received chatTitleUpdated event:', { chatId, title })
-      console.log('📋 Current chats:', chats.map(c => ({ id: c.id, title: c.title })))
+      // console.log('Sidebar received chatTitleUpdated event:', { chatId, title })
+      // console.log('Current chats:', chats.map(c => ({ id: c.id, title: c.title })))
       
       setChats(prevChats => {
         const updated = prevChats.map(chat => {
           if (chat.id === chatId) {
-            console.log('✅ Found matching chat, updating title from:', chat.title, 'to:', title)
+            // console.log('Found matching chat, updating title from:', chat.title, 'to:', title)
             return { ...chat, title }
           }
           return chat
         })
-        console.log('📊 Updated chats:', updated.map(c => ({ id: c.id, title: c.title })))
+        // console.log('Updated chats:', updated.map(c => ({ id: c.id, title: c.title })))
         return updated
       })
     }
@@ -108,14 +106,13 @@ export function Sidebar(props: SidebarProps) {
     }
   }, [])
 
-  // Listen for bulk chat operations
   useEffect(() => {
     const handleChatsDeleted = () => {
-      fetchChats(true) // Refresh the chat list
+      fetchChats(true)
     }
 
     const handleChatsArchived = () => {
-      fetchChats(true) // Refresh the chat list
+      fetchChats(true)
     }
 
     window.addEventListener('chatsDeleted', handleChatsDeleted)
@@ -149,12 +146,12 @@ export function Sidebar(props: SidebarProps) {
             const existingIds = new Set(prevChats.map(chat => chat.id))
             const newChats = data.filter((chat: Chat) => !existingIds.has(chat.id))
             
-            if (process.env.NODE_ENV === 'development') {
-              console.log('Existing chats:', prevChats.length)
-              console.log('New chats fetched:', data.length)
-              console.log('New chats after dedup:', newChats.length)
-              console.log('Duplicate chat IDs found:', data.length - newChats.length)
-            }
+            // if (process.env.NODE_ENV === 'development') {
+            //   console.log('Existing chats:', prevChats.length)
+            //   console.log('New chats fetched:', data.length)
+            //   console.log('New chats after dedup:', newChats.length)
+            //   console.log('Duplicate chat IDs found:', data.length - newChats.length)
+            // }
             
             return [...prevChats, ...newChats]
           })
@@ -416,7 +413,7 @@ export function Sidebar(props: SidebarProps) {
                   <>
                     {chats.map((chat, index) => (
                       <motion.div
-                        key={`chat-${chat.id}-${chat.updatedAt || index}`} // More robust unique key
+                        key={`chat-${chat.id}-${chat.updatedAt || index}`}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         className={cn(

@@ -395,7 +395,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                     </div>
                   </div>
                   <Button variant="outline" size="sm" onClick={() => signOut()}>
-                    Log out
+                    log out
                   </Button>
                 </div>
               </div>

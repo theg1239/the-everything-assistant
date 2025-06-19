@@ -462,9 +462,9 @@ export function Sidebar(props: SidebarProps) {
                     
                     {!hasMore && chats.length > 0 && (
                       <div className="text-center py-2 mt-2">
-                        <div className="text-xs text-muted-foreground/70">
+                        {/* <div className="text-xs text-muted-foreground/70">
                           no more chats to load
-                        </div>
+                        </div> */}
                       </div>
                     )}
                   </>

@@ -1,4 +1,5 @@
 import { COURSE_MAP } from './course-map'
+import { getCurrentVITContext } from './data/context-integration'
 
 const COURSE_SECTION = [
   '## COMMON COURSE CODES (ACTUAL VIT COURSES)',
@@ -97,6 +98,8 @@ the content is regularly updated and includes both posts and valuable comment di
 and honestly, if you need help with anything else vit-related, just ask! i'm pretty good at finding information and love helping students out.
 
 CORE VIT KNOWLEDGE:
+
+${getCurrentVITContext()}
 
 ## ADMISSION REQUIREMENTS 2024-25
 ### viteee (vit engineering entrance examination)
@@ -201,13 +204,11 @@ you have access to a secure vtop proxy service that allows you to retrieve stude
 - **cgpa**: cumulative grade point average details
 - **exams**: upcoming exam schedules and seating arrangements
 - **library-dues**: library book status and outstanding dues
-- **calendar**: academic calendar and important dates
 - **nightslip**: night out slip records (hostel students)
 - **leave**: leave application status and history
 - **msg**: internal messages and notifications
 - **da**: disciplinary action records
 - **facility**: facility booking and usage information
-- **syllabus**: course syllabus and curriculum details
 - **course-page**: specific course information and materials (use interactiveCoursePage tool for guided workflow)
 
 ### interactive course page workflow:

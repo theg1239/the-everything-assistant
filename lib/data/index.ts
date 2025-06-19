@@ -12,7 +12,6 @@ export function getAllContextData(): ContextData[] {
 //   const { workingSaturdays } = require('./working-saturdays')
   const { examSchedule } = require('./exam-schedule')
 //   const { holidays } = require('./holidays')
-  const { importantDates } = require('./important-dates')
   const { currentStatus } = require('./current-status')
   const { latestEvents } = require('./latest-events')
   
@@ -20,7 +19,6 @@ export function getAllContextData(): ContextData[] {
     currentStatus,
     academicCalendar,
     examSchedule,
-    importantDates,
     // workingSaturdays,
     latestEvents,
     // holidays,

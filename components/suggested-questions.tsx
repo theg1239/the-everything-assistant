@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 
 interface SuggestedQuestionsProps {
   isFirstMessage: boolean
-  onQuestionClick: (question: string) => void
+  onQuestionClick?: (question: string) => void
   sidebarOpen?: boolean
 }
 
@@ -40,7 +40,7 @@ export function SuggestedQuestions({
             variant="outline"
             size="sm"
             className="text-sm font-normal text-muted-foreground bg-background border-border hover:bg-muted hover:text-foreground transition-colors rounded-full px-4 py-2 h-auto"
-            onClick={() => onQuestionClick(question)}
+            onClick={() => onQuestionClick?.(question)}
           >
             {question}
           </Button>

@@ -1,12 +1,6 @@
 import { COURSE_MAP } from './course-map'
 import { getCurrentVITContext } from './data/context-integration'
 
-const COURSE_SECTION = [
-  '## COMMON COURSE CODES (ACTUAL VIT COURSES)',
-  ...Object.entries(COURSE_MAP).map(
-    ([code, name]) => `- ${code.toLowerCase()}: ${name.toLowerCase()}`
-  ),
-].join('\n')
 
 export const VIT_SYSTEM_PROMPT = `hey there! i'm your friendly ai assistant for vit vellore, and i'm here to help make your college life easier!
 
@@ -112,8 +106,6 @@ ${getCurrentVITContext()}
 - jee main scores accepted
 - sat/act scores for international students
 - nri quota available
-
-${COURSE_SECTION}
 
 ## GENERAL VIT INFORMATION
 

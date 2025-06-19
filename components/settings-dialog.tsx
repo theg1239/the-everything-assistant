@@ -218,17 +218,17 @@ export function SettingsDialog({ open, onOpenChange }: any) {
   }
 
   const renderContent = () => {
-    switch (activeSection) {
-      case 'general':
+    switch (activeSection) {      case 'general':
         return (
           <div className="space-y-6">
             <div>
-              <h3 className="text-lg font-semibold mb-4">general settings</h3>
+              <h3 className="text-lg md:text-xl font-semibold mb-4">general settings</h3>
               
-              <div className="space-y-4">                <div className="flex items-center justify-between">
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
                   <div className="space-y-0.5">
-                    <Label htmlFor="follow-up">show follow up suggestions in chats</Label>
-                    <p className="text-sm text-muted-foreground">
+                    <Label htmlFor="follow-up" className="text-sm md:text-base">show follow up suggestions in chats</Label>
+                    <p className="text-xs md:text-sm text-muted-foreground">
                       display suggested follow-up questions after AI responses
                     </p>
                   </div>
@@ -237,18 +237,18 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                     checked={followUpSuggestions}
                     onCheckedChange={handleFollowUpSuggestionsChange}
                     disabled={loadingPreferences}
+                    className="flex-shrink-0"
                   />
                 </div>
               </div>
-            </div>
-          </div>
+            </div>          </div>
         )
 
       case 'appearance':
         return (
           <div className="space-y-6">
             <div>
-              <h3 className="text-lg font-semibold mb-4">theme</h3>
+              <h3 className="text-lg md:text-xl font-semibold mb-4">theme</h3>
               
               <div className="space-y-3">
                 {themeOptions.map((option) => {
@@ -258,18 +258,18 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                       key={option.id}
                       onClick={() => setTheme(option.id)}
                       className={cn(
-                        'w-full flex items-center justify-between p-3 rounded-lg border transition-colors',
+                        'w-full flex items-center justify-between p-3 rounded-lg border transition-colors text-sm md:text-base',
                         theme === option.id
                           ? 'border-primary bg-primary/5'
                           : 'border-border hover:bg-muted/50'
                       )}
                     >
                       <div className="flex items-center gap-3">
-                        <Icon className="w-4 h-4" />
+                        <Icon className="w-4 h-4 flex-shrink-0" />
                         <span>{option.label}</span>
                       </div>
                       {theme === option.id && (
-                        <div className="w-2 h-2 rounded-full bg-primary" />
+                        <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
                       )}
                     </button>
                   )
@@ -283,11 +283,11 @@ export function SettingsDialog({ open, onOpenChange }: any) {
         return (
           <div className="space-y-6">
             <div>
-              <h3 className="text-lg font-semibold mb-4">language</h3>
+              <h3 className="text-lg md:text-xl font-semibold mb-4">language</h3>
               
               <div className="flex items-center justify-between p-3 rounded-lg border border-border">
-                <span>auto-detect</span>
-                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm md:text-base">auto-detect</span>
+                <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
               </div>
             </div>
           </div>
@@ -297,36 +297,39 @@ export function SettingsDialog({ open, onOpenChange }: any) {
         return (
           <div className="space-y-6">
             <div>
-              <h3 className="text-lg font-semibold mb-4">data controls</h3>
+              <h3 className="text-lg md:text-xl font-semibold mb-4">data controls</h3>
                 <div className="space-y-4">
                 {!showArchivedChats ? (
                   <>
-                    <div className="flex items-center justify-between p-3 rounded-lg border border-border">
-                      <div className="flex items-center gap-3">
-                        <Archive className="w-4 h-4" />
-                        <div>
-                          <p className="font-medium">archived chats</p>
-                          <p className="text-sm text-muted-foreground">manage your archived conversations</p>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
+                      <div className="flex items-start sm:items-center gap-3">
+                        <Archive className="w-4 h-4 flex-shrink-0 mt-0.5 sm:mt-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-sm md:text-base">archived chats</p>
+                          <p className="text-xs md:text-sm text-muted-foreground">manage your archived conversations</p>
                         </div>
                       </div>
-                      <Button variant="outline" size="sm" onClick={handleManageArchivedChats}>
+                      <Button variant="outline" size="sm" onClick={handleManageArchivedChats} className="w-full sm:w-auto flex-shrink-0">
                         manage
                       </Button>
                     </div>
 
-                    <div className="flex items-center justify-between p-3 rounded-lg border border-border">
-                      <div className="flex items-center gap-3">
-                        <Archive className="w-4 h-4" />
-                        <div>
-                          <p className="font-medium">archive all chats</p>
-                          <p className="text-sm text-muted-foreground">move all conversations to archive</p>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
+                      <div className="flex items-start sm:items-center gap-3">
+                        <Archive className="w-4 h-4 flex-shrink-0 mt-0.5 sm:mt-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-sm md:text-base">archive all chats</p>
+                          <p className="text-xs md:text-sm text-muted-foreground">move all conversations to archive</p>
                         </div>
                       </div>                      <Button 
                         variant="outline" 
                         size="sm" 
                         onClick={handleArchiveAllChats}
                         disabled={isArchiving}
-                        className={confirmArchive ? 'bg-orange-500/10 border-orange-500/30 text-orange-600' : ''}
+                        className={cn(
+                          "w-full sm:w-auto flex-shrink-0",
+                          confirmArchive ? 'bg-orange-500/10 border-orange-500/30 text-orange-600' : ''
+                        )}
                       >
                         {isArchiving ? (
                           <>
@@ -341,19 +344,22 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                       </Button>
                     </div>
 
-                    <div className="flex items-center justify-between p-3 rounded-lg border border-destructive/20">
-                      <div className="flex items-center gap-3">
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                        <div>
-                          <p className="font-medium">delete all chats</p>
-                          <p className="text-sm text-muted-foreground">permanently delete all conversations</p>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-destructive/20">
+                      <div className="flex items-start sm:items-center gap-3">
+                        <Trash2 className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5 sm:mt-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-sm md:text-base">delete all chats</p>
+                          <p className="text-xs md:text-sm text-muted-foreground">permanently delete all conversations</p>
                         </div>
                       </div>                      <Button 
                         variant="destructive" 
                         size="sm" 
                         onClick={handleDeleteAllChats}
                         disabled={isDeleting}
-                        className={confirmDelete ? 'bg-red-600 hover:bg-red-700' : ''}
+                        className={cn(
+                          "w-full sm:w-auto flex-shrink-0",
+                          confirmDelete ? 'bg-red-600 hover:bg-red-700' : ''
+                        )}
                       >
                         {isDeleting ? (
                           <>
@@ -370,12 +376,13 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                   </>
                 ) : (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-medium">archived chats</h4>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <h4 className="font-medium text-sm md:text-base">archived chats</h4>
                       <Button 
                         variant="ghost" 
                         size="sm" 
                         onClick={() => setShowArchivedChats(false)}
+                        className="w-full sm:w-auto"
                       >
                         back
                       </Button>
@@ -387,16 +394,16 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                       </div>                  ) : archivedChats.length === 0 ? (
                     <div className="text-center p-8 text-muted-foreground">
                       <Archive className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                      <p className="font-medium mb-1">no archived chats found</p>
-                      <p className="text-sm">archived conversations will appear here</p>
+                      <p className="font-medium mb-1 text-sm md:text-base">no archived chats found</p>
+                      <p className="text-xs md:text-sm">archived conversations will appear here</p>
                     </div>
                     ) : (
                       <div className="space-y-2 max-h-96 overflow-y-auto">
                         {archivedChats.map((chat) => (
-                          <div key={chat.id} className="flex items-center justify-between p-3 rounded-lg border border-border">
+                          <div key={chat.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
                             <div className="flex-1 min-w-0">
-                              <p className="font-medium truncate">{chat.title}</p>
-                              <p className="text-sm text-muted-foreground">
+                              <p className="font-medium truncate text-sm md:text-base">{chat.title}</p>
+                              <p className="text-xs md:text-sm text-muted-foreground">
                                 {new Date(chat.createdAt).toLocaleDateString()}
                               </p>
                             </div>                            <Button 
@@ -404,6 +411,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                               size="sm" 
                               onClick={() => handleRestoreChat(chat.id)}
                               disabled={restoringChats.has(chat.id)}
+                              className="w-full sm:w-auto flex-shrink-0"
                             >
                               {restoringChats.has(chat.id) ? (
                                 <>
@@ -418,8 +426,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                         ))}
                       </div>
                     )}
-                  </div>
-                )}
+                  </div>                )}
               </div>
             </div>
           </div>
@@ -429,18 +436,18 @@ export function SettingsDialog({ open, onOpenChange }: any) {
         return (
           <div className="space-y-6">
             <div>
-              <h3 className="text-lg font-semibold mb-4">security</h3>
+              <h3 className="text-lg md:text-xl font-semibold mb-4">security</h3>
               
               <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 rounded-lg border border-border">
-                  <div className="flex items-center gap-3">
-                    <LogOut className="w-4 h-4" />
-                    <div>
-                      <p className="font-medium">log out on this device</p>
-                      <p className="text-sm text-muted-foreground">sign out of your account</p>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
+                  <div className="flex items-start sm:items-center gap-3">
+                    <LogOut className="w-4 h-4 flex-shrink-0 mt-0.5 sm:mt-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm md:text-base">log out on this device</p>
+                      <p className="text-xs md:text-sm text-muted-foreground">sign out of your account</p>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => signOut()}>
+                  <Button variant="outline" size="sm" onClick={() => signOut()} className="w-full sm:w-auto flex-shrink-0">
                     log out
                   </Button>
                 </div>
@@ -453,15 +460,14 @@ export function SettingsDialog({ open, onOpenChange }: any) {
         return (
           <div className="space-y-6">
             <div>
-              <h3 className="text-lg font-semibold mb-4">{activeSection}</h3>
-              <p className="text-muted-foreground">this section is coming soon.</p>
+              <h3 className="text-lg md:text-xl font-semibold mb-4">{activeSection}</h3>
+              <p className="text-muted-foreground text-sm md:text-base">this section is coming soon.</p>
             </div>
           </div>
         )
     }
   }
 
-  // Reset confirmation states when switching sections or closing dialog
   useEffect(() => {
     setConfirmDelete(false)
     setConfirmArchive(false)
@@ -472,41 +478,48 @@ export function SettingsDialog({ open, onOpenChange }: any) {
       setConfirmArchive(false)
       setShowArchivedChats(false)
       setRestoringChats(new Set())
+    } else {
+      setActiveSection('general')
     }
   }, [open])
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl h-[600px] p-0 gap-0 bg-background border border-border">
-        <div className="flex h-full">
-          <div className="w-72 border-r border-border bg-muted/20 p-6">
-            <DialogHeader className="mb-6">
+  return (    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-5xl w-[95vw] h-[90vh] max-h-[800px] p-0 gap-0 bg-background border border-border overflow-hidden rounded-xl">
+        <div className="flex flex-col md:flex-row h-full rounded-xl overflow-hidden">
+          <div className="block md:hidden border-b border-border bg-muted/20 p-4 flex-shrink-0">
+            <DialogHeader>
               <DialogTitle className="text-xl font-semibold">settings</DialogTitle>
             </DialogHeader>
+          </div>       
+          <div className="w-full md:w-72 border-r-0 md:border-r border-border bg-muted/20 p-4 md:p-6 transition-all duration-300 rounded-tl-xl md:rounded-bl-xl md:rounded-tl-xl rounded-tr-xl md:rounded-tr-none">
+            <div className="hidden md:block">
+              <DialogHeader className="mb-6">
+                <DialogTitle className="text-xl font-semibold">settings</DialogTitle>
+              </DialogHeader>
+            </div>
 
             <nav className="space-y-1">
-              {menuItems.map((item) => {
-                const Icon = item.icon
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => setActiveSection(item.id)}
-                    className={cn(
-                      'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-left',
-                      activeSection === item.id
-                        ? 'bg-primary/10 text-primary font-medium'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                    )}
-                  >
-                    <Icon className="w-4 h-4" />
-                    {item.label}
-                  </button>
-                )
-              })}
-            </nav>
-          </div>
-
-          <div className="flex-1 p-6 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-1 md:grid-cols-1 md:gap-1">
+                {menuItems.map((item) => {
+                  const Icon = item.icon
+                  return (                    <button
+                      key={item.id}
+                      onClick={() => setActiveSection(item.id)}
+                      className={cn(
+                        'w-full flex flex-col md:flex-row items-center md:gap-3 gap-1 px-2 md:px-3 py-3 md:py-2 rounded-lg text-xs md:text-sm transition-colors text-center md:text-left',
+                        activeSection === item.id
+                          ? 'bg-primary/10 text-primary font-medium'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                      )}
+                    >
+                      <Icon className="w-4 h-4 flex-shrink-0" />
+                      <span className="truncate">{item.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </nav>          </div>
+          
+          <div className="flex-1 p-4 md:p-6 overflow-y-auto rounded-br-xl md:rounded-tr-xl rounded-bl-xl md:rounded-bl-none">
             <motion.div
               key={activeSection}
               initial={{ opacity: 0, x: 20 }}

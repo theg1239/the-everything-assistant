@@ -73,7 +73,10 @@ export async function getChats(
 ): Promise<Chat[]> {
   try {
     const chats = await prisma.chat.findMany({
-      where: { userId },
+      where: { 
+        userId,
+        archived: false, // Only return non-archived chats
+      },
       orderBy: { updated_at: 'desc' },
       take: limit,
       skip: offset,
@@ -126,6 +129,76 @@ export async function deleteChat(id: string, userId: string): Promise<void> {
     where: {
       id,
       userId,
+    },
+  })
+}
+
+export async function deleteAllChats(userId: string): Promise<number> {
+  const result = await prisma.chat.deleteMany({
+    where: {
+      userId,
+      archived: false,
+    },
+  })
+  return result.count
+}
+
+export async function archiveChat(id: string, userId: string): Promise<void> {
+  await prisma.chat.updateMany({
+    where: {
+      id,
+      userId,
+    },
+    data: {
+      archived: true,
+    },
+  })
+}
+
+export async function archiveAllChats(userId: string): Promise<number> {
+  const result = await prisma.chat.updateMany({
+    where: {
+      userId,
+      archived: false,
+    },
+    data: {
+      archived: true,
+    },
+  })
+  return result.count
+}
+
+export async function getArchivedChats(
+  userId: string,
+  limit: number = 15,
+  offset: number = 0
+): Promise<Chat[]> {
+  try {
+    const chats = await prisma.chat.findMany({
+      where: { 
+        userId,
+        archived: true,
+      },
+      orderBy: { updated_at: 'desc' },
+      take: limit,
+      skip: offset,
+    })
+    return chats as Chat[]
+  } catch (error) {
+    console.error('Error getting archived chats:', error)
+    return []
+  }
+}
+
+export async function restoreChat(id: string, userId: string): Promise<void> {
+  await prisma.chat.updateMany({
+    where: {
+      id,
+      userId,
+      archived: true,
+    },
+    data: {
+      archived: false,
     },
   })
 }

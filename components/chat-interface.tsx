@@ -17,6 +17,8 @@ import { extractTitleFromContent } from '@/lib/utils'
 import ResearchPreviewModal from '@/components/research-preview-modal'
 import { VTOPToolHandler } from '@/components/vtop-tool-handler'
 import { VTOPProvider, useVTOP } from '@/components/vtop-context'
+import { RateLimitProvider, useRateLimit } from '@/components/rate-limit-context'
+import { RateLimitErrorDisplay } from '@/components/rate-limit-error-display'
 import { toast } from 'sonner'
 import ScrollToTopButton from '@/components/scroll-to-top-button'
 import { cn } from '@/lib/utils'
@@ -88,7 +90,9 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const contentRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const [optimisticChatId, setOptimisticChatId] = useState<string | undefined>(chatId)
+  const currentChatIdRef = useRef<string | undefined>(chatId)
   const { updateToolResult } = useVTOP()
+  const { rateLimitError, clearRateLimitError, checkForRateLimitError } = useRateLimit()
 
   const mainRef = useViewportHeight()
   useEffect(() => {
@@ -135,10 +139,12 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   }, [sidebarOpen])
 
   useEffect(() => {
+    currentChatIdRef.current = optimisticChatId || chatId
+  }, [optimisticChatId, chatId])
+
+  useEffect(() => {
     const hasUser = initialMessages.some(m => m.role === 'user')
     setHasUserInitiatedConversation(hasUser)
-    // If there are initial messages, this is not a new chat
-    // If no initial messages, this is a new chat and first message should not auto-scroll on mobile
     setIsFirstMessageInNewChat(initialMessages.length === 0)
   }, [initialMessages])
   const {
@@ -161,16 +167,16 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       content: msg.content,
       toolInvocations: msg.toolInvocations,
     })),
-    body: optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : undefined,
-    onResponse: res => {
+    body: optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : undefined,    onResponse: res => {
       if (!showFullChat) setShowFullChat(true)
       setErrorMessage(null)
+      clearRateLimitError()
       const newId = res.headers.get('X-Chat-Id')
       const newPath = res.headers.get('X-Chat-Path')
       if (newId && newPath && !chatId) {
         setOptimisticChatId(newId)
+        currentChatIdRef.current = newId // Update the ref as well
         window.history.replaceState({}, '', newPath)
-        // Dispatch event for new chat creation
         const newChatEvent = new CustomEvent('newChatCreated', {
           detail: {
             id: newId,
@@ -182,11 +188,63 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         })
         window.dispatchEvent(newChatEvent)
       }
+    },    onFinish: (message) => {
+      const currentChatId = currentChatIdRef.current
+      console.log('🏁 AI response finished', { 
+        currentChatId, 
+        optimisticChatId, 
+        chatId, 
+        isFirstMessageInNewChat 
+      })
+      if (currentChatId && isFirstMessageInNewChat) {
+        setIsFirstMessageInNewChat(false)
+        //console.log('⏱Starting title update check in 3 seconds...')
+        
+        const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
+          try {
+            //console.log(`Attempt ${attempt}: Fetching updated chat data for:`, currentChatId)
+            const response = await fetch(`/api/chats/${currentChatId}`)
+            if (response.ok) {
+              const chatData = await response.json()
+              //console.log('Chat data received:', chatData)
+              if (chatData.title && chatData.title !== 'New Chat') {
+                //console.log('Title updated! Dispatching event:', chatData.title)
+                const titleUpdateEvent = new CustomEvent('chatTitleUpdated', {
+                  detail: {
+                    chatId: currentChatId,
+                    title: chatData.title,
+                  },
+                })
+                window.dispatchEvent(titleUpdateEvent)
+              } else if (attempt < maxAttempts) {
+                //console.log(`Title not updated yet (attempt ${attempt}/${maxAttempts}). Retrying in 2 seconds...`)
+                setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
+              } else {
+                //console.log('Title still not updated after all attempts')
+              }
+            } else {
+              console.error('Failed to fetch chat data:', response.status)
+            }
+          } catch (error) {
+            console.error(`Failed to check for title update (attempt ${attempt}):`, error)
+            if (attempt < maxAttempts) {
+              setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
+            }
+          }
+        }
+        
+        setTimeout(() => checkTitleUpdate(), 3000)
+      }
     },
     onError: err => {
       console.error(err)
-      toast.error('Something went wrong. Please try again.')
-      setErrorMessage('Unable to connect. Please check your connection and try again.')
+      
+      const isRateLimit = checkForRateLimitError(err)
+      
+      if (!isRateLimit) {
+        toast.error('Something went wrong. Please try again.')
+        setErrorMessage('Unable to connect. Please check your connection and try again.')
+      }
     },
   })
 
@@ -194,7 +252,6 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     if (isInitialRender) {
       setIsInitialRender(false)
 
-      // Ensure header is visible on mobile after initial render
       if (isMobile) {
         setTimeout(() => {
           window.scrollTo(0, 0)
@@ -205,9 +262,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
 
   useEffect(() => {
     if (!isInitialRender && messages.length > 0 && messages[messages.length - 1].role === 'user') {
-      // Completely disable auto-scroll on mobile to maintain header visibility
       if (isMobile) {
-        return // Don't auto-scroll on mobile at all
+        return
       }
 
       // On desktop, scroll normally
@@ -217,12 +273,10 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
 
   useEffect(() => {
     if (!isInitialRender && messages.length > 0 && isLoading) {
-      // Completely disable auto-scroll on mobile to maintain header visibility
       if (isMobile) {
-        return // Don't auto-scroll on mobile during loading
+        return
       }
 
-      // On desktop, scroll normally during loading
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
   }, [messages, isLoading, isInitialRender, isMobile])
@@ -233,12 +287,10 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       if (!targetNode) return
 
       const observer = new MutationObserver(() => {
-        // Completely disable auto-scroll on mobile to maintain header visibility
         if (isMobile) {
-          return // Don't auto-scroll on mobile during mutations
+          return
         }
 
-        // On desktop, scroll normally
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
       })
 
@@ -254,31 +306,37 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       }
     }
   }, [isLoading, isInitialRender, isMobile])
-
+  
   useEffect(() => {
     if (error) {
-      setErrorMessage('Unable to connect. Please check your connection and try again.')
+      const isRateLimit = checkForRateLimitError(error)
+      
+      if (!isRateLimit) {
+        setErrorMessage('Unable to connect. Please check your connection and try again.')
+      }
     }
-  }, [error])
+  }, [error, checkForRateLimitError])
+  
   const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!input.trim()) return
 
     if (!showFullChat) {
       setShowFullChat(true)
-      setIsFirstMessageInNewChat(true) // Mark this as first message in new chat
-    }
+      setIsFirstMessageInNewChat(true)    }
     setErrorMessage(null)
+    clearRateLimitError()
     setHasUserInitiatedConversation(true)
     originalHandleSubmit(e)
   }
+  
   const handleSuggestedQuestion = async (question: string) => {
     setInput('')
     if (!showFullChat) {
       setShowFullChat(true)
-      setIsFirstMessageInNewChat(true) // Mark this as first message in new chat
-    }
+      setIsFirstMessageInNewChat(true)    }
     setErrorMessage(null)
+    clearRateLimitError()
     setHasUserInitiatedConversation(true)
 
     await append({
@@ -490,10 +548,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     }
   }, [chatId, optimisticChatId])
 
-  // Ensure header visibility when transitioning to full chat on mobile
   useEffect(() => {
     if (showFullChat && isMobile && isFirstMessageInNewChat) {
-      // Small delay to ensure DOM has updated
       setTimeout(() => {
         window.scrollTo(0, 0)
       }, 50)
@@ -534,8 +590,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                   isLoading={isLoading}
                   placeholder="ask anything..."
                   stop={stop}
-                />
-              </motion.div>
+                />              </motion.div>
 
               {errorMessage && (
                 <motion.div
@@ -546,6 +601,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                   {errorMessage}
                 </motion.div>
               )}
+
+              <RateLimitErrorDisplay />
 
               {isLoading && input.trim() !== '' && (
                 <motion.div
@@ -652,8 +709,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               className={cn(
                 'max-w-3xl mx-auto px-4 space-y-6',
                 isMobile ? 'pt-2 pb-6' : 'pt-5' // Reduce top and bottom padding on mobile
-              )}
-            >
+              )}            >
               {errorMessage && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -662,7 +718,10 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                 >
                   {errorMessage}
                 </motion.div>
-              )}{' '}
+              )}
+
+              <RateLimitErrorDisplay />
+              
               <AnimatePresence>
                 {messages.map((message, idx) => (
                   <MessageBubble
@@ -735,8 +794,10 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
 
 export const ChatInterface = memo(({ initialMessages = [], chatId }: ChatInterfaceProps) => {
   return (
-    <VTOPProvider>
-      <PureChatInterface initialMessages={initialMessages} chatId={chatId} />
-    </VTOPProvider>
+    <RateLimitProvider>
+      <VTOPProvider>
+        <PureChatInterface initialMessages={initialMessages} chatId={chatId} />
+      </VTOPProvider>
+    </RateLimitProvider>
   )
 })

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generateObject } from 'ai'
-import { google } from '@ai-sdk/google'
+import { rateLimitedGoogle } from '@/lib/rate-limited-ai'
 import { z } from 'zod'
 
 const smartMatchSchema = z.object({
@@ -36,8 +35,8 @@ export async function POST(req: NextRequest) {
       number: option.number || index + 1,
     }))
 
-    const result = await generateObject({
-      model: google('gemini-2.5-flash-lite-preview-06-17'),
+    const result = await rateLimitedGoogle.generateObject({
+      model: await rateLimitedGoogle.model('gemini-2.5-flash-lite-preview-06-17'),
       schema: smartMatchSchema,
       prompt: `
 You are an intelligent assistant that matches user queries to available options for VTOP course materials.

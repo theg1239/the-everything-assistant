@@ -18,6 +18,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/utils'
+import { SettingsDialog } from '@/components/settings-dialog'
 
 interface Chat {
   id: string
@@ -42,6 +43,7 @@ export function Sidebar(props: SidebarProps) {
   const [hovering, setHovering] = useState(false)
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null)
   const [scrollPosition, setScrollPosition] = useState(0)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
   const { data: session } = useSession()
@@ -67,7 +69,11 @@ export function Sidebar(props: SidebarProps) {
   useEffect(() => {
     const handleNewChat = (event: CustomEvent) => {
       const newChat = event.detail
-      setChats(prevChats => [newChat, ...prevChats])
+      console.log('📧 Sidebar received newChatCreated event:', newChat)
+      setChats(prevChats => {
+        console.log('📊 Adding new chat to list. Previous count:', prevChats.length)
+        return [newChat, ...prevChats]
+      })
     }
 
     window.addEventListener('newChatCreated', handleNewChat as EventListener)
@@ -80,12 +86,44 @@ export function Sidebar(props: SidebarProps) {
   useEffect(() => {
     const handleChatTitleUpdate = (event: CustomEvent) => {
       const { chatId, title } = event.detail
-      setChats(prevChats => prevChats.map(chat => (chat.id === chatId ? { ...chat, title } : chat)))
+      console.log('📧 Sidebar received chatTitleUpdated event:', { chatId, title })
+      console.log('📋 Current chats:', chats.map(c => ({ id: c.id, title: c.title })))
+      
+      setChats(prevChats => {
+        const updated = prevChats.map(chat => {
+          if (chat.id === chatId) {
+            console.log('✅ Found matching chat, updating title from:', chat.title, 'to:', title)
+            return { ...chat, title }
+          }
+          return chat
+        })
+        console.log('📊 Updated chats:', updated.map(c => ({ id: c.id, title: c.title })))
+        return updated
+      })
     }
 
     window.addEventListener('chatTitleUpdated', handleChatTitleUpdate as EventListener)
     return () => {
       window.removeEventListener('chatTitleUpdated', handleChatTitleUpdate as EventListener)
+    }
+  }, [])
+
+  // Listen for bulk chat operations
+  useEffect(() => {
+    const handleChatsDeleted = () => {
+      fetchChats(true) // Refresh the chat list
+    }
+
+    const handleChatsArchived = () => {
+      fetchChats(true) // Refresh the chat list
+    }
+
+    window.addEventListener('chatsDeleted', handleChatsDeleted)
+    window.addEventListener('chatsArchived', handleChatsArchived)
+    
+    return () => {
+      window.removeEventListener('chatsDeleted', handleChatsDeleted)
+      window.removeEventListener('chatsArchived', handleChatsArchived)
     }
   }, [])
 
@@ -254,18 +292,19 @@ export function Sidebar(props: SidebarProps) {
   }, [])
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-40 md:hidden"
-            onClick={onToggle}
-            style={{ pointerEvents: 'auto' }}
-            onTouchStart={(e) => {
-              if (e.target === e.currentTarget) {
+    <>
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 z-40 md:hidden"
+              onClick={onToggle}
+              style={{ pointerEvents: 'auto' }}
+              onTouchStart={(e) => {
+                if (e.target === e.currentTarget) {
                 onToggle()
               }
             }}
@@ -481,6 +520,7 @@ export function Sidebar(props: SidebarProps) {
                     variant="ghost"
                     size="sm"
                     className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
+                    onClick={() => setSettingsOpen(true)}
                   >
                     <Settings className="h-4 w-4 mr-2" />
                     settings
@@ -501,5 +541,8 @@ export function Sidebar(props: SidebarProps) {
         </>
       )}
     </AnimatePresence>
+
+    <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+  </>
   )
 }

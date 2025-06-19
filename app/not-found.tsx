@@ -1,40 +1,44 @@
 'use client'
 
-import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Suspense } from 'react'
-
-function NotFoundContent() {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[100dvh] p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold text-center">404 - Page Not Found</CardTitle>
-          <CardDescription className="text-center">
-            The page you are looking for doesn't exist or has been moved.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center space-y-4">
-          <p className="text-center text-muted-foreground">
-            Sorry, we couldn't find the page you were looking for. Please check the URL or go back
-            to the homepage.
-          </p>
-          <Button asChild>
-            <Link href="/">Return to Home</Link>
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
+import { motion } from 'framer-motion'
+import Aurora from '@/components/aurora'
 
 export default function NotFound() {
+
   return (
-    <Suspense
-      fallback={<div className="flex items-center justify-center min-h-[100dvh]">Loading...</div>}
-    >
-      <NotFoundContent />
-    </Suspense>
+    <div className="relative min-h-screen overflow-hidden bg-black">
+      <div className="absolute inset-0">
+        <Aurora />
+      </div>
+
+      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+          className="text-center max-w-2xl mx-auto"
+        >
+
+          <motion.div
+            className="mb-8"
+          >
+            <h1 className="text-8xl md:text-9xl font-black mb-4 tracking-wider text-white">
+              404
+            </h1>
+
+            <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
+              page not found
+            </h2>
+            
+            <p className="text-lg text-white/80 mb-8 leading-relaxed max-w-lg mx-auto">
+              the page you're looking for has vanished into the void...
+            </p>
+          </motion.div>        
+        </motion.div>
+      </div>
+
+      {/* Bottom Gradient */}
+      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+    </div>
   )
 }

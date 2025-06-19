@@ -70,6 +70,7 @@ model Chat {
   userId     String
   title      String
   path       String
+  archived   Boolean  @default(false)
   created_at DateTime @default(now())
   updated_at DateTime @default(now()) @updatedAt
   

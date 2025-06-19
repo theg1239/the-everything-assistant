@@ -28,3 +28,5 @@ ai-chatbot
 next-env.d.ts
 
 ai-chatbot-main
+
+.vscode/

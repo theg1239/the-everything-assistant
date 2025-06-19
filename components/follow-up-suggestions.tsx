@@ -95,9 +95,13 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  
   useEffect(() => {
     if (lastAssistantMessage && isVisible) {
+      setSuggestions([])
       generateSuggestions()
+    } else if (!isVisible) {
+      setSuggestions([])
     }
   }, [lastAssistantMessage, isVisible])
 
@@ -145,7 +149,11 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
       container.scrollBy({ left: -scrollAmount, behavior: 'smooth' })
     }
   }
+  
   const generateSuggestions = async () => {
+    setIsLoading(true)
+    setSuggestions([])
+    
     try {
       const response = await fetch('/api/suggestions', {
         method: 'POST',
@@ -172,9 +180,12 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
       const fallbackSuggestions = generateFollowUpQuestions(lastAssistantMessage)
       const shuffled = fallbackSuggestions.sort(() => 0.5 - Math.random())
       setSuggestions(shuffled.slice(0, 3))
+    } finally {
+      setIsLoading(false)
     }
   }
-  if (!isVisible || suggestions.length === 0) {
+  
+  if (!isVisible || (suggestions.length === 0 && !isLoading)) {
     return null
   }
 

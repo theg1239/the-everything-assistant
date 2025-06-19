@@ -498,9 +498,9 @@ const ToolCallLoadingState = ({ toolCalls }: { toolCalls: any[] }) => {
               <div className="text-sm font-medium text-foreground truncate">
                 Searching for data...
               </div>
-              <div className="text-xs text-muted-foreground mt-1">
+              {/* <div className="text-xs text-muted-foreground mt-1">
                 Running {toolCalls.length} tool{toolCalls.length > 1 ? 's' : ''}
-              </div>
+              </div> */}
             </div>
             <Sparkles className="h-4 w-4 text-muted-foreground animate-pulse" />
           </div>

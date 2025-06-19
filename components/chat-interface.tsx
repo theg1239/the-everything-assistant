@@ -720,7 +720,6 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               variant="ghost"
               onClick={() => {
                 router.push('/')
-                router.refresh()
               }}
               className="h-9"
             >

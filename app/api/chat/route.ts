@@ -26,9 +26,10 @@ async function generateChatTitle(userMessage: string, userId?: string): Promise<
       setTimeout(() => reject(new Error('Title generation timeout')), 10000)
     )
 
-    const modelPromise = rateLimitedGoogle.generateText({
-      model: await rateLimitedGoogle.model('gemma-3-12b-it'),
-      prompt: `Generate a concise, descriptive title for a chat conversation based on the user's first message. The title should:
+    const modelPromise = rateLimitedGoogle.generateText(
+      {
+        model: await rateLimitedGoogle.model('gemma-3-12b-it'),
+        prompt: `Generate a concise, descriptive title for a chat conversation based on the user's first message. The title should:
 - Be 3-8 words maximum
 - Capture the main topic or intent
 - Be specific but not overly detailed
@@ -44,8 +45,10 @@ Examples:
 - "What are my exam schedules?" → "Exam Schedule Query"
 
 Respond with ONLY the title, nothing else.`,
-      maxTokens: 50,
-    }, userId)
+        maxTokens: 50,
+      },
+      userId
+    )
 
     const result = (await Promise.race([modelPromise, timeoutPromise])) as any
     const generatedTitle = result.text
@@ -66,7 +69,12 @@ Respond with ONLY the title, nothing else.`,
   }
 }
 
-async function parseVTOPData(rawData: any, command: string, userContext: string = '', userId?: string) {
+async function parseVTOPData(
+  rawData: any,
+  command: string,
+  userContext: string = '',
+  userId?: string
+) {
   try {
     // if (process.env.NODE_ENV !== 'production') {
     //   console.log('parseVTOPData received:', {
@@ -86,10 +94,11 @@ async function parseVTOPData(rawData: any, command: string, userContext: string 
       summary: z.string(),
     })
 
-    const result = await rateLimitedGoogle.generateObject({
-      model: await rateLimitedGoogle.model('gemini-2.5-flash-lite-preview-06-17'),
-      schema: vtopParseSchema,
-      prompt: `
+    const result = await rateLimitedGoogle.generateObject(
+      {
+        model: await rateLimitedGoogle.model('gemini-2.5-flash-lite-preview-06-17'),
+        schema: vtopParseSchema,
+        prompt: `
 You are a helpful assistant that parses VTOP (VIT Online Portal) data and formats it in a clean, natural language format.
 
 USER'S ORIGINAL REQUEST: ${userContext}
@@ -263,7 +272,9 @@ Example formats:
 
 Make the formatted_content engaging and conversational while being informative and contextually relevant to the user's request.
 `,
-    }, userId)
+      },
+      userId
+    )
 
     return result.object
   } catch (error) {
@@ -295,13 +306,13 @@ export async function POST(req: Request) {
       const userMessage = messages[0]?.content || ''
       if (userMessage.trim()) {
         generateChatTitle(userMessage, session.user.id)
-          .then(async (properTitle) => {
+          .then(async properTitle => {
             if (properTitle !== tempTitle) {
               await updateChat(chat!.id, properTitle)
               console.log('Chat title updated successfully:', properTitle)
             }
           })
-          .catch((error) => {
+          .catch(error => {
             console.error('Failed to update chat title:', error)
           })
       }
@@ -464,48 +475,56 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}`
       return message
     })
 
-    const resultStream = await rateLimitedGoogle.streamText({
-      model: await rateLimitedGoogle.model('gemini-2.5-flash-lite-preview-06-17'),
-      messages: [{ role: 'system', content: combinedSystemPrompt }, ...enhancedMessages],
-      tools,
-      temperature: 0.7,
-      maxTokens: 4096,
-      toolChoice: 'auto',
-      onFinish: async (result: any) => {
-        const toolResults = (result as any).toolResults ?? result.toolCalls ?? []
-        for (const tr of toolResults) {
-          if (
-            tr.toolName === 'queryVTOP' &&
-            tr.result?.success &&
-            tr.result.data &&
-            !tr.result.parsedData
-          ) {
-            try {
-              const userContext =
-                messages && messages.length > 0
-                  ? messages
-                      .filter((m: any) => m.role === 'user')
-                      .slice(-3)
-                      .map((m: any) => m.content)
-                      .join(' | ')
-                  : ''
-              const parsed = await parseVTOPData(tr.result, tr.args.command, userContext, session.user.id)
-              Object.assign(tr.result, {
-                parsedData: parsed,
-                formatted_content: (parsed as any).formatted_content,
-                structured_data: (parsed as any).structured_data,
-                summary: (parsed as any).summary,
-              })
-            } catch (e) {
-              console.error('Failed to parse VTOP data in stream:', e)
+    const resultStream = await rateLimitedGoogle.streamText(
+      {
+        model: await rateLimitedGoogle.model('gemini-2.5-flash-lite-preview-06-17'),
+        messages: [{ role: 'system', content: combinedSystemPrompt }, ...enhancedMessages],
+        tools,
+        temperature: 0.7,
+        maxTokens: 4096,
+        toolChoice: 'auto',
+        onFinish: async (result: any) => {
+          const toolResults = (result as any).toolResults ?? result.toolCalls ?? []
+          for (const tr of toolResults) {
+            if (
+              tr.toolName === 'queryVTOP' &&
+              tr.result?.success &&
+              tr.result.data &&
+              !tr.result.parsedData
+            ) {
+              try {
+                const userContext =
+                  messages && messages.length > 0
+                    ? messages
+                        .filter((m: any) => m.role === 'user')
+                        .slice(-3)
+                        .map((m: any) => m.content)
+                        .join(' | ')
+                    : ''
+                const parsed = await parseVTOPData(
+                  tr.result,
+                  tr.args.command,
+                  userContext,
+                  session.user.id
+                )
+                Object.assign(tr.result, {
+                  parsedData: parsed,
+                  formatted_content: (parsed as any).formatted_content,
+                  structured_data: (parsed as any).structured_data,
+                  summary: (parsed as any).summary,
+                })
+              } catch (e) {
+                console.error('Failed to parse VTOP data in stream:', e)
+              }
             }
           }
-        }
 
-        const safeInvocations = JSON.parse(JSON.stringify(toolResults))
-        await saveMessage(chat.id, 'assistant', result.text, safeInvocations, result.response.id)
+          const safeInvocations = JSON.parse(JSON.stringify(toolResults))
+          await saveMessage(chat.id, 'assistant', result.text, safeInvocations, result.response.id)
+        },
       },
-    }, session.user.id)
+      session.user.id
+    )
 
     return resultStream.toDataStreamResponse({
       headers: {
@@ -515,18 +534,18 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}`
     })
   } catch (error: any) {
     console.error('Chat API error:', error)
-    
+
     if (error.message?.includes('User rate limit exceeded')) {
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           error: 'RATE_LIMIT_EXCEEDED',
           message: error.message,
-          type: 'user_rate_limit'
+          type: 'user_rate_limit',
         }),
         { status: 429, headers: { 'Content-Type': 'application/json' } }
       )
     }
-    
+
     return new Response(
       JSON.stringify({ error: error.message || 'An unexpected error occurred' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }

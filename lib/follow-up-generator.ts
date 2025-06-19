@@ -5,7 +5,8 @@ import { authOptions } from '@/lib/auth'
 export async function generateFollowUpSuggestions(
   assistantMessage: string,
   userMessage?: string
-): Promise<string[]> {  try {
+): Promise<string[]> {
+  try {
     // console.log('generateFollowUpSuggestions called with:', {
     //   assistantLength: assistantMessage.length,
     //   userLength: userMessage?.length || 0,
@@ -18,7 +19,7 @@ export async function generateFollowUpSuggestions(
 
     // console.log('Proceeding with AI generation...')
 
-    const contextPrompt = userMessage 
+    const contextPrompt = userMessage
       ? `User asked: "${userMessage}"\nAssistant replied: "${assistantMessage}"`
       : `Assistant message: "${assistantMessage}"`
 
@@ -46,19 +47,27 @@ Common VIT-related topics include:
 Generate exactly 3 follow-up questions, one per line, without numbering or bullet points.`
 
     // console.log('Calling AI model with prompt length:', prompt.length)
-    const result = await rateLimitedGoogle.generateText({
-      model: rateLimitedGoogle.model(),
-      prompt,
-      maxTokens: 150,
-      temperature: 0.7,
-    }, userId)
+    const result = await rateLimitedGoogle.generateText(
+      {
+        model: rateLimitedGoogle.model(),
+        prompt,
+        maxTokens: 150,
+        temperature: 0.7,
+      },
+      userId
+    )
 
     // console.log('AI model raw response:', result.text)
 
     const suggestions = result.text
       .split('\n')
       .filter(line => line.trim().length > 0)
-      .map(line => line.trim().replace(/^[-•*]\s*/, '').toLowerCase())
+      .map(line =>
+        line
+          .trim()
+          .replace(/^[-•*]\s*/, '')
+          .toLowerCase()
+      )
       .slice(0, 3)
 
     // console.log('Processed suggestions:', suggestions)
@@ -76,7 +85,6 @@ Generate exactly 3 follow-up questions, one per line, without numbering or bulle
 
     // console.log('Using AI-generated suggestions:', suggestions)
     return suggestions
-
   } catch (error) {
     console.error('Error generating follow-up suggestions:', error)
     // console.log('Falling back to static suggestions')
@@ -86,65 +94,37 @@ Generate exactly 3 follow-up questions, one per line, without numbering or bulle
 
 function getStaticFollowUpSuggestions(assistantMessage: string): string[] {
   const message = assistantMessage.toLowerCase()
-    if (message.includes('vtop') || message.includes('marks') || message.includes('attendance')) {
-    return [
-      'show my detailed attendance',
-      'check fee payment status',
-      'what about other subjects?'
-    ]
+  if (message.includes('vtop') || message.includes('marks') || message.includes('attendance')) {
+    return ['show my detailed attendance', 'check fee payment status', 'what about other subjects?']
   }
-  
+
   if (message.includes('syllabus') || message.includes('course') || message.includes('subject')) {
-    return [
-      'get past exam papers',
-      'show course materials',
-      'tell me about faculty'
-    ]
+    return ['get past exam papers', 'show course materials', 'tell me about faculty']
   }
-  
+
   if (message.includes('placement') || message.includes('company') || message.includes('package')) {
-    return [
-      'what skills to focus on?',
-      'show placement trends',
-      'interview preparation tips?'
-    ]
+    return ['what skills to focus on?', 'show placement trends', 'interview preparation tips?']
   }
-  
+
   if (message.includes('hostel') || message.includes('mess') || message.includes('campus')) {
-    return [
-      'show other campus facilities',
-      'tell me about events',
-      'what about sports facilities?'
-    ]
+    return ['show other campus facilities', 'tell me about events', 'what about sports facilities?']
   }
-  
+
   if (message.includes('research') || message.includes('project') || message.includes('faculty')) {
-    return [
-      'how to join research?',
-      'show ongoing projects',
-      'connect with faculty'
-    ]
+    return ['how to join research?', 'show ongoing projects', 'connect with faculty']
   }
-  
-  if (message.includes('code') || message.includes('programming') || message.includes('algorithm')) {
-    return [
-      'show similar examples',
-      'explain the complexity',
-      'what are best practices?'
-    ]
+
+  if (
+    message.includes('code') ||
+    message.includes('programming') ||
+    message.includes('algorithm')
+  ) {
+    return ['show similar examples', 'explain the complexity', 'what are best practices?']
   }
-  
+
   if (message.includes('exam') || message.includes('study') || message.includes('grade')) {
-    return [
-      'give me study tips',
-      'show academic progress',
-      'how to improve grades?'
-    ]
+    return ['give me study tips', 'show academic progress', 'how to improve grades?']
   }
-  
-  return [
-    'tell me more about this',
-    'can you give an example?',
-    'how does this apply to VIT?'
-  ]
+
+  return ['tell me more about this', 'can you give an example?', 'how does this apply to VIT?']
 }

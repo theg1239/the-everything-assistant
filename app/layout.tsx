@@ -14,8 +14,10 @@ import MobileViewportFix from '@/components/mobile-viewport-fix'
 import ScrollToTop from '@/components/scroll-to-top'
 import dynamic from 'next/dynamic'
 
-const Aurora = dynamic(() => import('@/components/aurora'), { 
-  loading: () => <div className="fixed inset-0 w-full h-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />
+const Aurora = dynamic(() => import('@/components/aurora'), {
+  loading: () => (
+    <div className="fixed inset-0 w-full h-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />
+  ),
 })
 
 const inter = Inter({ subsets: ['latin'] })
@@ -84,16 +86,17 @@ export default function RootLayout({
               })();
             `,
           }}
-        />        <SessionProvider>
+        />{' '}
+        <SessionProvider>
           <ThemeProvider
             attribute="class"
             defaultTheme="dark"
             enableSystem
             disableTransitionOnChange
-          > 
+          >
             <div className="fixed inset-0 w-full h-full z-[-10]">
-              <Aurora 
-                colorStops={["#5227FF", "#7cff67", "#5227FF"]}
+              <Aurora
+                colorStops={['#5227FF', '#7cff67', '#5227FF']}
                 amplitude={1.2}
                 blend={0.6}
                 speed={0.8}

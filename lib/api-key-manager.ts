@@ -25,12 +25,7 @@ export class TokenBucket {
   private redis: Redis
   private key: string
 
-  constructor(
-    capacity: number,
-    refillRate: number,
-    redisClient: Redis,
-    keyPrefix: string
-  ) {
+  constructor(capacity: number, refillRate: number, redisClient: Redis, keyPrefix: string) {
     this.capacity = capacity
     this.tokens = capacity
     this.refillRate = refillRate
@@ -41,9 +36,9 @@ export class TokenBucket {
 
   async consume(tokens: number = 1): Promise<boolean> {
     const now = Date.now()
-    
+
     const state = await this.redis.hgetall(this.key)
-    
+
     if (state && Object.keys(state).length > 0) {
       this.tokens = parseInt(state.tokens as string) || this.capacity
       this.lastRefill = parseInt(state.lastRefill as string) || now
@@ -51,26 +46,26 @@ export class TokenBucket {
 
     const timeSinceLastRefill = (now - this.lastRefill) / 1000
     const tokensToAdd = timeSinceLastRefill * this.refillRate
-    
+
     this.tokens = Math.min(this.capacity, this.tokens + tokensToAdd)
     this.lastRefill = now
 
     if (this.tokens >= tokens) {
       this.tokens -= tokens
-      
+
       await this.redis.hset(this.key, {
         tokens: this.tokens.toString(),
-        lastRefill: this.lastRefill.toString()
+        lastRefill: this.lastRefill.toString(),
       })
-      
+
       await this.redis.expire(this.key, 3600)
-      
+
       return true
     }
 
     await this.redis.hset(this.key, {
       tokens: this.tokens.toString(),
-      lastRefill: this.lastRefill.toString()
+      lastRefill: this.lastRefill.toString(),
     })
     await this.redis.expire(this.key, 3600)
 
@@ -80,14 +75,14 @@ export class TokenBucket {
   async getAvailableTokens(): Promise<number> {
     const now = Date.now()
     const state = await this.redis.hgetall(this.key)
-    
+
     if (state && Object.keys(state).length > 0) {
       const storedTokens = parseInt(state.tokens as string) || this.capacity
       const lastRefill = parseInt(state.lastRefill as string) || now
-      
+
       const timeSinceLastRefill = (now - lastRefill) / 1000
       const tokensToAdd = timeSinceLastRefill * this.refillRate
-      
+
       return Math.min(this.capacity, storedTokens + tokensToAdd)
     }
 
@@ -123,28 +118,28 @@ export class ApiKeyManager {
     })
 
     this.initializeBuckets()
-    
+
     this.loadCurrentKeyIndex()
   }
 
   private async initializeBuckets(): Promise<void> {
     for (const [index, key] of this.config.keys.entries()) {
       const keyHash = this.hashKey(key)
-      
+
       const minuteBucket = new TokenBucket(
         this.config.rateLimit.requestsPerMinute,
         this.config.rateLimit.requestsPerMinute / 60,
         this.redis,
         `${keyHash}:minute`
       )
-      
+
       const hourBucket = new TokenBucket(
         this.config.rateLimit.requestsPerHour,
         this.config.rateLimit.requestsPerHour / 3600,
         this.redis,
         `${keyHash}:hour`
       )
-      
+
       const dayBucket = new TokenBucket(
         this.config.rateLimit.requestsPerDay,
         this.config.rateLimit.requestsPerDay / 86400,
@@ -161,7 +156,7 @@ export class ApiKeyManager {
         resetTime: 0,
         dailyUsage: 0,
         hourlyUsage: 0,
-        minuteUsage: 0
+        minuteUsage: 0,
       })
     }
   }
@@ -201,7 +196,7 @@ export class ApiKeyManager {
     const [minuteTokens, hourTokens, dayTokens] = await Promise.all([
       minuteBucket.getAvailableTokens(),
       hourBucket.getAvailableTokens(),
-      dayBucket.getAvailableTokens()
+      dayBucket.getAvailableTokens(),
     ])
 
     return minuteTokens < 1 || hourTokens < 1 || dayTokens < 1
@@ -219,7 +214,7 @@ export class ApiKeyManager {
     const [minuteOk, hourOk, dayOk] = await Promise.all([
       minuteBucket.consume(1),
       hourBucket.consume(1),
-      dayBucket.consume(1)
+      dayBucket.consume(1),
     ])
 
     return minuteOk && hourOk && dayOk
@@ -235,7 +230,7 @@ export class ApiKeyManager {
       const keyHash = this.hashKey(key)
 
       const isRateLimited = await this.isKeyRateLimited(keyHash)
-      
+
       if (!isRateLimited) {
         return { key, index: keyIndex }
       }
@@ -257,7 +252,7 @@ export class ApiKeyManager {
     await this.redis.hset(eventKey, {
       timestamp: Date.now().toString(),
       error: JSON.stringify(error),
-      keyHash
+      keyHash,
     })
     await this.redis.expire(eventKey, 86400)
   }
@@ -277,10 +272,10 @@ export class ApiKeyManager {
     const keyHash = this.hashKey(currentKey)
 
     const isRateLimited = await this.isKeyRateLimited(keyHash)
-    
+
     if (isRateLimited && this.config.rotateOnRateLimit) {
       const nextKey = await this.findNextAvailableKey()
-      
+
       if (nextKey) {
         this.currentKeyIndex = nextKey.index
         await this.saveCurrentKeyIndex()
@@ -298,10 +293,7 @@ export class ApiKeyManager {
     apiCall: (apiKey: string) => Promise<T>,
     options: { retryOnRateLimit?: boolean; maxRetries?: number } = {}
   ): Promise<T> {
-    const { 
-      retryOnRateLimit = true, 
-      maxRetries = this.config.retryConfig.maxRetries 
-    } = options
+    const { retryOnRateLimit = true, maxRetries = this.config.retryConfig.maxRetries } = options
 
     let lastError: any
     let attempt = 0
@@ -313,7 +305,7 @@ export class ApiKeyManager {
         const keyHash = this.hashKey(apiKey)
 
         const canProceed = await this.consumeTokens(keyHash)
-        
+
         if (!canProceed && attempt === 0) {
           if (this.config.rotateOnRateLimit) {
             const nextKey = await this.findNextAvailableKey()
@@ -322,14 +314,14 @@ export class ApiKeyManager {
               await this.saveCurrentKeyIndex()
               const nextKeyHash = this.hashKey(nextKey.key)
               const canProceedWithNewKey = await this.consumeTokens(nextKeyHash)
-              
+
               if (canProceedWithNewKey) {
                 await this.recordKeyUsage(nextKeyHash)
                 return await apiCall(nextKey.key)
               }
             }
           }
-          
+
           throw new Error('RATE_LIMIT_EXCEEDED')
         }
 
@@ -339,26 +331,25 @@ export class ApiKeyManager {
         }
 
         throw new Error('RATE_LIMIT_EXCEEDED')
-
       } catch (error: any) {
         lastError = error
-        
+
         const isRateLimitError = this.isRateLimitError(error)
-        
+
         if (isRateLimitError) {
           const currentKey = this.config.keys[this.currentKeyIndex]
           const keyHash = this.hashKey(currentKey)
-          
+
           await this.recordRateLimitEvent(keyHash, error)
-          
+
           if (this.config.rotateOnRateLimit && retryOnRateLimit) {
             const nextKey = await this.findNextAvailableKey()
-            
+
             if (nextKey) {
               this.currentKeyIndex = nextKey.index
               await this.saveCurrentKeyIndex()
               console.log(`Rotated to API key index ${nextKey.index} due to API rate limit`)
-              
+
               backoffMs = 1000
               attempt++
               continue
@@ -390,7 +381,7 @@ export class ApiKeyManager {
   private isRateLimitError(error: any): boolean {
     const errorMessage = error?.message?.toLowerCase() || ''
     const errorCode = error?.code || error?.status
-    
+
     return (
       errorMessage.includes('rate limit') ||
       errorMessage.includes('quota exceeded') ||
@@ -409,48 +400,44 @@ export class ApiKeyManager {
       if (status.isRateLimited && Date.now() > status.resetTime) {
         status.isRateLimited = false
         status.resetTime = 0
-        
+
         const minuteBucket = this.keyBuckets.get(`${keyHash}:minute`)
         const hourBucket = this.keyBuckets.get(`${keyHash}:hour`)
         const dayBucket = this.keyBuckets.get(`${keyHash}:day`)
-        
-        await Promise.all([
-          minuteBucket?.reset(),
-          hourBucket?.reset(),
-          dayBucket?.reset()
-        ])
+
+        await Promise.all([minuteBucket?.reset(), hourBucket?.reset(), dayBucket?.reset()])
       }
     }
   }
 
   async getKeyUsageStats(): Promise<Record<string, any>> {
     const stats: Record<string, any> = {}
-    
+
     for (const [index, key] of this.config.keys.entries()) {
       const keyHash = this.hashKey(key)
       const minuteBucket = this.keyBuckets.get(`${keyHash}:minute`)
       const hourBucket = this.keyBuckets.get(`${keyHash}:hour`)
       const dayBucket = this.keyBuckets.get(`${keyHash}:day`)
-      
+
       if (minuteBucket && hourBucket && dayBucket) {
         const [minuteTokens, hourTokens, dayTokens] = await Promise.all([
           minuteBucket.getAvailableTokens(),
           hourBucket.getAvailableTokens(),
-          dayBucket.getAvailableTokens()
+          dayBucket.getAvailableTokens(),
         ])
-        
+
         stats[`key_${index}`] = {
           availableTokens: {
             minute: Math.floor(minuteTokens),
             hour: Math.floor(hourTokens),
-            day: Math.floor(dayTokens)
+            day: Math.floor(dayTokens),
           },
           isRateLimited: await this.isKeyRateLimited(keyHash),
-          isCurrent: index === this.currentKeyIndex
+          isCurrent: index === this.currentKeyIndex,
         }
       }
     }
-    
+
     return stats
   }
 
@@ -458,7 +445,7 @@ export class ApiKeyManager {
     if (!this.config.enableRotation) {
       throw new Error('Key rotation is disabled')
     }
-    
+
     this.currentKeyIndex = (this.currentKeyIndex + 1) % this.config.keys.length
     await this.saveCurrentKeyIndex()
     console.log(`Manually rotated to API key index ${this.currentKeyIndex}`)
@@ -468,7 +455,7 @@ export class ApiKeyManager {
     for (const bucket of this.keyBuckets.values()) {
       await bucket.reset()
     }
-    
+
     for (const status of this.keyStatuses.values()) {
       status.isRateLimited = false
       status.resetTime = 0
@@ -476,7 +463,7 @@ export class ApiKeyManager {
       status.hourlyUsage = 0
       status.minuteUsage = 0
     }
-    
+
     console.log('All rate limits have been reset')
   }
 }
@@ -486,14 +473,14 @@ export const DEFAULT_API_KEY_CONFIG: ApiKeyConfig = {
   rateLimit: {
     requestsPerMinute: 60,
     requestsPerHour: 1000,
-    requestsPerDay: 50000
+    requestsPerDay: 50000,
   },
   retryConfig: {
     maxRetries: 3,
     backoffMultiplier: 2,
-    maxBackoffMs: 30000
+    maxBackoffMs: 30000,
   },
   enableRotation: true,
   rotateOnRateLimit: true,
-  keyHealthCheckInterval: 30000
+  keyHealthCheckInterval: 30000,
 }

@@ -86,7 +86,7 @@ export function Sidebar(props: SidebarProps) {
       const { chatId, title } = event.detail
       // console.log('Sidebar received chatTitleUpdated event:', { chatId, title })
       // console.log('Current chats:', chats.map(c => ({ id: c.id, title: c.title })))
-      
+
       setChats(prevChats => {
         const updated = prevChats.map(chat => {
           if (chat.id === chatId) {
@@ -117,7 +117,7 @@ export function Sidebar(props: SidebarProps) {
 
     window.addEventListener('chatsDeleted', handleChatsDeleted)
     window.addEventListener('chatsArchived', handleChatsArchived)
-    
+
     return () => {
       window.removeEventListener('chatsDeleted', handleChatsDeleted)
       window.removeEventListener('chatsArchived', handleChatsArchived)
@@ -145,14 +145,14 @@ export function Sidebar(props: SidebarProps) {
           setChats(prevChats => {
             const existingIds = new Set(prevChats.map(chat => chat.id))
             const newChats = data.filter((chat: Chat) => !existingIds.has(chat.id))
-            
+
             // if (process.env.NODE_ENV === 'development') {
             //   console.log('Existing chats:', prevChats.length)
             //   console.log('New chats fetched:', data.length)
             //   console.log('New chats after dedup:', newChats.length)
             //   console.log('Duplicate chat IDs found:', data.length - newChats.length)
             // }
-            
+
             return [...prevChats, ...newChats]
           })
         }
@@ -182,7 +182,7 @@ export function Sidebar(props: SidebarProps) {
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget
     setScrollPosition(scrollTop)
-    
+
     if (scrollHeight - scrollTop - clientHeight < 10 && hasMore && !loadingMore && !isLoadingMore) {
       setTimeout(() => {
         if (hasMore && !loadingMore && !isLoadingMore) {
@@ -266,7 +266,7 @@ export function Sidebar(props: SidebarProps) {
 
     const handleTouchMove = (e: TouchEvent) => {
       if (!isScrolling) return
-      
+
       e.preventDefault()
       const currentY = e.touches[0].pageY
       const diff = startY - currentY
@@ -300,246 +300,246 @@ export function Sidebar(props: SidebarProps) {
               className="fixed inset-0 bg-black/50 z-40 md:hidden"
               onClick={onToggle}
               style={{ pointerEvents: 'auto' }}
-              onTouchStart={(e) => {
+              onTouchStart={e => {
                 if (e.target === e.currentTarget) {
-                onToggle()
-              }
-            }}
-          />
+                  onToggle()
+                }
+              }}
+            />
 
-          <motion.div
-            initial={{ x: -300 }}
-            animate={{ x: 0 }}
-            exit={{ x: -300 }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="sidebar-container fixed left-0 top-0 z-50 h-full w-[var(--sidebar-width)] bg-black/30 backdrop-blur-md border-r border-border/50 flex flex-col shadow-xl"
-            onMouseEnter={() => setHovering(true)}
-            onMouseLeave={() => setHovering(false)}
-            style={{ 
-              pointerEvents: 'auto',
-              touchAction: 'none'
-            }}
-            onTouchStart={(e) => {
-              e.stopPropagation()
-            }}
-          >
-            <div className="p-4 border-b border-border flex items-center justify-between">
-              <div className="flex items-center space-x-2">
+            <motion.div
+              initial={{ x: -300 }}
+              animate={{ x: 0 }}
+              exit={{ x: -300 }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="sidebar-container fixed left-0 top-0 z-50 h-full w-[var(--sidebar-width)] bg-black/30 backdrop-blur-md border-r border-border/50 flex flex-col shadow-xl"
+              onMouseEnter={() => setHovering(true)}
+              onMouseLeave={() => setHovering(false)}
+              style={{
+                pointerEvents: 'auto',
+                touchAction: 'none',
+              }}
+              onTouchStart={e => {
+                e.stopPropagation()
+              }}
+            >
+              <div className="p-4 border-b border-border flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  {loading ? (
+                    <div className="h-7 w-32 bg-muted/60 rounded sidebar-loading-item"></div>
+                  ) : (
+                    <h2 className="text-lg font-medium text-foreground">
+                      the everything assistant
+                    </h2>
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onToggle}
+                  className="text-muted-foreground hover:text-foreground ml-auto"
+                  aria-label="Collapse sidebar"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </Button>
+              </div>
+
+              <div className="p-4 border-b border-border">
                 {loading ? (
-                  <div className="h-7 w-32 bg-muted/60 rounded sidebar-loading-item"></div>
+                  <div
+                    className="h-10 bg-muted/60 rounded-lg sidebar-loading-item"
+                    style={{ '--delay': 0 } as React.CSSProperties}
+                  ></div>
                 ) : (
-                  <h2 className="text-lg font-medium text-foreground">the everything assistant</h2>
+                  <Button
+                    onClick={startNewChat}
+                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground border-0 rounded-lg transition-all duration-200"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    new chat
+                  </Button>
                 )}
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onToggle}
-                className="text-muted-foreground hover:text-foreground ml-auto"
-                aria-label="Collapse sidebar"
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </Button>
-            </div>
 
-            <div className="p-4 border-b border-border">
-              {loading ? (
+              <div className="flex-1 min-h-0 flex flex-col">
                 <div
-                  className="h-10 bg-muted/60 rounded-lg sidebar-loading-item"
-                  style={{ '--delay': 0 } as React.CSSProperties}
-                ></div>
-              ) : (
-                <Button
-                  onClick={startNewChat}
-                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground border-0 rounded-lg transition-all duration-200"
+                  className="sidebar-mobile-scroll flex-1 p-4 overflow-y-auto overflow-x-hidden"
+                  onScroll={handleScroll}
+                  onTouchStart={e => {
+                    e.stopPropagation()
+                  }}
+                  onTouchMove={e => {
+                    e.stopPropagation()
+                  }}
+                  style={{
+                    touchAction: 'pan-y',
+                    WebkitOverflowScrolling: 'touch',
+                    overscrollBehavior: 'contain',
+                    pointerEvents: 'auto',
+                  }}
                 >
-                  <Plus className="h-4 w-4 mr-2" />
-                  new chat
-                </Button>
-              )}
-            </div>
+                  <div className="space-y-1">
+                    {loading ? (
+                      <div className="h-full w-full flex flex-col space-y-3">
+                        <div className="flex flex-col space-y-2">
+                          {[...Array(8)].map((_, i) => (
+                            <div
+                              key={i}
+                              className="h-12 bg-muted/60 rounded-lg sidebar-loading-item"
+                              style={{ '--delay': i } as React.CSSProperties}
+                            >
+                              <div className="flex items-center p-3">
+                                <div className="w-4 h-4 rounded-full bg-muted-foreground/20 mr-3"></div>
+                                <div className="flex-1">
+                                  <div className="h-3 bg-muted-foreground/20 rounded w-3/4 mb-2"></div>
+                                  <div className="h-2 bg-muted-foreground/10 rounded w-1/2"></div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : chats.length === 0 ? (
+                      <div className="text-center text-muted-foreground py-6">
+                        <div className="w-16 h-16 bg-muted/30 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <MessageSquare className="h-8 w-8 opacity-50" />
+                        </div>
+                        <p className="text-sm font-medium mb-1">no chat history</p>
+                        <p className="text-xs text-muted-foreground">
+                          start a conversation to see your history here
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        {chats.map((chat, index) => (
+                          <motion.div
+                            key={`chat-${chat.id}-${chat.updatedAt || index}`}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className={cn(
+                              'group relative flex items-center p-3 rounded-lg cursor-pointer transition-all',
+                              selectedChatId === chat.id || pathname === `/chat/${chat.id}`
+                                ? 'bg-muted text-foreground shadow-sm'
+                                : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
+                            )}
+                            onClick={() => {
+                              setSelectedChatId(chat.id)
+                              router.replace(`/chat/${chat.id}`)
+                              if (window.innerWidth < 768) {
+                                onToggle()
+                              }
+                            }}
+                          >
+                            <MessageSquare className="h-4 w-4 mr-3 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{chat.title}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatDate(chat.updatedAt)}
+                              </p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0"
+                              onClick={e => deleteChat(chat.id, e)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </motion.div>
+                        ))}
 
-            <div 
-              className="flex-1 min-h-0 flex flex-col"
-            >
-              <div 
-                className="sidebar-mobile-scroll flex-1 p-4 overflow-y-auto overflow-x-hidden"
-                onScroll={handleScroll}
-                onTouchStart={(e) => {
-                  e.stopPropagation()
-                }}
-                onTouchMove={(e) => {
-                  e.stopPropagation()
-                }}
-                style={{
-                  touchAction: 'pan-y',
-                  WebkitOverflowScrolling: 'touch',
-                  overscrollBehavior: 'contain',
-                  pointerEvents: 'auto',
-                }}
-              >
-              <div className="space-y-1">
-                {loading ? (
-                  <div className="h-full w-full flex flex-col space-y-3">
-                    <div className="flex flex-col space-y-2">
-                      {[...Array(8)].map((_, i) => (
-                        <div
-                          key={i}
-                          className="h-12 bg-muted/60 rounded-lg sidebar-loading-item"
-                          style={{ '--delay': i } as React.CSSProperties}
-                        >
-                          <div className="flex items-center p-3">
-                            <div className="w-4 h-4 rounded-full bg-muted-foreground/20 mr-3"></div>
-                            <div className="flex-1">
-                              <div className="h-3 bg-muted-foreground/20 rounded w-3/4 mb-2"></div>
-                              <div className="h-2 bg-muted-foreground/10 rounded w-1/2"></div>
+                        {(loadingMore || isLoadingMore) && hasMore && (
+                          <div className="flex justify-center py-2 mt-2">
+                            <div className="flex items-center text-muted-foreground text-xs">
+                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              loading more...
                             </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        )}
+
+                        {!hasMore && chats.length > 0 && (
+                          <div className="text-center py-2 mt-2">
+                            {/* <div className="text-xs text-muted-foreground/70">
+                          no more chats to load
+                        </div> */}
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
-                ) : chats.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-6">
-                    <div className="w-16 h-16 bg-muted/30 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <MessageSquare className="h-8 w-8 opacity-50" />
+                </div>
+              </div>
+
+              <div className="p-4 border-t border-border bg-muted/30 sidebar-user-section">
+                {loading ? (
+                  <div className="sidebar-loading-profile">
+                    <div className="flex items-center space-x-3 mb-3">
+                      <div className="h-8 w-8 rounded-full bg-muted-foreground/20"></div>
+                      <div className="flex-1 min-w-0">
+                        <div className="h-3 bg-muted-foreground/20 rounded w-3/4 mb-2"></div>
+                        <div className="h-2 bg-muted-foreground/10 rounded w-1/2"></div>
+                      </div>
                     </div>
-                    <p className="text-sm font-medium mb-1">no chat history</p>
-                    <p className="text-xs text-muted-foreground">
-                      start a conversation to see your history here
-                    </p>
+                    <div className="space-y-2">
+                      <div className="h-8 bg-muted-foreground/10 rounded-md"></div>
+                      <div className="h-8 bg-muted-foreground/10 rounded-md"></div>
+                    </div>
                   </div>
                 ) : (
                   <>
-                    {chats.map((chat, index) => (
-                      <motion.div
-                        key={`chat-${chat.id}-${chat.updatedAt || index}`}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className={cn(
-                          'group relative flex items-center p-3 rounded-lg cursor-pointer transition-all',
-                          selectedChatId === chat.id || pathname === `/chat/${chat.id}`
-                            ? 'bg-muted text-foreground shadow-sm'
-                            : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
-                        )}
-                        onClick={() => {
-                          setSelectedChatId(chat.id)
-                          router.replace(`/chat/${chat.id}`)
-                          if (window.innerWidth < 768) {
-                            onToggle()
-                          }
-                        }}
-                      >
-                        <MessageSquare className="h-4 w-4 mr-3 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{chat.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatDate(chat.updatedAt)}
-                          </p>
+                    <div className="flex items-center space-x-3 mb-3">
+                      {session?.user?.image ? (
+                        <img
+                          src={session.user.image || '/placeholder.svg'}
+                          alt={session.user.name || 'User'}
+                          className="h-8 w-8 rounded-full"
+                        />
+                      ) : (
+                        <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
+                          <User className="h-4 w-4 text-primary-foreground" />
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0"
-                          onClick={e => deleteChat(chat.id, e)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </motion.div>
-                    ))}
-
-                    {(loadingMore || isLoadingMore) && hasMore && (
-                      <div className="flex justify-center py-2 mt-2">
-                        <div className="flex items-center text-muted-foreground text-xs">
-                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                          loading more...
-                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-foreground truncate">
+                          {redactName(session?.user?.name || 'User')}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {session?.user?.email}
+                        </p>
                       </div>
-                    )}
-                    
-                    {!hasMore && chats.length > 0 && (
-                      <div className="text-center py-2 mt-2">
-                        {/* <div className="text-xs text-muted-foreground/70">
-                          no more chats to load
-                        </div> */}
-                      </div>
-                    )}
+                    </div>
                   </>
                 )}
+
+                {!loading && (
+                  <div className="space-y-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
+                      onClick={() => setSettingsOpen(true)}
+                    >
+                      <Settings className="h-4 w-4 mr-2" />
+                      settings
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
+                      onClick={() => signOut()}
+                    >
+                      <LogOut className="h-4 w-4 mr-2" />
+                      sign out
+                    </Button>
+                  </div>
+                )}
               </div>
-              </div>
-            </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
-            <div className="p-4 border-t border-border bg-muted/30 sidebar-user-section">
-              {loading ? (
-                <div className="sidebar-loading-profile">
-                  <div className="flex items-center space-x-3 mb-3">
-                    <div className="h-8 w-8 rounded-full bg-muted-foreground/20"></div>
-                    <div className="flex-1 min-w-0">
-                      <div className="h-3 bg-muted-foreground/20 rounded w-3/4 mb-2"></div>
-                      <div className="h-2 bg-muted-foreground/10 rounded w-1/2"></div>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="h-8 bg-muted-foreground/10 rounded-md"></div>
-                    <div className="h-8 bg-muted-foreground/10 rounded-md"></div>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center space-x-3 mb-3">
-                    {session?.user?.image ? (
-                      <img
-                        src={session.user.image || '/placeholder.svg'}
-                        alt={session.user.name || 'User'}
-                        className="h-8 w-8 rounded-full"
-                      />
-                    ) : (
-                      <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
-                        <User className="h-4 w-4 text-primary-foreground" />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-foreground truncate">
-                        {redactName(session?.user?.name || 'User')}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {session?.user?.email}
-                      </p>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {!loading && (
-                <div className="space-y-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
-                    onClick={() => setSettingsOpen(true)}
-                  >
-                    <Settings className="h-4 w-4 mr-2" />
-                    settings
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
-                    onClick={() => signOut()}
-                  >
-                    <LogOut className="h-4 w-4 mr-2" />
-                    sign out
-                  </Button>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-
-    <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
-  </>
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+    </>
   )
 }

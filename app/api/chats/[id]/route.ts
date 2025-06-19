@@ -51,9 +51,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     if (action === 'restore') {
       await restoreChat(id, session.user.id)
-      return Response.json({ 
-        success: true, 
-        message: 'Chat restored successfully' 
+      return Response.json({
+        success: true,
+        message: 'Chat restored successfully',
       })
     }
 

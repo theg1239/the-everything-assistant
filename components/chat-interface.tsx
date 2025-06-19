@@ -157,7 +157,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   useEffect(() => {
     const loadPreferences = async () => {
       if (!session?.user?.email) return
-      
+
       try {
         const response = await fetch('/api/user/preferences')
         if (response.ok) {
@@ -193,7 +193,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       content: msg.content,
       toolInvocations: msg.toolInvocations,
     })),
-    body: optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : undefined,    onResponse: res => {
+    body: optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : undefined,
+    onResponse: res => {
       if (!showFullChat) setShowFullChat(true)
       setErrorMessage(null)
       clearRateLimitError()
@@ -214,25 +215,26 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         })
         window.dispatchEvent(newChatEvent)
       }
-    },    onFinish: (message) => {
+    },
+    onFinish: message => {
       const currentChatId = currentChatIdRef.current
-      console.log('🏁 AI response finished', { 
-        currentChatId, 
-        optimisticChatId, 
-        chatId, 
-        isFirstMessageInNewChat 
+      console.log('🏁 AI response finished', {
+        currentChatId,
+        optimisticChatId,
+        chatId,
+        isFirstMessageInNewChat,
       })
-        if (message.role === 'assistant' && message.content) {
+      if (message.role === 'assistant' && message.content) {
         setLastAssistantMessage(message.content)
         if (userPreferences.followUpSuggestions !== false) {
           setShowFollowUpSuggestions(true)
         }
       }
-      
+
       if (currentChatId && isFirstMessageInNewChat) {
         setIsFirstMessageInNewChat(false)
         //console.log('⏱Starting title update check in 3 seconds...')
-        
+
         const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
           try {
             //console.log(`Attempt ${attempt}: Fetching updated chat data for:`, currentChatId)
@@ -265,15 +267,15 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
             }
           }
         }
-        
+
         setTimeout(() => checkTitleUpdate(), 3000)
       }
     },
     onError: err => {
       console.error(err)
-      
+
       const isRateLimit = checkForRateLimitError(err)
-      
+
       if (!isRateLimit) {
         toast.error('Something went wrong. Please try again.')
         setErrorMessage('Unable to connect. Please check your connection and try again.')
@@ -339,11 +341,11 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       }
     }
   }, [isLoading, isInitialRender, isMobile])
-  
+
   useEffect(() => {
     if (error) {
       const isRateLimit = checkForRateLimitError(error)
-      
+
       if (!isRateLimit) {
         setErrorMessage('Unable to connect. Please check your connection and try again.')
       }
@@ -354,12 +356,13 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     if (!input.trim()) return
 
     setShowFollowUpSuggestions(false)
-    
+
     setLastUserMessage(input.trim())
 
     if (!showFullChat) {
       setShowFullChat(true)
-      setIsFirstMessageInNewChat(true)    }
+      setIsFirstMessageInNewChat(true)
+    }
     setErrorMessage(null)
     clearRateLimitError()
     setHasUserInitiatedConversation(true)
@@ -367,14 +370,15 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   }
   const handleSuggestedQuestion = async (question: string) => {
     setInput('')
-    
+
     setShowFollowUpSuggestions(false)
-    
+
     setLastUserMessage(question)
-    
+
     if (!showFullChat) {
       setShowFullChat(true)
-      setIsFirstMessageInNewChat(true)    }
+      setIsFirstMessageInNewChat(true)
+    }
     setErrorMessage(null)
     clearRateLimitError()
     setHasUserInitiatedConversation(true)
@@ -603,7 +607,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         onCredentialsSubmit={handleVTOPCredentials}
       >
         <ResearchPreviewModal />
-        <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />        <div className="flex flex-col h-[100dvh] bg-transparent text-foreground relative overflow-hidden mobile-viewport-fix">
+        <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />{' '}
+        <div className="flex flex-col h-[100dvh] bg-transparent text-foreground relative overflow-hidden mobile-viewport-fix">
           <div className="relative z-10 flex flex-col h-full">
             <header className="flex-shrink-0 sticky top-0 z-40">
               <div className="flex h-14 items-center px-4 gap-2">
@@ -628,7 +633,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                   isLoading={isLoading}
                   placeholder="ask anything..."
                   stop={stop}
-                />              </motion.div>
+                />{' '}
+              </motion.div>
 
               {errorMessage && (
                 <motion.div
@@ -743,10 +749,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
             {' '}
             <div
               ref={contentRef}
-              className={cn(
-                'max-w-3xl mx-auto px-4 space-y-6',
-                isMobile ? 'pt-2 pb-6' : 'pt-5'
-              )}            >
+              className={cn('max-w-3xl mx-auto px-4 space-y-6', isMobile ? 'pt-2 pb-6' : 'pt-5')}
+            >
               {errorMessage && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
@@ -758,7 +762,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               )}
 
               <RateLimitErrorDisplay />
-              
+
               <AnimatePresence>
                 {messages.map((message, idx) => (
                   <MessageBubble
@@ -790,8 +794,9 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                       ></div>
                     </div>
                     <span className="text-sm">thinking...</span>
-                  </motion.div>                )}
-              
+                  </motion.div>
+                )}
+
               <div ref={messagesEndRef} className={isLoading ? 'h-20' : 'h-0'} aria-hidden="true" />
             </div>
           </div>
@@ -811,7 +816,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                 borderTop: 'none',
               }}
             ></div>
-          )}          <div className="relative z-10">
+          )}{' '}
+          <div className="relative z-10">
             <FollowUpSuggestions
               lastAssistantMessage={lastAssistantMessage}
               lastUserMessage={lastUserMessage}
@@ -820,7 +826,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               onDismiss={() => setShowFollowUpSuggestions(false)}
               isMobile={isMobile}
             />
-            
+
             <MultimodalInput
               input={input}
               setInput={setInput}

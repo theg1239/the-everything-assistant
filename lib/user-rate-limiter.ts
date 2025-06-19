@@ -11,7 +11,7 @@ export const DEFAULT_USER_RATE_LIMITS: UserRateLimitConfig = {
   requestsPerMinute: 10,
   requestsPerHour: 100,
   requestsPerDay: 1000,
-  enabled: true
+  enabled: true,
 }
 
 export class UserTokenBucket {
@@ -33,59 +33,61 @@ export class UserTokenBucket {
     this.key = `user_rate_limit:${userId}:${timeWindow}`
   }
 
-  async consume(tokens: number = 1): Promise<{ allowed: boolean; remainingTokens: number; resetTime: number }> {
+  async consume(
+    tokens: number = 1
+  ): Promise<{ allowed: boolean; remainingTokens: number; resetTime: number }> {
     const now = Date.now()
-    
+
     const state = await this.redis.hgetall(this.key)
-    
+
     let currentTokens = this.capacity
     let lastRefill = now
-    
+
     if (state && Object.keys(state).length > 0) {
       currentTokens = parseFloat(state.tokens as string) || this.capacity
       lastRefill = parseInt(state.lastRefill as string) || now
     }
-    
+
     const timePassed = (now - lastRefill) / 1000
     const tokensToAdd = Math.min(timePassed * this.refillRate, this.capacity - currentTokens)
     currentTokens = Math.min(currentTokens + tokensToAdd, this.capacity)
-    
+
     const allowed = currentTokens >= tokens
-    
+
     if (allowed) {
       currentTokens -= tokens
     }
-    
+
     const resetTime = now + ((this.capacity - currentTokens) / this.refillRate) * 1000
-    
+
     const expirationSeconds = Math.ceil((this.capacity / this.refillRate) * 2)
     await this.redis.hset(this.key, {
       tokens: currentTokens.toString(),
-      lastRefill: now.toString()
+      lastRefill: now.toString(),
     })
     await this.redis.expire(this.key, expirationSeconds)
-    
+
     return {
       allowed,
       remainingTokens: Math.floor(currentTokens),
-      resetTime: Math.floor(resetTime)
+      resetTime: Math.floor(resetTime),
     }
   }
 
   async getRemainingTokens(): Promise<number> {
     const now = Date.now()
     const state = await this.redis.hgetall(this.key)
-    
+
     if (!state || Object.keys(state).length === 0) {
       return this.capacity
     }
-    
+
     const currentTokens = parseFloat(state.tokens as string) || this.capacity
     const lastRefill = parseInt(state.lastRefill as string) || now
-    
+
     const timePassed = (now - lastRefill) / 1000
     const tokensToAdd = Math.min(timePassed * this.refillRate, this.capacity - currentTokens)
-    
+
     return Math.floor(Math.min(currentTokens + tokensToAdd, this.capacity))
   }
 
@@ -100,11 +102,11 @@ export class UserRateLimiter {
 
   constructor(config: UserRateLimitConfig) {
     this.config = config
-    
+
     if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
       throw new Error('Redis configuration required for user rate limiting')
     }
-    
+
     this.redis = new Redis({
       url: process.env.UPSTASH_REDIS_REST_URL,
       token: process.env.UPSTASH_REDIS_REST_TOKEN,
@@ -126,8 +128,8 @@ export class UserRateLimiter {
         limits: {
           minute: { remaining: this.config.requestsPerMinute, resetTime: 0 },
           hour: { remaining: this.config.requestsPerHour, resetTime: 0 },
-          day: { remaining: this.config.requestsPerDay, resetTime: 0 }
-        }
+          day: { remaining: this.config.requestsPerDay, resetTime: 0 },
+        },
       }
     }
 
@@ -158,7 +160,7 @@ export class UserRateLimiter {
     const [minuteResult, hourResult, dayResult] = await Promise.all([
       minuteBucket.consume(1),
       hourBucket.consume(1),
-      dayBucket.consume(1)
+      dayBucket.consume(1),
     ])
 
     if (!minuteResult.allowed) {
@@ -168,8 +170,8 @@ export class UserRateLimiter {
         limits: {
           minute: { remaining: minuteResult.remainingTokens, resetTime: minuteResult.resetTime },
           hour: { remaining: await hourBucket.getRemainingTokens(), resetTime: 0 },
-          day: { remaining: await dayBucket.getRemainingTokens(), resetTime: 0 }
-        }
+          day: { remaining: await dayBucket.getRemainingTokens(), resetTime: 0 },
+        },
       }
     }
 
@@ -180,8 +182,8 @@ export class UserRateLimiter {
         limits: {
           minute: { remaining: await minuteBucket.getRemainingTokens(), resetTime: 0 },
           hour: { remaining: hourResult.remainingTokens, resetTime: hourResult.resetTime },
-          day: { remaining: await dayBucket.getRemainingTokens(), resetTime: 0 }
-        }
+          day: { remaining: await dayBucket.getRemainingTokens(), resetTime: 0 },
+        },
       }
     }
 
@@ -192,8 +194,8 @@ export class UserRateLimiter {
         limits: {
           minute: { remaining: await minuteBucket.getRemainingTokens(), resetTime: 0 },
           hour: { remaining: await hourBucket.getRemainingTokens(), resetTime: 0 },
-          day: { remaining: dayResult.remainingTokens, resetTime: dayResult.resetTime }
-        }
+          day: { remaining: dayResult.remainingTokens, resetTime: dayResult.resetTime },
+        },
       }
     }
 
@@ -202,8 +204,8 @@ export class UserRateLimiter {
       limits: {
         minute: { remaining: minuteResult.remainingTokens, resetTime: minuteResult.resetTime },
         hour: { remaining: hourResult.remainingTokens, resetTime: hourResult.resetTime },
-        day: { remaining: dayResult.remainingTokens, resetTime: dayResult.resetTime }
-      }
+        day: { remaining: dayResult.remainingTokens, resetTime: dayResult.resetTime },
+      },
     }
   }
 
@@ -239,22 +241,20 @@ export class UserRateLimiter {
     const [minuteRemaining, hourRemaining, dayRemaining] = await Promise.all([
       minuteBucket.getRemainingTokens(),
       hourBucket.getRemainingTokens(),
-      dayBucket.getRemainingTokens()
+      dayBucket.getRemainingTokens(),
     ])
 
     return {
       minute: { remaining: minuteRemaining, limit: this.config.requestsPerMinute },
       hour: { remaining: hourRemaining, limit: this.config.requestsPerHour },
-      day: { remaining: dayRemaining, limit: this.config.requestsPerDay }
+      day: { remaining: dayRemaining, limit: this.config.requestsPerDay },
     }
   }
 
   async resetUserLimits(userId: string): Promise<void> {
     const buckets = ['minute', 'hour', 'day']
     await Promise.all(
-      buckets.map(timeWindow => 
-        this.redis.del(`user_rate_limit:${userId}:${timeWindow}`)
-      )
+      buckets.map(timeWindow => this.redis.del(`user_rate_limit:${userId}:${timeWindow}`))
     )
   }
 
@@ -272,6 +272,6 @@ export function loadUserRateLimitConfig(): UserRateLimitConfig {
     requestsPerMinute: parseInt(process.env.USER_RATE_LIMIT_REQUESTS_PER_MINUTE || '10'),
     requestsPerHour: parseInt(process.env.USER_RATE_LIMIT_REQUESTS_PER_HOUR || '100'),
     requestsPerDay: parseInt(process.env.USER_RATE_LIMIT_REQUESTS_PER_DAY || '1000'),
-    enabled: process.env.USER_RATE_LIMITING_ENABLED !== 'false'
+    enabled: process.env.USER_RATE_LIMITING_ENABLED !== 'false',
   }
 }

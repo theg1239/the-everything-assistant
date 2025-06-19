@@ -20,22 +20,23 @@ export function RateLimitErrorDisplay() {
 
   const formatResetTime = (resetTime?: string) => {
     if (!resetTime) return null
-    
+
     try {
       const resetDate = new Date(resetTime)
       const now = new Date()
       const diffMs = resetDate.getTime() - now.getTime()
-      
+
       if (diffMs <= 0) return 'now'
-      
+
       const diffMinutes = Math.ceil(diffMs / (1000 * 60))
-      
+
       if (diffMinutes < 60) {
         return `${diffMinutes} minute${diffMinutes !== 1 ? 's' : ''}`
       } else {
         const diffHours = Math.ceil(diffMinutes / 60)
         return `${diffHours} hour${diffHours !== 1 ? 's' : ''}`
-      }    } catch {
+      }
+    } catch {
       return null
     }
   }
@@ -61,7 +62,7 @@ export function RateLimitErrorDisplay() {
               )}
             </div>
           </div>
-          
+
           <div className="flex flex-col gap-3 w-full">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-2 flex-1">
@@ -70,7 +71,7 @@ export function RateLimitErrorDisplay() {
                   {rateLimitError.userLimit ? 'rate limit exceeded' : 'service rate limit exceeded'}
                 </h3>
               </div>
-              
+
               <Button
                 onClick={clearRateLimitError}
                 variant="ghost"
@@ -80,15 +81,16 @@ export function RateLimitErrorDisplay() {
                 <X className="w-4 h-4" />
               </Button>
             </div>
-            
+
             <div className="prose prose-invert prose-sm max-w-none">
               <p className="mb-3 last:mb-0 leading-relaxed text-foreground">
-                {rateLimitError.message || (rateLimitError.userLimit 
-                  ? 'you have exceeded your rate limit. please wait before sending another message.'
-                  : 'the service is experiencing high demand. please wait before trying again.')}
+                {rateLimitError.message ||
+                  (rateLimitError.userLimit
+                    ? 'you have exceeded your rate limit. please wait before sending another message.'
+                    : 'the service is experiencing high demand. please wait before trying again.')}
               </p>
             </div>
-            
+
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-sm">
               {resetTimeFormatted && (
                 <div className="flex items-center gap-2 text-muted-foreground">
@@ -96,14 +98,14 @@ export function RateLimitErrorDisplay() {
                   <span>rate limit resets in {resetTimeFormatted}</span>
                 </div>
               )}
-              
+
               {rateLimitError.userLimit && (
                 <div className="text-muted-foreground/80 sm:text-right">
                   try shorter messages or wait between requests
                 </div>
               )}
             </div>
-            
+
             <div className="sm:hidden">
               <Button
                 onClick={clearRateLimitError}

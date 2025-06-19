@@ -80,12 +80,12 @@
     height: calc(100vh - 180px);
     max-height: calc(100vh - 180px);
   }
-  
+
   .sidebar-scroll-area::-webkit-scrollbar {
     width: 0px;
     background: transparent;
   }
-  
+
   .sidebar-mobile-scroll {
     overflow-y: scroll !important;
     -webkit-overflow-scrolling: touch !important;
@@ -98,16 +98,16 @@
     -webkit-backface-visibility: hidden !important;
     backface-visibility: hidden !important;
   }
-  
+
   .sidebar-container {
     overflow: visible !important;
     touch-action: none !important;
   }
-  
+
   .sidebar-mobile-scroll * {
     pointer-events: auto !important;
   }
-  
+
   .sidebar-debug {
     position: fixed;
     top: 10px;

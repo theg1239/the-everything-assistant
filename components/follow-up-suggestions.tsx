@@ -16,86 +16,97 @@ interface FollowUpSuggestionsProps {
 
 function generateFollowUpQuestions(assistantMessage: string): string[] {
   const message = assistantMessage.toLowerCase()
-  
+
   if (message.includes('vtop') || message.includes('marks') || message.includes('attendance')) {
     return [
       'show me my detailed attendance',
       'what about my other subjects?',
       'check my fee payment status',
-      'show me upcoming exams'
+      'show me upcoming exams',
     ]
   }
-  
+
   if (message.includes('syllabus') || message.includes('course') || message.includes('subject')) {
     return [
       'get past exam papers for this course',
       'show me course materials',
       'what are the lab requirements?',
-      'tell me about the faculty for this course'
+      'tell me about the faculty for this course',
     ]
   }
-  
+
   if (message.includes('placement') || message.includes('company') || message.includes('package')) {
     return [
       'what skills should I focus on?',
       'show me recent placement trends',
       'tell me about internship opportunities',
-      'how to prepare for interviews?'
+      'how to prepare for interviews?',
     ]
   }
-  
+
   if (message.includes('hostel') || message.includes('mess') || message.includes('campus')) {
     return [
       'what about other campus facilities?',
       'show me club activities',
       'tell me about events this week',
-      'what are the sports facilities?'
+      'what are the sports facilities?',
     ]
   }
-  
+
   if (message.includes('research') || message.includes('project') || message.includes('faculty')) {
     return [
       'How can I get involved in research?',
       'Show me ongoing projects',
       'Tell me about publication opportunities',
-      'Connect me with faculty members'
+      'Connect me with faculty members',
     ]
   }
-  
-  if (message.includes('code') || message.includes('programming') || message.includes('algorithm')) {
+
+  if (
+    message.includes('code') ||
+    message.includes('programming') ||
+    message.includes('algorithm')
+  ) {
     return [
       'Show me similar examples',
       'Explain the complexity',
       'How to optimize this?',
-      'What are best practices?'
+      'What are best practices?',
     ]
   }
-  
+
   if (message.includes('exam') || message.includes('study') || message.includes('grade')) {
     return [
       'Give me study tips',
       'Show me my academic progress',
       'What are the exam patterns?',
-      'How to improve my grades?'
+      'How to improve my grades?',
     ]
   }
-  
+
   return [
     'Tell me more about this',
     'Can you give me an example?',
     'What are the next steps?',
-    'How does this apply to VIT students?'
+    'How does this apply to VIT students?',
   ]
 }
 
 export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
-  const { lastAssistantMessage = '', lastUserMessage = '', isVisible, onSuggestionClick, onDismiss, isMobile = false } = props
+  const {
+    lastAssistantMessage = '',
+    lastUserMessage = '',
+    isVisible,
+    onSuggestionClick,
+    onDismiss,
+    isMobile = false,
+  } = props
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
   const [canScrollRight, setCanScrollRight] = useState(false)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  
+
   useEffect(() => {
     if (lastAssistantMessage && isVisible) {
       setSuggestions([])
@@ -110,7 +121,7 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
       const container = scrollContainerRef.current
       const scrollLeft = container.scrollLeft
       const maxScrollLeft = container.scrollWidth - container.clientWidth
-      
+
       setCanScrollLeft(scrollLeft > 0)
       setCanScrollRight(scrollLeft < maxScrollLeft)
     }
@@ -120,14 +131,14 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
     const container = scrollContainerRef.current
     if (container && isMobile) {
       handleScroll()
-      
+
       container.addEventListener('scroll', handleScroll)
-      
+
       const resizeObserver = new ResizeObserver(() => {
         handleScroll()
       })
       resizeObserver.observe(container)
-      
+
       return () => {
         container.removeEventListener('scroll', handleScroll)
         resizeObserver.disconnect()
@@ -149,11 +160,11 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
       container.scrollBy({ left: -scrollAmount, behavior: 'smooth' })
     }
   }
-  
+
   const generateSuggestions = async () => {
     setIsLoading(true)
     setSuggestions([])
-    
+
     try {
       const response = await fetch('/api/suggestions', {
         method: 'POST',
@@ -184,7 +195,7 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
       setIsLoading(false)
     }
   }
-  
+
   if (!isVisible || (suggestions.length === 0 && !isLoading)) {
     return null
   }
@@ -197,7 +208,9 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
         exit={{ opacity: 0, y: 10 }}
         transition={{ duration: 0.2 }}
         className={`w-full ${isMobile ? 'mb-2' : 'mb-3'}`}
-      >        {isMobile ? (
+      >
+        {' '}
+        {isMobile ? (
           <div className="relative bg-background/95 backdrop-blur-sm border-t border-border/50">
             <div className="flex items-center gap-2 px-4 py-2">
               <ChevronRight className="h-3 w-3 text-muted-foreground/70 flex-shrink-0" />
@@ -209,7 +222,8 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
               >
                 <X className="h-3 w-3 text-muted-foreground/60" />
               </button>
-            </div>            <div className="relative">
+            </div>{' '}
+            <div className="relative">
               {canScrollLeft && (
                 <button
                   onClick={prevSlide}
@@ -220,17 +234,22 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
                   <ChevronLeft className="h-3 w-3 text-muted-foreground" />
                 </button>
               )}
-              
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 p-1.5 pointer-events-none opacity-0" aria-hidden="true">
+
+              <div
+                className="absolute left-0 top-1/2 -translate-y-1/2 p-1.5 pointer-events-none opacity-0"
+                aria-hidden="true"
+              >
                 <ChevronLeft className="h-3 w-3" />
               </div>
-              
-              <div 
+
+              <div
                 ref={scrollContainerRef}
                 className="flex gap-2 px-10 pb-3 overflow-x-auto scrollbar-hide"
-                style={{ 
-                  maskImage: 'linear-gradient(to right, transparent 0px, black 32px, black calc(100% - 32px), transparent 100%)',
-                  WebkitMaskImage: 'linear-gradient(to right, transparent 0px, black 32px, black calc(100% - 32px), transparent 100%)'
+                style={{
+                  maskImage:
+                    'linear-gradient(to right, transparent 0px, black 32px, black calc(100% - 32px), transparent 100%)',
+                  WebkitMaskImage:
+                    'linear-gradient(to right, transparent 0px, black 32px, black calc(100% - 32px), transparent 100%)',
                 }}
               >
                 {suggestions.map((suggestion, index) => (
@@ -252,11 +271,14 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
                   </motion.div>
                 ))}
               </div>
-              
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 p-1.5 pointer-events-none opacity-0" aria-hidden="true">
+
+              <div
+                className="absolute right-0 top-1/2 -translate-y-1/2 p-1.5 pointer-events-none opacity-0"
+                aria-hidden="true"
+              >
                 <ChevronRight className="h-3 w-3" />
               </div>
-              
+
               {canScrollRight && (
                 <button
                   onClick={nextSlide}
@@ -279,12 +301,12 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
               >
                 <X className="h-3 w-3 text-muted-foreground" />
               </button>
-              
+
               {/* <div className="flex items-center gap-2 mb-2">
                 <Lightbulb className="h-4 w-4 text-yellow-500" />
                 <span className="text-sm font-medium text-foreground">follow up questions</span>
               </div> */}
-              
+
               <div className="flex flex-wrap gap-2">
                 {suggestions.map((suggestion, index) => (
                   <motion.div

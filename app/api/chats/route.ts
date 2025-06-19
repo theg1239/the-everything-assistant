@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     const offset = parseInt(searchParams.get('offset') || '0')
     const archived = searchParams.get('archived') === 'true'
 
-    const chats = archived 
+    const chats = archived
       ? await getArchivedChats(session.user.id, limit, offset)
       : await getChats(session.user.id, limit, offset)
 
@@ -45,10 +45,10 @@ export async function DELETE(request: Request) {
 
     if (action === 'delete-all') {
       const deletedCount = await deleteAllChats(session.user.id)
-      return Response.json({ 
-        success: true, 
+      return Response.json({
+        success: true,
         message: `${deletedCount} chats deleted successfully`,
-        count: deletedCount 
+        count: deletedCount,
       })
     }
 
@@ -71,10 +71,10 @@ export async function PATCH(request: Request) {
 
     if (action === 'archive-all') {
       const archivedCount = await archiveAllChats(session.user.id)
-      return Response.json({ 
-        success: true, 
+      return Response.json({
+        success: true,
         message: `${archivedCount} chats archived successfully`,
-        count: archivedCount 
+        count: archivedCount,
       })
     }
 

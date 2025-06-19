@@ -9,18 +9,21 @@ export class RateLimitedGoogleAI {
   private config: ApiKeyConfig
   private userConfig: UserRateLimitConfig
 
-  constructor(customConfig?: Partial<ApiKeyConfig>, customUserConfig?: Partial<UserRateLimitConfig>) {
+  constructor(
+    customConfig?: Partial<ApiKeyConfig>,
+    customUserConfig?: Partial<UserRateLimitConfig>
+  ) {
     const apiKeys = this.loadApiKeysFromEnvironment()
-    
+
     this.config = {
       ...DEFAULT_API_KEY_CONFIG,
       ...customConfig,
-      keys: apiKeys
+      keys: apiKeys,
     }
 
     this.userConfig = {
       ...loadUserRateLimitConfig(),
-      ...customUserConfig
+      ...customUserConfig,
     }
 
     this.apiKeyManager = new ApiKeyManager(this.config)
@@ -29,7 +32,7 @@ export class RateLimitedGoogleAI {
 
   private loadApiKeysFromEnvironment(): string[] {
     const keys: string[] = []
-    
+
     if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
       keys.push(process.env.GOOGLE_GENERATIVE_AI_API_KEY)
     }
@@ -49,7 +52,9 @@ export class RateLimitedGoogleAI {
     }
 
     if (keys.length === 0) {
-      throw new Error('No Google AI API keys found in environment variables. Please set GOOGLE_GENERATIVE_AI_API_KEY or GOOGLE_AI_API_KEYS.')
+      throw new Error(
+        'No Google AI API keys found in environment variables. Please set GOOGLE_GENERATIVE_AI_API_KEY or GOOGLE_AI_API_KEYS.'
+      )
     }
 
     console.log(`Loaded ${keys.length} Google AI API key(s) for rotation`)
@@ -74,7 +79,8 @@ export class RateLimitedGoogleAI {
       const google = this.createGoogleInstance(apiKey)
       return google.embedding(modelName)
     }
-  }  async streamText(options: any, userId?: string) {
+  }
+  async streamText(options: any, userId?: string) {
     if (userId && this.userConfig.enabled) {
       const userCheck = await this.userRateLimiter.checkRateLimit(userId)
       if (!userCheck.allowed) {
@@ -85,10 +91,10 @@ export class RateLimitedGoogleAI {
     return this.executeWithRateLimit(async (apiKey: string) => {
       const google = this.createGoogleInstance(apiKey)
       const modelName = options.model?.modelId || 'gemini-2.5-flash-lite-preview-06-17'
-      
+
       return streamText({
         ...options,
-        model: google(modelName)
+        model: google(modelName),
       })
     })
   }
@@ -104,10 +110,10 @@ export class RateLimitedGoogleAI {
     return this.executeWithRateLimit(async (apiKey: string) => {
       const google = this.createGoogleInstance(apiKey)
       const modelName = options.model?.modelId || 'gemini-2.5-flash-lite-preview-06-17'
-      
+
       return generateText({
         ...options,
-        model: google(modelName)
+        model: google(modelName),
       })
     })
   }
@@ -123,10 +129,10 @@ export class RateLimitedGoogleAI {
     return this.executeWithRateLimit(async (apiKey: string) => {
       const google = this.createGoogleInstance(apiKey)
       const modelName = options.model?.modelId || 'gemini-2.5-flash-lite-preview-06-17'
-      
+
       return generateObject({
         ...options,
-        model: google(modelName)
+        model: google(modelName),
       })
     })
   }
@@ -142,10 +148,10 @@ export class RateLimitedGoogleAI {
     return this.executeWithRateLimit(async (apiKey: string) => {
       const google = this.createGoogleInstance(apiKey)
       const modelName = options.model?.modelId || 'text-embedding-004'
-      
+
       return embed({
         ...options,
-        model: google.embedding(modelName)
+        model: google.embedding(modelName),
       })
     })
   }
@@ -203,13 +209,13 @@ export class RateLimitedGoogleAI {
     return {
       apiKeys: {
         stats: apiKeyStats,
-        config: this.getConfig()
+        config: this.getConfig(),
       },
       userRateLimit: {
         stats: userStats,
         config: this.getUserConfig(),
-        enabled: this.userConfig.enabled
-      }
+        enabled: this.userConfig.enabled,
+      },
     }
   }
 }
@@ -236,28 +242,29 @@ export async function getGoogleEmbeddingModel(modelName: string = 'text-embeddin
 }
 
 export const rateLimitedGoogle = {
-  model: async (modelName: string = 'gemini-2.5-flash-lite-preview-06-17') => 
+  model: async (modelName: string = 'gemini-2.5-flash-lite-preview-06-17') =>
     getGoogleModel(modelName),
-  
-  embedding: async (modelName: string = 'text-embedding-004') =>
-    getGoogleEmbeddingModel(modelName),
-  
+
+  embedding: async (modelName: string = 'text-embedding-004') => getGoogleEmbeddingModel(modelName),
+
   streamText: (options: any, userId?: string) => getRateLimitedGoogle().streamText(options, userId),
-  generateText: (options: any, userId?: string) => getRateLimitedGoogle().generateText(options, userId),
-  generateObject: (options: any, userId?: string) => getRateLimitedGoogle().generateObject(options, userId),
+  generateText: (options: any, userId?: string) =>
+    getRateLimitedGoogle().generateText(options, userId),
+  generateObject: (options: any, userId?: string) =>
+    getRateLimitedGoogle().generateObject(options, userId),
   embed: (options: any, userId?: string) => getRateLimitedGoogle().embed(options, userId),
-  
+
   getUsageStats: () => getRateLimitedGoogle().getUsageStats(),
   rotateKey: () => getRateLimitedGoogle().rotateKey(),
   resetRateLimits: () => getRateLimitedGoogle().resetRateLimits(),
   updateConfig: (config: Partial<ApiKeyConfig>) => getRateLimitedGoogle().updateConfig(config),
-  
+
   getUserUsageStats: (userId: string) => getRateLimitedGoogle().getUserUsageStats(userId),
   checkUserRateLimit: (userId: string) => getRateLimitedGoogle().checkUserRateLimit(userId),
   resetUserRateLimits: (userId: string) => getRateLimitedGoogle().resetUserRateLimits(userId),
   getUserConfig: () => getRateLimitedGoogle().getUserConfig(),
   updateUserConfig: (config: any) => getRateLimitedGoogle().updateUserConfig(config),
-  getFullStatus: (userId?: string) => getRateLimitedGoogle().getFullStatus(userId)
+  getFullStatus: (userId?: string) => getRateLimitedGoogle().getFullStatus(userId),
 }
 
 export default rateLimitedGoogle

@@ -3,12 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { motion } from 'framer-motion'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
@@ -50,7 +45,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
   useEffect(() => {
     const loadPreferences = async () => {
       if (!session?.user?.email) return
-      
+
       setLoadingPreferences(true)
       try {
         const response = await fetch('/api/user/preferences')
@@ -81,8 +76,8 @@ export function SettingsDialog({ open, onOpenChange }: any) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          preferences: newPreferences
-        })
+          preferences: newPreferences,
+        }),
       })
 
       if (response.ok) {
@@ -99,7 +94,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
   const handleFollowUpSuggestionsChange = async (checked: boolean) => {
     setFollowUpSuggestions(checked)
     await savePreferences({
-      followUpSuggestions: checked
+      followUpSuggestions: checked,
     })
   }
 
@@ -120,7 +115,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
 
   const handleDeleteAllChats = async () => {
     if (!confirmDelete) {
-      setConfirmDelete(true)      
+      setConfirmDelete(true)
       setTimeout(() => setConfirmDelete(false), 3000)
       return
     }
@@ -131,7 +126,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
       const response = await fetch('/api/chats?action=delete-all', {
         method: 'DELETE',
       })
-        if (response.ok) {
+      if (response.ok) {
         const result = await response.json()
         window.dispatchEvent(new CustomEvent('chatsDeleted', { detail: result }))
         toast.success(`${result.count} chats deleted successfully`)
@@ -159,7 +154,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
       const response = await fetch('/api/chats?action=archive-all', {
         method: 'PATCH',
       })
-        if (response.ok) {
+      if (response.ok) {
         const result = await response.json()
         window.dispatchEvent(new CustomEvent('chatsArchived', { detail: result }))
         toast.success(`${result.count} chats archived successfully`)
@@ -178,7 +173,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
   const handleManageArchivedChats = async () => {
     setShowArchivedChats(true)
     setLoadingArchived(true)
-    
+
     try {
       const response = await fetch('/api/chats?archived=true&limit=50')
       if (response.ok) {
@@ -197,7 +192,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
       const response = await fetch(`/api/chats/${chatId}?action=restore`, {
         method: 'PATCH',
       })
-      
+
       if (response.ok) {
         setArchivedChats(prev => prev.filter(chat => chat.id !== chatId))
         window.dispatchEvent(new CustomEvent('chatsArchived'))
@@ -218,16 +213,19 @@ export function SettingsDialog({ open, onOpenChange }: any) {
   }
 
   const renderContent = () => {
-    switch (activeSection) {      case 'general':
+    switch (activeSection) {
+      case 'general':
         return (
           <div className="space-y-6">
             <div>
               <h3 className="text-lg md:text-xl font-semibold mb-4">general settings</h3>
-              
+
               <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
                   <div className="space-y-0.5">
-                    <Label htmlFor="follow-up" className="text-sm md:text-base">show follow up suggestions in chats</Label>
+                    <Label htmlFor="follow-up" className="text-sm md:text-base">
+                      show follow up suggestions in chats
+                    </Label>
                     <p className="text-xs md:text-sm text-muted-foreground">
                       display suggested follow-up questions after AI responses
                     </p>
@@ -241,7 +239,8 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                   />
                 </div>
               </div>
-            </div>          </div>
+            </div>{' '}
+          </div>
         )
 
       case 'appearance':
@@ -249,9 +248,9 @@ export function SettingsDialog({ open, onOpenChange }: any) {
           <div className="space-y-6">
             <div>
               <h3 className="text-lg md:text-xl font-semibold mb-4">theme</h3>
-              
+
               <div className="space-y-3">
-                {themeOptions.map((option) => {
+                {themeOptions.map(option => {
                   const Icon = option.icon
                   return (
                     <button
@@ -284,7 +283,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
           <div className="space-y-6">
             <div>
               <h3 className="text-lg md:text-xl font-semibold mb-4">language</h3>
-              
+
               <div className="flex items-center justify-between p-3 rounded-lg border border-border">
                 <span className="text-sm md:text-base">auto-detect</span>
                 <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
@@ -298,7 +297,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
           <div className="space-y-6">
             <div>
               <h3 className="text-lg md:text-xl font-semibold mb-4">data controls</h3>
-                <div className="space-y-4">
+              <div className="space-y-4">
                 {!showArchivedChats ? (
                   <>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
@@ -306,10 +305,17 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                         <Archive className="w-4 h-4 flex-shrink-0 mt-0.5 sm:mt-0" />
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-sm md:text-base">archived chats</p>
-                          <p className="text-xs md:text-sm text-muted-foreground">manage your archived conversations</p>
+                          <p className="text-xs md:text-sm text-muted-foreground">
+                            manage your archived conversations
+                          </p>
                         </div>
                       </div>
-                      <Button variant="outline" size="sm" onClick={handleManageArchivedChats} className="w-full sm:w-auto flex-shrink-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleManageArchivedChats}
+                        className="w-full sm:w-auto flex-shrink-0"
+                      >
                         manage
                       </Button>
                     </div>
@@ -319,16 +325,21 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                         <Archive className="w-4 h-4 flex-shrink-0 mt-0.5 sm:mt-0" />
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-sm md:text-base">archive all chats</p>
-                          <p className="text-xs md:text-sm text-muted-foreground">move all conversations to archive</p>
+                          <p className="text-xs md:text-sm text-muted-foreground">
+                            move all conversations to archive
+                          </p>
                         </div>
-                      </div>                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      </div>{' '}
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={handleArchiveAllChats}
                         disabled={isArchiving}
                         className={cn(
-                          "w-full sm:w-auto flex-shrink-0",
-                          confirmArchive ? 'bg-orange-500/10 border-orange-500/30 text-orange-600' : ''
+                          'w-full sm:w-auto flex-shrink-0',
+                          confirmArchive
+                            ? 'bg-orange-500/10 border-orange-500/30 text-orange-600'
+                            : ''
                         )}
                       >
                         {isArchiving ? (
@@ -349,15 +360,18 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                         <Trash2 className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5 sm:mt-0" />
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-sm md:text-base">delete all chats</p>
-                          <p className="text-xs md:text-sm text-muted-foreground">permanently delete all conversations</p>
+                          <p className="text-xs md:text-sm text-muted-foreground">
+                            permanently delete all conversations
+                          </p>
                         </div>
-                      </div>                      <Button 
-                        variant="destructive" 
-                        size="sm" 
+                      </div>{' '}
+                      <Button
+                        variant="destructive"
+                        size="sm"
                         onClick={handleDeleteAllChats}
                         disabled={isDeleting}
                         className={cn(
-                          "w-full sm:w-auto flex-shrink-0",
+                          'w-full sm:w-auto flex-shrink-0',
                           confirmDelete ? 'bg-red-600 hover:bg-red-700' : ''
                         )}
                       >
@@ -378,37 +392,48 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                   <div className="space-y-4">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <h4 className="font-medium text-sm md:text-base">archived chats</h4>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => setShowArchivedChats(false)}
                         className="w-full sm:w-auto"
                       >
                         back
                       </Button>
                     </div>
-                    
+
                     {loadingArchived ? (
                       <div className="flex items-center justify-center p-8">
                         <Loader2 className="w-6 h-6 animate-spin" />
-                      </div>                  ) : archivedChats.length === 0 ? (
-                    <div className="text-center p-8 text-muted-foreground">
-                      <Archive className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                      <p className="font-medium mb-1 text-sm md:text-base">no archived chats found</p>
-                      <p className="text-xs md:text-sm">archived conversations will appear here</p>
-                    </div>
+                      </div>
+                    ) : archivedChats.length === 0 ? (
+                      <div className="text-center p-8 text-muted-foreground">
+                        <Archive className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                        <p className="font-medium mb-1 text-sm md:text-base">
+                          no archived chats found
+                        </p>
+                        <p className="text-xs md:text-sm">
+                          archived conversations will appear here
+                        </p>
+                      </div>
                     ) : (
                       <div className="space-y-2 max-h-96 overflow-y-auto">
-                        {archivedChats.map((chat) => (
-                          <div key={chat.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
+                        {archivedChats.map(chat => (
+                          <div
+                            key={chat.id}
+                            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border"
+                          >
                             <div className="flex-1 min-w-0">
-                              <p className="font-medium truncate text-sm md:text-base">{chat.title}</p>
+                              <p className="font-medium truncate text-sm md:text-base">
+                                {chat.title}
+                              </p>
                               <p className="text-xs md:text-sm text-muted-foreground">
                                 {new Date(chat.createdAt).toLocaleDateString()}
                               </p>
-                            </div>                            <Button 
-                              variant="outline" 
-                              size="sm" 
+                            </div>{' '}
+                            <Button
+                              variant="outline"
+                              size="sm"
                               onClick={() => handleRestoreChat(chat.id)}
                               disabled={restoringChats.has(chat.id)}
                               className="w-full sm:w-auto flex-shrink-0"
@@ -426,7 +451,8 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                         ))}
                       </div>
                     )}
-                  </div>                )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -437,17 +463,24 @@ export function SettingsDialog({ open, onOpenChange }: any) {
           <div className="space-y-6">
             <div>
               <h3 className="text-lg md:text-xl font-semibold mb-4">security</h3>
-              
+
               <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
                   <div className="flex items-start sm:items-center gap-3">
                     <LogOut className="w-4 h-4 flex-shrink-0 mt-0.5 sm:mt-0" />
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-sm md:text-base">log out on this device</p>
-                      <p className="text-xs md:text-sm text-muted-foreground">sign out of your account</p>
+                      <p className="text-xs md:text-sm text-muted-foreground">
+                        sign out of your account
+                      </p>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => signOut()} className="w-full sm:w-auto flex-shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => signOut()}
+                    className="w-full sm:w-auto flex-shrink-0"
+                  >
                     log out
                   </Button>
                 </div>
@@ -461,7 +494,9 @@ export function SettingsDialog({ open, onOpenChange }: any) {
           <div className="space-y-6">
             <div>
               <h3 className="text-lg md:text-xl font-semibold mb-4">{activeSection}</h3>
-              <p className="text-muted-foreground text-sm md:text-base">this section is coming soon.</p>
+              <p className="text-muted-foreground text-sm md:text-base">
+                this section is coming soon.
+              </p>
             </div>
           </div>
         )
@@ -482,26 +517,27 @@ export function SettingsDialog({ open, onOpenChange }: any) {
       setActiveSection('general')
     }
   }, [open])
-  return (    <Dialog open={open} onOpenChange={onOpenChange}>
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl w-[95vw] h-[90vh] max-h-[800px] p-0 gap-0 bg-background border border-border overflow-hidden rounded-xl">
         <div className="flex flex-col md:flex-row h-full rounded-xl overflow-hidden">
           <div className="block md:hidden border-b border-border bg-muted/20 p-4 flex-shrink-0">
             <DialogHeader>
               <DialogTitle className="text-xl font-semibold">settings</DialogTitle>
             </DialogHeader>
-          </div>       
+          </div>
           <div className="w-full md:w-72 border-r-0 md:border-r border-border bg-muted/20 p-4 md:p-6 transition-all duration-300 rounded-tl-xl md:rounded-bl-xl md:rounded-tl-xl rounded-tr-xl md:rounded-tr-none">
             <div className="hidden md:block">
               <DialogHeader className="mb-6">
                 <DialogTitle className="text-xl font-semibold">settings</DialogTitle>
               </DialogHeader>
             </div>
-
             <nav className="space-y-1">
               <div className="grid grid-cols-2 gap-1 md:grid-cols-1 md:gap-1">
-                {menuItems.map((item) => {
+                {menuItems.map(item => {
                   const Icon = item.icon
-                  return (                    <button
+                  return (
+                    <button
                       key={item.id}
                       onClick={() => setActiveSection(item.id)}
                       className={cn(
@@ -517,8 +553,9 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                   )
                 })}
               </div>
-            </nav>          </div>
-          
+            </nav>{' '}
+          </div>
+
           <div className="flex-1 p-4 md:p-6 overflow-y-auto rounded-br-xl md:rounded-tr-xl rounded-bl-xl md:rounded-bl-none">
             <motion.div
               key={activeSection}

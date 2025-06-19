@@ -4,12 +4,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { 
-  Activity, 
-  RefreshCw, 
-  RotateCcw, 
-  Shield, 
-  AlertTriangle, 
+import {
+  Activity,
+  RefreshCw,
+  RotateCcw,
+  Shield,
+  AlertTriangle,
   CheckCircle,
   XCircle,
   Clock,
@@ -22,7 +22,7 @@ import {
   Settings,
   Eye,
   EyeOff,
-  Loader2
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -100,15 +100,15 @@ export default function ManagementPage() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
-    
+
     try {
       const response = await fetch('/api/rate-limit-status')
       const result = await response.json()
-      
+
       if (!response.ok) {
         throw new Error(result.error || 'Failed to fetch rate limit status')
       }
-      
+
       setData(result)
       setLastUpdate(new Date())
     } catch (err: any) {
@@ -123,7 +123,7 @@ export default function ManagementPage() {
       router.push('/login?callbackUrl=%2Fmgmt')
       return
     }
-    
+
     if (status === 'authenticated') {
       fetchData()
     }
@@ -141,24 +141,24 @@ export default function ManagementPage() {
 
   const handleAction = async (action: string, config?: any) => {
     setLoading(true)
-    
+
     try {
       const response = await fetch('/api/rate-limit-status', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ action, config })
+        body: JSON.stringify({ action, config }),
       })
-      
+
       const result = await response.json()
-      
+
       if (!response.ok) {
         throw new Error(result.error || 'Failed to execute action')
       }
-      
+
       toast.success(result.message)
-      
+
       // Refresh data after action
       await fetchData()
     } catch (err: any) {
@@ -211,7 +211,7 @@ export default function ManagementPage() {
                   monitor and manage API rate limiting and system health
                 </p>
               </div>
-              
+
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
@@ -222,29 +222,28 @@ export default function ManagementPage() {
                   {showSensitiveData ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   {showSensitiveData ? 'Hide' : 'Show'} Details
                 </Button>
-                
+
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setAutoRefresh(!autoRefresh)}
-                  className={cn("gap-2", autoRefresh && "bg-primary/10 text-primary")}
+                  className={cn('gap-2', autoRefresh && 'bg-primary/10 text-primary')}
                 >
                   {autoRefresh ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                   auto refresh
                 </Button>
-                
-                <Button
-                  onClick={fetchData}
-                  disabled={loading}
-                  size="sm"
-                  className="gap-2"
-                >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+
+                <Button onClick={fetchData} disabled={loading} size="sm" className="gap-2">
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4" />
+                  )}
                   load data
                 </Button>
               </div>
             </div>
-            
+
             {lastUpdate && (
               <div className="mt-4 text-sm text-muted-foreground">
                 last updated: {lastUpdate.toLocaleString()}
@@ -253,11 +252,10 @@ export default function ManagementPage() {
           </motion.div>
         </div>
       </header>
-      
+
       <div className="flex-1 overflow-hidden">
         <div className="h-full overflow-y-auto">
           <div className="container mx-auto px-4 max-w-7xl py-6">
-            
             {error && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -303,8 +301,17 @@ export default function ManagementPage() {
                         overall system status and configuration validation
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">                      <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
-                        <Database className={cn("w-5 h-5 flex-shrink-0", data.healthCheck?.redis === 'Connected' ? "text-green-500" : "text-yellow-500")} />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {' '}
+                      <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
+                        <Database
+                          className={cn(
+                            'w-5 h-5 flex-shrink-0',
+                            data.healthCheck?.redis === 'Connected'
+                              ? 'text-green-500'
+                              : 'text-yellow-500'
+                          )}
+                        />
                         <div className="min-w-0">
                           <p className="font-medium text-sm md:text-base">Redis</p>
                           <p className="text-xs md:text-sm text-muted-foreground">
@@ -312,22 +319,33 @@ export default function ManagementPage() {
                           </p>
                         </div>
                       </div>
-                      
                       <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
-                        <Key className={cn("w-5 h-5 flex-shrink-0", data.healthCheck?.apiKeys === 'Available' ? "text-green-500" : "text-red-500")} />
+                        <Key
+                          className={cn(
+                            'w-5 h-5 flex-shrink-0',
+                            data.healthCheck?.apiKeys === 'Available'
+                              ? 'text-green-500'
+                              : 'text-red-500'
+                          )}
+                        />
                         <div className="min-w-0">
                           <p className="font-medium text-sm md:text-base">API Keys</p>
                           <p className="text-xs md:text-sm text-muted-foreground">
-                            {data.environment?.summary?.apiKeys ? 
-                              `${data.environment.summary.apiKeys.totalAvailable}/${data.environment.summary.apiKeys.totalConfigured} available` :
-                              'Unknown'
-                            }
+                            {data.environment?.summary?.apiKeys
+                              ? `${data.environment.summary.apiKeys.totalAvailable}/${data.environment.summary.apiKeys.totalConfigured} available`
+                              : 'Unknown'}
                           </p>
                         </div>
                       </div>
-                      
                       <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
-                        <Server className={cn("w-5 h-5 flex-shrink-0", data.environment?.validation?.isValid ? "text-green-500" : "text-yellow-500")} />
+                        <Server
+                          className={cn(
+                            'w-5 h-5 flex-shrink-0',
+                            data.environment?.validation?.isValid
+                              ? 'text-green-500'
+                              : 'text-yellow-500'
+                          )}
+                        />
                         <div className="min-w-0">
                           <p className="font-medium text-sm md:text-base">Environment</p>
                           <p className="text-xs md:text-sm text-muted-foreground">
@@ -335,7 +353,6 @@ export default function ManagementPage() {
                           </p>
                         </div>
                       </div>
-                      
                       <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
                         <Settings className="w-5 h-5 flex-shrink-0 text-blue-500" />
                         <div className="min-w-0">
@@ -346,36 +363,40 @@ export default function ManagementPage() {
                         </div>
                       </div>
                     </div>
-                      {/* Validation Errors/Warnings */}
-                    {(!data.environment?.validation?.isValid || (data.environment?.validation?.warnings && data.environment.validation.warnings.length > 0)) && (
+                    {/* Validation Errors/Warnings */}
+                    {(!data.environment?.validation?.isValid ||
+                      (data.environment?.validation?.warnings &&
+                        data.environment.validation.warnings.length > 0)) && (
                       <div className="mt-6 space-y-3">
-                        {data.environment?.validation?.errors && data.environment.validation.errors.length > 0 && (
-                          <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                            <div className="flex items-center gap-2 mb-2 text-destructive">
-                              <XCircle className="w-4 h-4" />
-                              <span className="font-medium text-sm">Configuration Errors</span>
+                        {data.environment?.validation?.errors &&
+                          data.environment.validation.errors.length > 0 && (
+                            <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                              <div className="flex items-center gap-2 mb-2 text-destructive">
+                                <XCircle className="w-4 h-4" />
+                                <span className="font-medium text-sm">Configuration Errors</span>
+                              </div>
+                              <ul className="text-xs space-y-1 text-destructive/80">
+                                {data.environment.validation.errors.map((error, index) => (
+                                  <li key={index}>• {error}</li>
+                                ))}
+                              </ul>
                             </div>
-                            <ul className="text-xs space-y-1 text-destructive/80">
-                              {data.environment.validation.errors.map((error, index) => (
-                                <li key={index}>• {error}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                        
-                        {data.environment?.validation?.warnings && data.environment.validation.warnings.length > 0 && (
-                          <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                            <div className="flex items-center gap-2 mb-2 text-yellow-500">
-                              <AlertTriangle className="w-4 h-4" />
-                              <span className="font-medium text-sm">Configuration Warnings</span>
+                          )}
+
+                        {data.environment?.validation?.warnings &&
+                          data.environment.validation.warnings.length > 0 && (
+                            <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                              <div className="flex items-center gap-2 mb-2 text-yellow-500">
+                                <AlertTriangle className="w-4 h-4" />
+                                <span className="font-medium text-sm">Configuration Warnings</span>
+                              </div>
+                              <ul className="text-xs space-y-1 text-yellow-500/80">
+                                {data.environment.validation.warnings.map((warning, index) => (
+                                  <li key={index}>• {warning}</li>
+                                ))}
+                              </ul>
                             </div>
-                            <ul className="text-xs space-y-1 text-yellow-500/80">
-                              {data.environment.validation.warnings.map((warning, index) => (
-                                <li key={index}>• {warning}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
+                          )}
                       </div>
                     )}
                   </div>
@@ -397,53 +418,83 @@ export default function ManagementPage() {
                         Configuration and usage status for API keys
                       </div>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-3">
-                        <h4 className="font-medium text-sm md:text-base">Configuration</h4>                        <div className="space-y-2 text-xs md:text-sm">
+                        <h4 className="font-medium text-sm md:text-base">Configuration</h4>{' '}
+                        <div className="space-y-2 text-xs md:text-sm">
                           <div className="flex justify-between items-center">
                             <span>Total Keys:</span>
-                            <Badge variant="outline">{data.configuration?.apiKeys?.keyCount || 0}</Badge>
+                            <Badge variant="outline">
+                              {data.configuration?.apiKeys?.keyCount || 0}
+                            </Badge>
                           </div>
                           <div className="flex justify-between items-center">
                             <span>Rotation Enabled:</span>
-                            <Badge variant={data.configuration?.apiKeys?.enableRotation ? "default" : "secondary"}>
+                            <Badge
+                              variant={
+                                data.configuration?.apiKeys?.enableRotation
+                                  ? 'default'
+                                  : 'secondary'
+                              }
+                            >
                               {data.configuration?.apiKeys?.enableRotation ? 'Yes' : 'No'}
                             </Badge>
                           </div>
                           <div className="flex justify-between items-center">
                             <span>Auto-rotate on Limit:</span>
-                            <Badge variant={data.configuration?.apiKeys?.rotateOnRateLimit ? "default" : "secondary"}>
+                            <Badge
+                              variant={
+                                data.configuration?.apiKeys?.rotateOnRateLimit
+                                  ? 'default'
+                                  : 'secondary'
+                              }
+                            >
                               {data.configuration?.apiKeys?.rotateOnRateLimit ? 'Yes' : 'No'}
                             </Badge>
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="space-y-3">
-                        <h4 className="font-medium text-sm md:text-base">Rate Limits</h4>                        <div className="space-y-2 text-xs md:text-sm">
+                        <h4 className="font-medium text-sm md:text-base">Rate Limits</h4>{' '}
+                        <div className="space-y-2 text-xs md:text-sm">
                           <div className="flex justify-between items-center">
                             <span>Per Minute:</span>
-                            <Badge variant="outline">{data.configuration?.apiKeys?.rateLimit?.requestsPerMinute || 0}</Badge>
+                            <Badge variant="outline">
+                              {data.configuration?.apiKeys?.rateLimit?.requestsPerMinute || 0}
+                            </Badge>
                           </div>
                           <div className="flex justify-between items-center">
                             <span>Per Hour:</span>
-                            <Badge variant="outline">{data.configuration?.apiKeys?.rateLimit?.requestsPerHour || 0}</Badge>
+                            <Badge variant="outline">
+                              {data.configuration?.apiKeys?.rateLimit?.requestsPerHour || 0}
+                            </Badge>
                           </div>
                         </div>
                       </div>
                     </div>
-                      {showSensitiveData && data.keyUsage && (
+                    {showSensitiveData && data.keyUsage && (
                       <div className="mt-6 space-y-4">
                         <h4 className="font-medium text-sm md:text-base">Individual Key Status</h4>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                           {Object.entries(data.keyUsage).map(([keyIndex, usage]) => {
                             const StatusIcon = getStatusIcon(usage?.isHealthy || false)
                             return (
-                              <div key={keyIndex} className="p-4 rounded-lg bg-black/20 border border-border/20">
+                              <div
+                                key={keyIndex}
+                                className="p-4 rounded-lg bg-black/20 border border-border/20"
+                              >
                                 <div className="flex items-center justify-between mb-2">
-                                  <h5 className="font-medium text-sm md:text-base">Key {keyIndex}</h5>
-                                  <StatusIcon className={cn("w-4 h-4 flex-shrink-0", getStatusColor(usage?.isHealthy || false))} />
+                                  <h5 className="font-medium text-sm md:text-base">
+                                    Key {keyIndex}
+                                  </h5>
+                                  <StatusIcon
+                                    className={cn(
+                                      'w-4 h-4 flex-shrink-0',
+                                      getStatusColor(usage?.isHealthy || false)
+                                    )}
+                                  />
                                 </div>
                                 <div className="space-y-2 text-xs md:text-sm">
                                   <div className="flex justify-between items-center">
@@ -452,11 +503,19 @@ export default function ManagementPage() {
                                   </div>
                                   <div className="flex justify-between items-center">
                                     <span>Last Used:</span>
-                                    <span className="text-xs truncate max-w-[100px]">{formatTimestamp(usage?.lastUsed)}</span>
+                                    <span className="text-xs truncate max-w-[100px]">
+                                      {formatTimestamp(usage?.lastUsed)}
+                                    </span>
                                   </div>
                                   <div className="flex justify-between items-center">
                                     <span>Failures:</span>
-                                    <Badge variant={(usage?.consecutiveFailures || 0) > 0 ? "destructive" : "secondary"}>
+                                    <Badge
+                                      variant={
+                                        (usage?.consecutiveFailures || 0) > 0
+                                          ? 'destructive'
+                                          : 'secondary'
+                                      }
+                                    >
                                       {usage?.consecutiveFailures || 0}
                                     </Badge>
                                   </div>
@@ -494,7 +553,9 @@ export default function ManagementPage() {
                         Per-user request rate limiting configuration
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">                      <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      {' '}
+                      <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
                         <Clock className="w-5 h-5 flex-shrink-0 text-blue-500" />
                         <div className="min-w-0">
                           <p className="font-medium text-sm md:text-base">Per Minute</p>
@@ -503,7 +564,6 @@ export default function ManagementPage() {
                           </p>
                         </div>
                       </div>
-                      
                       <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
                         <Clock className="w-5 h-5 flex-shrink-0 text-green-500" />
                         <div className="min-w-0">
@@ -513,7 +573,6 @@ export default function ManagementPage() {
                           </p>
                         </div>
                       </div>
-                      
                       <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
                         <Clock className="w-5 h-5 flex-shrink-0 text-orange-500" />
                         <div className="min-w-0">
@@ -553,7 +612,7 @@ export default function ManagementPage() {
                         <RotateCcw className="w-4 h-4" />
                         Rotate API Key
                       </Button>
-                      
+
                       <Button
                         onClick={() => handleAction('reset')}
                         disabled={loading}

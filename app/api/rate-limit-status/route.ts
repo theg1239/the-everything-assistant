@@ -7,24 +7,25 @@ import { validateEnvironmentConfig, getEnvironmentSummary } from '@/lib/env-conf
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    
+
     const adminEmail = process.env.RATE_LIMIT_ADMIN_EMAIL
     if (!adminEmail) {
       return NextResponse.json({ error: 'Admin access not configured' }, { status: 503 })
     }
-    
+
     if (!session?.user?.email || session.user.email !== adminEmail) {
       return NextResponse.json({ error: 'Unauthorized access - admin only' }, { status: 403 })
-    }    const rateLimitedGoogle = getRateLimitedGoogle()
-    
+    }
+    const rateLimitedGoogle = getRateLimitedGoogle()
+
     const usageStats = await rateLimitedGoogle.getUsageStats()
-    
+
     const config = rateLimitedGoogle.getConfig()
-    
+
     const userConfig = rateLimitedGoogle.getUserConfig()
-    
+
     const envValidation = validateEnvironmentConfig()
-    
+
     const envSummary = getEnvironmentSummary()
 
     return NextResponse.json({
@@ -32,35 +33,36 @@ export async function GET(req: NextRequest) {
       timestamp: new Date().toISOString(),
       environment: {
         validation: envValidation,
-        summary: envSummary
-      },      configuration: {
+        summary: envSummary,
+      },
+      configuration: {
         apiKeys: {
           enableRotation: config.enableRotation,
           rotateOnRateLimit: config.rotateOnRateLimit,
           keyCount: config.keys.length,
           rateLimit: config.rateLimit,
           retryConfig: config.retryConfig,
-          keyHealthCheckInterval: config.keyHealthCheckInterval
+          keyHealthCheckInterval: config.keyHealthCheckInterval,
         },
         userRateLimit: {
           enabled: userConfig.enabled,
           requestsPerMinute: userConfig.requestsPerMinute,
           requestsPerHour: userConfig.requestsPerHour,
-          requestsPerDay: userConfig.requestsPerDay
-        }
+          requestsPerDay: userConfig.requestsPerDay,
+        },
       },
       keyUsage: usageStats,
       healthCheck: {
         redis: envSummary.hasRedis ? 'Connected' : 'Not configured',
-        apiKeys: envSummary.apiKeys.totalAvailable > 0 ? 'Available' : 'None configured'
-      }
+        apiKeys: envSummary.apiKeys.totalAvailable > 0 ? 'Available' : 'None configured',
+      },
     })
   } catch (error: any) {
     console.error('Rate limiting status check failed:', error)
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to get rate limiting status',
-        message: error.message || 'Unknown error'
+        message: error.message || 'Unknown error',
       },
       { status: 500 }
     )
@@ -70,12 +72,12 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions)
-    
+
     const adminEmail = process.env.RATE_LIMIT_ADMIN_EMAIL
     if (!adminEmail) {
       return NextResponse.json({ error: 'Admin access not configured' }, { status: 503 })
     }
-    
+
     if (!session?.user?.email || session.user.email !== adminEmail) {
       return NextResponse.json({ error: 'Unauthorized access - admin only' }, { status: 403 })
     }
@@ -88,16 +90,16 @@ export async function POST(req: NextRequest) {
     switch (action) {
       case 'rotate':
         await rateLimitedGoogle.rotateKey()
-        return NextResponse.json({ 
+        return NextResponse.json({
           message: 'API key rotated successfully',
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         })
 
       case 'reset':
         await rateLimitedGoogle.resetRateLimits()
-        return NextResponse.json({ 
+        return NextResponse.json({
           message: 'Rate limits reset successfully',
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         })
 
       case 'update_config':
@@ -105,12 +107,12 @@ export async function POST(req: NextRequest) {
         if (!config) {
           return NextResponse.json({ error: 'Configuration object required' }, { status: 400 })
         }
-        
+
         rateLimitedGoogle.updateConfig(config)
-        return NextResponse.json({ 
+        return NextResponse.json({
           message: 'Configuration updated successfully',
           newConfig: rateLimitedGoogle.getConfig(),
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         })
 
       default:
@@ -119,9 +121,9 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error('Rate limiting action failed:', error)
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to execute action',
-        message: error.message || 'Unknown error'
+        message: error.message || 'Unknown error',
       },
       { status: 500 }
     )

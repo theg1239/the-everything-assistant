@@ -647,7 +647,7 @@ export function createVITTools() {
     //   }),
     //   execute: async ({ department, facultyName }) => scrapeFacultyInfo(department, facultyName),
     // }),
-    
+
     // getPlacementInfo: tool({
     //   description:
     //     'get latest placement statistics and company information from VIT Placements Tracker',

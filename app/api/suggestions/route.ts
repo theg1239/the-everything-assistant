@@ -25,12 +25,8 @@ export async function POST(request: NextRequest) {
     const suggestions = await generateFollowUpSuggestions(assistantMessage, userMessage)
 
     return NextResponse.json({ suggestions })
-
   } catch (error) {
     console.error('Error in follow-up suggestions API:', error)
-    return NextResponse.json(
-      { error: 'Failed to generate suggestions' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to generate suggestions' }, { status: 500 })
   }
 }

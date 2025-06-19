@@ -74,7 +74,7 @@ export async function getChats(
 ): Promise<Chat[]> {
   try {
     const chats = await prisma.chat.findMany({
-      where: { 
+      where: {
         userId,
         archived: false, // Only return non-archived chats
       },
@@ -176,7 +176,7 @@ export async function getArchivedChats(
 ): Promise<Chat[]> {
   try {
     const chats = await prisma.chat.findMany({
-      where: { 
+      where: {
         userId,
         archived: true,
       },

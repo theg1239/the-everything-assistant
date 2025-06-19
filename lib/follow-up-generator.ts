@@ -1,6 +1,7 @@
 import { rateLimitedGoogle } from '@/lib/rate-limited-ai'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { getCurrentVITContext } from '@/lib/data/context-integration'
 
 export async function generateFollowUpSuggestions(
   assistantMessage: string,
@@ -23,28 +24,64 @@ export async function generateFollowUpSuggestions(
       ? `User asked: "${userMessage}"\nAssistant replied: "${assistantMessage}"`
       : `Assistant message: "${assistantMessage}"`
 
-    // console.log('Context prompt length:', contextPrompt.length)
+    const currentVITInfo = getCurrentVITContext()
 
-    const prompt = `Based on the following conversation context, generate 3 relevant follow-up questions that a VIT student might ask next. The questions should be:
+    const prompt = `You are a VIT assistant that helps students with various queries. Based on the conversation context and your available capabilities, generate 3 relevant follow-up questions that a VIT student might realistically ask next.
 
-1. Specific and actionable
-2. Naturally flowing from the conversation
-3. Relevant to VIT students (academics, VTOP, campus life, placements, etc.)
-4. Concise (under 10 words each)
-5. Different from each other in topic/focus
-
-Context:
+CONVERSATION CONTEXT:
 ${contextPrompt}
 
-Common VIT-related topics include:
-- VTOP queries (attendance, marks, timetable, fees, exams)
-- Academic courses and syllabi
-- Campus facilities (mess, hostel, library)
-- Placements and career guidance
-- Faculty and research opportunities
-- Events and activities
+YOUR AVAILABLE CAPABILITIES (what you can actually answer):
 
-Generate exactly 3 follow-up questions, one per line, without numbering or bullet points.`
+VTOP DATA ACCESS:
+- Student profile information (name, reg no, branch, year)
+- Marks and detailed assessment scores for all subjects
+- Semester-wise grades and CGPA calculations
+- Attendance percentage for all subjects with breakdown
+- Current semester timetable and class schedules
+- Fee payment receipts and transaction history
+- Hostel allotment and accommodation details
+- Library dues and book status
+- Exam schedules and seating arrangements
+- Course materials and faculty information download
+- Digital assignments and project submissions
+- Night slip records and leave applications
+
+REAL-TIME VIT INFORMATION:
+- Current academic calendar and semester dates
+- Exam schedules (CAT-1, CAT-2, FAT dates)
+- Working Saturdays and holiday calendar
+- Important deadlines and registration dates
+- Latest campus events and announcements
+- Current semester status and what's happening now
+
+ACADEMIC RESOURCES:
+- Past exam papers and study materials
+- Faculty information and contact details
+- Course syllabi and curriculum details
+- Placement statistics and company information
+- Campus facilities (mess menus, sports, library)
+- Research opportunities and project guidance
+
+KNOWLEDGE BASE ACCESS:
+- Student discussions from Reddit communities
+- Academic help and study strategies
+- Programming solutions and examples
+- Career guidance and interview preparation
+- VIT-specific experiences and tips
+
+CURRENT VIT CONTEXT:
+${currentVITInfo}
+
+Generate exactly 3 follow-up questions that:
+1. Are specific and actionable based on your actual capabilities
+2. Flow naturally from the conversation
+3. Are relevant to what's currently happening at VIT
+4. Are concise (under 12 words each)
+5. Cover different aspects of VIT student life
+6. Use natural, conversational language (lowercase)
+
+Output exactly 3 questions, one per line, without numbering or bullet points.`
 
     // console.log('Calling AI model with prompt length:', prompt.length)
     const result = await rateLimitedGoogle.generateText(
@@ -94,37 +131,52 @@ Generate exactly 3 follow-up questions, one per line, without numbering or bulle
 
 function getStaticFollowUpSuggestions(assistantMessage: string): string[] {
   const message = assistantMessage.toLowerCase()
+  
+  const currentSemesterSuggestions = [
+    'when is course registration?',
+    'show me fall semester exam dates',
+    'what classes start in july?'
+  ]
+  
   if (message.includes('vtop') || message.includes('marks') || message.includes('attendance')) {
-    return ['show my detailed attendance', 'check fee payment status', 'what about other subjects?']
+    return ['check my current semester attendance', 'show detailed marks breakdown', 'get my fee payment status']
   }
 
-  if (message.includes('syllabus') || message.includes('course') || message.includes('subject')) {
-    return ['get past exam papers', 'show course materials', 'tell me about faculty']
+  if (message.includes('course') || message.includes('subject') || message.includes('materials')) {
+    return ['download course materials for this semester', 'get past exam papers', 'show faculty contact information']
+  }
+
+  if (message.includes('exam') || message.includes('cat') || message.includes('fat')) {
+    return ['when are cat-1 exams this semester?', 'show exam schedule for fall 2025', 'check assignment deadlines']
+  }
+
+  if (message.includes('timetable') || message.includes('schedule') || message.includes('class')) {
+    return ['show my current semester timetable', 'what classes do i have tomorrow?', 'check lab schedule']
   }
 
   if (message.includes('placement') || message.includes('company') || message.includes('package')) {
-    return ['what skills to focus on?', 'show placement trends', 'interview preparation tips?']
+    return ['show latest placement statistics', 'what companies are visiting?', 'get interview preparation tips']
   }
 
   if (message.includes('hostel') || message.includes('mess') || message.includes('campus')) {
-    return ['show other campus facilities', 'tell me about events', 'what about sports facilities?']
+    return ['check today\'s mess menu', 'show campus sports facilities', 'tell me about upcoming events']
+  }
+
+  if (message.includes('registration') || message.includes('deadline') || message.includes('academic')) {
+    return currentSemesterSuggestions
+  }
+
+  if (message.includes('calendar') || message.includes('date') || message.includes('schedule')) {
+    return ['show working saturdays this semester', 'when is gravitas 2025?', 'check holiday calendar']
   }
 
   if (message.includes('research') || message.includes('project') || message.includes('faculty')) {
-    return ['how to join research?', 'show ongoing projects', 'connect with faculty']
+    return ['how to join research projects?', 'show faculty research areas', 'get project guidelines']
   }
 
-  if (
-    message.includes('code') ||
-    message.includes('programming') ||
-    message.includes('algorithm')
-  ) {
-    return ['show similar examples', 'explain the complexity', 'what are best practices?']
+  if (message.includes('library') || message.includes('book') || message.includes('due')) {
+    return ['check my library dues', 'show library timings', 'how to renew books?']
   }
 
-  if (message.includes('exam') || message.includes('study') || message.includes('grade')) {
-    return ['give me study tips', 'show academic progress', 'how to improve grades?']
-  }
-
-  return ['tell me more about this', 'can you give an example?', 'how does this apply to VIT?']
+  return ['show my vtop attendance', 'when is course registration?', 'check fall semester exam dates']
 }

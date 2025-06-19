@@ -21,8 +21,8 @@ const Aurora = dynamic(() => import('@/components/aurora'), {
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'vit assistant',
-  description: 'comprehensive ai assistant for vit vellore with extensive knowledge base',
+  title: 'the everything assistant',
+  description: 'comprehensive ai assistant',
 }
 
 export default function RootLayout({

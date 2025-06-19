@@ -218,12 +218,12 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     },
     onFinish: message => {
       const currentChatId = currentChatIdRef.current
-      console.log('🏁 AI response finished', {
-        currentChatId,
-        optimisticChatId,
-        chatId,
-        isFirstMessageInNewChat,
-      })
+      // console.log('🏁 AI response finished', {
+      //   currentChatId,
+      //   optimisticChatId,
+      //   chatId,
+      //   isFirstMessageInNewChat,
+      // })
       if (message.role === 'assistant' && message.content) {
         setLastAssistantMessage(message.content)
         if (userPreferences.followUpSuggestions !== false) {

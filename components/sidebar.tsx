@@ -5,7 +5,6 @@ import { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   MessageSquare,
   Plus,
@@ -38,9 +37,11 @@ export function Sidebar(props: SidebarProps) {
   const [chats, setChats] = useState<Chat[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
   const [hovering, setHovering] = useState(false)
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null)
+  const [scrollPosition, setScrollPosition] = useState(0)
   const router = useRouter()
   const pathname = usePathname()
   const { data: session } = useSession()
@@ -106,10 +107,21 @@ export function Sidebar(props: SidebarProps) {
         if (reset) {
           setChats(data)
         } else {
-          setChats(prevChats => [...prevChats, ...data])
+          setChats(prevChats => {
+            const existingIds = new Set(prevChats.map(chat => chat.id))
+            const newChats = data.filter((chat: Chat) => !existingIds.has(chat.id))
+            
+            if (process.env.NODE_ENV === 'development') {
+              console.log('Existing chats:', prevChats.length)
+              console.log('New chats fetched:', data.length)
+              console.log('New chats after dedup:', newChats.length)
+              console.log('Duplicate chat IDs found:', data.length - newChats.length)
+            }
+            
+            return [...prevChats, ...newChats]
+          })
         }
 
-        // If we got less than 15 items, we've reached the end
         if (data.length < 15) {
           setHasMore(false)
         }
@@ -119,21 +131,29 @@ export function Sidebar(props: SidebarProps) {
     } finally {
       setLoading(false)
       setLoadingMore(false)
+      setIsLoadingMore(false)
     }
   }
 
   const loadMoreChats = () => {
-    if (!loadingMore && hasMore) {
-      fetchChats(false)
+    if (!loadingMore && !isLoadingMore && hasMore) {
+      setIsLoadingMore(true)
+      fetchChats(false).finally(() => {
+        setIsLoadingMore(false)
+      })
     }
   }
 
-  // Handle scroll to detect when user reaches bottom
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget
-    // Trigger load more when user is within 100px of the bottom
-    if (scrollHeight - scrollTop - clientHeight < 100 && hasMore && !loadingMore) {
-      loadMoreChats()
+    setScrollPosition(scrollTop)
+    
+    if (scrollHeight - scrollTop - clientHeight < 10 && hasMore && !loadingMore && !isLoadingMore) {
+      setTimeout(() => {
+        if (hasMore && !loadingMore && !isLoadingMore) {
+          loadMoreChats()
+        }
+      }, 100)
     }
   }
 
@@ -174,6 +194,65 @@ export function Sidebar(props: SidebarProps) {
     }
   }
 
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth <= 768) {
+        const scrollElement = document.querySelector('.sidebar-scroll-area') as HTMLElement
+        if (scrollElement) {
+          scrollElement.style.display = 'none'
+          scrollElement.offsetHeight
+          scrollElement.style.display = ''
+        }
+      }
+    }
+
+    window.addEventListener('resize', handleResize)
+    window.addEventListener('orientationchange', handleResize)
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      window.removeEventListener('orientationchange', handleResize)
+    }
+  }, [])
+
+  useEffect(() => {
+    const scrollArea = document.querySelector('.sidebar-mobile-scroll') as HTMLElement
+    if (!scrollArea) return
+
+    let isScrolling = false
+    let startY = 0
+    let scrollStartY = 0
+
+    const handleTouchStart = (e: TouchEvent) => {
+      isScrolling = true
+      startY = e.touches[0].pageY
+      scrollStartY = scrollArea.scrollTop
+    }
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isScrolling) return
+      
+      e.preventDefault()
+      const currentY = e.touches[0].pageY
+      const diff = startY - currentY
+      scrollArea.scrollTop = scrollStartY + diff
+    }
+
+    const handleTouchEnd = () => {
+      isScrolling = false
+    }
+
+    scrollArea.addEventListener('touchstart', handleTouchStart, { passive: false })
+    scrollArea.addEventListener('touchmove', handleTouchMove, { passive: false })
+    scrollArea.addEventListener('touchend', handleTouchEnd, { passive: false })
+
+    return () => {
+      scrollArea.removeEventListener('touchstart', handleTouchStart)
+      scrollArea.removeEventListener('touchmove', handleTouchMove)
+      scrollArea.removeEventListener('touchend', handleTouchEnd)
+    }
+  }, [])
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -184,6 +263,12 @@ export function Sidebar(props: SidebarProps) {
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/50 z-40 md:hidden"
             onClick={onToggle}
+            style={{ pointerEvents: 'auto' }}
+            onTouchStart={(e) => {
+              if (e.target === e.currentTarget) {
+                onToggle()
+              }
+            }}
           />
 
           <motion.div
@@ -191,16 +276,23 @@ export function Sidebar(props: SidebarProps) {
             animate={{ x: 0 }}
             exit={{ x: -300 }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed left-0 top-0 z-50 h-full w-[var(--sidebar-width)] bg-background border-r border-border flex flex-col shadow-xl overflow-hidden"
+            className="sidebar-container fixed left-0 top-0 z-50 h-full w-[var(--sidebar-width)] bg-background border-r border-border flex flex-col shadow-xl"
             onMouseEnter={() => setHovering(true)}
             onMouseLeave={() => setHovering(false)}
+            style={{ 
+              pointerEvents: 'auto',
+              touchAction: 'none'
+            }}
+            onTouchStart={(e) => {
+              e.stopPropagation()
+            }}
           >
             <div className="p-4 border-b border-border flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 {loading ? (
                   <div className="h-7 w-32 bg-muted/60 rounded sidebar-loading-item"></div>
                 ) : (
-                  <h2 className="text-lg font-medium text-foreground">vit assistant</h2>
+                  <h2 className="text-lg font-medium text-foreground">the everything assistant</h2>
                 )}
               </div>
               <Button
@@ -231,7 +323,25 @@ export function Sidebar(props: SidebarProps) {
               )}
             </div>
 
-            <ScrollArea className="flex-1 p-4" onScrollCapture={handleScroll}>
+            <div 
+              className="flex-1 min-h-0 flex flex-col"
+            >
+              <div 
+                className="sidebar-mobile-scroll flex-1 p-4 overflow-y-auto overflow-x-hidden"
+                onScroll={handleScroll}
+                onTouchStart={(e) => {
+                  e.stopPropagation()
+                }}
+                onTouchMove={(e) => {
+                  e.stopPropagation()
+                }}
+                style={{
+                  touchAction: 'pan-y',
+                  WebkitOverflowScrolling: 'touch',
+                  overscrollBehavior: 'contain',
+                  pointerEvents: 'auto',
+                }}
+              >
               <div className="space-y-1">
                 {loading ? (
                   <div className="h-full w-full flex flex-col space-y-3">
@@ -258,16 +368,16 @@ export function Sidebar(props: SidebarProps) {
                     <div className="w-16 h-16 bg-muted/30 rounded-full flex items-center justify-center mx-auto mb-3">
                       <MessageSquare className="h-8 w-8 opacity-50" />
                     </div>
-                    <p className="text-sm font-medium mb-1">No chat history</p>
+                    <p className="text-sm font-medium mb-1">no chat history</p>
                     <p className="text-xs text-muted-foreground">
-                      Start a conversation to see your history here
+                      start a conversation to see your history here
                     </p>
                   </div>
                 ) : (
                   <>
-                    {chats.map(chat => (
+                    {chats.map((chat, index) => (
                       <motion.div
-                        key={chat.id}
+                        key={`chat-${chat.id}-${chat.updatedAt || index}`} // More robust unique key
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         className={cn(
@@ -294,7 +404,7 @@ export function Sidebar(props: SidebarProps) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 hover:bg-destructive hover:text-destructive-foreground"
+                          className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0"
                           onClick={e => deleteChat(chat.id, e)}
                         >
                           <Trash2 className="h-3 w-3" />
@@ -302,19 +412,27 @@ export function Sidebar(props: SidebarProps) {
                       </motion.div>
                     ))}
 
-                    {/* Infinite scroll loading indicator */}
-                    {loadingMore && (
-                      <div className="flex justify-center py-4">
-                        <div className="flex items-center text-muted-foreground text-sm">
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Loading more chats...
+                    {(loadingMore || isLoadingMore) && hasMore && (
+                      <div className="flex justify-center py-2 mt-2">
+                        <div className="flex items-center text-muted-foreground text-xs">
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          loading more...
+                        </div>
+                      </div>
+                    )}
+                    
+                    {!hasMore && chats.length > 0 && (
+                      <div className="text-center py-2 mt-2">
+                        <div className="text-xs text-muted-foreground/70">
+                          no more chats to load
                         </div>
                       </div>
                     )}
                   </>
                 )}
               </div>
-            </ScrollArea>
+              </div>
+            </div>
 
             <div className="p-4 border-t border-border bg-muted/30 sidebar-user-section">
               {loading ? (

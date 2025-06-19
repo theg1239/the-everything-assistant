@@ -45,7 +45,80 @@
   background-color: rgba(148, 163, 184, 0.5);
 }
 
+.sidebar-scroll-area {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+  height: 100%;
+  max-height: calc(100vh - 200px);
+}
+
+.sidebar-scroll-area::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scroll-area::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.3);
+  border-radius: 10px;
+}
+
+.sidebar-scroll-area::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(148, 163, 184, 0.5);
+}
+
 @media (max-width: 768px) {
+  .sidebar-scroll-area {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    transform: translateZ(0);
+    will-change: scroll-position;
+    height: calc(100vh - 180px);
+    max-height: calc(100vh - 180px);
+  }
+  
+  .sidebar-scroll-area::-webkit-scrollbar {
+    width: 0px;
+    background: transparent;
+  }
+  
+  .sidebar-mobile-scroll {
+    overflow-y: scroll !important;
+    -webkit-overflow-scrolling: touch !important;
+    height: calc(100vh - 200px) !important;
+    overscroll-behavior: contain !important;
+    touch-action: pan-y !important;
+    transform: translate3d(0, 0, 0) !important;
+    pointer-events: auto !important;
+    -webkit-transform: translate3d(0, 0, 0) !important;
+    -webkit-backface-visibility: hidden !important;
+    backface-visibility: hidden !important;
+  }
+  
+  .sidebar-container {
+    overflow: visible !important;
+    touch-action: none !important;
+  }
+  
+  .sidebar-mobile-scroll * {
+    pointer-events: auto !important;
+  }
+  
+  .sidebar-debug {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 5px;
+    font-size: 10px;
+    z-index: 9999;
+    border-radius: 3px;
+  }
 }
 
 @keyframes gradientShift {

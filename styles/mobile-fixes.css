@@ -16,6 +16,43 @@ body {
   overscroll-behavior: none;
 }
 
+@media (max-width: 768px) {
+  .sidebar-container {
+    position: fixed !important;
+    overflow: visible !important;
+    isolation: isolate !important;
+  }
+  
+  .sidebar-mobile-scroll {
+    position: relative !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
+    touch-action: pan-y !important;
+    transform: translate3d(0, 0, 0) !important;
+    height: calc(100vh - 200px) !important;
+    max-height: calc(100vh - 200px) !important;
+  }
+  
+  .sidebar-mobile-scroll,
+  .sidebar-scroll-area {
+    overflow-y: auto !important;
+  }
+  
+  .sidebar-mobile-scroll * {
+    pointer-events: auto !important;
+  }
+}
+
+.sidebar-mobile-scroll,
+.sidebar-scroll-area {
+  position: relative !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior: contain !important;
+  touch-action: pan-y !important;
+}
+
 main {
   height: 100vh;
   height: var(--app-height);

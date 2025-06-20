@@ -87,37 +87,61 @@
   }
 
   .sidebar-mobile-scroll {
-    overflow-y: scroll !important;
+    overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
     height: calc(100vh - 200px) !important;
+    max-height: calc(100vh - 200px) !important;
+    min-height: calc(100vh - 200px) !important;
     overscroll-behavior: contain !important;
-    touch-action: pan-y !important;
+    touch-action: none !important;
     transform: translate3d(0, 0, 0) !important;
     pointer-events: auto !important;
     -webkit-transform: translate3d(0, 0, 0) !important;
     -webkit-backface-visibility: hidden !important;
     backface-visibility: hidden !important;
+    position: relative !important;
+    isolation: isolate !important;
+    overflow: auto !important;
+    contain: layout style paint !important;
+    cursor: grab !important;
+    display: flex !important;
+    flex-direction: column !important;
+    user-select: none !important;
+  }
+  
+  .sidebar-mobile-scroll > .space-y-1 {
+    min-height: calc(100vh - 150px) !important;
+    flex: 1 !important;
+  }
+  
+  .sidebar-mobile-scroll:active {
+    cursor: grabbing !important;
+  }
+
+  .sidebar-mobile-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sidebar-overlay {
+    pointer-events: auto !important;
+  }
+
+  .sidebar-content {
+    overflow: visible !important;
+    height: 100% !important;
   }
 
   .sidebar-container {
     overflow: visible !important;
     touch-action: none !important;
+    position: fixed !important;
+    isolation: isolate !important;
+    contain: layout style !important;
   }
 
   .sidebar-mobile-scroll * {
     pointer-events: auto !important;
-  }
-
-  .sidebar-debug {
-    position: fixed;
-    top: 10px;
-    right: 10px;
-    background: rgba(0, 0, 0, 0.8);
-    color: white;
-    padding: 5px;
-    font-size: 10px;
-    z-index: 9999;
-    border-radius: 3px;
+    touch-action: none !important;
   }
 }
 

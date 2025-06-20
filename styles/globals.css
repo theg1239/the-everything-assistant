@@ -40,6 +40,15 @@
     -webkit-overflow-scrolling: touch;
   }
 
+  @media (max-width: 768px) {
+    .sidebar-mobile-scroll,
+    .sidebar-scroll-area {
+      overflow-y: auto !important;
+      -webkit-overflow-scrolling: touch !important;
+      overscroll-behavior: contain !important;
+    }
+  }
+
   .chat-content {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;

@@ -11,6 +11,7 @@ const getTimeOfDayGreeting = () => {
   
   if (hour >= 5 && hour < 12) {
     const morningGreetings = [
+      'hey',
       'rise and grind',
       'wakey wakey',
       'good morning',
@@ -33,6 +34,7 @@ const getTimeOfDayGreeting = () => {
   } 
   else if (hour >= 12 && hour < 17) {
     const afternoonGreetings = [
+      'hey',
       'good afternoon',
       'midday magic',
       'lunch break',
@@ -55,6 +57,7 @@ const getTimeOfDayGreeting = () => {
   } 
   else if (hour >= 17 && hour < 22) {
     const eveningGreetings = [
+      'hey',
       'golden hour',
       'winding down',
       'sunset vibes',
@@ -78,6 +81,7 @@ const getTimeOfDayGreeting = () => {
   else {
     if (dayOfWeek === 5 || dayOfWeek === 6) {
       const weekendNightGreetings = [
+        'hey',
         'weekend warrior',
         'party mode',
         'friday night',
@@ -95,6 +99,7 @@ const getTimeOfDayGreeting = () => {
     }
     
     const nightGreetings = [
+      'hey',
       'night owl',
       'midnight warrior',
       'burning midnight oil',
@@ -120,6 +125,20 @@ const getTimeOfDayGreeting = () => {
 const PureChatHeader = () => {
   const { data: session } = useSession()
   const [greeting, setGreeting] = useState('')
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768)
+    }
+    
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    
+    return () => {
+      window.removeEventListener('resize', checkMobile)
+    }
+  }, [])
 
   useEffect(() => {
     setGreeting(getTimeOfDayGreeting())
@@ -132,6 +151,14 @@ const PureChatHeader = () => {
   }, [])
 
   const firstName = session?.user?.name?.split(' ')[0]?.toLowerCase()
+  
+  const shouldShowName = firstName && (!isMobile || greeting === 'hey')
+  
+  const formatGreeting = () => {
+    if (!shouldShowName) return `${greeting}!`
+    if (greeting === 'hey') return `${greeting} ${firstName}!`
+    return `${greeting}, ${firstName}!`
+  }
 
   return (
     <motion.div
@@ -142,7 +169,7 @@ const PureChatHeader = () => {
     >
       <div className="flex flex-col items-center justify-center h-[8.5rem] px-4">
         <h1 className="text-4xl md:text-5xl font-light tracking-tight mb-2">
-          {greeting}{firstName ? `, ${firstName}` : ''}!
+          {formatGreeting()}
         </h1>
         {/* <p className="text-sm text-muted-foreground text-center max-w-[40rem] leading-normal">
           comprehensive knowledge base for vit vellore - courses, exams, mess details...anything!

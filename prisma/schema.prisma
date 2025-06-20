@@ -50,9 +50,19 @@ model User {
   created_at    DateTime  @default(now())
   updated_at    DateTime  @default(now()) @updatedAt
   
-  accounts Account[]
-  sessions Session[]
-  chats    Chat[]
+  // MFA fields
+  mfaEnabled     Boolean   @default(false)
+  mfaMethod      String?   // 'email' or 'authenticator'
+  mfaSecret      String?   // For authenticator app
+  backupCodes    String[]  @default([])
+  tempMfaSecret  String?   // Temporary during setup
+  tempMfaMethod  String?   // Temporary during setup
+  tempMfaExpires DateTime? // Temporary during setup
+  
+  accounts    Account[]
+  sessions    Session[]
+  chats       Chat[]
+  securityLogs SecurityLog[]
 
   @@map("users")
 }
@@ -121,6 +131,20 @@ model Vote {
 
   @@id([chatId, messageId])
   @@map("votes")
+}
+
+model SecurityLog {
+  id         String   @id @default(cuid())
+  userId     String
+  event      String   // 'MFA_ENABLED', 'MFA_DISABLED', 'MFA_BACKUP_CODES_REGENERATED', etc.
+  method     String?  // 'email', 'authenticator'
+  ipAddress  String?
+  userAgent  String?
+  created_at DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("security_logs")
 }
 
 model Migration {

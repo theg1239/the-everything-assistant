@@ -1,0 +1,133 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import bcrypt from 'bcryptjs'
+import {
+  verifyTOTP,
+  hashBackupCodes,
+  generateBackupCodes,
+  logSecurityEvent,
+  checkRateLimit
+} from '@/lib/mfa'
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { code } = await request.json()
+    if (!code || typeof code !== 'string') {
+      return NextResponse.json(
+        { error: 'Verification code is required' },
+        { status: 400 }
+      )
+    }
+
+    const rateLimitKey = `mfa-verify-${session.user.email}`
+    if (!checkRateLimit(rateLimitKey, 5, 15 * 60 * 1000)) {
+      return NextResponse.json(
+        { error: 'Too many verification attempts. Please try again later.' },
+        { status: 429 }
+      )
+    }
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: {
+        id: true,
+        email: true,
+        tempMfaSecret: true,
+        tempMfaMethod: true,
+        tempMfaExpires: true,
+        mfaEnabled: true,
+      },
+    })
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+    if (!user.tempMfaSecret) {
+      return NextResponse.json(
+        { error: 'No MFA setup in progress. Please start setup first.' },
+        { status: 400 }
+      )
+    }
+    if (!user.tempMfaMethod) {
+      return NextResponse.json(
+        { error: 'MFA method not set. Please start setup again.' },
+        { status: 400 }
+      )
+    }
+    if (user.tempMfaExpires && new Date() > user.tempMfaExpires) {
+      return NextResponse.json(
+        { error: 'Setup session expired. Please start setup again.' },
+        { status: 400 }
+      )
+    }
+    let isValidCode = false
+    
+    if (user.tempMfaMethod === 'email') {
+      isValidCode = await bcrypt.compare(code, user.tempMfaSecret)
+    } else if (user.tempMfaMethod === 'authenticator') {
+      isValidCode = verifyTOTP(code, user.tempMfaSecret)
+    }
+    
+    if (!isValidCode) {
+      await logSecurityEvent(
+        user.id,
+        'MFA_VERIFICATION_FAILED',
+        { method: user.tempMfaMethod },
+        request
+      )
+      return NextResponse.json(
+        { error: 'Invalid verification code. Please try again.' },
+        { status: 400 }
+      )
+    }
+
+    const backupCodes = generateBackupCodes()
+    const hashedBackupCodes = hashBackupCodes(backupCodes)
+    const updateData: any = {
+      mfaEnabled: true,
+      mfaMethod: user.tempMfaMethod,
+      tempMfaSecret: null,
+      tempMfaMethod: null,
+      tempMfaExpires: null,
+      backupCodes: hashedBackupCodes,
+    }
+    
+    if (user.tempMfaMethod === 'authenticator') {
+      updateData.mfaSecret = user.tempMfaSecret
+    } else {
+      updateData.mfaSecret = null
+    }
+    
+    await prisma.user.update({
+      where: { id: user.id },
+      data: updateData,
+    })
+
+    await logSecurityEvent(
+      user.id,
+      'MFA_ENABLED',
+      { method: user.tempMfaMethod },
+      request
+    )
+
+    return NextResponse.json({
+      success: true,
+      message: 'MFA has been successfully enabled',
+      backupCodes,
+      mfaEnabled: true,
+      mfaMethod: user.tempMfaMethod,
+    })
+  } catch (error) {
+    console.error('MFA verification error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}

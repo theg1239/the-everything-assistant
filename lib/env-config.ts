@@ -109,3 +109,15 @@ export function getEnvironmentSummary() {
     },
   }
 }
+
+export function isSMTPConfigured(): boolean {
+  return !!(process.env.SMTP_EMAIL && process.env.SMTP_APP_PASSWORD)
+}
+
+export function getSMTPStatus() {
+  return {
+    configured: isSMTPConfigured(),
+    email: process.env.SMTP_EMAIL ? 'Set' : 'Not set',
+    password: process.env.SMTP_APP_PASSWORD ? 'Set' : 'Not set',
+  }
+}

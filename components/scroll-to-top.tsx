@@ -3,7 +3,6 @@
 import { usePathname, useSearchParams } from 'next/navigation'
 import { useEffect, Suspense } from 'react'
 
-// Wrapper component that uses searchParams
 function ScrollToTopInner() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -21,7 +20,6 @@ function ScrollToTopInner() {
   return null
 }
 
-// Main component with Suspense boundary
 export default function ScrollToTop() {
   return (
     <Suspense fallback={null}>

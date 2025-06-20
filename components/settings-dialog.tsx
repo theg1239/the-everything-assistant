@@ -23,6 +23,14 @@ import {
   Sun,
   Monitor,
   Loader2,
+  Smartphone,
+  Mail,
+  Key,
+  QrCode,
+  Download,
+  Copy,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -42,6 +50,21 @@ export function SettingsDialog({ open, onOpenChange }: any) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(false)
   const [loadingPreferences, setLoadingPreferences] = useState(false)
+  const [mfaEnabled, setMfaEnabled] = useState(false)
+  const [mfaMethod, setMfaMethod] = useState<'email' | 'authenticator'>('email')
+  const [loadingMfa, setLoadingMfa] = useState(false)
+  const [showMfaSetup, setShowMfaSetup] = useState(false)
+  const [backupCodes, setBackupCodes] = useState<string[]>([])
+  const [showBackupCodes, setShowBackupCodes] = useState(false)
+  const [qrCodeUrl, setQrCodeUrl] = useState('')
+  const [manualEntryKey, setManualEntryKey] = useState('')
+  const [verificationCode, setVerificationCode] = useState('')
+  const [setupStep, setSetupStep] = useState<'method' | 'verify' | 'backup'>('method')
+  const [showBackupCodesReveal, setShowBackupCodesReveal] = useState(false)
+  const [mfaAvailability, setMfaAvailability] = useState<{email: boolean, authenticator: boolean}>({
+    email: true,
+    authenticator: true
+  })
 
   useEffect(() => {
     const loadPreferences = async () => {
@@ -49,12 +72,37 @@ export function SettingsDialog({ open, onOpenChange }: any) {
 
       setLoadingPreferences(true)
       try {
+        // Load user preferences
         const response = await fetch('/api/user/preferences')
         if (response.ok) {
           const data = await response.json()
           const prefs = data.preferences
           setFollowUpSuggestions(prefs.followUpSuggestions ?? true)
           setAuroraBackground(prefs.auroraBackground ?? true)
+        }
+
+        // Load MFA status
+        let loadedMfaMethod: 'email' | 'authenticator' = 'email'
+        const mfaResponse = await fetch('/api/user/mfa')
+        if (mfaResponse.ok) {
+          const mfaData = await mfaResponse.json()
+          setMfaEnabled(mfaData.mfaEnabled ?? false)
+          loadedMfaMethod = (mfaData.mfaMethod === 'authenticator' ? 'authenticator' : 'email')
+          setMfaMethod(loadedMfaMethod)
+          // Set backup codes count (we don't get the actual codes for security)
+          setBackupCodes(new Array(mfaData.backupCodesCount || 0).fill('••••••••'))
+        }
+
+        // Load MFA availability
+        const availabilityResponse = await fetch('/api/user/mfa/availability')
+        if (availabilityResponse.ok) {
+          const availabilityData = await availabilityResponse.json()
+          setMfaAvailability(availabilityData.availability)
+          
+          // If email is not available and current method is email, switch to authenticator
+          if (!availabilityData.availability.email && loadedMfaMethod === 'email') {
+            setMfaMethod('authenticator')
+          }
         }
       } catch (error) {
         console.error('Error loading preferences:', error)
@@ -109,6 +157,208 @@ export function SettingsDialog({ open, onOpenChange }: any) {
     })
     
     window.dispatchEvent(new CustomEvent('auroraToggle', { detail: { enabled: checked } }))
+  }
+
+  const handleMfaToggle = async (enabled: boolean) => {
+    if (enabled && !mfaEnabled) {
+      setShowMfaSetup(true)
+      setSetupStep('method')
+      return
+    }
+
+    setLoadingMfa(true)
+    try {
+      const response = await fetch('/api/user/mfa', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (response.ok) {
+        setMfaEnabled(false)
+        setBackupCodes([])
+        setShowMfaSetup(false)
+        toast.success('MFA disabled successfully')
+      } else {
+        throw new Error('Failed to disable MFA')
+      }
+    } catch (error) {
+      console.error('Error disabling MFA:', error)
+      toast.error('Failed to disable MFA')
+    } finally {
+      setLoadingMfa(false)
+    }
+  }
+
+  const initiateMfaSetup = async () => {
+    setLoadingMfa(true)
+    try {
+      const response = await fetch('/api/user/mfa/setup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          method: mfaMethod,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        
+        if (mfaMethod === 'authenticator') {
+          setQrCodeUrl(data.qrCode)
+          setManualEntryKey(data.secret)
+        }
+        
+        setSetupStep('verify')
+        
+        if (mfaMethod === 'email') {
+          toast.success('Verification code sent to your email')
+        }
+      } else {
+        throw new Error('Failed to initiate MFA setup')
+      }
+    } catch (error) {
+      console.error('Error initiating MFA setup:', error)
+      toast.error('Failed to initiate MFA setup')
+    } finally {
+      setLoadingMfa(false)
+    }
+  }
+
+  const verifyMfaSetup = async () => {
+    if (!verificationCode.trim()) {
+      toast.error('Please enter the verification code')
+      return
+    }
+
+    setLoadingMfa(true)
+    try {
+      const response = await fetch('/api/user/mfa/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code: verificationCode,
+          method: mfaMethod,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setBackupCodes(data.backupCodes)
+        setMfaEnabled(true)
+        setSetupStep('backup')
+        toast.success('MFA setup completed successfully')
+      } else {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Invalid verification code')
+      }
+    } catch (error: any) {
+      console.error('Error verifying MFA setup:', error)
+      toast.error(error.message || 'Failed to verify code')
+    } finally {
+      setLoadingMfa(false)
+    }
+  }
+
+  const completeMfaSetup = () => {
+    setShowMfaSetup(false)
+    setSetupStep('method')
+    setVerificationCode('')
+    setQrCodeUrl('')
+    setManualEntryKey('')
+    toast.success('MFA has been successfully enabled for your account')
+  }
+
+  const generateNewBackupCodes = async () => {
+    setLoadingMfa(true)
+    try {
+      const response = await fetch('/api/user/mfa/backup-codes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setBackupCodes(data.backupCodes)
+        toast.success('New backup codes generated successfully')
+      } else {
+        throw new Error('Failed to generate backup codes')
+      }
+    } catch (error) {
+      console.error('Error generating backup codes:', error)
+      toast.error('Failed to generate backup codes')
+    } finally {
+      setLoadingMfa(false)
+    }
+  }
+
+  const downloadBackupCodes = () => {
+    const codesText = backupCodes.join('\n')
+    const blob = new Blob([`The Everything Assistant - MFA Backup Codes\nGenerated: ${new Date().toLocaleString()}\n\nKeep these codes safe and secure:\n\n${codesText}\n\nEach code can only be used once.`], { 
+      type: 'text/plain' 
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `the-everything-assistant-backup-codes-${Date.now()}.txt`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    toast.success('Backup codes downloaded')
+  }
+
+  const copyBackupCodes = async () => {
+    try {
+      await navigator.clipboard.writeText(backupCodes.join('\n'))
+      toast.success('Backup codes copied to clipboard')
+    } catch (error) {
+      toast.error('Failed to copy backup codes')
+    }
+  }
+
+  const handleMfaMethodChange = async (method: 'email' | 'authenticator') => {
+    if (!mfaEnabled && setupStep === 'method') {
+      setMfaMethod(method)
+      return
+    }
+
+    if (!mfaEnabled) {
+      setMfaMethod(method)
+      return
+    }
+
+    setLoadingMfa(true)
+    try {
+      const response = await fetch('/api/user/mfa/method', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          method,
+        }),
+      })
+
+      if (response.ok) {
+        setMfaMethod(method)
+        toast.success('MFA method updated successfully')
+      } else {
+        throw new Error('Failed to update MFA method')
+      }
+    } catch (error) {
+      console.error('Error updating MFA method:', error)
+      toast.error('Failed to update MFA method')
+    } finally {
+      setLoadingMfa(false)
+    }
   }
 
   const menuItems = [
@@ -507,6 +757,427 @@ export function SettingsDialog({ open, onOpenChange }: any) {
               <h3 className="text-lg md:text-xl font-semibold mb-4">security</h3>
 
               <div className="space-y-4">
+                {/* Multi-Factor Authentication */}
+                <div className="space-y-4 p-4 rounded-lg border border-border bg-muted/10">
+                  <div className="flex items-center gap-3">
+                    <Key className="w-5 h-5 text-primary" />
+                    <h4 className="font-semibold text-base">multi-factor authentication</h4>
+                  </div>
+                  
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border bg-background">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="mfa-enabled" className="text-sm md:text-base">
+                        enable two-factor authentication
+                      </Label>
+                      <p className="text-xs md:text-sm text-muted-foreground">
+                        add an extra layer of security to your account
+                      </p>
+                    </div>
+                    <Switch
+                      id="mfa-enabled"
+                      checked={mfaEnabled}
+                      onCheckedChange={handleMfaToggle}
+                      disabled={loadingMfa}
+                      className="flex-shrink-0"
+                    />
+                  </div>
+
+                  {(mfaEnabled || showMfaSetup) && (
+                    <div className="space-y-4">
+                      {!showMfaSetup ? (
+                        <>
+                          <div className="space-y-3">
+                            <Label className="text-sm font-medium">current method: {mfaMethod === 'email' ? 'email verification' : 'authenticator app'}</Label>
+                            
+                            <div className="space-y-2">
+                              {mfaAvailability.email && (
+                                <button
+                                  onClick={() => handleMfaMethodChange('email')}
+                                  disabled={loadingMfa}
+                                  className={cn(
+                                    'w-full flex items-center justify-between p-3 rounded-lg border transition-colors text-sm md:text-base',
+                                    mfaMethod === 'email'
+                                      ? 'border-primary bg-primary/5'
+                                      : 'border-border hover:bg-muted/50'
+                                  )}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <Mail className="w-4 h-4 flex-shrink-0" />
+                                    <div className="text-left">
+                                      <div className="font-medium">email verification</div>
+                                      <div className="text-xs text-muted-foreground">
+                                        receive codes via email
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {mfaMethod === 'email' && (
+                                    <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+                                  )}
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => handleMfaMethodChange('authenticator')}
+                                disabled={loadingMfa}
+                                className={cn(
+                                  'w-full flex items-center justify-between p-3 rounded-lg border transition-colors text-sm md:text-base',
+                                  mfaMethod === 'authenticator'
+                                    ? 'border-primary bg-primary/5'
+                                    : 'border-border hover:bg-muted/50'
+                                )}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <Smartphone className="w-4 h-4 flex-shrink-0" />
+                                  <div className="text-left">
+                                    <div className="font-medium">authenticator app</div>
+                                    <div className="text-xs text-muted-foreground">
+                                      use google authenticator or similar
+                                    </div>
+                                  </div>
+                                </div>
+                                {mfaMethod === 'authenticator' && (
+                                  <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Backup Codes Management */}
+                          <div className="space-y-3 p-3 rounded-lg border border-orange-200 bg-orange-50/50 dark:border-orange-800 dark:bg-orange-950/20">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Label className="text-sm font-medium">backup codes</Label>
+                                <p className="text-xs text-muted-foreground">
+                                  {backupCodes.length} codes available
+                                </p>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setShowBackupCodes(!showBackupCodes)}
+                              >
+                                {showBackupCodes ? 'hide' : 'manage'}
+                              </Button>
+                            </div>
+
+                            {showBackupCodes && (
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-2 text-xs text-orange-600 dark:text-orange-400">
+                                  <Key className="w-3 h-3" />
+                                  <span>keep these codes safe - each can only be used once</span>
+                                </div>
+                                
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-sm font-medium">your backup codes</span>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => setShowBackupCodesReveal(!showBackupCodesReveal)}
+                                      className="h-6 px-2"
+                                    >
+                                      {showBackupCodesReveal ? (
+                                        <EyeOff className="w-3 h-3" />
+                                      ) : (
+                                        <Eye className="w-3 h-3" />
+                                      )}
+                                    </Button>
+                                  </div>
+                                  
+                                  {showBackupCodesReveal && (
+                                    <div className="grid grid-cols-2 gap-2 p-3 bg-background rounded border font-mono text-xs">
+                                      {backupCodes.map((code, index) => (
+                                        <div key={index} className="text-center py-1">
+                                          {code}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="flex gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={downloadBackupCodes}
+                                    className="flex-1"
+                                  >
+                                    <Download className="w-3 h-3 mr-1" />
+                                    download
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={copyBackupCodes}
+                                    className="flex-1"
+                                  >
+                                    <Copy className="w-3 h-3 mr-1" />
+                                    copy
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={generateNewBackupCodes}
+                                    disabled={loadingMfa}
+                                    className="flex-1"
+                                  >
+                                    {loadingMfa ? (
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                    ) : (
+                                      'regenerate'
+                                    )}
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        // MFA Setup Flow
+                        <div className="space-y-4">
+                          {setupStep === 'method' && (
+                            <>
+                              <Label className="text-sm font-medium">choose authentication method</Label>
+                              <div className="space-y-2">
+                                {mfaAvailability.email && (
+                                  <button
+                                    onClick={() => handleMfaMethodChange('email')}
+                                    disabled={loadingMfa}
+                                    className={cn(
+                                      'w-full flex items-center justify-between p-3 rounded-lg border transition-colors text-sm md:text-base',
+                                      mfaMethod === 'email'
+                                        ? 'border-primary bg-primary/5'
+                                        : 'border-border hover:bg-muted/50'
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <Mail className="w-4 h-4 flex-shrink-0" />
+                                      <div className="text-left">
+                                        <div className="font-medium">email verification</div>
+                                        <div className="text-xs text-muted-foreground">
+                                          receive codes via email
+                                        </div>
+                                      </div>
+                                    </div>
+                                    {mfaMethod === 'email' && (
+                                      <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+                                    )}
+                                  </button>
+                                )}
+
+                                {!mfaAvailability.email && (
+                                  <div className="p-3 rounded-lg border border-dashed border-muted-foreground/30 bg-muted/20">
+                                    <div className="flex items-center gap-3">
+                                      <Mail className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
+                                      <div className="text-left">
+                                        <div className="font-medium text-muted-foreground">email verification</div>
+                                        <div className="text-xs text-muted-foreground">
+                                          unavailable
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                <button
+                                  onClick={() => handleMfaMethodChange('authenticator')}
+                                  disabled={loadingMfa}
+                                  className={cn(
+                                    'w-full flex items-center justify-between p-3 rounded-lg border transition-colors text-sm md:text-base',
+                                    mfaMethod === 'authenticator'
+                                      ? 'border-primary bg-primary/5'
+                                      : 'border-border hover:bg-muted/50'
+                                  )}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <Smartphone className="w-4 h-4 flex-shrink-0" />
+                                    <div className="text-left">
+                                      <div className="font-medium">authenticator app</div>
+                                      <div className="text-xs text-muted-foreground">
+                                        use google authenticator or similar
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {mfaMethod === 'authenticator' && (
+                                    <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+                                  )}
+                                </button>
+                              </div>
+
+                              <div className="flex gap-2 pt-2">
+                                <Button
+                                  onClick={initiateMfaSetup}
+                                  disabled={loadingMfa}
+                                  size="sm"
+                                  className="flex-1"
+                                >
+                                  {loadingMfa ? (
+                                    <>
+                                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                      setting up...
+                                    </>
+                                  ) : (
+                                    'continue'
+                                  )}
+                                </Button>
+                                <Button
+                                  onClick={() => setShowMfaSetup(false)}
+                                  variant="outline"
+                                  size="sm"
+                                  className="flex-1"
+                                >
+                                  cancel
+                                </Button>
+                              </div>
+                            </>
+                          )}
+
+                          {setupStep === 'verify' && (
+                            <>
+                              {mfaMethod === 'authenticator' && (
+                                <div className="space-y-4">
+                                  <div className="text-center space-y-3">
+                                    <h4 className="font-medium">scan qr code</h4>
+                                    <p className="text-sm text-muted-foreground">
+                                      scan this qr code with your authenticator app
+                                    </p>
+                                    
+                                    {qrCodeUrl && (
+                                      <div className="flex justify-center">
+                                        <div className="p-4 bg-white rounded-lg">
+                                          <img src={qrCodeUrl} alt="QR Code" className="w-48 h-48" />
+                                        </div>
+                                      </div>
+                                    )}
+                                    
+                                    <details className="text-left">
+                                      <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground">
+                                        can't scan? enter manually
+                                      </summary>
+                                      <div className="mt-2 p-3 bg-muted rounded text-xs font-mono break-all">
+                                        {manualEntryKey}
+                                      </div>
+                                    </details>
+                                  </div>
+                                </div>
+                              )}
+
+                              {mfaMethod === 'email' && (
+                                <div className="space-y-3 text-center">
+                                  <h4 className="font-medium">check your email</h4>
+                                  <p className="text-sm text-muted-foreground">
+                                    we've sent a verification code to your email address
+                                  </p>
+                                </div>
+                              )}
+
+                              <div className="space-y-3">
+                                <Label className="text-sm font-medium">enter verification code</Label>
+                                <input
+                                  type="text"
+                                  value={verificationCode}
+                                  onChange={(e) => setVerificationCode(e.target.value)}
+                                  placeholder="000000"
+                                  className="w-full px-3 py-2 text-center text-lg font-mono tracking-widest border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                                  maxLength={6}
+                                />
+                              </div>
+
+                              <div className="flex gap-2">
+                                <Button
+                                  onClick={verifyMfaSetup}
+                                  disabled={loadingMfa || !verificationCode.trim()}
+                                  size="sm"
+                                  className="flex-1"
+                                >
+                                  {loadingMfa ? (
+                                    <>
+                                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                      verifying...
+                                    </>
+                                  ) : (
+                                    'verify'
+                                  )}
+                                </Button>
+                                <Button
+                                  onClick={() => {
+                                    setSetupStep('method')
+                                    setVerificationCode('')
+                                  }}
+                                  variant="outline"
+                                  size="sm"
+                                  className="flex-1"
+                                >
+                                  back
+                                </Button>
+                              </div>
+                            </>
+                          )}
+
+                          {setupStep === 'backup' && (
+                            <div className="space-y-4">
+                              <div className="text-center space-y-2">
+                                <h4 className="font-medium text-green-600">mfa enabled successfully!</h4>
+                                <p className="text-sm text-muted-foreground">
+                                  save these backup codes in a secure location
+                                </p>
+                              </div>
+
+                              <div className="space-y-3 p-4 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                                <div className="flex items-center gap-2 text-sm font-medium text-orange-600 dark:text-orange-400">
+                                  <Key className="w-4 h-4" />
+                                  backup codes
+                                </div>
+                                <p className="text-xs text-orange-600 dark:text-orange-400">
+                                  each code can only be used once. store them safely!
+                                </p>
+                                
+                                <div className="grid grid-cols-2 gap-2 p-3 bg-background rounded border font-mono text-xs">
+                                  {backupCodes.map((code, index) => (
+                                    <div key={index} className="text-center py-1">
+                                      {code}
+                                    </div>
+                                  ))}
+                                </div>
+
+                                <div className="flex gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={downloadBackupCodes}
+                                    className="flex-1"
+                                  >
+                                    <Download className="w-3 h-3 mr-1" />
+                                    download
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={copyBackupCodes}
+                                    className="flex-1"
+                                  >
+                                    <Copy className="w-3 h-3 mr-1" />
+                                    copy
+                                  </Button>
+                                </div>
+                              </div>
+
+                              <Button
+                                onClick={completeMfaSetup}
+                                size="sm"
+                                className="w-full"
+                              >
+                                finish setup
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Sign Out */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
                   <div className="flex items-start sm:items-center gap-3">
                     <LogOut className="w-4 h-4 flex-shrink-0 mt-0.5 sm:mt-0" />
@@ -555,6 +1226,11 @@ export function SettingsDialog({ open, onOpenChange }: any) {
       setConfirmArchive(false)
       setShowArchivedChats(false)
       setRestoringChats(new Set())
+      setShowMfaSetup(false)
+      setSetupStep('method')
+      setVerificationCode('')
+      setShowBackupCodes(false)
+      setShowBackupCodesReveal(false)
     } else {
       setActiveSection('general')
     }

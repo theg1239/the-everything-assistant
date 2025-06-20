@@ -53,7 +53,16 @@ export default function AuroraBackground() {
       window.removeEventListener('auroraToggle', handleAuroraToggle as EventListener)
     }
   }, [])
-  if (!preferencesLoaded || !auroraEnabled) {
+
+  if (!preferencesLoaded) {
+    return (
+      <div className="absolute inset-0 bg-background">
+        <div className="absolute inset-0 bg-gradient-to-br from-background via-muted/20 to-background" />
+      </div>
+    )
+  }
+
+  if (!auroraEnabled) {
     return (
       <div className="absolute inset-0 bg-background">
         <div className="absolute inset-0 bg-gradient-to-br from-background via-muted/20 to-background" />

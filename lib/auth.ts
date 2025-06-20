@@ -24,11 +24,21 @@ export const authOptions: NextAuthOptions = {
     strategy: 'database',
   },
   callbacks: {
-    session: ({ session, user }) => {
+    session: async ({ session, user }) => {
       if (session.user) {
         session.user.id = user.id
+        
+        const userData = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: { mfaEnabled: true }
+        })
+        
+        session.requiresMFA = userData?.mfaEnabled || false
       }
       return session
+    },
+    signIn: async ({ user, account, profile }) => {
+      return true
     },
   },
   pages: {

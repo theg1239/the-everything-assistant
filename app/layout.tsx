@@ -9,6 +9,7 @@ import '@/styles/mobile-fixes.css'
 import '@/styles/reddit-mobile.css'
 import { ThemeProvider } from '@/components/theme-provider'
 import { SessionProvider } from '@/components/session-provider'
+import { MFAGate } from '@/components/mfa-gate'
 import { Toaster } from 'sonner'
 import MobileViewportFix from '@/components/mobile-viewport-fix'
 import ScrollToTop from '@/components/scroll-to-top'
@@ -93,7 +94,9 @@ export default function RootLayout({
             </div>
             <MobileViewportFix />
             <ScrollToTop />
-            {children}
+            <MFAGate>
+              {children}
+            </MFAGate>
             <Toaster 
               position="top-right" 
               closeButton
@@ -103,7 +106,7 @@ export default function RootLayout({
                 style: {
                   background: 'hsl(var(--card))',
                   border: '1px solid hsl(var(--border))',
-                  color: 'hsl(var(--car d-foreground))',
+                  color: 'hsl(var(--card-foreground))',
                   borderRadius: '0.75rem',
                   padding: '12px 16px',
                   fontSize: '14px',

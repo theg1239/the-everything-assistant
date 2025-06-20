@@ -5,6 +5,7 @@ declare module 'next-auth' {
     user: {
       id: string
     } & DefaultSession['user']
+    requiresMFA?: boolean
   }
 
   interface User {

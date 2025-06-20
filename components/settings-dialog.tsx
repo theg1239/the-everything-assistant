@@ -31,6 +31,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
   const { data: session } = useSession()
   const [activeSection, setActiveSection] = useState('general')
   const [followUpSuggestions, setFollowUpSuggestions] = useState(true)
+  const [auroraBackground, setAuroraBackground] = useState(true)
   const [theme, setTheme] = useState('system')
   const [isDeleting, setIsDeleting] = useState(false)
   const [isArchiving, setIsArchiving] = useState(false)
@@ -53,6 +54,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
           const data = await response.json()
           const prefs = data.preferences
           setFollowUpSuggestions(prefs.followUpSuggestions ?? true)
+          setAuroraBackground(prefs.auroraBackground ?? true)
         }
       } catch (error) {
         console.error('Error loading preferences:', error)
@@ -95,7 +97,18 @@ export function SettingsDialog({ open, onOpenChange }: any) {
     setFollowUpSuggestions(checked)
     await savePreferences({
       followUpSuggestions: checked,
+      auroraBackground,
     })
+  }
+
+  const handleAuroraBackgroundChange = async (checked: boolean) => {
+    setAuroraBackground(checked)
+    await savePreferences({
+      followUpSuggestions,
+      auroraBackground: checked,
+    })
+    
+    window.dispatchEvent(new CustomEvent('auroraToggle', { detail: { enabled: checked } }))
   }
 
   const menuItems = [
@@ -453,6 +466,35 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                     )}
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        )
+
+      case 'personalization':
+        return (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg md:text-xl font-semibold mb-4">personalization</h3>
+
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="aurora-bg" className="text-sm md:text-base">
+                      aurora background effect
+                    </Label>
+                    <p className="text-xs md:text-sm text-muted-foreground">
+                      display animated aurora background throughout the app
+                    </p>
+                  </div>
+                  <Switch
+                    id="aurora-bg"
+                    checked={auroraBackground}
+                    onCheckedChange={handleAuroraBackgroundChange}
+                    disabled={loadingPreferences}
+                    className="flex-shrink-0"
+                  />
+                </div>
               </div>
             </div>
           </div>

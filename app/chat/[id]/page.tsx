@@ -27,17 +27,15 @@ export default async function ChatPage({ params }: ChatPageProps) {
   const messages = await getMessages(id)
 
   return (
-    <div className="h-screen overflow-hidden bg-transparent">
-      <ChatInterface
-        initialMessages={messages.map(msg => ({
-          id: msg.id,
-          role: msg.role,
-          content: msg.content,
-          toolInvocations: msg.toolInvocations,
-          createdAt: msg.created_at,
-        }))}
-        chatId={id}
-      />
-    </div>
+    <ChatInterface
+      initialMessages={messages.map(msg => ({
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+        toolInvocations: msg.toolInvocations,
+        createdAt: msg.created_at,
+      }))}
+      chatId={id}
+    />
   )
 }

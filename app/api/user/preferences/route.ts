@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
 
     const preferences = (user as any)?.preferences || {
       followUpSuggestions: true,
+      auroraBackground: true,
     }
 
     return NextResponse.json({ preferences })

@@ -29,6 +29,8 @@
     "@radix-ui/react-slot": "latest",
     "@radix-ui/react-switch": "^1.2.5",
     "@radix-ui/react-tooltip": "^1.2.7",
+    "@react-three/drei": "^10.3.0",
+    "@react-three/fiber": "^9.1.2",
     "@sparticuz/chromium": "latest",
     "@tailwindcss/typography": "latest",
     "@types/crypto-js": "^4.2.2",
@@ -57,6 +59,7 @@
     "speakeasy": "^2.0.0",
     "tailwind-merge": "^3.3.0",
     "tailwindcss-animate": "^1.0.7",
+    "three": "^0.177.0",
     "zod": "latest"
   },
   "devDependencies": {

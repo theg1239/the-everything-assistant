@@ -130,8 +130,8 @@ const PureMultimodalInput = ({
       <form onSubmit={onSubmit} className="relative max-w-3xl w-full px-4">
         <div
           className={cn(
-            'relative flex flex-col w-full rounded-2xl bg-background/70 backdrop-blur-sm overflow-hidden transition-all duration-200 border border-slate-800/50',
-            isFocused ? 'border-slate-700/50' : ''
+            'relative flex flex-col w-full rounded-2xl bg-transparent backdrop-blur-md overflow-hidden transition-all duration-200 border border-white/10',
+            isFocused ? 'border-white/20' : ''
           )}
         >
           {' '}

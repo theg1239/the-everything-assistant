@@ -34,13 +34,82 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { useCustomBackground } from '@/hooks/use-custom-background'
+import type { BackgroundType } from '@/components/custom-background'
+import dynamic from 'next/dynamic'
+import { useMemo } from 'react'
+
+const Aurora = dynamic(() => import('@/components/aurora'), {
+  ssr: false,
+  loading: () => null,
+})
+
+const Beams = dynamic(() => import('@/components/beams'), {
+  ssr: false,
+  loading: () => null,
+})
 
 export function SettingsDialog({ open, onOpenChange }: any) {
   const { data: session } = useSession()
+  const { setBackgroundType, toggleBackground } = useCustomBackground()
   const [activeSection, setActiveSection] = useState('general')
   const [followUpSuggestions, setFollowUpSuggestions] = useState(true)
-  const [auroraBackground, setAuroraBackground] = useState(true)
+  const [backgroundConfig, setBackgroundConfig] = useState({
+    type: 'aurora' as BackgroundType,
+    enabled: true
+  })
   const [theme, setTheme] = useState('system')
+
+  const BackgroundPreview = ({ type }: { type: BackgroundType }) => {
+    const beamsComponent = useMemo(() => (
+      <Beams 
+        beamWidth={3}
+        beamHeight={150}
+        beamNumber={6}
+        lightColor="#60a5fa"
+        speed={0.3}
+        noiseIntensity={0.4}
+        scale={1.2}
+        rotation={30}
+      />
+    ), [])
+
+    switch (type) {
+      case 'aurora':
+        return (
+          <div className="relative w-full h-16 rounded-md overflow-hidden bg-black">
+            <Aurora 
+              colorStops={['#5227FF', '#7cff67', '#5227FF']}
+              amplitude={1.2}
+              blend={0.6}
+              speed={0.8}
+            />
+          </div>
+        )
+      case 'beams':
+        return (
+          <div className="relative w-full h-16 rounded-md overflow-hidden bg-black">
+            {beamsComponent}
+          </div>
+        )
+      case 'gradient':
+        return (
+          <div className="relative w-full h-16 rounded-md overflow-hidden">
+            <div className="w-full h-full bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460]" />
+          </div>
+        )
+      case 'solid':
+        return (
+          <div className="relative w-full h-16 rounded-md overflow-hidden">
+            <div className="w-full h-full bg-[#0a0a0a]" />
+          </div>
+        )
+      default:
+        return (
+          <div className="w-full h-16 rounded-md bg-muted/50" />
+        )
+    }
+  }
   const [isDeleting, setIsDeleting] = useState(false)
   const [isArchiving, setIsArchiving] = useState(false)
   const [showArchivedChats, setShowArchivedChats] = useState(false)
@@ -81,7 +150,17 @@ export function SettingsDialog({ open, onOpenChange }: any) {
           const data = await response.json()
           const prefs = data.preferences
           setFollowUpSuggestions(prefs.followUpSuggestions ?? true)
-          setAuroraBackground(prefs.auroraBackground ?? true)
+          
+          // Handle both legacy aurora and new background config
+          if (prefs.backgroundConfig) {
+            setBackgroundConfig(prefs.backgroundConfig)
+          } else if (prefs.auroraBackground !== undefined) {
+            // Legacy aurora preference
+            setBackgroundConfig({
+              type: 'aurora',
+              enabled: prefs.auroraBackground
+            })
+          }
         }
 
         // Load MFA status
@@ -148,18 +227,32 @@ export function SettingsDialog({ open, onOpenChange }: any) {
     setFollowUpSuggestions(checked)
     await savePreferences({
       followUpSuggestions: checked,
-      auroraBackground,
+      backgroundConfig,
     })
   }
 
-  const handleAuroraBackgroundChange = async (checked: boolean) => {
-    setAuroraBackground(checked)
-    await savePreferences({
-      followUpSuggestions,
-      auroraBackground: checked,
-    })
+  const handleBackgroundTypeChange = async (type: BackgroundType) => {
+    const newConfig = { ...backgroundConfig, type }
+    setBackgroundConfig(newConfig)
+    
+    const success = await setBackgroundType(type, backgroundConfig.enabled)
+    if (!success) {
+      // Revert on failure
+      setBackgroundConfig(backgroundConfig)
+      toast.error('Failed to update background preference')
+    }
+  }
 
-    window.dispatchEvent(new CustomEvent('auroraToggle', { detail: { enabled: checked } }))
+  const handleBackgroundToggle = async (enabled: boolean) => {
+    const newConfig = { ...backgroundConfig, enabled }
+    setBackgroundConfig(newConfig)
+    
+    const success = await toggleBackground(enabled)
+    if (!success) {
+      // Revert on failure
+      setBackgroundConfig(backgroundConfig)
+      toast.error('Failed to update background preference')
+    }
   }
 
   const handleMfaToggle = async (enabled: boolean) => {
@@ -730,28 +823,98 @@ export function SettingsDialog({ open, onOpenChange }: any) {
         )
 
       case 'personalization':
+        const backgroundOptions = [
+          {
+            type: 'aurora' as BackgroundType,
+            name: 'Aurora',
+            description: 'Animated aurora borealis effect with flowing colors'
+          },
+          {
+            type: 'beams' as BackgroundType,
+            name: 'Light Beams',
+            description: 'Dynamic light beams with subtle animations'
+          },
+          {
+            type: 'gradient' as BackgroundType,
+            name: 'Gradient',
+            description: 'Smooth color gradient background'
+          },
+          {
+            type: 'solid' as BackgroundType,
+            name: 'Solid Color',
+            description: 'Simple solid color background'
+          }
+        ]
+
         return (
           <div className="space-y-6">
             <div>
               <h3 className="text-lg md:text-xl font-semibold mb-4">personalization</h3>
 
-              <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="aurora-bg" className="text-sm md:text-base">
-                      aurora background effect
-                    </Label>
-                    <p className="text-xs md:text-sm text-muted-foreground">
-                      display animated aurora background throughout the app
-                    </p>
+              <div className="space-y-6">
+                {/* Custom Backgrounds Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Palette className="w-5 h-5 text-primary" />
+                    <h4 className="font-semibold text-base">custom backgrounds</h4>
                   </div>
-                  <Switch
-                    id="aurora-bg"
-                    checked={auroraBackground}
-                    onCheckedChange={handleAuroraBackgroundChange}
-                    disabled={loadingPreferences}
-                    className="flex-shrink-0"
-                  />
+
+                  {/* Background Toggle */}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="background-enabled" className="text-sm md:text-base">
+                        enable custom backgrounds
+                      </Label>
+                      <p className="text-xs md:text-sm text-muted-foreground">
+                        show animated background effects throughout the app
+                      </p>
+                    </div>
+                    <Switch
+                      id="background-enabled"
+                      checked={backgroundConfig.enabled}
+                      onCheckedChange={handleBackgroundToggle}
+                      disabled={loadingPreferences}
+                      className="flex-shrink-0"
+                    />
+                  </div>
+
+                  {backgroundConfig.enabled && (
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium">background style</Label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {backgroundOptions.map((option) => (
+                          <button
+                            key={option.type}
+                            onClick={() => handleBackgroundTypeChange(option.type)}
+                            disabled={loadingPreferences}
+                            className={cn(
+                              "relative p-4 rounded-lg border-2 text-left transition-all duration-200",
+                              "hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20",
+                              backgroundConfig.type === option.type
+                                ? "border-primary bg-primary/5"
+                                : "border-border hover:bg-muted/50"
+                            )}
+                          >
+                            <div className="mb-3 border border-border/50 rounded-md overflow-hidden">
+                              <BackgroundPreview type={option.type} />
+                            </div>
+                            
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <h5 className="font-medium text-sm">{option.name}</h5>
+                                {backgroundConfig.type === option.type && (
+                                  <div className="w-2 h-2 rounded-full bg-primary" />
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground leading-relaxed">
+                                {option.description}
+                              </p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

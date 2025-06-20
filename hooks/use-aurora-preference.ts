@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
+import type { BackgroundConfig } from '@/components/custom-background'
 
 export function useAuroraPreference() {
   const { data: session } = useSession()
@@ -20,7 +21,13 @@ export function useAuroraPreference() {
         if (response.ok) {
           const data = await response.json()
           const prefs = data.preferences
-          setAuroraEnabled(prefs.auroraBackground ?? true)
+          
+          if (prefs.backgroundConfig) {
+            const config = prefs.backgroundConfig as BackgroundConfig
+            setAuroraEnabled(config.type === 'aurora' && config.enabled)
+          } else {
+            setAuroraEnabled(prefs.auroraBackground ?? true)
+          }
         }
       } catch (error) {
         console.error('Error loading aurora preference:', error)
@@ -37,10 +44,17 @@ export function useAuroraPreference() {
       setAuroraEnabled(event.detail.enabled)
     }
 
+    const handleBackgroundToggle = (event: CustomEvent<{ config: BackgroundConfig }>) => {
+      const config = event.detail.config
+      setAuroraEnabled(config.type === 'aurora' && config.enabled)
+    }
+
     window.addEventListener('auroraToggle', handleAuroraToggle as EventListener)
+    window.addEventListener('backgroundToggle', handleBackgroundToggle as EventListener)
 
     return () => {
       window.removeEventListener('auroraToggle', handleAuroraToggle as EventListener)
+      window.removeEventListener('backgroundToggle', handleBackgroundToggle as EventListener)
     }
   }, [])
 

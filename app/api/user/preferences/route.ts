@@ -20,6 +20,13 @@ export async function GET(request: NextRequest) {
       auroraBackground: true,
     }
 
+    if (!preferences.backgroundConfig && preferences.auroraBackground !== undefined) {
+      preferences.backgroundConfig = {
+        type: 'aurora',
+        enabled: preferences.auroraBackground
+      }
+    }
+
     return NextResponse.json({ preferences })
   } catch (error) {
     console.error('Error fetching user preferences:', error)
@@ -34,15 +41,34 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { preferences } = await request.json()
+    const body = await request.json()
 
-    if (!preferences || typeof preferences !== 'object') {
+    // Handle both old and new formats
+    let preferencesToUpdate: any = {}
+
+    if (body.preferences) {
+      // Old format: { preferences: { followUpSuggestions: true, auroraBackground: true } }
+      preferencesToUpdate = body.preferences
+    } else if (body.backgroundConfig) {
+      // New format: { backgroundConfig: { type: 'aurora', enabled: true } }
+      // Get existing preferences first
+      const existingUser = await prisma.user.findUnique({
+        where: { email: session.user.email },
+      })
+      
+      const existingPrefs = (existingUser as any)?.preferences || {}
+      preferencesToUpdate = {
+        ...existingPrefs,
+        backgroundConfig: body.backgroundConfig
+      }
+    } else {
       return NextResponse.json({ error: 'Invalid preferences data' }, { status: 400 })
     }
+
     const updatedUser = await prisma.user.update({
       where: { email: session.user.email },
       data: {
-        preferences,
+        preferences: preferencesToUpdate,
         updated_at: new Date(),
       } as any,
     })

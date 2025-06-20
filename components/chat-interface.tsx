@@ -812,7 +812,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
             <div
               className="absolute inset-0 pointer-events-none"
               style={{
-                background: 'linear-gradient(to bottom, transparent, rgb(2, 6, 23) 50%)',
+                background: 'linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.1) 70%, rgba(0, 0, 0, 0.2) 100%)',
                 borderTop: 'none',
               }}
             ></div>

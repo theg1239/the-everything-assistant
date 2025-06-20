@@ -13,7 +13,7 @@ import { MFAGate } from '@/components/mfa-gate'
 import { Toaster } from 'sonner'
 import MobileViewportFix from '@/components/mobile-viewport-fix'
 import ScrollToTop from '@/components/scroll-to-top'
-import AuroraBackground from '@/components/aurora-background'
+import CustomBackground from '@/components/custom-background'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -90,7 +90,7 @@ export default function RootLayout({
             disableTransitionOnChange
           >
             <div className="fixed inset-0 w-full h-full z-[-10]">
-              <AuroraBackground />
+              <CustomBackground />
             </div>
             <MobileViewportFix />
             <ScrollToTop />

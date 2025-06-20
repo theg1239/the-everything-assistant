@@ -6,6 +6,12 @@ import { scrapeFacultyInfo } from './scrapers/faculty-scraper'
 import { scrapePlacementInfo } from './scrapers/placement-scraper'
 import { getMessMenu, formatMenuItems, getAvailableDateRange } from './scrapers/mess-menu-scraper'
 import { getCourseCode } from './question-generator'
+import { 
+  findFullCourseName, 
+  searchCoursesByName, 
+  getAllCourseMatches, 
+  recognizeCourseInText 
+} from './course-map'
 
 async function searchRedditKnowledge(query: string, limit: number = 10) {
   try {
@@ -557,6 +563,50 @@ async function handleIntelligentCoursePage(params: {
   }
 }
 
+export const courseUtils = {
+  findFullCourseName,
+  searchCoursesByName,
+  getAllCourseMatches,
+  recognizeCourseInText,
+  
+  getCourseInfo: (input: string) => {
+    const matches = getAllCourseMatches(input)
+    if (matches.length > 0) {
+      return {
+        success: true,
+        query: input,
+        matches: matches.map(m => ({ code: m.code, name: m.name, matchType: m.matchType })),
+        primary: matches[0]
+      }
+    }
+    return {
+      success: false,
+      query: input,
+      matches: [],
+      primary: null
+    }
+  },
+
+  recognizeCoursesInText: (text: string) => {
+    const recognized = recognizeCourseInText(text)
+    const acronymMatches = []
+    
+    const words = text.toUpperCase().split(/\s+/)
+    for (const word of words) {
+      const matches = getAllCourseMatches(word)
+      if (matches.length > 0) {
+        acronymMatches.push({ original: word, matches })
+      }
+    }
+    
+    return {
+      directRecognitions: recognized,
+      acronymMatches,
+      totalFound: recognized.length + acronymMatches.length
+    }
+  }
+}
+
 export function createVITTools() {
   return {
     findPastPapers: tool({
@@ -575,7 +625,14 @@ export function createVITTools() {
 
           if (!/^[A-Z]{4}\d{3}[A-Z]?$/.test(resolvedCourseCode)) {
             const mappedCode = getCourseCode(courseCode)
-            if (mappedCode) resolvedCourseCode = mappedCode
+            if (mappedCode) {
+              resolvedCourseCode = mappedCode
+            } else {
+              const courseMatches = getAllCourseMatches(courseCode)
+              if (courseMatches.length > 0) {
+                resolvedCourseCode = courseMatches[0].code
+              }
+            }
           }
 
           const results = await Promise.allSettled([
@@ -1065,5 +1122,7 @@ export function createVITTools() {
         }
       },
     }),
+
+
   }
 }

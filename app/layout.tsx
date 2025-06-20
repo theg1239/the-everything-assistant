@@ -94,7 +94,26 @@ export default function RootLayout({
             <MobileViewportFix />
             <ScrollToTop />
             {children}
-            <Toaster position="top-right" />
+            <Toaster 
+              position="top-right" 
+              closeButton
+              richColors
+              theme="dark"
+              toastOptions={{
+                style: {
+                  background: 'hsl(var(--card))',
+                  border: '1px solid hsl(var(--border))',
+                  color: 'hsl(var(--car d-foreground))',
+                  borderRadius: '0.75rem',
+                  padding: '12px 16px',
+                  fontSize: '14px',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                  backdropFilter: 'blur(8px)',
+                  maxWidth: '400px',
+                },
+                className: 'sonner-toast',
+              }}
+            />
           </ThemeProvider>
         </SessionProvider>
       </body>

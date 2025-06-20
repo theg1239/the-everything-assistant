@@ -35,9 +35,7 @@ export function generateBackupCodes(count: number = 10): string[] {
 }
 
 export function hashBackupCodes(codes: string[]): string[] {
-  return codes.map(code => 
-    createHash('sha256').update(code).digest('hex')
-  )
+  return codes.map(code => createHash('sha256').update(code).digest('hex'))
 }
 
 export function verifyBackupCode(code: string, hashedCodes: string[]): boolean {
@@ -63,9 +61,10 @@ export async function sendEmailCode(
       },
     })
 
-    const subject = type === 'setup' 
-      ? 'The Everything Assistant - MFA Setup Verification'
-      : 'The Everything Assistant - Login Verification'
+    const subject =
+      type === 'setup'
+        ? 'The Everything Assistant - MFA Setup Verification'
+        : 'The Everything Assistant - Login Verification'
 
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -104,28 +103,32 @@ export async function sendEmailCode(
 
 const attemptCache = new Map<string, { count: number; lastAttempt: number }>()
 
-export function checkRateLimit(identifier: string, maxAttempts: number = 5, windowMs: number = 15 * 60 * 1000): boolean {
+export function checkRateLimit(
+  identifier: string,
+  maxAttempts: number = 5,
+  windowMs: number = 15 * 60 * 1000
+): boolean {
   const now = Date.now()
   const attempts = attemptCache.get(identifier)
-  
+
   if (!attempts) {
     attemptCache.set(identifier, { count: 1, lastAttempt: now })
     return true
   }
-  
+
   if (now - attempts.lastAttempt > windowMs) {
     attemptCache.set(identifier, { count: 1, lastAttempt: now })
     return true
   }
-  
+
   if (attempts.count >= maxAttempts) {
     return false
   }
-  
+
   attempts.count++
   attempts.lastAttempt = now
   attemptCache.set(identifier, attempts)
-  
+
   return true
 }
 
@@ -137,13 +140,12 @@ export async function logSecurityEvent(
 ) {
   try {
     const { prisma } = await import('./prisma')
-    
-    const ipAddress = request?.headers.get('x-forwarded-for') || 
-                     request?.headers.get('x-real-ip') || 
-                     'unknown'
-    
+
+    const ipAddress =
+      request?.headers.get('x-forwarded-for') || request?.headers.get('x-real-ip') || 'unknown'
+
     const userAgent = request?.headers.get('user-agent') || 'unknown'
-    
+
     await prisma.securityLog.create({
       data: {
         userId,
@@ -151,7 +153,7 @@ export async function logSecurityEvent(
         method: typeof details.method === 'string' ? details.method : null,
         ipAddress: Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
         userAgent,
-      }
+      },
     })
   } catch (error) {
     console.error('Error logging security event:', error)

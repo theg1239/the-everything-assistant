@@ -35,7 +35,7 @@ export function MFAProvider({ children }: { children: React.ReactNode }) {
       setIsCheckingMFA(false)
       setIsMFAVerified(true)
       return
-    }    // Check if we have a stored MFA verification in sessionStorage
+    } // Check if we have a stored MFA verification in sessionStorage
     const storedMFAVerification = sessionStorage.getItem(`mfa_verified_${session.user.id}`)
     if (storedMFAVerification) {
       const verificationData = JSON.parse(storedMFAVerification)
@@ -56,13 +56,16 @@ export function MFAProvider({ children }: { children: React.ReactNode }) {
 
   const setMFAVerified = (verified: boolean) => {
     setIsMFAVerified(verified)
-    
+
     if (verified && session?.user?.id) {
       // Store MFA verification in sessionStorage (persists until browser session ends)
-      sessionStorage.setItem(`mfa_verified_${session.user.id}`, JSON.stringify({
-        verified: true,
-        sessionId: session.user.id // Additional validation
-      }))
+      sessionStorage.setItem(
+        `mfa_verified_${session.user.id}`,
+        JSON.stringify({
+          verified: true,
+          sessionId: session.user.id, // Additional validation
+        })
+      )
     } else if (session?.user?.id) {
       // Remove verification if setting to false
       sessionStorage.removeItem(`mfa_verified_${session.user.id}`)
@@ -70,12 +73,14 @@ export function MFAProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <MFAContext.Provider value={{
-      isMFAVerified,
-      setMFAVerified,
-      requiresMFA,
-      isCheckingMFA
-    }}>
+    <MFAContext.Provider
+      value={{
+        isMFAVerified,
+        setMFAVerified,
+        requiresMFA,
+        isCheckingMFA,
+      }}
+    >
       {children}
     </MFAContext.Provider>
   )

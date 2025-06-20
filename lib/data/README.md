@@ -38,7 +38,7 @@ Your content here...
   `,
   metadata: {
     // Optional metadata
-  }
+  },
 }
 ```
 
@@ -87,11 +87,7 @@ const context = getCurrentVITContext()
 ### Advanced Usage
 
 ```typescript
-import { 
-  getAllContextData, 
-  getContextDataBySection,
-  getHighPriorityContextData 
-} from '@/lib/data'
+import { getAllContextData, getContextDataBySection, getHighPriorityContextData } from '@/lib/data'
 
 // Get all sections
 const allData = getAllContextData()
@@ -106,15 +102,18 @@ const importantData = getHighPriorityContextData()
 ## 📅 Update Schedule
 
 ### Daily
+
 - Check for new university announcements
 - Update time-sensitive information
 
-### Weekly  
+### Weekly
+
 - Review and update mess menu
 - Check for working Saturday announcements
 - Update important upcoming dates
 
 ### Monthly
+
 - Validate all data for accuracy
 - Update academic calendar if needed
 - Add new holidays or schedule changes
@@ -148,7 +147,7 @@ The context system is automatically integrated into:
 If context data isn't appearing:
 
 1. Check the `lastUpdated` date format (YYYY-MM-DD)
-2. Ensure the section is added to `getAllContextData()` 
+2. Ensure the section is added to `getAllContextData()`
 3. Verify the `priority` field is set correctly
 4. Check for TypeScript compilation errors
 

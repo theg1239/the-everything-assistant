@@ -4,7 +4,8 @@ export const currentStatus: ContextData = {
   section: 'current-status',
   title: 'Current Semester Status & Latest Updates',
   lastUpdated: '2025-06-20',
-  priority: 'high',  content: `
+  priority: 'high',
+  content: `
 CURRENT SEMESTER STATUS:
 - Active Period: Summer Break / Fall 2025-26 Registration Phase
 - Upcoming Semester: Fall Semester 2025-26
@@ -66,7 +67,7 @@ Important Reminders:
     nextMajorDate: '2025-06-28', // Course registration
     nextMajorEvent: 'Course Registration',
     classesStartDate: '2025-07-09',
-    upcomingFest: 'Gravitas\'25 (Sep 26-28, 2025)',
-    academicYear: '2025-26'
-  }
+    upcomingFest: "Gravitas'25 (Sep 26-28, 2025)",
+    academicYear: '2025-26',
+  },
 }

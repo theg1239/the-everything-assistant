@@ -82,6 +82,6 @@ Re-examination Policy:
     cat1Dates: 'August 17-23, 2025',
     cat2Dates: 'October 5-11, 2025',
     fatDates: 'November 17 - December 4, 2025',
-    attendanceRequirement: '75%'
-  }
+    attendanceRequirement: '75%',
+  },
 }

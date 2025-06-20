@@ -27,12 +27,12 @@ export const authOptions: NextAuthOptions = {
     session: async ({ session, user }) => {
       if (session.user) {
         session.user.id = user.id
-        
+
         const userData = await prisma.user.findUnique({
           where: { id: user.id },
-          select: { mfaEnabled: true }
+          select: { mfaEnabled: true },
         })
-        
+
         session.requiresMFA = userData?.mfaEnabled || false
       }
       return session

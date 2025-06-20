@@ -66,6 +66,6 @@ export const holidays: ContextData = {
 - Library may have reduced hours during holidays
 `,
   metadata: {
-    attendanceMinimum: '75%'
-  }
+    attendanceMinimum: '75%',
+  },
 }

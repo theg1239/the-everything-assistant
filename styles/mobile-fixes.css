@@ -22,7 +22,7 @@ body {
     overflow: visible !important;
     isolation: isolate !important;
   }
-  
+
   .sidebar-mobile-scroll {
     position: relative !important;
     overflow-y: auto !important;
@@ -33,12 +33,12 @@ body {
     height: calc(100vh - 200px) !important;
     max-height: calc(100vh - 200px) !important;
   }
-  
+
   .sidebar-mobile-scroll,
   .sidebar-scroll-area {
     overflow-y: auto !important;
   }
-  
+
   .sidebar-mobile-scroll * {
     pointer-events: auto !important;
   }

@@ -49,12 +49,7 @@ export async function DELETE(request: NextRequest) {
       },
     })
 
-    await logSecurityEvent(
-      user.id,
-      'MFA_DISABLED',
-      { previousMethod: user.mfaMethod },
-      request
-    )
+    await logSecurityEvent(user.id, 'MFA_DISABLED', { previousMethod: user.mfaMethod }, request)
 
     return NextResponse.json({
       success: true,
@@ -62,10 +57,7 @@ export async function DELETE(request: NextRequest) {
     })
   } catch (error) {
     console.error('MFA disable error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
@@ -97,9 +89,6 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('MFA status check error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

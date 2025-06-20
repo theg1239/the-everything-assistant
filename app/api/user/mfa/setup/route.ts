@@ -14,7 +14,7 @@ const prisma = new PrismaClient()
 const createEmailTransporter = () => {
   console.log('SMTP_EMAIL exists:', !!process.env.SMTP_EMAIL)
   console.log('SMTP_APP_PASSWORD exists:', !!process.env.SMTP_APP_PASSWORD)
-  
+
   if (!process.env.SMTP_EMAIL || !process.env.SMTP_APP_PASSWORD) {
     throw new Error('Missing SMTP credentials in environment variables')
   }
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { method } = await request.json()
-    
+
     if (!method || !['email', 'authenticator'].includes(method)) {
       return NextResponse.json({ error: 'Invalid method' }, { status: 400 })
     }
@@ -53,12 +53,16 @@ export async function POST(request: NextRequest) {
 
     if (user.mfaEnabled) {
       return NextResponse.json({ error: 'MFA already enabled' }, { status: 400 })
-    }    if (method === 'email') {
+    }
+    if (method === 'email') {
       // Check if SMTP is configured
       if (!isSMTPConfigured()) {
-        return NextResponse.json({ 
-          error: 'Email MFA is not available. SMTP configuration is required.' 
-        }, { status: 400 })
+        return NextResponse.json(
+          {
+            error: 'Email MFA is not available. SMTP configuration is required.',
+          },
+          { status: 400 }
+        )
       }
 
       if (!user.email) {
@@ -67,9 +71,9 @@ export async function POST(request: NextRequest) {
 
       const verificationCode = crypto.randomInt(100000, 999999).toString()
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
-      
+
       const hashedCode = await bcrypt.hash(verificationCode, 12)
-      
+
       await prisma.user.update({
         where: { id: user.id },
         data: {
@@ -81,10 +85,10 @@ export async function POST(request: NextRequest) {
 
       try {
         const transporter = createEmailTransporter()
-        
+
         await transporter.verify()
         console.log('SMTP connection verified successfully')
-        
+
         const mailOptions = {
           from: `"The Everything Assistant" <${process.env.SMTP_EMAIL}>`,
           to: user.email,
@@ -116,15 +120,14 @@ export async function POST(request: NextRequest) {
 
         const result = await transporter.sendMail(mailOptions)
         console.log('Email sent successfully:', result.messageId)
-        
-        return NextResponse.json({ 
+
+        return NextResponse.json({
           success: true,
-          message: 'Verification code sent to your email' 
+          message: 'Verification code sent to your email',
         })
-        
       } catch (emailError) {
         console.error('Email sending error:', emailError)
-        
+
         await prisma.user.update({
           where: { id: user.id },
           data: {
@@ -133,13 +136,12 @@ export async function POST(request: NextRequest) {
             tempMfaExpires: null,
           },
         })
-        
+
         return NextResponse.json(
           { error: 'Failed to send verification email. Please check your email configuration.' },
           { status: 500 }
         )
       }
-      
     } else if (method === 'authenticator') {
       const secret = speakeasy.generateSecret({
         name: `everything assistant (${user.email})`,
@@ -165,12 +167,8 @@ export async function POST(request: NextRequest) {
         manualEntryKey: secret.base32,
       })
     }
-
   } catch (error) {
     console.error('MFA setup error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

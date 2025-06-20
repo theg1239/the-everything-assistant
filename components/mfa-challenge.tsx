@@ -47,7 +47,9 @@ export function MFAChallenge() {
     if (!code.trim()) return
 
     if (isBackupMode && mfaStatus && mfaStatus.backupCodeCount === 0) {
-      toast.error('No backup codes available. Please use your authenticator app or contact support.')
+      toast.error(
+        'No backup codes available. Please use your authenticator app or contact support.'
+      )
       return
     }
 
@@ -58,11 +60,7 @@ export function MFAChallenge() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(
-          isBackupMode 
-            ? { backupCode: code.trim() }
-            : { code: code.trim() }
-        ),
+        body: JSON.stringify(isBackupMode ? { backupCode: code.trim() } : { code: code.trim() }),
       })
 
       const data = await response.json()
@@ -83,8 +81,9 @@ export function MFAChallenge() {
       setCode('')
     } finally {
       setIsLoading(false)
-    }  }
-  
+    }
+  }
+
   const toggleMode = () => {
     setIsBackupMode(!isBackupMode)
     setCode('')
@@ -93,7 +92,9 @@ export function MFAChallenge() {
   if (!mfaStatus) {
     return (
       <div className="min-h-screen bg-transparent flex items-center justify-center p-4">
-        <div className="text-4xl font-light text-white drop-shadow-lg">the everything assistant</div>
+        <div className="text-4xl font-light text-white drop-shadow-lg">
+          the everything assistant
+        </div>
       </div>
     )
   }
@@ -110,29 +111,30 @@ export function MFAChallenge() {
           <CardHeader className="text-center space-y-4">
             <CardTitle className="text-2xl font-light text-white drop-shadow-lg">
               verify your identity
-            </CardTitle>            <CardDescription className="text-slate-200">
-              {isBackupMode 
+            </CardTitle>{' '}
+            <CardDescription className="text-slate-200">
+              {isBackupMode
                 ? 'enter your backup code'
-                : mfaStatus.mfaMethod === 'email' 
+                : mfaStatus.mfaMethod === 'email'
                   ? 'enter the verification code sent to your email'
-                  : 'enter the code from your authenticator app'
-              }
+                  : 'enter the code from your authenticator app'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <form onSubmit={handleVerifyCode} className="space-y-4">
-              <div>                <Input
+              <div>
+                {' '}
+                <Input
                   type="text"
-                  placeholder={isBackupMode ? "Enter backup code" : "Enter verification code"}
+                  placeholder={isBackupMode ? 'Enter backup code' : 'Enter verification code'}
                   value={code}
-                  onChange={(e) => setCode(e.target.value)}
+                  onChange={e => setCode(e.target.value)}
                   className="bg-slate-800/50 border-slate-600 text-white placeholder-slate-400 text-center text-lg tracking-widest"
                   maxLength={isBackupMode ? 20 : 6}
                   disabled={isLoading}
                   autoFocus
                 />
               </div>
-              
               <Button
                 type="submit"
                 className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 shadow-lg hover:shadow-xl transition-all duration-200"
@@ -140,7 +142,9 @@ export function MFAChallenge() {
                 disabled={isLoading || !code.trim()}
               >
                 {isLoading ? 'verifying...' : 'verify'}
-              </Button>            </form>            <div className="text-center">
+              </Button>{' '}
+            </form>{' '}
+            <div className="text-center">
               <Button
                 variant="ghost"
                 onClick={toggleMode}
@@ -149,11 +153,11 @@ export function MFAChallenge() {
               >
                 {isBackupMode ? 'use authenticator instead' : 'use backup code instead'}
               </Button>
-            </div>            <div className="text-xs text-slate-400 text-center">
-              {isBackupMode 
+            </div>{' '}
+            <div className="text-xs text-slate-400 text-center">
+              {isBackupMode
                 ? 'having trouble? try using your authenticator app instead'
-                : `having trouble? check your ${mfaStatus.mfaMethod === 'email' ? 'email' : 'authenticator app'} for the latest code`
-              }
+                : `having trouble? check your ${mfaStatus.mfaMethod === 'email' ? 'email' : 'authenticator app'} for the latest code`}
             </div>
           </CardContent>
         </Card>

@@ -94,11 +94,9 @@ export default function RootLayout({
             </div>
             <MobileViewportFix />
             <ScrollToTop />
-            <MFAGate>
-              {children}
-            </MFAGate>
-            <Toaster 
-              position="top-right" 
+            <MFAGate>{children}</MFAGate>
+            <Toaster
+              position="top-right"
               closeButton
               richColors
               theme="dark"

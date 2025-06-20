@@ -46,6 +46,6 @@ export const workingSaturdays: ContextData = {
   metadata: {
     nextWorkingSaturday: '2025-01-25',
     totalWorkingSaturdays: 5,
-    currentSemester: 'Winter 2024-25'
-  }
+    currentSemester: 'Winter 2024-25',
+  },
 }

@@ -10,7 +10,7 @@ import {
   generateEmailCode,
   sendEmailCode,
   checkRateLimit,
-  logSecurityEvent
+  logSecurityEvent,
 } from '@/lib/mfa'
 
 export async function PATCH(request: NextRequest) {
@@ -21,14 +21,17 @@ export async function PATCH(request: NextRequest) {
     }
 
     const { newMethod, verificationCode } = await request.json()
-    
+
     if (!newMethod || !['email', 'authenticator'].includes(newMethod)) {
       return NextResponse.json({ error: 'Invalid method' }, { status: 400 })
     }
 
     const rateLimitKey = `mfa-method-${session.user.email}`
     if (!checkRateLimit(rateLimitKey, 5, 15 * 60 * 1000)) {
-      return NextResponse.json({ error: 'Too many attempts. Please try again later.' }, { status: 429 })
+      return NextResponse.json(
+        { error: 'Too many attempts. Please try again later.' },
+        { status: 429 }
+      )
     }
 
     const user = await prisma.user.findUnique({
@@ -75,10 +78,15 @@ export async function PATCH(request: NextRequest) {
       }
 
       if (!isValidCode) {
-        await logSecurityEvent(user.id, 'MFA_METHOD_CHANGE_FAILED', { 
-          newMethod,
-          reason: 'Invalid verification code'
-        }, request)
+        await logSecurityEvent(
+          user.id,
+          'MFA_METHOD_CHANGE_FAILED',
+          {
+            newMethod,
+            reason: 'Invalid verification code',
+          },
+          request
+        )
         return NextResponse.json({ error: 'Invalid verification code' }, { status: 400 })
       }
 
@@ -93,10 +101,15 @@ export async function PATCH(request: NextRequest) {
         },
       })
 
-      await logSecurityEvent(user.id, 'MFA_METHOD_CHANGED', { 
-        oldMethod: user.mfaMethod,
-        newMethod 
-      }, request)
+      await logSecurityEvent(
+        user.id,
+        'MFA_METHOD_CHANGED',
+        {
+          oldMethod: user.mfaMethod,
+          newMethod,
+        },
+        request
+      )
 
       return NextResponse.json({
         success: true,
@@ -107,9 +120,9 @@ export async function PATCH(request: NextRequest) {
     if (newMethod === 'email') {
       const verificationCode = generateEmailCode()
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000)
-      
+
       const hashedCode = await bcrypt.hash(verificationCode, 12)
-      
+
       await prisma.user.update({
         where: { id: user.id },
         data: {
@@ -120,16 +133,15 @@ export async function PATCH(request: NextRequest) {
       })
 
       const emailSent = await sendEmailCode(user.email!, verificationCode, 'setup')
-      
+
       if (!emailSent) {
         return NextResponse.json({ error: 'Failed to send verification email' }, { status: 500 })
       }
-      
-      return NextResponse.json({ 
+
+      return NextResponse.json({
         success: true,
-        message: 'Verification code sent to your email' 
+        message: 'Verification code sent to your email',
       })
-      
     } else if (newMethod === 'authenticator') {
       const secret = generateTOTPSecret()
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
@@ -152,12 +164,8 @@ export async function PATCH(request: NextRequest) {
         manualEntryKey: secret,
       })
     }
-
   } catch (error) {
     console.error('MFA method change error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

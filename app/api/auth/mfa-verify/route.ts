@@ -11,11 +11,11 @@ export async function POST(request: Request) {
     }
 
     const { code, backupCode } = await request.json()
-    console.log('MFA Verify Request:', { 
-      hasCode: !!code, 
+    console.log('MFA Verify Request:', {
+      hasCode: !!code,
       hasBackupCode: !!backupCode,
       codeLength: code?.length,
-      backupCodeLength: backupCode?.length
+      backupCodeLength: backupCode?.length,
     })
 
     const user = await prisma.user.findUnique({
@@ -33,34 +33,38 @@ export async function POST(request: Request) {
       mfaEnabled: user?.mfaEnabled,
       mfaMethod: user?.mfaMethod,
       hasSecret: !!user?.mfaSecret,
-      backupCodeCount: user?.backupCodes?.length
+      backupCodeCount: user?.backupCodes?.length,
     })
 
     if (!user || !user.mfaEnabled) {
       return NextResponse.json({ error: 'MFA not enabled' }, { status: 400 })
-    }    let isValid = false
+    }
+    let isValid = false
     let message = ''
 
     if (backupCode) {
       console.log('Verifying backup code...')
       const hashedBackupCodes = user.backupCodes
       console.log('Available backup codes count:', hashedBackupCodes.length)
-      
+
       const isValidBackupCode = verifyBackupCode(backupCode, hashedBackupCodes)
       console.log('Backup code verification result:', isValidBackupCode)
 
       if (isValidBackupCode) {
         console.log('Backup code verified successfully')
         isValid = true
-        
-        const hashedInput = require('crypto').createHash('sha256').update(backupCode.toUpperCase()).digest('hex')
+
+        const hashedInput = require('crypto')
+          .createHash('sha256')
+          .update(backupCode.toUpperCase())
+          .digest('hex')
         const updatedBackupCodes = hashedBackupCodes.filter(code => code !== hashedInput)
-        
+
         await prisma.user.update({
           where: { id: user.id },
-          data: { backupCodes: updatedBackupCodes }
+          data: { backupCodes: updatedBackupCodes },
         })
-        
+
         const remainingCodes = updatedBackupCodes.length
         message = `Backup code used successfully. ${remainingCodes} backup codes remaining.`
       } else {
@@ -74,23 +78,26 @@ export async function POST(request: Request) {
         console.log('TOTP verification result:', isValid)
       } else if (user.mfaMethod === 'email') {
         console.log('Email MFA detected')
-        return NextResponse.json({ error: 'Email MFA verification not yet implemented for login' }, { status: 400 })
+        return NextResponse.json(
+          { error: 'Email MFA verification not yet implemented for login' },
+          { status: 400 }
+        )
       } else {
         console.log('No valid MFA method found')
       }
     } else {
       console.log('No code or backup code provided')
-    }console.log('Final validation - isValid:', isValid)
-    
+    }
+    console.log('Final validation - isValid:', isValid)
+
     if (!isValid) {
       return NextResponse.json({ error: 'Invalid verification code' }, { status: 400 })
     }
 
-    return NextResponse.json({ 
-      success: true, 
-      message: message || 'MFA verification successful' 
+    return NextResponse.json({
+      success: true,
+      message: message || 'MFA verification successful',
     })
-
   } catch (error) {
     console.error('MFA verification error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

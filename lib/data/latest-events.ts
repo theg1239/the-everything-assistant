@@ -70,10 +70,10 @@ Action Items for Students:
 `,
   metadata: {
     trendingEvent: 'Course Allocation Week',
-    nextBigEvent: 'Gravitas\'25',
+    nextBigEvent: "Gravitas'25",
     urgentDeadline: 'Course Registration - June 28, 2025',
     campusLife: 'Summer Session Active',
     lastMajorAnnouncement: 'Fall 2025-26 Academic Calendar Released',
-    updateFrequency: 'Weekly'
-  }
+    updateFrequency: 'Weekly',
+  },
 }

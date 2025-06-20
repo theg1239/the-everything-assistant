@@ -1,7 +1,6 @@
 import { COURSE_MAP } from './course-map'
 import { getCurrentVITContext } from './data/context-integration'
 
-
 export const VIT_SYSTEM_PROMPT = `hey there! i'm your friendly ai assistant for vit vellore, and i'm here to help make your college life easier!
 
 ## CURRENT DATE & TIME

@@ -1,134 +1,134 @@
 // Common acronyms and alternative course codes
 export const COURSE_ACRONYMS: { [key: string]: string[] } = {
   // Data Structures and Algorithms
-  'DSA': ['BCSE202L', 'BITE201L', 'ISWE102L', 'CSI2002'],
+  DSA: ['BCSE202L', 'BITE201L', 'ISWE102L', 'CSI2002'],
   'DATA STRUCTURES': ['BCSE202L', 'BITE201L', 'ISWE102L', 'CSI2002'],
-  'ALGORITHMS': ['BCSE202L', 'BCSE204L', 'CSI2003'],
-  
+  ALGORITHMS: ['BCSE202L', 'BCSE204L', 'CSI2003'],
+
   // Digital System Design
-  'DSD': ['BECE102L'],
+  DSD: ['BECE102L'],
   'DIGITAL DESIGN': ['BECE102L'],
-  
+
   // Operating Systems
-  'OS': ['BCSE303L', 'BITE303L', 'ISWE204L'],
+  OS: ['BCSE303L', 'BITE303L', 'ISWE204L'],
   'OPERATING SYSTEM': ['BCSE303L', 'BITE303L', 'ISWE204L'],
-  
+
   // Database Systems
-  'DBMS': ['BCSE302L', 'BITE302L', 'ISWE103L'],
-  'DATABASE': ['BCSE302L', 'BITE302L', 'ISWE103L'],
-  
+  DBMS: ['BCSE302L', 'BITE302L', 'ISWE103L'],
+  DATABASE: ['BCSE302L', 'BITE302L', 'ISWE103L'],
+
   // Computer Networks
-  'CN': ['BCSE308L', 'BITE305L', 'UCSC203L'],
-  'NETWORKS': ['BCSE308L', 'BITE305L', 'UCSC203L'],
+  CN: ['BCSE308L', 'BITE305L', 'UCSC203L'],
+  NETWORKS: ['BCSE308L', 'BITE305L', 'UCSC203L'],
   'COMPUTER NETWORKS': ['BCSE308L', 'BITE305L', 'UCSC203L'],
-  
+
   // Software Engineering
-  'SE': ['BCSE301L', 'BITE307L', 'ISWE101L'],
+  SE: ['BCSE301L', 'BITE307L', 'ISWE101L'],
   'SOFTWARE ENGINEERING': ['BCSE301L', 'BITE307L', 'ISWE101L'],
-  
+
   // Machine Learning
-  'ML': ['BCSE209L', 'BITE410L', 'CSE4020'],
+  ML: ['BCSE209L', 'BITE410L', 'CSE4020'],
   'MACHINE LEARNING': ['BCSE209L', 'BITE410L', 'CSE4020'],
-  
+
   // Artificial Intelligence
-  'AI': ['BCSE306L', 'BITE308L', 'BMEE407L', 'CBS3004'],
+  AI: ['BCSE306L', 'BITE308L', 'BMEE407L', 'CBS3004'],
   'ARTIFICIAL INTELLIGENCE': ['BCSE306L', 'BITE308L', 'BMEE407L', 'CBS3004'],
-  
+
   // Computer Architecture
-  'CA': ['BCSE205L', 'BITE301L', 'ISWE301L', 'CBS1004'],
+  CA: ['BCSE205L', 'BITE301L', 'ISWE301L', 'CBS1004'],
   'COMPUTER ARCHITECTURE': ['BCSE205L', 'BITE301L', 'ISWE301L', 'CBS1004'],
-  'COA': ['BCSE205L', 'BITE301L', 'ISWE301L', 'CBS1004'],
-  
+  COA: ['BCSE205L', 'BITE301L', 'ISWE301L', 'CBS1004'],
+
   // Theory of Computation
-  'TOC': ['BCSE304L', 'BITE306L', 'ISWE203L'],
+  TOC: ['BCSE304L', 'BITE306L', 'ISWE203L'],
   'THEORY OF COMPUTATION': ['BCSE304L', 'BITE306L', 'ISWE203L'],
-  
+
   // Compiler Design
-  'CD': ['BCSE307L', 'CSI2005'],
-  'COMPILER': ['BCSE307L', 'CSI2005'],
+  CD: ['BCSE307L', 'CSI2005'],
+  COMPILER: ['BCSE307L', 'CSI2005'],
   'COMPILER DESIGN': ['BCSE307L', 'CSI2005'],
-  
+
   // Web Technologies
-  'WT': ['BITE304L', 'ISWE206L'],
+  WT: ['BITE304L', 'ISWE206L'],
   'WEB TECH': ['BITE304L', 'ISWE206L'],
   'WEB TECHNOLOGIES': ['BITE304L', 'ISWE206L'],
-  
+
   // Data Mining
-  'DM': ['BCSE208L', 'BITE312E'],
+  DM: ['BCSE208L', 'BITE312E'],
   'DATA MINING': ['BCSE208L', 'BITE312E'],
-  
+
   // Cryptography and Network Security
-  'CNS': ['BCSE309L', 'BECE411L'],
-  'CRYPTOGRAPHY': ['BCSE309L', 'BECE411L'],
+  CNS: ['BCSE309L', 'BECE411L'],
+  CRYPTOGRAPHY: ['BCSE309L', 'BECE411L'],
   'NETWORK SECURITY': ['BCSE309L', 'BECE411L'],
-  
+
   // Digital Signal Processing
-  'DSP': ['BECE301L'],
+  DSP: ['BECE301L'],
   'SIGNAL PROCESSING': ['BECE301L', 'BEVD203L'],
-  
+
   // VLSI Design
-  'VLSI': ['BECE303L'],
+  VLSI: ['BECE303L'],
   'VLSI DESIGN': ['BECE303L'],
-  
+
   // Object Oriented Programming
-  'OOP': ['BCSE102L', 'ICSE102L'],
-  'OOPS': ['BCSE102L', 'ICSE102L'],
+  OOP: ['BCSE102L', 'ICSE102L'],
+  OOPS: ['BCSE102L', 'ICSE102L'],
   'OBJECT ORIENTED': ['BCSE102L', 'ICSE102L', 'BITE404E'],
-  
+
   // Human Computer Interaction
-  'HCI': ['BITE311L'],
+  HCI: ['BITE311L'],
   'HUMAN COMPUTER INTERACTION': ['BITE311L'],
-  
+
   // Information Security
-  'IS': ['BCSE317L', 'CBS3002'],
+  IS: ['BCSE317L', 'CBS3002'],
   'INFO SEC': ['BCSE317L', 'CBS3002'],
   'INFORMATION SECURITY': ['BCSE317L', 'CBS3002'],
-  
+
   // Big Data Analytics
-  'BDA': ['BCSE402L', 'BITE411L'],
+  BDA: ['BCSE402L', 'BITE411L'],
   'BIG DATA': ['BCSE402L', 'BITE411L'],
-  
+
   // Internet of Things
-  'IOT': ['BCSE401L', 'BITE403L'],
+  IOT: ['BCSE401L', 'BITE403L'],
   'INTERNET OF THINGS': ['BCSE401L', 'BITE403L'],
-  
+
   // Cloud Computing
-  'CC': ['BITE412L', 'SWE4002'],
-  'CLOUD': ['BITE412L', 'SWE4002', 'BMEE355L', 'BECE355L'],
+  CC: ['BITE412L', 'SWE4002'],
+  CLOUD: ['BITE412L', 'SWE4002', 'BMEE355L', 'BECE355L'],
   'CLOUD COMPUTING': ['BITE412L', 'SWE4002'],
-  
+
   // Mathematics shortcuts
-  'CALC': ['BMAT101L', 'IMAT101L'],
-  'CALCULUS': ['BMAT101L', 'IMAT101L'],
+  CALC: ['BMAT101L', 'IMAT101L'],
+  CALCULUS: ['BMAT101L', 'IMAT101L'],
   'LINEAR ALGEBRA': ['BMAT201L', 'BMAT203L', 'UMAT201L', 'IMAT201L'],
-  'PROBABILITY': ['BMAT202L', 'TMAT201L'],
-  'STATS': ['BMAT202L', 'MAT2001', 'TMAT201L'],
-  'STATISTICS': ['BMAT202L', 'MAT2001', 'TMAT201L'],
+  PROBABILITY: ['BMAT202L', 'TMAT201L'],
+  STATS: ['BMAT202L', 'MAT2001', 'TMAT201L'],
+  STATISTICS: ['BMAT202L', 'MAT2001', 'TMAT201L'],
   'DISCRETE MATH': ['BMAT205L', 'MAT1014'],
-  
+
   // Physics shortcuts
-  'PHYSICS': ['BPHY101L', 'IPHY101L'],
-  'QUANTUM': ['BPHY203L'],
-  'MECHANICS': ['BPHY202L', 'BMEE201L'],
-  
+  PHYSICS: ['BPHY101L', 'IPHY101L'],
+  QUANTUM: ['BPHY203L'],
+  MECHANICS: ['BPHY202L', 'BMEE201L'],
+
   // Chemistry shortcuts
-  'CHEMISTRY': ['BCHY101L', 'ICHY101L'],
-  'CHEM': ['BCHY101L', 'ICHY101L'],
-  
+  CHEMISTRY: ['BCHY101L', 'ICHY101L'],
+  CHEM: ['BCHY101L', 'ICHY101L'],
+
   // Electronics shortcuts
-  'ELECTRONICS': ['BEEE102L', 'IEEE102L'],
-  'ANALOG': ['BECE206L', 'BECE304L'],
-  'DIGITAL': ['BEEE206L', 'BECE102L'],
-  'MICROPROCESSOR': ['BECE204L', 'ISWE201L'],
-  'MICRO': ['BECE204L', 'ISWE201L'],
-  
+  ELECTRONICS: ['BEEE102L', 'IEEE102L'],
+  ANALOG: ['BECE206L', 'BECE304L'],
+  DIGITAL: ['BEEE206L', 'BECE102L'],
+  MICROPROCESSOR: ['BECE204L', 'ISWE201L'],
+  MICRO: ['BECE204L', 'ISWE201L'],
+
   // Management shortcuts
-  'MANAGEMENT': ['BMGT101L'],
-  'ENTREPRENEURSHIP': ['BMGT108L', 'CFOC508M'],
-  
+  MANAGEMENT: ['BMGT101L'],
+  ENTREPRENEURSHIP: ['BMGT108L', 'CFOC508M'],
+
   // Language shortcuts
-  'ENGLISH': ['BENG101L', 'IENG101L'],
-  'COMMUNICATION': ['BENG101L', 'IENG101L', 'BHUM201L'],
+  ENGLISH: ['BENG101L', 'IENG101L'],
+  COMMUNICATION: ['BENG101L', 'IENG101L', 'BHUM201L'],
 }
 
 export const COURSE_MAP: { [key: string]: string } = {
@@ -526,16 +526,16 @@ export const COURSE_MAP: { [key: string]: string } = {
 // Enhanced function to find course names with acronym support
 export function findFullCourseName(code: string): string {
   const upperCode = code.toUpperCase().trim()
-  
+
   // Direct course code lookup
   if (COURSE_MAP[upperCode]) {
     return COURSE_MAP[upperCode]
   }
-  
+
   // Acronym lookup - return all matching courses
   if (COURSE_ACRONYMS[upperCode]) {
-    const matches = COURSE_ACRONYMS[upperCode].map(courseCode => 
-      COURSE_MAP[courseCode] || courseCode
+    const matches = COURSE_ACRONYMS[upperCode].map(
+      courseCode => COURSE_MAP[courseCode] || courseCode
     )
     if (matches.length === 1) {
       return matches[0]
@@ -543,7 +543,7 @@ export function findFullCourseName(code: string): string {
       return matches.join(' / ')
     }
   }
-  
+
   // Partial name matching
   const searchResults = searchCoursesByName(upperCode)
   if (searchResults.length === 1) {
@@ -551,44 +551,46 @@ export function findFullCourseName(code: string): string {
   } else if (searchResults.length > 1) {
     return searchResults.map(r => r.name).join(' / ')
   }
-  
+
   return code
 }
 
 // Search courses by partial name matching
-export function searchCoursesByName(searchTerm: string): Array<{code: string, name: string}> {
+export function searchCoursesByName(searchTerm: string): Array<{ code: string; name: string }> {
   const upperSearchTerm = searchTerm.toUpperCase().trim()
-  const results: Array<{code: string, name: string}> = []
-  
+  const results: Array<{ code: string; name: string }> = []
+
   // Search in course names
   for (const [code, name] of Object.entries(COURSE_MAP)) {
     if (name.toUpperCase().includes(upperSearchTerm)) {
-      results.push({code, name})
+      results.push({ code, name })
     }
   }
-  
+
   // Remove duplicates by name
-  const uniqueResults = results.filter((item, index, self) => 
-    index === self.findIndex(t => t.name === item.name)
+  const uniqueResults = results.filter(
+    (item, index, self) => index === self.findIndex(t => t.name === item.name)
   )
-  
+
   return uniqueResults.slice(0, 10) // Limit to top 10 results
 }
 
 // Get all possible matches for a search term
-export function getAllCourseMatches(searchTerm: string): Array<{code: string, name: string, matchType: string}> {
+export function getAllCourseMatches(
+  searchTerm: string
+): Array<{ code: string; name: string; matchType: string }> {
   const upperSearchTerm = searchTerm.toUpperCase().trim()
-  const results: Array<{code: string, name: string, matchType: string}> = []
-  
+  const results: Array<{ code: string; name: string; matchType: string }> = []
+
   // Direct course code match
   if (COURSE_MAP[upperSearchTerm]) {
     results.push({
       code: upperSearchTerm,
       name: COURSE_MAP[upperSearchTerm],
-      matchType: 'exact_code'
+      matchType: 'exact_code',
     })
   }
-  
+
   // Acronym matches
   if (COURSE_ACRONYMS[upperSearchTerm]) {
     COURSE_ACRONYMS[upperSearchTerm].forEach(courseCode => {
@@ -596,65 +598,69 @@ export function getAllCourseMatches(searchTerm: string): Array<{code: string, na
         results.push({
           code: courseCode,
           name: COURSE_MAP[courseCode],
-          matchType: 'acronym'
+          matchType: 'acronym',
         })
       }
     })
   }
-  
+
   // Partial name matches
   for (const [code, name] of Object.entries(COURSE_MAP)) {
-    if (name.toUpperCase().includes(upperSearchTerm) && 
-        !results.some(r => r.code === code)) {
+    if (name.toUpperCase().includes(upperSearchTerm) && !results.some(r => r.code === code)) {
       results.push({
         code,
         name,
-        matchType: 'partial_name'
+        matchType: 'partial_name',
       })
     }
   }
-  
+
   return results.slice(0, 15) // Limit results
 }
 
 // Smart course recognition function - for background processing
-export function recognizeCourseInText(text: string): Array<{original: string, matches: Array<{code: string, name: string}>}> {
+export function recognizeCourseInText(
+  text: string
+): Array<{ original: string; matches: Array<{ code: string; name: string }> }> {
   const upperText = text.toUpperCase()
-  const recognizedCourses: Array<{original: string, matches: Array<{code: string, name: string}>}> = []
-  
+  const recognizedCourses: Array<{
+    original: string
+    matches: Array<{ code: string; name: string }>
+  }> = []
+
   // Check for direct course codes (pattern: letters followed by numbers and optional letters)
   const courseCodePattern = /\b[A-Z]{3,6}[0-9]{3,4}[A-Z]?\b/g
   const codeMatches = text.match(courseCodePattern) || []
-  
+
   codeMatches.forEach(match => {
     const upperMatch = match.toUpperCase()
     if (COURSE_MAP[upperMatch]) {
       recognizedCourses.push({
         original: match,
-        matches: [{code: upperMatch, name: COURSE_MAP[upperMatch]}]
+        matches: [{ code: upperMatch, name: COURSE_MAP[upperMatch] }],
       })
     }
   })
-  
+
   // Check for acronyms
   Object.keys(COURSE_ACRONYMS).forEach(acronym => {
     const regex = new RegExp(`\\b${acronym}\\b`, 'gi')
     const acronymMatches = text.match(regex) || []
-    
+
     if (acronymMatches.length > 0) {
       const matches = COURSE_ACRONYMS[acronym].map(courseCode => ({
         code: courseCode,
-        name: COURSE_MAP[courseCode] || courseCode
+        name: COURSE_MAP[courseCode] || courseCode,
       }))
-      
+
       acronymMatches.forEach(match => {
         recognizedCourses.push({
           original: match,
-          matches
+          matches,
         })
       })
     }
   })
-  
+
   return recognizedCourses
 }

@@ -211,13 +211,16 @@ export function Sidebar(props: SidebarProps) {
 
   const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
     if (!isDragging) return
-    
+
     const touch = e.touches[0]
     const scrollContainer = e.currentTarget
     const deltaY = touchStartY - touch.clientY
     const newScrollTop = touchStartScrollTop + deltaY
-    
-    scrollContainer.scrollTop = Math.max(0, Math.min(newScrollTop, scrollContainer.scrollHeight - scrollContainer.clientHeight))
+
+    scrollContainer.scrollTop = Math.max(
+      0,
+      Math.min(newScrollTop, scrollContainer.scrollHeight - scrollContainer.clientHeight)
+    )
   }
 
   const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -309,14 +312,14 @@ export function Sidebar(props: SidebarProps) {
             className="sidebar-container sidebar-content fixed left-0 top-0 z-50 h-full w-[var(--sidebar-width)] bg-black/30 backdrop-blur-md border-r border-border/50 flex flex-col shadow-xl"
             onMouseEnter={() => setHovering(true)}
             onMouseLeave={() => setHovering(false)}
-            onTouchStart={(e) => {
+            onTouchStart={e => {
               // console.log('Sidebar container touch start:', {
               //   target: (e.target as HTMLElement)?.className || 'unknown',
               //   currentTarget: (e.currentTarget as HTMLElement)?.className || 'unknown',
               //   touches: e.touches.length
               // })
             }}
-            onTouchMove={(e) => {
+            onTouchMove={e => {
               // console.log('Sidebar container touch move:', {
               //   touches: e.touches.length,
               //   preventDefault: e.defaultPrevented
@@ -333,9 +336,7 @@ export function Sidebar(props: SidebarProps) {
                 {loading ? (
                   <div className="h-7 w-32 bg-muted/60 rounded sidebar-loading-item"></div>
                 ) : (
-                  <h2 className="text-lg font-medium text-foreground">
-                    the everything assistant
-                  </h2>
+                  <h2 className="text-lg font-medium text-foreground">the everything assistant</h2>
                 )}
               </div>
               <Button
@@ -548,10 +549,9 @@ export function Sidebar(props: SidebarProps) {
 
   return (
     <>
-      {mounted && typeof window !== 'undefined' 
+      {mounted && typeof window !== 'undefined'
         ? createPortal(sidebarContent, document.body)
-        : null
-      }
+        : null}
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </>
   )

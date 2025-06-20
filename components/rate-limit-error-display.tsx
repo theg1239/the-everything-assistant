@@ -59,7 +59,7 @@ export function RateLimitErrorDisplay() {
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
           className="relative w-full max-w-md mx-auto bg-card/95 backdrop-blur-lg border border-border rounded-2xl shadow-2xl"
-          onClick={(e) => e.stopPropagation()}
+          onClick={e => e.stopPropagation()}
         >
           <div className="flex items-center justify-between p-6 pb-4">
             <div className="flex items-center gap-3">
@@ -71,15 +71,13 @@ export function RateLimitErrorDisplay() {
                 )}
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-foreground">
-                  rate limit exceeded
-                </h3>
+                <h3 className="text-lg font-semibold text-foreground">rate limit exceeded</h3>
                 <p className="text-sm text-muted-foreground">
                   {rateLimitError.userLimit ? 'personal limit reached' : 'service limit reached'}
                 </p>
               </div>
             </div>
-            
+
             <Button
               onClick={clearRateLimitError}
               variant="ghost"
@@ -107,7 +105,7 @@ export function RateLimitErrorDisplay() {
                   <Clock className="w-4 h-4 text-orange-500/70" />
                   <span>Rate limit resets in {resetTimeFormatted}</span>
                 </div>
-              </div>  
+              </div>
             )}
 
             {rateLimitError.userLimit && (

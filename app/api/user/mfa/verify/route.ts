@@ -8,7 +8,7 @@ import {
   hashBackupCodes,
   generateBackupCodes,
   logSecurityEvent,
-  checkRateLimit
+  checkRateLimit,
 } from '@/lib/mfa'
 
 export async function POST(request: NextRequest) {
@@ -20,10 +20,7 @@ export async function POST(request: NextRequest) {
 
     const { code } = await request.json()
     if (!code || typeof code !== 'string') {
-      return NextResponse.json(
-        { error: 'Verification code is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Verification code is required' }, { status: 400 })
     }
 
     const rateLimitKey = `mfa-verify-${session.user.email}`
@@ -67,13 +64,13 @@ export async function POST(request: NextRequest) {
       )
     }
     let isValidCode = false
-    
+
     if (user.tempMfaMethod === 'email') {
       isValidCode = await bcrypt.compare(code, user.tempMfaSecret)
     } else if (user.tempMfaMethod === 'authenticator') {
       isValidCode = verifyTOTP(code, user.tempMfaSecret)
     }
-    
+
     if (!isValidCode) {
       await logSecurityEvent(
         user.id,
@@ -97,24 +94,19 @@ export async function POST(request: NextRequest) {
       tempMfaExpires: null,
       backupCodes: hashedBackupCodes,
     }
-    
+
     if (user.tempMfaMethod === 'authenticator') {
       updateData.mfaSecret = user.tempMfaSecret
     } else {
       updateData.mfaSecret = null
     }
-    
+
     await prisma.user.update({
       where: { id: user.id },
       data: updateData,
     })
 
-    await logSecurityEvent(
-      user.id,
-      'MFA_ENABLED',
-      { method: user.tempMfaMethod },
-      request
-    )
+    await logSecurityEvent(user.id, 'MFA_ENABLED', { method: user.tempMfaMethod }, request)
 
     return NextResponse.json({
       success: true,
@@ -125,9 +117,6 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('MFA verification error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -131,52 +131,92 @@ Output exactly 3 questions, one per line, without numbering or bullet points.`
 
 function getStaticFollowUpSuggestions(assistantMessage: string): string[] {
   const message = assistantMessage.toLowerCase()
-  
+
   const currentSemesterSuggestions = [
     'when is course registration?',
     'show me fall semester exam dates',
-    'what classes start in july?'
+    'what classes start in july?',
   ]
-  
+
   if (message.includes('vtop') || message.includes('marks') || message.includes('attendance')) {
-    return ['check my current semester attendance', 'show detailed marks breakdown', 'get my fee payment status']
+    return [
+      'check my current semester attendance',
+      'show detailed marks breakdown',
+      'get my fee payment status',
+    ]
   }
 
   if (message.includes('course') || message.includes('subject') || message.includes('materials')) {
-    return ['download course materials for this semester', 'get past exam papers', 'show faculty contact information']
+    return [
+      'download course materials for this semester',
+      'get past exam papers',
+      'show faculty contact information',
+    ]
   }
 
   if (message.includes('exam') || message.includes('cat') || message.includes('fat')) {
-    return ['when are cat-1 exams this semester?', 'show exam schedule for fall 2025', 'check assignment deadlines']
+    return [
+      'when are cat-1 exams this semester?',
+      'show exam schedule for fall 2025',
+      'check assignment deadlines',
+    ]
   }
 
   if (message.includes('timetable') || message.includes('schedule') || message.includes('class')) {
-    return ['show my current semester timetable', 'what classes do i have tomorrow?', 'check lab schedule']
+    return [
+      'show my current semester timetable',
+      'what classes do i have tomorrow?',
+      'check lab schedule',
+    ]
   }
 
   if (message.includes('placement') || message.includes('company') || message.includes('package')) {
-    return ['show latest placement statistics', 'what companies are visiting?', 'get interview preparation tips']
+    return [
+      'show latest placement statistics',
+      'what companies are visiting?',
+      'get interview preparation tips',
+    ]
   }
 
   if (message.includes('hostel') || message.includes('mess') || message.includes('campus')) {
-    return ['check today\'s mess menu', 'show campus sports facilities', 'tell me about upcoming events']
+    return [
+      "check today's mess menu",
+      'show campus sports facilities',
+      'tell me about upcoming events',
+    ]
   }
 
-  if (message.includes('registration') || message.includes('deadline') || message.includes('academic')) {
+  if (
+    message.includes('registration') ||
+    message.includes('deadline') ||
+    message.includes('academic')
+  ) {
     return currentSemesterSuggestions
   }
 
   if (message.includes('calendar') || message.includes('date') || message.includes('schedule')) {
-    return ['show working saturdays this semester', 'when is gravitas 2025?', 'check holiday calendar']
+    return [
+      'show working saturdays this semester',
+      'when is gravitas 2025?',
+      'check holiday calendar',
+    ]
   }
 
   if (message.includes('research') || message.includes('project') || message.includes('faculty')) {
-    return ['how to join research projects?', 'show faculty research areas', 'get project guidelines']
+    return [
+      'how to join research projects?',
+      'show faculty research areas',
+      'get project guidelines',
+    ]
   }
 
   if (message.includes('library') || message.includes('book') || message.includes('due')) {
     return ['check my library dues', 'show library timings', 'how to renew books?']
   }
 
-  return ['show my vtop attendance', 'when is course registration?', 'check fall semester exam dates']
+  return [
+    'show my vtop attendance',
+    'when is course registration?',
+    'check fall semester exam dates',
+  ]
 }

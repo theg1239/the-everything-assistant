@@ -61,9 +61,12 @@ export function SettingsDialog({ open, onOpenChange }: any) {
   const [verificationCode, setVerificationCode] = useState('')
   const [setupStep, setSetupStep] = useState<'method' | 'verify' | 'backup'>('method')
   const [showBackupCodesReveal, setShowBackupCodesReveal] = useState(false)
-  const [mfaAvailability, setMfaAvailability] = useState<{email: boolean, authenticator: boolean}>({
+  const [mfaAvailability, setMfaAvailability] = useState<{
+    email: boolean
+    authenticator: boolean
+  }>({
     email: true,
-    authenticator: true
+    authenticator: true,
   })
 
   useEffect(() => {
@@ -87,7 +90,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
         if (mfaResponse.ok) {
           const mfaData = await mfaResponse.json()
           setMfaEnabled(mfaData.mfaEnabled ?? false)
-          loadedMfaMethod = (mfaData.mfaMethod === 'authenticator' ? 'authenticator' : 'email')
+          loadedMfaMethod = mfaData.mfaMethod === 'authenticator' ? 'authenticator' : 'email'
           setMfaMethod(loadedMfaMethod)
           // Set backup codes count (we don't get the actual codes for security)
           setBackupCodes(new Array(mfaData.backupCodesCount || 0).fill('••••••••'))
@@ -98,7 +101,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
         if (availabilityResponse.ok) {
           const availabilityData = await availabilityResponse.json()
           setMfaAvailability(availabilityData.availability)
-          
+
           // If email is not available and current method is email, switch to authenticator
           if (!availabilityData.availability.email && loadedMfaMethod === 'email') {
             setMfaMethod('authenticator')
@@ -155,7 +158,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
       followUpSuggestions,
       auroraBackground: checked,
     })
-    
+
     window.dispatchEvent(new CustomEvent('auroraToggle', { detail: { enabled: checked } }))
   }
 
@@ -206,14 +209,14 @@ export function SettingsDialog({ open, onOpenChange }: any) {
 
       if (response.ok) {
         const data = await response.json()
-        
+
         if (mfaMethod === 'authenticator') {
           setQrCodeUrl(data.qrCode)
           setManualEntryKey(data.secret)
         }
-        
+
         setSetupStep('verify')
-        
+
         if (mfaMethod === 'email') {
           toast.success('Verification code sent to your email')
         }
@@ -301,9 +304,14 @@ export function SettingsDialog({ open, onOpenChange }: any) {
 
   const downloadBackupCodes = () => {
     const codesText = backupCodes.join('\n')
-    const blob = new Blob([`The Everything Assistant - MFA Backup Codes\nGenerated: ${new Date().toLocaleString()}\n\nKeep these codes safe and secure:\n\n${codesText}\n\nEach code can only be used once.`], { 
-      type: 'text/plain' 
-    })
+    const blob = new Blob(
+      [
+        `The Everything Assistant - MFA Backup Codes\nGenerated: ${new Date().toLocaleString()}\n\nKeep these codes safe and secure:\n\n${codesText}\n\nEach code can only be used once.`,
+      ],
+      {
+        type: 'text/plain',
+      }
+    )
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -763,7 +771,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                     <Key className="w-5 h-5 text-primary" />
                     <h4 className="font-semibold text-base">multi-factor authentication</h4>
                   </div>
-                  
+
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border bg-background">
                     <div className="space-y-0.5">
                       <Label htmlFor="mfa-enabled" className="text-sm md:text-base">
@@ -787,8 +795,11 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                       {!showMfaSetup ? (
                         <>
                           <div className="space-y-3">
-                            <Label className="text-sm font-medium">current method: {mfaMethod === 'email' ? 'email verification' : 'authenticator app'}</Label>
-                            
+                            <Label className="text-sm font-medium">
+                              current method:{' '}
+                              {mfaMethod === 'email' ? 'email verification' : 'authenticator app'}
+                            </Label>
+
                             <div className="space-y-2">
                               {mfaAvailability.email && (
                                 <button
@@ -866,14 +877,16 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                                   <Key className="w-3 h-3" />
                                   <span>keep these codes safe - each can only be used once</span>
                                 </div>
-                                
+
                                 <div className="space-y-2">
                                   <div className="flex items-center justify-between">
                                     <span className="text-sm font-medium">your backup codes</span>
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      onClick={() => setShowBackupCodesReveal(!showBackupCodesReveal)}
+                                      onClick={() =>
+                                        setShowBackupCodesReveal(!showBackupCodesReveal)
+                                      }
                                       className="h-6 px-2"
                                     >
                                       {showBackupCodesReveal ? (
@@ -883,7 +896,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                                       )}
                                     </Button>
                                   </div>
-                                  
+
                                   {showBackupCodesReveal && (
                                     <div className="grid grid-cols-2 gap-2 p-3 bg-background rounded border font-mono text-xs">
                                       {backupCodes.map((code, index) => (
@@ -937,7 +950,9 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                         <div className="space-y-4">
                           {setupStep === 'method' && (
                             <>
-                              <Label className="text-sm font-medium">choose authentication method</Label>
+                              <Label className="text-sm font-medium">
+                                choose authentication method
+                              </Label>
                               <div className="space-y-2">
                                 {mfaAvailability.email && (
                                   <button
@@ -970,7 +985,9 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                                     <div className="flex items-center gap-3">
                                       <Mail className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
                                       <div className="text-left">
-                                        <div className="font-medium text-muted-foreground">email verification</div>
+                                        <div className="font-medium text-muted-foreground">
+                                          email verification
+                                        </div>
                                         <div className="text-xs text-muted-foreground">
                                           unavailable
                                         </div>
@@ -1041,15 +1058,19 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                                     <p className="text-sm text-muted-foreground">
                                       scan this qr code with your authenticator app
                                     </p>
-                                    
+
                                     {qrCodeUrl && (
                                       <div className="flex justify-center">
                                         <div className="p-4 bg-white rounded-lg">
-                                          <img src={qrCodeUrl} alt="QR Code" className="w-48 h-48" />
+                                          <img
+                                            src={qrCodeUrl}
+                                            alt="QR Code"
+                                            className="w-48 h-48"
+                                          />
                                         </div>
                                       </div>
                                     )}
-                                    
+
                                     <details className="text-left">
                                       <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground">
                                         can't scan? enter manually
@@ -1072,11 +1093,13 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                               )}
 
                               <div className="space-y-3">
-                                <Label className="text-sm font-medium">enter verification code</Label>
+                                <Label className="text-sm font-medium">
+                                  enter verification code
+                                </Label>
                                 <input
                                   type="text"
                                   value={verificationCode}
-                                  onChange={(e) => setVerificationCode(e.target.value)}
+                                  onChange={e => setVerificationCode(e.target.value)}
                                   placeholder="000000"
                                   className="w-full px-3 py-2 text-center text-lg font-mono tracking-widest border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
                                   maxLength={6}
@@ -1117,7 +1140,9 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                           {setupStep === 'backup' && (
                             <div className="space-y-4">
                               <div className="text-center space-y-2">
-                                <h4 className="font-medium text-green-600">mfa enabled successfully!</h4>
+                                <h4 className="font-medium text-green-600">
+                                  mfa enabled successfully!
+                                </h4>
                                 <p className="text-sm text-muted-foreground">
                                   save these backup codes in a secure location
                                 </p>
@@ -1131,7 +1156,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                                 <p className="text-xs text-orange-600 dark:text-orange-400">
                                   each code can only be used once. store them safely!
                                 </p>
-                                
+
                                 <div className="grid grid-cols-2 gap-2 p-3 bg-background rounded border font-mono text-xs">
                                   {backupCodes.map((code, index) => (
                                     <div key={index} className="text-center py-1">
@@ -1162,11 +1187,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                                 </div>
                               </div>
 
-                              <Button
-                                onClick={completeMfaSetup}
-                                size="sm"
-                                className="w-full"
-                              >
+                              <Button onClick={completeMfaSetup} size="sm" className="w-full">
                                 finish setup
                               </Button>
                             </div>

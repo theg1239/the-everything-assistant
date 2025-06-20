@@ -67,6 +67,6 @@ Important Notes:
     cat1Period: 'August 17-23, 2025',
     cat2Period: 'October 5-11, 2025',
     fatPeriod: 'November 17 - December 4, 2025',
-    deanAcademics: 'M. Anthony Xavior PhD'
-  }
+    deanAcademics: 'M. Anthony Xavior PhD',
+  },
 }

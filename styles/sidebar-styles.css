@@ -108,12 +108,12 @@
     flex-direction: column !important;
     user-select: none !important;
   }
-  
+
   .sidebar-mobile-scroll > .space-y-1 {
     min-height: calc(100vh - 150px) !important;
     flex: 1 !important;
   }
-  
+
   .sidebar-mobile-scroll:active {
     cursor: grabbing !important;
   }

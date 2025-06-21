@@ -2,7 +2,7 @@
 
 import { useSession } from 'next-auth/react'
 import { usePathname } from 'next/navigation'
-import { MFAProvider, useMFA } from '@/components/mfa-context'
+import { MFAProvider, useMFA } from '@/contexts/mfa-context'
 import { MFAChallenge } from '@/components/mfa-challenge'
 
 function MFAGateInner({ children }: { children: React.ReactNode }) {

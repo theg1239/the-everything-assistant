@@ -4,31 +4,27 @@ import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useSession } from 'next-auth/react'
 
-// Dynamically import background components
-const Aurora = dynamic(() => import('@/components/aurora'), {
+const Aurora = dynamic(() => import('@/components/backgrounds/aurora'), {
   ssr: false,
   loading: () => null,
 })
 
-const Beams = dynamic(() => import('@/components/beams'), {
+const Beams = dynamic(() => import('@/components/backgrounds/beams'), {
   ssr: false,
   loading: () => null,
 })
 
-// Background types
 export type BackgroundType = 'aurora' | 'beams' | 'gradient' | 'solid'
 
 export interface BackgroundConfig {
   type: BackgroundType
   enabled: boolean
-  // Aurora specific config
   aurora?: {
     colorStops?: string[]
     amplitude?: number
     blend?: number
     speed?: number
   }
-  // Beams specific config
   beams?: {
     beamWidth?: number
     beamHeight?: number
@@ -39,12 +35,10 @@ export interface BackgroundConfig {
     scale?: number
     rotation?: number
   }
-  // Gradient specific config
   gradient?: {
     colors: string[]
     direction?: 'to-br' | 'to-tr' | 'to-bl' | 'to-tl' | 'to-r' | 'to-l' | 'to-t' | 'to-b'
   }
-  // Solid color config
   solid?: {
     color: string
   }

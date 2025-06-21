@@ -18,7 +18,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ArtifactDisplay } from './artifact-display'
-import { useVTOP } from './vtop-context'
+import { useVTOP } from '../contexts/vtop-context'
 import { useMediaQuery } from '@/hooks/use-media-query'
 
 interface ToolCallDisplayProps {

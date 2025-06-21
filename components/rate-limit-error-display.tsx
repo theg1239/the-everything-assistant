@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle, Clock, User, Zap, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useRateLimit } from '@/components/rate-limit-context'
+import { useRateLimit } from '@/contexts/rate-limit-context'
 
 export function RateLimitErrorDisplay() {
   const { rateLimitError, clearRateLimitError } = useRateLimit()

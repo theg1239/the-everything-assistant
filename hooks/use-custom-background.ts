@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback } from 'react'
-import type { BackgroundType, BackgroundConfig } from '@/components/custom-background'
+import type { BackgroundType, BackgroundConfig } from '@/components/backgrounds/custom-background'
 
 export function useCustomBackground() {
   const updateBackgroundConfig = useCallback(async (config: Partial<BackgroundConfig>) => {

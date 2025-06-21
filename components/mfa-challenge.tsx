@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
-import { useMFA } from '@/components/mfa-context'
+import { useMFA } from '@/contexts/mfa-context'
 
 interface MFAStatus {
   mfaEnabled: boolean

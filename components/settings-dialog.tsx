@@ -35,16 +35,16 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useCustomBackground } from '@/hooks/use-custom-background'
-import type { BackgroundType } from '@/components/custom-background'
+import type { BackgroundType } from '@/components/backgrounds/custom-background'
 import dynamic from 'next/dynamic'
 import { useMemo } from 'react'
 
-const Aurora = dynamic(() => import('@/components/aurora'), {
+const Aurora = dynamic(() => import('@/components/backgrounds/aurora'), {
   ssr: false,
   loading: () => null,
 })
 
-const Beams = dynamic(() => import('@/components/beams'), {
+const Beams = dynamic(() => import('@/components/backgrounds/beams'), {
   ssr: false,
   loading: () => null,
 })

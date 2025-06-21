@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
-import type { BackgroundConfig } from '@/components/custom-background'
+import type { BackgroundConfig } from '@/components/backgrounds/custom-background'
 
 export function useAuroraPreference() {
   const { data: session } = useSession()

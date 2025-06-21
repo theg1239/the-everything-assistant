@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import Aurora from '@/components/aurora'
+import Aurora from '@/components/backgrounds/aurora'
 
 export default function NotFound() {
   return (

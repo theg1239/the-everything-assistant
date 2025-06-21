@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useSession } from 'next-auth/react'
 
-const Aurora = dynamic(() => import('@/components/aurora'), {
+const Aurora = dynamic(() => import('@/components/backgrounds/aurora'), {
   ssr: false,
   loading: () => null,
 })

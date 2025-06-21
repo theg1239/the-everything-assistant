@@ -8,7 +8,7 @@ import { ToolCallDisplay } from './tool-call-display'
 import { MessageActions } from './message-actions'
 import { SparklesIcon } from 'lucide-react'
 import { memo } from 'react'
-import { useVTOP } from './vtop-context'
+import { useVTOP } from '../contexts/vtop-context'
 
 interface MessageBubbleProps {
   message: Message

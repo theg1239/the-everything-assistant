@@ -24,7 +24,7 @@ export function VTOPProvider({ children }: { children: React.ReactNode }) {
   const [version, setVersion] = useState(0)
 
   const updateToolResult = useCallback((toolCallId: string, command: string, result: any) => {
-    console.log('VTOPContext: Updating tool result for', toolCallId, 'with result:', result)
+    // console.log('VTOPContext: Updating tool result for', toolCallId, 'with result:', result)
     setToolResults(prev => {
       const newMap = new Map(prev)
       newMap.set(toolCallId, {

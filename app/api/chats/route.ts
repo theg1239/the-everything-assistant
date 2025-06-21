@@ -1,4 +1,4 @@
-import { getChats, deleteAllChats, archiveAllChats, getArchivedChats } from '@/lib/db'
+import { getChats, deleteAllChats, deleteAllArchivedChats, archiveAllChats, getArchivedChats } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
@@ -48,6 +48,13 @@ export async function DELETE(request: Request) {
       return Response.json({
         success: true,
         message: `${deletedCount} chats deleted successfully`,
+        count: deletedCount,
+      })
+    } else if (action === 'delete-archived') {
+      const deletedCount = await deleteAllArchivedChats(session.user.id)
+      return Response.json({
+        success: true,
+        message: `${deletedCount} archived chats deleted successfully`,
         count: deletedCount,
       })
     }

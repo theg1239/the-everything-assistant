@@ -366,3 +366,13 @@ export async function saveVote(
     throw error
   }
 }
+
+export async function deleteAllArchivedChats(userId: string): Promise<number> {
+  const result = await prisma.chat.deleteMany({
+    where: {
+      userId,
+      archived: true,
+    },
+  })
+  return result.count
+}

@@ -118,6 +118,8 @@ export function SettingsDialog({ open, onOpenChange }: any) {
   const [restoringChats, setRestoringChats] = useState<Set<string>>(new Set())
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(false)
+  const [confirmDeleteArchived, setConfirmDeleteArchived] = useState(false)
+  const [isDeletingArchived, setIsDeletingArchived] = useState(false)
   const [loadingPreferences, setLoadingPreferences] = useState(false)
   const [mfaEnabled, setMfaEnabled] = useState(false)
   const [mfaMethod, setMfaMethod] = useState<'email' | 'authenticator'>('email')
@@ -576,6 +578,34 @@ export function SettingsDialog({ open, onOpenChange }: any) {
     }
   }
 
+  const handleDeleteAllArchivedChats = async () => {
+    if (!confirmDeleteArchived) {
+      setConfirmDeleteArchived(true)
+      setTimeout(() => setConfirmDeleteArchived(false), 3000)
+      return
+    }
+
+    setIsDeletingArchived(true)
+    setConfirmDeleteArchived(false)
+    try {
+      const response = await fetch('/api/chats?action=delete-archived', {
+        method: 'DELETE',
+      })
+      if (response.ok) {
+        const result = await response.json()
+        setArchivedChats([])
+        toast.success(`${result.count} archived chats deleted successfully`)
+      } else {
+        throw new Error('Failed to delete archived chats')
+      }
+    } catch (error) {
+      console.error('Error deleting archived chats:', error)
+      toast.error('Failed to delete archived chats. Please try again.')
+    } finally {
+      setIsDeletingArchived(false)
+    }
+  }
+
   const renderContent = () => {
     switch (activeSection) {
       case 'general':
@@ -658,10 +688,10 @@ export function SettingsDialog({ open, onOpenChange }: any) {
 
       case 'data':
         return (
-          <div className="space-y-6">
-            <div>
+          <div className={cn("space-y-6", showArchivedChats && "h-full flex flex-col")}>
+            <div className={showArchivedChats ? "flex-1 flex flex-col" : ""}>
               <h3 className="text-lg md:text-xl font-semibold mb-4">data controls</h3>
-              <div className="space-y-4">
+              <div className={cn("space-y-4", showArchivedChats && "flex-1 flex flex-col")}>
                 {!showArchivedChats ? (
                   <>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
@@ -753,66 +783,103 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                     </div>
                   </>
                 ) : (
-                  <div className="space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <h4 className="font-medium text-sm md:text-base">archived chats</h4>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowArchivedChats(false)}
-                        className="w-full sm:w-auto"
-                      >
-                        back
-                      </Button>
+                  <div className="flex flex-col h-full space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-border">
+                      <h4 className="font-medium text-lg">archived chats</h4>
+                      <div className="flex gap-2">
+                        {archivedChats.length > 0 && (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={handleDeleteAllArchivedChats}
+                            disabled={isDeletingArchived}
+                            className={cn(
+                              'flex-shrink-0',
+                              confirmDeleteArchived ? 'bg-red-600 hover:bg-red-700' : ''
+                            )}
+                          >
+                            {isDeletingArchived ? (
+                              <>
+                                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                deleting...
+                              </>
+                            ) : confirmDeleteArchived ? (
+                              'confirm delete all?'
+                            ) : (
+                              <>
+                                <Trash2 className="w-3 h-3 mr-1" />
+                                delete all
+                              </>
+                            )}
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowArchivedChats(false)}
+                          className="flex-shrink-0"
+                        >
+                          back
+                        </Button>
+                      </div>
                     </div>
 
                     {loadingArchived ? (
-                      <div className="flex items-center justify-center p-8">
+                      <div className="flex items-center justify-center flex-1 min-h-[200px]">
                         <Loader2 className="w-6 h-6 animate-spin" />
                       </div>
                     ) : archivedChats.length === 0 ? (
-                      <div className="text-center p-8 text-muted-foreground">
-                        <Archive className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                        <p className="font-medium mb-1 text-sm md:text-base">
-                          no archived chats found
-                        </p>
-                        <p className="text-xs md:text-sm">
-                          archived conversations will appear here
-                        </p>
+                      <div className="flex items-center justify-center flex-1 min-h-[200px] text-muted-foreground">
+                        <div className="text-center">
+                          <Archive className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                          <p className="font-medium mb-1 text-sm md:text-base">
+                            no archived chats found
+                          </p>
+                          <p className="text-xs md:text-sm">
+                            archived conversations will appear here
+                          </p>
+                        </div>
                       </div>
                     ) : (
-                      <div className="space-y-2 max-h-96 overflow-y-auto">
-                        {archivedChats.map(chat => (
-                          <div
-                            key={chat.id}
-                            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border"
-                          >
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium truncate text-sm md:text-base">
-                                {chat.title}
-                              </p>
-                              <p className="text-xs md:text-sm text-muted-foreground">
-                                {new Date(chat.createdAt).toLocaleDateString()}
-                              </p>
-                            </div>{' '}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleRestoreChat(chat.id)}
-                              disabled={restoringChats.has(chat.id)}
-                              className="w-full sm:w-auto flex-shrink-0"
+                      <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
+                        <div className="grid gap-2">
+                          {archivedChats.map(chat => (
+                            <div
+                              key={chat.id}
+                              className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-lg border border-border hover:bg-muted/30 transition-colors"
                             >
-                              {restoringChats.has(chat.id) ? (
-                                <>
-                                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                                  restoring...
-                                </>
-                              ) : (
-                                'restore'
-                              )}
-                            </Button>
-                          </div>
-                        ))}
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium truncate text-sm md:text-base mb-1">
+                                  {chat.title}
+                                </p>
+                                <div className="flex items-center gap-4 text-xs md:text-sm text-muted-foreground">
+                                  <span>
+                                    Created: {new Date(chat.createdAt).toLocaleDateString()}
+                                  </span>
+                                  <span>
+                                    Archived: {new Date(chat.updatedAt).toLocaleDateString()}
+                                  </span>
+                                </div>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleRestoreChat(chat.id)}
+                                disabled={restoringChats.has(chat.id)}
+                                className="w-full sm:w-auto flex-shrink-0"
+                              >
+                                {restoringChats.has(chat.id) ? (
+                                  <>
+                                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                    restoring...
+                                  </>
+                                ) : (
+                                  'restore'
+                                )}
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1408,6 +1475,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
     if (!open) {
       setConfirmDelete(false)
       setConfirmArchive(false)
+      setConfirmDeleteArchived(false)
       setShowArchivedChats(false)
       setRestoringChats(new Set())
       setShowMfaSetup(false)

@@ -651,8 +651,8 @@ Format as JSON.`
   }
   async scrapeAllTargetSubreddits() {
     const targetSubreddits = (process.env.TARGET_SUBREDDITS || 'Vit').split(',').map(s => s.trim())
-    const maxPostsPerSubreddit = parseInt(process.env.MAX_POSTS_PER_SUBREDDIT) || 50
-    const maxPagesPerSubreddit = parseInt(process.env.MAX_PAGES_PER_SUBREDDIT) || 10
+    const maxPostsPerSubreddit = parseInt(process.env.MAX_POSTS_PER_SUBREDDIT) || 5000
+    const maxPagesPerSubreddit = parseInt(process.env.MAX_PAGES_PER_SUBREDDIT) || 50
 
     logger.info(
       `Starting scraping of all target subreddits (${targetSubreddits.length} subreddits, max ${maxPostsPerSubreddit} posts each, max ${maxPagesPerSubreddit} pages each)`

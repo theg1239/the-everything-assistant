@@ -92,6 +92,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const [lastAssistantMessage, setLastAssistantMessage] = useState<string>('')
   const [lastUserMessage, setLastUserMessage] = useState<string>('')
   const [userPreferences, setUserPreferences] = useState<any>({ followUpSuggestions: true })
+  const [selectedTool, setSelectedTool] = useState<string>('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -193,7 +194,10 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       content: msg.content,
       toolInvocations: msg.toolInvocations,
     })),
-    body: optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : undefined,
+    body: {
+      ...(optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : {}),
+      ...(selectedTool ? { preferredTool: selectedTool } : {})
+    },
     onResponse: res => {
       if (!showFullChat) setShowFullChat(true)
       setErrorMessage(null)
@@ -387,6 +391,10 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       role: 'user',
       content: question,
     })
+  }
+
+  const handleToolSelection = (toolId: string) => {
+    setSelectedTool(toolId)
   }
 
   const resetToHome = () => {
@@ -633,6 +641,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                   isLoading={isLoading}
                   placeholder="ask anything..."
                   stop={stop}
+                  onToolSelect={handleToolSelection}
+                  selectedTool={selectedTool}
                 />{' '}
               </motion.div>
 
@@ -834,6 +844,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
               isLoading={isLoading}
               placeholder="ask anything..."
               stop={stop}
+              onToolSelect={handleToolSelection}
+              selectedTool={selectedTool}
             />
           </div>
         </div>

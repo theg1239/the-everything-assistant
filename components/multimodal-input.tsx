@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
+import { ToolsDropdown } from '@/components/tools-dropdown'
 
 interface MultimodalInputProps {
   input: string
@@ -20,6 +21,8 @@ interface MultimodalInputProps {
   maxLength?: number
   autoFocus?: boolean
   showAttachments?: boolean
+  onToolSelect?: (toolId: string) => void
+  selectedTool?: string
 }
 
 const PureMultimodalInput = ({
@@ -33,9 +36,28 @@ const PureMultimodalInput = ({
   maxLength = 1000,
   autoFocus = true,
   showAttachments = true,
+  onToolSelect,
+  selectedTool,
 }: MultimodalInputProps) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [isFocused, setIsFocused] = useState(false)
+
+  const getPlaceholderText = () => {
+    if (!selectedTool) return placeholder || 'ask anything...'
+    
+    switch (selectedTool) {
+      case 'reddit-search':
+        return 'search related subreddits'
+      case 'vtop-query':
+        return 'ask about your VTOP data (marks, attendance, timetable)'
+      case 'past-papers':
+        return 'find past papers for any course'
+      case 'mess-menu':
+        return 'ask about the mess menu'
+      default:
+        return placeholder || 'ask anything...'
+    }
+  }
 
   const adjustHeight = useCallback(() => {
     if (textareaRef.current) {
@@ -143,7 +165,7 @@ const PureMultimodalInput = ({
               onKeyDown={handleKeyDown}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
-              placeholder={placeholder}
+              placeholder={getPlaceholderText()}
               className={cn(
                 'min-h-[64px] max-h-[200px] w-full resize-none border-0 bg-transparent px-4 py-4 text-sm',
                 'ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
@@ -157,7 +179,10 @@ const PureMultimodalInput = ({
               aria-label="Message input"
             />
 
-            <div className="flex items-end p-2">
+            <div className="flex items-end gap-2 p-2">
+              {/* Tools Dropdown */}
+              <ToolsDropdown onToolSelect={onToolSelect} selectedTool={selectedTool} />
+              
               <AnimatePresence mode="wait">
                 {isLoading ? (
                   <motion.div

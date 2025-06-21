@@ -295,7 +295,7 @@ export async function POST(req: Request) {
     if (!session?.user?.id) {
       return new Response('Unauthorized', { status: 401 })
     }
-    const { messages, id: chatId, directToolCall } = await req.json()
+    const { messages, id: chatId, directToolCall, preferredTool } = await req.json()
 
     let chat = chatId ? await getChat(chatId, session.user.id) : null
     if (!chat) {
@@ -416,10 +416,23 @@ export async function POST(req: Request) {
     }
 
     const tools = createVITTools()
+    
+    // Create tool preference guidance
+    const toolPreferenceGuidance = preferredTool ? `
+
+IMPORTANT: The user has specifically selected the "${preferredTool}" tool. When responding to their query, you should prioritize using this tool if it's relevant to their question. Available tools and their purposes:
+
+- reddit-search: Use searchRedditKnowledge or searchRedditWithContext for student discussions and academic advice
+- vtop-query: Use queryVTOP for personal VTOP data like grades, attendance, timetable  
+- past-papers: Use findPastPapers for examination papers and course materials
+- mess-menu: Use getMessMenu for hostel dining information
+
+If the user's query is relevant to the selected tool "${preferredTool}", use it even if other tools might also be applicable.` : ''
+
     const combinedSystemPrompt = `${VIT_SYSTEM_PROMPT}
 
 ADDITIONAL COMPREHENSIVE KNOWLEDGE:
-${VIT_COMPREHENSIVE_KNOWLEDGE}`
+${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
 
     const enhancedMessages = messages.map((message: any) => {
       if (

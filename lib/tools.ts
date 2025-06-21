@@ -798,7 +798,7 @@ export function createVITTools() {
       parameters: z.object({
         command: z
           .enum([
-            'profile',
+            // 'profile',
             'marks',
             'grades',
             'attendance',
@@ -809,7 +809,7 @@ export function createVITTools() {
             'exams',
             'exam-schedule',
             'library-dues',
-            'calendar',
+            // 'calendar',
             'nightslip',
             'leave',
             'leave-status',

@@ -14,6 +14,7 @@ import { Toaster } from 'sonner'
 import MobileViewportFix from '@/components/mobile-viewport-fix'
 import ScrollToTop from '@/components/scroll-to-top'
 import CustomBackground from '@/components/custom-background'
+import { PerformanceMonitor } from '@/components/performance-monitor'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -94,6 +95,7 @@ export default function RootLayout({
             </div>
             <MobileViewportFix />
             <ScrollToTop />
+            {process.env.NODE_ENV === 'development' && <PerformanceMonitor />}
             <MFAGate>{children}</MFAGate>
             <Toaster
               position="top-right"

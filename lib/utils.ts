@@ -29,3 +29,13 @@ export function extractTitleFromContent(content: string): string {
   const truncated = firstLine.length > 50 ? firstLine.substring(0, 50) + '...' : firstLine
   return truncated || 'New Chat'
 }
+
+export function generateUUID(): string {
+  return crypto.randomUUID()
+}
+
+export function getTrailingMessageId(messages: any[]): string | null {
+  if (messages.length === 0) return null
+  const lastMessage = messages[messages.length - 1]
+  return lastMessage.id || null
+}

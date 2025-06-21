@@ -25,7 +25,6 @@ export default async function ChatPage({ params }: ChatPageProps) {
   }
 
   const messages = await getMessages(id)
-
   return (
     <ChatInterface
       initialMessages={messages.map(msg => ({
@@ -36,6 +35,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
         createdAt: msg.created_at,
       }))}
       chatId={id}
+      autoResume={true}
     />
   )
 }

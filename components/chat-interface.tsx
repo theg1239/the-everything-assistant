@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, memo, useCallback } from 'react'
 import { useChat } from 'ai/react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import { VirtualizedMessages } from '@/components/virtualized-messages'
 import { AnimatePresence, motion } from 'framer-motion'
 import { FileText, Plus } from 'lucide-react'
 import { HamburgerButton } from '@/components/hamburger-button'
@@ -11,7 +12,6 @@ import { Button } from '@/components/ui/button'
 import { SuggestedQuestions } from '@/components/suggested-questions'
 import { FollowUpSuggestions } from '@/components/follow-up-suggestions'
 import { ChatHeader } from '@/components/chat-header'
-import { MessageBubble } from '@/components/message-bubble'
 import { MultimodalInput } from '@/components/multimodal-input'
 import { Sidebar } from '@/components/sidebar'
 import { Canvas } from '@/components/canvas'
@@ -24,28 +24,39 @@ import { RateLimitErrorDisplay } from '@/components/rate-limit-error-display'
 import { toast } from 'sonner'
 import ScrollToTopButton from '@/components/scroll-to-top-button'
 import { cn } from '@/lib/utils'
+import { useDebounce, useThrottle } from '@/hooks/use-debounce'
+import { useAutoResume } from '@/hooks/use-auto-resume'
 
 const useViewportHeight = () => {
   const mainRef = useRef<HTMLDivElement>(null)
+  
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout
+    
     const setVh = () => {
-      const vh = window.innerHeight * 0.01
-      document.documentElement.style.setProperty('--vh', `${vh}px`)
+      clearTimeout(timeoutId)
+      
+      timeoutId = setTimeout(() => {
+        requestAnimationFrame(() => {
+          const vh = window.innerHeight * 0.01
+          document.documentElement.style.setProperty('--vh', `${vh}px`)
 
-      const viewport = window.visualViewport
-      const height = viewport ? viewport.height : window.innerHeight
-      document.documentElement.style.setProperty('--app-height', `${height}px`)
+          const viewport = window.visualViewport
+          const height = viewport ? viewport.height : window.innerHeight
+          document.documentElement.style.setProperty('--app-height', `${height}px`)
 
-      if (mainRef.current) {
-        mainRef.current.style.height = `calc(var(--vh, 1vh) * 100)`
-      }
+          if (mainRef.current) {
+            mainRef.current.style.height = `calc(var(--vh, 1vh) * 100)`
+          }
 
-      if (
-        window.innerWidth <= 768 &&
-        (!window.visualViewport || window.visualViewport.scale <= 1)
-      ) {
-        window.scrollTo(0, 0)
-      }
+          if (
+            window.innerWidth <= 768 &&
+            (!window.visualViewport || window.visualViewport.scale <= 1)
+          ) {
+            window.scrollTo(0, 0)
+          }
+        })
+      }, 50)
     }
 
     const handleVisualViewportChange = () => {
@@ -53,14 +64,15 @@ const useViewportHeight = () => {
     }
 
     setVh()
-    window.addEventListener('resize', setVh)
-    window.addEventListener('orientationchange', () => setTimeout(setVh, 100))
+    window.addEventListener('resize', setVh, { passive: true })
+    window.addEventListener('orientationchange', () => setTimeout(setVh, 100), { passive: true })
 
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', handleVisualViewportChange)
     }
 
     return () => {
+      clearTimeout(timeoutId)
       window.removeEventListener('resize', setVh)
       window.removeEventListener('orientationchange', () => setTimeout(setVh, 100))
       if (window.visualViewport) {
@@ -75,9 +87,10 @@ const useViewportHeight = () => {
 interface ChatInterfaceProps {
   initialMessages?: any[]
   chatId?: string
+  autoResume?: boolean
 }
 
-const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps) => {
+const PureChatInterface = ({ initialMessages = [], chatId, autoResume = false }: ChatInterfaceProps) => {
   const [showFullChat, setShowFullChat] = useState(initialMessages.length > 0)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [canvasOpen, setCanvasOpen] = useState(false)
@@ -104,25 +117,37 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const { data: session } = useSession()
 
   const mainRef = useViewportHeight()
+  
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout
+    
     const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 768)
+      clearTimeout(timeoutId)
+      timeoutId = setTimeout(() => {
+        const isMobileNow = window.innerWidth <= 768
+        if (isMobileNow !== isMobile) {
+          setIsMobile(isMobileNow)
+        }
+      }, 100)
     }
 
     const checkZoom = () => {
       if (window.visualViewport) {
         const scale = window.visualViewport.scale || 1
-        setIsZoomed(scale > 1.1)
+        const isZoomedNow = scale > 1.1
+        if (isZoomedNow !== isZoomed) {
+          setIsZoomed(isZoomedNow)
+        }
       }
     }
 
     checkMobile()
     checkZoom()
 
-    window.addEventListener('resize', checkMobile)
+    window.addEventListener('resize', checkMobile, { passive: true })
 
     if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', checkZoom)
+      window.visualViewport.addEventListener('resize', checkZoom, { passive: true })
     }
 
     if (window.innerWidth <= 768 && document.readyState === 'complete') {
@@ -130,12 +155,13 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     }
 
     return () => {
+      clearTimeout(timeoutId)
       window.removeEventListener('resize', checkMobile)
       if (window.visualViewport) {
         window.visualViewport.removeEventListener('resize', checkZoom)
       }
     }
-  }, [])
+  }, [isMobile, isZoomed])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -156,8 +182,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     setIsFirstMessageInNewChat(initialMessages.length === 0)
   }, [initialMessages])
 
-  useEffect(() => {
-    const loadPreferences = async () => {
+  useEffect(() => {    const loadPreferences = async () => {
       if (!session?.user?.email) return
 
       try {
@@ -175,7 +200,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       loadPreferences()
     }
   }, [session?.user?.email])
-  const {
+    const {
     messages,
     input,
     handleInputChange,
@@ -187,6 +212,8 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     append,
     setMessages,
     reload,
+    experimental_resume,
+    data,
   } = useChat({
     api: '/api/chat',
     initialMessages: initialMessages.map(msg => ({
@@ -209,6 +236,10 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         setOptimisticChatId(newId)
         currentChatIdRef.current = newId // Update the ref as well
         setChatCreatedEventDispatched(true) // Prevent duplicate events
+        
+        // Try both methods to ensure URL updates
+        router.push(newPath)
+        // Also use window.history as fallback
         window.history.replaceState({}, '', newPath)
         const newChatEvent = new CustomEvent('newChatCreated', {
           detail: {
@@ -285,10 +316,15 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       if (!isRateLimit) {
         toast.error('Something went wrong. Please try again.')
         setErrorMessage('Unable to connect. Please check your connection and try again.')
-      }
-    },  })
+      }    },  })
 
-  const scrollToBottom = useCallback(() => {
+      useAutoResume({
+    autoResume: autoResume ?? true,
+    initialMessages,
+    experimental_resume,
+    data,
+    setMessages,
+  });  const scrollToBottom = useCallback(() => {
     if (messagesEndRef.current) {
       const container = contentRef.current?.parentElement
       if (container && isMobile) {
@@ -305,6 +341,9 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     }
   }, [isMobile])
 
+  // Throttle scroll operations to prevent excessive reflows
+  const throttledScrollToBottom = useThrottle(scrollToBottom, 100)
+
   useEffect(() => {
     if (isInitialRender) {
       setIsInitialRender(false)
@@ -316,26 +355,24 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       }
     }
   }, [isInitialRender, isMobile])
-
+  
   useEffect(() => {
     if (!isInitialRender && messages.length > 0 && messages[messages.length - 1].role === 'user') {
-      scrollToBottom()
+      throttledScrollToBottom()
     }
-  }, [messages, isLoading, isInitialRender, isMobile, scrollToBottom])
+  }, [messages, isLoading, isInitialRender, throttledScrollToBottom])
 
   useEffect(() => {
     if (!isInitialRender && messages.length > 0 && isLoading) {
-      scrollToBottom()
+      throttledScrollToBottom()
     }
-  }, [messages, isLoading, isInitialRender, isMobile, scrollToBottom])
+  }, [messages, isLoading, isInitialRender, throttledScrollToBottom])
   useEffect(() => {
     if (isLoading && !isInitialRender) {
       const targetNode = contentRef.current
       if (!targetNode) return
 
-      const observer = new MutationObserver(() => {
-        scrollToBottom()
-      })
+      const observer = new MutationObserver(throttledScrollToBottom)
 
       observer.observe(targetNode, {
         childList: true,
@@ -348,17 +385,16 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         observer.disconnect()
       }
     }
-  }, [isLoading, isInitialRender, isMobile, scrollToBottom])
-
+  }, [isLoading, isInitialRender, throttledScrollToBottom])
   useEffect(() => {
     if (isMobile && !isInitialRender && messages.length > 0) {
       const timeoutId = setTimeout(() => {
-        scrollToBottom()
-      }, 100)
+        throttledScrollToBottom()
+      }, 200)
 
       return () => clearTimeout(timeoutId)
     }
-  }, [messages.length, isMobile, isInitialRender, scrollToBottom])
+  }, [messages.length, isMobile, isInitialRender, throttledScrollToBottom])
 
   useEffect(() => {
     if (error) {
@@ -369,12 +405,11 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       }
     }
   }, [error, checkForRateLimitError])
-  const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleFormSubmit = useCallback((e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!input.trim()) return
 
     setShowFollowUpSuggestions(false)
-
     setLastUserMessage(input.trim())
 
     if (!showFullChat) {
@@ -384,13 +419,12 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     setErrorMessage(null)
     clearRateLimitError()
     setHasUserInitiatedConversation(true)
+    
     originalHandleSubmit(e)
-  }
-  const handleSuggestedQuestion = async (question: string) => {
+  }, [input, showFullChat, clearRateLimitError, originalHandleSubmit, setShowFollowUpSuggestions, setLastUserMessage, setErrorMessage, setHasUserInitiatedConversation])
+    const handleSuggestedQuestion = useCallback(async (question: string) => {
     setInput('')
-
     setShowFollowUpSuggestions(false)
-
     setLastUserMessage(question)
 
     if (!showFullChat) {
@@ -405,7 +439,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       role: 'user',
       content: question,
     })
-  }
+  }, [showFullChat, clearRateLimitError, setInput, append, setShowFollowUpSuggestions, setLastUserMessage, setErrorMessage, setHasUserInitiatedConversation])
 
   const handleToolSelection = (toolId: string) => {
     setSelectedTool(toolId)
@@ -791,19 +825,12 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
                 </motion.div>
               )}
 
-              <RateLimitErrorDisplay />
-
-              <AnimatePresence>
-                {messages.map((message, idx) => (
-                  <MessageBubble
-                    key={`${message.id}-${idx}`}
-                    message={message}
-                    chatId={optimisticChatId}
-                    onCreateCanvas={createCanvasFromMessage}
-                    onLoginClick={handleLoginClick}
-                  />
-                ))}
-              </AnimatePresence>
+              <RateLimitErrorDisplay />              <VirtualizedMessages
+                messages={messages}
+                chatId={optimisticChatId}
+                onCreateCanvas={createCanvasFromMessage}
+                onLoginClick={handleLoginClick}
+              />
               {isLoading &&
                 messages.length > 0 &&
                 messages[messages.length - 1].role === 'user' && (
@@ -874,11 +901,11 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   )
 }
 
-export const ChatInterface = memo(({ initialMessages = [], chatId }: ChatInterfaceProps) => {
+export const ChatInterface = memo(({ initialMessages = [], chatId, autoResume = true }: ChatInterfaceProps) => {
   return (
     <RateLimitProvider>
       <VTOPProvider>
-        <PureChatInterface initialMessages={initialMessages} chatId={chatId} />
+        <PureChatInterface initialMessages={initialMessages} chatId={chatId} autoResume={autoResume} />
       </VTOPProvider>
     </RateLimitProvider>
   )

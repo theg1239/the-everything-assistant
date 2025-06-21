@@ -89,6 +89,7 @@ model Chat {
   messages          Message[]
   canvas_documents  CanvasDocument[]
   votes             Vote[]
+  streamIds         StreamId[]
 
   @@map("chats")
 }
@@ -153,4 +154,15 @@ model Migration {
   executed_at DateTime @default(now())
 
   @@map("migrations")
+}
+
+model StreamId {
+  id        String   @id @default(cuid())
+  streamId  String   @unique
+  chatId    String
+  createdAt DateTime @default(now())
+  
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  
+  @@map("stream_ids")
 }

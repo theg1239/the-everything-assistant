@@ -1,16 +1,55 @@
-import { streamText, generateObject, generateText } from 'ai'
+import { createDataStream, smoothStream } from 'ai'
 import { rateLimitedGoogle } from '@/lib/rate-limited-ai'
 import { createVITTools } from '@/lib/tools'
 import { VIT_SYSTEM_PROMPT } from '@/lib/prompts'
 import { VIT_COMPREHENSIVE_KNOWLEDGE } from '@/lib/knowledge-base'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { getChat, createChat, saveMessage, updateChat } from '@/lib/db'
-import { generateChatPath, extractTitleFromContent } from '@/lib/utils'
+import { 
+  getChat, 
+  createChat,
+  createChatWithFirstMessage,
+  saveMessage, 
+  updateChat, 
+  createStreamId, 
+  getMostRecentStreamId,
+  getLastAssistantMessage
+} from '@/lib/db'
+import { generateChatPath, extractTitleFromContent, generateUUID, getTrailingMessageId } from '@/lib/utils'
 import { z } from 'zod'
+import {
+  createResumableStreamContext,
+  type ResumableStreamContext,
+} from 'resumable-stream'
+import { after } from 'next/server'
+import { differenceInSeconds } from 'date-fns'
+import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
+
+let globalStreamContext: ResumableStreamContext | null = null
+
+function getStreamContext() {
+  if (!globalStreamContext) {
+    try {
+      globalStreamContext = createResumableStreamContext({
+        waitUntil: after,
+      })
+      console.log(' > Resumable streams enabled')
+    } catch (error: any) {
+      if (error.message.includes('REDIS_URL')) {
+        console.log(' > Resumable streams are disabled due to missing REDIS_URL')
+      } else {
+        console.error('Error creating resumable stream context:', error)
+        console.log(' > Falling back to regular streaming without resumability')
+      }
+      return null
+    }
+  }
+
+  return globalStreamContext
+}
 
 async function generateChatTitle(userMessage: string, userId?: string): Promise<string> {
   try {
@@ -290,20 +329,46 @@ Make the formatted_content engaging and conversational while being informative a
 }
 
 export async function POST(req: Request) {
+  const startTime = performance.now()
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
       return new Response('Unauthorized', { status: 401 })
     }
+
     const { messages, id: chatId, directToolCall, preferredTool } = await req.json()
 
-    let chat = chatId ? await getChat(chatId, session.user.id) : null
-    if (!chat) {
-      const tempTitle = extractTitleFromContent(messages[0]?.content || 'New Chat')
-      const path = generateChatPath()
-      chat = await createChat(session.user.id, tempTitle, path)
+    const authTime = performance.now()
+    console.log(`Auth completed in ${(authTime - startTime).toFixed(2)}ms`)
 
-      const userMessage = messages[0]?.content || ''
+    let chat = chatId ? await getChat(chatId, session.user.id) : null
+    let firstUserMessage: any = null
+    
+    if (!chat) {
+      const firstMessage = messages[0]
+      const tempTitle = extractTitleFromContent(firstMessage?.content || 'New Chat')
+      const path = generateChatPath()
+      if (firstMessage?.role === 'user') {
+        const chatCreateStart = performance.now()
+        const result = await createChatWithFirstMessage(
+          session.user.id, 
+          tempTitle, 
+          path, 
+          firstMessage.content,
+          firstMessage.id
+        )
+        chat = result.chat
+        firstUserMessage = result.message
+        const chatCreateTime = performance.now()
+        console.log(`Chat and first message created atomically in ${(chatCreateTime - chatCreateStart).toFixed(2)}ms`)
+      } else {
+        const chatCreateStart = performance.now()
+        chat = await createChat(session.user.id, tempTitle, path)
+        const chatCreateTime = performance.now()
+        console.log(`Chat created in ${(chatCreateTime - chatCreateStart).toFixed(2)}ms`)
+      }
+
+      const userMessage = firstMessage?.content || ''
       if (userMessage.trim()) {
         generateChatTitle(userMessage, session.user.id)
           .then(async properTitle => {
@@ -356,6 +421,7 @@ export async function POST(req: Request) {
                 structured_data: (parsedData as any).structured_data,
                 summary: (parsedData as any).summary,
               })
+              
               const assistantResponse =
                 (result as any).formatted_content ||
                 (result as any).summary ||
@@ -400,24 +466,16 @@ export async function POST(req: Request) {
         })
       }
     }
-    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-      return new Response(
-        JSON.stringify({
-          error:
-            'API key not configured. Please add GOOGLE_GENERATIVE_AI_API_KEY to your environment variables.',
-        }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
-      )
-    }
-
     const userMessage = messages[messages.length - 1]
-    if (userMessage.role === 'user') {
+    if (userMessage.role === 'user' && !firstUserMessage) {
       await saveMessage(chat.id, 'user', userMessage.content, undefined, userMessage.id)
     }
 
+    const streamId = generateUUID()
+    await createStreamId(streamId, chat.id)
+
     const tools = createVITTools()
     
-    // Create tool preference guidance
     const toolPreferenceGuidance = preferredTool ? `
 
 IMPORTANT: The user has specifically selected the "${preferredTool}" tool. When responding to their query, you should prioritize using this tool if it's relevant to their question. Available tools and their purposes:
@@ -487,62 +545,153 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
       }
       return message
     })
-
-    const resultStream = await rateLimitedGoogle.streamText(
-      {
-        model: await rateLimitedGoogle.model('gemini-2.5-flash-lite-preview-06-17'),
-        messages: [{ role: 'system', content: combinedSystemPrompt }, ...enhancedMessages],
-        tools,
-        temperature: 0.7,
-        maxTokens: 4096,
-        toolChoice: 'auto',
-        onFinish: async (result: any) => {
-          const toolResults = (result as any).toolResults ?? result.toolCalls ?? []
-          for (const tr of toolResults) {
-            if (
-              tr.toolName === 'queryVTOP' &&
-              tr.result?.success &&
-              tr.result.data &&
-              !tr.result.parsedData
-            ) {
-              try {
-                const userContext =
-                  messages && messages.length > 0
-                    ? messages
-                        .filter((m: any) => m.role === 'user')
-                        .slice(-3)
-                        .map((m: any) => m.content)
-                        .join(' | ')
-                    : ''
-                const parsed = await parseVTOPData(
-                  tr.result,
-                  tr.args.command,
-                  userContext,
-                  session.user.id
-                )
-                Object.assign(tr.result, {
-                  parsedData: parsed,
-                  formatted_content: (parsed as any).formatted_content,
-                  structured_data: (parsed as any).structured_data,
-                  summary: (parsed as any).summary,
-                })
-              } catch (e) {
-                console.error('Failed to parse VTOP data in stream:', e)
+    const stream = createDataStream({
+      execute: async (dataStream) => {
+        const result = await rateLimitedGoogle.streamText(
+          {
+            model: await rateLimitedGoogle.model('gemini-2.5-flash-lite-preview-06-17'),
+            messages: [{ role: 'system', content: combinedSystemPrompt }, ...enhancedMessages],
+            tools,
+            temperature: 0.7,
+            maxTokens: 4096,
+            toolChoice: 'auto',
+            experimental_transform: smoothStream({ chunking: 'word' }),            experimental_generateMessageId: generateUUID,            onFinish: async ({ response }: { response: any }) => {
+              const toolResults = (response as any).toolResults ?? response.toolCalls ?? []
+              
+              for (const tr of toolResults) {
+                if (
+                  tr.toolName === 'queryVTOP' &&
+                  tr.result?.success &&
+                  tr.result.data &&
+                  !tr.result.parsedData
+                ) {
+                  try {
+                    const userContext =
+                      messages && messages.length > 0
+                        ? messages
+                            .filter((m: any) => m.role === 'user')
+                            .slice(-3)
+                            .map((m: any) => m.content)
+                            .join(' | ')
+                        : ''
+                    const parsed = await parseVTOPData(
+                      tr.result,
+                      tr.args.command,
+                      userContext,
+                      session.user.id
+                    )
+                    Object.assign(tr.result, {
+                      parsedData: parsed,
+                      formatted_content: (parsed as any).formatted_content,
+                      structured_data: (parsed as any).structured_data,
+                      summary: (parsed as any).summary,
+                    })
+                  } catch (e) {
+                    console.error('Failed to parse VTOP data in stream:', e)
+                  }
+                }
               }
-            }
-          }
 
-          const safeInvocations = JSON.parse(JSON.stringify(toolResults))
-          await saveMessage(chat.id, 'assistant', result.text, safeInvocations, result.response.id)
-        },
-      },
-      session.user.id
-    )
+              const safeInvocations = JSON.parse(JSON.stringify(toolResults))
+              
+              let assistantId: string | undefined
+              let messageText = ''
+              
+              if (response.messages && Array.isArray(response.messages) && response.messages.length > 0) {
+                const assistantMessages = response.messages.filter((message: any) => message.role === 'assistant')
+                
+                if (assistantMessages.length > 0) {
+                  const lastAssistantMessage = assistantMessages[assistantMessages.length - 1]
+                  const messageId = getTrailingMessageId(assistantMessages)
+                  assistantId = messageId || undefined
+                  
+                  if (lastAssistantMessage.content) {
+                    if (typeof lastAssistantMessage.content === 'string') {
+                      messageText = lastAssistantMessage.content
+                    } else if (Array.isArray(lastAssistantMessage.content)) {
+                      messageText = lastAssistantMessage.content
+                        .filter((part: any) => part.type === 'text')
+                        .map((part: any) => part.text)
+                        .join('')
+                    }
+                  }
+                }
+              }
+              
+              if (!messageText && response.text) {
+                messageText = response.text
+                assistantId = assistantId || generateUUID()
+              }
+              
+              if (assistantId && messageText) {
+                try {
+                  await saveMessage(chat.id, 'assistant', messageText, safeInvocations, assistantId)
+                  console.log('Assistant message saved successfully')
+                } catch (saveError) {
+                  console.error('Failed to save assistant message:', saveError)
+                }
+              } else {
+                console.log('Skipping message save - missing data:', { 
+                  hasAssistantId: !!assistantId, 
+                  hasMessageText: !!messageText,
+                  textLength: messageText.length 
+                })
+              }
+            },
+          },
+          session.user.id
+        )
+        console.log('Before consumeStream()')
+        result.consumeStream()
+        console.log('After consumeStream()')
+        
+        console.log('Before mergeIntoDataStream()')
+        result.mergeIntoDataStream(dataStream, {
+          sendReasoning: true,
+        })
+        console.log('After mergeIntoDataStream()')
+      },onError: (error: any) => {
+        console.error('Data stream error:', error)
+        const errorMessage = error?.message || 'An unexpected error occurred while processing your request'
+        console.log('Simplified error message:', errorMessage)
+        return `Error: ${errorMessage}`      },
+    })
+    const streamContext = getStreamContext()
 
-    return resultStream.toDataStreamResponse({
+    if (streamContext) {
+      try {
+        console.log('Creating resumable stream with ID:', streamId)
+        const resumableResponse = await streamContext.resumableStream(streamId, () => stream)
+        
+        console.log('Resumable stream created:', {
+          isResponse: resumableResponse instanceof Response,
+          hasBody: !!(resumableResponse as any)?.body,
+          isReadableStream: resumableResponse instanceof ReadableStream,
+          constructor: resumableResponse?.constructor?.name,
+          headers: resumableResponse instanceof Response ? Array.from((resumableResponse as Response).headers.entries()) : 'not a response'        })
+        
+        return new Response(resumableResponse, {
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Chat-Id': chat.id,
+            'X-Chat-Path': `/chat/${chat.id}`,
+          },
+        })
+      } catch (resumableError) {
+        console.error('Resumable stream error, falling back to regular stream:', resumableError)
+      }
+    }
+    
+    console.log('Using regular streaming (no resumable context or error occurred)')
+    return new Response(stream, {
       headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
         'X-Chat-Id': chat.id,
-        'X-Chat-Path': chat.path,
+        'X-Chat-Path': `/chat/${chat.id}`,
       },
     })
   } catch (error: any) {
@@ -563,5 +712,178 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
       JSON.stringify({ error: error.message || 'An unexpected error occurred' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     )
+  }
+}
+
+export async function GET(request: Request) {
+  const startTime = performance.now() // Performance tracking
+  const streamContext = getStreamContext()
+  const resumeRequestedAt = new Date()
+
+  if (!streamContext) {
+    return new Response(null, { status: 204 })
+  }
+
+  const { searchParams } = new URL(request.url)
+  const chatId = searchParams.get('chatId')
+
+  if (!chatId) {
+    return new Response('Bad Request: chatId is required', { status: 400 })
+  }
+
+  const session = await getServerSession(authOptions)
+
+  if (!session?.user) {
+    return new Response('Unauthorized', { status: 401 })
+  }
+  const [chat, recentStreamId] = await Promise.all([
+    getChat(chatId, session.user.id),
+    getMostRecentStreamId(chatId)
+  ])
+
+  const dbQueryTime = performance.now()
+  console.log(`DB queries completed in ${(dbQueryTime - startTime).toFixed(2)}ms`)
+
+  if (!chat) {
+    return new Response('Chat not found', { status: 404 })
+  }
+
+  if (!recentStreamId) {
+    return new Response('No streams found', { status: 404 })
+  }const emptyDataStream = createDataStream({
+    execute: () => {},
+  })
+    console.log('Attempting to resume stream for chatId:', chatId, 'with streamId:', recentStreamId)
+  
+  let stream: ReadableStream | Response | null = null
+  
+  try {
+    const streamPromise = streamContext.resumableStream(
+      recentStreamId,
+      () => emptyDataStream,
+    )
+    
+    const timeoutPromise = new Promise<null>((_, reject) => 
+      setTimeout(() => reject(new Error('Stream resume timeout')), 1000)
+    )
+    
+    stream = await Promise.race([streamPromise, timeoutPromise])
+  } catch (resumeError) {
+    console.error('Failed to resume stream or timeout occurred:', resumeError)
+    stream = null
+  }
+  
+  console.log('Resume stream result:', {
+    streamExists: !!stream,
+    isResponse: stream instanceof Response,
+    isReadableStream: stream instanceof ReadableStream,
+    constructor: stream?.constructor?.name,
+    streamId: recentStreamId
+  })
+  if (stream) {
+    const resumeTime = performance.now()
+    console.log(`Stream resumed successfully in ${(resumeTime - startTime).toFixed(2)}ms`)
+    return new Response(stream, { 
+      status: 200,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Chat-Id': chat.id,
+        'X-Chat-Path': `/chat/${chat.id}`,
+      }
+    })
+  }
+
+  const dbRestoreStartTime = performance.now()
+  console.log('No resumable stream found, attempting database restore...')
+  const mostRecentMessage = await getLastAssistantMessage(chatId)
+  
+  const dbRestoreTime = performance.now()
+  console.log(`DB restore query completed in ${(dbRestoreTime - dbRestoreStartTime).toFixed(2)}ms`)
+  
+  if (!mostRecentMessage) {
+    console.log('No assistant messages found in database')
+    return new Response(emptyDataStream, { 
+      status: 200,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache',        
+        'Connection': 'keep-alive',
+        'X-Chat-Id': chat.id,
+        'X-Chat-Path': `/chat/${chat.id}`,
+      }    
+    })
+  }
+
+  const messageCreatedAt = new Date(mostRecentMessage.created_at)
+
+  if (differenceInSeconds(resumeRequestedAt, messageCreatedAt) > 15) {    
+    console.log('Message too old for restore (>15s)')
+    return new Response(emptyDataStream, { 
+      status: 200,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Chat-Id': chat.id,
+        'X-Chat-Path': `/chat/${chat.id}`,
+      }
+    })
+  }
+  console.log('Restoring message from database')
+  const restoredStream = createDataStream({
+    execute: (buffer) => {
+      buffer.writeData({
+        type: 'append-message',
+        message: JSON.stringify(mostRecentMessage),
+      })
+    },
+  })
+
+  const totalTime = performance.now()
+  console.log(`Database restore completed in ${(totalTime - startTime).toFixed(2)}ms total`)
+
+  return new Response(restoredStream, { 
+    status: 200,
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Chat-Id': chat.id,        
+      'X-Chat-Path': `/chat/${chat.id}`,
+    }
+  })
+}
+
+export async function DELETE(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const id = searchParams.get('id')
+
+  if (!id) {
+    return new Response('Bad Request: id is required', { status: 400 })
+  }
+
+  const session = await getServerSession(authOptions)
+
+  if (!session?.user) {
+    return new Response('Unauthorized', { status: 401 })
+  }
+
+  const chat = await getChat(id, session.user.id)
+
+  if (!chat) {
+    return new Response('Chat not found', { status: 404 })
+  }
+
+  try {
+    await prisma.chat.delete({
+      where: { id },
+    })
+
+    return Response.json({ success: true }, { status: 200 })
+  } catch (error) {
+    console.error('Error deleting chat:', error)
+    return new Response('Internal Server Error', { status: 500 })
   }
 }

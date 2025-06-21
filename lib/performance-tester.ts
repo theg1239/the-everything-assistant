@@ -2,10 +2,9 @@ import { DbOptimizations, QueryCache } from './db-optimizations'
 import { 
   getChats, 
   getUser,
-  getChatsWithMessageCounts,
-  withQueryTimer
+  getChatsWithMessageCounts
 } from './db'
-import { checkDatabaseConnection } from './prisma'
+import { checkDatabaseConnection, withQueryTimer } from './prisma'
 
 export class PerformanceTester {
   static async runPerformanceTests(userId: string): Promise<{

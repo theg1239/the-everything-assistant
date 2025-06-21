@@ -44,12 +44,10 @@ export interface Vote {
   is_upvoted: boolean
 }
 
-// Optimized user queries with relation joins
 export async function getUser(email: string): Promise<User | null> {
   try {
     const user = await prisma.user.findUnique({
       where: { email },
-      relationLoadStrategy: 'join',
     })
     return user as User
   } catch (error) {
@@ -69,7 +67,6 @@ export async function createUser(email: string, name: string, image?: string): P
   return user as User
 }
 
-// Highly optimized chat queries
 export async function getChats(
   userId: string,
   limit: number = 15,
@@ -207,7 +204,7 @@ export async function updateChat(id: string, title: string): Promise<void> {
       title,
       updated_at: new Date(),
     },
-    select: { id: true }, // Only select the ID to minimize data transfer
+    select: { id: true },
   })
 }
 
@@ -364,7 +361,6 @@ export async function getCanvasDocuments(chatId: string): Promise<CanvasDocument
     const documents = await prisma.canvasDocument.findMany({
       where: { chatId },
       orderBy: { created_at: 'desc' },
-      relationLoadStrategy: 'join',
       select: {
         id: true,
         chatId: true,
@@ -420,18 +416,17 @@ export async function updateCanvasDocument(
       content,
       updated_at: new Date(),
     },
-    select: { id: true }, // Only select the ID to minimize data transfer
+    select: { id: true },
   })
 }
 
 export async function deleteCanvasDocument(id: string): Promise<void> {
   await prisma.canvasDocument.delete({
     where: { id },
-    select: { id: true }, // Only select the ID to minimize data transfer
+    select: { id: true },
   })
 }
 
-// Optimized vote queries
 export async function getVote(chatId: string, messageId: string): Promise<Vote | null> {
   try {
     const vote = await prisma.vote.findUnique({
@@ -441,7 +436,6 @@ export async function getVote(chatId: string, messageId: string): Promise<Vote |
           messageId,
         },
       },
-      relationLoadStrategy: 'join',
       select: {
         chatId: true,
         messageId: true,
@@ -461,7 +455,6 @@ export async function saveVote(
   isUpvoted: boolean
 ): Promise<void> {
   try {
-    // Use atomic upsert instead of separate checks for better performance
     await prisma.vote.upsert({
       where: {
         chatId_messageId: {
@@ -477,7 +470,7 @@ export async function saveVote(
         messageId,
         is_upvoted: isUpvoted,
       },
-      select: { chatId: true }, // Only select minimal data
+      select: { chatId: true },
     })
   } catch (error) {
     console.error('Error in saveVote:', error)
@@ -495,14 +488,13 @@ export async function deleteAllArchivedChats(userId: string): Promise<number> {
   return result.count
 }
 
-// Highly optimized stream ID queries
 export async function createStreamId(streamId: string, chatId: string): Promise<void> {
   await prisma.streamId.create({
     data: {
       streamId,
       chatId,
     },
-    select: { id: true }, // Only select the ID to minimize data transfer
+    select: { id: true },
   })
 }
 
@@ -510,7 +502,6 @@ export async function getStreamIdsByChatId(chatId: string): Promise<string[]> {
   const streamIds = await prisma.streamId.findMany({
     where: { chatId },
     orderBy: { createdAt: 'asc' },
-    relationLoadStrategy: 'join',
     select: { streamId: true },
   })
 
@@ -521,14 +512,11 @@ export async function getMostRecentStreamId(chatId: string): Promise<string | nu
   const streamId = await prisma.streamId.findFirst({
     where: { chatId },
     orderBy: { createdAt: 'desc' },
-    relationLoadStrategy: 'join',
     select: { streamId: true },
   })
-
   return streamId?.streamId || null
 }
 
-// Highly optimized assistant message query with single query instead of joins
 export async function getLastAssistantMessage(chatId: string): Promise<any | null> {
   const message = await prisma.message.findFirst({
     where: {
@@ -536,7 +524,6 @@ export async function getLastAssistantMessage(chatId: string): Promise<any | nul
       role: 'assistant',
     },
     orderBy: { created_at: 'desc' },
-    relationLoadStrategy: 'join',
     select: {
       id: true,
       chatId: true,
@@ -561,7 +548,6 @@ export async function deleteStreamIdsByChatId(chatId: string): Promise<void> {
   })
 }
 
-// Optimized message count query with single database hit
 export async function getMessageCountByUserId(
   userId: string,
   differenceInHours: number = 24
@@ -582,7 +568,6 @@ export async function getMessageCountByUserId(
   return count
 }
 
-// Additional optimized batch operations for better performance
 export async function getChatsWithMessageCounts(
   userId: string,
   limit: number = 15,
@@ -596,7 +581,6 @@ export async function getChatsWithMessageCounts(
     orderBy: { updated_at: 'desc' },
     take: limit,
     skip: offset,
-    relationLoadStrategy: 'join',
     select: {
       id: true,
       userId: true,
@@ -623,7 +607,6 @@ export async function getChatsWithMessageCounts(
   }))
 }
 
-// Batch update for better performance when updating multiple records
 export async function batchUpdateChatTimestamps(chatIds: string[]): Promise<void> {
   await prisma.chat.updateMany({
     where: {
@@ -637,7 +620,6 @@ export async function batchUpdateChatTimestamps(chatIds: string[]): Promise<void
   })
 }
 
-// Optimized query to get recent messages across all chats for a user
 export async function getRecentMessagesForUser(
   userId: string,
   limit: number = 50
@@ -651,7 +633,6 @@ export async function getRecentMessagesForUser(
     },
     orderBy: { created_at: 'desc' },
     take: limit,
-    relationLoadStrategy: 'join',
     select: {
       id: true,
       chatId: true,

@@ -16,7 +16,14 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "heroku-postbuild": "cd services/reddit-scraper && npm install --legacy-peer-deps"
+    "heroku-postbuild": "cd services/reddit-scraper && npm install --legacy-peer-deps",
+    "test:performance": "tsx scripts/test-performance.ts",
+    "test:performance:basic": "tsx scripts/test-performance.ts basic",
+    "test:performance:advanced": "tsx scripts/test-performance.ts advanced",
+    "test:performance:benchmark": "tsx scripts/test-performance.ts benchmark",
+    "test:performance:stress": "tsx scripts/test-performance.ts stress",
+    "test:performance:report": "tsx scripts/test-performance.ts report",
+    "test:performance:seed": "tsx scripts/test-performance.ts seed"
   },
   "dependencies": {
     "@ai-sdk/google": "latest",
@@ -83,6 +90,7 @@
     "prettier": "^3.5.3",
     "prisma": "^5.10.2",
     "tailwindcss": "^3.4.1",
+    "tsx": "^4.20.3",
     "typescript": "^5.3.3"
   }
 }

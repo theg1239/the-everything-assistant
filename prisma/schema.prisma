@@ -3,6 +3,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {
@@ -64,6 +65,7 @@ model User {
   chats       Chat[]
   securityLogs SecurityLog[]
 
+  @@index([email])
   @@map("users")
 }
 
@@ -91,6 +93,9 @@ model Chat {
   votes             Vote[]
   streamIds         StreamId[]
 
+  @@index([userId, archived, updated_at(sort: Desc)])
+  @@index([userId, updated_at(sort: Desc)])
+  @@index([archived])
   @@map("chats")
 }
 
@@ -105,6 +110,8 @@ model Message {
   chat  Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
   votes Vote[]
 
+  @@index([chatId, created_at])
+  @@index([chatId, role, created_at(sort: Desc)])
   @@map("messages")
 }
 
@@ -119,6 +126,7 @@ model CanvasDocument {
   
   chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
 
+  @@index([chatId, created_at(sort: Desc)])
   @@map("canvas_documents")
 }
 
@@ -164,5 +172,6 @@ model StreamId {
   
   chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
   
+  @@index([chatId, createdAt])
   @@map("stream_ids")
 }

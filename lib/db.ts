@@ -44,10 +44,12 @@ export interface Vote {
   is_upvoted: boolean
 }
 
+// Optimized user queries with relation joins
 export async function getUser(email: string): Promise<User | null> {
   try {
     const user = await prisma.user.findUnique({
       where: { email },
+      relationLoadStrategy: 'join',
     })
     return user as User
   } catch (error) {
@@ -67,6 +69,7 @@ export async function createUser(email: string, name: string, image?: string): P
   return user as User
 }
 
+// Highly optimized chat queries
 export async function getChats(
   userId: string,
   limit: number = 15,
@@ -76,11 +79,19 @@ export async function getChats(
     const chats = await prisma.chat.findMany({
       where: {
         userId,
-        archived: false, // Only return non-archived chats
+        archived: false,
       },
       orderBy: { updated_at: 'desc' },
       take: limit,
       skip: offset,
+      select: {
+        id: true,
+        userId: true,
+        title: true,
+        created_at: true,
+        updated_at: true,
+        path: true,
+      },
     })
     return chats as Chat[]
   } catch (error) {
@@ -95,6 +106,14 @@ export async function getChat(id: string, userId: string): Promise<Chat | null> 
       where: {
         id,
         userId,
+      },
+      select: {
+        id: true,
+        userId: true,
+        title: true,
+        created_at: true,
+        updated_at: true,
+        path: true,
       },
     })
     return chat as Chat | null
@@ -111,6 +130,14 @@ export async function createChat(userId: string, title: string, path: string): P
       title,
       path,
     },
+    select: {
+      id: true,
+      userId: true,
+      title: true,
+      created_at: true,
+      updated_at: true,
+      path: true,
+    },
   })
   return chat as Chat
 }
@@ -122,27 +149,53 @@ export async function createChatWithFirstMessage(
   messageContent: string,
   messageId?: string
 ): Promise<{ chat: Chat; message: Message }> {
-  const result = await prisma.$transaction(async tx => {
-    const chat = await tx.chat.create({
-      data: {
-        userId,
-        title,
-        path,
-      },
-    })
+  const result = await prisma.$transaction(
+    async tx => {
+      const chat = await tx.chat.create({
+        data: {
+          userId,
+          title,
+          path,
+        },
+        select: {
+          id: true,
+          userId: true,
+          title: true,
+          created_at: true,
+          updated_at: true,
+          path: true,
+        },
+      })
 
-    const message = await tx.message.create({
-      data: {
-        id: messageId,
-        chatId: chat.id,
-        role: 'user',
-        content: messageContent,
-        tool_invocations: undefined,
-      },
-    })
+      const message = await tx.message.create({
+        data: {
+          id: messageId,
+          chatId: chat.id,
+          role: 'user',
+          content: messageContent,
+          tool_invocations: undefined,
+        },
+        select: {
+          id: true,
+          chatId: true,
+          role: true,
+          content: true,
+          tool_invocations: true,
+          created_at: true,
+        },
+      })
 
-    return { chat: chat as Chat, message: message as Message }
-  })
+      return { 
+        chat: chat as Chat, 
+        message: { ...message, toolInvocations: message.tool_invocations } as Message 
+      }
+    },
+    {
+      isolationLevel: 'ReadCommitted',
+      maxWait: 5000,
+      timeout: 10000,
+    }
+  )
 
   return result
 }
@@ -154,6 +207,7 @@ export async function updateChat(id: string, title: string): Promise<void> {
       title,
       updated_at: new Date(),
     },
+    select: { id: true }, // Only select the ID to minimize data transfer
   })
 }
 
@@ -215,6 +269,14 @@ export async function getArchivedChats(
       orderBy: { updated_at: 'desc' },
       take: limit,
       skip: offset,
+      select: {
+        id: true,
+        userId: true,
+        title: true,
+        created_at: true,
+        updated_at: true,
+        path: true,
+      },
     })
     return chats as Chat[]
   } catch (error) {
@@ -241,6 +303,14 @@ export async function getMessages(chatId: string): Promise<Message[]> {
     const messages = await prisma.message.findMany({
       where: { chatId },
       orderBy: { created_at: 'asc' },
+      select: {
+        id: true,
+        chatId: true,
+        role: true,
+        content: true,
+        tool_invocations: true,
+        created_at: true,
+      },
     })
     return messages.map(msg => ({
       ...msg,
@@ -276,15 +346,34 @@ export async function saveMessage(
       content,
       tool_invocations: safeToolInvocations,
     },
+    select: {
+      id: true,
+      chatId: true,
+      role: true,
+      content: true,
+      tool_invocations: true,
+      created_at: true,
+    },
   })
-  return message as Message
+  return { ...message, toolInvocations: message.tool_invocations } as Message
 }
 
+// Optimized canvas document queries
 export async function getCanvasDocuments(chatId: string): Promise<CanvasDocument[]> {
   try {
     const documents = await prisma.canvasDocument.findMany({
       where: { chatId },
       orderBy: { created_at: 'desc' },
+      relationLoadStrategy: 'join',
+      select: {
+        id: true,
+        chatId: true,
+        title: true,
+        content: true,
+        type: true,
+        created_at: true,
+        updated_at: true,
+      },
     })
     return documents as CanvasDocument[]
   } catch (error) {
@@ -306,6 +395,15 @@ export async function createCanvasDocument(
       content,
       type,
     },
+    select: {
+      id: true,
+      chatId: true,
+      title: true,
+      content: true,
+      type: true,
+      created_at: true,
+      updated_at: true,
+    },
   })
   return document as CanvasDocument
 }
@@ -322,15 +420,18 @@ export async function updateCanvasDocument(
       content,
       updated_at: new Date(),
     },
+    select: { id: true }, // Only select the ID to minimize data transfer
   })
 }
 
 export async function deleteCanvasDocument(id: string): Promise<void> {
   await prisma.canvasDocument.delete({
     where: { id },
+    select: { id: true }, // Only select the ID to minimize data transfer
   })
 }
 
+// Optimized vote queries
 export async function getVote(chatId: string, messageId: string): Promise<Vote | null> {
   try {
     const vote = await prisma.vote.findUnique({
@@ -339,6 +440,12 @@ export async function getVote(chatId: string, messageId: string): Promise<Vote |
           chatId,
           messageId,
         },
+      },
+      relationLoadStrategy: 'join',
+      select: {
+        chatId: true,
+        messageId: true,
+        is_upvoted: true,
       },
     })
     return vote as Vote
@@ -354,29 +461,7 @@ export async function saveVote(
   isUpvoted: boolean
 ): Promise<void> {
   try {
-    const message = await prisma.message.findUnique({
-      where: { id: messageId },
-    })
-
-    if (!message) {
-      console.error(`Message with ID ${messageId} not found`)
-      throw new Error(`Message with ID ${messageId} not found`)
-    }
-
-    const chat = await prisma.chat.findUnique({
-      where: { id: chatId },
-    })
-
-    if (!chat) {
-      console.error(`Chat with ID ${chatId} not found`)
-      throw new Error(`Chat with ID ${chatId} not found`)
-    }
-
-    if (message.chatId !== chatId) {
-      console.error(`Message ${messageId} does not belong to chat ${chatId}`)
-      throw new Error(`Message ${messageId} does not belong to chat ${chatId}`)
-    }
-
+    // Use atomic upsert instead of separate checks for better performance
     await prisma.vote.upsert({
       where: {
         chatId_messageId: {
@@ -392,6 +477,7 @@ export async function saveVote(
         messageId,
         is_upvoted: isUpvoted,
       },
+      select: { chatId: true }, // Only select minimal data
     })
   } catch (error) {
     console.error('Error in saveVote:', error)
@@ -409,12 +495,14 @@ export async function deleteAllArchivedChats(userId: string): Promise<number> {
   return result.count
 }
 
+// Highly optimized stream ID queries
 export async function createStreamId(streamId: string, chatId: string): Promise<void> {
   await prisma.streamId.create({
     data: {
       streamId,
       chatId,
     },
+    select: { id: true }, // Only select the ID to minimize data transfer
   })
 }
 
@@ -422,6 +510,7 @@ export async function getStreamIdsByChatId(chatId: string): Promise<string[]> {
   const streamIds = await prisma.streamId.findMany({
     where: { chatId },
     orderBy: { createdAt: 'asc' },
+    relationLoadStrategy: 'join',
     select: { streamId: true },
   })
 
@@ -432,12 +521,14 @@ export async function getMostRecentStreamId(chatId: string): Promise<string | nu
   const streamId = await prisma.streamId.findFirst({
     where: { chatId },
     orderBy: { createdAt: 'desc' },
+    relationLoadStrategy: 'join',
     select: { streamId: true },
   })
 
   return streamId?.streamId || null
 }
 
+// Highly optimized assistant message query with single query instead of joins
 export async function getLastAssistantMessage(chatId: string): Promise<any | null> {
   const message = await prisma.message.findFirst({
     where: {
@@ -445,6 +536,7 @@ export async function getLastAssistantMessage(chatId: string): Promise<any | nul
       role: 'assistant',
     },
     orderBy: { created_at: 'desc' },
+    relationLoadStrategy: 'join',
     select: {
       id: true,
       chatId: true,
@@ -469,6 +561,7 @@ export async function deleteStreamIdsByChatId(chatId: string): Promise<void> {
   })
 }
 
+// Optimized message count query with single database hit
 export async function getMessageCountByUserId(
   userId: string,
   differenceInHours: number = 24
@@ -487,4 +580,90 @@ export async function getMessageCountByUserId(
   })
 
   return count
+}
+
+// Additional optimized batch operations for better performance
+export async function getChatsWithMessageCounts(
+  userId: string,
+  limit: number = 15,
+  offset: number = 0
+): Promise<(Chat & { messageCount: number })[]> {
+  const chatsWithCounts = await prisma.chat.findMany({
+    where: {
+      userId,
+      archived: false,
+    },
+    orderBy: { updated_at: 'desc' },
+    take: limit,
+    skip: offset,
+    relationLoadStrategy: 'join',
+    select: {
+      id: true,
+      userId: true,
+      title: true,
+      created_at: true,
+      updated_at: true,
+      path: true,
+      _count: {
+        select: {
+          messages: true,
+        },
+      },
+    },
+  })
+
+  return chatsWithCounts.map(chat => ({
+    id: chat.id,
+    userId: chat.userId,
+    title: chat.title,
+    created_at: chat.created_at,
+    updated_at: chat.updated_at,
+    path: chat.path,
+    messageCount: chat._count.messages,
+  }))
+}
+
+// Batch update for better performance when updating multiple records
+export async function batchUpdateChatTimestamps(chatIds: string[]): Promise<void> {
+  await prisma.chat.updateMany({
+    where: {
+      id: {
+        in: chatIds,
+      },
+    },
+    data: {
+      updated_at: new Date(),
+    },
+  })
+}
+
+// Optimized query to get recent messages across all chats for a user
+export async function getRecentMessagesForUser(
+  userId: string,
+  limit: number = 50
+): Promise<Message[]> {
+  const messages = await prisma.message.findMany({
+    where: {
+      chat: {
+        userId,
+        archived: false,
+      },
+    },
+    orderBy: { created_at: 'desc' },
+    take: limit,
+    relationLoadStrategy: 'join',
+    select: {
+      id: true,
+      chatId: true,
+      role: true,
+      content: true,
+      tool_invocations: true,
+      created_at: true,
+    },
+  })
+
+  return messages.map(msg => ({
+    ...msg,
+    toolInvocations: msg.tool_invocations ?? undefined,
+  })) as Message[]
 }

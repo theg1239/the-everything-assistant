@@ -7,7 +7,7 @@
     "npm": "10.x"
   },
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "npx prisma generate && next build && cd services/reddit-scraper && npm install --legacy-peer-deps",
     "start": "next start",
     "lint": "next lint",
@@ -43,7 +43,7 @@
     "framer-motion": "latest",
     "lucide-react": "latest",
     "nanoid": "latest",
-    "next": "^15.3.3",
+    "next": "^15.3.4",
     "next-auth": "^4.24.11",
     "next-themes": "latest",
     "nodemailer": "^7.0.3",
@@ -75,6 +75,7 @@
     "autoprefixer": "^10.4.17",
     "eslint": "^8.56.0",
     "eslint-config-next": "14.1.0",
+    "next-rspack": "^15.3.4",
     "postcss": "^8.4.33",
     "prettier": "^3.5.3",
     "prisma": "^5.10.2",

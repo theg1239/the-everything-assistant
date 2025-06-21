@@ -1,5 +1,7 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+import type { NextConfig } from 'next'
+import withRspack from 'next-rspack';
+
+const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: false,
   },
@@ -15,4 +17,4 @@ const nextConfig = {
   },
 }
 
-export default nextConfig
+export default withRspack(nextConfig);

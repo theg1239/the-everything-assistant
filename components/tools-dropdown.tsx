@@ -63,32 +63,41 @@ export function ToolsDropdown({ onToolSelect, selectedTool }: ToolsDropdownProps
           buttonRef.current && !buttonRef.current.contains(event.target as Node)) {
         setIsOpen(false)
       }
-    }
-
-    if (isOpen) {
+    }    if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside)
       return () => {
         document.removeEventListener('mousedown', handleClickOutside)
       }
-    }  }, [isOpen])
+    }
+  }, [isOpen])
 
   React.useEffect(() => {
     if (isOpen && buttonRef.current && mounted) {
       const buttonRect = buttonRef.current.getBoundingClientRect()
       
-      // Position dropdown below the button
-      let top = buttonRect.bottom + 4 // 4px gap below button
-      let left = buttonRect.left
-      
-      // Ensure dropdown doesn't go off screen horizontally
+      // Position dropdown above and to the left of the button
+      const dropdownHeight = 180 // Approximate height for the dropdown
       const dropdownWidth = 240
-      if (left + dropdownWidth > window.innerWidth) {
-        left = window.innerWidth - dropdownWidth - 8
+      
+      // Position above the button with some gap
+      let top = buttonRect.top - dropdownHeight - 8 // 8px gap above button
+      
+      // Position to the left (right-align dropdown to button's right edge)
+      let left = buttonRect.right - dropdownWidth
+      
+      // If dropdown would go off screen at the top, position it below instead
+      if (top < 8) {
+        top = buttonRect.bottom + 8 // 8px gap below button
       }
       
-      // Ensure dropdown doesn't go off screen to the left
+      // Ensure dropdown doesn't go off screen horizontally to the left
       if (left < 8) {
         left = 8
+      }
+      
+      // Ensure dropdown doesn't go off screen horizontally to the right
+      if (left + dropdownWidth > window.innerWidth - 8) {
+        left = window.innerWidth - dropdownWidth - 8
       }
       
       setDropdownPosition({ top, left })

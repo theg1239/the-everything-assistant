@@ -79,6 +79,11 @@ export function Sidebar(props: SidebarProps) {
       const newChat = event.detail
       // console.log('Sidebar received newChatCreated event:', newChat)
       setChats(prevChats => {
+        const exists = prevChats.some(chat => chat.id === newChat.id)
+        if (exists) {
+          // console.log('Chat already exists, skipping duplicate')
+          return prevChats
+        }
         // console.log('Adding new chat to list. Previous count:', prevChats.length)
         return [newChat, ...prevChats]
       })

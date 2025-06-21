@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, memo } from 'react'
+import { useState, useRef, useEffect, memo, useCallback } from 'react'
 import { useChat } from 'ai/react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
@@ -93,6 +93,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
   const [lastUserMessage, setLastUserMessage] = useState<string>('')
   const [userPreferences, setUserPreferences] = useState<any>({ followUpSuggestions: true })
   const [selectedTool, setSelectedTool] = useState<string>('')
+  const [chatCreatedEventDispatched, setChatCreatedEventDispatched] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -204,9 +205,10 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       clearRateLimitError()
       const newId = res.headers.get('X-Chat-Id')
       const newPath = res.headers.get('X-Chat-Path')
-      if (newId && newPath && !chatId) {
+      if (newId && newPath && !chatId && !chatCreatedEventDispatched) {
         setOptimisticChatId(newId)
         currentChatIdRef.current = newId // Update the ref as well
+        setChatCreatedEventDispatched(true) // Prevent duplicate events
         window.history.replaceState({}, '', newPath)
         const newChatEvent = new CustomEvent('newChatCreated', {
           detail: {
@@ -284,8 +286,24 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         toast.error('Something went wrong. Please try again.')
         setErrorMessage('Unable to connect. Please check your connection and try again.')
       }
-    },
-  })
+    },  })
+
+  const scrollToBottom = useCallback(() => {
+    if (messagesEndRef.current) {
+      const container = contentRef.current?.parentElement
+      if (container && isMobile) {
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior: 'smooth'
+        })
+      } else {
+        messagesEndRef.current.scrollIntoView({ 
+          behavior: 'smooth',
+          block: 'end'
+        })
+      }
+    }
+  }, [isMobile])
 
   useEffect(() => {
     if (isInitialRender) {
@@ -301,36 +319,22 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
 
   useEffect(() => {
     if (!isInitialRender && messages.length > 0 && messages[messages.length - 1].role === 'user') {
-      if (isMobile) {
-        return
-      }
-
-      // On desktop, scroll normally
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      scrollToBottom()
     }
-  }, [messages, isLoading, isInitialRender, isMobile])
+  }, [messages, isLoading, isInitialRender, isMobile, scrollToBottom])
 
   useEffect(() => {
     if (!isInitialRender && messages.length > 0 && isLoading) {
-      if (isMobile) {
-        return
-      }
-
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      scrollToBottom()
     }
-  }, [messages, isLoading, isInitialRender, isMobile])
-
+  }, [messages, isLoading, isInitialRender, isMobile, scrollToBottom])
   useEffect(() => {
     if (isLoading && !isInitialRender) {
       const targetNode = contentRef.current
       if (!targetNode) return
 
       const observer = new MutationObserver(() => {
-        if (isMobile) {
-          return
-        }
-
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        scrollToBottom()
       })
 
       observer.observe(targetNode, {
@@ -344,7 +348,17 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
         observer.disconnect()
       }
     }
-  }, [isLoading, isInitialRender, isMobile])
+  }, [isLoading, isInitialRender, isMobile, scrollToBottom])
+
+  useEffect(() => {
+    if (isMobile && !isInitialRender && messages.length > 0) {
+      const timeoutId = setTimeout(() => {
+        scrollToBottom()
+      }, 100)
+
+      return () => clearTimeout(timeoutId)
+    }
+  }, [messages.length, isMobile, isInitialRender, scrollToBottom])
 
   useEffect(() => {
     if (error) {
@@ -608,6 +622,12 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
     }
   }, [showFullChat, isMobile, isFirstMessageInNewChat])
 
+  useEffect(() => {
+    if (!chatId && !optimisticChatId) {
+      setChatCreatedEventDispatched(false)
+    }
+  }, [chatId, optimisticChatId])
+
   if (!showFullChat) {
     return (
       <VTOPToolHandler
@@ -752,7 +772,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
           <div
             className={cn(
               'absolute inset-0 overflow-y-auto chat-content',
-              isMobile && 'mobile-chat-container mobile-no-auto-scroll',
+              isMobile && 'mobile-chat-container',
               isMobile && isFirstMessageInNewChat && 'mobile-prevent-auto-scroll'
             )}
           >

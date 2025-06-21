@@ -158,7 +158,8 @@ async function runAdvancedPerformanceTest(userId: string): Promise<void> {
 async function runBenchmarkTests(userId: string): Promise<void> {
   console.log('\n Running Benchmark Tests...\n')
   
-  const benchmarks = [    {
+  const benchmarks: Array<{ name: string; operation: () => Promise<any> }> = [
+    {
       name: 'Chat Loading (Basic)',
       operation: () => getChats(userId, 10)
     },
@@ -168,7 +169,10 @@ async function runBenchmarkTests(userId: string): Promise<void> {
     },
     {
       name: 'Cursor Pagination',
-      operation: () => DbOptimizations.getChatsPaginated(userId, undefined, 10)
+      operation: async () => {
+        const result = await DbOptimizations.getChatsPaginated(userId, undefined, 10)
+        return result.chats
+      }
     },
     {
       name: 'User Activity Summary',

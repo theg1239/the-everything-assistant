@@ -3,18 +3,7 @@ import { PrismaClient } from '@prisma/client'
 const globalForPrisma = global as unknown as { prisma: PrismaClient }
 
 export const prisma = globalForPrisma.prisma ?? new PrismaClient({
-  log: process.env.NODE_ENV === 'development' 
-    ? ['query', 'info', 'warn', 'error']
-    : ['error'],
-  
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL
-    }
-  },
-
   errorFormat: 'pretty',
-
   transactionOptions: {
     maxWait: 5000,
     timeout: 10000,
@@ -22,26 +11,6 @@ export const prisma = globalForPrisma.prisma ?? new PrismaClient({
   },
 })
 
-prisma.$on('query', (e) => {
-  if (process.env.NODE_ENV === 'development') {
-    console.log('Query: ' + e.query)
-    console.log('Duration: ' + e.duration + 'ms')
-  }
-})
-
-prisma.$on('info', (e) => {
-  console.log('Info:', e.message)
-})
-
-prisma.$on('warn', (e) => {
-  console.warn('Warning:', e.message)
-})
-
-prisma.$on('error', (e) => {
-  console.error('Database Error:', e.message)
-})
-
-// Global connection setup
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma
 }

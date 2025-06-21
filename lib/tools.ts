@@ -794,7 +794,7 @@ export function createVITTools() {
 
     queryVTOP: tool({
       description:
-        "Access VTOP (VIT's official portal) to get student information like grades, attendance, timetable, profile, marks, hostel info, library dues, exam schedules, and more. This tool automatically handles credential authentication and interactive command prompts through intelligent defaults. For course materials, it supports smart natural language queries like 'anuj kumar's fluid mechanics notes' or 'week 5 assignments'. Use this tool whenever users request VTOP data - credentials will be prompted securely.",
+        "Access VTOP (VIT's official portal) to get PERSONAL student data that requires login authentication. Use ONLY for individual student information like personal grades, attendance, timetable, profile, marks, hostel info, library dues, exam schedules, digital assignments, and course materials. DO NOT use for general VIT information already available in knowledge base (like admission requirements, grading system explanation, campus facilities, exam patterns, etc.). This tool automatically handles credential authentication and interactive command prompts through intelligent defaults. For course materials, it supports smart natural language queries like 'anuj kumar's fluid mechanics notes' or 'week 5 assignments'. Use this tool ONLY when users request their PERSONAL VTOP data - credentials will be prompted securely.",
       parameters: z.object({
         command: z
           .enum([

@@ -502,7 +502,7 @@ const ToolCallLoadingState = ({ toolCalls }: { toolCalls: any[] }) => {
                 Running {toolCalls.length} tool{toolCalls.length > 1 ? 's' : ''}
               </div> */}
             </div>
-            <Sparkles className="h-4 w-4 text-muted-foreground animate-pulse" />
+            <Sparkles className="h-4 w-4 text-muted-foreground" />
           </div>
         </CardContent>
       </Card>

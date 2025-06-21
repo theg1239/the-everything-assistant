@@ -893,23 +893,23 @@ export function SettingsDialog({ open, onOpenChange }: any) {
         const backgroundOptions = [
           {
             type: 'aurora' as BackgroundType,
-            name: 'Aurora',
-            description: 'Animated aurora borealis effect with flowing colors'
+            name: 'aurora',
+            description: 'animated aurora borealis effect with flowing colors'
           },
           {
             type: 'beams' as BackgroundType,
-            name: 'Light Beams',
-            description: 'Dynamic light beams with subtle animations'
+            name: 'light beams',
+            description: 'dynamic light beams with subtle animations'
           },
           {
             type: 'gradient' as BackgroundType,
-            name: 'Gradient',
-            description: 'Smooth color gradient background'
+            name: 'gradient',
+            description: 'smooth color gradient background'
           },
           {
             type: 'solid' as BackgroundType,
-            name: 'Solid Color',
-            description: 'Simple solid color background'
+            name: 'lights out',
+            description: 'what it says'
           }
         ]
 
@@ -919,14 +919,12 @@ export function SettingsDialog({ open, onOpenChange }: any) {
               <h3 className="text-lg md:text-xl font-semibold mb-4">personalization</h3>
 
               <div className="space-y-6">
-                {/* Custom Backgrounds Section */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-3 mb-4">
                     <Palette className="w-5 h-5 text-primary" />
                     <h4 className="font-semibold text-base">custom backgrounds</h4>
                   </div>
 
-                  {/* Background Toggle */}
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
                     <div className="space-y-0.5">
                       <Label htmlFor="background-enabled" className="text-sm md:text-base">
@@ -995,7 +993,6 @@ export function SettingsDialog({ open, onOpenChange }: any) {
               <h3 className="text-lg md:text-xl font-semibold mb-4">security</h3>
 
               <div className="space-y-4">
-                {/* Multi-Factor Authentication */}
                 <div className="space-y-4 p-4 rounded-lg border border-border bg-muted/10">
                   <div className="flex items-center gap-3">
                     <Key className="w-5 h-5 text-primary" />

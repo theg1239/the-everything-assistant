@@ -556,7 +556,18 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
             maxTokens: 4096,
             toolChoice: 'auto',
             experimental_transform: smoothStream({ chunking: 'word' }),            experimental_generateMessageId: generateUUID,            onFinish: async ({ response }: { response: any }) => {
-              const toolResults = (response as any).toolResults ?? response.toolCalls ?? []
+              // console.log('DEBUG: onFinish response structure:', {
+              //   hasToolResults: !!(response as any).toolResults,
+              //   hasToolCalls: !!response.toolCalls,
+              //   hasUsage: !!response.usage,
+              //   hasToolInvocations: !!response.toolInvocations,
+              //   responseKeys: Object.keys(response),
+              //   toolResultsLength: ((response as any).toolResults ?? []).length,
+              //   toolCallsLength: (response.toolCalls ?? []).length,
+              //   toolInvocationsLength: (response.toolInvocations ?? []).length
+              // })
+              
+              const toolResults = (response as any).toolResults ?? response.toolCalls ?? response.toolInvocations ?? []
               
               for (const tr of toolResults) {
                 if (
@@ -617,15 +628,19 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
                   }
                 }
               }
-              
-              if (!messageText && response.text) {
+                if (!messageText && response.text) {
                 messageText = response.text
                 assistantId = assistantId || generateUUID()
               }
               
-              if (assistantId && messageText) {
+              if (!assistantId && safeInvocations && safeInvocations.length > 0) {
+                assistantId = generateUUID()
+              }
+              
+              if (assistantId && (messageText || (safeInvocations && safeInvocations.length > 0))) {
                 try {
-                  await saveMessage(chat.id, 'assistant', messageText, safeInvocations, assistantId)
+                  const contentToSave = messageText || ''
+                  await saveMessage(chat.id, 'assistant', contentToSave, safeInvocations, assistantId)
                   console.log('Assistant message saved successfully')
                 } catch (saveError) {
                   console.error('Failed to save assistant message:', saveError)
@@ -634,7 +649,8 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
                 console.log('Skipping message save - missing data:', { 
                   hasAssistantId: !!assistantId, 
                   hasMessageText: !!messageText,
-                  textLength: messageText.length 
+                  textLength: messageText?.length || 0,
+                  hasToolInvocations: !!(safeInvocations && safeInvocations.length > 0)
                 })
               }
             },

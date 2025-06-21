@@ -112,7 +112,7 @@ const PureChatInterface = ({ initialMessages = [], chatId, autoResume = false }:
   const router = useRouter()
   const [optimisticChatId, setOptimisticChatId] = useState<string | undefined>(chatId)
   const currentChatIdRef = useRef<string | undefined>(chatId)
-  const { updateToolResult } = useVTOP()
+  const { updateToolResult, clearToolResult } = useVTOP()
   const { rateLimitError, clearRateLimitError, checkForRateLimitError } = useRateLimit()
   const { data: session } = useSession()
 
@@ -472,14 +472,15 @@ const PureChatInterface = ({ initialMessages = [], chatId, autoResume = false }:
       if (!command) {
         console.error('No command found in original tool call')
         return
-      }
-
-      const toolCallId = originalToolCall.toolCallId || Date.now().toString()
+      }      const toolCallId = originalToolCall.toolCallId || Date.now().toString()
       //console.log('Handling VTOP credentials for toolCallId:', toolCallId, 'command:', command)
+      
+      clearToolResult(toolCallId)
+      
       const updatedMessagesForLoading = messages.map((message: any) => {
         if (message.toolInvocations) {
           const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
-            if (toolInvocation.toolCallId && toolInvocation.toolCallId === toolCallId) {
+            if (toolInvocation.toolCallId && toolCallId) {
               //console.log('Clearing credentials state for toolCallId:', toolCallId)
               return {
                 ...toolInvocation,
@@ -661,6 +662,22 @@ const PureChatInterface = ({ initialMessages = [], chatId, autoResume = false }:
       setChatCreatedEventDispatched(false)
     }
   }, [chatId, optimisticChatId])
+  useEffect(() => {
+    if (messages && messages.length > 0) {
+      const lastMessage = messages[messages.length - 1]
+      if (lastMessage && lastMessage.toolInvocations) {
+        for (const tool of lastMessage.toolInvocations) {
+          if (tool.toolName === 'queryVTOP' && tool.state === 'result' && tool.toolCallId) {
+            const toolResult = (tool as any).result
+            if (toolResult) {
+              const command = toolResult.command || tool.args?.command || 'unknown'
+              updateToolResult(tool.toolCallId, command, toolResult)
+            }
+          }
+        }
+      }
+    }
+  }, [messages, updateToolResult])
 
   if (!showFullChat) {
     return (

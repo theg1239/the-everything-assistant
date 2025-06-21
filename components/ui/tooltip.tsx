@@ -17,7 +17,7 @@ const TooltipContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>
 >(({ className, sideOffset = 4, ...props }, ref) => {
   const [mounted, setMounted] = React.useState(false)
-  
+
   React.useEffect(() => {
     setMounted(true)
   }, [])
@@ -35,7 +35,7 @@ const TooltipContent = React.forwardRef<
   )
 
   if (!mounted) return null
-  
+
   return typeof window !== 'undefined' ? createPortal(content, document.body) : content
 })
 TooltipContent.displayName = TooltipPrimitive.Content.displayName

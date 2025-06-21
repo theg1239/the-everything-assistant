@@ -7,9 +7,9 @@ export function PerformanceMonitor() {
     if (typeof window === 'undefined') return
 
     if ('PerformanceObserver' in window) {
-      const observer = new PerformanceObserver((list) => {
+      const observer = new PerformanceObserver(list => {
         const entries = list.getEntries()
-        entries.forEach((entry) => {
+        entries.forEach(entry => {
           if (entry.duration > 100) {
             console.warn(`Long task detected: ${entry.duration.toFixed(0)}ms`)
           }
@@ -18,8 +18,7 @@ export function PerformanceMonitor() {
 
       try {
         observer.observe({ entryTypes: ['longtask'] })
-      } catch (e) {
-      }
+      } catch (e) {}
 
       return () => {
         observer.disconnect()

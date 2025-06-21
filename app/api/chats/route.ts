@@ -1,4 +1,10 @@
-import { getChats, deleteAllChats, deleteAllArchivedChats, archiveAllChats, getArchivedChats } from '@/lib/db'
+import {
+  getChats,
+  deleteAllChats,
+  deleteAllArchivedChats,
+  archiveAllChats,
+  getArchivedChats,
+} from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 

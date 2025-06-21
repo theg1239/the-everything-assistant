@@ -34,12 +34,12 @@ export function PerformanceProvider({ children }: PerformanceProviderProps) {
     }
 
     if ('PerformanceObserver' in window) {
-      const observer = new PerformanceObserver((list) => {
+      const observer = new PerformanceObserver(list => {
         const entries = list.getEntries()
-        entries.forEach((entry) => {
+        entries.forEach(entry => {
           if (entry.duration > 50) {
             longTaskCount++
-            
+
             if (longTaskCount > 5) {
               setReduceAnimations(true)
               setIsLowPerformance(true)
@@ -51,8 +51,7 @@ export function PerformanceProvider({ children }: PerformanceProviderProps) {
 
       try {
         observer.observe({ entryTypes: ['longtask'] })
-      } catch (e) {
-      }
+      } catch (e) {}
 
       const interval = setInterval(resetCounter, 10000)
 

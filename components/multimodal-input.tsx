@@ -44,7 +44,7 @@ const PureMultimodalInput = ({
 
   const getPlaceholderText = () => {
     if (!selectedTool) return placeholder || 'ask anything...'
-    
+
     switch (selectedTool) {
       case 'reddit-search':
         return 'search related subreddits'
@@ -182,7 +182,7 @@ const PureMultimodalInput = ({
             <div className="flex items-end gap-2 p-2">
               {/* Tools Dropdown */}
               <ToolsDropdown onToolSelect={onToolSelect} selectedTool={selectedTool} />
-              
+
               <AnimatePresence mode="wait">
                 {isLoading ? (
                   <motion.div

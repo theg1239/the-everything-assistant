@@ -19,26 +19,26 @@ const availableTools: Tool[] = [
     id: 'reddit-search',
     name: 'search reddit',
     description: 'Search Reddit knowledge base for student discussions and academic advice',
-    icon: <MessageSquare className="w-4 h-4" />
+    icon: <MessageSquare className="w-4 h-4" />,
   },
   {
     id: 'vtop-query',
     name: 'VTOP access',
     description: 'Access personal VTOP data like grades, attendance, and timetable',
-    icon: <GraduationCap className="w-4 h-4" />
+    icon: <GraduationCap className="w-4 h-4" />,
   },
   {
     id: 'past-papers',
     name: 'past papers',
     description: 'Find past examination papers for VIT courses',
-    icon: <FileText className="w-4 h-4" />
+    icon: <FileText className="w-4 h-4" />,
   },
   {
     id: 'mess-menu',
     name: 'mess menu',
     description: 'Get mess menu for VIT hostels',
-    icon: <Search className="w-4 h-4" />
-  }
+    icon: <Search className="w-4 h-4" />,
+  },
 ]
 
 interface ToolsDropdownProps {
@@ -59,11 +59,16 @@ export function ToolsDropdown({ onToolSelect, selectedTool }: ToolsDropdownProps
 
   React.useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) &&
-          buttonRef.current && !buttonRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false)
       }
-    }    if (isOpen) {
+    }
+    if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside)
       return () => {
         document.removeEventListener('mousedown', handleClickOutside)
@@ -74,32 +79,32 @@ export function ToolsDropdown({ onToolSelect, selectedTool }: ToolsDropdownProps
   React.useEffect(() => {
     if (isOpen && buttonRef.current && mounted) {
       const buttonRect = buttonRef.current.getBoundingClientRect()
-      
+
       // Position dropdown above and to the left of the button
       const dropdownHeight = 180 // Approximate height for the dropdown
       const dropdownWidth = 240
-      
+
       // Position above the button with some gap
       let top = buttonRect.top - dropdownHeight - 8 // 8px gap above button
-      
+
       // Position to the left (right-align dropdown to button's right edge)
       let left = buttonRect.right - dropdownWidth
-      
+
       // If dropdown would go off screen at the top, position it below instead
       if (top < 8) {
         top = buttonRect.bottom + 8 // 8px gap below button
       }
-      
+
       // Ensure dropdown doesn't go off screen horizontally to the left
       if (left < 8) {
         left = 8
       }
-      
+
       // Ensure dropdown doesn't go off screen horizontally to the right
       if (left + dropdownWidth > window.innerWidth - 8) {
         left = window.innerWidth - dropdownWidth - 8
       }
-      
+
       setDropdownPosition({ top, left })
     }
   }, [isOpen, mounted])
@@ -112,7 +117,9 @@ export function ToolsDropdown({ onToolSelect, selectedTool }: ToolsDropdownProps
 
   return (
     <div className="relative">
-      <TooltipProvider>        <Tooltip>
+      <TooltipProvider>
+        {' '}
+        <Tooltip>
           <TooltipTrigger asChild>
             <Button
               ref={buttonRef}
@@ -120,8 +127,9 @@ export function ToolsDropdown({ onToolSelect, selectedTool }: ToolsDropdownProps
               size="sm"
               onClick={() => setIsOpen(!isOpen)}
               className={cn(
-                "h-8 px-2 text-muted-foreground hover:text-foreground transition-all",
-                selectedTool && "text-blue-500 hover:text-blue-600 bg-blue-50/50 dark:bg-blue-950/20"
+                'h-8 px-2 text-muted-foreground hover:text-foreground transition-all',
+                selectedTool &&
+                  'text-blue-500 hover:text-blue-600 bg-blue-50/50 dark:bg-blue-950/20'
               )}
             >
               <Wrench className="w-4 h-4" />
@@ -134,62 +142,58 @@ export function ToolsDropdown({ onToolSelect, selectedTool }: ToolsDropdownProps
           </TooltipTrigger>
           <TooltipContent>
             {selectedTool ? `using: ${selectedToolData?.name}` : 'available tools'}
-          </TooltipContent>        </Tooltip>
-      </TooltipProvider>
-
-      {isOpen && mounted && createPortal(
-        <div
-          ref={dropdownRef}
-          className="fixed z-50 min-w-[240px] bg-background border rounded-lg shadow-lg"
-          style={{
-            top: dropdownPosition.top,
-            left: dropdownPosition.left,
-          }}
-        >
-          <div className="py-1">
-            {/* Option to clear tool selection */}
-            <button
-              onClick={() => handleToolSelect('')}
-              className={cn(
-                "w-full flex items-center gap-3 px-3 py-2 text-left transition-colors",
-                "hover:bg-muted/50",
-                !selectedTool && "bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300"
-              )}
-            >
-              <div className="flex-shrink-0">
-                <MessageSquare className="w-4 h-4" />
-              </div>
-              <div className="flex-1">
-                <div className="text-sm font-medium">
-                  general
-                </div>
-              </div>
-            </button>
-            
-            {availableTools.map((tool) => (
+          </TooltipContent>{' '}
+        </Tooltip>
+      </TooltipProvider>{' '}
+      {isOpen &&
+        mounted &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            className="fixed z-50 min-w-[240px] bg-background/80 backdrop-blur-md border border-border/50 rounded-lg shadow-lg overflow-hidden"
+            style={{
+              top: dropdownPosition.top,
+              left: dropdownPosition.left,
+            }}
+          >
+            <div className="">
               <button
-                key={tool.id}
-                onClick={() => handleToolSelect(tool.id)}
+                onClick={() => handleToolSelect('')}
                 className={cn(
-                  "w-full flex items-center gap-3 px-3 py-2 text-left transition-colors",
-                  "hover:bg-muted/50",
-                  selectedTool === tool.id && "bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300"
+                  'w-full flex items-center gap-3 px-3 py-2 text-left transition-colors',
+                  'hover:bg-muted/50',
+                  !selectedTool && 'bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300'
                 )}
               >
                 <div className="flex-shrink-0">
-                  {tool.icon}
+                  <MessageSquare className="w-4 h-4" />
                 </div>
                 <div className="flex-1">
-                  <div className="text-sm font-medium">
-                    {tool.name}
-                  </div>
+                  <div className="text-sm font-medium">general</div>
                 </div>
               </button>
-            ))}
-          </div>
-        </div>,
-        document.body
-      )}
+
+              {availableTools.map((tool, index) => (
+                <button
+                  key={tool.id}
+                  onClick={() => handleToolSelect(tool.id)}
+                  className={cn(
+                    'w-full flex items-center gap-3 px-3 py-2 text-left transition-colors',
+                    'hover:bg-muted/50',
+                    selectedTool === tool.id &&
+                      'bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300'
+                  )}
+                >
+                  <div className="flex-shrink-0">{tool.icon}</div>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium">{tool.name}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   )
 }

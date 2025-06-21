@@ -5,22 +5,24 @@ import { VIT_SYSTEM_PROMPT } from '@/lib/prompts'
 import { VIT_COMPREHENSIVE_KNOWLEDGE } from '@/lib/knowledge-base'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { 
-  getChat, 
+import {
+  getChat,
   createChat,
   createChatWithFirstMessage,
-  saveMessage, 
-  updateChat, 
-  createStreamId, 
+  saveMessage,
+  updateChat,
+  createStreamId,
   getMostRecentStreamId,
-  getLastAssistantMessage
+  getLastAssistantMessage,
 } from '@/lib/db'
-import { generateChatPath, extractTitleFromContent, generateUUID, getTrailingMessageId } from '@/lib/utils'
-import { z } from 'zod'
 import {
-  createResumableStreamContext,
-  type ResumableStreamContext,
-} from 'resumable-stream'
+  generateChatPath,
+  extractTitleFromContent,
+  generateUUID,
+  getTrailingMessageId,
+} from '@/lib/utils'
+import { z } from 'zod'
+import { createResumableStreamContext, type ResumableStreamContext } from 'resumable-stream'
 import { after } from 'next/server'
 import { differenceInSeconds } from 'date-fns'
 import { prisma } from '@/lib/prisma'
@@ -343,7 +345,7 @@ export async function POST(req: Request) {
 
     let chat = chatId ? await getChat(chatId, session.user.id) : null
     let firstUserMessage: any = null
-    
+
     if (!chat) {
       const firstMessage = messages[0]
       const tempTitle = extractTitleFromContent(firstMessage?.content || 'New Chat')
@@ -351,16 +353,18 @@ export async function POST(req: Request) {
       if (firstMessage?.role === 'user') {
         const chatCreateStart = performance.now()
         const result = await createChatWithFirstMessage(
-          session.user.id, 
-          tempTitle, 
-          path, 
+          session.user.id,
+          tempTitle,
+          path,
           firstMessage.content,
           firstMessage.id
         )
         chat = result.chat
         firstUserMessage = result.message
         const chatCreateTime = performance.now()
-        console.log(`Chat and first message created atomically in ${(chatCreateTime - chatCreateStart).toFixed(2)}ms`)
+        console.log(
+          `Chat and first message created atomically in ${(chatCreateTime - chatCreateStart).toFixed(2)}ms`
+        )
       } else {
         const chatCreateStart = performance.now()
         chat = await createChat(session.user.id, tempTitle, path)
@@ -421,7 +425,7 @@ export async function POST(req: Request) {
                 structured_data: (parsedData as any).structured_data,
                 summary: (parsedData as any).summary,
               })
-              
+
               const assistantResponse =
                 (result as any).formatted_content ||
                 (result as any).summary ||
@@ -475,8 +479,9 @@ export async function POST(req: Request) {
     await createStreamId(streamId, chat.id)
 
     const tools = createVITTools()
-    
-    const toolPreferenceGuidance = preferredTool ? `
+
+    const toolPreferenceGuidance = preferredTool
+      ? `
 
 IMPORTANT: The user has specifically selected the "${preferredTool}" tool. When responding to their query, you should prioritize using this tool if it's relevant to their question. Available tools and their purposes:
 
@@ -485,7 +490,8 @@ IMPORTANT: The user has specifically selected the "${preferredTool}" tool. When 
 - past-papers: Use findPastPapers for examination papers and course materials
 - mess-menu: Use getMessMenu for hostel dining information
 
-If the user's query is relevant to the selected tool "${preferredTool}", use it even if other tools might also be applicable.` : ''
+If the user's query is relevant to the selected tool "${preferredTool}", use it even if other tools might also be applicable.`
+      : ''
 
     const combinedSystemPrompt = `${VIT_SYSTEM_PROMPT}
 
@@ -546,7 +552,7 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
       return message
     })
     const stream = createDataStream({
-      execute: async (dataStream) => {
+      execute: async dataStream => {
         const result = await rateLimitedGoogle.streamText(
           {
             model: await rateLimitedGoogle.model('gemini-2.5-flash-lite-preview-06-17'),
@@ -555,7 +561,9 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
             temperature: 0.7,
             maxTokens: 4096,
             toolChoice: 'auto',
-            experimental_transform: smoothStream({ chunking: 'word' }),            experimental_generateMessageId: generateUUID,            onFinish: async ({ response }: { response: any }) => {
+            experimental_transform: smoothStream({ chunking: 'word' }),
+            experimental_generateMessageId: generateUUID,
+            onFinish: async ({ response }: { response: any }) => {
               // console.log('DEBUG: onFinish response structure:', {
               //   hasToolResults: !!(response as any).toolResults,
               //   hasToolCalls: !!response.toolCalls,
@@ -566,9 +574,13 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
               //   toolCallsLength: (response.toolCalls ?? []).length,
               //   toolInvocationsLength: (response.toolInvocations ?? []).length
               // })
-              
-              const toolResults = (response as any).toolResults ?? response.toolCalls ?? response.toolInvocations ?? []
-              
+
+              const toolResults =
+                (response as any).toolResults ??
+                response.toolCalls ??
+                response.toolInvocations ??
+                []
+
               for (const tr of toolResults) {
                 if (
                   tr.toolName === 'queryVTOP' &&
@@ -604,18 +616,24 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
               }
 
               const safeInvocations = JSON.parse(JSON.stringify(toolResults))
-              
+
               let assistantId: string | undefined
               let messageText = ''
-              
-              if (response.messages && Array.isArray(response.messages) && response.messages.length > 0) {
-                const assistantMessages = response.messages.filter((message: any) => message.role === 'assistant')
-                
+
+              if (
+                response.messages &&
+                Array.isArray(response.messages) &&
+                response.messages.length > 0
+              ) {
+                const assistantMessages = response.messages.filter(
+                  (message: any) => message.role === 'assistant'
+                )
+
                 if (assistantMessages.length > 0) {
                   const lastAssistantMessage = assistantMessages[assistantMessages.length - 1]
                   const messageId = getTrailingMessageId(assistantMessages)
                   assistantId = messageId || undefined
-                  
+
                   if (lastAssistantMessage.content) {
                     if (typeof lastAssistantMessage.content === 'string') {
                       messageText = lastAssistantMessage.content
@@ -628,29 +646,35 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
                   }
                 }
               }
-                if (!messageText && response.text) {
+              if (!messageText && response.text) {
                 messageText = response.text
                 assistantId = assistantId || generateUUID()
               }
-              
+
               if (!assistantId && safeInvocations && safeInvocations.length > 0) {
                 assistantId = generateUUID()
               }
-              
+
               if (assistantId && (messageText || (safeInvocations && safeInvocations.length > 0))) {
                 try {
                   const contentToSave = messageText || ''
-                  await saveMessage(chat.id, 'assistant', contentToSave, safeInvocations, assistantId)
+                  await saveMessage(
+                    chat.id,
+                    'assistant',
+                    contentToSave,
+                    safeInvocations,
+                    assistantId
+                  )
                   console.log('Assistant message saved successfully')
                 } catch (saveError) {
                   console.error('Failed to save assistant message:', saveError)
                 }
               } else {
-                console.log('Skipping message save - missing data:', { 
-                  hasAssistantId: !!assistantId, 
+                console.log('Skipping message save - missing data:', {
+                  hasAssistantId: !!assistantId,
                   hasMessageText: !!messageText,
                   textLength: messageText?.length || 0,
-                  hasToolInvocations: !!(safeInvocations && safeInvocations.length > 0)
+                  hasToolInvocations: !!(safeInvocations && safeInvocations.length > 0),
                 })
               }
             },
@@ -660,17 +684,20 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
         console.log('Before consumeStream()')
         result.consumeStream()
         console.log('After consumeStream()')
-        
+
         console.log('Before mergeIntoDataStream()')
         result.mergeIntoDataStream(dataStream, {
           sendReasoning: true,
         })
         console.log('After mergeIntoDataStream()')
-      },onError: (error: any) => {
+      },
+      onError: (error: any) => {
         console.error('Data stream error:', error)
-        const errorMessage = error?.message || 'An unexpected error occurred while processing your request'
+        const errorMessage =
+          error?.message || 'An unexpected error occurred while processing your request'
         console.log('Simplified error message:', errorMessage)
-        return `Error: ${errorMessage}`      },
+        return `Error: ${errorMessage}`
+      },
     })
     const streamContext = getStreamContext()
 
@@ -678,19 +705,23 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
       try {
         console.log('Creating resumable stream with ID:', streamId)
         const resumableResponse = await streamContext.resumableStream(streamId, () => stream)
-        
+
         console.log('Resumable stream created:', {
           isResponse: resumableResponse instanceof Response,
           hasBody: !!(resumableResponse as any)?.body,
           isReadableStream: resumableResponse instanceof ReadableStream,
           constructor: resumableResponse?.constructor?.name,
-          headers: resumableResponse instanceof Response ? Array.from((resumableResponse as Response).headers.entries()) : 'not a response'        })
-        
+          headers:
+            resumableResponse instanceof Response
+              ? Array.from((resumableResponse as Response).headers.entries())
+              : 'not a response',
+        })
+
         return new Response(resumableResponse, {
           headers: {
             'Content-Type': 'text/plain; charset=utf-8',
             'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
+            Connection: 'keep-alive',
             'X-Chat-Id': chat.id,
             'X-Chat-Path': `/chat/${chat.id}`,
           },
@@ -699,13 +730,13 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
         console.error('Resumable stream error, falling back to regular stream:', resumableError)
       }
     }
-    
+
     console.log('Using regular streaming (no resumable context or error occurred)')
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
         'X-Chat-Id': chat.id,
         'X-Chat-Path': `/chat/${chat.id}`,
       },
@@ -754,7 +785,7 @@ export async function GET(request: Request) {
   }
   const [chat, recentStreamId] = await Promise.all([
     getChat(chatId, session.user.id),
-    getMostRecentStreamId(chatId)
+    getMostRecentStreamId(chatId),
   ])
 
   const dbQueryTime = performance.now()
@@ -766,90 +797,88 @@ export async function GET(request: Request) {
 
   if (!recentStreamId) {
     return new Response('No streams found', { status: 404 })
-  }const emptyDataStream = createDataStream({
+  }
+  const emptyDataStream = createDataStream({
     execute: () => {},
   })
-    console.log('Attempting to resume stream for chatId:', chatId, 'with streamId:', recentStreamId)
-  
+  console.log('Attempting to resume stream for chatId:', chatId, 'with streamId:', recentStreamId)
+
   let stream: ReadableStream | Response | null = null
-  
+
   try {
-    const streamPromise = streamContext.resumableStream(
-      recentStreamId,
-      () => emptyDataStream,
-    )
-    
-    const timeoutPromise = new Promise<null>((_, reject) => 
+    const streamPromise = streamContext.resumableStream(recentStreamId, () => emptyDataStream)
+
+    const timeoutPromise = new Promise<null>((_, reject) =>
       setTimeout(() => reject(new Error('Stream resume timeout')), 1000)
     )
-    
+
     stream = await Promise.race([streamPromise, timeoutPromise])
   } catch (resumeError) {
     console.error('Failed to resume stream or timeout occurred:', resumeError)
     stream = null
   }
-  
+
   console.log('Resume stream result:', {
     streamExists: !!stream,
     isResponse: stream instanceof Response,
     isReadableStream: stream instanceof ReadableStream,
     constructor: stream?.constructor?.name,
-    streamId: recentStreamId
+    streamId: recentStreamId,
   })
   if (stream) {
     const resumeTime = performance.now()
     console.log(`Stream resumed successfully in ${(resumeTime - startTime).toFixed(2)}ms`)
-    return new Response(stream, { 
+    return new Response(stream, {
       status: 200,
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
         'X-Chat-Id': chat.id,
         'X-Chat-Path': `/chat/${chat.id}`,
-      }
+      },
     })
   }
 
   const dbRestoreStartTime = performance.now()
   console.log('No resumable stream found, attempting database restore...')
   const mostRecentMessage = await getLastAssistantMessage(chatId)
-  
+
   const dbRestoreTime = performance.now()
   console.log(`DB restore query completed in ${(dbRestoreTime - dbRestoreStartTime).toFixed(2)}ms`)
-  
+
   if (!mostRecentMessage) {
     console.log('No assistant messages found in database')
-    return new Response(emptyDataStream, { 
+    return new Response(emptyDataStream, {
       status: 200,
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'no-cache',        
-        'Connection': 'keep-alive',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
         'X-Chat-Id': chat.id,
         'X-Chat-Path': `/chat/${chat.id}`,
-      }    
+      },
     })
   }
 
   const messageCreatedAt = new Date(mostRecentMessage.created_at)
 
-  if (differenceInSeconds(resumeRequestedAt, messageCreatedAt) > 15) {    
+  if (differenceInSeconds(resumeRequestedAt, messageCreatedAt) > 15) {
     console.log('Message too old for restore (>15s)')
-    return new Response(emptyDataStream, { 
+    return new Response(emptyDataStream, {
       status: 200,
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
         'X-Chat-Id': chat.id,
         'X-Chat-Path': `/chat/${chat.id}`,
-      }
+      },
     })
   }
   console.log('Restoring message from database')
   const restoredStream = createDataStream({
-    execute: (buffer) => {
+    execute: buffer => {
       buffer.writeData({
         type: 'append-message',
         message: JSON.stringify(mostRecentMessage),
@@ -860,15 +889,15 @@ export async function GET(request: Request) {
   const totalTime = performance.now()
   console.log(`Database restore completed in ${(totalTime - startTime).toFixed(2)}ms total`)
 
-  return new Response(restoredStream, { 
+  return new Response(restoredStream, {
     status: 200,
     headers: {
       'Content-Type': 'text/plain; charset=utf-8',
       'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'X-Chat-Id': chat.id,        
+      Connection: 'keep-alive',
+      'X-Chat-Id': chat.id,
       'X-Chat-Path': `/chat/${chat.id}`,
-    }
+    },
   })
 }
 

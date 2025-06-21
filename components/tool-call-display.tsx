@@ -172,7 +172,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
           }
         }
       }
-      
+
       if (errorMessage.includes('Login failed or session could not be established')) {
         errorMessage = 'Login failed - incorrect username/password'
       }
@@ -547,7 +547,11 @@ const ToolCallResultsSummary = ({
       if (tool.toolName === 'queryVTOP') {
         let errorMessage = tool.result.error || tool.result.message || ''
 
-        if (!errorMessage || errorMessage === '500' || errorMessage.includes('VTOP request failed: 500')) {
+        if (
+          !errorMessage ||
+          errorMessage === '500' ||
+          errorMessage.includes('VTOP request failed: 500')
+        ) {
           const rawData = tool.result.output || tool.result.data || tool.result.message
           if (typeof rawData === 'string') {
             if (
@@ -574,13 +578,15 @@ const ToolCallResultsSummary = ({
         }
 
         const messageField = tool.result.message || ''
-        if (messageField.includes('Invalid LoginId/Password') || 
-            messageField.includes('Login failed or session could not be established')) {
+        if (
+          messageField.includes('Invalid LoginId/Password') ||
+          messageField.includes('Login failed or session could not be established')
+        ) {
           errorMessage = 'Invalid LoginId/Password'
         }
 
         const isCredentialError =
-          errorMessage.includes('VTOP credentials required') || 
+          errorMessage.includes('VTOP credentials required') ||
           (errorMessage.includes('credentials') && errorMessage.includes('required'))
         const isAuthError =
           errorMessage.includes('Invalid LoginId/Password') ||
@@ -606,25 +612,30 @@ const ToolCallResultsSummary = ({
       const firstFailedTool = failedTools[0]
       const errorMessage =
         firstFailedTool.result.error || firstFailedTool.result.message || 'An error occurred'
-      
-      const isAuthError = firstFailedTool.toolName === 'queryVTOP' && (
-        errorMessage.includes('Invalid LoginId/Password') || 
-        errorMessage.includes('Login failed') ||
-        errorMessage.includes('session could not be established') ||
-        errorMessage.includes('incorrect username/password') ||
-        errorMessage.includes('Authentication failed') ||
-        errorMessage.includes('Invalid credentials') ||
-        errorMessage.includes('Login failed or session could not be established') ||
-        (() => {
-          const rawData = firstFailedTool.result.output || firstFailedTool.result.data || firstFailedTool.result.message || ''
-          return typeof rawData === 'string' && (
-            rawData.includes('Login failed') ||
-            rawData.includes('Invalid LoginId/Password') ||
-            rawData.includes('session could not be established') ||
-            rawData.includes('incorrect username/password')
-          )
-        })()
-      )
+
+      const isAuthError =
+        firstFailedTool.toolName === 'queryVTOP' &&
+        (errorMessage.includes('Invalid LoginId/Password') ||
+          errorMessage.includes('Login failed') ||
+          errorMessage.includes('session could not be established') ||
+          errorMessage.includes('incorrect username/password') ||
+          errorMessage.includes('Authentication failed') ||
+          errorMessage.includes('Invalid credentials') ||
+          errorMessage.includes('Login failed or session could not be established') ||
+          (() => {
+            const rawData =
+              firstFailedTool.result.output ||
+              firstFailedTool.result.data ||
+              firstFailedTool.result.message ||
+              ''
+            return (
+              typeof rawData === 'string' &&
+              (rawData.includes('Login failed') ||
+                rawData.includes('Invalid LoginId/Password') ||
+                rawData.includes('session could not be established') ||
+                rawData.includes('incorrect username/password'))
+            )
+          })())
 
       return (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3">
@@ -634,13 +645,16 @@ const ToolCallResultsSummary = ({
                 <AlertCircle className="h-5 w-5 text-red-400" />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-foreground truncate">
-                    {firstFailedTool.toolName === 'queryVTOP' && isAuthError ? 'VTOP Login Failed' : 
-                     firstFailedTool.toolName === 'queryVTOP' ? 'VTOP Error' : 'Search Error'}
+                    {firstFailedTool.toolName === 'queryVTOP' && isAuthError
+                      ? 'VTOP Login Failed'
+                      : firstFailedTool.toolName === 'queryVTOP'
+                        ? 'VTOP Error'
+                        : 'Search Error'}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                    {isAuthError && firstFailedTool.toolName === 'queryVTOP' ? 
-                      'Invalid VTOP credentials. Please try logging in again.' : 
-                      errorMessage}
+                    {isAuthError && firstFailedTool.toolName === 'queryVTOP'
+                      ? 'Invalid VTOP credentials. Please try logging in again.'
+                      : errorMessage}
                   </div>
                 </div>
                 {isAuthError && onLoginClick && (
@@ -672,9 +686,7 @@ const ToolCallResultsSummary = ({
 
     const vtopCredentialTools = enrichedToolCalls.filter(
       tool =>
-        tool.toolName === 'queryVTOP' &&
-        tool.result &&
-        tool.result.requiresCredentials === true
+        tool.toolName === 'queryVTOP' && tool.result && tool.result.requiresCredentials === true
     )
 
     if (vtopCredentialTools.length > 0) {

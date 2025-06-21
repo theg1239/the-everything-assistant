@@ -74,7 +74,8 @@ const defaultBackgroundConfig: BackgroundConfig = {
 
 export default function CustomBackground() {
   const { data: session, status } = useSession()
-  const [backgroundConfig, setBackgroundConfig] = useState<BackgroundConfig>(defaultBackgroundConfig)
+  const [backgroundConfig, setBackgroundConfig] =
+    useState<BackgroundConfig>(defaultBackgroundConfig)
   const [preferencesLoaded, setPreferencesLoaded] = useState(false)
 
   useEffect(() => {
@@ -91,7 +92,7 @@ export default function CustomBackground() {
           if (response.ok) {
             const data = await response.json()
             const prefs = data.preferences
-            
+
             // Handle legacy aurora preference
             if (prefs.auroraBackground !== undefined) {
               setBackgroundConfig({
@@ -155,8 +156,12 @@ export default function CustomBackground() {
       case 'aurora':
         return (
           <Aurora
-            colorStops={backgroundConfig.aurora?.colorStops || defaultBackgroundConfig.aurora!.colorStops!}
-            amplitude={backgroundConfig.aurora?.amplitude || defaultBackgroundConfig.aurora!.amplitude!}
+            colorStops={
+              backgroundConfig.aurora?.colorStops || defaultBackgroundConfig.aurora!.colorStops!
+            }
+            amplitude={
+              backgroundConfig.aurora?.amplitude || defaultBackgroundConfig.aurora!.amplitude!
+            }
             blend={backgroundConfig.aurora?.blend || defaultBackgroundConfig.aurora!.blend!}
             speed={backgroundConfig.aurora?.speed || defaultBackgroundConfig.aurora!.speed!}
           />
@@ -165,22 +170,35 @@ export default function CustomBackground() {
       case 'beams':
         return (
           <Beams
-            beamWidth={backgroundConfig.beams?.beamWidth || defaultBackgroundConfig.beams!.beamWidth!}
-            beamHeight={backgroundConfig.beams?.beamHeight || defaultBackgroundConfig.beams!.beamHeight!}
-            beamNumber={backgroundConfig.beams?.beamNumber || defaultBackgroundConfig.beams!.beamNumber!}
-            lightColor={backgroundConfig.beams?.lightColor || defaultBackgroundConfig.beams!.lightColor!}
+            beamWidth={
+              backgroundConfig.beams?.beamWidth || defaultBackgroundConfig.beams!.beamWidth!
+            }
+            beamHeight={
+              backgroundConfig.beams?.beamHeight || defaultBackgroundConfig.beams!.beamHeight!
+            }
+            beamNumber={
+              backgroundConfig.beams?.beamNumber || defaultBackgroundConfig.beams!.beamNumber!
+            }
+            lightColor={
+              backgroundConfig.beams?.lightColor || defaultBackgroundConfig.beams!.lightColor!
+            }
             speed={backgroundConfig.beams?.speed || defaultBackgroundConfig.beams!.speed!}
-            noiseIntensity={backgroundConfig.beams?.noiseIntensity || defaultBackgroundConfig.beams!.noiseIntensity!}
+            noiseIntensity={
+              backgroundConfig.beams?.noiseIntensity ||
+              defaultBackgroundConfig.beams!.noiseIntensity!
+            }
             scale={backgroundConfig.beams?.scale || defaultBackgroundConfig.beams!.scale!}
             rotation={backgroundConfig.beams?.rotation || defaultBackgroundConfig.beams!.rotation!}
           />
         )
 
       case 'gradient':
-        const gradientColors = backgroundConfig.gradient?.colors || defaultBackgroundConfig.gradient!.colors
-        const direction = backgroundConfig.gradient?.direction || defaultBackgroundConfig.gradient!.direction
+        const gradientColors =
+          backgroundConfig.gradient?.colors || defaultBackgroundConfig.gradient!.colors
+        const direction =
+          backgroundConfig.gradient?.direction || defaultBackgroundConfig.gradient!.direction
         const gradientClasses = `bg-gradient-${direction} from-[${gradientColors[0]}] via-[${gradientColors[1]}] to-[${gradientColors[2] || gradientColors[1]}]`
-        
+
         return (
           <div className="absolute inset-0">
             <div className={`absolute inset-0 ${gradientClasses}`} />
@@ -189,9 +207,7 @@ export default function CustomBackground() {
 
       case 'solid':
         const solidColor = backgroundConfig.solid?.color || defaultBackgroundConfig.solid!.color
-        return (
-          <div className="absolute inset-0" style={{ backgroundColor: solidColor }} />
-        )
+        return <div className="absolute inset-0" style={{ backgroundColor: solidColor }} />
 
       default:
         return (

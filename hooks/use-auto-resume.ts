@@ -1,21 +1,21 @@
-'use client';
+'use client'
 
-import { useEffect } from 'react';
-import type { Message } from 'ai';
-import type { UseChatHelpers } from 'ai/react';
+import { useEffect } from 'react'
+import type { Message } from 'ai'
+import type { UseChatHelpers } from 'ai/react'
 
 export interface UseAutoResumeParams {
-  autoResume: boolean;
-  initialMessages: Message[];
-  experimental_resume: UseChatHelpers['experimental_resume'];
-  data: UseChatHelpers['data'];
-  setMessages: UseChatHelpers['setMessages'];
+  autoResume: boolean
+  initialMessages: Message[]
+  experimental_resume: UseChatHelpers['experimental_resume']
+  data: UseChatHelpers['data']
+  setMessages: UseChatHelpers['setMessages']
 }
 
 export interface DataPart {
-  type: string;
-  message?: string;
-  [key: string]: any;
+  type: string
+  message?: string
+  [key: string]: any
 }
 
 export function useAutoResume({
@@ -26,33 +26,33 @@ export function useAutoResume({
   setMessages,
 }: UseAutoResumeParams) {
   useEffect(() => {
-    if (!autoResume) return;
+    if (!autoResume) return
 
-    const mostRecentMessage = initialMessages.at(-1);
+    const mostRecentMessage = initialMessages.at(-1)
 
     if (mostRecentMessage?.role === 'user') {
-      experimental_resume();
+      experimental_resume()
     }
 
     // we intentionally run this once
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [])
 
   useEffect(() => {
-    if (!data) return;
-    if (data.length === 0) return;
+    if (!data) return
+    if (data.length === 0) return
 
-    const dataPart = data[0] as DataPart;
+    const dataPart = data[0] as DataPart
 
     if (dataPart.type === 'append-message') {
       if (dataPart.message) {
         try {
-          const message = JSON.parse(dataPart.message) as Message;
-          setMessages([...initialMessages, message]);
+          const message = JSON.parse(dataPart.message) as Message
+          setMessages([...initialMessages, message])
         } catch (error) {
-          console.error('Failed to parse resume message:', error);
+          console.error('Failed to parse resume message:', error)
         }
       }
     }
-  }, [data, initialMessages, setMessages]);
+  }, [data, initialMessages, setMessages])
 }

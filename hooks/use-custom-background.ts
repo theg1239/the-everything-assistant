@@ -48,9 +48,12 @@ export function useCustomBackground() {
   )
 
   // Legacy aurora support
-  const toggleAurora = useCallback(async (enabled: boolean) => {
-    return updateBackgroundConfig({ type: 'aurora', enabled })
-  }, [updateBackgroundConfig])
+  const toggleAurora = useCallback(
+    async (enabled: boolean) => {
+      return updateBackgroundConfig({ type: 'aurora', enabled })
+    },
+    [updateBackgroundConfig]
+  )
 
   return {
     updateBackgroundConfig,

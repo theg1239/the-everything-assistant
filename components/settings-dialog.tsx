@@ -56,29 +56,32 @@ export function SettingsDialog({ open, onOpenChange }: any) {
   const [followUpSuggestions, setFollowUpSuggestions] = useState(true)
   const [backgroundConfig, setBackgroundConfig] = useState({
     type: 'aurora' as BackgroundType,
-    enabled: true
+    enabled: true,
   })
   const [theme, setTheme] = useState('system')
 
   const BackgroundPreview = ({ type }: { type: BackgroundType }) => {
-    const beamsComponent = useMemo(() => (
-      <Beams 
-        beamWidth={3}
-        beamHeight={150}
-        beamNumber={6}
-        lightColor="#60a5fa"
-        speed={0.3}
-        noiseIntensity={0.4}
-        scale={1.2}
-        rotation={30}
-      />
-    ), [])
+    const beamsComponent = useMemo(
+      () => (
+        <Beams
+          beamWidth={3}
+          beamHeight={150}
+          beamNumber={6}
+          lightColor="#60a5fa"
+          speed={0.3}
+          noiseIntensity={0.4}
+          scale={1.2}
+          rotation={30}
+        />
+      ),
+      []
+    )
 
     switch (type) {
       case 'aurora':
         return (
           <div className="relative w-full h-16 rounded-md overflow-hidden bg-black">
-            <Aurora 
+            <Aurora
               colorStops={['#5227FF', '#7cff67', '#5227FF']}
               amplitude={1.2}
               blend={0.6}
@@ -105,9 +108,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
           </div>
         )
       default:
-        return (
-          <div className="w-full h-16 rounded-md bg-muted/50" />
-        )
+        return <div className="w-full h-16 rounded-md bg-muted/50" />
     }
   }
   const [isDeleting, setIsDeleting] = useState(false)
@@ -152,7 +153,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
           const data = await response.json()
           const prefs = data.preferences
           setFollowUpSuggestions(prefs.followUpSuggestions ?? true)
-          
+
           // Handle both legacy aurora and new background config
           if (prefs.backgroundConfig) {
             setBackgroundConfig(prefs.backgroundConfig)
@@ -160,7 +161,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
             // Legacy aurora preference
             setBackgroundConfig({
               type: 'aurora',
-              enabled: prefs.auroraBackground
+              enabled: prefs.auroraBackground,
             })
           }
         }
@@ -236,7 +237,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
   const handleBackgroundTypeChange = async (type: BackgroundType) => {
     const newConfig = { ...backgroundConfig, type }
     setBackgroundConfig(newConfig)
-    
+
     const success = await setBackgroundType(type, backgroundConfig.enabled)
     if (!success) {
       // Revert on failure
@@ -248,7 +249,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
   const handleBackgroundToggle = async (enabled: boolean) => {
     const newConfig = { ...backgroundConfig, enabled }
     setBackgroundConfig(newConfig)
-    
+
     const success = await toggleBackground(enabled)
     if (!success) {
       // Revert on failure
@@ -688,10 +689,10 @@ export function SettingsDialog({ open, onOpenChange }: any) {
 
       case 'data':
         return (
-          <div className={cn("space-y-6", showArchivedChats && "h-full flex flex-col")}>
-            <div className={showArchivedChats ? "flex-1 flex flex-col" : ""}>
+          <div className={cn('space-y-6', showArchivedChats && 'h-full flex flex-col')}>
+            <div className={showArchivedChats ? 'flex-1 flex flex-col' : ''}>
               <h3 className="text-lg md:text-xl font-semibold mb-4">data controls</h3>
-              <div className={cn("space-y-4", showArchivedChats && "flex-1 flex flex-col")}>
+              <div className={cn('space-y-4', showArchivedChats && 'flex-1 flex flex-col')}>
                 {!showArchivedChats ? (
                   <>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
@@ -894,23 +895,23 @@ export function SettingsDialog({ open, onOpenChange }: any) {
           {
             type: 'aurora' as BackgroundType,
             name: 'aurora',
-            description: 'animated aurora borealis effect with flowing colors'
+            description: 'animated aurora borealis effect with flowing colors',
           },
           {
             type: 'beams' as BackgroundType,
             name: 'light beams',
-            description: 'dynamic light beams with subtle animations'
+            description: 'dynamic light beams with subtle animations',
           },
           {
             type: 'gradient' as BackgroundType,
             name: 'gradient',
-            description: 'smooth color gradient background'
+            description: 'smooth color gradient background',
           },
           {
             type: 'solid' as BackgroundType,
             name: 'lights out',
-            description: 'what it says'
-          }
+            description: 'what it says',
+          },
         ]
 
         return (
@@ -947,23 +948,23 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                     <div className="space-y-3">
                       <Label className="text-sm font-medium">background style</Label>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {backgroundOptions.map((option) => (
+                        {backgroundOptions.map(option => (
                           <button
                             key={option.type}
                             onClick={() => handleBackgroundTypeChange(option.type)}
                             disabled={loadingPreferences}
                             className={cn(
-                              "relative p-4 rounded-lg border-2 text-left transition-all duration-200",
-                              "hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20",
+                              'relative p-4 rounded-lg border-2 text-left transition-all duration-200',
+                              'hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20',
                               backgroundConfig.type === option.type
-                                ? "border-primary bg-primary/5"
-                                : "border-border hover:bg-muted/50"
+                                ? 'border-primary bg-primary/5'
+                                : 'border-border hover:bg-muted/50'
                             )}
                           >
                             <div className="mb-3 border border-border/50 rounded-md overflow-hidden">
                               <BackgroundPreview type={option.type} />
                             </div>
-                            
+
                             <div className="space-y-1">
                               <div className="flex items-center gap-2">
                                 <h5 className="font-medium text-sm">{option.name}</h5>

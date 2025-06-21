@@ -116,13 +116,14 @@ export async function createChat(userId: string, title: string, path: string): P
 }
 
 export async function createChatWithFirstMessage(
-  userId: string, 
-  title: string, 
-  path: string, 
-  messageContent: string, 
+  userId: string,
+  title: string,
+  path: string,
+  messageContent: string,
   messageId?: string
 ): Promise<{ chat: Chat; message: Message }> {
-  const result = await prisma.$transaction(async (tx) => {    const chat = await tx.chat.create({
+  const result = await prisma.$transaction(async tx => {
+    const chat = await tx.chat.create({
       data: {
         userId,
         title,
@@ -423,7 +424,7 @@ export async function getStreamIdsByChatId(chatId: string): Promise<string[]> {
     orderBy: { createdAt: 'asc' },
     select: { streamId: true },
   })
-  
+
   return streamIds.map((s: { streamId: string }) => s.streamId)
 }
 
@@ -433,15 +434,15 @@ export async function getMostRecentStreamId(chatId: string): Promise<string | nu
     orderBy: { createdAt: 'desc' },
     select: { streamId: true },
   })
-  
+
   return streamId?.streamId || null
 }
 
 export async function getLastAssistantMessage(chatId: string): Promise<any | null> {
   const message = await prisma.message.findFirst({
-    where: { 
+    where: {
       chatId,
-      role: 'assistant'
+      role: 'assistant',
     },
     orderBy: { created_at: 'desc' },
     select: {
@@ -450,14 +451,16 @@ export async function getLastAssistantMessage(chatId: string): Promise<any | nul
       role: true,
       content: true,
       tool_invocations: true,
-      created_at: true
-    }
+      created_at: true,
+    },
   })
-  
-  return message ? {
-    ...message,
-    toolInvocations: message.tool_invocations
-  } : null
+
+  return message
+    ? {
+        ...message,
+        toolInvocations: message.tool_invocations,
+      }
+    : null
 }
 
 export async function deleteStreamIdsByChatId(chatId: string): Promise<void> {
@@ -466,9 +469,12 @@ export async function deleteStreamIdsByChatId(chatId: string): Promise<void> {
   })
 }
 
-export async function getMessageCountByUserId(userId: string, differenceInHours: number = 24): Promise<number> {
+export async function getMessageCountByUserId(
+  userId: string,
+  differenceInHours: number = 24
+): Promise<number> {
   const timeThreshold = new Date(Date.now() - differenceInHours * 60 * 60 * 1000)
-  
+
   const count = await prisma.message.count({
     where: {
       chat: {
@@ -479,6 +485,6 @@ export async function getMessageCountByUserId(userId: string, differenceInHours:
       },
     },
   })
-  
+
   return count
 }

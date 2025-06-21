@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     if (!preferences.backgroundConfig && preferences.auroraBackground !== undefined) {
       preferences.backgroundConfig = {
         type: 'aurora',
-        enabled: preferences.auroraBackground
+        enabled: preferences.auroraBackground,
       }
     }
 
@@ -55,11 +55,11 @@ export async function PATCH(request: NextRequest) {
       const existingUser = await prisma.user.findUnique({
         where: { email: session.user.email },
       })
-      
+
       const existingPrefs = (existingUser as any)?.preferences || {}
       preferencesToUpdate = {
         ...existingPrefs,
-        backgroundConfig: body.backgroundConfig
+        backgroundConfig: body.backgroundConfig,
       }
     } else {
       return NextResponse.json({ error: 'Invalid preferences data' }, { status: 400 })

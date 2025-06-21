@@ -9,27 +9,24 @@ interface VirtualizedMessagesProps {
   onLoginClick: () => void
 }
 
-export const VirtualizedMessages = memo(({ 
-  messages, 
-  chatId, 
-  onCreateCanvas, 
-  onLoginClick 
-}: VirtualizedMessagesProps) => {
-  const visibleMessages = messages.slice(-50)
-  
-  return (
-    <AnimatePresence mode="popLayout">
-      {visibleMessages.map((message, idx) => (
-        <MessageBubble
-          key={`${message.id}-${idx}`}
-          message={message}
-          chatId={chatId}
-          onCreateCanvas={onCreateCanvas}
-          onLoginClick={onLoginClick}
-        />
-      ))}
-    </AnimatePresence>
-  )
-})
+export const VirtualizedMessages = memo(
+  ({ messages, chatId, onCreateCanvas, onLoginClick }: VirtualizedMessagesProps) => {
+    const visibleMessages = messages.slice(-50)
+
+    return (
+      <AnimatePresence mode="popLayout">
+        {visibleMessages.map((message, idx) => (
+          <MessageBubble
+            key={`${message.id}-${idx}`}
+            message={message}
+            chatId={chatId}
+            onCreateCanvas={onCreateCanvas}
+            onLoginClick={onLoginClick}
+          />
+        ))}
+      </AnimatePresence>
+    )
+  }
+)
 
 VirtualizedMessages.displayName = 'VirtualizedMessages'

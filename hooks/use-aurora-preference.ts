@@ -21,7 +21,7 @@ export function useAuroraPreference() {
         if (response.ok) {
           const data = await response.json()
           const prefs = data.preferences
-          
+
           if (prefs.backgroundConfig) {
             const config = prefs.backgroundConfig as BackgroundConfig
             setAuroraEnabled(config.type === 'aurora' && config.enabled)

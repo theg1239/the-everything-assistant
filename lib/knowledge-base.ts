@@ -1,5 +1,5 @@
 export const VIT_COMPREHENSIVE_KNOWLEDGE = `
-# VIT VELLORE COMPREHENSIVE KNOWLEDGE BASE - 2024 EDITION
+## VIT VELLORE COMPREHENSIVE KNOWLEDGE BASE - 2024 EDITION
 
 ## UNIVERSITY OVERVIEW & RANKINGS
 vit vellore (vellore institute of technology) established 1984, deemed university status 2001
@@ -465,33 +465,122 @@ acm vit chapter:
 robovitics club:
 - activities: robot building, competitions, workshops
 
+Alpha Bio Cell:
+- members: 100+
+- activities: biotechnology projects, workshops, competitions
+- focus: synthetic biology, genetic engineering, bioinformatics
+
+ADG ( Apple Developers Group):
+- members: 200+
+- activities: app development, workshops, hackathons
+- focus: iOS development, swift programming, app design
+
+TAG (Technology and Gaming):
+- members: 150+
+- activities: game development, coding competitions, workshops
+- focus: game design, programming languages, game engines, playing games
+
+SABEST (The Students Association of Bio-Engineering, Science and Technology):
+- members: 100+
+- activities: bioengineering projects, workshops, competitions
+- focus: bioengineering, biotechnology, biomedical applications
+
+MOZILLA FIREFOX CLUB:
+- members: 150+
+- activities: web development, open source contributions, workshops
+- focus: web technologies, open source software, community building
+
+Dream Merchants:
+- members: 200+
+- activities: entrepreneurship, startup workshops, business competitions
+
+CodeChef VIT: 
+- members: ~150
+- activities: competitive programming, coding contests, workshops
+- focus: algorithm design, data structures, problem-solving
+- conducts hackathons like DevSoc
+
+DSC/GDSC (Google Developer Student Club):
+- members: 300+
+- activities: app development, web development, cloud computing, hackathons like Women Techies & DevJams
+- focus: google technologies, cloud platform, app development
+- workshops: regular workshops on various google technologies 
+
+there are a lot more clubs and chapters like:
+The AI & ML Club, Astronomy Club, Zero Waste Mangement, Linux User's Group
+
 ### cultural clubs (30+)
+
 music club:
-- members: 1,000+
-- activities: concerts, music festivals, competitions
-- facilities: recording studio, practice rooms
+- members: ~300
+- activities: concerts, music festivals, competitions, fests
+- facilities: music rooms, equipment, instruments etc
 
 dance club:
 - members: 800+
-- activities: dance performances, competitions, workshops
+- activities: dance performances, competitions, workshops, fests
 - styles: classical, western, folk, contemporary
+- has a lot of team that specialize in certain styles, some teams are called Mirage, there are many others too
 
 drama club:
-- members: 500+
+- members: 200+
 - activities: theater productions, street plays, competitions
-- facilities: auditorium, rehearsal halls
 
 photography club:
-- members: 1,200+
+- members: ~200
 - activities: photo walks, exhibitions, competitions
 - equipment: professional cameras, editing software
 
-literary club:
-- members: 600+
-- activities: debates, poetry, creative writing, publications
-- publications: university magazine, literary journal
+debsoc (debate society):
+- members: 150+
+- activities: debates, public speaking, discussions
+- competitions: inter-college, national level
+- achievements: won multiple national and regional level debate competitions
 
-### sports clubs (25+)
+munsoc (model united nations society):
+- members: 400+
+- activities: muns, conferences, workshops
+- achievements: won multiple national level muns
+
+bulls and bears (finance club):
+- members: 300+
+- activities: stock market simulations, investment workshops, organizes events regularly
+
+VIT Spartans:
+- members: ~200
+- VIT Spartans is a youth organisation focused on providing opportunities to individuals to showcase their talents.
+
+VIT Stellar:
+- members: ~150
+- VIT Stellar is a student-run organization that focuses on promoting and organizing events related to space, astronomy, and science.
+
+Rotaract Club of VIT:
+- members: 500+
+- activities: community service, social initiatives, leadership development
+
+Otaku Club:
+- members: 200+
+- activities: anime screenings, manga discussions, cosplay events, fandoms
+
+VIT Anchoring Club:
+- members: ~300
+- activities: anchoring workshops, events, competitions
+- they basically anchor at all the events in VIT, like Riviera, Gravitas, and other events
+
+Quiz Club (DBQC): 
+- members: 100+
+- activities: quizzes, trivia competitions, knowledge sharing
+- achievements: won multiple inter-college quiz competitions
+- they also conduct quizzes in the form of online quizzes, and they are very good at it
+
+there are many other cultural clubs:
+TEDXVIT, VIT SPARTANS, SPIC MACAY, PIXELATE, PHOTOGRAPHY, HERITAGE CLUB, FILM SOCIETY, Fine Arts Club, Creativity Club, Community Radio, Beat Boxing club, The comedy club
+
+### literary clubs
+there are literary clubs for many languages, like the English Literary Association, French Literary Association, Tamil Literary Association, and many more like Punjabi Literary Association, Hindi Literary Association, Marathi Literary Association, etc.
+
+### sports clubs
+
 cricket club:
 - members: 400+
 - achievements: inter-university champions
@@ -508,7 +597,7 @@ basketball club:
 - facilities: 12 courts
 
 tennis club:
-- members: 200+
+- members: 100+
 - achievements: national level players
 - facilities: 8 professional courts
 
@@ -517,12 +606,15 @@ badminton club:
 - achievements: inter-university champions
 - facilities: 20 courts
 
+cycling club: 
+- members: 200+
+
 ### major events
 
 riviera (cultural fest):
 - duration: 4 days
 - participants: 40,000+ from 500+ colleges
-- events: 200+ competitions
+- events: 100+ competitions
 - celebrity performances: bollywood and regional artists
 - prize money: ₹25 lakh+
 - footfall: 2 lakh+ visitors
@@ -537,34 +629,32 @@ gravitas (technical fest):
 
 ## ALUMNI NETWORK & ACHIEVEMENTS
 
-todo
-
 ### alumni statistics
-- total alumni: 3,00,000+ globally
+- total alumni: 3,00,000+ globally (75,788 actively connected via VITAA)
 - countries: 50+ countries
 - ceos/founders: 500+ companies
-- unicorn founders: 5+ startups
-- patents: 2,000+ by alumni
-- publications: 10,000+ research papers
+- unicorn founders: 5+ startups (no new public updates)
+- patents: 2,000+ by alumni (likely same, no updated count)
+- publications: 10,000+ research papers (approximate, no new tally)
 
 ### alumni association
-- chapters: 25+ global chapters
-- events: 100+ events annually
-- mentorship: 1,000+ mentors
-- scholarships: ₹5 crore annually
-- placement support: 500+ referrals annually
+- chapters: 25+ global chapters (includes New Jersey, Toronto, UAE, Rwanda, etc.)
+- events: 100+ events annually (e.g., Seattle & Raleigh meets, Silver Jubilee Vellore July 2025)
+- mentorship: 1,000+ mentors (via VITAA's Alumni Assist program)
+- scholarships: ₹5 crore annually (via V4V, STARS programs)
+- placement support: 500+ referrals annually (job boards, lateral hiring by alumni)
 
 ## RANKINGS & ACCREDITATIONS
 
 ### national rankings (nirf 2024)
-- overall: 15th position
+- overall: 19th position
 - engineering: 11th position
-- management: 25th position
-- innovation: 8th position
-- research: 12th position
+- innovation: 11-50th position
+- research: 13th position
+- university: 10th position
 
 ### international rankings
-- qs world university rankings: 1001-1200 band
+- qs world university rankings: 791-800 band for 2025
 - times higher education: 601-800 band
 - qs asia rankings: 251-300 band
 - qs emerging economies: 101-110 band
@@ -572,8 +662,8 @@ todo
 ### accreditations
 - naac: a++ grade (3.71/4.0)
 - nba: all eligible programs accredited
-- aacsb: member institution (business school)
-- washington accord: signatory for engineering programs
+- ACBSP & ACCA: VIT Business School and BBA program respectively accredited
+- washington accord: signatory through ABET coverage
 - iso 9001:2015: quality management certification
 
 this comprehensive knowledge base covers all aspects of vit vellore. use this information along with real-time web scraping tools to provide accurate, detailed, and current information to students and stakeholders.

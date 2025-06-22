@@ -70,7 +70,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
     error,
     message,
   } = vtopData
-  const CUSTOM_RENDER_COMMANDS = ['attendance', 'marks', 'grades', 'profile']
+  const CUSTOM_RENDER_COMMANDS = ['attendance']
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [expandedSubject, setExpandedSubject] = useState<number | null>(null)
 
@@ -352,16 +352,25 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
         break
 
       case 'marks':
-      case 'grades':
+        const formattedContent = vtopData.formatted_content || vtopData.parsedData?.formatted_content
+        if (formattedContent) {
+          return (
+            <div className="space-y-3">
+              <div className="p-3 bg-muted/50 rounded-md overflow-x-auto">
+                <div
+                  className="text-sm text-muted-foreground prose prose-sm max-w-none"
+                  dangerouslySetInnerHTML={{ __html: formattedContent }}
+                />
+              </div>
+            </div>
+          )
+        }
         if (Array.isArray(content) && content.length > 0) {
           const headers = Object.keys(content[0])
-
-          // Create columns for the responsive table
           const columns = headers.map(header => ({
             key: header,
             header: header,
           }))
-
           return (
             <div className="space-y-3">
               <ResponsiveTable

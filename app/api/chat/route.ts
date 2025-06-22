@@ -141,6 +141,7 @@ async function parseVTOPData(
         schema: vtopParseSchema,
         prompt: `
 You are a helpful assistant that parses VTOP (VIT Online Portal) data and formats it in a clean, natural language format.
+For marks, when there's a lot of data and huge amount of subjects, you should summarize the data in a concise way with the help of tables.
 
 USER'S ORIGINAL REQUEST: ${userContext}
 Command: ${command}

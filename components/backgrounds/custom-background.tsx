@@ -19,7 +19,7 @@ const Dither = dynamic(() => import('@/components/backgrounds/dither'), {
   loading: () => null,
 })
 
-export type BackgroundType = 'aurora' | 'beams' | 'dither' | 'gradient' | 'solid'
+export type BackgroundType = 'aurora' | 'beams' | 'dither' | 'gradient' | 'solid' | 'null '
 
 export interface BackgroundConfig {
   type: BackgroundType

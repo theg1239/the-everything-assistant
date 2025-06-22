@@ -64,6 +64,10 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     enabled: true,
   })
   const [theme, setTheme] = useState('system')
+  
+  const [touchStartY, setTouchStartY] = useState(0)
+  const [touchStartScrollTop, setTouchStartScrollTop] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
 
   const BackgroundPreview = ({ type }: { type: BackgroundType }) => {
     const beamsComponent = useMemo(
@@ -1259,7 +1263,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                                     mfaMethod === 'authenticator'
                                       ? 'border-primary bg-primary/5'
                                       : 'border-border hover:bg-muted/50'
-                                  )}
+                                )}
                                 >
                                   <div className="flex items-center gap-3">
                                     <Smartphone className="w-4 h-4 flex-shrink-0" />
@@ -1514,6 +1518,34 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     }
   }
 
+  // Touch handlers for mobile scrolling
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    const touch = e.touches[0]
+    const scrollContainer = e.currentTarget
+    setTouchStartY(touch.clientY)
+    setTouchStartScrollTop(scrollContainer.scrollTop)
+    setIsDragging(true)
+  }
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!isDragging) return
+
+    e.preventDefault()
+    
+    const touch = e.touches[0]
+    const scrollContainer = e.currentTarget
+    const deltaY = touchStartY - touch.clientY
+    const newScrollTop = touchStartScrollTop + deltaY
+
+    scrollContainer.scrollTop = Math.max(
+      0,
+      Math.min(newScrollTop, scrollContainer.scrollHeight - scrollContainer.clientHeight)
+    )
+  }
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    setIsDragging(false)
+  }
+
   useEffect(() => {
     setConfirmDelete(false)
     setConfirmArchive(false)
@@ -1535,15 +1567,14 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     }
   }, [open])
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl w-[95vw] h-[90vh] max-h-[800px] p-0 gap-0 bg-background border border-border overflow-hidden rounded-xl">
+    <Dialog open={open} onOpenChange={onOpenChange}>      <DialogContent className="max-w-5xl w-[95vw] h-[90vh] max-h-[800px] p-0 gap-0 bg-background border border-border overflow-hidden rounded-xl">
         <div className="flex flex-col md:flex-row h-full rounded-xl overflow-hidden">
           <div className="block md:hidden border-b border-border bg-muted/20 p-4 flex-shrink-0">
             <DialogHeader>
               <DialogTitle className="text-xl font-semibold">settings</DialogTitle>
             </DialogHeader>
           </div>
-          <div className="w-full md:w-72 border-r-0 md:border-r border-border bg-muted/20 p-4 md:p-6 transition-all duration-300 rounded-tl-xl md:rounded-bl-xl md:rounded-tl-xl rounded-tr-xl md:rounded-tr-none">
+          <div className="w-full md:w-72 border-r-0 md:border-r border-border bg-muted/20 p-4 md:p-6 transition-all duration-300 rounded-tl-xl md:rounded-bl-xl md:rounded-tl-xl rounded-tr-xl md:rounded-tr-none flex-shrink-0">
             <div className="hidden md:block">
               <DialogHeader className="mb-6">
                 <DialogTitle className="text-xl font-semibold">settings</DialogTitle>
@@ -1571,17 +1602,31 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                 })}
               </div>
             </nav>{' '}
-          </div>
-
-          <div className="flex-1 p-4 md:p-6 overflow-y-auto rounded-br-xl md:rounded-tr-xl rounded-bl-xl md:rounded-bl-none">
-            <motion.div
-              key={activeSection}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              {renderContent()}
-            </motion.div>
+          </div>          <div 
+            className="flex-1 min-h-0 overflow-y-auto rounded-br-xl md:rounded-tr-xl rounded-bl-xl md:rounded-bl-none"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            style={{
+              overflow: 'auto',
+              WebkitOverflowScrolling: 'touch',
+              overscrollBehavior: 'contain',
+              position: 'relative',
+              touchAction: 'none', // Prevent default touch behavior
+              transform: 'translate3d(0, 0, 0)',
+              userSelect: 'none', // Prevent text selection during drag
+            }}
+          >
+            <div className="p-4 md:p-6">
+              <motion.div
+                key={activeSection}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                {renderContent()}
+              </motion.div>
+            </div>
           </div>
         </div>
       </DialogContent>

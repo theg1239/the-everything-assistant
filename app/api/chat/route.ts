@@ -263,7 +263,6 @@ FORMATTING GUIDELINES:
 1. Use bullet points and lists for better readability when showing multiple items
 2. If you need to present tabular data, use HTML table tags: <table>, <tr>, <td>, <th>
 3. Use HTML formatting tags like <strong>, <em>, <br>, <p>, <ul>, <li> for better presentation
-4. For profile data: Write in natural sentences about the person's details
 5. For attendance: Describe attendance in conversational language
 6. For marks/grades: Explain performance in narrative form with lists for multiple subjects
 7. For receipts/financial data: Describe transactions naturally with HTML tables if needed

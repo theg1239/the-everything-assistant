@@ -1968,63 +1968,113 @@ const PureArtifactDisplay = ({
       <AnimatePresence>
         {pdfUrl && (
           <motion.div
-            className="fixed inset-0 z-50 bg-background"
+            className="fixed inset-0 z-50 bg-background flex"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-border bg-background/95 backdrop-blur-sm">
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleClosePdf}
-                  className="h-8 w-8 p-0"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-                <div className="flex items-center gap-2">
-                  <FileSearch className="h-4 w-4 text-primary" />
-                  <div className="flex flex-col">
-                    <h2 className="text-sm font-semibold line-clamp-1">{pdfTitle}</h2>
-                    <p className="text-xs text-muted-foreground">PDF Document</p>
+            {/* Left Panel - Paper Details (Hidden on mobile) */}
+            {!isMobile && (
+              <motion.div
+                className="w-80 bg-muted dark:bg-background h-full border-r border-border flex-shrink-0 overflow-y-auto"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <div className="p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleClosePdf}
+                      className="h-8 w-8 p-0"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-xs"
+                      onClick={() => window.open(pdfUrl, '_blank')}
+                    >
+                      <ExternalLink className="h-3 w-3 mr-1" />
+                      Open External
+                    </Button>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-2">
+                      <FileSearch className="h-4 w-4 text-primary mt-1 flex-shrink-0" />
+                      <div>
+                        <h2 className="text-sm font-semibold leading-tight">{pdfTitle}</h2>
+                        <p className="text-xs text-muted-foreground mt-1">PDF Document</p>
+                      </div>
+                    </div>
+
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <p>• Use scroll wheel or trackpad to navigate</p>
+                      <p>• Press Escape to close viewer</p>
+                      <p>• Use "Open External" for full features</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs"
-                  onClick={() => window.open(pdfUrl, '_blank')}
-                >
-                  <ExternalLink className="h-3 w-3 mr-1" />
-                  Open in New Tab
-                </Button>
-              </div>
-            </div>
+              </motion.div>
+            )}
 
-            {/* PDF Content */}
-            <div className="flex-1 h-[calc(100vh-73px)] relative bg-muted/20">
-              {isPdfLoading && (
-                <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-10">
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
-                    <p className="text-sm text-muted-foreground">Loading PDF...</p>
+            {/* Right Panel - PDF Content */}
+            <motion.div
+              className="flex-1 h-full relative bg-muted/20"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+            >
+              {/* Mobile Header */}
+              {isMobile && (
+                <div className="flex items-center justify-between p-3 border-b border-border bg-background/95 backdrop-blur-sm">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleClosePdf}
+                      className="h-8 w-8 p-0"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                    <div className="flex items-center gap-2">
+                      <FileSearch className="h-3 w-3 text-primary" />
+                      <span className="text-sm font-medium line-clamp-1">{pdfTitle}</span>
+                    </div>
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs px-2"
+                    onClick={() => window.open(pdfUrl, '_blank')}
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                  </Button>
                 </div>
               )}
-              <iframe 
-                src={pdfUrl} 
-                title="PDF Preview" 
-                className="w-full h-full border-0 bg-white"
-                allow="fullscreen"
-                loading="lazy"
-                onLoad={() => setIsPdfLoading(false)}
-              />
-            </div>
+
+              <div className={`${isMobile ? 'h-[calc(100vh-60px)]' : 'h-full'} relative`}>
+                {isPdfLoading && (
+                  <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-10">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
+                      <p className="text-sm text-muted-foreground">Loading PDF...</p>
+                    </div>
+                  </div>
+                )}
+                <iframe 
+                  src={pdfUrl} 
+                  title="PDF Preview" 
+                  className="w-full h-full border-0 bg-white"
+                  allow="fullscreen"
+                  loading="lazy"
+                  onLoad={() => setIsPdfLoading(false)}
+                />
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

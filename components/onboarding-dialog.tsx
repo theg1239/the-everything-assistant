@@ -43,7 +43,7 @@ const onboardingSteps: OnboardingStep[] = [
     id: 'welcome',
     title: 'welcome to the everything assistant',
     description:
-      'your ai-powered agentic companion for everything vit-related. ask anything, get instant answers.',
+      'your ai-powered agentic companion for everything vit-related.',
     icon: Sparkles,
     gradient: 'from-purple-500 to-pink-500',
     artworkImage: '/onboarding-artwork/artwork.png',
@@ -67,7 +67,7 @@ const onboardingSteps: OnboardingStep[] = [
     id: 'papers',
     title: 'past papers at your fingertips',
     description:
-      'search across all vit paper repositories instantly. no more hunting through multiple websites. search by exam type, year and course.',
+      'search across all vit paper repositories instantly. no more hunting through multiple websites. search by exam type, year.',
     icon: FileSearch,
     gradient: 'from-green-500 to-teal-500',
     artworkImage: '/onboarding-artwork/artwork3.png',
@@ -81,7 +81,7 @@ const onboardingSteps: OnboardingStep[] = [
     id: 'campus',
     title: 'campus life made easy',
     description:
-      'get mess menus, search the r/Vit subreddit and more subreddits, academic calendar & holidays, exam dates - everything in just one place.',
+      'get mess menus, search the r/Vit subreddit and more subreddits, academic calendar & holidays, exam dates - everything.',
     icon: UtensilsCrossed,
     gradient: 'from-orange-500 to-red-500',
     artworkImage: '/onboarding-artwork/artwork4.png',
@@ -243,7 +243,7 @@ export function OnboardingDialog({ isOpen, onClose }: OnboardingDialogProps) {
       <ChevronNavigation />
       <Dialog open={isOpen} onOpenChange={onClose} modal={true}>
         <DialogContent
-          className="max-w-2xl w-[95vw] sm:w-full h-[50vh] sm:h-[60vh] p-0 bg-white dark:bg-slate-900 rounded-2xl overflow-hidden shadow-2xl border-0"
+          className="max-w-2xl w-[95vw] sm:w-full h-[55vh] sm:h-[60vh] md:h-[65vh] max-h-[600px] min-h-[400px] p-0 bg-white dark:bg-slate-900 rounded-2xl overflow-hidden shadow-2xl border-0"
           onPointerDownOutside={e => {
             const target = e.target as Element
             if (target.closest('button[data-chevron]')) {
@@ -271,47 +271,49 @@ export function OnboardingDialog({ isOpen, onClose }: OnboardingDialogProps) {
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
           >
-            <div className="h-full flex flex-col px-5 py-2 sm:px-8 sm:py-4 overflow-y-auto">
-              <div className="flex items-center space-x-3 mb-3">
-                {/* <div className={`p-2 rounded-lg bg-gradient-to-r ${currentStepData.gradient} shadow-md`}>
+            <div className="h-full flex flex-col px-5 py-2 sm:px-8 sm:py-4">
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <div className="flex items-center space-x-3 mb-3">
+                  {/* <div className={`p-2 rounded-lg bg-gradient-to-r ${currentStepData.gradient} shadow-md`}>
                 <IconComponent className="w-5 h-5 text-white" />
               </div> */}
-                <h2 className="text-lg sm:text-xl font-semibold text-slate-900 dark:text-white">
-                  {currentStepData.title}
-                </h2>
-              </div>{' '}
-              <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 mb-3 leading-relaxed">
-                {currentStepData.description}
-              </p>{' '}
-              {currentStepData.isLastStep ? (
-                <>
-                  <div className="mt-auto mb-3">
-                    <Button
-                      onClick={handleFinish}
-                      className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-8 py-4 rounded-xl font-semibold text-base shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl"
-                    >
-                      get started
-                    </Button>
-                  </div>
-                </>
-              ) : currentStepData.examples ? (
-                <div className="space-y-2 mb-3">
-                  <h3 className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mb-2">
-                    try asking:
-                  </h3>
-                  <div className="space-y-2">
-                    {currentStepData.examples.map((example, index) => (
-                      <div
-                        key={index}
-                        className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 px-3 py-2 rounded-lg"
+                  <h2 className="text-lg sm:text-xl font-semibold text-slate-900 dark:text-white">
+                    {currentStepData.title}
+                  </h2>
+                </div>{' '}
+                <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 mb-3 leading-relaxed">
+                  {currentStepData.description}
+                </p>{' '}
+                {currentStepData.isLastStep ? (
+                  <>
+                    <div className="mt-6 mb-3">
+                      <Button
+                        onClick={handleFinish}
+                        className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-8 py-4 rounded-xl font-semibold text-base shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl"
                       >
-                        "{example}"
-                      </div>
-                    ))}
+                        get started
+                      </Button>
+                    </div>
+                  </>
+                ) : currentStepData.examples ? (
+                  <div className="space-y-2 mb-3">
+                    <h3 className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mb-2">
+                      try asking:
+                    </h3>
+                    <div className="space-y-2">
+                      {currentStepData.examples.map((example, index) => (
+                        <div
+                          key={index}
+                          className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 px-3 py-2 rounded-lg"
+                        >
+                          "{example}"
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ) : null}
-              <div className="flex justify-center space-x-2 mt-auto pt-1">
+                ) : null}
+              </div>
+              <div className="flex justify-center space-x-2 py-3 mt-2 border-t border-slate-100 dark:border-slate-800">
                 {onboardingSteps.map((_, index) => (
                   <button
                     key={index}

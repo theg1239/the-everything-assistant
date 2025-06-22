@@ -35,7 +35,6 @@ export function useOnboarding() {
   }, [])
 
   const triggerOnboarding = () => {
-    console.log('triggerOnboarding function called directly')
     setShowOnboarding(true)
   }
 

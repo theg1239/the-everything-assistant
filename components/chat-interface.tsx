@@ -123,11 +123,6 @@ const PureChatInterface = ({
   const { data: session } = useSession()
   const { showOnboarding, closeOnboarding } = useOnboarding()
 
-  // Debug onboarding state changes
-  useEffect(() => {
-    console.log('ChatInterface: showOnboarding changed to:', showOnboarding)
-  }, [showOnboarding])
-
   const mainRef = useViewportHeight()
 
   useEffect(() => {

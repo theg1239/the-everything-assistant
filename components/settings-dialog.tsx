@@ -1485,13 +1485,10 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
               <h3 className="text-lg md:text-xl font-semibold mb-4">tutorial</h3>
               <p className="text-muted-foreground text-sm md:text-base mb-6">
                 take a tour of all the features and learn how to get the most out of your assistant.
-              </p>
-
-              <Button
+              </p>              <Button
                 onClick={() => {
-                  console.log('Start tutorial clicked, onTriggerOnboarding:', onTriggerOnboarding)
                   onTriggerOnboarding?.()
-                  console.log('Event dispatched')
+                  window.dispatchEvent(new CustomEvent('triggerOnboarding'))
                   onOpenChange(false)
                 }}
                 className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"

@@ -61,7 +61,7 @@ export interface BackgroundConfig {
 }
 
 const defaultBackgroundConfig: BackgroundConfig = {
-  type: 'aurora',
+  type: 'null',
   enabled: true,
   aurora: {
     colorStops: ['#5227FF', '#7cff67', '#5227FF'],

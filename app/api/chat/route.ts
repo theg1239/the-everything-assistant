@@ -58,18 +58,18 @@ async function generateChatTitle(userMessage: string, userId?: string): Promise<
     //console.log('Generating title for:', userMessage.substring(0, 50) + '...')
 
     const cleanMessage = userMessage.trim().toLowerCase()
-    if (cleanMessage.length < 10 || ['hi', 'hello', 'hey', 'test', 'help'].includes(cleanMessage)) {
+    if (cleanMessage.length < 5 || ['hi', 'hello', 'hey', 'test', 'help', 'yo', 'sup'].includes(cleanMessage)) {
       console.log('⏭Skipping title generation for simple message')
       return extractTitleFromContent(userMessage)
     }
 
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Title generation timeout')), 10000)
+      setTimeout(() => reject(new Error('Title generation timeout')), 5000)
     )
 
     const modelPromise = rateLimitedGoogle.generateText(
       {
-        model: await rateLimitedGoogle.model('gemma-3-12b-it'),
+        model: await rateLimitedGoogle.model('gemini-2.5-flash-lite-preview-06-17'),
         prompt: `Generate a concise, descriptive title for a chat conversation based on the user's first message. The title should:
 - Be 3-8 words maximum
 - Capture the main topic or intent
@@ -86,7 +86,7 @@ Examples:
 - "What are my exam schedules?" → "Exam Schedule Query"
 
 Respond with ONLY the title, nothing else.`,
-        maxTokens: 50,
+        maxTokens: 30,
       },
       userId
     )
@@ -372,18 +372,22 @@ export async function POST(req: Request) {
         console.log(`Chat created in ${(chatCreateTime - chatCreateStart).toFixed(2)}ms`)
       }
 
+      // Generate title asynchronously without blocking the response
       const userMessage = firstMessage?.content || ''
       if (userMessage.trim()) {
-        generateChatTitle(userMessage, session.user.id)
-          .then(async properTitle => {
-            if (properTitle !== tempTitle) {
-              await updateChat(chat!.id, properTitle)
-              console.log('Chat title updated successfully:', properTitle)
-            }
-          })
-          .catch(error => {
-            console.error('Failed to update chat title:', error)
-          })
+        // Fire and forget - don't await this
+        setImmediate(() => {
+          generateChatTitle(userMessage, session.user.id)
+            .then(async properTitle => {
+              if (properTitle !== tempTitle) {
+                await updateChat(chat!.id, properTitle)
+                console.log('Chat title updated successfully:', properTitle)
+              }
+            })
+            .catch(error => {
+              console.error('Failed to update chat title:', error)
+            })
+        })
       }
     }
 

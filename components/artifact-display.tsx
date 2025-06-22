@@ -2,7 +2,7 @@
 
 import React, { useState, memo, useRef, useEffect } from 'react'
 import ReactDOM from 'react-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   FileSearch,
   ChevronDown,
@@ -35,12 +35,6 @@ import { cn } from '@/lib/utils'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { ResponsiveCard } from '@/components/responsive-card'
 import { ResponsiveTable } from '@/components/responsive-table'
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
 
 interface ArtifactDisplayProps {
   title: string
@@ -662,7 +656,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
   )
 }
 
-const PaperCard = ({ paper, onViewPdf }: { paper: any; onViewPdf: (url: string) => void }) => {
+const PaperCard = ({ paper, onViewPdf }: { paper: any; onViewPdf: (url: string, title?: string) => void }) => {
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [expanded, setExpanded] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -671,7 +665,7 @@ const PaperCard = ({ paper, onViewPdf }: { paper: any; onViewPdf: (url: string) 
     setIsLoading(true)
     try {
       const urlToView = paper.link || paper.url || paper.pdfUrl || paper.downloadUrl
-      onViewPdf(urlToView)
+      onViewPdf(urlToView, paper.title)
     } finally {
       // Keep loading state for a brief moment to show feedback
       setTimeout(() => setIsLoading(false), 1000)
@@ -1759,6 +1753,7 @@ const PureArtifactDisplay = ({
   const [maximizedItem, setMaximizedItem] = useState<any | null>(null)
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [isPdfLoading, setIsPdfLoading] = useState(false)
+  const [pdfTitle, setPdfTitle] = useState<string>('')
   const contentRef = useRef<HTMLDivElement>(null)
 
   const toggleExpand = () => setIsExpanded(!isExpanded)
@@ -1772,8 +1767,9 @@ const PureArtifactDisplay = ({
     setMaximizedItem(null)
   }
 
-  const handleViewPdf = (url: string) => {
+  const handleViewPdf = (url: string, title?: string) => {
     setIsPdfLoading(true)
+    setPdfTitle(title || 'PDF Preview')
     const embedUrl = url.replace('/view?usp=sharing', '/preview').replace('/view', '/preview')
     setPdfUrl(embedUrl)
     // Reset loading state after a delay to account for iframe loading
@@ -1783,6 +1779,7 @@ const PureArtifactDisplay = ({
   const handleClosePdf = () => {
     setPdfUrl(null)
     setIsPdfLoading(false)
+    setPdfTitle('')
   }
 
   useEffect(() => {
@@ -1794,6 +1791,19 @@ const PureArtifactDisplay = ({
       contentRef.current.style.setProperty('--card-content-height', `${newHeight}px`)
     }
   }, [maximizedItem])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && pdfUrl) {
+        handleClosePdf()
+      }
+    }
+
+    if (pdfUrl) {
+      document.addEventListener('keydown', handleKeyDown)
+      return () => document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [pdfUrl])
 
   const renderContent = () => {
     if (!data || (Array.isArray(data) && data.length === 0)) {
@@ -1837,7 +1847,7 @@ const PureArtifactDisplay = ({
           {displayItems.map((item, index) => {
             switch (type) {
               case 'papers':
-                return <PaperCard key={index} paper={item} onViewPdf={handleViewPdf} />
+                return <PaperCard key={index} paper={item} onViewPdf={(url, title) => handleViewPdf(url, title)} />
               case 'faculty':
                 return <FacultyCard key={index} faculty={item} />
               case 'companies':
@@ -1955,19 +1965,49 @@ const PureArtifactDisplay = ({
         <CardContent className="pt-0 overflow-hidden">{renderContent()}</CardContent>
       </Card>
 
-      {pdfUrl && (
-        <Sheet open={!!pdfUrl} onOpenChange={(open) => !open && handleClosePdf()}>
-          <SheetContent 
-            side="right" 
-            className="w-full sm:max-w-none sm:w-[95vw] md:w-[90vw] lg:w-[85vw] xl:w-[80vw] 2xl:w-[75vw] max-w-none p-0 gap-0 h-full border-l-2 border-border/50"
+      <AnimatePresence>
+        {pdfUrl && (
+          <motion.div
+            className="fixed inset-0 z-50 bg-background"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
           >
-            <SheetHeader className="px-4 sm:px-6 py-3 sm:py-4 border-b border-border flex-shrink-0 bg-background/95 backdrop-blur-sm">
-              <SheetTitle className="text-left text-sm sm:text-base font-semibold flex items-center gap-2">
-                <FileSearch className="h-4 w-4 text-primary" />
-                PDF Preview
-              </SheetTitle>
-            </SheetHeader>
-            <div className="flex-1 h-[calc(100vh-60px)] sm:h-[calc(100vh-80px)] relative bg-muted/20">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-border bg-background/95 backdrop-blur-sm">
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClosePdf}
+                  className="h-8 w-8 p-0"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+                <div className="flex items-center gap-2">
+                  <FileSearch className="h-4 w-4 text-primary" />
+                  <div className="flex flex-col">
+                    <h2 className="text-sm font-semibold line-clamp-1">{pdfTitle}</h2>
+                    <p className="text-xs text-muted-foreground">PDF Document</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => window.open(pdfUrl, '_blank')}
+                >
+                  <ExternalLink className="h-3 w-3 mr-1" />
+                  Open in New Tab
+                </Button>
+              </div>
+            </div>
+
+            {/* PDF Content */}
+            <div className="flex-1 h-[calc(100vh-73px)] relative bg-muted/20">
               {isPdfLoading && (
                 <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-10">
                   <div className="flex flex-col items-center gap-3">
@@ -1985,9 +2025,9 @@ const PureArtifactDisplay = ({
                 onLoad={() => setIsPdfLoading(false)}
               />
             </div>
-          </SheetContent>
-        </Sheet>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }

@@ -4,13 +4,15 @@ export class DbOptimizations {
   static async batchGetChatsWithMetadata(
     userId: string,
     chatIds: string[]
-  ): Promise<Array<{
-    id: string
-    title: string
-    messageCount: number
-    lastMessageAt: Date | null
-    hasCanvasDocuments: boolean
-  }>> {
+  ): Promise<
+    Array<{
+      id: string
+      title: string
+      messageCount: number
+      lastMessageAt: Date | null
+      hasCanvasDocuments: boolean
+    }>
+  > {
     const results = await prisma.chat.findMany({
       where: {
         id: { in: chatIds },
@@ -52,13 +54,15 @@ export class DbOptimizations {
     userId: string,
     searchTerm: string,
     limit: number = 20
-  ): Promise<Array<{
-    messageId: string
-    chatId: string
-    chatTitle: string
-    content: string
-    created_at: Date
-  }>> {
+  ): Promise<
+    Array<{
+      messageId: string
+      chatId: string
+      chatTitle: string
+      content: string
+      created_at: Date
+    }>
+  > {
     const results = await prisma.$queryRaw`
       SELECT 
         m.id as "messageId",
@@ -85,7 +89,10 @@ export class DbOptimizations {
     }>
   }
 
-  static async getUserActivitySummary(userId: string, days: number = 7): Promise<{
+  static async getUserActivitySummary(
+    userId: string,
+    days: number = 7
+  ): Promise<{
     totalChats: number
     totalMessages: number
     activeChats: number
@@ -183,14 +190,13 @@ export class DbOptimizations {
 
       let connectionCount: number | undefined
       try {
-        const result = await prisma.$queryRaw`
+        const result = (await prisma.$queryRaw`
           SELECT count(*) as count 
           FROM pg_stat_activity 
           WHERE datname = current_database()
-        ` as Array<{ count: bigint }>
+        `) as Array<{ count: bigint }>
         connectionCount = Number(result[0]?.count || 0)
-      } catch {
-      }
+      } catch {}
 
       return {
         isConnected: true,

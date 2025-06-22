@@ -182,9 +182,9 @@ export async function createChatWithFirstMessage(
         },
       })
 
-      return { 
-        chat: chat as Chat, 
-        message: { ...message, toolInvocations: message.tool_invocations } as Message 
+      return {
+        chat: chat as Chat,
+        message: { ...message, toolInvocations: message.tool_invocations } as Message,
       }
     },
     {

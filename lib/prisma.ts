@@ -2,14 +2,16 @@ import { PrismaClient } from '@prisma/client'
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient }
 
-export const prisma = globalForPrisma.prisma ?? new PrismaClient({
-  errorFormat: 'pretty',
-  transactionOptions: {
-    maxWait: 5000,
-    timeout: 10000,
-    isolationLevel: 'ReadCommitted',
-  },
-})
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    errorFormat: 'pretty',
+    transactionOptions: {
+      maxWait: 5000,
+      timeout: 10000,
+      isolationLevel: 'ReadCommitted',
+    },
+  })
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma
@@ -29,15 +31,13 @@ export async function checkDatabaseConnection(): Promise<boolean> {
   }
 }
 
-export function withQueryTimer<T>(
-  operation: string,
-  queryFn: () => Promise<T>
-): Promise<T> {
+export function withQueryTimer<T>(operation: string, queryFn: () => Promise<T>): Promise<T> {
   const start = Date.now()
-  
+
   return queryFn().finally(() => {
     const duration = Date.now() - start
-    if (duration > 1000) { // Log slow queries (>1s)
+    if (duration > 1000) {
+      // Log slow queries (>1s)
       console.warn(`Slow query detected: ${operation} took ${duration}ms`)
     }
   })

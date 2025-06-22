@@ -40,19 +40,16 @@ interface ScraperResult {
   searchUrl?: string
 }
 
-// Helper function to deduplicate papers based on title and metadata
 function deduplicatePapers(papers: Paper[]): Paper[] {
   const seen = new Set<string>()
   const uniquePapers: Paper[] = []
 
   for (const paper of papers) {
-    // Remove "Select" suffix and normalize title for comparison
     const normalizedTitle = paper.title.replace(/Select$/, '').trim()
     const key = `${normalizedTitle}-${paper.examType}-${paper.year}-${paper.metadata}`.toLowerCase()
     
     if (!seen.has(key)) {
       seen.add(key)
-      // Use the cleaned title without "Select" suffix
       uniquePapers.push({
         ...paper,
         title: normalizedTitle
@@ -69,13 +66,11 @@ export async function scrapePapersCodeChef(
   year?: string
 ): Promise<ScraperResult> {
   try {
-    // Try API approach first
     const apiResult = await tryAPIApproach(courseCode, examType, year)
     if (apiResult.success && apiResult.papers.length > 0) {
       return apiResult
     }
 
-    // Fall back to browser scraping if API fails
     return await tryBrowserScraping(courseCode, examType, year)
   } catch (error) {
     console.error('Error in scrapePapersCodeChef:', error)
@@ -120,11 +115,9 @@ async function tryAPIApproach(
     if (response.ok) {
       const data = await response.json()
       
-      // Handle both array responses and object responses with papers property
       const papersArray = Array.isArray(data) ? data : (data.papers || [])
       
       if (papersArray && papersArray.length > 0) {
-        // Validate papers by checking if their URLs are accessible
         const validatedPapers = await Promise.all(
           papersArray.map(async (paper: ApiPaper) => {
             const title = paper.title || paper.name || paper.paperName || 
@@ -148,10 +141,8 @@ async function tryAPIApproach(
               if (yearMatch) extractedYear = yearMatch[0]
             }
 
-            // Create paper URL using the paper ID
             const paperUrl = paper._id ? `https://papers.codechefvit.com/paper/${paper._id}` : ''
             
-            // Validate the paper by checking if the final URL is accessible
             let isValid = true
             if (paper.finalUrl) {
               try {
@@ -164,7 +155,7 @@ async function tryAPIApproach(
             }
 
             if (!isValid) {
-              return null // Filter out invalid papers
+              return null
             }
 
             return {
@@ -178,11 +169,9 @@ async function tryAPIApproach(
           })
         )
 
-        // Filter out null values (invalid papers) and deduplicate
         let papers = validatedPapers.filter(paper => paper !== null) as Paper[]
         papers = deduplicatePapers(papers)
 
-        // Apply filters
         if (examType) {
           papers = papers.filter(paper => {
             const paperTitle = paper.title.toLowerCase()
@@ -219,7 +208,6 @@ async function tryAPIApproach(
       }
     }
 
-    // Try with just course code if full name didn't work
     const codeOnlyUrl = `https://papers.codechefvit.com/api/papers?subject=${encodeURIComponent(courseCode)}`
     const codeResponse = await fetch(codeOnlyUrl, {
       headers: {
@@ -233,7 +221,6 @@ async function tryAPIApproach(
       const papersArray = Array.isArray(codeData) ? codeData : (codeData.papers || [])
 
       if (papersArray && papersArray.length > 0) {
-        // Same validation and processing as above
         const validatedPapers = await Promise.all(
           papersArray.map(async (paper: ApiPaper) => {
             const title = paper.title || paper.name || paper.paperName || 

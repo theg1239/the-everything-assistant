@@ -1772,7 +1772,6 @@ const PureArtifactDisplay = ({
     setPdfTitle(title || 'PDF Preview')
     const embedUrl = url.replace('/view?usp=sharing', '/preview').replace('/view', '/preview')
     setPdfUrl(embedUrl)
-    // Reset loading state after a delay to account for iframe loading
     setTimeout(() => setIsPdfLoading(false), 2000)
   }
 
@@ -1786,7 +1785,7 @@ const PureArtifactDisplay = ({
     if (maximizedItem && contentRef.current) {
       const cardHeaderHeight = contentRef.current.querySelector('.card-header')?.clientHeight || 0
       const cardContentHeight = contentRef.current.querySelector('.card-content')?.clientHeight || 0
-      const newHeight = cardHeaderHeight + cardContentHeight + 24 // 24 for padding
+      const newHeight = cardHeaderHeight + cardContentHeight + 24
 
       contentRef.current.style.setProperty('--card-content-height', `${newHeight}px`)
     }

@@ -243,8 +243,6 @@ Extract and format each faculty option from the options array for user selection
     : ''
 }
 
-
-
 Please parse this VTOP data and return a structured response with:
 - success: true if parsing was successful
 - formatted_content: A natural language description with proper formatting that directly addresses the user's original request

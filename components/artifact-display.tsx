@@ -29,12 +29,18 @@ import {
   Info,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { useMediaQuery } from '@/hooks/use-media-query'
-import { ResponsiveCard } from './responsive-card'
-import { ResponsiveTable } from './responsive-table'
+import { ResponsiveCard } from '@/components/responsive-card'
+import { ResponsiveTable } from '@/components/responsive-table'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 
 interface ArtifactDisplayProps {
   title: string
@@ -659,16 +665,28 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
 const PaperCard = ({ paper, onViewPdf }: { paper: any; onViewPdf: (url: string) => void }) => {
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [expanded, setExpanded] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+
+  const handleViewPaper = async () => {
+    setIsLoading(true)
+    try {
+      const urlToView = paper.link || paper.url || paper.pdfUrl || paper.downloadUrl
+      onViewPdf(urlToView)
+    } finally {
+      // Keep loading state for a brief moment to show feedback
+      setTimeout(() => setIsLoading(false), 1000)
+    }
+  }
 
   return (
-    <Card className="w-full hover:shadow-sm transition-all duration-200 border-border bg-card">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium line-clamp-2 text-card-foreground">
+    <Card className="w-full hover:shadow-md transition-all duration-200 border-border bg-card group flex flex-col h-full">
+      <CardHeader className="pb-3 flex-shrink-0">
+        <CardTitle className="text-sm font-medium line-clamp-3 text-card-foreground group-hover:text-primary transition-colors leading-snug">
           {paper.title}
         </CardTitle>
       </CardHeader>
-      <CardContent className="pt-0 space-y-3">
-        <div className="space-y-2 text-xs text-muted-foreground">
+      <CardContent className="pt-0 space-y-3 flex-1 flex flex-col">
+        <div className="space-y-2 text-xs text-muted-foreground flex-1">
           {paper.authors && (
             <div className="flex items-start gap-2">
               <Users className="h-3 w-3 shrink-0 mt-0.5" />
@@ -704,62 +722,69 @@ const PaperCard = ({ paper, onViewPdf }: { paper: any; onViewPdf: (url: string) 
         </div>
 
         {(paper.examType || paper.category) && (
-          <Badge variant="secondary" className="text-xs">
+          <Badge variant="secondary" className="text-xs w-fit">
             {paper.examType || paper.category}
           </Badge>
         )}
 
-        {isMobile &&
-          (paper.authors?.length > 2 ||
-            (paper.journal || paper.venue || paper.conference)?.length > 30) && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setExpanded(!expanded)}
-              className="w-full text-xs h-7"
-            >
-              {expanded ? (
-                <>
-                  <ChevronUp className="h-3 w-3 mr-1" />
-                  Show Less
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="h-3 w-3 mr-1" />
-                  Show More
-                </>
-              )}
-            </Button>
-          )}
+        <div className="flex-shrink-0 pt-1">
+          {isMobile &&
+            (paper.authors?.length > 2 ||
+              (paper.journal || paper.venue || paper.conference)?.length > 30) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setExpanded(!expanded)}
+                className="w-full text-xs h-7 mb-2"
+              >
+                {expanded ? (
+                  <>
+                    <ChevronUp className="h-3 w-3 mr-1" />
+                    Show Less
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-3 w-3 mr-1" />
+                    Show More
+                  </>
+                )}
+              </Button>
+            )}
 
-        <div className="flex gap-2 pt-1">
-          {(paper.link || paper.url || paper.pdfUrl || paper.downloadUrl) && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 px-3 text-xs"
-              onClick={() => {
-                const urlToView = paper.link || paper.url || paper.pdfUrl || paper.downloadUrl
-                //console.log('[PaperCard] View Paper clicked. URL:', urlToView)
-                onViewPdf(urlToView)
-              }}
-            >
-              <ExternalLink className="h-3 w-3 mr-1" />{' '}
-              {/* Corrected: Assuming ExternalLink is the intended icon from lucide-react or a custom component. If not, this needs to be adjusted. */}
-              View Paper
-            </Button>
-          )}
-          {paper.doi && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-3 text-xs"
-              onClick={() => window.open(`https://doi.org/${paper.doi}`, '_blank')}
-            >
-              <Globe className="h-3 w-3 mr-1" />
-              DOI
-            </Button>
-          )}
+          <div className="flex flex-col gap-2">
+            {(paper.link || paper.url || paper.pdfUrl || paper.downloadUrl) && (
+              <Button
+                variant="default"
+                size="sm"
+                className="h-8 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm transition-all duration-200 hover:shadow-md"
+                onClick={handleViewPaper}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <div className="animate-spin h-3 w-3 mr-2 border-2 border-current border-t-transparent rounded-full" />
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    <FileSearch className="h-3 w-3 mr-2" />
+                    View Paper
+                  </>
+                )}
+              </Button>
+            )}
+            {paper.doi && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-3 text-xs transition-all duration-200 hover:bg-muted"
+                onClick={() => window.open(`https://doi.org/${paper.doi}`, '_blank')}
+              >
+                <Globe className="h-3 w-3 mr-1" />
+                DOI
+              </Button>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -1733,6 +1758,7 @@ const PureArtifactDisplay = ({
   const [showAllItems, setShowAllItems] = useState(false)
   const [maximizedItem, setMaximizedItem] = useState<any | null>(null)
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
+  const [isPdfLoading, setIsPdfLoading] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
 
   const toggleExpand = () => setIsExpanded(!isExpanded)
@@ -1747,15 +1773,16 @@ const PureArtifactDisplay = ({
   }
 
   const handleViewPdf = (url: string) => {
-    //console.log('[PureArtifactDisplay] handleViewPdf called with URL:', url);
+    setIsPdfLoading(true)
     const embedUrl = url.replace('/view?usp=sharing', '/preview').replace('/view', '/preview')
-    //console.log('[PureArtifactDisplay] Setting PDF embed URL to:', embedUrl);
     setPdfUrl(embedUrl)
+    // Reset loading state after a delay to account for iframe loading
+    setTimeout(() => setIsPdfLoading(false), 2000)
   }
 
   const handleClosePdf = () => {
-    //console.log('[PureArtifactDisplay] Closing PDF view.')
     setPdfUrl(null)
+    setIsPdfLoading(false)
   }
 
   useEffect(() => {
@@ -1794,11 +1821,17 @@ const PureArtifactDisplay = ({
               type === 'reddit-overview' ||
               type === 'error'
               ? 'grid-cols-1'
-              : isMobile
-                ? 'grid-cols-1'
-                : isFullscreen
-                  ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
-                  : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
+              : type === 'papers'
+                ? isMobile
+                  ? 'grid-cols-1'
+                  : isFullscreen
+                    ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
+                    : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+                : isMobile
+                  ? 'grid-cols-1'
+                  : isFullscreen
+                    ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
+                    : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
           )}
         >
           {displayItems.map((item, index) => {
@@ -1923,32 +1956,37 @@ const PureArtifactDisplay = ({
       </Card>
 
       {pdfUrl && (
-        <ModalPortal>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4"
-            onClick={handleClosePdf}
+        <Sheet open={!!pdfUrl} onOpenChange={(open) => !open && handleClosePdf()}>
+          <SheetContent 
+            side="right" 
+            className="w-full sm:max-w-none sm:w-[95vw] md:w-[90vw] lg:w-[85vw] xl:w-[80vw] 2xl:w-[75vw] max-w-none p-0 gap-0 h-full border-l-2 border-border/50"
           >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-card p-1 rounded-lg shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col relative overflow-hidden"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex justify-between items-center p-3 border-b border-border">
-                <span className="font-semibold text-card-foreground">PDF Preview</span>
-                <Button variant="ghost" size="icon" onClick={handleClosePdf} className="h-8 w-8">
-                  <X className="h-5 w-5" />
-                  <span className="sr-only">Close PDF preview</span>
-                </Button>
-              </div>
-              <iframe src={pdfUrl} title="PDF Preview" className="w-full h-full border-0" />
-            </motion.div>
-          </motion.div>
-        </ModalPortal>
+            <SheetHeader className="px-4 sm:px-6 py-3 sm:py-4 border-b border-border flex-shrink-0 bg-background/95 backdrop-blur-sm">
+              <SheetTitle className="text-left text-sm sm:text-base font-semibold flex items-center gap-2">
+                <FileSearch className="h-4 w-4 text-primary" />
+                PDF Preview
+              </SheetTitle>
+            </SheetHeader>
+            <div className="flex-1 h-[calc(100vh-60px)] sm:h-[calc(100vh-80px)] relative bg-muted/20">
+              {isPdfLoading && (
+                <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-10">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
+                    <p className="text-sm text-muted-foreground">Loading PDF...</p>
+                  </div>
+                </div>
+              )}
+              <iframe 
+                src={pdfUrl} 
+                title="PDF Preview" 
+                className="w-full h-full border-0 bg-white"
+                allow="fullscreen"
+                loading="lazy"
+                onLoad={() => setIsPdfLoading(false)}
+              />
+            </div>
+          </SheetContent>
+        </Sheet>
       )}
     </motion.div>
   )

@@ -49,6 +49,11 @@ const Beams = dynamic(() => import('@/components/backgrounds/beams'), {
   loading: () => null,
 })
 
+const Dither = dynamic(() => import('@/components/backgrounds/dither'), {
+  ssr: false,
+  loading: () => null,
+})
+
 export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any) {
   const { data: session } = useSession()
   const { setBackgroundType, toggleBackground } = useCustomBackground()
@@ -93,6 +98,22 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         return (
           <div className="relative w-full h-16 rounded-md overflow-hidden bg-black">
             {beamsComponent}
+          </div>
+        )
+      case 'dither':
+        return (
+          <div className="relative w-full h-16 rounded-md overflow-hidden bg-black">
+            <Dither
+              waveSpeed={0.05}
+              waveFrequency={3}
+              waveAmplitude={0.3}
+              waveColor={[0.4, 0.6, 0.8]}
+              colorNum={4}
+              pixelSize={2}
+              disableAnimation={false}
+              enableMouseInteraction={false}
+              mouseRadius={1}
+            />
           </div>
         )
       case 'gradient':
@@ -902,6 +923,11 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
             type: 'beams' as BackgroundType,
             name: 'light beams',
             description: 'dynamic light beams with subtle animations',
+          },
+          {
+            type: 'dither' as BackgroundType,
+            name: 'dither',
+            description: 'retro dithered waves with pixel art aesthetics',
           },
           {
             type: 'gradient' as BackgroundType,

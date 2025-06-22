@@ -14,7 +14,12 @@ const Beams = dynamic(() => import('@/components/backgrounds/beams'), {
   loading: () => null,
 })
 
-export type BackgroundType = 'aurora' | 'beams' | 'gradient' | 'solid'
+const Dither = dynamic(() => import('@/components/backgrounds/dither'), {
+  ssr: false,
+  loading: () => null,
+})
+
+export type BackgroundType = 'aurora' | 'beams' | 'dither' | 'gradient' | 'solid'
 
 export interface BackgroundConfig {
   type: BackgroundType
@@ -34,6 +39,17 @@ export interface BackgroundConfig {
     noiseIntensity?: number
     scale?: number
     rotation?: number
+  }
+  dither?: {
+    waveSpeed?: number
+    waveFrequency?: number
+    waveAmplitude?: number
+    waveColor?: [number, number, number]
+    colorNum?: number
+    pixelSize?: number
+    disableAnimation?: boolean
+    enableMouseInteraction?: boolean
+    mouseRadius?: number
   }
   gradient?: {
     colors: string[]
@@ -62,6 +78,17 @@ const defaultBackgroundConfig: BackgroundConfig = {
     noiseIntensity: 1.75,
     scale: 0.2,
     rotation: 0,
+  },
+  dither: {
+    waveSpeed: 0.05,
+    waveFrequency: 3,
+    waveAmplitude: 0.3,
+    waveColor: [0.4, 0.6, 0.8],
+    colorNum: 4,
+    pixelSize: 2,
+    disableAnimation: false,
+    enableMouseInteraction: true,
+    mouseRadius: 1,
   },
   gradient: {
     colors: ['#1a1a2e', '#16213e', '#0f3460'],
@@ -189,6 +216,39 @@ export default function CustomBackground() {
             }
             scale={backgroundConfig.beams?.scale || defaultBackgroundConfig.beams!.scale!}
             rotation={backgroundConfig.beams?.rotation || defaultBackgroundConfig.beams!.rotation!}
+          />
+        )
+
+      case 'dither':
+        return (
+          <Dither
+            waveSpeed={
+              backgroundConfig.dither?.waveSpeed || defaultBackgroundConfig.dither!.waveSpeed!
+            }
+            waveFrequency={
+              backgroundConfig.dither?.waveFrequency || defaultBackgroundConfig.dither!.waveFrequency!
+            }
+            waveAmplitude={
+              backgroundConfig.dither?.waveAmplitude || defaultBackgroundConfig.dither!.waveAmplitude!
+            }
+            waveColor={
+              backgroundConfig.dither?.waveColor || defaultBackgroundConfig.dither!.waveColor!
+            }
+            colorNum={
+              backgroundConfig.dither?.colorNum || defaultBackgroundConfig.dither!.colorNum!
+            }
+            pixelSize={
+              backgroundConfig.dither?.pixelSize || defaultBackgroundConfig.dither!.pixelSize!
+            }
+            disableAnimation={
+              backgroundConfig.dither?.disableAnimation || defaultBackgroundConfig.dither!.disableAnimation!
+            }
+            enableMouseInteraction={
+              backgroundConfig.dither?.enableMouseInteraction || defaultBackgroundConfig.dither!.enableMouseInteraction!
+            }
+            mouseRadius={
+              backgroundConfig.dither?.mouseRadius || defaultBackgroundConfig.dither!.mouseRadius!
+            }
           />
         )
 

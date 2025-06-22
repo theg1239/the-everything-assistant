@@ -2014,21 +2014,19 @@ const PureArtifactDisplay = ({
                     <div className="text-xs text-muted-foreground space-y-1">
                       <p>• Use scroll wheel or trackpad to navigate</p>
                       <p>• Press Escape to close viewer</p>
-                      <p>• Use "Open External" for full features</p>
+                      <p>• Use "Open External" to view the paper source.</p>
                     </div>
                   </div>
                 </div>
               </motion.div>
             )}
 
-            {/* Right Panel - PDF Content */}
             <motion.div
               className="flex-1 h-full relative bg-muted/20"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
             >
-              {/* Mobile Header */}
               {isMobile && (
                 <div className="flex items-center justify-between p-3 border-b border-border bg-background/95 backdrop-blur-sm">
                   <div className="flex items-center gap-2">

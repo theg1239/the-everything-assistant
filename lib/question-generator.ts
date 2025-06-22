@@ -69,7 +69,6 @@ export function isVTOPQuestion(question: string): boolean {
     'class messages',
     'digital assignments',
     'facility',
-    'profile',
     'thursday',
     'classes do i have',
   ]
@@ -151,13 +150,6 @@ function generateQuestionsByCategory(): { [key: string]: string[] } {
       'show me my grades',
       "what's my last class tomorrow",
     ],
-    placements: [
-      'what are the placement statistics at vit?',
-      'which companies recruit from vit?',
-      'tell me about the highest packages at vit',
-      'how is the placement process for cse students?',
-      'what is the average placement package?',
-    ],
     campus: [
       'what are the hostel facilities like?',
       'tell me about the campus infrastructure',
@@ -181,9 +173,6 @@ function generateQuestionsByCategory(): { [key: string]: string[] } {
     ],
     faculty: [
       'tell me about the faculty at vit',
-      'how many faculty members have phd degrees?',
-      'what is the faculty strength in computer science?',
-      'who are the top researchers at vit?',
       'how can I contact faculty members?',
     ],
     courses: [
@@ -210,11 +199,28 @@ function generateQuestionsByCategory(): { [key: string]: string[] } {
       'what is the process for international students?',
     ],
     extracurricular: [
-      'what clubs and organizations are there?',
+      'what clubs and chapters are there?',
       'tell me about the cultural events at vit',
       'what technical competitions are organized?',
       'how can I join clubs at vit?',
       'what are riviera and gravitas festivals?',
+    ],
+    reddit: [
+      'what do students think about the food at vit?',
+      'share some study tips from seniors at vit',
+      'what are the best hostels according to students?',
+      'any advice for freshers from vit alumni?',
+      'what are the most common placement experiences?',
+      'can you find project ideas from vit reddit?',
+      'what are some fun stories from r/VIT?',
+      'what is the general opinion on the grading system?',
+      'how do students prepare for viteee?',
+      'what are some must-visit places on campus according to students?',
+      'what are the most popular clubs as per reddit?',
+      'any tips for surviving the first year at vit?',
+      'what are the most upvoted posts about vit?',
+      'what do students say about the mess food?',
+      'can you show trending discussions from vit reddit?',
     ],
   }
 }
@@ -224,8 +230,8 @@ export function getRandomQuestions(count: number = 6, isFirstMessage: boolean = 
   const categories = Object.keys(allCategories)
 
   const priorityCategories = isFirstMessage
-    ? ['vtop', 'academics', 'admission', 'placements', 'campus']
-    : ['vtop', 'research', 'faculty', 'courses', 'international', 'extracurricular']
+    ? ['vtop', 'academics', 'admission', 'campus', 'reddit']
+    : ['vtop', 'courses', 'extracurricular', 'reddit']
 
   let questions: string[] = []
 
@@ -238,8 +244,18 @@ export function getRandomQuestions(count: number = 6, isFirstMessage: boolean = 
     }
   }
 
+  // Add at least one Reddit question if available and not already included
+  if (allCategories['reddit'] && allCategories['reddit'].length > 0 && questions.length < count) {
+    const redditQuestions = [...allCategories['reddit']]
+    const randomIndex = Math.floor(Math.random() * redditQuestions.length)
+    const redditQuestion = redditQuestions[randomIndex]
+    if (!questions.includes(redditQuestion)) {
+      questions.push(redditQuestion)
+    }
+  }
+
   priorityCategories.forEach(category => {
-    if (allCategories[category] && questions.length < count && category !== 'vtop') {
+    if (allCategories[category] && questions.length < count && category !== 'vtop' && category !== 'reddit') {
       const randomIndex = Math.floor(Math.random() * allCategories[category].length)
       const question = allCategories[category][randomIndex]
       if (!questions.includes(question)) {
@@ -254,7 +270,6 @@ export function getRandomQuestions(count: number = 6, isFirstMessage: boolean = 
     if (categoryQuestions && categoryQuestions.length > 0) {
       const randomIndex = Math.floor(Math.random() * categoryQuestions.length)
       const question = categoryQuestions[randomIndex]
-
       if (!questions.includes(question)) {
         questions.push(question)
       }

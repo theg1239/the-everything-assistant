@@ -707,7 +707,7 @@ export function createVITTools() {
 
     // getPlacementInfo: tool({
     //   description:
-    //     'get latest placement statistics and company information from VIT Placements Tracker',
+    //     'get latest placement statistics and company information from VIT Placements Tracker. Use this for any questions about placements, highest packages, company offers, salary stats, or recruitment. DO NOT use queryVTOP for these queries.',
     //   parameters: z.object({
     //     year: z.string().optional().describe('academic year like 2024-25, 2023-24'),
     //     companyFilter: z

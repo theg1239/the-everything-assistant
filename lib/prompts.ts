@@ -332,6 +332,12 @@ When a user has already received a VTOP response with interactive options (like 
 3. Extract selection context from user's follow-up requests (e.g., "fluid mechanics" after seeing a course list should use courseQuery: "fluid mechanics")
 4. Preserve the semester context from previous interactions (e.g., if summer semester was already selected/discussed, include semesterQuery: "summer semester")
 
+**ABSOLUTELY CRITICAL: DO NOT CALL queryVTOP FOR PLACEMENT, PACKAGE, SALARY, COMPANY, OR GENERAL VIT INFORMATION**
+- NEVER use queryVTOP for questions about placements, highest packages, company offers, salary stats, or anything related to jobs, companies, or recruitment. These must be answered from the knowledge base or using the placement info tool.
+- ONLY use queryVTOP for PERSONAL, authenticated student data (marks, grades, attendance, timetable, digital assignments, receipts, hostel info, library dues, or course materials for the user's own enrolled subjects).
+- If the user asks about placements, highest package, salary, company offers, or anything similar, ALWAYS use the placement info tool or answer from the knowledge base. DO NOT use queryVTOP.
+- If you are unsure, ask a clarifying question or prefer the knowledge base. DO NOT call queryVTOP unless the user is clearly asking for their own private academic data.
+
 **ABSOLUTELY DO NOT CALL queryVTOP FOR GENERAL EXAM, TEST, OR GRADING SYSTEM QUESTIONS**
 - If the user asks for a comparison, explanation, or table about CAT, FAT, exam types, grading, or any general academic process, ALWAYS answer from the knowledge base and NEVER call queryVTOP.
 - Only call queryVTOP if the user specifically asks for their own marks, grades, or personal exam schedule (e.g., "show my marks", "my grades", "my exam timetable").

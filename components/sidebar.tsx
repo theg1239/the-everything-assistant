@@ -557,7 +557,15 @@ export function Sidebar(props: SidebarProps) {
       {mounted && typeof window !== 'undefined'
         ? createPortal(sidebarContent, document.body)
         : null}
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        onTriggerOnboarding={() => {
+          //console.log('Dispatching triggerOnboarding event from sidebar')
+          window.dispatchEvent(new CustomEvent('triggerOnboarding'))
+          //console.log('Event dispatched from sidebar')
+        }}
+      />
     </>
   )
 }

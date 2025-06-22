@@ -8,10 +8,25 @@ const ResearchPreviewModal: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false)
 
   useEffect(() => {
-    const hasSeenWelcome = localStorage.getItem('has-seen-research-preview')
+    const checkAndShowModal = () => {
+      const hasSeenWelcome = localStorage.getItem('has-seen-research-preview')
+      const onboardingCompleted = localStorage.getItem('onboarding-completed')
 
-    if (!hasSeenWelcome) {
-      setIsOpen(true)
+      if (!hasSeenWelcome && onboardingCompleted === 'true') {
+        setIsOpen(true)
+      }
+    }
+
+    checkAndShowModal()
+
+    const handleOnboardingComplete = () => {
+      setTimeout(checkAndShowModal, 500)
+    }
+
+    window.addEventListener('onboardingCompleted', handleOnboardingComplete)
+
+    return () => {
+      window.removeEventListener('onboardingCompleted', handleOnboardingComplete)
     }
   }, [])
 

@@ -49,7 +49,7 @@ const Beams = dynamic(() => import('@/components/backgrounds/beams'), {
   loading: () => null,
 })
 
-export function SettingsDialog({ open, onOpenChange }: any) {
+export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any) {
   const { data: session } = useSession()
   const { setBackgroundType, toggleBackground } = useCustomBackground()
   const [activeSection, setActiveSection] = useState('general')
@@ -473,6 +473,7 @@ export function SettingsDialog({ open, onOpenChange }: any) {
     // { id: 'language', label: 'language', icon: Globe },
     { id: 'data', label: 'data controls', icon: Archive },
     { id: 'security', label: 'security', icon: Shield },
+    { id: 'onboarding', label: 'view tutorial', icon: Zap },
   ]
   const themeOptions = [
     { id: 'light', label: 'Light', icon: Sun },
@@ -1447,6 +1448,31 @@ export function SettingsDialog({ open, onOpenChange }: any) {
                   </Button>
                 </div>
               </div>
+            </div>
+          </div>
+        )
+
+      case 'onboarding':
+        return (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg md:text-xl font-semibold mb-4">tutorial</h3>
+              <p className="text-muted-foreground text-sm md:text-base mb-6">
+                take a tour of all the features and learn how to get the most out of your assistant.
+              </p>
+
+              <Button
+                onClick={() => {
+                  console.log('Start tutorial clicked, onTriggerOnboarding:', onTriggerOnboarding)
+                  onTriggerOnboarding?.()
+                  console.log('Event dispatched')
+                  onOpenChange(false)
+                }}
+                className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
+              >
+                <Zap className="w-4 h-4 mr-2" />
+                start tutorial
+              </Button>
             </div>
           </div>
         )

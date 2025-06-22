@@ -21,6 +21,8 @@ import { VTOPToolHandler } from '@/components/vtop-tool-handler'
 import { VTOPProvider, useVTOP } from '@/contexts/vtop-context'
 import { RateLimitProvider, useRateLimit } from '@/contexts/rate-limit-context'
 import { RateLimitErrorDisplay } from '@/components/rate-limit-error-display'
+import { OnboardingDialog } from '@/components/onboarding-dialog'
+import { useOnboarding } from '@/hooks/use-onboarding'
 import { toast } from 'sonner'
 import ScrollToTopButton from '@/components/scroll-to-top-button'
 import { cn } from '@/lib/utils'
@@ -119,6 +121,12 @@ const PureChatInterface = ({
   const { updateToolResult, clearToolResult } = useVTOP()
   const { rateLimitError, clearRateLimitError, checkForRateLimitError } = useRateLimit()
   const { data: session } = useSession()
+  const { showOnboarding, closeOnboarding } = useOnboarding()
+
+  // Debug onboarding state changes
+  useEffect(() => {
+    console.log('ChatInterface: showOnboarding changed to:', showOnboarding)
+  }, [showOnboarding])
 
   const mainRef = useViewportHeight()
 
@@ -719,6 +727,7 @@ const PureChatInterface = ({
         onCredentialsSubmit={handleVTOPCredentials}
       >
         <ResearchPreviewModal />
+        <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
         <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />{' '}
         <div className="flex flex-col h-[100dvh] bg-transparent text-foreground relative overflow-hidden mobile-viewport-fix">
           <div className="relative z-10 flex flex-col h-full">
@@ -794,13 +803,13 @@ const PureChatInterface = ({
       </VTOPToolHandler>
     )
   }
-
   return (
     <VTOPToolHandler
       toolInvocations={messages[messages.length - 1]?.toolInvocations}
       onCredentialsSubmit={handleVTOPCredentials}
     >
       <ResearchPreviewModal />
+      <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
       <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
       <Canvas
         isOpen={canvasOpen}

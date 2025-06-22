@@ -9,6 +9,7 @@ import { MessageActions } from './message-actions'
 import { SparklesIcon } from 'lucide-react'
 import { memo } from 'react'
 import { useVTOP } from '../contexts/vtop-context'
+import rehypeRaw from 'rehype-raw'
 
 interface MessageBubbleProps {
   message: Message
@@ -84,6 +85,7 @@ const PureMessageBubble = ({
                 return (
                   <div className="prose prose-invert prose-base max-w-none">
                     <ReactMarkdown
+                      rehypePlugins={[rehypeRaw]}
                       components={{
                         p: ({ children }) => (
                           <p className="mb-3 last:mb-0 leading-relaxed text-foreground">
@@ -123,18 +125,18 @@ const PureMessageBubble = ({
                         ),
                         table: ({ children }) => (
                           <div className="overflow-x-auto mb-3">
-                            <table className="min-w-full border border-border rounded-lg">
+                            <table className="min-w-full border border-border rounded-lg text-sm">
                               {children}
                             </table>
                           </div>
                         ),
                         th: ({ children }) => (
-                          <th className="border border-border px-3 py-2 bg-muted text-foreground font-semibold">
+                          <th className="border border-border px-3 py-2 bg-muted text-foreground font-semibold text-sm">
                             {children}
                           </th>
                         ),
                         td: ({ children }) => (
-                          <td className="border border-border px-3 py-2 text-muted-foreground">
+                          <td className="border border-border px-3 py-2 text-muted-foreground text-sm">
                             {children}
                           </td>
                         ),

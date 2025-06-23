@@ -1,75 +1,33 @@
-import { createDataStream, smoothStream } from 'ai'
 import { rateLimitedGoogle } from '@/lib/rate-limited-ai'
 import { createVITTools } from '@/lib/tools'
 import { VIT_SYSTEM_PROMPT } from '@/lib/prompts'
 import { VIT_COMPREHENSIVE_KNOWLEDGE } from '@/lib/knowledge-base'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import {
-  getChat,
-  createChat,
-  createChatWithFirstMessage,
-  saveMessage,
-  updateChat,
-  createStreamId,
-  getMostRecentStreamId,
-  getLastAssistantMessage,
-} from '@/lib/db'
-import {
-  generateChatPath,
-  extractTitleFromContent,
-  generateUUID,
-  getTrailingMessageId,
-} from '@/lib/utils'
+import { getChat, createChat, saveMessage, updateChat } from '@/lib/db'
+import { generateChatPath, extractTitleFromContent } from '@/lib/utils'
 import { z } from 'zod'
-import { createResumableStreamContext, type ResumableStreamContext } from 'resumable-stream'
-import { after } from 'next/server'
-import { differenceInSeconds } from 'date-fns'
-import { prisma } from '@/lib/prisma'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
-
-let globalStreamContext: ResumableStreamContext | null = null
-
-function getStreamContext() {
-  if (!globalStreamContext) {
-    try {
-      globalStreamContext = createResumableStreamContext({
-        waitUntil: after,
-      })
-      console.log(' > Resumable streams enabled')
-    } catch (error: any) {
-      if (error.message.includes('REDIS_URL')) {
-        console.log(' > Resumable streams are disabled due to missing REDIS_URL')
-      } else {
-        console.error('Error creating resumable stream context:', error)
-        console.log(' > Falling back to regular streaming without resumability')
-      }
-      return null
-    }
-  }
-
-  return globalStreamContext
-}
 
 async function generateChatTitle(userMessage: string, userId?: string): Promise<string> {
   try {
     //console.log('Generating title for:', userMessage.substring(0, 50) + '...')
 
     const cleanMessage = userMessage.trim().toLowerCase()
-    if (cleanMessage.length < 5 || ['hi', 'hello', 'hey', 'test', 'help', 'yo', 'sup'].includes(cleanMessage)) {
+    if (cleanMessage.length < 10 || ['hi', 'hello', 'hey', 'test', 'help'].includes(cleanMessage)) {
       console.log('⏭Skipping title generation for simple message')
       return extractTitleFromContent(userMessage)
     }
 
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Title generation timeout')), 5000)
+      setTimeout(() => reject(new Error('Title generation timeout')), 10000)
     )
 
     const modelPromise = rateLimitedGoogle.generateText(
       {
-        model: await rateLimitedGoogle.model('gemini-2.5-flash-lite-preview-06-17'),
+        model: await rateLimitedGoogle.model('gemma-3-12b-it'),
         prompt: `Generate a concise, descriptive title for a chat conversation based on the user's first message. The title should:
 - Be 3-8 words maximum
 - Capture the main topic or intent
@@ -86,7 +44,7 @@ Examples:
 - "What are my exam schedules?" → "Exam Schedule Query"
 
 Respond with ONLY the title, nothing else.`,
-        maxTokens: 30,
+        maxTokens: 50,
       },
       userId
     )
@@ -141,7 +99,6 @@ async function parseVTOPData(
         schema: vtopParseSchema,
         prompt: `
 You are a helpful assistant that parses VTOP (VIT Online Portal) data and formats it in a clean, natural language format.
-For marks, when there's a lot of data and huge amount of subjects, you should summarize the data in a concise way with the help of tables.
 
 USER'S ORIGINAL REQUEST: ${userContext}
 Command: ${command}
@@ -244,6 +201,8 @@ Extract and format each faculty option from the options array for user selection
     : ''
 }
 
+
+
 Please parse this VTOP data and return a structured response with:
 - success: true if parsing was successful
 - formatted_content: A natural language description with proper formatting that directly addresses the user's original request
@@ -263,6 +222,7 @@ FORMATTING GUIDELINES:
 1. Use bullet points and lists for better readability when showing multiple items
 2. If you need to present tabular data, use HTML table tags: <table>, <tr>, <td>, <th>
 3. Use HTML formatting tags like <strong>, <em>, <br>, <p>, <ul>, <li> for better presentation
+4. For profile data: Write in natural sentences about the person's details
 5. For attendance: Describe attendance in conversational language
 6. For marks/grades: Explain performance in narrative form with lists for multiple subjects
 7. For receipts/financial data: Describe transactions naturally with HTML tables if needed
@@ -329,63 +289,31 @@ Make the formatted_content engaging and conversational while being informative a
 }
 
 export async function POST(req: Request) {
-  const startTime = performance.now()
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
       return new Response('Unauthorized', { status: 401 })
     }
-
     const { messages, id: chatId, directToolCall, preferredTool } = await req.json()
 
-    const authTime = performance.now()
-    console.log(`Auth completed in ${(authTime - startTime).toFixed(2)}ms`)
-
     let chat = chatId ? await getChat(chatId, session.user.id) : null
-    let firstUserMessage: any = null
-
     if (!chat) {
-      const firstMessage = messages[0]
-      const tempTitle = extractTitleFromContent(firstMessage?.content || 'New Chat')
+      const tempTitle = extractTitleFromContent(messages[0]?.content || 'New Chat')
       const path = generateChatPath()
-      if (firstMessage?.role === 'user') {
-        const chatCreateStart = performance.now()
-        const result = await createChatWithFirstMessage(
-          session.user.id,
-          tempTitle,
-          path,
-          firstMessage.content,
-          firstMessage.id
-        )
-        chat = result.chat
-        firstUserMessage = result.message
-        const chatCreateTime = performance.now()
-        console.log(
-          `Chat and first message created atomically in ${(chatCreateTime - chatCreateStart).toFixed(2)}ms`
-        )
-      } else {
-        const chatCreateStart = performance.now()
-        chat = await createChat(session.user.id, tempTitle, path)
-        const chatCreateTime = performance.now()
-        console.log(`Chat created in ${(chatCreateTime - chatCreateStart).toFixed(2)}ms`)
-      }
+      chat = await createChat(session.user.id, tempTitle, path)
 
-      // Generate title asynchronously without blocking the response
-      const userMessage = firstMessage?.content || ''
+      const userMessage = messages[0]?.content || ''
       if (userMessage.trim()) {
-        // Fire and forget - don't await this
-        setImmediate(() => {
-          generateChatTitle(userMessage, session.user.id)
-            .then(async properTitle => {
-              if (properTitle !== tempTitle) {
-                await updateChat(chat!.id, properTitle)
-                console.log('Chat title updated successfully:', properTitle)
-              }
-            })
-            .catch(error => {
-              console.error('Failed to update chat title:', error)
-            })
-        })
+        generateChatTitle(userMessage, session.user.id)
+          .then(async properTitle => {
+            if (properTitle !== tempTitle) {
+              await updateChat(chat!.id, properTitle)
+              console.log('Chat title updated successfully:', properTitle)
+            }
+          })
+          .catch(error => {
+            console.error('Failed to update chat title:', error)
+          })
       }
     }
 
@@ -427,7 +355,6 @@ export async function POST(req: Request) {
                 structured_data: (parsedData as any).structured_data,
                 summary: (parsedData as any).summary,
               })
-
               const assistantResponse =
                 (result as any).formatted_content ||
                 (result as any).summary ||
@@ -472,18 +399,25 @@ export async function POST(req: Request) {
         })
       }
     }
+    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+      return new Response(
+        JSON.stringify({
+          error:
+            'API key not configured. Please add GOOGLE_GENERATIVE_AI_API_KEY to your environment variables.',
+        }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
     const userMessage = messages[messages.length - 1]
-    if (userMessage.role === 'user' && !firstUserMessage) {
+    if (userMessage.role === 'user') {
       await saveMessage(chat.id, 'user', userMessage.content, undefined, userMessage.id)
     }
 
-    const streamId = generateUUID()
-    await createStreamId(streamId, chat.id)
-
     const tools = createVITTools()
-
-    const toolPreferenceGuidance = preferredTool
-      ? `
+    
+    // Create tool preference guidance
+    const toolPreferenceGuidance = preferredTool ? `
 
 IMPORTANT: The user has specifically selected the "${preferredTool}" tool. When responding to their query, you should prioritize using this tool if it's relevant to their question. Available tools and their purposes:
 
@@ -492,8 +426,7 @@ IMPORTANT: The user has specifically selected the "${preferredTool}" tool. When 
 - past-papers: Use findPastPapers for examination papers and course materials
 - mess-menu: Use getMessMenu for hostel dining information
 
-If the user's query is relevant to the selected tool "${preferredTool}", use it even if other tools might also be applicable.`
-      : ''
+If the user's query is relevant to the selected tool "${preferredTool}", use it even if other tools might also be applicable.` : ''
 
     const combinedSystemPrompt = `${VIT_SYSTEM_PROMPT}
 
@@ -553,194 +486,62 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
       }
       return message
     })
-    const stream = createDataStream({
-      execute: async dataStream => {
-        const result = await rateLimitedGoogle.streamText(
-          {
-            model: await rateLimitedGoogle.model('gemini-2.5-flash-lite-preview-06-17'),
-            messages: [{ role: 'system', content: combinedSystemPrompt }, ...enhancedMessages],
-            tools,
-            temperature: 0.7,
-            maxTokens: 4096,
-            toolChoice: 'auto',
-            experimental_transform: smoothStream({ chunking: 'word' }),
-            experimental_generateMessageId: generateUUID,
-            onFinish: async ({ response }: { response: any }) => {
-              // console.log('DEBUG: onFinish response structure:', {
-              //   hasToolResults: !!(response as any).toolResults,
-              //   hasToolCalls: !!response.toolCalls,
-              //   hasUsage: !!response.usage,
-              //   hasToolInvocations: !!response.toolInvocations,
-              //   responseKeys: Object.keys(response),
-              //   toolResultsLength: ((response as any).toolResults ?? []).length,
-              //   toolCallsLength: (response.toolCalls ?? []).length,
-              //   toolInvocationsLength: (response.toolInvocations ?? []).length
-              // })
 
-              const toolResults =
-                (response as any).toolResults ??
-                response.toolCalls ??
-                response.toolInvocations ??
-                []
-
-              for (const tr of toolResults) {
-                if (
-                  tr.toolName === 'queryVTOP' &&
-                  tr.result?.success &&
-                  tr.result.data &&
-                  !tr.result.parsedData
-                ) {
-                  try {
-                    const userContext =
-                      messages && messages.length > 0
-                        ? messages
-                            .filter((m: any) => m.role === 'user')
-                            .slice(-3)
-                            .map((m: any) => m.content)
-                            .join(' | ')
-                        : ''
-                    const parsed = await parseVTOPData(
-                      tr.result,
-                      tr.args.command,
-                      userContext,
-                      session.user.id
-                    )
-                    Object.assign(tr.result, {
-                      parsedData: parsed,
-                      formatted_content: (parsed as any).formatted_content,
-                      structured_data: (parsed as any).structured_data,
-                      summary: (parsed as any).summary,
-                    })
-                  } catch (e) {
-                    console.error('Failed to parse VTOP data in stream:', e)
-                  }
-                }
-              }
-
-              const safeInvocations = JSON.parse(JSON.stringify(toolResults))
-
-              let assistantId: string | undefined
-              let messageText = ''
-
-              if (
-                response.messages &&
-                Array.isArray(response.messages) &&
-                response.messages.length > 0
-              ) {
-                const assistantMessages = response.messages.filter(
-                  (message: any) => message.role === 'assistant'
+    const resultStream = await rateLimitedGoogle.streamText(
+      {
+        model: await rateLimitedGoogle.model('gemini-2.5-flash-lite-preview-06-17'),
+        messages: [{ role: 'system', content: combinedSystemPrompt }, ...enhancedMessages],
+        tools,
+        temperature: 0.7,
+        maxTokens: 4096,
+        toolChoice: 'auto',
+        onFinish: async (result: any) => {
+          const toolResults = (result as any).toolResults ?? result.toolCalls ?? []
+          for (const tr of toolResults) {
+            if (
+              tr.toolName === 'queryVTOP' &&
+              tr.result?.success &&
+              tr.result.data &&
+              !tr.result.parsedData
+            ) {
+              try {
+                const userContext =
+                  messages && messages.length > 0
+                    ? messages
+                        .filter((m: any) => m.role === 'user')
+                        .slice(-3)
+                        .map((m: any) => m.content)
+                        .join(' | ')
+                    : ''
+                const parsed = await parseVTOPData(
+                  tr.result,
+                  tr.args.command,
+                  userContext,
+                  session.user.id
                 )
-
-                if (assistantMessages.length > 0) {
-                  const lastAssistantMessage = assistantMessages[assistantMessages.length - 1]
-                  const messageId = getTrailingMessageId(assistantMessages)
-                  assistantId = messageId || undefined
-
-                  if (lastAssistantMessage.content) {
-                    if (typeof lastAssistantMessage.content === 'string') {
-                      messageText = lastAssistantMessage.content
-                    } else if (Array.isArray(lastAssistantMessage.content)) {
-                      messageText = lastAssistantMessage.content
-                        .filter((part: any) => part.type === 'text')
-                        .map((part: any) => part.text)
-                        .join('')
-                    }
-                  }
-                }
-              }
-              if (!messageText && response.text) {
-                messageText = response.text
-                assistantId = assistantId || generateUUID()
-              }
-
-              if (!assistantId && safeInvocations && safeInvocations.length > 0) {
-                assistantId = generateUUID()
-              }
-
-              if (assistantId && (messageText || (safeInvocations && safeInvocations.length > 0))) {
-                try {
-                  const contentToSave = messageText || ''
-                  await saveMessage(
-                    chat.id,
-                    'assistant',
-                    contentToSave,
-                    safeInvocations,
-                    assistantId
-                  )
-                  console.log('Assistant message saved successfully')
-                } catch (saveError) {
-                  console.error('Failed to save assistant message:', saveError)
-                }
-              } else {
-                console.log('Skipping message save - missing data:', {
-                  hasAssistantId: !!assistantId,
-                  hasMessageText: !!messageText,
-                  textLength: messageText?.length || 0,
-                  hasToolInvocations: !!(safeInvocations && safeInvocations.length > 0),
+                Object.assign(tr.result, {
+                  parsedData: parsed,
+                  formatted_content: (parsed as any).formatted_content,
+                  structured_data: (parsed as any).structured_data,
+                  summary: (parsed as any).summary,
                 })
+              } catch (e) {
+                console.error('Failed to parse VTOP data in stream:', e)
               }
-            },
-          },
-          session.user.id
-        )
-        console.log('Before consumeStream()')
-        result.consumeStream()
-        console.log('After consumeStream()')
+            }
+          }
 
-        console.log('Before mergeIntoDataStream()')
-        result.mergeIntoDataStream(dataStream, {
-          sendReasoning: true,
-        })
-        console.log('After mergeIntoDataStream()')
+          const safeInvocations = JSON.parse(JSON.stringify(toolResults))
+          await saveMessage(chat.id, 'assistant', result.text, safeInvocations, result.response.id)
+        },
       },
-      onError: (error: any) => {
-        console.error('Data stream error:', error)
-        const errorMessage =
-          error?.message || 'An unexpected error occurred while processing your request'
-        console.log('Simplified error message:', errorMessage)
-        return `Error: ${errorMessage}`
-      },
-    })
-    const streamContext = getStreamContext()
+      session.user.id
+    )
 
-    if (streamContext) {
-      try {
-        console.log('Creating resumable stream with ID:', streamId)
-        const resumableResponse = await streamContext.resumableStream(streamId, () => stream)
-
-        console.log('Resumable stream created:', {
-          isResponse: resumableResponse instanceof Response,
-          hasBody: !!(resumableResponse as any)?.body,
-          isReadableStream: resumableResponse instanceof ReadableStream,
-          constructor: resumableResponse?.constructor?.name,
-          headers:
-            resumableResponse instanceof Response
-              ? Array.from((resumableResponse as Response).headers.entries())
-              : 'not a response',
-        })
-
-        return new Response(resumableResponse, {
-          headers: {
-            'Content-Type': 'text/plain; charset=utf-8',
-            'Cache-Control': 'no-cache',
-            Connection: 'keep-alive',
-            'X-Chat-Id': chat.id,
-            'X-Chat-Path': `/chat/${chat.id}`,
-          },
-        })
-      } catch (resumableError) {
-        console.error('Resumable stream error, falling back to regular stream:', resumableError)
-      }
-    }
-
-    console.log('Using regular streaming (no resumable context or error occurred)')
-    return new Response(stream, {
+    return resultStream.toDataStreamResponse({
       headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
         'X-Chat-Id': chat.id,
-        'X-Chat-Path': `/chat/${chat.id}`,
+        'X-Chat-Path': chat.path,
       },
     })
   } catch (error: any) {
@@ -761,176 +562,5 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
       JSON.stringify({ error: error.message || 'An unexpected error occurred' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     )
-  }
-}
-
-export async function GET(request: Request) {
-  const startTime = performance.now() // Performance tracking
-  const streamContext = getStreamContext()
-  const resumeRequestedAt = new Date()
-
-  if (!streamContext) {
-    return new Response(null, { status: 204 })
-  }
-
-  const { searchParams } = new URL(request.url)
-  const chatId = searchParams.get('chatId')
-
-  if (!chatId) {
-    return new Response('Bad Request: chatId is required', { status: 400 })
-  }
-
-  const session = await getServerSession(authOptions)
-
-  if (!session?.user) {
-    return new Response('Unauthorized', { status: 401 })
-  }
-  const [chat, recentStreamId] = await Promise.all([
-    getChat(chatId, session.user.id),
-    getMostRecentStreamId(chatId),
-  ])
-
-  const dbQueryTime = performance.now()
-  console.log(`DB queries completed in ${(dbQueryTime - startTime).toFixed(2)}ms`)
-
-  if (!chat) {
-    return new Response('Chat not found', { status: 404 })
-  }
-
-  if (!recentStreamId) {
-    return new Response('No streams found', { status: 404 })
-  }
-  const emptyDataStream = createDataStream({
-    execute: () => {},
-  })
-  console.log('Attempting to resume stream for chatId:', chatId, 'with streamId:', recentStreamId)
-
-  let stream: ReadableStream | Response | null = null
-
-  try {
-    const streamPromise = streamContext.resumableStream(recentStreamId, () => emptyDataStream)
-
-    const timeoutPromise = new Promise<null>((_, reject) =>
-      setTimeout(() => reject(new Error('Stream resume timeout')), 1000)
-    )
-
-    stream = await Promise.race([streamPromise, timeoutPromise])
-  } catch (resumeError) {
-    console.error('Failed to resume stream or timeout occurred:', resumeError)
-    stream = null
-  }
-
-  console.log('Resume stream result:', {
-    streamExists: !!stream,
-    isResponse: stream instanceof Response,
-    isReadableStream: stream instanceof ReadableStream,
-    constructor: stream?.constructor?.name,
-    streamId: recentStreamId,
-  })
-  if (stream) {
-    const resumeTime = performance.now()
-    console.log(`Stream resumed successfully in ${(resumeTime - startTime).toFixed(2)}ms`)
-    return new Response(stream, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-        'X-Chat-Id': chat.id,
-        'X-Chat-Path': `/chat/${chat.id}`,
-      },
-    })
-  }
-
-  const dbRestoreStartTime = performance.now()
-  console.log('No resumable stream found, attempting database restore...')
-  const mostRecentMessage = await getLastAssistantMessage(chatId)
-
-  const dbRestoreTime = performance.now()
-  console.log(`DB restore query completed in ${(dbRestoreTime - dbRestoreStartTime).toFixed(2)}ms`)
-
-  if (!mostRecentMessage) {
-    console.log('No assistant messages found in database')
-    return new Response(emptyDataStream, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-        'X-Chat-Id': chat.id,
-        'X-Chat-Path': `/chat/${chat.id}`,
-      },
-    })
-  }
-
-  const messageCreatedAt = new Date(mostRecentMessage.created_at)
-
-  if (differenceInSeconds(resumeRequestedAt, messageCreatedAt) > 15) {
-    console.log('Message too old for restore (>15s)')
-    return new Response(emptyDataStream, {
-      status: 200,
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-        'X-Chat-Id': chat.id,
-        'X-Chat-Path': `/chat/${chat.id}`,
-      },
-    })
-  }
-  console.log('Restoring message from database')
-  const restoredStream = createDataStream({
-    execute: buffer => {
-      buffer.writeData({
-        type: 'append-message',
-        message: JSON.stringify(mostRecentMessage),
-      })
-    },
-  })
-
-  const totalTime = performance.now()
-  console.log(`Database restore completed in ${(totalTime - startTime).toFixed(2)}ms total`)
-
-  return new Response(restoredStream, {
-    status: 200,
-    headers: {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-      'X-Chat-Id': chat.id,
-      'X-Chat-Path': `/chat/${chat.id}`,
-    },
-  })
-}
-
-export async function DELETE(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const id = searchParams.get('id')
-
-  if (!id) {
-    return new Response('Bad Request: id is required', { status: 400 })
-  }
-
-  const session = await getServerSession(authOptions)
-
-  if (!session?.user) {
-    return new Response('Unauthorized', { status: 401 })
-  }
-
-  const chat = await getChat(id, session.user.id)
-
-  if (!chat) {
-    return new Response('Chat not found', { status: 404 })
-  }
-
-  try {
-    await prisma.chat.delete({
-      where: { id },
-    })
-
-    return Response.json({ success: true }, { status: 200 })
-  } catch (error) {
-    console.error('Error deleting chat:', error)
-    return new Response('Internal Server Error', { status: 500 })
   }
 }

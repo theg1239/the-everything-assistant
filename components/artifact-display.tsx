@@ -27,6 +27,10 @@ import {
   CheckCircle,
   AlertTriangle,
   Info,
+  Map,
+  Building,
+  Info as InfoIcon,
+  Shield,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
@@ -52,6 +56,7 @@ interface ArtifactDisplayProps {
     | 'reddit-knowledge'
     | 'reddit-overview'
     | 'error'
+    | 'campus-info'
   className?: string
   onLoginClick?: () => void
 }
@@ -461,7 +466,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
           )
         }
         break
-
       default:
         return null
     }
@@ -806,7 +810,7 @@ const FacultyCard = ({ faculty }: { faculty: any }) => {
   const [expanded, setExpanded] = useState(false)
 
   return (
-    <Card className="w-full hover:shadow-sm transition-all duration-200 border-border bg-card">
+    <Card className="w-full max-w-full hover:shadow-sm transition-all duration-200 border-border bg-card">
       <CardHeader className="pb-3">
         <div className="space-y-2 flex items-center gap-3">
           {faculty.image && (
@@ -1782,6 +1786,87 @@ const ModalPortal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return ReactDOM.createPortal(children, elRef.current)
 }
 
+const CampusInfoCard = ({ info }: { info: any }) => {
+  return (
+    <div className="w-full">
+      <Card className="overflow-hidden border-border/50 hover:border-blue-500/30 transition-colors w-full">
+        <CardHeader className="pb-3 bg-gradient-to-r from-blue-50 to-blue-50/50 dark:from-blue-950/30 dark:to-blue-950/10">
+          <div className="flex items-start gap-4">
+            <div className="p-2.5 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5">
+              <Building className="h-6 w-6" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-xl font-bold text-foreground">{info.name}</h3>
+              {info.description && (
+                <p className="text-sm text-muted-foreground mt-1">{info.description}</p>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-6 pt-4 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {info.usage && (
+              <div className="bg-muted/30 p-4 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500 flex-shrink-0">
+                    <InfoIcon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-sm text-muted-foreground mb-1">Usage</h4>
+                    <p className="text-foreground">{info.usage}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {info.location && (
+              <div className="bg-muted/30 p-4 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500 flex-shrink-0">
+                    <MapPin className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-sm text-muted-foreground mb-1">Location</h4>
+                    <p className="text-foreground">{info.location}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {info.note && (
+            <div className="bg-blue-50/50 dark:bg-blue-950/20 p-4 rounded-lg border border-blue-100 dark:border-blue-900/50">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500 flex-shrink-0">
+                  <Info className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="font-medium text-sm text-blue-600 dark:text-blue-400 mb-1">Note</h4>
+                  <p className="text-foreground">{info.note}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {info.mapsUrl && (
+            <div className="pt-2">
+              <a
+                href={info.mapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+              >
+                <Map className="h-4 w-4 mr-2" />
+                View on Google Maps
+              </a>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 const PureArtifactDisplay = ({
   title,
   icon,
@@ -1899,8 +1984,10 @@ const PureArtifactDisplay = ({
               type === 'vtop-data' ||
               type === 'reddit-knowledge' ||
               type === 'reddit-overview' ||
-              type === 'error'
-              ? 'grid-cols-1'
+              type === 'error' ||
+              type === 'campus-info' ||
+              type === 'faculty'
+              ? 'grid-cols-1 w-full max-w-full gap-4'
               : type === 'papers'
                 ? isMobile
                   ? 'grid-cols-1'
@@ -1940,6 +2027,8 @@ const PureArtifactDisplay = ({
                 return <RedditOverviewCard key={index} data={item} />
               case 'error':
                 return <ErrorCard key={index} errorData={item} />
+            case 'campus-info':
+                return <CampusInfoCard key={index} info={item} />
               default:
                 return (
                   <Card key={index} className="hover:shadow-md transition-shadow">

@@ -13,6 +13,7 @@ import {
   TrendingUp,
   UtensilsCrossed,
   Shield,
+  MapPin,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -489,6 +490,42 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
           success: false,
         },
         source: 'Reddit Knowledge Base',
+      }
+    }
+  }
+
+  if (toolName === 'getCampusInfo') {
+    if (result.success && result.name) {
+      // Combine the name and description for a more informative display
+      const description = result.description 
+        ? `${result.name}: ${result.description}`
+        : result.name;
+        
+      return {
+        type: 'campus-info' as const,
+        title: 'Campus Info',
+        icon: <MapPin className="h-5 w-5 text-emerald-500" />,
+        data: {
+          name: result.name,
+          description: description,
+          usage: result.usage,
+          location: result.location,
+          note: result.note,
+          mapsUrl: result.mapsUrl,
+          message: result.message,
+        },
+        source: 'VIT Campus Info',
+      }
+    }
+    if (result.success === false) {
+      return {
+        type: 'campus-info' as const,
+        title: 'Campus Block Info',
+        icon: <MapPin className="h-5 w-5 text-emerald-500" />,
+        data: {
+          error: result.message,
+        },
+        source: 'VIT Campus Info',
       }
     }
   }

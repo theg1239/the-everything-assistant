@@ -433,6 +433,11 @@ If the user's query is relevant to the selected tool "${preferredTool}", use it 
 ADDITIONAL COMPREHENSIVE KNOWLEDGE:
 ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
 
+    // Log the full combined system prompt for debugging
+    console.log('--- SYSTEM PROMPT START ---')
+    console.log(combinedSystemPrompt)
+    console.log('--- SYSTEM PROMPT END ---')
+
     const enhancedMessages = messages.map((message: any) => {
       if (
         message.role === 'assistant' &&
@@ -489,7 +494,7 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
 
     const resultStream = await rateLimitedGoogle.streamText(
       {
-        model: await rateLimitedGoogle.model('gemini-2.5-flash-lite-preview-06-17'),
+        model: await rateLimitedGoogle.model('gemini-2.5-flash'),
         messages: [{ role: 'system', content: combinedSystemPrompt }, ...enhancedMessages],
         tools,
         temperature: 0.7,

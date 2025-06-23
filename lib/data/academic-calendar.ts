@@ -31,9 +31,9 @@ Holidays & Breaks:
 - October 18-26, 2025 (Saturday to Sunday): Deepavali (Holiday)
 
 Assessment Schedule:
-- August 17, 2025 (Sunday) to August 23, 2025 (Saturday): Continuous Assessment Test - I (CAT-1)
+- August 17, 2025 (Sunday) to August 23, 2025 (Saturday): CAT1 schedule
 - September 8-10, 2025 (Monday to Wednesday): Course withdraw option for students
-- October 5, 2025 (Sunday) to October 11, 2025 (Saturday): Continuous Assessment Test - II (CAT-2)
+- October 5, 2025 (Sunday) to October 11, 2025 (Saturday): CAT2 schedule
 
 Final Examinations:
 - November 7, 2025 (Friday): Last instructional day for laboratory classes

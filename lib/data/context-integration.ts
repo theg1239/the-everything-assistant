@@ -4,7 +4,7 @@ export function getCurrentVITContext(): string {
   try {
     const contextData = getContextForAIPrompt({
       includeAll: false,
-      maxLength: 3000,
+      maxLength: 10000,
     })
 
     if (!contextData || contextData.trim().length === 0) {

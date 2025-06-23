@@ -571,7 +571,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
               <h4 className="text-sm font-medium text-card-foreground mb-2"></h4>
               <div
                 className="text-sm text-muted-foreground prose prose-sm max-w-none 
-                           [&_table]:w-full [&_table]:border-collapse [&_table]:border [&_table]:border-border [&_table]:rounded-md [&_table]:overflow-hidden
+                           [&_table]:w-full [&_table]:border-collapse [&_table]:border [&_table]:rounded-md [&_table]:overflow-hidden
                            [&_th]:border [&_th]:border-border [&_th]:p-3 [&_th]:bg-muted/80 [&_th]:font-semibold [&_th]:text-card-foreground [&_th]:text-left
                            [&_td]:border [&_td]:border-border [&_td]:p-3 [&_td]:text-card-foreground
                            [&_tr:nth-child(even)]:bg-muted/20
@@ -801,13 +801,26 @@ const FacultyCard = ({ faculty }: { faculty: any }) => {
   return (
     <Card className="w-full hover:shadow-sm transition-all duration-200 border-border bg-card">
       <CardHeader className="pb-3">
-        <div className="space-y-2">
-          <CardTitle className="text-sm font-medium text-card-foreground">{faculty.name}</CardTitle>
-          {faculty.designation && (
-            <Badge variant="secondary" className="text-xs w-fit">
-              {faculty.designation}
-            </Badge>
+        <div className="space-y-2 flex items-center gap-3">
+          {faculty.image && (
+            <img
+              src={faculty.image}
+              alt={faculty.name}
+              className="h-12 w-12 rounded-full object-cover border border-border"
+              loading="lazy"
+            />
           )}
+          <div>
+            <CardTitle className="text-sm font-medium text-card-foreground">{faculty.name}</CardTitle>
+            {faculty.designation && (
+              <Badge variant="secondary" className="text-xs w-fit">
+                {faculty.designation}
+              </Badge>
+            )}
+            {faculty.school && (
+              <div className="text-xs text-muted-foreground mt-1">{faculty.school}</div>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="pt-0">
@@ -815,17 +828,13 @@ const FacultyCard = ({ faculty }: { faculty: any }) => {
           {faculty.department && (
             <div className="flex items-start gap-2">
               <Building2 className="h-3 w-3 shrink-0 mt-0.5" />
-              <span className={isMobile && !expanded ? 'line-clamp-1' : ''}>
-                {faculty.department}
-              </span>
+              <span className={isMobile && !expanded ? 'line-clamp-1' : ''}>{faculty.department}</span>
             </div>
           )}
           {faculty.specialization && (
             <div className="flex items-start gap-2">
               <GraduationCap className="h-3 w-3 shrink-0 mt-0.5" />
-              <span className={isMobile && !expanded ? 'line-clamp-1' : 'line-clamp-2'}>
-                {faculty.specialization}
-              </span>
+              <span className={isMobile && !expanded ? 'line-clamp-1' : 'line-clamp-2'}>{faculty.specialization}</span>
             </div>
           )}
           {faculty.email && (
@@ -838,6 +847,19 @@ const FacultyCard = ({ faculty }: { faculty: any }) => {
             <div className="flex items-center gap-2">
               <Phone className="h-3 w-3 shrink-0" />
               <span>{faculty.phone}</span>
+            </div>
+          )}
+          {faculty.profileUrl && (
+            <div className="flex items-center gap-2">
+              <Globe className="h-3 w-3 shrink-0" />
+              <a
+                href={faculty.profileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline break-all"
+              >
+                Profile URL
+              </a>
             </div>
           )}
         </div>
@@ -1814,6 +1836,10 @@ const PureArtifactDisplay = ({
   }, [pdfUrl])
 
   const renderContent = () => {
+    // eslint-disable-next-line no-console
+    //console.log('ArtifactDisplay rendered', { type, data });
+    // eslint-disable-next-line no-console
+    //console.log('ArtifactDisplay type:', type);
     if (!data || (Array.isArray(data) && data.length === 0)) {
       return (
         <div className="text-center py-8 text-muted-foreground">
@@ -1823,12 +1849,34 @@ const PureArtifactDisplay = ({
       )
     }
 
-    const items = Array.isArray(data) ? data : [data]
+    const isFacultyType = type === 'faculty'
+    const facultyList = isFacultyType && data && Array.isArray(data.faculty) ? data.faculty : null
+    if (isFacultyType) {
+      // eslint-disable-next-line no-console
+      //console.log('ArtifactDisplay faculty debug:', { data, facultyList })
+    }
+    if (isFacultyType && facultyList && facultyList.length === 0) {
+      // eslint-disable-next-line no-console
+      //console.log('ArtifactDisplay: Showing pretty empty state for faculty')
+      return (
+        <div className="text-center py-8 text-muted-foreground">
+          <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
+          <p className="text-sm">
+            {typeof data.message === 'string'
+              ? data.message
+              : 'No faculty found matching your criteria. Please check the spelling or try a different department or name.'}
+          </p>
+        </div>
+      )
+    }
+
+    const items: any[] = isFacultyType && facultyList ? facultyList : Array.isArray(data) ? data : [data]
+    const itemCount = items.length
     const displayItems = showAllItems || !isMobile || isFullscreen ? items : items.slice(0, 3)
     const hasMoreItems = isMobile && items.length > 3 && !showAllItems && !isFullscreen
 
     return (
-      <>
+           <>
         {' '}
         <div
           className={cn(
@@ -1852,7 +1900,7 @@ const PureArtifactDisplay = ({
                     : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
           )}
         >
-          {displayItems.map((item, index) => {
+          {displayItems.map((item: any, index: number) => {
             switch (type) {
               case 'papers':
                 return <PaperCard key={index} paper={item} onViewPdf={(url, title) => handleViewPdf(url, title)} />

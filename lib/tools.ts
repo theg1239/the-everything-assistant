@@ -687,23 +687,100 @@ export function createVITTools() {
           return {
             success: false,
             error: errorMessage,
-            message: 'unable to scrape papers at the moment. please try again later.',
+            message: 'unable to scrape papers at the moment. please try again later.'
           }
         }
       },
     }),
 
-    // getFacultyInfo: tool({
-    //   description: 'get current faculty information from VIT official websites',
-    //   parameters: z.object({
-    //     department: z
-    //       .string()
-    //       .optional()
-    //       .describe('department like computer science, mechanical, electronics'),
-    //     facultyName: z.string().optional().describe('specific faculty member name'),
-    //   }),
-    //   execute: async ({ department, facultyName }) => scrapeFacultyInfo(department, facultyName),
-    // }),
+    getFacultyInfo: tool({
+      description: 'Get current faculty information from a local JSON file (public/faculty.json). NEVER return all faculty members at once—ALWAYS require at least a department or faculty name filter. If no filter is provided, ask the user to specify a department or faculty name. Returns school, department, and faculty info. Do NOT provide a full list of all faculty.',
+      parameters: z.object({
+        department: z.string().optional().describe('Department like computer science, mechanical, electronics'),
+        facultyName: z.string().optional().describe('Specific faculty member name'),
+      }),
+      execute: async ({ department, facultyName }) => {
+        try {
+          const res = await fetch(
+            typeof window === 'undefined'
+              ? `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/faculty.json`
+              : '/faculty.json'
+          )
+          if (!res.ok) throw new Error('Could not load faculty.json')
+          const schools = await res.json()
+
+          let results = []
+          const deptFilter = department ? department.toLowerCase() : null
+          const facultyFilter = facultyName ? facultyName.toLowerCase() : null
+          for (let i = 0; i < schools.length; ++i) {
+            const school = schools[i]
+            const departments = school.departments || []
+            for (let j = 0; j < departments.length; ++j) {
+              const dept = departments[j]
+              if (deptFilter && (!dept.department || !dept.department.toLowerCase().includes(deptFilter))) continue
+              const facultyArr = dept.faculty || []
+              for (let k = 0; k < facultyArr.length; ++k) {
+                const faculty = facultyArr[k]
+                if (facultyFilter && faculty.name) {
+                  const name = normalizeString(faculty.name)
+                  const filter = normalizeString(facultyFilter)
+                  const nameTokens = name.split(' ')
+                  const filterTokens = filter.split(' ')
+                  let allTokensMatch = true
+                  for (const fToken of filterTokens) {
+                    let tokenMatched = false
+                    for (const nToken of nameTokens) {
+                      if (fToken.length < 4) {
+                        if (nToken === fToken) {
+                          tokenMatched = true
+                          break
+                        }
+                      } else {
+                        const dist = getLevenshteinDistance(nToken, fToken)
+                        if (nToken.includes(fToken) || dist <= 1) {
+                          tokenMatched = true
+                          break
+                        }
+                      }
+                    }
+                    if (!tokenMatched) {
+                      allTokensMatch = false
+                      break
+                    }
+                  }
+                  if (!allTokensMatch) continue
+                } else if (facultyFilter && !faculty.name) {
+                  continue
+                }
+                results.push({
+                  school: school.school,
+                  department: dept.department,
+                  departmentUrl: dept.url,
+                  profileUrl: faculty.profile_url || faculty.profileUrl || undefined, // Always provide 'profileUrl' for UI
+                  ...faculty,
+                  image: faculty.image_url || faculty.image || undefined, // Always provide 'image' for UI
+                })
+              }
+            }
+          }
+
+          return {
+            success: true,
+            total: results.length,
+            faculty: results,
+            message: results.length
+              ? `Found ${results.length} faculty${department ? ' in ' + department : ''}${facultyName ? ' matching ' + facultyName : ''}.`
+              : 'No faculty found. Please check the spelling or try a different department or name.',
+          }
+        } catch (error: any) {
+          return {
+            success: false,
+            error: error.message || 'Failed to search faculty.json',
+            message: 'Unable to access faculty data.',
+          }
+        }
+      },
+    }),
 
     // getPlacementInfo: tool({
     //   description:
@@ -1123,4 +1200,34 @@ export function createVITTools() {
       },
     }),
   }
+}
+
+function getLevenshteinDistance(a: string, b: string): number {
+  const matrix = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0))
+  for (let i = 0; i <= a.length; i++) matrix[i][0] = i
+  for (let j = 0; j <= b.length; j++) matrix[0][j] = j
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      if (a[i - 1] === b[j - 1]) {
+        matrix[i][j] = matrix[i - 1][j - 1]
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j] + 1, // deletion
+          matrix[i][j - 1] + 1, // insertion
+          matrix[i - 1][j - 1] + 1 // substitution
+        )
+      }
+    }
+  }
+  return matrix[a.length][b.length]
+}
+
+function normalizeString(str: string): string {
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^a-z0-9 ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
 }

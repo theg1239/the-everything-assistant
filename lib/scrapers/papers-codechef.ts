@@ -47,12 +47,12 @@ function deduplicatePapers(papers: Paper[]): Paper[] {
   for (const paper of papers) {
     const normalizedTitle = paper.title.replace(/Select$/, '').trim()
     const key = `${normalizedTitle}-${paper.examType}-${paper.year}-${paper.metadata}`.toLowerCase()
-    
+
     if (!seen.has(key)) {
       seen.add(key)
       uniquePapers.push({
         ...paper,
-        title: normalizedTitle
+        title: normalizedTitle,
       })
     }
   }
@@ -114,14 +114,17 @@ async function tryAPIApproach(
 
     if (response.ok) {
       const data = await response.json()
-      
-      const papersArray = Array.isArray(data) ? data : (data.papers || [])
-      
+
+      const papersArray = Array.isArray(data) ? data : data.papers || []
+
       if (papersArray && papersArray.length > 0) {
         const validatedPapers = await Promise.all(
           papersArray.map(async (paper: ApiPaper) => {
-            const title = paper.title || paper.name || paper.paperName || 
-                         `${paper.subject || courseCode} ${paper.exam || ''} ${paper.slot || ''} ${paper.year || ''} ${paper.semester || ''}`.trim()
+            const title =
+              paper.title ||
+              paper.name ||
+              paper.paperName ||
+              `${paper.subject || courseCode} ${paper.exam || ''} ${paper.slot || ''} ${paper.year || ''} ${paper.semester || ''}`.trim()
 
             let extractedExamType = paper.examType || paper.exam || examType || ''
             if (!extractedExamType || extractedExamType === 'unknown') {
@@ -142,7 +145,7 @@ async function tryAPIApproach(
             }
 
             const paperUrl = paper._id ? `https://papers.codechefvit.com/paper/${paper._id}` : ''
-            
+
             let isValid = true
             if (paper.finalUrl) {
               try {
@@ -162,7 +165,10 @@ async function tryAPIApproach(
               title,
               url: paperUrl,
               source: 'papers.codechefvit.com',
-              metadata: paper.metadata || paper.description || `${paper.slot || ''} ${paper.semester || ''}`.trim(),
+              metadata:
+                paper.metadata ||
+                paper.description ||
+                `${paper.slot || ''} ${paper.semester || ''}`.trim(),
               examType: extractedExamType,
               year: extractedYear,
             }
@@ -215,16 +221,19 @@ async function tryAPIApproach(
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       },
     })
-    
+
     if (codeResponse.ok) {
       const codeData = await codeResponse.json()
-      const papersArray = Array.isArray(codeData) ? codeData : (codeData.papers || [])
+      const papersArray = Array.isArray(codeData) ? codeData : codeData.papers || []
 
       if (papersArray && papersArray.length > 0) {
         const validatedPapers = await Promise.all(
           papersArray.map(async (paper: ApiPaper) => {
-            const title = paper.title || paper.name || paper.paperName || 
-                         `${paper.subject || courseCode} ${paper.exam || ''} ${paper.slot || ''} ${paper.year || ''} ${paper.semester || ''}`.trim()
+            const title =
+              paper.title ||
+              paper.name ||
+              paper.paperName ||
+              `${paper.subject || courseCode} ${paper.exam || ''} ${paper.slot || ''} ${paper.year || ''} ${paper.semester || ''}`.trim()
 
             let extractedExamType = paper.examType || paper.exam || examType || ''
             if (!extractedExamType) {
@@ -245,7 +254,7 @@ async function tryAPIApproach(
             }
 
             const paperUrl = paper._id ? `https://papers.codechefvit.com/paper/${paper._id}` : ''
-            
+
             let isValid = true
             if (paper.finalUrl) {
               try {
@@ -265,7 +274,10 @@ async function tryAPIApproach(
               title,
               url: paperUrl,
               source: 'papers.codechefvit.com',
-              metadata: paper.metadata || paper.description || `${paper.slot || ''} ${paper.semester || ''}`.trim(),
+              metadata:
+                paper.metadata ||
+                paper.description ||
+                `${paper.slot || ''} ${paper.semester || ''}`.trim(),
               examType: extractedExamType,
               year: extractedYear,
             }
@@ -345,7 +357,7 @@ async function tryBrowserScraping(
           if (title && href && title.length > 5) {
             // Remove "Select" suffix from title
             const cleanTitle = title.replace(/Select$/, '').trim()
-            
+
             const titleLower = cleanTitle.toLowerCase()
             const courseLower = courseCode.toLowerCase()
             const metaLower = (meta || '').toLowerCase()
@@ -367,7 +379,7 @@ async function tryBrowserScraping(
               (examType.toLowerCase() === 'fat' && titleLower.includes('final'))
 
             const matchesYear = !year || titleLower.includes(year) || metaLower.includes(year)
-            
+
             if (matchesCourse && matchesExam && matchesYear) {
               let extractedExamType = examType || ''
               if (!extractedExamType) {

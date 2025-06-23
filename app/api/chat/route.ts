@@ -415,9 +415,10 @@ export async function POST(req: Request) {
     }
 
     const tools = createVITTools()
-    
+
     // Create tool preference guidance
-    const toolPreferenceGuidance = preferredTool ? `
+    const toolPreferenceGuidance = preferredTool
+      ? `
 
 IMPORTANT: The user has specifically selected the "${preferredTool}" tool. When responding to their query, you should prioritize using this tool if it's relevant to their question. Available tools and their purposes:
 
@@ -426,7 +427,8 @@ IMPORTANT: The user has specifically selected the "${preferredTool}" tool. When 
 - past-papers: Use findPastPapers for examination papers and course materials
 - mess-menu: Use getMessMenu for hostel dining information
 
-If the user's query is relevant to the selected tool "${preferredTool}", use it even if other tools might also be applicable.` : ''
+If the user's query is relevant to the selected tool "${preferredTool}", use it even if other tools might also be applicable.`
+      : ''
 
     const combinedSystemPrompt = `${VIT_SYSTEM_PROMPT}
 

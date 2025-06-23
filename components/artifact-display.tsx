@@ -352,7 +352,8 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
         break
 
       case 'marks':
-        const formattedContent = vtopData.formatted_content || vtopData.parsedData?.formatted_content
+        const formattedContent =
+          vtopData.formatted_content || vtopData.parsedData?.formatted_content
         if (formattedContent) {
           return (
             <div className="space-y-3">
@@ -665,7 +666,13 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
   )
 }
 
-const PaperCard = ({ paper, onViewPdf }: { paper: any; onViewPdf: (url: string, title?: string) => void }) => {
+const PaperCard = ({
+  paper,
+  onViewPdf,
+}: {
+  paper: any
+  onViewPdf: (url: string, title?: string) => void
+}) => {
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [expanded, setExpanded] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -811,7 +818,9 @@ const FacultyCard = ({ faculty }: { faculty: any }) => {
             />
           )}
           <div>
-            <CardTitle className="text-sm font-medium text-card-foreground">{faculty.name}</CardTitle>
+            <CardTitle className="text-sm font-medium text-card-foreground">
+              {faculty.name}
+            </CardTitle>
             {faculty.designation && (
               <Badge variant="secondary" className="text-xs w-fit">
                 {faculty.designation}
@@ -828,13 +837,17 @@ const FacultyCard = ({ faculty }: { faculty: any }) => {
           {faculty.department && (
             <div className="flex items-start gap-2">
               <Building2 className="h-3 w-3 shrink-0 mt-0.5" />
-              <span className={isMobile && !expanded ? 'line-clamp-1' : ''}>{faculty.department}</span>
+              <span className={isMobile && !expanded ? 'line-clamp-1' : ''}>
+                {faculty.department}
+              </span>
             </div>
           )}
           {faculty.specialization && (
             <div className="flex items-start gap-2">
               <GraduationCap className="h-3 w-3 shrink-0 mt-0.5" />
-              <span className={isMobile && !expanded ? 'line-clamp-1' : 'line-clamp-2'}>{faculty.specialization}</span>
+              <span className={isMobile && !expanded ? 'line-clamp-1' : 'line-clamp-2'}>
+                {faculty.specialization}
+              </span>
             </div>
           )}
           {faculty.email && (
@@ -1870,13 +1883,14 @@ const PureArtifactDisplay = ({
       )
     }
 
-    const items: any[] = isFacultyType && facultyList ? facultyList : Array.isArray(data) ? data : [data]
+    const items: any[] =
+      isFacultyType && facultyList ? facultyList : Array.isArray(data) ? data : [data]
     const itemCount = items.length
     const displayItems = showAllItems || !isMobile || isFullscreen ? items : items.slice(0, 3)
     const hasMoreItems = isMobile && items.length > 3 && !showAllItems && !isFullscreen
 
     return (
-           <>
+      <>
         {' '}
         <div
           className={cn(
@@ -1903,7 +1917,13 @@ const PureArtifactDisplay = ({
           {displayItems.map((item: any, index: number) => {
             switch (type) {
               case 'papers':
-                return <PaperCard key={index} paper={item} onViewPdf={(url, title) => handleViewPdf(url, title)} />
+                return (
+                  <PaperCard
+                    key={index}
+                    paper={item}
+                    onViewPdf={(url, title) => handleViewPdf(url, title)}
+                  />
+                )
               case 'faculty':
                 return <FacultyCard key={index} faculty={item} />
               case 'companies':
@@ -2119,9 +2139,9 @@ const PureArtifactDisplay = ({
                     </div>
                   </div>
                 )}
-                <iframe 
-                  src={pdfUrl} 
-                  title="PDF Preview" 
+                <iframe
+                  src={pdfUrl}
+                  title="PDF Preview"
                   className="w-full h-full border-0 bg-white"
                   allow="fullscreen"
                   loading="lazy"

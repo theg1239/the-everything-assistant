@@ -1,3 +1,5 @@
+require('dotenv').config()
+
 const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
@@ -6,32 +8,44 @@ const logger = require('./utils/logger')
 const RedditScraper = require('./scrapers/reddit-scraper')
 const KnowledgeBase = require('./knowledge-base/knowledge-base')
 const cron = require('node-cron')
-require('dotenv').config()
+const path = require('path')
+
+const ragApiApp = require('./api-server')
 
 const app = express()
 const PORT = process.env.PORT || 3001
+
+app.use(helmet())
+app.use(
+  cors({
+    origin: ['http://localhost:3000', 'https://the-everything-assistant.vercel.app'],
+    credentials: true,
+  })
+)
+app.use(express.json())
 
 const rateLimiter = new RateLimiterMemory({
   keyGenerator: req => req.ip,
   points: 100,
   duration: 3600,
 })
-
-app.use(helmet())
-app.use(cors())
-app.use(express.json())
-
 app.use(async (req, res, next) => {
   try {
     await rateLimiter.consume(req.ip)
     next()
-  } catch (rejRes) {
+  } catch {
     res.status(429).json({ error: 'Too many requests' })
   }
 })
 
+app.use('/', ragApiApp)
+
 const redditScraper = new RedditScraper()
 const knowledgeBase = new KnowledgeBase()
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'))
+})
 
 app.get('/health', (req, res) => {
   res.json({
@@ -45,11 +59,9 @@ app.get('/health', (req, res) => {
 app.post('/search', async (req, res) => {
   try {
     const { query, limit = 10 } = req.body
-
     if (!query) {
       return res.status(400).json({ error: 'Query is required' })
     }
-
     const results = await knowledgeBase.search(query, limit)
     res.json({ results })
   } catch (error) {
@@ -71,19 +83,14 @@ app.get('/stats', async (req, res) => {
 app.post('/scrape', async (req, res) => {
   try {
     const { subreddit } = req.body
-
-    logger.info(`Manual scrape requested for: ${subreddit || 'all subreddits'}`)
-
+    logger.info(`Manual scrape requested for ${subreddit || 'all'}`)
     if (subreddit) {
       await redditScraper.scrapeSubreddit(subreddit)
-      logger.info(`Scraping completed for subreddit: ${subreddit}`)
     } else {
       await redditScraper.scrapeAllTargetSubreddits()
-      logger.info('Scraping completed for all target subreddits')
     }
-
     res.json({
-      message: 'Scraping completed successfully',
+      message: 'Scraping completed',
       subreddit: subreddit || 'all',
       timestamp: new Date().toISOString(),
     })
@@ -107,46 +114,41 @@ app.get('/subreddits', async (req, res) => {
   }
 })
 
-const scrapeInterval = process.env.SCRAPE_INTERVAL_HOURS || 6
-cron.schedule(`0 */${scrapeInterval} * * *`, async () => {
-  logger.info('Starting scheduled scraping...')
+const intervalHrs = parseInt(process.env.SCRAPE_INTERVAL_HOURS, 10) || 6
+cron.schedule(`0 */${intervalHrs} * * *`, async () => {
+  logger.info('Scheduled incremental scraping started…')
   try {
     await redditScraper.scrapeAllTargetSubreddits()
-    logger.info('Scheduled scraping completed')
-  } catch (error) {
-    logger.error('Scheduled scraping failed:', error)
+    logger.info('Scheduled incremental scraping completed')
+  } catch (err) {
+    logger.error('Scheduled scrape failed:', err)
   }
 })
 
-app.use((error, req, res, next) => {
-  logger.error('Unhandled error:', error)
+app.use((err, req, res, next) => {
+  logger.error('Unhandled error:', err)
   res.status(500).json({ error: 'Internal server error' })
 })
 
 app.listen(PORT, () => {
-  logger.info(`Reddit Scraper Service running on port ${PORT}`)
+  logger.info(`Unified service listening on port ${PORT}`)
 
   knowledgeBase
     .initialize()
     .then(() => {
       logger.info('Knowledge base initialized')
-
       if (process.env.NODE_ENV === 'development' && process.env.ENABLE_INITIAL_SCRAPE === 'true') {
-        logger.info('Starting initial scrape in development mode...')
-        setTimeout(async () => {
-          try {
-            await redditScraper.scrapeAllTargetSubreddits()
-            logger.info('Initial scrape completed successfully')
-          } catch (error) {
-            logger.error('Initial scrape failed:', error)
-          }
-        }, 5000)
+        logger.info('Performing initial dev mode scrape…')
+        redditScraper
+          .scrapeAllTargetSubreddits()
+          .then(() => logger.info('Dev initial scrape done'))
+          .catch(e => logger.error('Dev initial scrape failed:', e))
       } else {
-        logger.info('Initial scrape skipped (set ENABLE_INITIAL_SCRAPE=true to enable)')
+        logger.info('Initial scrape skipped')
       }
     })
-    .catch(error => {
-      logger.error('Knowledge base initialization failed:', error)
+    .catch(e => {
+      logger.error('KB init failed:', e)
     })
 })
 

@@ -2579,16 +2579,7 @@ app.get('/commands', (req, res) => {
 })
 
 app.get('/', (req, res) => {
-  res.json({
-    message: 'Service is running',
-    version: require('./package.json').version,
-    environment: process.env.NODE_ENV || 'development',
-    endpoints: {
-      health: '/health',
-      commands: '/commands',
-      vtop: '/vtop (POST)',
-    },
-  })
+  res.sendFile(path.join(__dirname, 'public', 'index.html'))
 })
 
 app.use((err, req, res, next) => {

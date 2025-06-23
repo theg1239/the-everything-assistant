@@ -42,12 +42,11 @@ const onboardingSteps: OnboardingStep[] = [
   {
     id: 'welcome',
     title: 'welcome to the everything assistant',
-    description:
-      'your ai-powered agentic companion for everything vit-related.',
+    description: 'your ai-powered agentic companion for everything vit-related.',
     icon: Sparkles,
     gradient: 'from-purple-500 to-pink-500',
     artworkImage: '/onboarding-artwork/artwork.png',
-    examples: ['what can you do?', 'tell me some things about VIT','can I ask you anything?'],
+    examples: ['what can you do?', 'tell me some things about VIT', 'can I ask you anything?'],
   },
   {
     id: 'vtop',
@@ -169,10 +168,10 @@ export function OnboardingDialog({ isOpen, onClose }: OnboardingDialogProps) {
 
   const handleFinish = () => {
     localStorage.setItem('onboarding-completed', 'true')
-    
+
     // Dispatch event to notify other components
     window.dispatchEvent(new CustomEvent('onboardingCompleted'))
-    
+
     onClose()
   }
 
@@ -265,10 +264,7 @@ export function OnboardingDialog({ isOpen, onClose }: OnboardingDialogProps) {
             }
           }}
         >
-          <DialogTitle className="sr-only">
-            {currentStepData.title}
-          </DialogTitle>
-          {' '}
+          <DialogTitle className="sr-only">{currentStepData.title}</DialogTitle>{' '}
           <div className="relative h-24 sm:h-32 overflow-hidden">
             <Image
               src={currentStepData.artworkImage}

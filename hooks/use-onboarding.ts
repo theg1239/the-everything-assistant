@@ -21,7 +21,7 @@ export function useOnboarding() {
     if (!hasSeenBefore) {
       const timer = setTimeout(() => {
         setShowOnboarding(true)
-      }, 1) 
+      }, 1)
 
       return () => {
         clearTimeout(timer)

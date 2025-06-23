@@ -260,9 +260,9 @@ program
       )
 
       await kb.cleanup()
-      console.log('✅ Cleanup completed successfully')
+      console.log('Cleanup completed successfully')
     } catch (error) {
-      console.error('❌ Cleanup failed:', error.message)
+      console.error('Cleanup failed:', error.message)
       process.exit(1)
     }
   })

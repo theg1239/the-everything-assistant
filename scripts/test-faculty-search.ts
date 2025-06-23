@@ -14,50 +14,23 @@ const DEPARTMENT_ACRONYMS: Record<string, string[]> = {
     'school of computer science and engineering',
     'cse',
   ],
-  smec: [
-    'mechanical engineering',
-    'school of mechanical engineering',
-    'mechanical',
-  ],
-  mech: [
-    'mechanical engineering',
-    'school of mechanical engineering',
-    'mechanical',
-    'smec',
-  ],
+  smec: ['mechanical engineering', 'school of mechanical engineering', 'mechanical'],
+  mech: ['mechanical engineering', 'school of mechanical engineering', 'mechanical', 'smec'],
   ece: [
     'electronics and communication engineering',
     'electronics',
     'school of electronics engineering',
   ],
-  ssl: [
-    'school of social sciences and languages',
-    'social sciences',
-    'languages',
-  ],
-  sas: [
-    'school of advanced sciences',
-    'advanced sciences',
-    'sas',
-  ],
+  ssl: ['school of social sciences and languages', 'social sciences', 'languages'],
+  sas: ['school of advanced sciences', 'advanced sciences', 'sas'],
   score: [
     'information technology',
     'it',
     'school of information technology and engineering',
     'score',
   ],
-  civil: [
-    'civil engineering',
-    'school of civil engineering',
-    'civil',
-    'sce',
-  ],
-  sce: [
-    'civil engineering',
-    'school of civil engineering',
-    'civil',
-    'sce',
-  ],
+  civil: ['civil engineering', 'school of civil engineering', 'civil', 'sce'],
+  sce: ['civil engineering', 'school of civil engineering', 'civil', 'sce'],
 }
 
 function normalizeString(str: string): string {
@@ -144,7 +117,7 @@ const testQueries = [
 ]
 
 for (const query of testQueries) {
-  const matches: { school: string, department: string }[] = []
+  const matches: { school: string; department: string }[] = []
   for (const school of facultyData) {
     if (school.school && matchesDepartment(school.school, query)) {
       for (const dept of school.departments || []) {

@@ -64,7 +64,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     enabled: true,
   })
   const [theme, setTheme] = useState('system')
-  
+
   const [touchStartY, setTouchStartY] = useState(0)
   const [touchStartScrollTop, setTouchStartScrollTop] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
@@ -1263,7 +1263,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                                     mfaMethod === 'authenticator'
                                       ? 'border-primary bg-primary/5'
                                       : 'border-border hover:bg-muted/50'
-                                )}
+                                  )}
                                 >
                                   <div className="flex items-center gap-3">
                                     <Smartphone className="w-4 h-4 flex-shrink-0" />
@@ -1489,7 +1489,8 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
               <h3 className="text-lg md:text-xl font-semibold mb-4">tutorial</h3>
               <p className="text-muted-foreground text-sm md:text-base mb-6">
                 take a tour of all the features and learn how to get the most out of your assistant.
-              </p>              <Button
+              </p>{' '}
+              <Button
                 onClick={() => {
                   onTriggerOnboarding?.()
                   window.dispatchEvent(new CustomEvent('triggerOnboarding'))
@@ -1530,7 +1531,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     if (!isDragging) return
 
     e.preventDefault()
-    
+
     const touch = e.touches[0]
     const scrollContainer = e.currentTarget
     const deltaY = touchStartY - touch.clientY
@@ -1567,7 +1568,9 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     }
   }, [open])
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>      <DialogContent className="max-w-5xl w-[95vw] h-[90vh] max-h-[800px] p-0 gap-0 bg-background border border-border overflow-hidden rounded-xl">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {' '}
+      <DialogContent className="max-w-5xl w-[95vw] h-[90vh] max-h-[800px] p-0 gap-0 bg-background border border-border overflow-hidden rounded-xl">
         <div className="flex flex-col md:flex-row h-full rounded-xl overflow-hidden">
           <div className="block md:hidden border-b border-border bg-muted/20 p-4 flex-shrink-0">
             <DialogHeader>
@@ -1602,7 +1605,8 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                 })}
               </div>
             </nav>{' '}
-          </div>          <div 
+          </div>{' '}
+          <div
             className="flex-1 min-h-0 overflow-y-auto rounded-br-xl md:rounded-tr-xl rounded-bl-xl md:rounded-bl-none"
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}

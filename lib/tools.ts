@@ -577,50 +577,23 @@ const DEPARTMENT_ACRONYMS: Record<string, string[]> = {
     'school of computer science and engineering',
     'cse',
   ],
-  smec: [
-    'mechanical engineering',
-    'school of mechanical engineering',
-    'mechanical',
-  ],
-  mech: [
-    'mechanical engineering',
-    'school of mechanical engineering',
-    'mechanical',
-    'smec',
-  ],
+  smec: ['mechanical engineering', 'school of mechanical engineering', 'mechanical'],
+  mech: ['mechanical engineering', 'school of mechanical engineering', 'mechanical', 'smec'],
   ece: [
     'electronics and communication engineering',
     'electronics',
     'school of electronics engineering',
   ],
-  ssl: [
-    'school of social sciences and languages',
-    'social sciences',
-    'languages',
-  ],
-  sas: [
-    'school of advanced sciences',
-    'advanced sciences',
-    'sas',
-  ],
+  ssl: ['school of social sciences and languages', 'social sciences', 'languages'],
+  sas: ['school of advanced sciences', 'advanced sciences', 'sas'],
   score: [
     'information technology',
     'it',
     'school of information technology and engineering',
     'score',
   ],
-  civil: [
-    'civil engineering',
-    'school of civil engineering',
-    'civil',
-    'sce',
-  ],
-  sce: [
-    'civil engineering',
-    'school of civil engineering',
-    'civil',
-    'sce',
-  ],
+  civil: ['civil engineering', 'school of civil engineering', 'civil', 'sce'],
+  sce: ['civil engineering', 'school of civil engineering', 'civil', 'sce'],
 }
 
 function matchesDepartment(deptName: string, filter: string): boolean {
@@ -799,7 +772,7 @@ export function createVITTools() {
           return {
             success: false,
             error: errorMessage,
-            message: 'unable to scrape papers at the moment. please try again later.'
+            message: 'unable to scrape papers at the moment. please try again later.',
           }
         }
       },
@@ -810,7 +783,10 @@ export function createVITTools() {
 
 For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'CIVIL') and full or partial department names (e.g., 'computer science', 'school of mechanical engineering', 'information technology', 'civil engineering'). The search is robust to acronyms, full names, and partial matches in either direction.`,
       parameters: z.object({
-        department: z.string().optional().describe('Department like computer science, mechanical, electronics'),
+        department: z
+          .string()
+          .optional()
+          .describe('Department like computer science, mechanical, electronics'),
         facultyName: z.string().optional().describe('Specific faculty member name'),
       }),
       execute: async ({ department, facultyName }) => {
@@ -1070,7 +1046,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             'course-page',
           ])
           .describe(
-            'VTOP command to execute - marks (semester marks), grades (semester grades), attendance (attendance %), timetable (class schedule), receipts (fee receipts), hostel (hostel info), cgpa (CGPA details), exams/exam-schedule (the user\'s exam timetable), library-dues (library fines), nightslip (nightslip status), leave/leave-status (leave applications), msg/class-message (class announcements), da (digital assignments), facility (facility booking), syllabus (course syllabus), course-page (intelligent course materials with smart matching)'
+            "VTOP command to execute - marks (semester marks), grades (semester grades), attendance (attendance %), timetable (class schedule), receipts (fee receipts), hostel (hostel info), cgpa (CGPA details), exams/exam-schedule (the user's exam timetable), library-dues (library fines), nightslip (nightslip status), leave/leave-status (leave applications), msg/class-message (class announcements), da (digital assignments), facility (facility booking), syllabus (course syllabus), course-page (intelligent course materials with smart matching)"
           ),
         username: z
           .string()
@@ -1368,6 +1344,149 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               'Unable to access Reddit overview. The service may be temporarily unavailable.',
             suggestion: 'Please try again later or check if the Reddit scraper service is running.',
           }
+        }
+      },
+    }),
+
+    getCampusInfo: tool({
+      description: `Get information about VIT-Vellore campus blocks (SJT, TT, SMV, MB, etc.).  
+  Use it to answer: “where is TT?”, “what is GDN used for?”, “which departments sit in Gandhi Block?”.  
+  The tool returns a concise description, typical usage, and a quick location cue.`,
+      parameters: z.object({
+        block: z.string().describe('Block / building code: e.g. SJT, TT, SMV, MB'),
+      }),
+      execute: async ({ block }) => {
+        const maps = (q: string) =>
+          `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+            `${q} VIT Vellore`
+          )}`
+
+        const info = {
+          sjt: {
+            name: 'SJT (Silver Jubilee Tower)',
+            description:
+              "13-storey landmark built for VIT's silver jubilee, filled with high-end computing labs and project spaces.",
+            usage:
+              'Senior-year Computer Science (SCSE/SITE) lectures, research labs, Exam Cell and the busy SJT food court.',
+            location:
+              'Along Jimmy Carter Road, just east of Technology Tower, near to the SJT Foodys and a little food court, also has Dominos',
+            note: 'Top floors give an unbeatable panoramic view of the campus.',
+            mapsUrl: maps('SJT'),
+          },
+
+          tt: {
+            name: 'TT (Technology Tower)',
+            description:
+              'Seven-floor tower with smart lecture theatres and roof terrace viewing deck.',
+            usage:
+              'Base for the School of Electrical Engineering (SELECT) and the new Computer Science + Electrical Eng. major; power-systems, nanotech and photonics labs.',
+            location:
+              'West of SJT on Jimmy Carter Road, overlooking VIT Lake (upper floors offer the best skyline shots).',
+            note: 'Popular sunset spot; ground floor café opens till late.',
+            mapsUrl: maps('Technology Tower'),
+          },
+
+          prp: {
+            name: 'PRP (Pearl Research Park)',
+            description: 'G+7 research & teaching complex geared towards industry collaboration.',
+            usage:
+              'First-year CSE classrooms, start-up incubator suites and multidisciplinary R-&-D centres.',
+            location: 'South-east of SJT, between Jimmy Carter Road and Gandhi Block.',
+            note: 'Most CSE freshers have their initial semesters here before moving to SJT.',
+            mapsUrl: maps('Pearl Research Park'),
+          },
+
+          gdn: {
+            name: 'GDN (G. D. Naidu Block)',
+            description: 'Oldest block on campus, packed with heavy engineering workshops.',
+            usage:
+              'Mechanical & Manufacturing Engg. labs (machine, welding, foundry, metrology) plus core first-year workshops.',
+            location:
+              'Right beside the All Mart shopping complex; Main Canteen faces its front; a short walk south of Main Building.',
+            note: 'Expect the buzz of lathes and the smell of cutting oil all day.',
+            mapsUrl: maps('G D Naidu Block'),
+          },
+
+          smv: {
+            name: 'SMV (Sir M. Visvesvaraya Block)',
+            description: 'Iconic hexagon (“Hexagon”) building with airy corridors and wet-labs.',
+            usage:
+              'Chemical, Biotechnology & Food-Tech classrooms and labs, along with a few postgraduate offices.',
+            location: "Opposite the Woody's entrance and a minute's walk from Foodys junction.",
+            note: 'Every side looks the same—easy to get disoriented at first!',
+            mapsUrl: maps('SMV Block'),
+          },
+
+          cdmm: {
+            name: 'CDMM (Centre for Disaster Mitigation & Management)',
+            description:
+              'Specialised research block for geo-hazard modelling and structural resilience. Disaster and Waste Management course occurs here',
+            usage: 'Structural, geotechnical, remote-sensing & GIS labs plus consultancy offices.',
+            location: 'Adjacent to Main Building and sharing the northern driveway with GDN.',
+            note: 'Houses the campus shake-table used for earthquake simulations.',
+            mapsUrl: maps('CDMM'),
+          },
+
+          cbmr: {
+            name: 'CBMR (Centre for Biomaterials & Biomedical Research)',
+            description:
+              'Life-sciences block featuring GMP-grade tissue-culture and 3-D bioprinting suites. Some faculties have their offices here.',
+            usage: 'Biomedical & molecular research labs and SBST conference spaces.',
+            location: 'In the bio-cluster lane at the rear of SMV.',
+            note: 'Favoured by biotech start-ups for joint prototype work.',
+            mapsUrl: maps('CBMR'),
+          },
+
+          mb: {
+            name: 'MB (Main Building / Dr. M. G. R Block)',
+            description:
+              '3-storey administrative hub with administrative offices, a basement, the Channa Reddy auditorium. ',
+            usage:
+              'Chancellor, Registrar, Admissions, Finance and first year mechanical engineering classes.',
+            location: 'Immediately through the main gate, facing the fountain round-about.',
+            note: 'All official paperwork starts here—carry your ID.',
+            mapsUrl: maps('Main Building VIT'),
+          },
+
+          gandhi: {
+            name: 'Gandhi Block',
+            description:
+              'Energy-efficient studio complex with deep balconies, open classrooms and radiant cooling.',
+            usage:
+              'Home of V-SPARC (Architecture) and VSIGN (Design); architecture studios, model workshops and a 450-seat auditorium.',
+            location:
+              "It's the farthest block, right next to PRP, at the south-west corner of campus.",
+            note: 'It is a very pretty block honestly, but it is the farthest in the campus from the main gate.',
+            mapsUrl: maps('Gandhi Block'),
+          },
+
+          alm: {
+            name: 'ALM (A. L. Mudaliar Block)',
+            description:
+              'Science & health-services block that doubles as the campus Health Centre.',
+            usage:
+              'Physics, Chemistry, Microbiology labs and the 24*7 outpatient clinic & pharmacy.',
+            location: 'South-west of MB, near the visitor parking and athletics ground.',
+            note: 'Emergency ambulance bay operates round-the-clock.',
+            mapsUrl: maps('ALM Block'),
+          },
+        } as const
+
+        const key = block.trim().toLowerCase() as keyof typeof info
+        if (key in info) {
+          const blockInfo = info[key]
+          return {
+            success: true,
+            ...blockInfo,
+            message: `${blockInfo.description} ${blockInfo.usage} ${blockInfo.location}`,
+            mapsUrl: blockInfo.mapsUrl,
+          }
+        }
+        return {
+          success: false,
+          message: `No information found for “${block}”. Try one of: ${Object.keys(info)
+            .map(k => k.toUpperCase())
+            .join(', ')}.`,
         }
       },
     }),

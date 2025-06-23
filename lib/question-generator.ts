@@ -171,10 +171,7 @@ function generateQuestionsByCategory(): { [key: string]: string[] } {
       'how can students participate in research?',
       'what are the innovation initiatives at vit?',
     ],
-    faculty: [
-      'tell me about the faculty at vit',
-      'how can I contact faculty members?',
-    ],
+    faculty: ['tell me about the faculty at vit', 'how can I contact faculty members?'],
     courses: [
       'what programs are offered at vit?',
       'tell me about the cse curriculum',
@@ -255,7 +252,12 @@ export function getRandomQuestions(count: number = 6, isFirstMessage: boolean = 
   }
 
   priorityCategories.forEach(category => {
-    if (allCategories[category] && questions.length < count && category !== 'vtop' && category !== 'reddit') {
+    if (
+      allCategories[category] &&
+      questions.length < count &&
+      category !== 'vtop' &&
+      category !== 'reddit'
+    ) {
       const randomIndex = Math.floor(Math.random() * allCategories[category].length)
       const question = allCategories[category][randomIndex]
       if (!questions.includes(question)) {

@@ -6,7 +6,6 @@ const KnowledgeBase = require('./knowledge-base/knowledge-base')
 const logger = require('./utils/logger')
 
 const app = express()
-const port = process.env.PORT || 3002
 
 app.use(cors())
 app.use(express.json())
@@ -22,8 +21,7 @@ app.get('/health', (req, res) => {
 app.post('/api/search', async (req, res) => {
   try {
     const { query, limit = 10 } = req.body
-
-    if (!query || typeof query !== 'string' || query.trim().length === 0) {
+    if (!query || typeof query !== 'string' || !query.trim()) {
       return res.status(400).json({
         success: false,
         error: 'Query is required and must be a non-empty string',
@@ -31,25 +29,24 @@ app.post('/api/search', async (req, res) => {
     }
 
     logger.info(`Search request: "${query}"`)
-
     const searchResults = await knowledgeBase.search(query, limit)
 
     res.json({
       success: true,
-      results: searchResults.map(result => ({
-        type: result.type,
-        title: result.title,
-        content: result.content?.substring(0, 300) + (result.content?.length > 300 ? '...' : ''),
-        subreddit: result.subreddit,
-        author: result.author,
-        score: result.score,
-        upvotes: result.upvotes,
-        similarity: result.similarity,
-        url: result.url,
-        created: result.created_utc,
+      results: searchResults.map(r => ({
+        type: r.type,
+        title: r.title,
+        content: r.content?.substring(0, 300) + (r.content?.length > 300 ? '...' : ''),
+        subreddit: r.subreddit,
+        author: r.author,
+        score: r.score,
+        upvotes: r.upvotes,
+        similarity: r.similarity,
+        url: r.url,
+        created: r.created_utc,
       })),
       totalResults: searchResults.length,
-      query: query,
+      query,
     })
   } catch (error) {
     logger.error('Search API error:', error)
@@ -64,8 +61,7 @@ app.post('/api/search', async (req, res) => {
 app.post('/api/ask', async (req, res) => {
   try {
     const { query, conversationHistory = [], useAgentic = true } = req.body
-
-    if (!query || typeof query !== 'string' || query.trim().length === 0) {
+    if (!query || typeof query !== 'string' || !query.trim()) {
       return res.status(400).json({
         success: false,
         error: 'Query is required and must be a non-empty string',
@@ -101,18 +97,15 @@ app.post('/api/ask', async (req, res) => {
 
 app.get('/api/stats', async (req, res) => {
   try {
-    const postCountResult = await knowledgeBase.pool.query('SELECT COUNT(*) FROM reddit_posts')
-    const commentCountResult = await knowledgeBase.pool.query(
-      'SELECT COUNT(*) FROM reddit_comments'
-    )
-    const embeddingCountResult = await knowledgeBase.pool.query(
+    const postCount = await knowledgeBase.pool.query('SELECT COUNT(*) FROM reddit_posts')
+    const commentCount = await knowledgeBase.pool.query('SELECT COUNT(*) FROM reddit_comments')
+    const embeddingCount = await knowledgeBase.pool.query(
       'SELECT COUNT(*) FROM reddit_posts WHERE embedding IS NOT NULL'
     )
-
     const subredditStats = await knowledgeBase.pool.query(`
-      SELECT subreddit, COUNT(*) as post_count 
-      FROM reddit_posts 
-      GROUP BY subreddit 
+      SELECT subreddit, COUNT(*) AS post_count
+      FROM reddit_posts
+      GROUP BY subreddit
       ORDER BY post_count DESC
     `)
 
@@ -136,18 +129,15 @@ app.get('/api/stats', async (req, res) => {
 
 app.get('/api/trending', async (req, res) => {
   try {
-    const trendingResult = await knowledgeBase.pool.query(`
+    const trending = await knowledgeBase.pool.query(`
       SELECT title, score, upvotes, subreddit, created_utc, url
-      FROM reddit_posts 
+      FROM reddit_posts
       WHERE created_utc > NOW() - INTERVAL '30 days'
-      ORDER BY score DESC 
+      ORDER BY score DESC
       LIMIT 10
     `)
 
-    res.json({
-      success: true,
-      trending: trendingResult.rows,
-    })
+    res.json({ success: true, trending: trending.rows })
   } catch (error) {
     logger.error('Trending API error:', error)
     res.status(500).json({
@@ -199,23 +189,23 @@ app.post('/api/compare', async (req, res) => {
   }
 })
 
-app.use((error, req, res, next) => {
-  logger.error('Unhandled error:', error)
+app.use((err, req, res, next) => {
+  logger.error('Unhandled error in RAG API:', err)
   res.status(500).json({
     success: false,
     error: 'Internal server error',
   })
 })
 
-app.listen(port, () => {
-  logger.info(`Knowledge API server running on port ${port}`)
-  logger.info('Available endpoints:')
-  logger.info('  GET  /health - Health check')
-  logger.info('  POST /api/search - Search knowledge base')
-  logger.info('  POST /api/ask - RAG-powered Q&A')
-  logger.info('  GET  /api/stats - Database statistics')
-  logger.info('  GET  /api/trending - Trending topics')
-  logger.info('  POST /api/compare - Compare agentic vs legacy RAG')
-})
+// app.listen(port, () => {
+//   logger.info(`Knowledge API server running on port ${port}`)
+//   logger.info('Available endpoints:')
+//   logger.info('  GET  /health - Health check')
+//   logger.info('  POST /api/search - Search knowledge base')
+//   logger.info('  POST /api/ask - RAG-powered Q&A')
+//   logger.info('  GET  /api/stats - Database statistics')
+//   logger.info('  GET  /api/trending - Trending topics')
+//   logger.info('  POST /api/compare - Compare agentic vs legacy RAG')
+// })
 
 module.exports = app

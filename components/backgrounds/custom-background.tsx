@@ -226,10 +226,12 @@ export default function CustomBackground() {
               backgroundConfig.dither?.waveSpeed || defaultBackgroundConfig.dither!.waveSpeed!
             }
             waveFrequency={
-              backgroundConfig.dither?.waveFrequency || defaultBackgroundConfig.dither!.waveFrequency!
+              backgroundConfig.dither?.waveFrequency ||
+              defaultBackgroundConfig.dither!.waveFrequency!
             }
             waveAmplitude={
-              backgroundConfig.dither?.waveAmplitude || defaultBackgroundConfig.dither!.waveAmplitude!
+              backgroundConfig.dither?.waveAmplitude ||
+              defaultBackgroundConfig.dither!.waveAmplitude!
             }
             waveColor={
               backgroundConfig.dither?.waveColor || defaultBackgroundConfig.dither!.waveColor!
@@ -241,10 +243,12 @@ export default function CustomBackground() {
               backgroundConfig.dither?.pixelSize || defaultBackgroundConfig.dither!.pixelSize!
             }
             disableAnimation={
-              backgroundConfig.dither?.disableAnimation || defaultBackgroundConfig.dither!.disableAnimation!
+              backgroundConfig.dither?.disableAnimation ||
+              defaultBackgroundConfig.dither!.disableAnimation!
             }
             enableMouseInteraction={
-              backgroundConfig.dither?.enableMouseInteraction || defaultBackgroundConfig.dither!.enableMouseInteraction!
+              backgroundConfig.dither?.enableMouseInteraction ||
+              defaultBackgroundConfig.dither!.enableMouseInteraction!
             }
             mouseRadius={
               backgroundConfig.dither?.mouseRadius || defaultBackgroundConfig.dither!.mouseRadius!

@@ -106,6 +106,20 @@ const onboardingSteps: OnboardingStep[] = [
     ],
   },
   {
+    id: 'up to date',
+    title: 'get real information',
+    description:
+      'search for faculty members, ask about when holidays or events are happening, and more.',
+    icon: Zap,
+    gradient: 'from-yellow-500 to-amber-500',
+    artworkImage: '/onboarding-artwork/artwork2.png',
+    examples: [
+      'show me the faculty members in cse',
+      'when is the diwali holiday?',
+      'what are the dates of gravitas?',
+    ],
+  },
+  {
     id: 'get-started',
     title: 'ready to get started?',
     description:

@@ -563,6 +563,118 @@ async function handleIntelligentCoursePage(params: {
   }
 }
 
+// --- Department acronym and robust matching helper ---
+const DEPARTMENT_ACRONYMS: Record<string, string[]> = {
+  cse: [
+    'computer science and engineering',
+    'computer science',
+    'school of computer science and engineering',
+    'scope',
+  ],
+  scope: [
+    'computer science and engineering',
+    'computer science',
+    'school of computer science and engineering',
+    'cse',
+  ],
+  smec: [
+    'mechanical engineering',
+    'school of mechanical engineering',
+    'mechanical',
+  ],
+  mech: [
+    'mechanical engineering',
+    'school of mechanical engineering',
+    'mechanical',
+    'smec',
+  ],
+  ece: [
+    'electronics and communication engineering',
+    'electronics',
+    'school of electronics engineering',
+  ],
+  ssl: [
+    'school of social sciences and languages',
+    'social sciences',
+    'languages',
+  ],
+  sas: [
+    'school of advanced sciences',
+    'advanced sciences',
+    'sas',
+  ],
+  score: [
+    'information technology',
+    'it',
+    'school of information technology and engineering',
+    'score',
+  ],
+  civil: [
+    'civil engineering',
+    'school of civil engineering',
+    'civil',
+    'sce',
+  ],
+  sce: [
+    'civil engineering',
+    'school of civil engineering',
+    'civil',
+    'sce',
+  ],
+}
+
+function matchesDepartment(deptName: string, filter: string): boolean {
+  const normDept = normalizeString(deptName)
+  const normFilter = normalizeString(filter)
+
+  // Direct substring or equality match
+  if (normDept.includes(normFilter) || normFilter.includes(normDept)) return true
+
+  // Check if filter is a known acronym, and dept matches any mapped name
+  if (DEPARTMENT_ACRONYMS[normFilter]) {
+    if (DEPARTMENT_ACRONYMS[normFilter].some(full => normDept.includes(normalizeString(full)))) {
+      return true
+    }
+  }
+
+  // Check if dept is a known acronym, and filter matches any mapped name
+  if (DEPARTMENT_ACRONYMS[normDept]) {
+    if (DEPARTMENT_ACRONYMS[normDept].some(full => normFilter.includes(normalizeString(full)))) {
+      return true
+    }
+  }
+
+  // Check if filter matches any acronym by partial/full name
+  for (const [acronym, names] of Object.entries(DEPARTMENT_ACRONYMS)) {
+    if (
+      names.some(
+        n =>
+          normDept.includes(normalizeString(n)) &&
+          (normFilter === acronym || normFilter.includes(acronym) || acronym.includes(normFilter))
+      )
+    ) {
+      return true
+    }
+    if (
+      names.some(
+        n =>
+          normFilter.includes(normalizeString(n)) &&
+          (normDept === acronym || normDept.includes(acronym) || acronym.includes(normDept))
+      )
+    ) {
+      return true
+    }
+  }
+
+  // Token-based partial match (e.g., 'computer' matches 'computer science')
+  const deptTokens = normDept.split(' ')
+  const filterTokens = normFilter.split(' ')
+  if (filterTokens.every(f => deptTokens.some(d => d.startsWith(f) || d === f))) return true
+  if (deptTokens.every(d => filterTokens.some(f => f.startsWith(d) || f === d))) return true
+
+  return false
+}
+
 export const courseUtils = {
   findFullCourseName,
   searchCoursesByName,
@@ -694,7 +806,9 @@ export function createVITTools() {
     }),
 
     getFacultyInfo: tool({
-      description: 'Get current faculty information from a local JSON file (public/faculty.json). NEVER return all faculty members at once—ALWAYS require at least a department or faculty name filter. If no filter is provided, ask the user to specify a department or faculty name. Returns school, department, and faculty info. Do NOT provide a full list of all faculty.',
+      description: `Get current faculty information from a local JSON file (public/faculty.json). NEVER return all faculty members at once—ALWAYS require at least a department or faculty name filter. If no filter is provided, ask the user to specify a department or faculty name. Returns school, department, and faculty info. Do NOT provide a full list of all faculty.
+
+For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'CIVIL') and full or partial department names (e.g., 'computer science', 'school of mechanical engineering', 'information technology', 'civil engineering'). The search is robust to acronyms, full names, and partial matches in either direction.`,
       parameters: z.object({
         department: z.string().optional().describe('Department like computer science, mechanical, electronics'),
         facultyName: z.string().optional().describe('Specific faculty member name'),
@@ -714,10 +828,68 @@ export function createVITTools() {
           const facultyFilter = facultyName ? facultyName.toLowerCase() : null
           for (let i = 0; i < schools.length; ++i) {
             const school = schools[i]
+            const schoolName = school.school
             const departments = school.departments || []
+            // If deptFilter matches the school name, include all departments
+            let schoolMatches = false
+            if (deptFilter && schoolName && matchesDepartment(schoolName, deptFilter)) {
+              schoolMatches = true
+            }
             for (let j = 0; j < departments.length; ++j) {
               const dept = departments[j]
-              if (deptFilter && (!dept.department || !dept.department.toLowerCase().includes(deptFilter))) continue
+              // If school matched, include all departments
+              if (schoolMatches) {
+                const facultyArr = dept.faculty || []
+                for (let k = 0; k < facultyArr.length; ++k) {
+                  const faculty = facultyArr[k]
+                  if (facultyFilter && faculty.name) {
+                    const name = normalizeString(faculty.name)
+                    const filter = normalizeString(facultyFilter)
+                    const nameTokens = name.split(' ')
+                    const filterTokens = filter.split(' ')
+                    let allTokensMatch = true
+                    for (const fToken of filterTokens) {
+                      let tokenMatched = false
+                      for (const nToken of nameTokens) {
+                        if (fToken.length < 4) {
+                          if (nToken === fToken) {
+                            tokenMatched = true
+                            break
+                          }
+                        } else {
+                          const dist = getLevenshteinDistance(nToken, fToken)
+                          if (nToken.includes(fToken) || dist <= 1) {
+                            tokenMatched = true
+                            break
+                          }
+                        }
+                      }
+                      if (!tokenMatched) {
+                        allTokensMatch = false
+                        break
+                      }
+                    }
+                    if (!allTokensMatch) continue
+                  } else if (facultyFilter && !faculty.name) {
+                    continue
+                  }
+                  results.push({
+                    school: school.school,
+                    department: dept.department,
+                    departmentUrl: dept.url,
+                    profileUrl: faculty.profile_url || faculty.profileUrl || undefined,
+                    ...faculty,
+                    image: faculty.image_url || faculty.image || undefined,
+                  })
+                }
+                continue
+              }
+              // Otherwise, match on department name
+              if (
+                deptFilter &&
+                (!dept.department || !matchesDepartment(dept.department, deptFilter))
+              )
+                continue
               const facultyArr = dept.faculty || []
               for (let k = 0; k < facultyArr.length; ++k) {
                 const faculty = facultyArr[k]
@@ -756,9 +928,9 @@ export function createVITTools() {
                   school: school.school,
                   department: dept.department,
                   departmentUrl: dept.url,
-                  profileUrl: faculty.profile_url || faculty.profileUrl || undefined, // Always provide 'profileUrl' for UI
+                  profileUrl: faculty.profile_url || faculty.profileUrl || undefined,
                   ...faculty,
-                  image: faculty.image_url || faculty.image || undefined, // Always provide 'image' for UI
+                  image: faculty.image_url || faculty.image || undefined,
                 })
               }
             }

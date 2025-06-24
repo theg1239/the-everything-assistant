@@ -42,7 +42,6 @@ interface RateLimitStatus {
       hasRedis: boolean
       apiKeys: {
         totalAvailable: number
-        totalConfigured: number
       }
       adminAccess: {
         email: string
@@ -74,11 +73,17 @@ interface RateLimitStatus {
   }
   keyUsage: {
     [keyIndex: string]: {
-      requestCount: number
-      lastUsed: string | null
-      isHealthy: boolean
-      consecutiveFailures: number
-      rateLimitedUntil: string | null
+      requests: number
+      failures: number
+      lastUsed: number | null
+      lastFailed: number | null
+      availableTokens: {
+        minute: number
+        hour: number
+        day: number
+      }
+      isRateLimited: boolean
+      isCurrent: boolean
     }
   }
   healthCheck: {
@@ -100,16 +105,11 @@ export default function ManagementPage() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
-
     try {
-      const response = await fetch('/api/rate-limit-status')
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to fetch rate limit status')
-      }
-
-      setData(result)
+      const res = await fetch('/api/rate-limit-status')
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Failed to fetch status')
+      setData(json)
       setLastUpdate(new Date())
     } catch (err: any) {
       setError(err.message || 'Failed to fetch data')
@@ -123,71 +123,47 @@ export default function ManagementPage() {
       router.push('/login?callbackUrl=%2Fmgmt')
       return
     }
-
-    if (status === 'authenticated') {
-      fetchData()
-    }
+    if (status === 'authenticated') fetchData()
   }, [status, router, fetchData])
 
   useEffect(() => {
     if (!autoRefresh) return
-
-    const interval = setInterval(() => {
-      fetchData()
-    }, 10000)
-
-    return () => clearInterval(interval)
+    const iv = setInterval(fetchData, 10000)
+    return () => clearInterval(iv)
   }, [autoRefresh, fetchData])
 
   const handleAction = async (action: string, config?: any) => {
     setLoading(true)
-
     try {
-      const response = await fetch('/api/rate-limit-status', {
+      const res = await fetch('/api/rate-limit-status', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, config }),
       })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to execute action')
-      }
-
-      toast.success(result.message)
-
-      // Refresh data after action
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Action failed')
+      toast.success(json.message)
       await fetchData()
     } catch (err: any) {
-      toast.error(err.message || 'Failed to execute action')
+      toast.error(err.message || 'Action failed')
     } finally {
       setLoading(false)
     }
   }
 
-  const formatTimestamp = (timestamp: string | null) => {
-    if (!timestamp) return 'Never'
-    return new Date(timestamp).toLocaleString()
+  const formatTimestamp = (ts: number | null) => {
+    return ts ? new Date(ts).toLocaleString() : 'Never'
   }
 
-  const getStatusColor = (isHealthy: boolean) => {
-    return isHealthy ? 'text-green-500' : 'text-red-500'
-  }
-
-  const getStatusIcon = (isHealthy: boolean) => {
-    return isHealthy ? CheckCircle : XCircle
-  }
+  const getStatusColor = (isHealthy: boolean) => isHealthy ? 'text-green-500' : 'text-red-500'
+  const getStatusIcon = (isHealthy: boolean) => isHealthy ? CheckCircle : XCircle
 
   if (status === 'loading') {
     return (
       <div className="flex flex-col h-screen bg-transparent">
         <div className="flex-1 flex items-center justify-center">
           <div className="flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="w-5 h-5 animate-spin" />
-            <span>Loading...</span>
+            <Loader2 className="w-5 h-5 animate-spin" /> Loading...
           </div>
         </div>
       </div>
@@ -196,54 +172,32 @@ export default function ManagementPage() {
 
   return (
     <div className="flex flex-col h-screen bg-transparent text-foreground overflow-hidden">
+      {/* Header */}
       <header className="flex-shrink-0 bg-black/20 backdrop-blur-sm border-b border-border/50">
         <div className="container mx-auto px-4 max-w-7xl">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="py-6"
-          >
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="py-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-bold text-foreground">rate limit management</h1>
+                <h1 className="text-3xl font-bold">rate limit management</h1>
                 <p className="text-muted-foreground mt-1">
                   monitor and manage API rate limiting and system health
                 </p>
               </div>
-
               <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowSensitiveData(!showSensitiveData)}
-                  className="gap-2"
-                >
+                <Button variant="outline" size="sm" onClick={() => setShowSensitiveData(!showSensitiveData)} className="gap-2">
                   {showSensitiveData ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   {showSensitiveData ? 'Hide' : 'Show'} Details
                 </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setAutoRefresh(!autoRefresh)}
-                  className={cn('gap-2', autoRefresh && 'bg-primary/10 text-primary')}
-                >
+                <Button variant="outline" size="sm" onClick={() => setAutoRefresh(!autoRefresh)} className={cn('gap-2', autoRefresh && 'bg-primary/10 text-primary')}>
                   {autoRefresh ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                   auto refresh
                 </Button>
-
                 <Button onClick={fetchData} disabled={loading} size="sm" className="gap-2">
-                  {loading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="w-4 h-4" />
-                  )}
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                   load data
                 </Button>
               </div>
             </div>
-
             {lastUpdate && (
               <div className="mt-4 text-sm text-muted-foreground">
                 last updated: {lastUpdate.toLocaleString()}
@@ -253,15 +207,12 @@ export default function ManagementPage() {
         </div>
       </header>
 
+      {/* Content */}
       <div className="flex-1 overflow-hidden">
         <div className="h-full overflow-y-auto">
           <div className="container mx-auto px-4 max-w-7xl py-6">
             {error && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mb-6"
-              >
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
                 <div className="rounded-lg bg-destructive/10 backdrop-blur-sm border border-destructive/20 p-4">
                   <div className="flex items-center gap-2 text-destructive">
                     <AlertTriangle className="w-5 h-5" />
@@ -271,85 +222,50 @@ export default function ManagementPage() {
               </motion.div>
             )}
 
-            {loading && !data && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex items-center justify-center py-12"
-              >
+            {!data && loading && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-center py-12">
                 <div className="flex items-center gap-2 text-muted-foreground">
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                  <span>loading rate limit status...</span>
+                  <Loader2 className="w-6 h-6 animate-spin" /> loading status...
                 </div>
               </motion.div>
             )}
 
             {data && (
               <div className="space-y-6">
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                >
+                {/* System Health */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
                   <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
                     <div className="flex flex-col space-y-1.5 mb-6">
                       <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
-                        <Shield className="w-5 h-5" />
-                        system health
+                        <Shield className="w-5 h-5" /> system health
                       </div>
                       <div className="text-sm text-muted-foreground">
                         overall system status and configuration validation
                       </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                      {' '}
                       <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
-                        <Database
-                          className={cn(
-                            'w-5 h-5 flex-shrink-0',
-                            data.healthCheck?.redis === 'Connected'
-                              ? 'text-green-500'
-                              : 'text-yellow-500'
-                          )}
-                        />
+                        <Database className={cn('w-5 h-5 flex-shrink-0', data.healthCheck.redis === 'Connected' ? 'text-green-500' : 'text-yellow-500')} />
                         <div className="min-w-0">
                           <p className="font-medium text-sm md:text-base">Redis</p>
-                          <p className="text-xs md:text-sm text-muted-foreground">
-                            {data.healthCheck?.redis || 'Unknown'}
-                          </p>
+                          <p className="text-xs md:text-sm text-muted-foreground">{data.healthCheck.redis}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
-                        <Key
-                          className={cn(
-                            'w-5 h-5 flex-shrink-0',
-                            data.healthCheck?.apiKeys === 'Available'
-                              ? 'text-green-500'
-                              : 'text-red-500'
-                          )}
-                        />
+                        <Key className={cn('w-5 h-5 flex-shrink-0', data.healthCheck.apiKeys === 'Available' ? 'text-green-500' : 'text-red-500')} />
                         <div className="min-w-0">
                           <p className="font-medium text-sm md:text-base">API Keys</p>
                           <p className="text-xs md:text-sm text-muted-foreground">
-                            {data.environment?.summary?.apiKeys
-                              ? `${data.environment.summary.apiKeys.totalAvailable}/${data.environment.summary.apiKeys.totalConfigured} available`
-                              : 'Unknown'}
+                            {data.environment.summary.apiKeys.totalAvailable}/{data.configuration.apiKeys.keyCount} available
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
-                        <Server
-                          className={cn(
-                            'w-5 h-5 flex-shrink-0',
-                            data.environment?.validation?.isValid
-                              ? 'text-green-500'
-                              : 'text-yellow-500'
-                          )}
-                        />
+                        <Server className={cn('w-5 h-5 flex-shrink-0', data.environment.validation.isValid ? 'text-green-500' : 'text-yellow-500')} />
                         <div className="min-w-0">
                           <p className="font-medium text-sm md:text-base">Environment</p>
                           <p className="text-xs md:text-sm text-muted-foreground">
-                            {data.environment?.validation?.isValid ? 'Valid' : 'Issues Found'}
+                            {data.environment.validation.isValid ? 'Valid' : 'Issues Found'}
                           </p>
                         </div>
                       </div>
@@ -357,176 +273,89 @@ export default function ManagementPage() {
                         <Settings className="w-5 h-5 flex-shrink-0 text-blue-500" />
                         <div className="min-w-0">
                           <p className="font-medium text-sm md:text-base">Status</p>
-                          <p className="text-xs md:text-sm text-muted-foreground">
-                            {data.status || 'Unknown'}
-                          </p>
+                          <p className="text-xs md:text-sm text-muted-foreground">{data.status}</p>
                         </div>
                       </div>
                     </div>
-                    {/* Validation Errors/Warnings */}
-                    {(!data.environment?.validation?.isValid ||
-                      (data.environment?.validation?.warnings &&
-                        data.environment.validation.warnings.length > 0)) && (
-                      <div className="mt-6 space-y-3">
-                        {data.environment?.validation?.errors &&
-                          data.environment.validation.errors.length > 0 && (
-                            <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                              <div className="flex items-center gap-2 mb-2 text-destructive">
-                                <XCircle className="w-4 h-4" />
-                                <span className="font-medium text-sm">Configuration Errors</span>
-                              </div>
-                              <ul className="text-xs space-y-1 text-destructive/80">
-                                {data.environment.validation.errors.map((error, index) => (
-                                  <li key={index}>• {error}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-
-                        {data.environment?.validation?.warnings &&
-                          data.environment.validation.warnings.length > 0 && (
-                            <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                              <div className="flex items-center gap-2 mb-2 text-yellow-500">
-                                <AlertTriangle className="w-4 h-4" />
-                                <span className="font-medium text-sm">Configuration Warnings</span>
-                              </div>
-                              <ul className="text-xs space-y-1 text-yellow-500/80">
-                                {data.environment.validation.warnings.map((warning, index) => (
-                                  <li key={index}>• {warning}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                      </div>
-                    )}
                   </div>
                 </motion.div>
 
-                {/* API Keys Management */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                >
+                {/* API Key Management */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
                   <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
                     <div className="flex flex-col space-y-1.5 mb-6">
                       <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
-                        <Key className="w-5 h-5" />
-                        API Key Management
+                        <Key className="w-5 h-5" /> API Key Management
                       </div>
                       <div className="text-sm text-muted-foreground">
                         Configuration and usage status for API keys
                       </div>
                     </div>
-
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-3">
-                        <h4 className="font-medium text-sm md:text-base">Configuration</h4>{' '}
+                        <h4 className="font-medium text-sm md:text-base">Configuration</h4>
                         <div className="space-y-2 text-xs md:text-sm">
-                          <div className="flex justify-between items-center">
+                          <div className="flex justify-between">
                             <span>Total Keys:</span>
-                            <Badge variant="outline">
-                              {data.configuration?.apiKeys?.keyCount || 0}
-                            </Badge>
+                            <Badge variant="outline">{data.configuration.apiKeys.keyCount}</Badge>
                           </div>
-                          <div className="flex justify-between items-center">
+                          <div className="flex justify-between">
                             <span>Rotation Enabled:</span>
-                            <Badge
-                              variant={
-                                data.configuration?.apiKeys?.enableRotation
-                                  ? 'default'
-                                  : 'secondary'
-                              }
-                            >
-                              {data.configuration?.apiKeys?.enableRotation ? 'Yes' : 'No'}
+                            <Badge variant={data.configuration.apiKeys.enableRotation ? 'default' : 'secondary'}>
+                              {data.configuration.apiKeys.enableRotation ? 'Yes' : 'No'}
                             </Badge>
                           </div>
-                          <div className="flex justify-between items-center">
+                          <div className="flex justify-between">
                             <span>Auto-rotate on Limit:</span>
-                            <Badge
-                              variant={
-                                data.configuration?.apiKeys?.rotateOnRateLimit
-                                  ? 'default'
-                                  : 'secondary'
-                              }
-                            >
-                              {data.configuration?.apiKeys?.rotateOnRateLimit ? 'Yes' : 'No'}
+                            <Badge variant={data.configuration.apiKeys.rotateOnRateLimit ? 'default' : 'secondary'}>
+                              {data.configuration.apiKeys.rotateOnRateLimit ? 'Yes' : 'No'}
                             </Badge>
                           </div>
                         </div>
                       </div>
-
                       <div className="space-y-3">
-                        <h4 className="font-medium text-sm md:text-base">Rate Limits</h4>{' '}
+                        <h4 className="font-medium text-sm md:text-base">Rate Limits</h4>
                         <div className="space-y-2 text-xs md:text-sm">
-                          <div className="flex justify-between items-center">
+                          <div className="flex justify-between">
                             <span>Per Minute:</span>
-                            <Badge variant="outline">
-                              {data.configuration?.apiKeys?.rateLimit?.requestsPerMinute || 0}
-                            </Badge>
+                            <Badge variant="outline">{data.configuration.apiKeys.rateLimit.requestsPerMinute}</Badge>
                           </div>
-                          <div className="flex justify-between items-center">
+                          <div className="flex justify-between">
                             <span>Per Hour:</span>
-                            <Badge variant="outline">
-                              {data.configuration?.apiKeys?.rateLimit?.requestsPerHour || 0}
-                            </Badge>
+                            <Badge variant="outline">{data.configuration.apiKeys.rateLimit.requestsPerHour}</Badge>
                           </div>
                         </div>
                       </div>
                     </div>
-                    {showSensitiveData && data.keyUsage && (
+
+                    {showSensitiveData && (
                       <div className="mt-6 space-y-4">
                         <h4 className="font-medium text-sm md:text-base">Individual Key Status</h4>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                           {Object.entries(data.keyUsage).map(([keyIndex, usage]) => {
-                            const StatusIcon = getStatusIcon(usage?.isHealthy || false)
+                            const isHealthy = !usage.isRateLimited
+                            const StatusIcon = getStatusIcon(isHealthy)
                             return (
-                              <div
-                                key={keyIndex}
-                                className="p-4 rounded-lg bg-black/20 border border-border/20"
-                              >
+                              <div key={keyIndex} className="p-4 rounded-lg bg-black/20 border border-border/20">
                                 <div className="flex items-center justify-between mb-2">
-                                  <h5 className="font-medium text-sm md:text-base">
-                                    Key {keyIndex}
-                                  </h5>
-                                  <StatusIcon
-                                    className={cn(
-                                      'w-4 h-4 flex-shrink-0',
-                                      getStatusColor(usage?.isHealthy || false)
-                                    )}
-                                  />
+                                  <h5 className="font-medium text-sm md:text-base">Key {keyIndex}</h5>
+                                  <StatusIcon className={cn('w-4 h-4', getStatusColor(isHealthy))} />
                                 </div>
                                 <div className="space-y-2 text-xs md:text-sm">
-                                  <div className="flex justify-between items-center">
+                                  <div className="flex justify-between">
                                     <span>Requests:</span>
-                                    <span>{usage?.requestCount || 0}</span>
+                                    <span>{usage.requests}</span>
                                   </div>
-                                  <div className="flex justify-between items-center">
+                                  <div className="flex justify-between">
                                     <span>Last Used:</span>
-                                    <span className="text-xs truncate max-w-[100px]">
-                                      {formatTimestamp(usage?.lastUsed)}
-                                    </span>
+                                    <span className="truncate max-w-[200px]">{formatTimestamp(usage.lastUsed)}</span>
                                   </div>
-                                  <div className="flex justify-between items-center">
+                                  <div className="flex justify-between">
                                     <span>Failures:</span>
-                                    <Badge
-                                      variant={
-                                        (usage?.consecutiveFailures || 0) > 0
-                                          ? 'destructive'
-                                          : 'secondary'
-                                      }
-                                    >
-                                      {usage?.consecutiveFailures || 0}
+                                    <Badge variant={usage.failures > 0 ? 'destructive' : 'secondary'}>
+                                      {usage.failures}
                                     </Badge>
                                   </div>
-                                  {usage?.rateLimitedUntil && (
-                                    <div className="flex justify-between items-center">
-                                      <span>Limited Until:</span>
-                                      <span className="text-xs text-orange-500 truncate max-w-[100px]">
-                                        {formatTimestamp(usage.rateLimitedUntil)}
-                                      </span>
-                                    </div>
-                                  )}
                                 </div>
                               </div>
                             )
@@ -538,47 +367,41 @@ export default function ManagementPage() {
                 </motion.div>
 
                 {/* User Rate Limiting */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                >
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
                   <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
                     <div className="flex flex-col space-y-1.5 mb-6">
                       <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
-                        <Users className="w-5 h-5" />
-                        User Rate Limiting
+                        <Users className="w-5 h-5" /> User Rate Limiting
                       </div>
                       <div className="text-sm text-muted-foreground">
                         Per-user request rate limiting configuration
                       </div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      {' '}
                       <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
-                        <Clock className="w-5 h-5 flex-shrink-0 text-blue-500" />
-                        <div className="min-w-0">
+                        <Clock className="w-5 h-5 text-blue-500" />
+                        <div>
                           <p className="font-medium text-sm md:text-base">Per Minute</p>
                           <p className="text-xs md:text-sm text-muted-foreground">
-                            {data.configuration?.userRateLimit?.requestsPerMinute || 0} requests
+                            {data.configuration.userRateLimit.requestsPerMinute} requests
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
-                        <Clock className="w-5 h-5 flex-shrink-0 text-green-500" />
-                        <div className="min-w-0">
+                        <Clock className="w-5 h-5 text-green-500" />
+                        <div>
                           <p className="font-medium text-sm md:text-base">Per Hour</p>
                           <p className="text-xs md:text-sm text-muted-foreground">
-                            {data.configuration?.userRateLimit?.requestsPerHour || 0} requests
+                            {data.configuration.userRateLimit.requestsPerHour} requests
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
-                        <Clock className="w-5 h-5 flex-shrink-0 text-orange-500" />
-                        <div className="min-w-0">
+                        <Clock className="w-5 h-5 text-orange-500" />
+                        <div>
                           <p className="font-medium text-sm md:text-base">Per Day</p>
                           <p className="text-xs md:text-sm text-muted-foreground">
-                            {data.configuration?.userRateLimit?.requestsPerDay || 0} requests
+                            {data.configuration.userRateLimit.requestsPerDay} requests
                           </p>
                         </div>
                       </div>
@@ -587,40 +410,22 @@ export default function ManagementPage() {
                 </motion.div>
 
                 {/* Actions */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
-                >
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
                   <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
                     <div className="flex flex-col space-y-1.5 mb-6">
                       <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
-                        <Activity className="w-5 h-5" />
-                        Management Actions
+                        <Activity className="w-5 h-5" /> Management Actions
                       </div>
                       <div className="text-sm text-muted-foreground">
                         Perform maintenance and administrative actions
                       </div>
                     </div>
                     <div className="flex flex-col sm:flex-row gap-3">
-                      <Button
-                        onClick={() => handleAction('rotate')}
-                        disabled={loading}
-                        variant="outline"
-                        className="gap-2 w-full sm:w-auto"
-                      >
-                        <RotateCcw className="w-4 h-4" />
-                        Rotate API Key
+                      <Button onClick={() => handleAction('rotate')} disabled={loading} variant="outline" className="gap-2 w-full sm:w-auto">
+                        <RotateCcw className="w-4 h-4" /> Rotate API Key
                       </Button>
-
-                      <Button
-                        onClick={() => handleAction('reset')}
-                        disabled={loading}
-                        variant="outline"
-                        className="gap-2 w-full sm:w-auto"
-                      >
-                        <RefreshCw className="w-4 h-4" />
-                        Reset Rate Limits
+                      <Button onClick={() => handleAction('reset')} disabled={loading} variant="outline" className="gap-2 w-full sm:w-auto">
+                        <RefreshCw className="w-4 h-4" /> Reset Rate Limits
                       </Button>
                     </div>
                   </div>

@@ -959,6 +959,11 @@ const PureChatInterface = ({
                 onToolSelect={handleToolSelection}
                 selectedTool={selectedTool}
               />
+              <div className="px-2 sm:px-4 pb-0.5">
+                <p className="text-[10px] sm:text-xs text-muted-foreground text-center leading-tight">
+                  the assistant can make mistakes. please verify important information.
+                </p>
+              </div>
             </div>
           )}
         </div>

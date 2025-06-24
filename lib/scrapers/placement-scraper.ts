@@ -51,11 +51,16 @@ function convertCtcToNumeric(ctc: string): number | null {
 
 async function readCsvFile(filePath: string): Promise<PlacementRecord[]> {
   try {
+    console.log(`Attempting to read CSV file from: ${filePath}`);
     const fileContent = await fs.readFile(filePath, 'utf-8');
     const result = Papa.parse<PlacementRecord>(fileContent, {
       header: true,
       skipEmptyLines: true,
     });
+    console.log(`Successfully read ${result.data.length} records from ${filePath}`);
+    if (result.data.length > 0) {
+      console.log('Sample record:', JSON.stringify(result.data[0], null, 2));
+    }
     return result.data;
   } catch (error) {
     console.error(`Error reading or parsing CSV file at ${filePath}:`, error);
@@ -100,19 +105,28 @@ export async function scrapePlacementInfo(
     const normalOffersPath = path.join(basePath, 'google_sheet_data.csv');
     const witchOffersPath = path.join(basePath, 'WITCH-P.csv');
 
+    // Always load both data sources
     let normalOffers = await readCsvFile(normalOffersPath);
     const witchOffers = await readCsvFile(witchOffersPath);
 
-    let allOffers: PlacementRecord[];
+    // Preprocess both data sources
+    const processedNormalOffers = preprocessAndFilterData(normalOffers);
+    const processedWitchOffers = preprocessAndFilterData(witchOffers);
 
-    if (combineWitch) {
-      const filteredWitchOffers = preprocessAndFilterData(witchOffers);
-      allOffers = [...normalOffers, ...filteredWitchOffers];
-    } else {
-      allOffers = normalOffers;
+    // If we're filtering by campus, we need to include WITCH data
+    // since it contains the campus information
+    const shouldIncludeWitch = combineWitch || !!campus;
+    
+    // Combine offers based on conditions
+    let allOffers: PlacementRecord[] = [...processedNormalOffers];
+    if (shouldIncludeWitch) {
+      allOffers = [...allOffers, ...processedWitchOffers];
     }
 
-    let processedOffers = preprocessAndFilterData(allOffers);
+    // If campus is specified, we'll need to filter by it
+    // Since normal offers don't have campus info, we'll include them all
+    // and only filter the WITCH offers by campus
+    let processedOffers = allOffers;
 
     if (companyFilter) {
       const filter = companyFilter.toLowerCase();
@@ -122,9 +136,30 @@ export async function scrapePlacementInfo(
     }
 
     if (campus) {
-      processedOffers = processedOffers.filter(
-        offer => offer.Campus?.toLowerCase() === campus.toLowerCase()
-      );
+      console.log(`Filtering for campus: ${campus}`);
+      const campusLower = campus.toLowerCase();
+      console.log(`Total offers before campus filter: ${processedOffers.length}`);
+      
+      // Get unique campus values for debugging
+      const allCampuses = [...new Set(processedOffers.map(o => o.Campus).filter(Boolean))];
+      console.log('All Campus values in data:', allCampuses);
+      
+      // If we have campus info, filter by it
+      // If no campus info is available, include all offers (assume they're for the requested campus)
+      processedOffers = processedOffers.filter(offer => {
+        // If no campus info is available, include the offer
+        if (!offer.Campus) return true;
+        
+        // Otherwise, check if it matches the requested campus
+        const offerCampus = offer.Campus.toLowerCase();
+        const matches = offerCampus.includes(campusLower);
+        if (matches) {
+          console.log(`Match found: ${offerCampus} includes ${campusLower}`);
+        }
+        return matches;
+      });
+      
+      console.log(`Total offers after campus filter: ${processedOffers.length}`);
     }
 
     const totalOffers = processedOffers.length;

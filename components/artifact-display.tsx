@@ -35,6 +35,8 @@ import {
   Target,
   Star,
   Briefcase,
+  School,
+  Award,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
@@ -1829,6 +1831,7 @@ const CampusInfoCard = ({ info }: { info: any }) => {
 
 const PlacementInfoCard = ({ data: rawData }: { data: any }) => {
   const placementData = rawData.data;
+  const campus = rawData.campus;
 
   if (!placementData) {
     return (
@@ -1861,13 +1864,84 @@ const PlacementInfoCard = ({ data: rawData }: { data: any }) => {
     );
   }
 
+  // Check if we have campus-specific data by looking at the source
+  const hasCampusData = campus && stats && stats['Total Offers'] !== '0' && 
+    rawData.data?.source?.includes('campus');
+  const academicYear = `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`;
+
   return (
     <div className="space-y-6">
+      {campus && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/20 p-6 rounded-xl border border-blue-100 dark:border-blue-800/50">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <School className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <h2 className="text-2xl font-bold text-foreground">{campus} Campus</h2>
+              </div>
+              <p className="text-muted-foreground">
+                {hasCampusData 
+                  ? `Campus-specific placement statistics for ${academicYear} Academic Year`
+                  : `Placement statistics for ${academicYear} Academic Year`}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <div className="bg-white dark:bg-blue-900/30 px-3 py-1.5 rounded-lg flex items-center gap-2 border border-blue-100 dark:border-blue-800/50">
+                <Briefcase className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <span className="text-sm font-medium">{stats?.['Companies'] || 'N/A'} Companies</span>
+              </div>
+              <div className="bg-white dark:bg-blue-900/30 px-3 py-1.5 rounded-lg flex items-center gap-2 border border-blue-100 dark:border-blue-800/50">
+                <Award className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <span className="text-sm font-medium">{stats?.['Total Offers'] || 'N/A'} Offers</span>
+              </div>
+            </div>
+          </div>
+          
+          {hasCampusData && (
+            <div className="mt-4 pt-4 border-t border-blue-100 dark:border-blue-800/30">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground">Highest CTC</p>
+                  <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{stats['Highest CTC']}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground">Average CTC</p>
+                  <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{stats['Average CTC']}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground">Median CTC</p>
+                  <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{stats['Median CTC']}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground">Lowest CTC</p>
+                  <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{stats['Lowest CTC']}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {campus && !hasCampusData && (
+            <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-100 dark:border-amber-800/50">
+              <div className="flex items-start gap-3">
+                <Info className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                    Note: Campus-Specific Data Limited
+                  </p>
+                  <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                    The statistics shown include data from all VIT campuses. Specific data for {campus} campus is limited or not available.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       {stats && (
         <div>
           <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
             <BarChart3 className="h-5 w-5" />
-            Placement Statistics
+            {hasCampusData ? 'Campus Placement Statistics' : 'Combined Placement Statistics'}
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {renderStat(<TrendingUp className="h-6 w-6" />, 'Total Offers', stats['Total Offers'])}

@@ -950,16 +950,28 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
         const raw = await scrapePlacementInfo(year, companyFilter, combineWitch, campus)
         try {
           const { parsePlacementData } = await import('../app/api/chat/route')
-          const parsed = await parsePlacementData(raw, '', undefined)
+                    interface ParsedPlacementData {
+            formatted_content: string;
+            summary: string;
+          }
+          const parsed = (await parsePlacementData(
+            raw,
+            '',
+            undefined
+          )) as ParsedPlacementData
           return {
             ...raw,
+            campus, // Include the campus in the response
             formatted_content: parsed.formatted_content,
             summary: parsed.summary,
             message: parsed.summary || parsed.formatted_content,
           }
         } catch (err) {
           // fallback if parsing fails
-          return raw
+          return {
+            ...raw,
+            campus // Include the campus in the fallback response
+          }
         }
       },
     }),

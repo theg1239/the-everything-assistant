@@ -66,6 +66,8 @@ interface ArtifactDisplayProps {
     | 'getPlacementInfo'
   className?: string
   onLoginClick?: () => void
+  maximizedItem?: any
+  setMaximizedItem?: (item: any) => void
 }
 
 const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?: () => void }) => {
@@ -1830,8 +1832,8 @@ const CampusInfoCard = ({ info }: { info: any }) => {
 }
 
 const PlacementInfoCard = ({ data: rawData }: { data: any }) => {
-  const placementData = rawData.data;
-  const campus = rawData.campus;
+  const [showDetails, setShowDetails] = useState(false);
+  const { data: placementData, campus, formatted_content } = rawData;
 
   if (!placementData) {
     return (
@@ -1843,7 +1845,7 @@ const PlacementInfoCard = ({ data: rawData }: { data: any }) => {
 
   const { statistics: stats, companies, recentOffers: recent_offers } = placementData;
 
-  if (!stats && !companies && !recent_offers) {
+  if (!stats && !companies && !recent_offers && !formatted_content) {
     return (
       <div className="text-center py-10">
         <p className="text-muted-foreground">No placement information available.</p>
@@ -1864,133 +1866,147 @@ const PlacementInfoCard = ({ data: rawData }: { data: any }) => {
     );
   }
 
-  // Check if we have campus-specific data by looking at the source
   const hasCampusData = campus && stats && stats['Total Offers'] !== '0' && 
     rawData.data?.source?.includes('campus');
   const academicYear = `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`;
 
   return (
     <div className="space-y-6">
-      {campus && (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/20 p-6 rounded-xl border border-blue-100 dark:border-blue-800/50">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <School className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                <h2 className="text-2xl font-bold text-foreground">{campus} Campus</h2>
-              </div>
-              <p className="text-muted-foreground">
-                {hasCampusData 
-                  ? `Campus-specific placement statistics for ${academicYear} Academic Year`
-                  : `Placement statistics for ${academicYear} Academic Year`}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <div className="bg-white dark:bg-blue-900/30 px-3 py-1.5 rounded-lg flex items-center gap-2 border border-blue-100 dark:border-blue-800/50">
-                <Briefcase className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                <span className="text-sm font-medium">{stats?.['Companies'] || 'N/A'} Companies</span>
-              </div>
-              <div className="bg-white dark:bg-blue-900/30 px-3 py-1.5 rounded-lg flex items-center gap-2 border border-blue-100 dark:border-blue-800/50">
-                <Award className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                <span className="text-sm font-medium">{stats?.['Total Offers'] || 'N/A'} Offers</span>
-              </div>
-            </div>
-          </div>
-          
-          {hasCampusData && (
-            <div className="mt-4 pt-4 border-t border-blue-100 dark:border-blue-800/30">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="text-center">
-                  <p className="text-xs text-muted-foreground">Highest CTC</p>
-                  <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{stats['Highest CTC']}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-xs text-muted-foreground">Average CTC</p>
-                  <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{stats['Average CTC']}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-xs text-muted-foreground">Median CTC</p>
-                  <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{stats['Median CTC']}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-xs text-muted-foreground">Lowest CTC</p>
-                  <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{stats['Lowest CTC']}</p>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {campus && !hasCampusData && (
-            <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-100 dark:border-amber-800/50">
-              <div className="flex items-start gap-3">
-                <Info className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
+      {formatted_content && (
+        <div className="prose max-w-none dark:prose-invert bg-card rounded-lg p-6 border border-border" dangerouslySetInnerHTML={{ __html: formatted_content }} />
+      )}
+
+      <div className="flex justify-center">
+        <Button variant="outline" onClick={() => setShowDetails(!showDetails)}>
+          {showDetails ? 'Hide' : 'Show'} Detailed Stats
+        </Button>
+      </div>
+
+      {showDetails && (
+        <div className="space-y-6 pt-6 border-t">
+          {campus && (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/20 p-6 rounded-xl border border-blue-100 dark:border-blue-800/50">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                    Note: Campus-Specific Data Limited
-                  </p>
-                  <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                    The statistics shown include data from all VIT campuses. Specific data for {campus} campus is limited or not available.
+                  <div className="flex items-center gap-2 mb-2">
+                    <School className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    <h2 className="text-2xl font-bold text-foreground">{campus} Campus</h2>
+                  </div>
+                  <p className="text-muted-foreground">
+                    {hasCampusData 
+                      ? `Campus-specific placement statistics for ${academicYear} Academic Year`
+                      : `Placement statistics for ${academicYear} Academic Year`}
                   </p>
                 </div>
+                <div className="flex flex-wrap gap-2">
+                  <div className="bg-white dark:bg-blue-900/30 px-3 py-1.5 rounded-lg flex items-center gap-2 border border-blue-100 dark:border-blue-800/50">
+                    <Briefcase className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-sm font-medium">{stats?.['Companies'] || 'N/A'} Companies</span>
+                  </div>
+                  <div className="bg-white dark:bg-blue-900/30 px-3 py-1.5 rounded-lg flex items-center gap-2 border border-blue-100 dark:border-blue-800/50">
+                    <Award className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-sm font-medium">{stats?.['Total Offers'] || 'N/A'} Offers</span>
+                  </div>
+                </div>
+              </div>
+              
+              {hasCampusData && (
+                <div className="mt-4 pt-4 border-t border-blue-100 dark:border-blue-800/30">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground">Highest CTC</p>
+                      <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{stats['Highest CTC']}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground">Average CTC</p>
+                      <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{stats['Average CTC']}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground">Median CTC</p>
+                      <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{stats['Median CTC']}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground">Lowest CTC</p>
+                      <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{stats['Lowest CTC']}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {campus && !hasCampusData && (
+                <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-100 dark:border-amber-800/50">
+                  <div className="flex items-start gap-3">
+                    <Info className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                        Note: Campus-Specific Data Limited
+                      </p>
+                      <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                        The statistics shown include data from all VIT campuses. Specific data for {campus} campus is limited or not available.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {stats && (
+            <div>
+              <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                <BarChart3 className="h-5 w-5" />
+                {hasCampusData ? 'Campus Placement Statistics' : 'Combined Placement Statistics'}
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {renderStat(<TrendingUp className="h-6 w-6" />, 'Total Offers', stats['Total Offers'])}
+                {renderStat(<DollarSign className="h-6 w-6" />, 'Highest CTC', stats['Highest CTC'])}
+                {renderStat(<Target className="h-6 w-6" />, 'Average CTC', stats['Average CTC'])}
+                {renderStat(<Users className="h-6 w-6" />, 'Companies Visited', stats['Companies'])}
+                {renderStat(<Star className="h-6 w-6" />, 'Median CTC', stats['Median CTC'])}
+                {renderStat(<CheckCircle className="h-6 w-6" />, 'Lowest CTC', stats['Lowest CTC'])}
               </div>
             </div>
           )}
-        </div>
-      )}
-      {stats && (
-        <div>
-          <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-            <BarChart3 className="h-5 w-5" />
-            {hasCampusData ? 'Campus Placement Statistics' : 'Combined Placement Statistics'}
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {renderStat(<TrendingUp className="h-6 w-6" />, 'Total Offers', stats['Total Offers'])}
-            {renderStat(<DollarSign className="h-6 w-6" />, 'Highest CTC', stats['Highest CTC'])}
-            {renderStat(<Target className="h-6 w-6" />, 'Average CTC', stats['Average CTC'])}
-            {renderStat(<Users className="h-6 w-6" />, 'Companies Visited', stats['Companies'])}
-            {renderStat(<Star className="h-6 w-6" />, 'Median CTC', stats['Median CTC'])}
-            {renderStat(<CheckCircle className="h-6 w-6" />, 'Lowest CTC', stats['Lowest CTC'])}
-          </div>
-        </div>
-      )}
 
-      {companies && companies.length > 0 && (
-        <div>
-          <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-            <Building2 className="h-5 w-5" />
-            Top Companies
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {companies.slice(0, 15).map((company: any, index: number) => (
-              <Badge key={index} variant="secondary" className="text-sm py-1 px-3">
-                {company.name || company}
-              </Badge>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {recent_offers && recent_offers.length > 0 && (
-        <div>
-          <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-            <Briefcase className="h-5 w-5" />
-            Recent Offers
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {recent_offers.slice(0, 6).map((offer: any, index: number) => (
-              <Card key={index} className="p-3">
-                <div className="flex justify-between items-start gap-2">
-                  <div>
-                    <p className="font-semibold text-sm">{offer.company}</p>
-                    <p className="text-xs text-muted-foreground">{offer.date}</p>
-                  </div>
-                  <Badge variant="outline" className="text-xs whitespace-nowrap text-right">
-                    {offer.ctc}
+          {companies && companies.length > 0 && (
+            <div>
+              <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                <Building2 className="h-5 w-5" />
+                Top Companies
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {companies.slice(0, 15).map((company: any, index: number) => (
+                  <Badge key={index} variant="secondary" className="text-sm py-1 px-3">
+                    {company.name || company}
                   </Badge>
-                </div>
-              </Card>
-            ))}
-          </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {recent_offers && recent_offers.length > 0 && (
+            <div>
+              <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                <Briefcase className="h-5 w-5" />
+                Recent Offers
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {recent_offers.slice(0, 6).map((offer: any, index: number) => (
+                  <Card key={index} className="p-3">
+                    <div className="flex justify-between items-start gap-2">
+                      <div>
+                        <p className="font-semibold text-sm">{offer.company}</p>
+                        <p className="text-xs text-muted-foreground">{offer.date}</p>
+                      </div>
+                      <Badge variant="outline" className="text-xs whitespace-nowrap text-right">
+                        {offer.ctc}
+                      </Badge>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -2004,12 +2020,20 @@ const PureArtifactDisplay = ({
   type,
   className,
   onLoginClick,
+  maximizedItem: propMaximizedItem,
+  setMaximizedItem: propSetMaximizedItem,
 }: ArtifactDisplayProps) => {
   const [isExpanded, setIsExpanded] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [showAllItems, setShowAllItems] = useState(false)
-  const [maximizedItem, setMaximizedItem] = useState<any | null>(null)
+  const [internalMaximizedItem, setInternalMaximizedItem] = useState<any>(null)
+
+  const isControlled = propMaximizedItem !== undefined && propSetMaximizedItem !== undefined
+
+  const maximizedItem = isControlled ? propMaximizedItem : internalMaximizedItem
+  const setMaximizedItem = isControlled ? propSetMaximizedItem! : setInternalMaximizedItem
+
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [isPdfLoading, setIsPdfLoading] = useState(false)
   const [pdfTitle, setPdfTitle] = useState<string>('')
@@ -2019,11 +2043,19 @@ const PureArtifactDisplay = ({
   const toggleShowAll = () => setShowAllItems(!showAllItems)
 
   const handleMaximize = (item: any) => {
-    setMaximizedItem(item)
+    if (isControlled) {
+      propSetMaximizedItem!(item)
+    } else {
+      setInternalMaximizedItem(item)
+    }
   }
 
   const handleCloseMaximize = () => {
-    setMaximizedItem(null)
+    if (isControlled) {
+      propSetMaximizedItem!(null)
+    } else {
+      setInternalMaximizedItem(null)
+    }
   }
 
   const handleViewPdf = (url: string, title?: string) => {

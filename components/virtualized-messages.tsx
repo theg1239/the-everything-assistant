@@ -7,10 +7,21 @@ interface VirtualizedMessagesProps {
   chatId?: string
   onCreateCanvas: (content: string) => void
   onLoginClick: () => void
+  onPlacementSearch: (company: string) => void
+  maximizedItem?: any
+  setMaximizedItem?: (item: any) => void
 }
 
 export const VirtualizedMessages = memo(
-  ({ messages, chatId, onCreateCanvas, onLoginClick }: VirtualizedMessagesProps) => {
+  ({
+    messages,
+    chatId,
+    onCreateCanvas,
+    onLoginClick,
+    onPlacementSearch,
+    maximizedItem,
+    setMaximizedItem,
+  }: VirtualizedMessagesProps) => {
     const visibleMessages = messages.slice(-50)
 
     return (
@@ -22,6 +33,9 @@ export const VirtualizedMessages = memo(
             chatId={chatId}
             onCreateCanvas={onCreateCanvas}
             onLoginClick={onLoginClick}
+            onPlacementSearch={onPlacementSearch}
+            maximizedItem={maximizedItem}
+            setMaximizedItem={setMaximizedItem}
           />
         ))}
       </AnimatePresence>

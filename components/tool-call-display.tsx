@@ -1,6 +1,6 @@
 'use client'
 
-import { memo } from 'react'
+import React, { memo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Loader2,
@@ -14,8 +14,10 @@ import {
   UtensilsCrossed,
   Shield,
   MapPin,
+  Search,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ArtifactDisplay } from './artifact-display'
@@ -25,6 +27,9 @@ import { useMediaQuery } from '@/hooks/use-media-query'
 interface ToolCallDisplayProps {
   toolCalls: any[]
   onLoginClick?: () => void
+  onPlacementSearch?: (company: string) => void
+  maximizedItem?: any
+  setMaximizedItem?: (item: any) => void
 }
 
 const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) => {
@@ -583,10 +588,23 @@ const ToolCallLoadingState = ({ toolCalls }: { toolCalls: any[] }) => {
 const ToolCallResultsSummary = ({
   toolCalls,
   onLoginClick,
+  onPlacementSearch,
+  maximizedItem,
+  setMaximizedItem,
 }: {
   toolCalls: any[]
   onLoginClick?: () => void
+  onPlacementSearch?: (company: string) => void
+  maximizedItem?: any
+  setMaximizedItem?: (item: any) => void
 }) => {
+  const [companySearch, setCompanySearch] = React.useState('');
+
+  const handleSearch = () => {
+    if (onPlacementSearch && companySearch.trim()) {
+      onPlacementSearch(companySearch.trim());
+    }
+  };
   const completedTools = toolCalls.filter(tool => tool.result)
   const isMobile = useMediaQuery('(max-width: 640px)')
 
@@ -845,6 +863,22 @@ const ToolCallResultsSummary = ({
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
           >
+            {artifact.type === 'placements' && onPlacementSearch && (
+              <div className="mb-4 flex items-center gap-2 px-1">
+                <Input
+                  type="search"
+                  placeholder="Search by company name..."
+                  value={companySearch}
+                  onChange={(e) => setCompanySearch(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
+                  className="h-9"
+                />
+                <Button onClick={handleSearch} size="sm">
+                  <Search className="h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Search</span>
+                </Button>
+              </div>
+            )}
             <ArtifactDisplay
               title={artifact.title}
               icon={artifact.icon}
@@ -852,6 +886,8 @@ const ToolCallResultsSummary = ({
               type={artifact.type}
               className="relative"
               onLoginClick={onLoginClick}
+              maximizedItem={maximizedItem}
+              setMaximizedItem={setMaximizedItem}
             />
             {artifact.source && (
               <div className="mt-2 flex justify-end">
@@ -867,7 +903,13 @@ const ToolCallResultsSummary = ({
   )
 }
 
-const PureToolCallDisplay = ({ toolCalls, onLoginClick }: ToolCallDisplayProps) => {
+const PureToolCallDisplay = ({
+  toolCalls,
+  onLoginClick,
+  onPlacementSearch,
+  maximizedItem,
+  setMaximizedItem,
+}: ToolCallDisplayProps) => {
   const { getToolResult, version } = useVTOP()
 
   const enrichedToolCalls = toolCalls.map(tool => {
@@ -937,7 +979,7 @@ const PureToolCallDisplay = ({ toolCalls, onLoginClick }: ToolCallDisplayProps) 
 
   if (enrichedToolCalls.length === 0) return null
 
-  return <ToolCallResultsSummary toolCalls={enrichedToolCalls} onLoginClick={onLoginClick} />
+  return <ToolCallResultsSummary toolCalls={enrichedToolCalls} onLoginClick={onLoginClick} onPlacementSearch={onPlacementSearch} />
 }
 
 export const ToolCallDisplay = memo(PureToolCallDisplay)

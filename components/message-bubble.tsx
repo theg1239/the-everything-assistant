@@ -16,6 +16,9 @@ interface MessageBubbleProps {
   chatId?: string
   onCreateCanvas?: (content: string) => void
   onLoginClick?: () => void
+  onPlacementSearch?: (company: string) => void
+  maximizedItem?: any
+  setMaximizedItem?: (item: any) => void
 }
 
 const PureMessageBubble = ({
@@ -23,6 +26,9 @@ const PureMessageBubble = ({
   chatId,
   onCreateCanvas,
   onLoginClick,
+  onPlacementSearch,
+  maximizedItem,
+  setMaximizedItem,
 }: MessageBubbleProps) => {
   const { version } = useVTOP()
   const isUser = message.role === 'user'
@@ -58,6 +64,9 @@ const PureMessageBubble = ({
               }
               toolCalls={message.toolInvocations}
               onLoginClick={onLoginClick}
+              onPlacementSearch={onPlacementSearch}
+              maximizedItem={maximizedItem}
+              setMaximizedItem={setMaximizedItem}
             />
           )}
 

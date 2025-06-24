@@ -113,6 +113,7 @@ const PureChatInterface = ({
   const [userPreferences, setUserPreferences] = useState<any>({ followUpSuggestions: true })
   const [selectedTool, setSelectedTool] = useState<string>('')
   const [chatCreatedEventDispatched, setChatCreatedEventDispatched] = useState(false)
+  const [maximizedArtifact, setMaximizedArtifact] = useState<any>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -492,12 +493,20 @@ const PureChatInterface = ({
     setCanvasOpen(true)
   }
 
-  const handleLoginClick = () => {
+    const handleLoginClick = () => {
     const triggerEvent = new CustomEvent('vtopLoginTrigger', {
       detail: { command: 'attendance' },
     })
     window.dispatchEvent(triggerEvent)
   }
+
+  const handlePlacementSearch = (company: string) => {
+    append({
+      role: 'user',
+      content: `Get placement information for ${company}`,
+    });
+  };
+
   const handleVTOPCredentials = async (
     credentials: { username: string; encryptedPassword: string },
     originalToolCall: any
@@ -747,10 +756,9 @@ const PureChatInterface = ({
                   setInput={setInput}
                   handleSubmit={handleFormSubmit}
                   isLoading={isLoading}
-                  placeholder="ask anything..."
-                  stop={stop}
                   onToolSelect={handleToolSelection}
                   selectedTool={selectedTool}
+                  placeholder="ask anything..."
                 />{' '}
               </motion.div>
 
@@ -884,6 +892,9 @@ const PureChatInterface = ({
                 chatId={optimisticChatId}
                 onCreateCanvas={createCanvasFromMessage}
                 onLoginClick={handleLoginClick}
+                onPlacementSearch={handlePlacementSearch}
+                maximizedItem={maximizedArtifact}
+                setMaximizedItem={setMaximizedArtifact}
               />
               {isLoading &&
                 messages.length > 0 &&
@@ -928,27 +939,28 @@ const PureChatInterface = ({
               }}
             ></div>
           )}{' '}
-          <div className="relative z-10">
-            <FollowUpSuggestions
-              lastAssistantMessage={lastAssistantMessage}
-              lastUserMessage={lastUserMessage}
-              isVisible={showFollowUpSuggestions && !isLoading}
-              onSuggestionClick={handleSuggestedQuestion}
-              onDismiss={() => setShowFollowUpSuggestions(false)}
-              isMobile={isMobile}
-            />
-
-            <MultimodalInput
-              input={input}
-              setInput={setInput}
-              handleSubmit={handleFormSubmit}
-              isLoading={isLoading}
-              placeholder="ask anything..."
-              stop={stop}
-              onToolSelect={handleToolSelection}
-              selectedTool={selectedTool}
-            />
-          </div>
+          {!maximizedArtifact && (
+            <div className="relative z-10">
+              <FollowUpSuggestions
+                lastAssistantMessage={lastAssistantMessage}
+                lastUserMessage={lastUserMessage}
+                isVisible={showFollowUpSuggestions && !isLoading}
+                onSuggestionClick={handleSuggestedQuestion}
+                onDismiss={() => setShowFollowUpSuggestions(false)}
+                isMobile={isMobile}
+              />
+              <MultimodalInput
+                input={input}
+                setInput={setInput}
+                handleSubmit={handleFormSubmit}
+                isLoading={isLoading}
+                placeholder="ask anything..."
+                stop={stop}
+                onToolSelect={handleToolSelection}
+                selectedTool={selectedTool}
+              />
+            </div>
+          )}
         </div>
       </div>
     </VTOPToolHandler>

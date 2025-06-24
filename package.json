@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "npx prisma generate && next build && cd services/reddit-scraper && npm install --legacy-peer-deps",
+    "build": "npx prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "format": "npx prettier --write .",
@@ -16,7 +16,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "heroku-postbuild": "cd services/reddit-scraper && npm install --legacy-peer-deps",
+    "heroku-postbuild": "cd services/deep-search && npm install --legacy-peer-deps",
     "test:performance": "tsx scripts/test-performance.ts",
     "test:performance:basic": "tsx scripts/test-performance.ts basic",
     "test:performance:advanced": "tsx scripts/test-performance.ts advanced",

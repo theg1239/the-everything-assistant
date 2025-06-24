@@ -112,9 +112,9 @@ app.post('/api/ask', async (req, res) => {
 
 app.get('/api/stats', async (req, res) => {
   try {
-    const postCount = await knowledgeBase.pool.query('SELECT COUNT(*) FROM reddit_posts')
-    const commentCount = await knowledgeBase.pool.query('SELECT COUNT(*) FROM reddit_comments')
-    const embeddingCount = await knowledgeBase.pool.query(
+    const postCountResult = await knowledgeBase.pool.query('SELECT COUNT(*) FROM reddit_posts')
+    const commentCountResult = await knowledgeBase.pool.query('SELECT COUNT(*) FROM reddit_comments')
+    const embeddingCountResult = await knowledgeBase.pool.query(
       'SELECT COUNT(*) FROM reddit_posts WHERE embedding IS NOT NULL'
     )
     const subredditStats = await knowledgeBase.pool.query(`
@@ -127,9 +127,9 @@ app.get('/api/stats', async (req, res) => {
     res.json({
       success: true,
       stats: {
-        totalPosts: parseInt(postCountResult.rows[0].count),
-        totalComments: parseInt(commentCountResult.rows[0].count),
-        postsWithEmbeddings: parseInt(embeddingCountResult.rows[0].count),
+        totalPosts: parseInt(postCountResult.rows[0].count, 10),
+        totalComments: parseInt(commentCountResult.rows[0].count, 10),
+        postsWithEmbeddings: parseInt(embeddingCountResult.rows[0].count, 10),
         subreddits: subredditStats.rows,
       },
     })
@@ -165,8 +165,7 @@ app.get('/api/trending', async (req, res) => {
 app.post('/api/compare', async (req, res) => {
   try {
     const { query, conversationHistory = [] } = req.body
-
-    if (!query || typeof query !== 'string' || query.trim().length === 0) {
+    if (!query || typeof query !== 'string' || !query.trim()) {
       return res.status(400).json({
         success: false,
         error: 'Query is required and must be a non-empty string',
@@ -212,15 +211,17 @@ app.use((err, req, res, next) => {
   })
 })
 
+// Uncomment and configure your port when ready to run
+// const port = process.env.PORT || 3002
 // app.listen(port, () => {
 //   console.log(`Knowledge API server running on port ${port}`)
 //   console.log('Available endpoints:')
-//   console.log('  GET  /health - Health check')
-//   console.log('  POST /api/search - Search knowledge base')
-//   console.log('  POST /api/ask - RAG-powered Q&A')
-//   console.log('  GET  /api/stats - Database statistics')
-//   console.log('  GET  /api/trending - Trending topics')
-//   console.log('  POST /api/compare - Compare agentic vs legacy RAG')
+//   console.log('  GET  /health')
+//   console.log('  POST /api/search')
+//   console.log('  POST /api/ask')
+//   console.log('  GET  /api/stats')
+//   console.log('  GET  /api/trending')
+//   console.log('  POST /api/compare')
 // })
 
 module.exports = app

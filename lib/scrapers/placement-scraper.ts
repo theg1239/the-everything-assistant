@@ -1,268 +1,202 @@
-import puppeteer from 'puppeteer-core'
-import chromium from '@sparticuz/chromium'
+import fs from 'fs/promises';
+import path from 'path';
+import Papa from 'papaparse';
 
 interface Company {
-  name: string
-  placed: string
-  avgCTC: string
+  name: string;
+  placed: number;
+  avgCTC: string;
 }
 
 interface RecentOffer {
-  student: string
-  company: string
-  ctc: string
-  date: string
+  company: string;
+  ctc: string;
+  date: string;
 }
 
 interface PlacementData {
-  statistics: Record<string, string> // metrics across the banner
-  companies: Company[] // company-wise table
-  recentOffers: RecentOffer[] // latest individual offers
+  statistics: Record<string, string>;
+  companies: Company[];
+  recentOffers: RecentOffer[];
 }
 
 export interface PlacementResponse {
-  success: boolean
-  year?: string
-  data?: PlacementData
-  message?: string
-  lastUpdated?: string
-  error?: string
+  success: boolean;
+  year?: string;
+  data?: PlacementData;
+  message?: string;
+  lastUpdated?: string;
+  error?: string;
+}
+
+interface PlacementRecord {
+  'Reg_No': string;
+  'Branch': string;
+  'Company': string;
+  'CTC': string;
+  'Month'?: string;
+  'Campus'?: string;
+}
+
+function convertCtcToNumeric(ctc: string): number | null {
+  if (!ctc) return null;
+  try {
+    const numericString = ctc.replace(/LPA/i, '').trim();
+    const value = parseFloat(numericString);
+    return isNaN(value) ? null : value;
+  } catch {
+    return null;
+  }
+}
+
+async function readCsvFile(filePath: string): Promise<PlacementRecord[]> {
+  try {
+    const fileContent = await fs.readFile(filePath, 'utf-8');
+    const result = Papa.parse<PlacementRecord>(fileContent, {
+      header: true,
+      skipEmptyLines: true,
+    });
+    return result.data;
+  } catch (error) {
+    console.error(`Error reading or parsing CSV file at ${filePath}:`, error);
+    return [];
+  }
+}
+
+function preprocessAndFilterData(records: PlacementRecord[]): PlacementRecord[] {
+  const recordsWithNumericCtc = records.map(record => ({
+    ...record,
+    numericCTC: convertCtcToNumeric(record.CTC),
+  }));
+
+  const sorted = recordsWithNumericCtc.sort((a, b) => {
+    if (a.Reg_No !== b.Reg_No) {
+      return a.Reg_No.localeCompare(b.Reg_No);
+    }
+    if (b.numericCTC !== a.numericCTC) {
+      return (b.numericCTC ?? 0) - (a.numericCTC ?? 0);
+    }
+    return a.Company.localeCompare(b.Company);
+  });
+
+  const uniqueRecords = new Map<string, PlacementRecord>();
+  for (const record of sorted) {
+    if (!uniqueRecords.has(record.Reg_No)) {
+      uniqueRecords.set(record.Reg_No, record);
+    }
+  }
+
+  return Array.from(uniqueRecords.values());
 }
 
 export async function scrapePlacementInfo(
-  year?: string,
-  companyFilter?: string
+  year: string = '2024-2025',
+  companyFilter?: string,
+  combineWitch: boolean = false,
+  campus?: 'Vellore' | 'Chennai' | 'Amaravati' | 'Bhopal'
 ): Promise<PlacementResponse> {
   try {
-    return await withBrowser(async page => {
-      console.log('Navigating to placement tracker...')
-      try {
-        await page.goto('https://vit-placements-tracker.streamlit.app/', {
-          waitUntil: 'domcontentloaded',
-          timeout: 25_000,
-        })
-      } catch (navError: any) {
-        console.log('Navigation timeout, continuing anyway:', navError?.message)
+    const basePath = path.join(process.cwd(), 'public', 'placements');
+    const normalOffersPath = path.join(basePath, 'google_sheet_data.csv');
+    const witchOffersPath = path.join(basePath, 'WITCH-P.csv');
+
+    let normalOffers = await readCsvFile(normalOffersPath);
+    const witchOffers = await readCsvFile(witchOffersPath);
+
+    let allOffers: PlacementRecord[];
+
+    if (combineWitch) {
+      const filteredWitchOffers = preprocessAndFilterData(witchOffers);
+      allOffers = [...normalOffers, ...filteredWitchOffers];
+    } else {
+      allOffers = normalOffers;
+    }
+
+    let processedOffers = preprocessAndFilterData(allOffers);
+
+    if (companyFilter) {
+      const filter = companyFilter.toLowerCase();
+      processedOffers = processedOffers.filter(offer =>
+        offer.Company.toLowerCase().includes(filter)
+      );
+    }
+
+    if (campus) {
+      processedOffers = processedOffers.filter(
+        offer => offer.Campus?.toLowerCase() === campus.toLowerCase()
+      );
+    }
+
+    const totalOffers = processedOffers.length;
+    const offersWithCtc = processedOffers.filter(o => convertCtcToNumeric(o.CTC) !== null);
+    const ctcValues = offersWithCtc.map(o => convertCtcToNumeric(o.CTC)!);
+
+    const highestCTC = ctcValues.length > 0 ? Math.max(...ctcValues) : 0;
+    const lowestCTC = ctcValues.length > 0 ? Math.min(...ctcValues) : 0;
+    const averageCTC = ctcValues.length > 0 ? ctcValues.reduce((a, b) => a + b, 0) / ctcValues.length : 0;
+
+    const sortedCtc = [...ctcValues].sort((a, b) => a - b);
+    const medianCTC =
+      sortedCtc.length > 0
+        ? sortedCtc.length % 2 === 0
+          ? (sortedCtc[sortedCtc.length / 2 - 1] + sortedCtc[sortedCtc.length / 2]) / 2
+          : sortedCtc[Math.floor(sortedCtc.length / 2)]
+        : 0;
+
+    const companyStats = new Map<string, { count: number; ctcSum: number; ctcCount: number }>();
+    processedOffers.forEach(offer => {
+      const numericCTC = convertCtcToNumeric(offer.CTC);
+      const stats = companyStats.get(offer.Company) || { count: 0, ctcSum: 0, ctcCount: 0 };
+      stats.count++;
+      if (numericCTC !== null) {
+        stats.ctcSum += numericCTC;
+        stats.ctcCount++;
       }
-      console.log('Waiting for Streamlit to load...')
+      companyStats.set(offer.Company, stats);
+    });
 
-      try {
-        await page.waitForFunction(() => document.querySelector('[data-testid="stApp"]') !== null, {
-          timeout: 10000,
-        })
-      } catch (appError: any) {
-        console.log('App container timeout, continuing anyway')
-      }
+    const companies: Company[] = Array.from(companyStats.entries())
+      .map(([name, { count, ctcSum, ctcCount }]) => ({
+        name,
+        placed: count,
+        avgCTC: ctcCount > 0 ? (ctcSum / ctcCount).toFixed(2) + ' LPA' : 'N/A',
+      }))
+      .sort((a, b) => b.placed - a.placed);
 
-      // Use setTimeout wrapped in Promise instead of waitForTimeout
-      await new Promise(resolve => setTimeout(resolve, 2000))
+    const recentOffers: RecentOffer[] = processedOffers
+      .slice(0, 20)
+      .map(offer => ({
+        company: offer.Company,
+        ctc: offer.CTC,
+        date: offer.Month || 'N/A',
+      }));
 
-      if (process.env.NODE_ENV === 'development') {
-        await page.screenshot({ path: '/tmp/placement-debug-initial.png' })
-      }
-      let lastUpdated: string | null = null
-      try {
-        lastUpdated = await Promise.race([
-          page.evaluate(() => {
-            const el = [...document.querySelectorAll('p, div')].find(e =>
-              /Data Updated as on/i.test(e.textContent ?? '')
-            )
-            return el?.textContent?.replace(/^\s*|\s*$/g, '') ?? null
-          }),
-          new Promise<null>(resolve => setTimeout(() => resolve(null), 3000)),
-        ])
-      } catch (err) {
-        console.log('Failed to get last updated info')
-      }
-      console.log('Attempting dropdown selection...')
-      let selectionSuccess = false
+    const data: PlacementData = {
+      statistics: {
+        'Total Offers': totalOffers.toString(),
+        'Highest CTC': `${highestCTC.toFixed(2)} LPA`,
+        'Lowest CTC': `${lowestCTC.toFixed(2)} LPA`,
+        'Average CTC': `${averageCTC.toFixed(2)} LPA`,
+        'Median CTC': `${medianCTC.toFixed(2)} LPA`,
+        'Companies': companyStats.size.toString(),
+      },
+      companies: companies.slice(0, 50),
+      recentOffers,
+    };
 
-      try {
-        const dropdown = await page.$('[aria-label*="Select DataFrame"], [role="combobox"]')
-        if (dropdown) {
-          await dropdown.click()
-          await new Promise(resolve => setTimeout(resolve, 1000))
-
-          const options = await page.$$('[role="option"]')
-          if (options.length >= 2) {
-            await options[0].click()
-            await new Promise(resolve => setTimeout(resolve, 1000))
-
-            await dropdown.click()
-            await new Promise(resolve => setTimeout(resolve, 1000))
-
-            const refreshedOptions = await page.$$('[role="option"]')
-            if (refreshedOptions.length >= 2) {
-              await refreshedOptions[1].click()
-              selectionSuccess = true
-              console.log('Successfully selected dropdown options')
-            }
-          }
-        }
-      } catch (error) {
-        console.log('Dropdown selection failed, continuing anyway:', error)
-      }
-      console.log('Waiting for data to load...')
-
-      await new Promise(resolve => setTimeout(resolve, 2000))
-
-      try {
-        await Promise.race([
-          page.waitForSelector('[data-testid="stMetric"], [data-testid="stTable"]', {
-            timeout: 15000,
-          }),
-          new Promise(resolve => setTimeout(resolve, 15000)),
-        ])
-      } catch (err) {
-        console.log('Content wait timeout, proceeding anyway')
-      }
-      console.log('Scraping placement data...')
-      const scraped = await page.evaluate(() => {
-        const digits = (txt: string = '') => (txt.match(/[\d,.]+/)?.[0] ?? '0').replace(/,/g, '')
-
-        const metrics = [...document.querySelectorAll('[data-testid="stMetric"]')]
-        const banner: Record<string, string> = {
-          'total offers': metrics[0] ? digits(metrics[0].textContent || '') : '0',
-          'unique offers': metrics[1] ? digits(metrics[1].textContent || '') : '0',
-          'super-dream offers': metrics[2] ? digits(metrics[2].textContent || '') : '0',
-          'dream offers': metrics[3] ? digits(metrics[3].textContent || '') : '0',
-          'total companies': metrics[4] ? digits(metrics[4].textContent || '') : '0',
-        }
-
-        const txtEls = [...document.querySelectorAll('[data-testid="stText"]')]
-        banner['highest package'] =
-          txtEls
-            .find(e => /Highest Package/i.test(e.textContent ?? ''))
-            ?.textContent?.match(/[\d.]+\s*LPA/)?.[0] ?? 'N/A'
-        banner['average package'] =
-          txtEls
-            .find(e => /Average Package/i.test(e.textContent ?? ''))
-            ?.textContent?.match(/[\d.]+\s*LPA/)?.[0] ?? 'N/A'
-
-        const compTable = [...document.querySelectorAll('[data-testid="stTable"]')].find(t =>
-          /Company.*CTC/i.test(t.textContent ?? '')
-        )
-
-        const companies = compTable
-          ? [...compTable.querySelectorAll('tbody tr')]
-              .slice(0, 50)
-              .map(row => {
-                const cells = [...row.querySelectorAll('td, th')]
-                return {
-                  name: cells[0]?.textContent?.trim() ?? '',
-                  placed: cells[1]?.textContent?.trim() ?? '',
-                  avgCTC: cells[2]?.textContent?.trim() ?? '',
-                }
-              })
-              .filter(c => c.name)
-          : []
-
-        const offersTable = [...document.querySelectorAll('[data-testid="stTable"]')].find(t =>
-          /Student.*Offer/i.test(t.textContent ?? '')
-        )
-
-        const recentOffers = offersTable
-          ? [...offersTable.querySelectorAll('tbody tr')]
-              .slice(0, 20)
-              .map(row => {
-                const cells = [...row.querySelectorAll('td, th')]
-                return {
-                  student: cells[0]?.textContent?.trim() || 'Anonymous',
-                  company: cells[1]?.textContent?.trim() ?? '',
-                  ctc: cells[2]?.textContent?.trim() ?? '',
-                  date: cells[3]?.textContent?.trim() ?? '',
-                }
-              })
-              .filter(o => o.company)
-          : []
-
-        return { banner, companies, recentOffers }
-      })
-      if (companyFilter && scraped.companies.length > 0) {
-        const test = (s: string) => s.toLowerCase().includes(companyFilter.toLowerCase())
-        scraped.companies = scraped.companies.filter((c: Company) => test(c.name))
-        scraped.recentOffers = scraped.recentOffers.filter((o: RecentOffer) => test(o.company))
-      }
-
-      const data: PlacementData = {
-        statistics: scraped.banner,
-        companies: scraped.companies,
-        recentOffers: scraped.recentOffers,
-      }
-
-      const hasAnyData =
-        Object.values(scraped.banner).some(v => v !== '0' && v !== 'N/A') ||
-        scraped.companies.length > 0 ||
-        scraped.recentOffers.length > 0
-
-      return {
-        success: hasAnyData,
-        year: year ?? '2024-25',
-        data,
-        lastUpdated: lastUpdated ?? undefined,
-        message: hasAnyData
-          ? `Retrieved placement information${companyFilter ? ' (filtered)' : ''}`
-          : 'Partial data retrieved - some information may be unavailable',
-      } satisfies PlacementResponse
-    })
+    return {
+      success: true,
+      year,
+      data,
+      message: `Retrieved placement information for ${year}`,
+      lastUpdated: new Date().toISOString(),
+    };
   } catch (err: any) {
-    console.error('Placement scraper error:', err)
+    console.error('Placement scraper error:', err);
     return {
       success: false,
       error: err?.message ?? String(err),
       message: 'Unable to fetch placement information. Please try again later.',
-    }
-  }
-}
-
-async function withBrowser<T>(userFn: (page: any) => Promise<T>): Promise<T> {
-  let browser
-  try {
-    browser = await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
-    })
-
-    const page = await browser.newPage()
-    await page.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    )
-    await page.setDefaultTimeout(30000)
-
-    const result = await userFn(page)
-    return result
-  } catch (err) {
-    console.error('Browser error:', err)
-    throw err
-  } finally {
-    if (browser) {
-      await browser.close()
-    }
-  }
-}
-
-async function selectStreamlitOption(
-  page: any,
-  labelText: string,
-  optionText: string
-): Promise<boolean> {
-  try {
-    const labelHandle = await page.$x(`//label[contains(., "${labelText}")]`)
-    if (labelHandle.length) {
-      await labelHandle[0].click()
-      await page.waitForSelector('div[role="option"]', { timeout: 5_000 })
-      const opt = await page.$x(`//div[@role="option"][contains(., "${optionText}")]`)
-      if (opt.length) await opt[0].click()
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      return true
-    } else {
-      console.log(`Label with text "${labelText}" not found`)
-      return false
-    }
-  } catch (error) {
-    console.log(`Error in selectStreamlitOption: ${error}`)
-    return false
+    };
   }
 }

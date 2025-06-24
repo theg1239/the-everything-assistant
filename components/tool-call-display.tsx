@@ -282,7 +282,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         availableDateRange: result.availableDateRange,
         success: false,
       },
-      source: toolName || 'Mess Menu System',
+      source: 'Mess Menu',
     }
   }
 
@@ -320,13 +320,22 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     }
   }
 
-  if (result.placements && result.placements.length > 0) {
-    return {
-      type: 'placements' as const,
-      title: `${result.placements.length} Placement Records`,
-      icon: <TrendingUp className="h-5 w-5 text-green-400" />,
-      data: result.placements,
-      source: result.source || toolName || 'Placement Data',
+  if (toolName === 'getPlacementInfo') {
+    if (result.success) {
+      return {
+        type: 'placements' as const,
+        title: `Placement Overview ${result.year ? `(${result.year})` : ''}`,
+        icon: <TrendingUp className="h-5 w-5 text-green-500" />,
+        data: result,
+        source: 'VIT Placements',
+      }
+    } else {
+      return {
+        type: 'error' as const,
+        title: 'Placement Info Error',
+        icon: <AlertCircle className="h-5 w-5 text-red-500" />,
+        data: { error: result.message || 'Could not fetch placement data.' },
+      }
     }
   }
 

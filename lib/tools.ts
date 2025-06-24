@@ -930,18 +930,39 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       },
     }),
 
-    // getPlacementInfo: tool({
-    //   description:
-    //     'get latest placement statistics and company information from VIT Placements Tracker. Use this for any questions about placements, highest packages, company offers, salary stats, or recruitment. DO NOT use queryVTOP for these queries.',
-    //   parameters: z.object({
-    //     year: z.string().optional().describe('academic year like 2024-25, 2023-24'),
-    //     companyFilter: z
-    //       .string()
-    //       .optional()
-    //       .describe('filter results by company name (case-insensitive substring match)'),
-    //   }),
-    //   execute: async ({ year, companyFilter }) => scrapePlacementInfo(year, companyFilter),
-    // }),
+    getPlacementInfo: tool({
+      description:
+        'Get latest placement statistics and company information. Use this for any questions about placements, highest packages, company offers, salary stats, or recruitment.',
+      parameters: z.object({
+        year: z.string().optional().describe('Academic year, e.g., 2024-25'),
+        companyFilter: z
+          .string()
+          .optional()
+          .describe('Filter results by a specific company. Can be a partial name.'),
+        combineWitch: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe('Whether to include WITCH (e.g., TCS, Cognizant) offers in the results. Defaults to false.'),
+        campus: z.enum(['Vellore', 'Chennai', 'Amaravati', 'Bhopal']).optional().describe('Filter results by campus. Can be Vellore, Chennai or Amaravati.'),
+      }), 
+      execute: async ({ year, companyFilter, combineWitch, campus }) => {
+        const raw = await scrapePlacementInfo(year, companyFilter, combineWitch, campus)
+        try {
+          const { parsePlacementData } = await import('../app/api/chat/route')
+          const parsed = await parsePlacementData(raw, '', undefined)
+          return {
+            ...raw,
+            formatted_content: parsed.formatted_content,
+            summary: parsed.summary,
+            message: parsed.summary || parsed.formatted_content,
+          }
+        } catch (err) {
+          // fallback if parsing fails
+          return raw
+        }
+      },
+    }),
 
     getMessMenu: tool({
       description:

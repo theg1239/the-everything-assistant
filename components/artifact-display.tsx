@@ -31,6 +31,10 @@ import {
   Building,
   Info as InfoIcon,
   Shield,
+  DollarSign,
+  Target,
+  Star,
+  Briefcase,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
@@ -57,6 +61,7 @@ interface ArtifactDisplayProps {
     | 'reddit-overview'
     | 'error'
     | 'campus-info'
+    | 'getPlacementInfo'
   className?: string
   onLoginClick?: () => void
 }
@@ -975,51 +980,6 @@ const CompanyCard = ({ company }: { company: any }) => {
   )
 }
 
-const PlacementCard = ({ placement }: { placement: any }) => (
-  <Card className="w-full hover:shadow-sm transition-all duration-200 border-border bg-card">
-    <CardHeader className="pb-3">
-      <div className="space-y-2">
-        <CardTitle className="text-sm font-medium text-card-foreground">
-          {placement.company}
-        </CardTitle>
-        {placement.package && (
-          <Badge variant="outline" className="text-xs w-fit">
-            ₹{placement.package} LPA
-          </Badge>
-        )}
-      </div>
-    </CardHeader>
-    <CardContent className="pt-0">
-      <div className="space-y-2 text-xs text-muted-foreground">
-        {placement.role && (
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-3 w-3 shrink-0" />
-            <span>{placement.role}</span>
-          </div>
-        )}
-        {placement.branch && (
-          <div className="flex items-center gap-2">
-            <GraduationCap className="h-3 w-3 shrink-0" />
-            <span>{placement.branch}</span>
-          </div>
-        )}
-        {placement.year && (
-          <div className="flex items-center gap-2">
-            <Calendar className="h-3 w-3 shrink-0" />
-            <span>{placement.year}</span>
-          </div>
-        )}
-        {placement.campus && (
-          <div className="flex items-center gap-2">
-            <MapPin className="h-3 w-3 shrink-0" />
-            <span>{placement.campus}</span>
-          </div>
-        )}
-      </div>
-    </CardContent>
-  </Card>
-)
-
 const MessMenuCard = ({ menuData }: { menuData: any }) => {
   const {
     hostelType,
@@ -1867,6 +1827,102 @@ const CampusInfoCard = ({ info }: { info: any }) => {
   )
 }
 
+const PlacementInfoCard = ({ data: rawData }: { data: any }) => {
+  const placementData = rawData.data;
+
+  if (!placementData) {
+    return (
+      <div className="text-center py-10">
+        <p className="text-muted-foreground">No placement data found in the response.</p>
+      </div>
+    );
+  }
+
+  const { statistics: stats, companies, recentOffers: recent_offers } = placementData;
+
+  if (!stats && !companies && !recent_offers) {
+    return (
+      <div className="text-center py-10">
+        <p className="text-muted-foreground">No placement information available.</p>
+      </div>
+    );
+  }
+
+  const renderStat = (icon: React.ReactNode, label: string, value: string | number | undefined) => {
+    if (!value) return null;
+    return (
+      <div className="flex items-center gap-3 bg-muted/50 p-3 rounded-lg">
+        <div className="text-primary">{icon}</div>
+        <div>
+          <p className="text-sm text-muted-foreground">{label}</p>
+          <p className="font-bold text-lg">{value}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {stats && (
+        <div>
+          <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            <BarChart3 className="h-5 w-5" />
+            Placement Statistics
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {renderStat(<TrendingUp className="h-6 w-6" />, 'Total Offers', stats['Total Offers'])}
+            {renderStat(<DollarSign className="h-6 w-6" />, 'Highest CTC', stats['Highest CTC'])}
+            {renderStat(<Target className="h-6 w-6" />, 'Average CTC', stats['Average CTC'])}
+            {renderStat(<Users className="h-6 w-6" />, 'Companies Visited', stats['Companies'])}
+            {renderStat(<Star className="h-6 w-6" />, 'Median CTC', stats['Median CTC'])}
+            {renderStat(<CheckCircle className="h-6 w-6" />, 'Lowest CTC', stats['Lowest CTC'])}
+          </div>
+        </div>
+      )}
+
+      {companies && companies.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            <Building2 className="h-5 w-5" />
+            Top Companies
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {companies.slice(0, 15).map((company: any, index: number) => (
+              <Badge key={index} variant="secondary" className="text-sm py-1 px-3">
+                {company.name || company}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {recent_offers && recent_offers.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            <Briefcase className="h-5 w-5" />
+            Recent Offers
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {recent_offers.slice(0, 6).map((offer: any, index: number) => (
+              <Card key={index} className="p-3">
+                <div className="flex justify-between items-start gap-2">
+                  <div>
+                    <p className="font-semibold text-sm">{offer.company}</p>
+                    <p className="text-xs text-muted-foreground">{offer.date}</p>
+                  </div>
+                  <Badge variant="outline" className="text-xs whitespace-nowrap text-right">
+                    {offer.ctc}
+                  </Badge>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const PureArtifactDisplay = ({
   title,
   icon,
@@ -1934,6 +1990,10 @@ const PureArtifactDisplay = ({
   }, [pdfUrl])
 
   const renderContent = () => {
+    if (type === 'placements' && data && !Array.isArray(data)) {
+      return <PlacementInfoCard data={data} />;
+    }
+
     // eslint-disable-next-line no-console
     //console.log('ArtifactDisplay rendered', { type, data });
     // eslint-disable-next-line no-console
@@ -2015,8 +2075,6 @@ const PureArtifactDisplay = ({
                 return <FacultyCard key={index} faculty={item} />
               case 'companies':
                 return <CompanyCard key={index} company={item} />
-              case 'placements':
-                return <PlacementCard key={index} placement={item} />
               case 'mess-menu':
                 return <MessMenuCard key={index} menuData={item} />
               case 'vtop-data':
@@ -2029,6 +2087,8 @@ const PureArtifactDisplay = ({
                 return <ErrorCard key={index} errorData={item} />
             case 'campus-info':
                 return <CampusInfoCard key={index} info={item} />
+            case 'placements':
+                return <PlacementInfoCard key={index} data={item} />
               default:
                 return (
                   <Card key={index} className="hover:shadow-md transition-shadow">

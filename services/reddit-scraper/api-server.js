@@ -3,12 +3,27 @@ const cors = require('cors')
 const RAGService = require('./knowledge-base/rag-service')
 const AgenticRAGService = require('./knowledge-base/agentic-rag-service')
 const KnowledgeBase = require('./knowledge-base/knowledge-base')
-const logger = require('./utils/logger')
 
 const app = express()
 
 app.use(cors())
 app.use(express.json())
+
+// Log every incoming request and its payload
+app.use((req, res, next) => {
+  console.log(`[Request] ${req.method} ${req.url} - Body: ${JSON.stringify(req.body)}`)
+  next()
+})
+
+// Intercept res.json to log every response payload
+app.use((req, res, next) => {
+  const oldJson = res.json
+  res.json = function (data) {
+    console.log(`[Response] ${req.method} ${req.url} - Response: ${JSON.stringify(data)}`)
+    return oldJson.call(this, data)
+  }
+  next()
+})
 
 const ragService = new AgenticRAGService()
 const legacyRagService = new RAGService()
@@ -28,7 +43,7 @@ app.post('/api/search', async (req, res) => {
       })
     }
 
-    logger.info(`Search request: "${query}"`)
+    console.log(`Search request: "${query}"`)
     const searchResults = await knowledgeBase.search(query, limit)
 
     res.json({
@@ -49,7 +64,7 @@ app.post('/api/search', async (req, res) => {
       query,
     })
   } catch (error) {
-    logger.error('Search API error:', error)
+    console.error('Search API error:', error)
     res.status(500).json({
       success: false,
       error: 'Internal server error during search',
@@ -68,7 +83,7 @@ app.post('/api/ask', async (req, res) => {
       })
     }
 
-    logger.info(`RAG request: "${query}" (agentic: ${useAgentic})`)
+    console.log(`RAG request: "${query}" (agentic: ${useAgentic})`)
 
     const activeRagService = useAgentic ? ragService : legacyRagService
     const response = await activeRagService.generateResponse(query, conversationHistory)
@@ -86,7 +101,7 @@ app.post('/api/ask', async (req, res) => {
       query: query,
     })
   } catch (error) {
-    logger.error('RAG API error:', error)
+    console.error('RAG API error:', error)
     res.status(500).json({
       success: false,
       error: 'Internal server error during response generation',
@@ -119,7 +134,7 @@ app.get('/api/stats', async (req, res) => {
       },
     })
   } catch (error) {
-    logger.error('Stats API error:', error)
+    console.error('Stats API error:', error)
     res.status(500).json({
       success: false,
       error: 'Internal server error while fetching stats',
@@ -139,7 +154,7 @@ app.get('/api/trending', async (req, res) => {
 
     res.json({ success: true, trending: trending.rows })
   } catch (error) {
-    logger.error('Trending API error:', error)
+    console.error('Trending API error:', error)
     res.status(500).json({
       success: false,
       error: 'Internal server error while fetching trending topics',
@@ -158,7 +173,7 @@ app.post('/api/compare', async (req, res) => {
       })
     }
 
-    logger.info(`Comparison request: "${query}"`)
+    console.log(`Comparison request: "${query}"`)
 
     const [agenticResponse, legacyResponse] = await Promise.allSettled([
       ragService.generateResponse(query, conversationHistory),
@@ -180,7 +195,7 @@ app.post('/api/compare', async (req, res) => {
       query: query,
     })
   } catch (error) {
-    logger.error('Comparison API error:', error)
+    console.error('Comparison API error:', error)
     res.status(500).json({
       success: false,
       error: 'Internal server error during comparison',
@@ -190,7 +205,7 @@ app.post('/api/compare', async (req, res) => {
 })
 
 app.use((err, req, res, next) => {
-  logger.error('Unhandled error in RAG API:', err)
+  console.error('Unhandled error in RAG API:', err)
   res.status(500).json({
     success: false,
     error: 'Internal server error',
@@ -198,14 +213,14 @@ app.use((err, req, res, next) => {
 })
 
 // app.listen(port, () => {
-//   logger.info(`Knowledge API server running on port ${port}`)
-//   logger.info('Available endpoints:')
-//   logger.info('  GET  /health - Health check')
-//   logger.info('  POST /api/search - Search knowledge base')
-//   logger.info('  POST /api/ask - RAG-powered Q&A')
-//   logger.info('  GET  /api/stats - Database statistics')
-//   logger.info('  GET  /api/trending - Trending topics')
-//   logger.info('  POST /api/compare - Compare agentic vs legacy RAG')
+//   console.log(`Knowledge API server running on port ${port}`)
+//   console.log('Available endpoints:')
+//   console.log('  GET  /health - Health check')
+//   console.log('  POST /api/search - Search knowledge base')
+//   console.log('  POST /api/ask - RAG-powered Q&A')
+//   console.log('  GET  /api/stats - Database statistics')
+//   console.log('  GET  /api/trending - Trending topics')
+//   console.log('  POST /api/compare - Compare agentic vs legacy RAG')
 // })
 
 module.exports = app

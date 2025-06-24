@@ -1782,7 +1782,7 @@ const CampusInfoCard = ({ info }: { info: any }) => {
                 </div>
               </div>
             )}
-            
+
             {info.location && (
               <div className="bg-muted/30 p-4 rounded-lg">
                 <div className="flex items-start gap-3">
@@ -1797,7 +1797,7 @@ const CampusInfoCard = ({ info }: { info: any }) => {
               </div>
             )}
           </div>
-          
+
           {info.note && (
             <div className="bg-blue-50/50 dark:bg-blue-950/20 p-4 rounded-lg border border-blue-100 dark:border-blue-900/50">
               <div className="flex items-start gap-3">
@@ -1805,13 +1805,15 @@ const CampusInfoCard = ({ info }: { info: any }) => {
                   <Info className="h-5 w-5" />
                 </div>
                 <div>
-                  <h4 className="font-medium text-sm text-blue-600 dark:text-blue-400 mb-1">Note</h4>
+                  <h4 className="font-medium text-sm text-blue-600 dark:text-blue-400 mb-1">
+                    Note
+                  </h4>
                   <p className="text-foreground">{info.note}</p>
                 </div>
               </div>
             </div>
           )}
-          
+
           {info.mapsUrl && (
             <div className="pt-2">
               <a
@@ -1832,29 +1834,29 @@ const CampusInfoCard = ({ info }: { info: any }) => {
 }
 
 const PlacementInfoCard = ({ data: rawData }: { data: any }) => {
-  const [showDetails, setShowDetails] = useState(false);
-  const { data: placementData, campus, formatted_content } = rawData;
+  const [showDetails, setShowDetails] = useState(false)
+  const { data: placementData, campus, formatted_content } = rawData
 
   if (!placementData) {
     return (
       <div className="text-center py-10">
         <p className="text-muted-foreground">No placement data found in the response.</p>
       </div>
-    );
+    )
   }
 
-  const { statistics: stats, companies, recentOffers: recent_offers } = placementData;
+  const { statistics: stats, companies, recentOffers: recent_offers } = placementData
 
   if (!stats && !companies && !recent_offers && !formatted_content) {
     return (
       <div className="text-center py-10">
         <p className="text-muted-foreground">No placement information available.</p>
       </div>
-    );
+    )
   }
 
   const renderStat = (icon: React.ReactNode, label: string, value: string | number | undefined) => {
-    if (!value) return null;
+    if (!value) return null
     return (
       <div className="flex items-center gap-3 bg-muted/50 p-3 rounded-lg">
         <div className="text-primary">{icon}</div>
@@ -1863,17 +1865,20 @@ const PlacementInfoCard = ({ data: rawData }: { data: any }) => {
           <p className="font-bold text-lg">{value}</p>
         </div>
       </div>
-    );
+    )
   }
 
-  const hasCampusData = campus && stats && stats['Total Offers'] !== '0' && 
-    rawData.data?.source?.includes('campus');
-  const academicYear = `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`;
+  const hasCampusData =
+    campus && stats && stats['Total Offers'] !== '0' && rawData.data?.source?.includes('campus')
+  const academicYear = `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`
 
   return (
     <div className="space-y-6">
       {formatted_content && (
-        <div className="prose max-w-none dark:prose-invert bg-card rounded-lg p-6 border border-border" dangerouslySetInnerHTML={{ __html: formatted_content }} />
+        <div
+          className="prose max-w-none dark:prose-invert bg-card rounded-lg p-6 border border-border"
+          dangerouslySetInnerHTML={{ __html: formatted_content }}
+        />
       )}
 
       <div className="flex justify-center">
@@ -1893,7 +1898,7 @@ const PlacementInfoCard = ({ data: rawData }: { data: any }) => {
                     <h2 className="text-2xl font-bold text-foreground">{campus} Campus</h2>
                   </div>
                   <p className="text-muted-foreground">
-                    {hasCampusData 
+                    {hasCampusData
                       ? `Campus-specific placement statistics for ${academicYear} Academic Year`
                       : `Placement statistics for ${academicYear} Academic Year`}
                   </p>
@@ -1901,38 +1906,50 @@ const PlacementInfoCard = ({ data: rawData }: { data: any }) => {
                 <div className="flex flex-wrap gap-2">
                   <div className="bg-white dark:bg-blue-900/30 px-3 py-1.5 rounded-lg flex items-center gap-2 border border-blue-100 dark:border-blue-800/50">
                     <Briefcase className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                    <span className="text-sm font-medium">{stats?.['Companies'] || 'N/A'} Companies</span>
+                    <span className="text-sm font-medium">
+                      {stats?.['Companies'] || 'N/A'} Companies
+                    </span>
                   </div>
                   <div className="bg-white dark:bg-blue-900/30 px-3 py-1.5 rounded-lg flex items-center gap-2 border border-blue-100 dark:border-blue-800/50">
                     <Award className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                    <span className="text-sm font-medium">{stats?.['Total Offers'] || 'N/A'} Offers</span>
+                    <span className="text-sm font-medium">
+                      {stats?.['Total Offers'] || 'N/A'} Offers
+                    </span>
                   </div>
                 </div>
               </div>
-              
+
               {hasCampusData && (
                 <div className="mt-4 pt-4 border-t border-blue-100 dark:border-blue-800/30">
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="text-center">
                       <p className="text-xs text-muted-foreground">Highest CTC</p>
-                      <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{stats['Highest CTC']}</p>
+                      <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                        {stats['Highest CTC']}
+                      </p>
                     </div>
                     <div className="text-center">
                       <p className="text-xs text-muted-foreground">Average CTC</p>
-                      <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{stats['Average CTC']}</p>
+                      <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                        {stats['Average CTC']}
+                      </p>
                     </div>
                     <div className="text-center">
                       <p className="text-xs text-muted-foreground">Median CTC</p>
-                      <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{stats['Median CTC']}</p>
+                      <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                        {stats['Median CTC']}
+                      </p>
                     </div>
                     <div className="text-center">
                       <p className="text-xs text-muted-foreground">Lowest CTC</p>
-                      <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{stats['Lowest CTC']}</p>
+                      <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                        {stats['Lowest CTC']}
+                      </p>
                     </div>
                   </div>
                 </div>
               )}
-              
+
               {campus && !hasCampusData && (
                 <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-100 dark:border-amber-800/50">
                   <div className="flex items-start gap-3">
@@ -1942,7 +1959,8 @@ const PlacementInfoCard = ({ data: rawData }: { data: any }) => {
                         Note: Campus-Specific Data Limited
                       </p>
                       <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
-                        The statistics shown include data from all VIT campuses. Specific data for {campus} campus is limited or not available.
+                        The statistics shown include data from all VIT campuses. Specific data for{' '}
+                        {campus} campus is limited or not available.
                       </p>
                     </div>
                   </div>
@@ -1958,8 +1976,16 @@ const PlacementInfoCard = ({ data: rawData }: { data: any }) => {
                 {hasCampusData ? 'Campus Placement Statistics' : 'Combined Placement Statistics'}
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {renderStat(<TrendingUp className="h-6 w-6" />, 'Total Offers', stats['Total Offers'])}
-                {renderStat(<DollarSign className="h-6 w-6" />, 'Highest CTC', stats['Highest CTC'])}
+                {renderStat(
+                  <TrendingUp className="h-6 w-6" />,
+                  'Total Offers',
+                  stats['Total Offers']
+                )}
+                {renderStat(
+                  <DollarSign className="h-6 w-6" />,
+                  'Highest CTC',
+                  stats['Highest CTC']
+                )}
                 {renderStat(<Target className="h-6 w-6" />, 'Average CTC', stats['Average CTC'])}
                 {renderStat(<Users className="h-6 w-6" />, 'Companies Visited', stats['Companies'])}
                 {renderStat(<Star className="h-6 w-6" />, 'Median CTC', stats['Median CTC'])}
@@ -2010,8 +2036,8 @@ const PlacementInfoCard = ({ data: rawData }: { data: any }) => {
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
 const PureArtifactDisplay = ({
   title,
@@ -2097,7 +2123,7 @@ const PureArtifactDisplay = ({
 
   const renderContent = () => {
     if (type === 'placements' && data && !Array.isArray(data)) {
-      return <PlacementInfoCard data={data} />;
+      return <PlacementInfoCard data={data} />
     }
 
     // eslint-disable-next-line no-console
@@ -2191,9 +2217,9 @@ const PureArtifactDisplay = ({
                 return <RedditOverviewCard key={index} data={item} />
               case 'error':
                 return <ErrorCard key={index} errorData={item} />
-            case 'campus-info':
+              case 'campus-info':
                 return <CampusInfoCard key={index} info={item} />
-            case 'placements':
+              case 'placements':
                 return <PlacementInfoCard key={index} data={item} />
               default:
                 return (

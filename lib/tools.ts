@@ -943,22 +943,23 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           .boolean()
           .optional()
           .default(false)
-          .describe('Whether to include WITCH (e.g., TCS, Cognizant) offers in the results. Defaults to false.'),
-        campus: z.enum(['Vellore', 'Chennai', 'Amaravati', 'Bhopal']).optional().describe('Filter results by campus. Can be Vellore, Chennai or Amaravati.'),
-      }), 
+          .describe(
+            'Whether to include WITCH (e.g., TCS, Cognizant) offers in the results. Defaults to false.'
+          ),
+        campus: z
+          .enum(['Vellore', 'Chennai', 'Amaravati', 'Bhopal'])
+          .optional()
+          .describe('Filter results by campus. Can be Vellore, Chennai or Amaravati.'),
+      }),
       execute: async ({ year, companyFilter, combineWitch, campus }) => {
         const raw = await scrapePlacementInfo(year, companyFilter, combineWitch, campus)
         try {
           const { parsePlacementData } = await import('../lib/scrapers/placement-scraper')
-                    interface ParsedPlacementData {
-            formatted_content: string;
-            summary: string;
+          interface ParsedPlacementData {
+            formatted_content: string
+            summary: string
           }
-          const parsed = (await parsePlacementData(
-            raw,
-            '',
-            undefined
-          )) as ParsedPlacementData
+          const parsed = (await parsePlacementData(raw, '', undefined)) as ParsedPlacementData
           return {
             ...raw,
             campus, // Include the campus in the response
@@ -970,7 +971,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           // fallback if parsing fails
           return {
             ...raw,
-            campus // Include the campus in the fallback response
+            campus, // Include the campus in the fallback response
           }
         }
       },

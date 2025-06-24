@@ -25,12 +25,7 @@ export class TokenBucket {
   private redis: Redis
   private key: string
 
-  constructor(
-    capacity: number,
-    refillRate: number,
-    redisClient: Redis,
-    keyPrefix: string
-  ) {
+  constructor(capacity: number, refillRate: number, redisClient: Redis, keyPrefix: string) {
     this.capacity = capacity
     this.tokens = capacity
     this.refillRate = refillRate
@@ -168,10 +163,7 @@ export class ApiKeyManager {
 
   private async saveCurrentKeyIndex(): Promise<void> {
     try {
-      await this.redis.set(
-        'api_key_manager:current_index',
-        this.currentKeyIndex.toString()
-      )
+      await this.redis.set('api_key_manager:current_index', this.currentKeyIndex.toString())
     } catch (err) {
       console.warn('Failed to save current key index to Redis:', err)
     }
@@ -199,11 +191,7 @@ export class ApiKeyManager {
     const h = this.keyBuckets.get(`${keyHash}:hour`)
     const d = this.keyBuckets.get(`${keyHash}:day`)
     if (!m || !h || !d) return false
-    const [ok1, ok2, ok3] = await Promise.all([
-      m.consume(1),
-      h.consume(1),
-      d.consume(1),
-    ])
+    const [ok1, ok2, ok3] = await Promise.all([m.consume(1), h.consume(1), d.consume(1)])
     return ok1 && ok2 && ok3
   }
 
@@ -267,10 +255,7 @@ export class ApiKeyManager {
       this.lastHealthCheck = now
     }
     const current = this.config.keys[this.currentKeyIndex]
-    if (
-      (await this.isKeyRateLimited(this.hashKey(current))) &&
-      this.config.rotateOnRateLimit
-    ) {
+    if ((await this.isKeyRateLimited(this.hashKey(current))) && this.config.rotateOnRateLimit) {
       const next = await this.findNextAvailableKey()
       if (next) {
         this.currentKeyIndex = next.index
@@ -328,9 +313,7 @@ export class ApiKeyManager {
             if (nxt) {
               this.currentKeyIndex = nxt.index
               await this.saveCurrentKeyIndex()
-              console.log(
-                `Rotated to API key index ${nxt.index} due to API rate limit`
-              )
+              console.log(`Rotated to API key index ${nxt.index} due to API rate limit`)
               backoff = 1000
               attempt++
               continue
@@ -340,7 +323,7 @@ export class ApiKeyManager {
         if (!retryOnRateLimit || !isRateErr) throw err
         if (attempt >= maxRetries) break
         console.log(`Attempt ${attempt + 1} failed, retrying in ${backoff}ms...`)
-        await new Promise((r) => setTimeout(r, backoff))
+        await new Promise(r => setTimeout(r, backoff))
         backoff = Math.min(
           backoff * this.config.retryConfig.backoffMultiplier,
           this.config.retryConfig.maxBackoffMs
@@ -373,7 +356,7 @@ export class ApiKeyManager {
           this.keyBuckets.get(`${keyHash}:hour`),
           this.keyBuckets.get(`${keyHash}:day`),
         ]
-        await Promise.all(buckets.map((b) => b?.reset()))
+        await Promise.all(buckets.map(b => b?.reset()))
       }
     }
   }

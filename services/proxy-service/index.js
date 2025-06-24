@@ -74,10 +74,7 @@ function getCliExecutablePath() {
     return process.env.BINARY_PATH
   }
 
-  const possibleNames =
-    process.platform === 'win32'
-      ? ['binary.exe']
-      : ['binary']
+  const possibleNames = process.platform === 'win32' ? ['binary.exe'] : ['binary']
 
   for (const name of possibleNames) {
     const fullPath = path.resolve(__dirname, `./${name}`)

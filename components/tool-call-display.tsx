@@ -511,10 +511,8 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
   if (toolName === 'getCampusInfo') {
     if (result.success && result.name) {
       // Combine the name and description for a more informative display
-      const description = result.description 
-        ? `${result.name}: ${result.description}`
-        : result.name;
-        
+      const description = result.description ? `${result.name}: ${result.description}` : result.name
+
       return {
         type: 'campus-info' as const,
         title: 'Campus Info',
@@ -598,13 +596,13 @@ const ToolCallResultsSummary = ({
   maximizedItem?: any
   setMaximizedItem?: (item: any) => void
 }) => {
-  const [companySearch, setCompanySearch] = React.useState('');
+  const [companySearch, setCompanySearch] = React.useState('')
 
   const handleSearch = () => {
     if (onPlacementSearch && companySearch.trim()) {
-      onPlacementSearch(companySearch.trim());
+      onPlacementSearch(companySearch.trim())
     }
-  };
+  }
   const completedTools = toolCalls.filter(tool => tool.result)
   const isMobile = useMediaQuery('(max-width: 640px)')
 
@@ -869,8 +867,10 @@ const ToolCallResultsSummary = ({
                   type="search"
                   placeholder="Search by company name..."
                   value={companySearch}
-                  onChange={(e) => setCompanySearch(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
+                  onChange={e => setCompanySearch(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') handleSearch()
+                  }}
                   className="h-9"
                 />
                 <Button onClick={handleSearch} size="sm">
@@ -979,7 +979,13 @@ const PureToolCallDisplay = ({
 
   if (enrichedToolCalls.length === 0) return null
 
-  return <ToolCallResultsSummary toolCalls={enrichedToolCalls} onLoginClick={onLoginClick} onPlacementSearch={onPlacementSearch} />
+  return (
+    <ToolCallResultsSummary
+      toolCalls={enrichedToolCalls}
+      onLoginClick={onLoginClick}
+      onPlacementSearch={onPlacementSearch}
+    />
+  )
 }
 
 export const ToolCallDisplay = memo(PureToolCallDisplay)

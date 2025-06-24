@@ -5,7 +5,7 @@ import { useChat } from 'ai/react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { VirtualizedMessages } from '@/components/virtualized-messages'
-import { AnimatePresence, motion } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { FileText, Plus } from 'lucide-react'
 import { HamburgerButton } from '@/components/hamburger-button'
 import { Button } from '@/components/ui/button'
@@ -26,7 +26,7 @@ import { useOnboarding } from '@/hooks/use-onboarding'
 import { toast } from 'sonner'
 import ScrollToTopButton from '@/components/scroll-to-top-button'
 import { cn } from '@/lib/utils'
-import { useDebounce, useThrottle } from '@/hooks/use-debounce'
+import { useThrottle } from '@/hooks/use-debounce'
 import { useAutoResume } from '@/hooks/use-auto-resume'
 
 const useViewportHeight = () => {
@@ -493,7 +493,7 @@ const PureChatInterface = ({
     setCanvasOpen(true)
   }
 
-    const handleLoginClick = () => {
+  const handleLoginClick = () => {
     const triggerEvent = new CustomEvent('vtopLoginTrigger', {
       detail: { command: 'attendance' },
     })
@@ -504,8 +504,8 @@ const PureChatInterface = ({
     append({
       role: 'user',
       content: `Get placement information for ${company}`,
-    });
-  };
+    })
+  }
 
   const handleVTOPCredentials = async (
     credentials: { username: string; encryptedPassword: string },

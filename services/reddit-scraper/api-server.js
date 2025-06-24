@@ -113,7 +113,9 @@ app.post('/api/ask', async (req, res) => {
 app.get('/api/stats', async (req, res) => {
   try {
     const postCountResult = await knowledgeBase.pool.query('SELECT COUNT(*) FROM reddit_posts')
-    const commentCountResult = await knowledgeBase.pool.query('SELECT COUNT(*) FROM reddit_comments')
+    const commentCountResult = await knowledgeBase.pool.query(
+      'SELECT COUNT(*) FROM reddit_comments'
+    )
     const embeddingCountResult = await knowledgeBase.pool.query(
       'SELECT COUNT(*) FROM reddit_posts WHERE embedding IS NOT NULL'
     )

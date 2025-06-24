@@ -337,7 +337,7 @@ export async function POST(req: Request) {
             try {
               const command = (
                 'command' in result ? result.command : directToolCall.args?.command
-              ) as string;
+              ) as string
 
               const userContext =
                 messages && messages.length > 0
@@ -346,19 +346,19 @@ export async function POST(req: Request) {
                       .slice(-3)
                       .map((m: any) => m.content)
                       .join(' | ')
-                  : '';
-              const parsedData = await parseVTOPData(result, command, userContext, session.user.id);
+                  : ''
+              const parsedData = await parseVTOPData(result, command, userContext, session.user.id)
 
               Object.assign(result, {
                 parsedData,
                 formatted_content: (parsedData as any).formatted_content,
                 structured_data: (parsedData as any).structured_data,
                 summary: (parsedData as any).summary,
-              });
+              })
               const assistantResponse =
                 (result as any).formatted_content ||
                 (result as any).summary ||
-                `Successfully retrieved your ${command} data from VTOP.`;
+                `Successfully retrieved your ${command} data from VTOP.`
 
               const toolInvocation = {
                 toolCallId: directToolCall.toolCallId || Date.now().toString(),
@@ -366,7 +366,7 @@ export async function POST(req: Request) {
                 args: directToolCall.args,
                 result: result,
                 state: 'result',
-              };
+              }
 
               await saveMessage(
                 chat.id,
@@ -374,18 +374,18 @@ export async function POST(req: Request) {
                 assistantResponse,
                 [toolInvocation],
                 Date.now().toString()
-              );
+              )
             } catch (parseError) {
-              console.error('Failed to parse VTOP data:', parseError);
+              console.error('Failed to parse VTOP data:', parseError)
             }
             return new Response(JSON.stringify({ success: true, result }), {
               headers: { 'Content-Type': 'application/json' },
-            });
+            })
           }
 
           return new Response(JSON.stringify({ success: true, result }), {
             headers: { 'Content-Type': 'application/json' },
-          });
+          })
         } catch (error: any) {
           return new Response(
             JSON.stringify({

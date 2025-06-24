@@ -1,6 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
 import Papa from 'papaparse';
+import { rateLimitedGoogle } from '@/lib/rate-limited-ai'
+import { z } from 'zod';
 
 interface Company {
   name: string;
@@ -232,6 +234,70 @@ export async function scrapePlacementInfo(
       success: false,
       error: err?.message ?? String(err),
       message: 'Unable to fetch placement information. Please try again later.',
+    };
+  }
+}
+
+export async function parsePlacementData(
+  rawData: any,
+  userContext: string = '',
+  userId?: string
+) {
+  try {
+    const placementParseSchema = z.object({
+      success: z.boolean(),
+      formatted_content: z.string(),
+      summary: z.string(),
+    });
+
+    const result = await rateLimitedGoogle.generateObject({
+      model: await rateLimitedGoogle.model('gemini-2.5-flash-lite-preview-06-17'),
+      schema: placementParseSchema,
+      prompt: `You are a helpful assistant that summarizes university placement data into a clear and friendly natural language format.
+
+USER'S ORIGINAL REQUEST: ${userContext}
+Raw Placement Data: ${JSON.stringify(rawData.data)}
+
+Please parse this data and generate a response that:
+1.  Starts with a brief, engaging summary of the overall placement season for the specified year (${rawData.year}).
+2.  Clearly states the key statistics:
+    - Total Offers
+    - Highest, Lowest, Average, and Median CTC (Cost to Company)
+    - Number of companies that visited.
+3.  Lists the top 5-7 recruiting companies with the number of students they hired and their average CTC.
+4.  Mentions a few (3-5) of the most recent placements to give a sense of current activity.
+5.  Is formatted using simple HTML (like <strong>, <ul>, <li>, <p>) for readability. DO NOT use markdown like ** or *.
+6.  Maintains a positive and informative tone, like a university career advisor.
+7.  If a specific company was filtered, tailor the response to focus on that company's data.
+
+Example Output Structure:
+<p>Here's a snapshot of the ${rawData.year} placement season so far!</p>
+<p><strong>Key Statistics:</strong></p>
+<ul>
+  <li><strong>Total Offers:</strong> ${rawData.data.statistics['Total Offers']}</li>
+  <li><strong>Highest Salary:</strong> ${rawData.data.statistics['Highest CTC']}</li>
+</ul>
+<p><strong>Top Companies by Offers:</strong></p>
+<ul>
+  <li>TCS Digital: 349 students (Avg. 7.00 LPA)</li>
+</ul>
+<p><strong>Recent Placements:</strong></p>
+<ul>
+  <li>An offer was made by Capgemini for 7.5 LPA.</li>
+</ul>
+
+Tailor the summary to be a direct answer to the user's original request. The final output should be a single block of HTML content for the 'formatted_content' field.
+`,
+    }, userId);
+
+    return result.object;
+  } catch (error) {
+    console.error('Error parsing Placement data with AI SDK:', error);
+    return {
+      success: false,
+      error: 'Failed to parse Placement data',
+      formatted_content: 'Unable to parse the placement data at this time.',
+      summary: 'Parsing failed',
     };
   }
 }

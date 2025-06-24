@@ -223,6 +223,16 @@ function getStaticFollowUpSuggestions(assistantMessage: string): string[] {
     return ['check my library dues', 'show library timings', 'how to renew books?']
   }
 
+  if (message.includes('placement') || message.includes('internship') || message.includes('company')) {
+    return [
+      'show placement statistics',
+      'list top recruiting companies',
+      'show recent placement offers',
+      'compare placement statistics by campus',
+      'show highest package offers'
+    ]
+  }
+
   return [
     'show my vtop attendance',
     'when is course registration?',

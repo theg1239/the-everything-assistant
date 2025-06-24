@@ -949,7 +949,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       execute: async ({ year, companyFilter, combineWitch, campus }) => {
         const raw = await scrapePlacementInfo(year, companyFilter, combineWitch, campus)
         try {
-          const { parsePlacementData } = await import('../app/api/chat/route')
+          const { parsePlacementData } = await import('../lib/scrapers/placement-scraper')
                     interface ParsedPlacementData {
             formatted_content: string;
             summary: string;

@@ -70,14 +70,14 @@ function sanitizeErrorForResponse(error, command) {
 }
 
 function getCliExecutablePath() {
-  if (process.env.CLI_TOP_PATH) {
-    return process.env.CLI_TOP_PATH
+  if (process.env.BINARY_PATH) {
+    return process.env.BINARY_PATH
   }
 
   const possibleNames =
     process.platform === 'win32'
-      ? ['cli-top.exe', 'cli-top-windows-amd64.exe', 'main.exe']
-      : ['cli-top', 'cli-top-linux-amd64', 'main']
+      ? ['binary.exe']
+      : ['binary']
 
   for (const name of possibleNames) {
     const fullPath = path.resolve(__dirname, `./${name}`)
@@ -86,11 +86,11 @@ function getCliExecutablePath() {
     }
   }
 
-  const baseName = process.platform === 'win32' ? 'cli-top.exe' : 'cli-top'
+  const baseName = process.platform === 'win32' ? 'binary.exe' : 'binary'
   return path.resolve(__dirname, `./${baseName}`)
 }
 
-const CLI_TOP_PATH = getCliExecutablePath()
+const BINARY_PATH = getCliExecutablePath()
 const CLI_TIMEOUT = parseInt(process.env.CLI_TIMEOUT) || 120000
 
 const COMMAND_MAPPING = {
@@ -138,9 +138,9 @@ async function executeVTOPCommand(username, password, command, flags) {
       console.log(`Executing VTOP command: ${command} for user: ${username}`)
     }
 
-    if (!fs.existsSync(CLI_TOP_PATH)) {
+    if (!fs.existsSync(BINARY_PATH)) {
       return reject({
-        error: `CLI executable not found at path: ${CLI_TOP_PATH}`,
+        error: `CLI executable not found at path: ${BINARY_PATH}`,
         command: command,
         args: ['proxy', username, '***', command],
       })
@@ -148,7 +148,7 @@ async function executeVTOPCommand(username, password, command, flags) {
 
     if (process.platform !== 'win32') {
       try {
-        fs.chmodSync(CLI_TOP_PATH, '755')
+        fs.chmodSync(BINARY_PATH, '755')
       } catch (chmodErr) {
         console.warn('Could not set executable permissions:', chmodErr.message)
       }
@@ -183,15 +183,14 @@ async function executeVTOPCommand(username, password, command, flags) {
 
     if (process.env.NODE_ENV !== 'production') {
       console.log(
-        `Executing: ${CLI_TOP_PATH} ${['proxy', username, '***', command, ...cliArgs.slice(4)].join(' ')}`
+        `Executing: ${BINARY_PATH} ${['proxy', username, '***', command, ...cliArgs.slice(4)].join(' ')}`
       )
     }
 
-    // Check if this is an interactive command that might need automated responses
     const interactiveConfig = INTERACTIVE_COMMANDS[command]
     if (interactiveConfig) {
       return executeInteractiveCommand(
-        CLI_TOP_PATH,
+        BINARY_PATH,
         cliArgs,
         options,
         command,
@@ -202,7 +201,7 @@ async function executeVTOPCommand(username, password, command, flags) {
     }
 
     const { execFile } = require('child_process')
-    execFile(CLI_TOP_PATH, cliArgs, options, (err, stdout, stderr) => {
+    execFile(BINARY_PATH, cliArgs, options, (err, stdout, stderr) => {
       if (process.env.NODE_ENV !== 'production') {
         console.log(
           `CLI execution completed. Error: ${!!err}, stdout length: ${stdout?.length || 0}, stderr length: ${stderr?.length || 0}`
@@ -584,8 +583,6 @@ function findBestSemesterMatch(prompt, flags) {
     const semesterMappings = {
       summer: ['summer', 'intersession', 'inter session'],
       winter: ['winter', 'intersession', 'inter session'],
-      fall: ['fall', 'autumn', 'odd'],
-      spring: ['spring', 'even'],
       current: ['current', 'present', 'ongoing'],
       latest: ['latest', 'recent', 'last'],
       1: ['first', '1st', 'one'],
@@ -635,12 +632,10 @@ function resolveSemesterQuery(semesterQuery, semesterOptions) {
 
   const query = semesterQuery.toLowerCase().trim()
 
-  // For "latest", "current", "ongoing" - always auto-select the first option
   if (query.includes('latest') || query.includes('current') || query.includes('ongoing')) {
     return semesterOptions[0].number
   }
 
-  // For specific semester numbers (e.g., "semester 1", "3rd semester")
   const numberMatch = query.match(/(?:semester\s*)?(\d+)(?:rd|th|st|nd)?/)
   if (numberMatch) {
     const requestedNumber = parseInt(numberMatch[1])
@@ -655,51 +650,42 @@ function resolveSemesterQuery(semesterQuery, semesterOptions) {
     }
   }
 
-  // Check for year in the query first
   const yearMatch = query.match(/20\d{2}[-\/]?\d{0,2}/)
   let yearFilter = null
   if (yearMatch) {
     const yearStr = yearMatch[0]
-    // Handle formats like "2024-25" or "2024"
     yearFilter = opt => opt.description.toLowerCase().includes(yearStr.toLowerCase())
   }
 
-  // For season queries (fall, winter, summer, spring) - check for multiple matches
   const seasonMap = {
-    fall: ['fall', 'autumn'],
+    fall: ['fall'],
     winter: ['winter'],
     summer: ['summer'],
-    spring: ['spring'],
   }
 
   for (const [season, variants] of Object.entries(seasonMap)) {
     if (variants.some(variant => query.includes(variant))) {
-      // Find ALL matching options for this season
       let allMatches = semesterOptions.filter(opt =>
         variants.some(variant => opt.description.toLowerCase().includes(variant))
       )
 
-      // If we have a year filter, apply it to narrow down the results
       if (yearFilter) {
         allMatches = allMatches.filter(yearFilter)
       }
 
-      // If there's exactly one match, auto-select it
       if (allMatches.length === 1) {
         console.log(`Resolved ${season} semester query to:`, allMatches[0].description)
         return allMatches[0].number
       }
 
-      // If there are multiple matches, don't auto-select - let user choose
       if (allMatches.length > 1) {
         console.log(
           `Multiple ${season} semesters found:`,
           allMatches.map(m => m.description)
         )
-        return null // This will trigger the user selection prompt
+        return null
       }
 
-      // If no matches after filtering, continue to other logic
       if (allMatches.length === 0) {
         console.log(`No ${season} semesters found matching the query`)
         return null
@@ -707,7 +693,6 @@ function resolveSemesterQuery(semesterQuery, semesterOptions) {
     }
   }
 
-  // For year-only queries (e.g., "2024")
   if (
     yearMatch &&
     !seasonMap.fall.some(v => query.includes(v)) &&
@@ -717,18 +702,16 @@ function resolveSemesterQuery(semesterQuery, semesterOptions) {
   ) {
     const allMatches = semesterOptions.filter(yearFilter)
 
-    // If there's exactly one match for the year, auto-select it
     if (allMatches.length === 1) {
       return allMatches[0].number
     }
 
-    // If there are multiple matches for the year, don't auto-select
     if (allMatches.length > 1) {
       console.log(
         `Multiple semesters found for year query:`,
         allMatches.map(m => m.description)
       )
-      return null // This will trigger the user selection prompt
+      return null
     }
   }
 
@@ -1275,15 +1258,15 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
   }
 
   return new Promise((resolve, reject) => {
-    if (!fs.existsSync(CLI_TOP_PATH)) {
+    if (!fs.existsSync(BINARY_PATH)) {
       return reject({
-        error: `CLI executable not found at path: ${CLI_TOP_PATH}`,
+        error: `CLI executable not found at path: ${BINARY_PATH}`,
         command: 'course-page-interactive',
         step: step,
       })
     }
 
-    const child = spawn(CLI_TOP_PATH, cliArgs, {
+    const child = spawn(BINARY_PATH, cliArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd: __dirname,
     })
@@ -1618,7 +1601,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           interactiveState: 'waiting_for_input',
         })
       } else if (code === 0) {
-        // Only parse download info if we're in materials step or if there's evidence of actual downloads
         const shouldParseDownloadInfo =
           step === 'materials' ||
           stdout.includes('Downloaded') ||
@@ -2030,9 +2012,6 @@ setInterval(
 )
 
 function cleanCliOutput(rawOutput, hasServedFiles = false) {
-  // For interactive course page workflows, we need more selective cleaning
-  // Don't use the general cleanVTOPOutput function as it's too aggressive for interactive data
-
   const lines = rawOutput.split('\n')
   const cleanedLines = []
 
@@ -2043,12 +2022,10 @@ function cleanCliOutput(rawOutput, hasServedFiles = false) {
   let downloadPath = ''
   let filesCount = 0
 
-  // First pass: extract important information and clean debug lines
   const filteredLines = []
   for (const line of lines) {
     const trimmed = line.trim()
 
-    // Skip debug and login information
     if (
       trimmed.includes('Proxy command:') ||
       trimmed.includes('Proxy executing') ||
@@ -2178,7 +2155,7 @@ async function serveDownloadedFiles(downloadPath, downloadInfo) {
 
       if (stat.isFile()) {
         const fileId = uuidv4()
-        const expiry = Date.now() + 2 * 60 * 60 * 1000 // 2 hours
+        const expiry = Date.now() + 2 * 60 * 60 * 1000
 
         tempFiles.set(fileId, {
           path: filePath,
@@ -2195,12 +2172,12 @@ async function serveDownloadedFiles(downloadPath, downloadInfo) {
         let downloadUrl
         if (process.env.NODE_ENV === 'production') {
           downloadUrl = `https://the-everything-assistant.onrender.com/download/${fileId}`
-          console.log(`🌐 Production mode detected - using Render domain for file: ${filename}`)
+          console.log(`Production mode detected - using Render domain for file: ${filename}`)
         } else {
           const host = process.env.PROXY_HOST || 'localhost'
           const port = process.env.PORT || 3001
           downloadUrl = `http://${host}:${port}/download/${fileId}`
-          console.log(`🏠 Development mode detected - using localhost for file: ${filename}`)
+          console.log(`Development mode detected - using localhost for file: ${filename}`)
         }
 
         servedFiles.push({
@@ -2485,11 +2462,9 @@ app.post('/vtop-interactive-continue', async (req, res) => {
     updatedFlags.faculty = parseInt(selection)
   } else if (step === 'materials') {
     updatedFlags.materialSelection = selection
-    nextStep = 'download' // Materials selection leads to download
+    nextStep = 'download'
   }
 
-  // Get credentials from session (they should be in the original request context)
-  // For security, we'll require the password to be provided again or use encrypted form
   const password = req.body.password || req.body.encryptedPassword
   if (!password) {
     return res.status(400).json({
@@ -2504,7 +2479,6 @@ app.post('/vtop-interactive-continue', async (req, res) => {
   }
 
   try {
-    // Execute the next step with updated flags
     const result = await executeInteractiveCoursePageWorkflow(
       parsedSession.username,
       password,
@@ -2600,17 +2574,17 @@ app.use((req, res) => {
 const PORT = process.env.PORT || 3001
 
 function performStartupChecks() {
-  console.log(`CLI Path: ${CLI_TOP_PATH}`)
+  console.log(`CLI Path: ${BINARY_PATH}`)
 
-  if (!fs.existsSync(CLI_TOP_PATH)) {
-    console.error(`CLI executable not found at: ${CLI_TOP_PATH}`)
-    console.error('Please ensure the cli-top executable is available in the correct location.')
+  if (!fs.existsSync(BINARY_PATH)) {
+    console.error(`CLI executable not found at: ${BINARY_PATH}`)
+    console.error('Please ensure the executable is available in the correct location.')
     process.exit(1)
   }
 
   if (process.platform !== 'win32') {
     try {
-      fs.chmodSync(CLI_TOP_PATH, '755')
+      fs.chmodSync(BINARY_PATH, '755')
       console.log('Executable permissions set for CLI tool')
     } catch (chmodErr) {
       console.warn('Could not set executable permissions:', chmodErr.message)
@@ -2623,7 +2597,7 @@ function performStartupChecks() {
 performStartupChecks()
 
 const server = app.listen(PORT, () => {
-  console.log(`VTOP Proxy Service running on port ${PORT}`)
+  console.log(`Proxy Service running on port ${PORT}`)
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`)
 })
 

@@ -76,9 +76,11 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
                   .map(c => c.trim())
                   .filter(c => c)
                 const row: any = {}
+                const indexOffset = cells.length - headers.length
                 headers.forEach((header, index) => {
-                  if (cells[index + (firstLine.includes('INDEX') ? 1 : 0)]) {
-                    let cellValue = cells[index + (firstLine.includes('INDEX') ? 1 : 0)]
+                  const cell = cells[index + (indexOffset > 0 ? 1 : 0)]
+                  if (cell !== undefined) {
+                    let cellValue = cells[index + (indexOffset > 0 ? 1 : 0)]
                     cellValue = cellValue
                       .replace(/\[32m|\[0m|\[31m|\[33m|\[34m|\[35m|\[36m|\[37m/g, '') // Remove ANSI color codes
                       .replace(/[^\x20-\x7E]/g, ' ') // Replace non-ASCII characters with space
@@ -89,7 +91,56 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
                 })
                 return row
               })
-              parsedData = rows
+              // Post-process attendance rows to normalize keys
+              let processedRows = rows
+              if (command === 'attendance' && Array.isArray(processedRows)) {
+                if (process.env.NODE_ENV !== 'production') {
+                // eslint-disable-next-line no-console
+                //console.log('[VTOP parser] raw attendance row', processedRows)
+              }
+              processedRows = processedRows.map((row: any) => {
+                  const clean = (val: any) => (typeof val === 'string' ? val.trim() : val)
+                  return {
+                    SUBJECT:
+                      clean(row.SUBJECT) ||
+                      clean(row['SUBJECT NAME']) ||
+                      clean(row['SUBJECT CODE']) ||
+                      clean(row.Subject) ||
+                      clean(row['Subject Name']) ||
+                      clean(row['Subject Code']) ||
+                      clean(row.NAME) ||
+                      clean(row.name) ||
+                      '',
+                    PERCENTAGE:
+                      clean(row.PERCENTAGE) ||
+                      clean(row['%']) ||
+                      clean(row['ATTENDANCE PERCENTAGE']) ||
+                      clean(row.percentage) ||
+                      clean(row.attendance) ||
+                      '',
+                    'CLASSES ATTENDED':
+                      clean(row['CLASSES ATTENDED']) ||
+                      clean(row.ATTENDED) ||
+                      clean(row['Classes Attended']) ||
+                      clean(row.attended) ||
+                      '',
+                    'TOTAL CLASSES':
+                      clean(row['TOTAL CLASSES']) ||
+                      clean(row.TOTAL) ||
+                      clean(row['Total Classes']) ||
+                      clean(row.total) ||
+                      '',
+                    '75% ALERT':
+                      clean(row['75% ALERT']) ||
+                      clean(row.ALERT) ||
+                      clean(row.Status) ||
+                      clean(row.STATUS) ||
+                      clean(row.alert) ||
+                      '',
+                  }
+                })
+              }
+              parsedData = processedRows
             }
           }
         } else {

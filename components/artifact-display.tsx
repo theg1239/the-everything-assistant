@@ -140,8 +140,17 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
   const renderCustomVTOPCommand = (command: string, content: any) => {
     switch (command) {
       case 'attendance':
+        // Debug logs - remove in production if unnecessary
+        if (process.env.NODE_ENV !== 'production') {
+          // eslint-disable-next-line no-console
+          //console.log('[VTOP] raw attendance content', content)
+        }
         if (Array.isArray(content) && content.length > 0) {
           const validSubjects = content.filter((subject: any) => {
+            if (process.env.NODE_ENV !== 'production') {
+              // eslint-disable-next-line no-console
+              //console.log('[VTOP] evaluating subject', subject)
+            }
             const subjectName = subject.SUBJECT || subject.subject || subject.name || ''
             const percentage = parseFloat(
               subject.PERCENTAGE || subject.percentage || subject.attendance || '0'
@@ -161,6 +170,11 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
               )
             )
           })
+
+          if (process.env.NODE_ENV !== 'production') {
+            // eslint-disable-next-line no-console
+            console.log('[VTOP] validSubjects length', validSubjects.length)
+          }
 
           if (validSubjects.length === 0) {
             return (

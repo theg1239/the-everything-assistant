@@ -1,3 +1,4 @@
+import { smoothStream } from 'ai'
 import { rateLimitedGoogle } from '@/lib/rate-limited-ai'
 import { createVITTools } from '@/lib/tools'
 import { VIT_SYSTEM_PROMPT } from '@/lib/prompts'
@@ -504,6 +505,7 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
         tools,
         temperature: 0.7,
         maxTokens: 4096,
+        experimental_transform: smoothStream({ chunking: 'word' }),
         toolChoice: 'auto',
         onFinish: async (result: any) => {
           const toolResults = (result as any).toolResults ?? result.toolCalls ?? []

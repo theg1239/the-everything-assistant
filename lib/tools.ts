@@ -1832,10 +1832,3 @@ function normalizeString(str: string): string {
     .replace(/\s+/g, ' ')
     .trim()
 }
-
-// TOP-LEVEL DEBUG: getFacultyInfo tool loaded (file loaded)
-if (typeof process !== 'undefined' && process.env) {
-  console.error('[getFacultyInfo] TOC: tools.ts loaded');
-} else if (typeof window !== 'undefined') {
-  window.alert?.('[getFacultyInfo] TOC: tools.ts loaded');
-}

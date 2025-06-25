@@ -129,14 +129,6 @@ category 4 (management quota):
 - total program cost: ₹22,00,000 (4 years)
 - seats: 5% of total intake
 
-### additional fees (annual)
-- caution deposit: ₹3,000 (refundable)
-- university development fund: ₹25,000
-- alumni fund: ₹2,500
-- student activity fee: ₹5,000
-- medical insurance: ₹1,500
-- bus fee: ₹15,000-25,000 (based on distance)
-
 ## FFCS (FULLY FLEXIBLE CREDIT SYSTEM) - DETAILED
 
 ### credit structure
@@ -157,7 +149,7 @@ category 4 (management quota):
 6. timetable generation: based on allocated courses
 8. add/drop period: first few days of the semester to adjust courses, slots, faculties, etc.
 
-### grading system (detailed)
+### grading system
 - s grade: 10 points (90-100%) - outstanding
 - a grade: 9 points (80-89%) - excellent  
 - b grade: 8 points (70-79%) - very good
@@ -186,7 +178,7 @@ cat 1:
 - format: multiple choice questions (mcq)
 - weightage: 15% of total marks
 - syllabus: first 40% of course content
-- question pattern: 5 questions + sub questions, 10 marks each
+- question pattern: 5 questions + sub questions, 10 marks each (max marks: 50)
 
 cat 2:
 - timing: weeks 9-10 of semester  
@@ -194,8 +186,9 @@ cat 2:
 - format: multiple choice questions (mcq)
 - weightage: 15% of total marks
 - syllabus: next 40% of course content
-- question pattern: 5 questions + sub questions, 10 marks each
-
+- question pattern: 5 questions + sub questions, 10 marks each (max marks: 50)s
+- open book exam
+ 
 ### digital assignments (da)
 - weightage: 10% of total marks
 - submission: online through vtop portal
@@ -217,81 +210,6 @@ cat 2:
 - duration: 15-30 minutes
 - format: mcq/short answers
 - announcement: may be surprise or announced
-
-## PLACEMENT STATISTICS 2023-24 (COMPREHENSIVE)
-
-### overall statistics
-- total offers: 9,847 (highest ever)
-- students placed: 7,500+ (85% placement rate)
-- companies visited: 1,200+ (400+ new recruiters)
-- highest international package: ₹1.02 crore (google)
-- highest domestic package: ₹83 lakh (microsoft)
-- average package: ₹9.23 lakh (15% increase from previous year)
-- median package: ₹7.5 lakh
-- students with multiple offers: 2,500+
-
-### top recruiters by tier
-
-tier 1 companies (₹30+ lakh packages):
-- google: 25 offers, ₹45-102 lakh
-- microsoft: 35 offers, ₹35-83 lakh  
-- amazon: 45 offers, ₹30-65 lakh
-- apple: 15 offers, ₹40-75 lakh
-- meta: 20 offers, ₹35-70 lakh
-- netflix: 10 offers, ₹50-80 lakh
-
-tier 2 companies (₹15-30 lakh packages):
-- goldman sachs: 40 offers, ₹20-45 lakh
-- morgan stanley: 35 offers, ₹18-40 lakh
-- jp morgan: 30 offers, ₹22-38 lakh
-- deutsche bank: 25 offers, ₹20-35 lakh
-- cisco: 50 offers, ₹15-32 lakh
-- intel: 40 offers, ₹18-35 lakh
-
-tier 3 companies (₹8-15 lakh packages):
-- tcs: 400 offers, ₹8-12 lakh
-- infosys: 350 offers, ₹8-15 lakh
-- wipro: 300 offers, ₹8-14 lakh
-- cognizant: 250 offers, ₹8-13 lakh
-- accenture: 200 offers, ₹9-15 lakh
-- capgemini: 180 offers, ₹8-14 lakh
-
-### branch-wise placement statistics
-
-computer science & engineering:
-- students: 1,200
-- placed: 1,080 (90%)
-- average package: ₹12.8 lakh
-- highest package: ₹1.02 crore
-- top recruiters: google, microsoft, amazon
-
-information technology:
-- students: 800
-- placed: 720 (90%)
-- average package: ₹11.9 lakh
-- highest package: ₹83 lakh
-- top recruiters: microsoft, amazon, cisco
-
-electronics & communication:
-- students: 1,000
-- placed: 850 (85%)
-- average package: ₹9.4 lakh
-- highest package: ₹45 lakh
-- top recruiters: qualcomm, intel, cisco
-
-electrical & electronics:
-- students: 600
-- placed: 510 (85%)
-- average package: ₹8.9 lakh
-- highest package: ₹35 lakh
-- top recruiters: siemens, abb, schneider
-
-mechanical engineering:
-- students: 800
-- placed: 680 (85%)
-- average package: ₹8.6 lakh
-- highest package: ₹32 lakh
-- top recruiters: tata motors, mahindra, l&t
 
 ## RESEARCH & INNOVATION (DETAILED)
 

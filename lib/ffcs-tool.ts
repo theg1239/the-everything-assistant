@@ -1,4 +1,4 @@
-import Papa from 'papaparse';
+
 
 export interface Course {
     CODE: string;
@@ -15,43 +15,37 @@ export interface FFCSToolData {
     uniqueCourses: Course[];
 }
 
-/**
- * Fetches and processes FFCS course data for a given campus.
- *
- * This function fetches the raw course data from a publicly accessible CSV file,
- * parses it, and then processes it into two formats:
- * - `allCourses`: The complete list of all available course sections.
- * - `uniqueCourses`: A filtered list of unique courses (by code and title),
- *   suitable for populating a search dropdown.
- *
- * @param campus The campus for which to fetch data ('vellore', 'chennai', or 'ap').
- * @returns A promise that resolves to an object containing both `allCourses` and `uniqueCourses`.
- */
+export type School = 'smec' | 'score' | 'scope' | 'sbst' | 'sce' | 'scheme' | 'select' | 'sense';
+
 export async function getCourseData(
-    school: 'smec' | 'scope' = 'smec',
+    school: School = 'smec',
 ): Promise<FFCSToolData> {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-    if (!baseUrl) {
-        throw new Error('NEXT_PUBLIC_BASE_URL environment variable is not set.');
+    const response = await fetch(`/ffcs/${school}.json`);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch course data for ${school}`);
     }
-        const fileName = school === 'smec' ? 'vtop_course_details.csv' : 'vtop_course_details2.csv.xls';
-    const response = await fetch(`${baseUrl}/ffcs/${fileName}`);
-    const csvText = await response.text();
+    const data = await response.json();
 
-    const parsedData = await new Promise<Papa.ParseResult<Course>>(
-        (resolve, reject) => {
-            Papa.parse<Course>(csvText, {
-                header: true,
-                skipEmptyLines: true,
-                complete: (results) => resolve(results),
-                error: (error: any) => reject(error),
+    const allCourses: Course[] = [];
+
+    Object.values<any>(data).forEach((category: any) => {
+        Object.entries<any>(category).forEach(([courseKey, sessions]) => {
+            const [codePart, ...titleRest] = courseKey.split(' - ');
+            const code = codePart.trim();
+            const title = titleRest.join(' - ').trim();
+            (sessions as any[]).forEach((session) => {
+                allCourses.push({
+                    CODE: code,
+                    TITLE: title,
+                    TYPE: (session.type ?? '') as string,
+                    CREDITS: '',
+                    VENUE: session.venue ?? '',
+                    SLOT: session.slot ?? '',
+                    FACULTY: session.faculty ?? '',
+                });
             });
-        },
-    );
-
-    const allCourses = parsedData.data.filter(
-        (course) => course.CODE && course.TITLE,
-    );
+        });
+    });
 
     const uniqueCourses = allCourses.filter(
         (element, index, self) =>
@@ -60,5 +54,5 @@ export async function getCourseData(
             ) === index,
     );
 
-        return { allCourses, uniqueCourses };
+    return { allCourses, uniqueCourses };
 }

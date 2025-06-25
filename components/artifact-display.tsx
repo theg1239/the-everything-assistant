@@ -842,6 +842,8 @@ const PaperCard = ({
 const FacultyCard = ({ faculty }: { faculty: any }) => {
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [expanded, setExpanded] = useState(false)
+  const [showCourses, setShowCourses] = useState(false)
+  const hasCourses = Array.isArray(faculty.courses) && faculty.courses.length > 0
 
   return (
     <Card className="w-full max-w-full hover:shadow-sm transition-all duration-200 border-border bg-card">
@@ -915,29 +917,64 @@ const FacultyCard = ({ faculty }: { faculty: any }) => {
           )}
         </div>
 
-        {isMobile &&
-          (faculty.specialization?.length > 30 ||
-            faculty.department?.length > 30 ||
-            faculty.email?.length > 30) && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setExpanded(!expanded)}
-              className="w-full text-xs h-7 mt-2"
-            >
-              {expanded ? (
-                <>
-                  <ChevronUp className="h-3 w-3 mr-1" />
-                  Show Less
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="h-3 w-3 mr-1" />
-                  Show More
-                </>
-              )}
-            </Button>
-          )}
+        {isMobile && (
+          <>
+            {hasCourses && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCourses(!showCourses)}
+                  className="h-7 px-3 text-xs mt-2"
+                >
+                  {showCourses ? 'Hide Courses' : 'View Courses'}
+                </Button>
+                {showCourses && (
+                  <div className="mt-2 max-h-40 overflow-y-auto grid gap-2 text-xs">
+                    {faculty.courses.map((c: any, idx: number) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <Badge variant="secondary" className="px-1.5 py-0.5 whitespace-nowrap">
+                          {c.code}
+                        </Badge>
+                        <span className="flex-1 min-w-0 truncate" title={c.title}>
+                          {c.title}
+                        </span>
+                        {c.slot && (
+                          <Badge variant="outline" className="px-1.5 py-0.5 whitespace-nowrap">
+                            {c.slot}
+                          </Badge>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {(faculty.specialization?.length > 30 ||
+              faculty.department?.length > 30 ||
+              faculty.email?.length > 30) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setExpanded(!expanded)}
+                className="w-full text-xs h-7 mt-2"
+              >
+                {expanded ? (
+                  <>
+                    <ChevronUp className="h-3 w-3 mr-1" />
+                    Show Less
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-3 w-3 mr-1" />
+                    Show More
+                  </>
+                )}
+              </Button>
+            )}
+          </>
+        )}
       </CardContent>
     </Card>
   )

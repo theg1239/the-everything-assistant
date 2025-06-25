@@ -170,6 +170,9 @@ export class ApiKeyManager {
   }
 
   private hashKey(key: string): string {
+    if (typeof key !== 'string' || !key) {
+      throw new Error('ApiKeyManager: Tried to hash an undefined or non-string key');
+    }
     return `key_${key.slice(-8)}_${key.length}`
   }
 
@@ -249,18 +252,31 @@ export class ApiKeyManager {
   // ——————————————————————————————————————————————
 
   async getCurrentKey(): Promise<string> {
-  if (this.initPromise) {
-    await this.initPromise
-  }
+    if (this.initPromise) {
+      await this.initPromise
+    }
+    if (!this.config.keys || this.config.keys.length === 0) {
+      throw new Error('No API keys configured for ApiKeyManager')
+    }
+    let current = this.config.keys[this.currentKeyIndex]
+    if (!current) {
+      const next = await this.findNextAvailableKey()
+      if (next) {
+        this.currentKeyIndex = next.index
+        await this.saveCurrentKeyIndex()
+        return next.key
+      }
+      throw new Error('NO_VALID_API_KEYS_AVAILABLE')
+    }
     if (!this.config.enableRotation) {
-      return this.config.keys[0]
+      return current
     }
     const now = Date.now()
     if (now - this.lastHealthCheck > this.config.keyHealthCheckInterval) {
       await this.performHealthCheck()
       this.lastHealthCheck = now
     }
-    const current = this.config.keys[this.currentKeyIndex]
+    // If current key is rate limited, rotate
     if ((await this.isKeyRateLimited(this.hashKey(current))) && this.config.rotateOnRateLimit) {
       const next = await this.findNextAvailableKey()
       if (next) {
@@ -274,6 +290,58 @@ export class ApiKeyManager {
     return current
   }
 
+  private getRandomKeyIndex(exclude: Set<number> = new Set()): number | null {
+    const available = this.config.keys
+      .map((_, idx) => idx)
+      .filter(idx => !exclude.has(idx))
+    if (available.length === 0) return null
+    const randIdx = Math.floor(Math.random() * available.length)
+    return available[randIdx]
+  }
+
+  private async isKeyBanned(keyHash: string): Promise<boolean> {
+    const banKey = `ban:${keyHash}`
+    const bannedUntil = await this.redis.get(banKey)
+    if (!bannedUntil) return false
+    return Date.now() < parseInt(bannedUntil as string)
+  }
+
+  private async banKey(keyHash: string, cooldownMs: number = 5 * 60 * 1000): Promise<void> {
+    const banKey = `ban:${keyHash}`
+    const until = Date.now() + cooldownMs
+    await this.redis.set(banKey, until.toString(), { ex: Math.ceil(cooldownMs / 1000) })
+  }
+
+  private async incrementFailure(keyHash: string, maxFails = 5, cooldownMs = 5 * 60 * 1000): Promise<void> {
+    const failKey = `failures:${keyHash}`
+    const fails = (parseInt((await this.redis.get(failKey)) as string) || 0) + 1
+    await this.redis.set(failKey, fails.toString(), { ex: 3600 })
+    if (fails >= maxFails) {
+      await this.banKey(keyHash, cooldownMs)
+      await this.redis.set(failKey, '0', { ex: 3600 })
+      console.warn(`[ApiKeyManager] Banned key ${keyHash} for ${cooldownMs / 1000}s due to repeated failures`)
+    }
+  }
+
+  private async getHealthyKeyIndices(): Promise<number[]> {
+    const healthy: number[] = []
+    for (let idx = 0; idx < this.config.keys.length; idx++) {
+      const key = this.config.keys[idx]
+      const keyHash = this.hashKey(key)
+      if (!(await this.isKeyRateLimited(keyHash)) && !(await this.isKeyBanned(keyHash))) {
+        healthy.push(idx)
+      }
+    }
+    return healthy
+  }
+
+  private async getRandomHealthyKeyIndex(exclude: Set<number> = new Set()): Promise<number | null> {
+    const healthy = (await this.getHealthyKeyIndices()).filter(idx => !exclude.has(idx))
+    if (healthy.length === 0) return null
+    const randIdx = Math.floor(Math.random() * healthy.length)
+    return healthy[randIdx]
+  }
+
   async executeWithRateLimit<T>(
     apiCall: (apiKey: string) => Promise<T>,
     options: { retryOnRateLimit?: boolean; maxRetries?: number } = {}
@@ -282,64 +350,39 @@ export class ApiKeyManager {
     let attempt = 0
     let backoff = 1000
     let lastErr: any = null
+    const tried = new Set<number>()
 
-    while (attempt <= maxRetries) {
+    while (attempt <= maxRetries && tried.size < this.config.keys.length) {
+      const idx = await this.getRandomHealthyKeyIndex(tried)
+      if (idx === null) break
+      tried.add(idx)
+      const key = this.config.keys[idx]
+      const hash = this.hashKey(key)
+      const ok = await this.consumeTokens(hash)
+      if (!ok) {
+        attempt++
+        continue
+      }
       try {
-        const key = await this.getCurrentKey()
-        const hash = this.hashKey(key)
-        const ok = await this.consumeTokens(hash)
-
-        if (!ok && attempt === 0 && this.config.rotateOnRateLimit) {
-          const nxt = await this.findNextAvailableKey()
-          if (nxt) {
-            this.currentKeyIndex = nxt.index
-            await this.saveCurrentKeyIndex()
-            const nxtHash = this.hashKey(nxt.key)
-            if (await this.consumeTokens(nxtHash)) {
-              console.log(`[ApiKeyManager] Executing request with rotated API key index ${this.currentKeyIndex}`)
-              await this.recordKeyUsage(nxtHash)
-              return apiCall(nxt.key)
-            }
-          }
-          throw new Error('RATE_LIMIT_EXCEEDED')
-        }
-
-        if (ok) {
-          console.log(`[ApiKeyManager] Executing request with API key index ${this.currentKeyIndex}`)
-          await this.recordKeyUsage(hash)
-          return apiCall(key)
-        }
-        throw new Error('RATE_LIMIT_EXCEEDED')
+        console.log(`[ApiKeyManager] Executing request with API key index ${idx}`)
+        await this.recordKeyUsage(hash)
+        return await apiCall(key)
       } catch (err: any) {
         lastErr = err
-        const isRateErr = this.isRateLimitError(err)
-        if (isRateErr) {
-          const cur = this.config.keys[this.currentKeyIndex]
-          await this.recordRateLimitEvent(this.hashKey(cur), err)
-          if (this.config.rotateOnRateLimit && retryOnRateLimit) {
-            const nxt = await this.findNextAvailableKey()
-            if (nxt) {
-              this.currentKeyIndex = nxt.index
-              await this.saveCurrentKeyIndex()
-              console.log(`Rotated to API key index ${nxt.index} due to API rate limit`)
-              backoff = 1000
-              attempt++
-              continue
-            }
-          }
-        }
-        if (!retryOnRateLimit || !isRateErr) throw err
-        if (attempt >= maxRetries) break
-        console.log(`Attempt ${attempt + 1} failed, retrying in ${backoff}ms...`)
+        await this.recordRateLimitEvent(hash, err)
+        await this.incrementFailure(hash)
+        attempt++
+        if (attempt > maxRetries) break
+        console.warn(`[ApiKeyManager] Error with key index ${idx}, retrying with another key...`)
         await new Promise(r => setTimeout(r, backoff))
         backoff = Math.min(
           backoff * this.config.retryConfig.backoffMultiplier,
           this.config.retryConfig.maxBackoffMs
         )
-        attempt++
+        continue
       }
     }
-    throw new Error(`Max retries exceeded. Last error: ${lastErr?.message || 'Unknown'}`)
+    throw new Error(`All API keys failed, are rate limited, or are temporarily banned. Last error: ${lastErr?.message || 'Unknown'}`)
   }
 
   private isRateLimitError(error: any): boolean {

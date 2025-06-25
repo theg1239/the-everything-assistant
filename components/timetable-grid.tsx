@@ -27,7 +27,7 @@ const TimetableGrid: React.FC<TimetableGridProps> = ({ timetable, schema }) => {
     const { days, timeHeaders, slotGridMap, rowCount } = useMemo(() => {
         const allSlots = [...schema.theory, ...schema.lab];
 
-        const dayKeys = [...new Set(allSlots.flatMap(s => Object.keys(s.days)))];
+        const dayKeys = [...new Set(allSlots.flatMap(s => s.days ? Object.keys(s.days) : []))];
         const dayOrder = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
         const sortedDayKeys = dayKeys.sort((a, b) => dayOrder.indexOf(a) - dayOrder.indexOf(b));
         const days = sortedDayKeys.map(d => d.charAt(0).toUpperCase() + d.slice(1));
@@ -45,7 +45,8 @@ const TimetableGrid: React.FC<TimetableGridProps> = ({ timetable, schema }) => {
                 const startIdx = timeIndexMap.get(slotInfo.start);
                 if (startIdx === undefined) return;
 
-                for (const [day, slotName] of Object.entries(slotInfo.days)) {
+                if (!slotInfo.days) return;
+                    for (const [day, slotName] of Object.entries(slotInfo.days)) {
                     const dayIdx = dayIndexMap.get(day);
                     if (dayIdx === undefined) continue;
 

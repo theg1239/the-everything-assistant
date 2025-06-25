@@ -1,0 +1,2609 @@
+{
+  "FoundationCore": {
+    "BARB101L - Arabic": [
+      {
+        "slot": "B2",
+        "venue": "SJT607",
+        "faculty": "MOHD SAQIB"
+      },
+      {
+        "slot": "A2",
+        "venue": "SJT715",
+        "faculty": "MOHD SAQIB"
+      },
+      {
+        "slot": "G1",
+        "venue": "SJT407",
+        "faculty": "MOHD SAQIB"
+      },
+      {
+        "slot": "C2",
+        "venue": "SJT607",
+        "faculty": "MOHD SAQIB"
+      }
+    ],
+    "BCHI101L - Chinese I": [
+      {
+        "slot": "A2",
+        "venue": "TT201",
+        "faculty": "KHANA BAIDYA"
+      },
+      {
+        "slot": "E1",
+        "venue": "SJT514",
+        "faculty": "KHANA BAIDYA"
+      },
+      {
+        "slot": "B2",
+        "venue": "SJT311",
+        "faculty": "KHANA BAIDYA"
+      },
+      {
+        "slot": "E2",
+        "venue": "SJT514",
+        "faculty": "KHANA BAIDYA"
+      }
+    ],
+    "BCLE212L - Natural Disaster Mitigation and Management": [
+      {
+        "slot": "G1+TG1",
+        "venue": "CDMM105",
+        "faculty": "JOHN SUSHIL PACKIARAJ"
+      },
+      {
+        "slot": "G2+TG2",
+        "venue": "CDMM103",
+        "faculty": "GANAPATHY G.P"
+      },
+      {
+        "slot": "G2+TG2",
+        "venue": "CDMM105",
+        "faculty": "SUGANYA OM"
+      },
+      {
+        "slot": "G1+TG1",
+        "venue": "CDMM404",
+        "faculty": "SHANMUGA PRIYA T"
+      },
+      {
+        "slot": "F1+TF1",
+        "venue": "GDN128",
+        "faculty": "MEENA T"
+      },
+      {
+        "slot": "F1+TF1",
+        "venue": "GDN129",
+        "faculty": "PRIYADHARSHINI  B"
+      },
+      {
+        "slot": "F2+TF2",
+        "venue": "CDMM404",
+        "faculty": "PRASANTH S"
+      },
+      {
+        "slot": "F2+TF2",
+        "venue": "CDMM405",
+        "faculty": "ARUNAVA RAY"
+      }
+    ],
+    "BCLE214L - Global Warming": [
+      {
+        "slot": "E1+TE1",
+        "venue": "CDMM403",
+        "faculty": "MURUGAVELH S"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "CDMM404",
+        "faculty": "KAVITHA M.S"
+      },
+      {
+        "slot": "D1+TD1",
+        "venue": "CDMM105",
+        "faculty": "VIGNESH RAJKUMAR L"
+      },
+      {
+        "slot": "D2+TD2",
+        "venue": "CDMM104",
+        "faculty": "VIGNESH RAJKUMAR L"
+      }
+    ],
+    "BCLE215L - Waste Management": [
+      {
+        "slot": "D1+TD1",
+        "venue": "CDMM403",
+        "faculty": "MONALI PRIYADARSHINI"
+      },
+      {
+        "slot": "D2+TD2",
+        "venue": "CDMM105",
+        "faculty": "AMIT B MAHINDRAKAR"
+      }
+    ],
+    "BCLE216L - Water Resource Management": [
+      {
+        "slot": "B2+TB2",
+        "venue": "CDMM103",
+        "faculty": "JAGADEESH P"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "CDMM103",
+        "faculty": "MAHENTHIRAN S"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "CDMM103",
+        "faculty": "DILLIP KUMAR BARIK"
+      }
+    ],
+    "BENG102P - Technical Report Writing": [
+      {
+        "slot": "L9+L10",
+        "venue": "TT432",
+        "faculty": "GAYATHRI N"
+      },
+      {
+        "slot": "L7+L8",
+        "venue": "TT306",
+        "faculty": "SUJATHA ARAVINDAKSHAN MENON"
+      },
+      {
+        "slot": "L29+L30",
+        "venue": "SJT519",
+        "faculty": "ANU BAISEL"
+      },
+      {
+        "slot": "L7+L8",
+        "venue": "TT116",
+        "faculty": "PRASANTHA KUMAR N.S"
+      },
+      {
+        "slot": "L27+L28",
+        "venue": "TT116",
+        "faculty": "MD. SAHUL HAMEED M A"
+      },
+      {
+        "slot": "L15+L16",
+        "venue": "TT432",
+        "faculty": "VISHNU PRIYA N.S"
+      },
+      {
+        "slot": "L21+L22",
+        "venue": "SJT519",
+        "faculty": "MEENAKSHI S"
+      },
+      {
+        "slot": "L5+L6",
+        "venue": "SJT519",
+        "faculty": "PRAJEESH TOMY"
+      },
+      {
+        "slot": "L9+L10",
+        "venue": "TT306",
+        "faculty": "ANIL PREMRAJ J"
+      },
+      {
+        "slot": "L23+L24",
+        "venue": "TT116",
+        "faculty": "LAXMI DHAR DWIVEDI"
+      },
+      {
+        "slot": "L39+L40",
+        "venue": "TT318",
+        "faculty": "RAJU R.L.N"
+      },
+      {
+        "slot": "L11+L12",
+        "venue": "TT306",
+        "faculty": "BHUVANESWARI V"
+      },
+      {
+        "slot": "L27+L28",
+        "venue": "SJT519",
+        "faculty": "MEENAKSHI S"
+      },
+      {
+        "slot": "L23+L24",
+        "venue": "TT432",
+        "faculty": "CHRISTOPHER RAJASEKARAN W"
+      },
+      {
+        "slot": "L9+L10",
+        "venue": "SJT519",
+        "faculty": "AJANTA SIRCAR"
+      },
+      {
+        "slot": "L15+L16",
+        "venue": "TT116",
+        "faculty": "SRINIVASAN R"
+      },
+      {
+        "slot": "L21+L22",
+        "venue": "TT432",
+        "faculty": "SRINIVASAN R"
+      },
+      {
+        "slot": "L53+L54",
+        "venue": "TT306",
+        "faculty": "SENTHIL BABU M K"
+      },
+      {
+        "slot": "L55+L56",
+        "venue": "PRP248",
+        "faculty": "VARSHA K"
+      },
+      {
+        "slot": "L57+L58",
+        "venue": "PRP248",
+        "faculty": "ANKITA SUNDRIYAL"
+      },
+      {
+        "slot": "L49+L50",
+        "venue": "PRP248",
+        "faculty": "SNEHA MISHRA"
+      },
+      {
+        "slot": "L3+L4",
+        "venue": "TT432",
+        "faculty": "CHRISTOPHER RAJASEKARAN W"
+      },
+      {
+        "slot": "L15+L16",
+        "venue": "SJT519",
+        "faculty": "PRAJEESH TOMY"
+      },
+      {
+        "slot": "L25+L26",
+        "venue": "PRP248",
+        "faculty": "MATHUMATHY S"
+      },
+      {
+        "slot": "L27+L28",
+        "venue": "PRP248",
+        "faculty": "ANBURAJ  G"
+      },
+      {
+        "slot": "L29+L30",
+        "venue": "PRP248",
+        "faculty": "SHEEJA RAJAGOPAL"
+      },
+      {
+        "slot": "L7+L8",
+        "venue": "PRP248",
+        "faculty": "SARASWATHY S"
+      },
+      {
+        "slot": "L15+L16",
+        "venue": "PRP248",
+        "faculty": "EVANGELINE PRISCILLA B"
+      },
+      {
+        "slot": "L39+L40",
+        "venue": "TT306",
+        "faculty": "LAXMI DHAR DWIVEDI"
+      },
+      {
+        "slot": "L31+L32",
+        "venue": "TT432",
+        "faculty": "VISHNU PRIYA N.S"
+      },
+      {
+        "slot": "L43+L44",
+        "venue": "TT306",
+        "faculty": "SUGANTHAN  C"
+      },
+      {
+        "slot": "L33+L34",
+        "venue": "TT306",
+        "faculty": "ANITHA DEVI V"
+      },
+      {
+        "slot": "L51+L52",
+        "venue": "TT306",
+        "faculty": "SOUMEN MUKHERJEE"
+      },
+      {
+        "slot": "L57+L58",
+        "venue": "TT306",
+        "faculty": "GAYATHRI N"
+      },
+      {
+        "slot": "L31+L32",
+        "venue": "TT306",
+        "faculty": "SUNITHA V"
+      },
+      {
+        "slot": "L49+L50",
+        "venue": "TT306",
+        "faculty": "THENMOZHI M"
+      },
+      {
+        "slot": "L37+L38",
+        "venue": "TT306",
+        "faculty": "MARY JENNIFER J"
+      },
+      {
+        "slot": "L45+L46",
+        "venue": "TT306",
+        "faculty": "JAISHREE JAIKRISHNAN"
+      },
+      {
+        "slot": "L15+L16",
+        "venue": "TT306",
+        "faculty": "ANIL PREMRAJ J"
+      },
+      {
+        "slot": "L27+L28",
+        "venue": "TT432",
+        "faculty": "SENGUTTUVAN M"
+      },
+      {
+        "slot": "L21+L22",
+        "venue": "TT306",
+        "faculty": "MD. SAHUL HAMEED M A"
+      },
+      {
+        "slot": "L13+L14",
+        "venue": "TT306",
+        "faculty": "G CHRISTOPHER"
+      },
+      {
+        "slot": "L3+L4",
+        "venue": "TT306",
+        "faculty": "VIDHYA B"
+      },
+      {
+        "slot": "L23+L24",
+        "venue": "TT306",
+        "faculty": "PRASANTHA KUMAR N.S"
+      },
+      {
+        "slot": "L51+L52",
+        "venue": "PRP249",
+        "faculty": "SUSHANT KISHORE"
+      },
+      {
+        "slot": "L5+L6",
+        "venue": "TT306",
+        "faculty": "SHEEJA RAJAGOPAL"
+      },
+      {
+        "slot": "L21+L22",
+        "venue": "TT116",
+        "faculty": "YADAMALA SREENIVASULU"
+      },
+      {
+        "slot": "L29+L30",
+        "venue": "TT306",
+        "faculty": "SREEJITH VARMA R"
+      },
+      {
+        "slot": "L55+L56",
+        "venue": "TT306",
+        "faculty": "SUJATHA ARAVINDAKSHAN MENON"
+      },
+      {
+        "slot": "L19+L20",
+        "venue": "TT306",
+        "faculty": "RAJALEKSHMI K"
+      },
+      {
+        "slot": "L33+L34",
+        "venue": "TT116",
+        "faculty": "RAJU R.L.N"
+      }
+    ],
+    "BESP101L - Spanish I": [
+      {
+        "slot": "B2",
+        "venue": "SMV109",
+        "faculty": "SABYASACHI MISHRA"
+      },
+      {
+        "slot": "A2",
+        "venue": "CDMM404",
+        "faculty": "SABYASACHI MISHRA"
+      },
+      {
+        "slot": "F1",
+        "venue": "TT434",
+        "faculty": "SABYASACHI MISHRA"
+      },
+      {
+        "slot": "E2",
+        "venue": "SMV101",
+        "faculty": "SABYASACHI MISHRA"
+      },
+      {
+        "slot": "F1",
+        "venue": "PRP605",
+        "faculty": "GAURAV SUSHANT"
+      },
+      {
+        "slot": "F1",
+        "venue": "PRP622",
+        "faculty": "SHILPI GUPTA"
+      },
+      {
+        "slot": "C1",
+        "venue": "PRP238",
+        "faculty": "ATUL KUMAR"
+      },
+      {
+        "slot": "E2",
+        "venue": "SJT604",
+        "faculty": "BAISHALI CHOUDHURI"
+      },
+      {
+        "slot": "F1",
+        "venue": "PRP623",
+        "faculty": "ATUL KUMAR"
+      }
+    ],
+    "BFRE101L - French I": [
+      {
+        "slot": "C2",
+        "venue": "SMV116",
+        "faculty": "MALATHY O"
+      },
+      {
+        "slot": "C2",
+        "venue": "SJT126",
+        "faculty": "SHANTANU SHANDILYA"
+      },
+      {
+        "slot": "F1",
+        "venue": "CDMM404",
+        "faculty": "COUMARAN G"
+      },
+      {
+        "slot": "C1",
+        "venue": "CDMM404",
+        "faculty": "COUMARAN G"
+      },
+      {
+        "slot": "C2",
+        "venue": "SMV128",
+        "faculty": "ANTOINETTE DANIEL"
+      },
+      {
+        "slot": "A2",
+        "venue": "TT104",
+        "faculty": "VISALAKSHI R"
+      },
+      {
+        "slot": "C1",
+        "venue": "CDMM405",
+        "faculty": "VISALAKSHI R"
+      },
+      {
+        "slot": "B2",
+        "venue": "CDMM404",
+        "faculty": "VISALAKSHI R"
+      }
+    ],
+    "BGER101L - German I": [
+      {
+        "slot": "F1",
+        "venue": "TT413",
+        "faculty": "ADAIKALAM ARULANANDAM"
+      },
+      {
+        "slot": "E1",
+        "venue": "TT620",
+        "faculty": "ADAIKALAM ARULANANDAM"
+      },
+      {
+        "slot": "E2",
+        "venue": "SMV109",
+        "faculty": "ADAIKALAM ARULANANDAM"
+      },
+      {
+        "slot": "C2",
+        "venue": "SJT601",
+        "faculty": "DHANANJAY KUMAR"
+      },
+      {
+        "slot": "A2",
+        "venue": "PRP576",
+        "faculty": "ABHIJIT KR DARBEY"
+      },
+      {
+        "slot": "C1",
+        "venue": "PRP634",
+        "faculty": "ARATI KUMARI"
+      },
+      {
+        "slot": "A2",
+        "venue": "PRP329",
+        "faculty": "ARATI KUMARI"
+      },
+      {
+        "slot": "C1",
+        "venue": "SJT626",
+        "faculty": "ABHIJIT KR DARBEY"
+      }
+    ],
+    "BHUM102E - Indian Classical Music": [
+      {
+        "slot": "L45+L46",
+        "venue": "SJTA301",
+        "faculty": "SUDHEER C V"
+      },
+      {
+        "slot": "B2",
+        "venue": "SJTA301",
+        "faculty": "SUDHEER C V"
+      },
+      {
+        "slot": "L27+L28",
+        "venue": "SJTA301",
+        "faculty": "SUDHEER C V"
+      },
+      {
+        "slot": "G1",
+        "venue": "SJTA301",
+        "faculty": "SUDHEER C V"
+      }
+    ],
+    "BHUM103L - Micro Economics": [
+      {
+        "slot": "F1+TF1",
+        "venue": "MB224",
+        "faculty": "SALMAN HAIDER"
+      },
+      {
+        "slot": "F1+TF1",
+        "venue": "MB227",
+        "faculty": "SHAHID HAMID RAINA"
+      },
+      {
+        "slot": "G1+TG1",
+        "venue": "SMV101",
+        "faculty": "SALMAN HAIDER"
+      },
+      {
+        "slot": "F2+TF2",
+        "venue": "SMV104",
+        "faculty": "AQUIB PARVEZ"
+      }
+    ],
+    "BHUM104L - Macro Economics": [
+      {
+        "slot": "D2+TD2",
+        "venue": "SJT602",
+        "faculty": "NILAVATHY K"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "TT305",
+        "faculty": "ADIL AHMAD SHAH"
+      },
+      {
+        "slot": "B2+TB2",
+        "venue": "MB211",
+        "faculty": "SALMAN HAIDER"
+      },
+      {
+        "slot": "D1+TD1",
+        "venue": "PRP619",
+        "faculty": "SAVITHA N"
+      },
+      {
+        "slot": "F2+TF2",
+        "venue": "TT434",
+        "faculty": "SIVAKUMAR S"
+      }
+    ],
+    "BHUM105L - Public Policy and Administration": [
+      {
+        "slot": "F2+TF2",
+        "venue": "PRP519",
+        "faculty": "RUPAK KUMAR"
+      }
+    ],
+    "BHUM106L - Principles of Sociology": [
+      {
+        "slot": "E2+TE2",
+        "venue": "PRP250",
+        "faculty": "ABHIJIT DASGUPTA"
+      },
+      {
+        "slot": "G1+TG1",
+        "venue": "SJT221",
+        "faculty": "SREYA SEN"
+      },
+      {
+        "slot": "G1+TG1",
+        "venue": "SJT602",
+        "faculty": "RAHUL SHUKLA"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "PRP238",
+        "faculty": "KUBENDRAN A"
+      },
+      {
+        "slot": "A2+TA2",
+        "venue": "SMV311",
+        "faculty": "PRABAKAR S"
+      },
+      {
+        "slot": "D2+TD2",
+        "venue": "SMV109",
+        "faculty": "PRABAKAR S"
+      },
+      {
+        "slot": "F2+TF2",
+        "venue": "SJT617",
+        "faculty": "ABHIJIT DASGUPTA"
+      }
+    ],
+    "BHUM107L - Sustainability and Society": [
+      {
+        "slot": "F2+TF2",
+        "venue": "PRP604",
+        "faculty": "RAHUL SHUKLA"
+      },
+      {
+        "slot": "C1+TC1",
+        "venue": "SJT607",
+        "faculty": "SREYA SEN"
+      }
+    ],
+    "BHUM108L - Urban Community Development": [
+      {
+        "slot": "G1+TG1",
+        "venue": "PRP372",
+        "faculty": "BALAMURUGAN J"
+      },
+      {
+        "slot": "F2+TF2",
+        "venue": "SJT215",
+        "faculty": "SREYA SEN"
+      }
+    ],
+    "BHUM109L - Social Work and Sustainability": [
+      {
+        "slot": "G1+TG1",
+        "venue": "SJTG01",
+        "faculty": "DOMINIC SAVIO"
+      }
+    ],
+    "BHUM110L - Cognitive Psychology": [
+      {
+        "slot": "E1+TE1",
+        "venue": "TT305",
+        "faculty": "BHUVANESWARI M"
+      },
+      {
+        "slot": "A2+TA2",
+        "venue": "GDNG07",
+        "faculty": "MOHD OWAIS KHAN"
+      }
+    ],
+    "BJAP101L - Japanese I": [
+      {
+        "slot": "A2",
+        "venue": "SJT709",
+        "faculty": "KHANJAN"
+      },
+      {
+        "slot": "B2",
+        "venue": "SJT711",
+        "faculty": "KHANJAN"
+      },
+      {
+        "slot": "C1",
+        "venue": "PRP238A",
+        "faculty": "KHANJAN"
+      },
+      {
+        "slot": "E2",
+        "venue": "SJT607",
+        "faculty": "KHANJAN"
+      },
+      {
+        "slot": "A2",
+        "venue": "SJT619",
+        "faculty": "HIYA MUKHERJEE"
+      },
+      {
+        "slot": "G1",
+        "venue": "SJT712",
+        "faculty": "HIYA MUKHERJEE"
+      },
+      {
+        "slot": "C1",
+        "venue": "SJT715",
+        "faculty": "HIYA MUKHERJEE"
+      },
+      {
+        "slot": "D2",
+        "venue": "SMV128",
+        "faculty": "HIYA MUKHERJEE"
+      }
+    ],
+    "BMAT102L - Differential Equations and Transforms": [
+      {
+        "slot": "A1+TA1+TAA1",
+        "venue": "PRP773",
+        "faculty": "INDHIRA K"
+      },
+      {
+        "slot": "C2+TC2+TCC2",
+        "venue": "TT204",
+        "faculty": "INDHIRA K"
+      }
+    ],
+    "BMAT201L - Complex Variables and Linear Algebra": [
+      {
+        "slot": "B2+TB2+TBB2",
+        "venue": "PRP426",
+        "faculty": "HEMADRI REDDY REGANTI"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "SJT208",
+        "faculty": "JAGADEESHKUMAR K"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "SJT201",
+        "faculty": "KALPANA PRIYA D"
+      },
+      {
+        "slot": "C2+TC2+TCC2",
+        "venue": "GDN107",
+        "faculty": "KALPANA PRIYA D"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "GDN107",
+        "faculty": "RAJASEKARAN G"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "SJT202",
+        "faculty": "AKELLA VENKATA SURYANARAYANA MURTY"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "SJT204",
+        "faculty": "VIJAYA K"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "SJT205",
+        "faculty": "MURUGUSUNDARAMOORTHY G"
+      },
+      {
+        "slot": "D2+TD2+TDD2",
+        "venue": "SMV102",
+        "faculty": "VALLAMPATI RAMACHANDRA PRASAD"
+      },
+      {
+        "slot": "C2+TC2+TCC2",
+        "venue": "SJT201",
+        "faculty": "VIJAYA K"
+      },
+      {
+        "slot": "C2+TC2+TCC2",
+        "venue": "SJT202",
+        "faculty": "MELLACHERUVU NAGA SRINIVASU"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "CDMM104",
+        "faculty": "MELLACHERUVU NAGA SRINIVASU"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "SMV218",
+        "faculty": "PASUPATHI R"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "GDN123",
+        "faculty": "UDHAYAKUMAR R"
+      },
+      {
+        "slot": "C2+TC2+TCC2",
+        "venue": "GDN120",
+        "faculty": "UDHAYAKUMAR R"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "GDN120",
+        "faculty": "PERI KAMESWARA KAMESWARAN"
+      },
+      {
+        "slot": "C2+TC2+TCC2",
+        "venue": "SJT208",
+        "faculty": "PERI KAMESWARA KAMESWARAN"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "TT423",
+        "faculty": "JAGADEESWARI M"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "TT424",
+        "faculty": "MUBASHIR UNNISSA M"
+      },
+      {
+        "slot": "D2+TD2+TDD2",
+        "venue": "TT423",
+        "faculty": "MUBASHIR UNNISSA M"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "PRP429",
+        "faculty": "NIRANJAN HARI"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "GDN122",
+        "faculty": "LAKSHMINARAYANA P"
+      },
+      {
+        "slot": "C2+TC2+TCC2",
+        "venue": "GDN122",
+        "faculty": "LAKSHMINARAYANA P"
+      },
+      {
+        "slot": "D2+TD2+TDD2",
+        "venue": "TT404",
+        "faculty": "YOGALAKSHMI T"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "SMV102",
+        "faculty": "GORINTLA SUCHARITHA"
+      },
+      {
+        "slot": "C2+TC2+TCC2",
+        "venue": "SJT211",
+        "faculty": "GORINTLA SUCHARITHA"
+      },
+      {
+        "slot": "D2+TD2+TDD2",
+        "venue": "CDMM103",
+        "faculty": "SIVAKUMAR M"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "GDN128",
+        "faculty": "SIVAKUMAR M"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "GDN129",
+        "faculty": "CHANDRASEKAR A"
+      },
+      {
+        "slot": "D2+TD2+TDD2",
+        "venue": "TT424",
+        "faculty": "PADIGEPATI NAVEEN"
+      },
+      {
+        "slot": "C2+TC2+TCC2",
+        "venue": "GDN123",
+        "faculty": "CHANDRASEKAR A"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "TT201",
+        "faculty": "PURUSOTHAM S"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "TT204",
+        "faculty": "PRASAD THEEDA"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "SMV104",
+        "faculty": "GOURANGA  MALLIK"
+      },
+      {
+        "slot": "C2+TC2+TCC2",
+        "venue": "SJT211A",
+        "faculty": "MURUGUSUNDARAMOORTHY G"
+      },
+      {
+        "slot": "C2+TC2+TCC2",
+        "venue": "GDN128",
+        "faculty": "GOURANGA  MALLIK"
+      },
+      {
+        "slot": "C2+TC2+TCC2",
+        "venue": "GDN129",
+        "faculty": "LAKSHMI NARAYAN MISHRA"
+      },
+      {
+        "slot": "C2+TC2+TCC2",
+        "venue": "CDMM103",
+        "faculty": "PURUSOTHAM S"
+      },
+      {
+        "slot": "B2+TB2+TBB2",
+        "venue": "PRP424",
+        "faculty": "RACHNA BHATIA"
+      },
+      {
+        "slot": "B2+TB2+TBB2",
+        "venue": "PRP425",
+        "faculty": "PARVEZ ALAM"
+      },
+      {
+        "slot": "B2+TB2+TBB2",
+        "venue": "PRP427",
+        "faculty": "REENU RANI"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "PRP424",
+        "faculty": "RACHNA BHATIA"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "PRP425",
+        "faculty": "PARVEZ ALAM"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "PRP426",
+        "faculty": "PADMA R"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "PRP427",
+        "faculty": "SUBHABRATA RATH"
+      },
+      {
+        "slot": "C1+TC1+TCC1",
+        "venue": "TT620",
+        "faculty": "RAJENDRAN  P"
+      },
+      {
+        "slot": "B2+TB2+TBB2",
+        "venue": "SMV219",
+        "faculty": "AKELLA VENKATA SURYANARAYANA MURTY"
+      },
+      {
+        "slot": "B2+TB2+TBB2",
+        "venue": "TT201",
+        "faculty": "ARUN KUMAR BADAJENA"
+      },
+      {
+        "slot": "A2+TA2+TAA2",
+        "venue": "PRP671",
+        "faculty": "ARUN KUMAR BADAJENA"
+      },
+      {
+        "slot": "B2+TB2+TBB2",
+        "venue": "PRP429",
+        "faculty": "RAJENDRAN  P"
+      }
+    ],
+    "BMGT101L - Principles of Management": [
+      {
+        "slot": "G2+TG2",
+        "venue": "MB224",
+        "faculty": "VIJESH V JOSHI"
+      },
+      {
+        "slot": "G1+TG1",
+        "venue": "MB218",
+        "faculty": "RAJA SEKHAR Y"
+      },
+      {
+        "slot": "G1+TG1",
+        "venue": "MB219",
+        "faculty": "D DSILVA WINFRED RUFUSS"
+      },
+      {
+        "slot": "G2+TG2",
+        "venue": "MB212",
+        "faculty": "ANUJ KUMAR"
+      },
+      {
+        "slot": "G2+TG2",
+        "venue": "MB213",
+        "faculty": "D DSILVA WINFRED RUFUSS"
+      },
+      {
+        "slot": "G2+TG2",
+        "venue": "MB214",
+        "faculty": "SABOOR S"
+      }
+    ],
+    "BPHY101L - Engineering Physics": [
+      {
+        "slot": "G1+TG1",
+        "venue": "PRP238A",
+        "faculty": "JITENDRA KUMAR BEHERA"
+      },
+      {
+        "slot": "G1+TG1",
+        "venue": "PRP429",
+        "faculty": "UMA MAHENDRA KUMAR K"
+      }
+    ],
+    "BPHY101P - Engineering Physics Lab": [
+      {
+        "slot": "L43+L44",
+        "venue": "PRPG17",
+        "faculty": "SANGEM RAJESH"
+      },
+      {
+        "slot": "L49+L50",
+        "venue": "TT436",
+        "faculty": "SENTHUR PANDI R"
+      }
+    ],
+    "BSTS202P - Qualitative Skills Practice II": [
+      {
+        "slot": "E1+TE1",
+        "venue": "GDN128",
+        "faculty": "ETHNUS (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "GDN107",
+        "faculty": "SIXPHRASE (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "GDNG07",
+        "faculty": "FACE (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "GDN107",
+        "faculty": "SIXPHRASE (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "GDN120",
+        "faculty": "SIXPHRASE (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "GDN120",
+        "faculty": "SIXPHRASE (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "GDN122",
+        "faculty": "SIXPHRASE (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "GDN122",
+        "faculty": "ETHNUS (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "GDN123",
+        "faculty": "ETHNUS (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "GDN129",
+        "faculty": "FACE (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "GDN129",
+        "faculty": "FACE (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "GDN123",
+        "faculty": "ETHNUS (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "GDN128",
+        "faculty": "ETHNUS (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "GDNG07",
+        "faculty": "FACE (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "TT204",
+        "faculty": "ETHNUS (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "TT404",
+        "faculty": "FACE (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "TT413",
+        "faculty": "SIXPHRASE (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "TT413",
+        "faculty": "SIXPHRASE (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "TT204",
+        "faculty": "ETHNUS (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "TT404",
+        "faculty": "FACE (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "SMV218",
+        "faculty": "ETHNUS (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "SMV218",
+        "faculty": "ETHNUS (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "SMV219",
+        "faculty": "FACE (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "SMV219",
+        "faculty": "FACE (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "SMV102",
+        "faculty": "SIXPHRASE (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "SMV102",
+        "faculty": "SIXPHRASE (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "SMV104",
+        "faculty": "ETHNUS (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "CDMM104",
+        "faculty": "ETHNUS (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "CDMM105",
+        "faculty": "FACE (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "CDMM105",
+        "faculty": "FACE (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "SJT208",
+        "faculty": "SIXPHRASE (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "SJT201",
+        "faculty": "ETHNUS (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "SJT201",
+        "faculty": "FACE (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "SJT202",
+        "faculty": "ETHNUS (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "SJT205",
+        "faculty": "FACE (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "SJT205",
+        "faculty": "FACE (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "SJT208",
+        "faculty": "SIXPHRASE (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "SJT211",
+        "faculty": "SIXPHRASE (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "PRP424",
+        "faculty": "ETHNUS (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "PRP425",
+        "faculty": "FACE (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "PRP426",
+        "faculty": "SIXPHRASE (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "PRP426",
+        "faculty": "SIXPHRASE (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "SJT204",
+        "faculty": "FACE (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "SJT204",
+        "faculty": "FACE (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "SJT211",
+        "faculty": "SIXPHRASE (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "SJT211A",
+        "faculty": "SIXPHRASE (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "PRP424",
+        "faculty": "ETHNUS (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "PRP425",
+        "faculty": "FACE (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "PRP427",
+        "faculty": "ETHNUS (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "TT423",
+        "faculty": "FACE (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "PRP427",
+        "faculty": "ETHNUS (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "TT423",
+        "faculty": "FACE (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "TT424",
+        "faculty": "SIXPHRASE (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "TT434",
+        "faculty": "ETHNUS (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "TT424",
+        "faculty": "SIXPHRASE (APT)"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "TT434",
+        "faculty": "ETHNUS (APT)"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "SJT202",
+        "faculty": "FACE (APT)"
+      }
+    ]
+  },
+  "DisciplineCore": {
+    "BECE102L - Digital Systems Design": [
+      {
+        "slot": "G2+TG2",
+        "venue": "PRP425",
+        "faculty": "PALLA PENCHALAIAH"
+      },
+      {
+        "slot": "G2+TG2",
+        "venue": "PRP427",
+        "faculty": "VISHAL GUPTA"
+      },
+      {
+        "slot": "G2+TG2",
+        "venue": "TT531A",
+        "faculty": "ARUNACHALAM V"
+      },
+      {
+        "slot": "G1+TG1",
+        "venue": "TT531A",
+        "faculty": "ARUNACHALAM V"
+      },
+      {
+        "slot": "G2+TG2",
+        "venue": "TT504",
+        "faculty": "VETRIVEERAN RAJAMANI"
+      },
+      {
+        "slot": "G1+TG1",
+        "venue": "PRP427",
+        "faculty": "VISHAL GUPTA"
+      },
+      {
+        "slot": "G2+TG2",
+        "venue": "TT301",
+        "faculty": "DHANABAL R"
+      },
+      {
+        "slot": "G1+TG1",
+        "venue": "PRP425",
+        "faculty": "PALLA PENCHALAIAH"
+      },
+      {
+        "slot": "G2+TG2",
+        "venue": "PRP426",
+        "faculty": "DEBASHISH DASH"
+      },
+      {
+        "slot": "G1+TG1",
+        "venue": "TT619",
+        "faculty": "DEBASHISH DASH"
+      },
+      {
+        "slot": "G1+TG1",
+        "venue": "TT504",
+        "faculty": "DHANABAL R"
+      },
+      {
+        "slot": "G1+TG1",
+        "venue": "TT301",
+        "faculty": "VETRIVEERAN RAJAMANI"
+      }
+    ],
+    "BECE102P - Digital Systems Design Lab": [
+      {
+        "slot": "L13+L14",
+        "venue": "SJT203",
+        "faculty": "ARUNACHALAM V"
+      },
+      {
+        "slot": "L33+L34",
+        "venue": "SJT203",
+        "faculty": "ARUNACHALAM V"
+      },
+      {
+        "slot": "L57+L58",
+        "venue": "SJT203",
+        "faculty": "ARUNACHALAM V"
+      },
+      {
+        "slot": "L11+L12",
+        "venue": "SJT203",
+        "faculty": "PALLA PENCHALAIAH"
+      },
+      {
+        "slot": "L25+L26",
+        "venue": "SJT203",
+        "faculty": "PALLA PENCHALAIAH"
+      },
+      {
+        "slot": "L55+L56",
+        "venue": "SJT203",
+        "faculty": "PALLA PENCHALAIAH"
+      },
+      {
+        "slot": "L15+L16",
+        "venue": "SJT203",
+        "faculty": "DEBASHISH DASH"
+      },
+      {
+        "slot": "L23+L24",
+        "venue": "SJT203",
+        "faculty": "DEBASHISH DASH"
+      },
+      {
+        "slot": "L31+L32",
+        "venue": "SJT203",
+        "faculty": "DEBASHISH DASH"
+      },
+      {
+        "slot": "L59+L60",
+        "venue": "SJT203",
+        "faculty": "DEBASHISH DASH"
+      },
+      {
+        "slot": "L41+L42",
+        "venue": "SJT203",
+        "faculty": "DHANABAL R"
+      },
+      {
+        "slot": "L45+L46",
+        "venue": "SJT203",
+        "faculty": "DHANABAL R"
+      },
+      {
+        "slot": "L19+L20",
+        "venue": "TT237",
+        "faculty": "DHANABAL R"
+      },
+      {
+        "slot": "L27+L28",
+        "venue": "TT237",
+        "faculty": "DHANABAL R"
+      },
+      {
+        "slot": "L29+L30",
+        "venue": "SJT203",
+        "faculty": "ARUNACHALAM V"
+      },
+      {
+        "slot": "L47+L48",
+        "venue": "SJT203",
+        "faculty": "PALLA PENCHALAIAH"
+      },
+      {
+        "slot": "L3+L4",
+        "venue": "SJT203",
+        "faculty": "VETRIVEERAN RAJAMANI"
+      },
+      {
+        "slot": "L27+L28",
+        "venue": "SJT203",
+        "faculty": "VETRIVEERAN RAJAMANI"
+      },
+      {
+        "slot": "L43+L44",
+        "venue": "SJT203",
+        "faculty": "VETRIVEERAN RAJAMANI"
+      },
+      {
+        "slot": "L53+L54",
+        "venue": "SJT203",
+        "faculty": "VETRIVEERAN RAJAMANI"
+      },
+      {
+        "slot": "L13+L14",
+        "venue": "TT237",
+        "faculty": "VISHAL GUPTA"
+      },
+      {
+        "slot": "L29+L30",
+        "venue": "TT237",
+        "faculty": "VISHAL GUPTA"
+      },
+      {
+        "slot": "L31+L32",
+        "venue": "TT237",
+        "faculty": "VISHAL GUPTA"
+      },
+      {
+        "slot": "L45+L46",
+        "venue": "TT237",
+        "faculty": "VISHAL GUPTA"
+      }
+    ],
+    "BECE204L - Microprocessors and Microcontrollers": [
+      {
+        "slot": "G1+TG1",
+        "venue": "PRP134",
+        "faculty": "SHAH ARPAN HASMUKH MAYURI"
+      }
+    ],
+    "BECE204P - Microprocessors and Microcontrollers Lab": [
+      {
+        "slot": "L37+L38",
+        "venue": "TT729",
+        "faculty": "SHAH ARPAN HASMUKH MAYURI"
+      },
+      {
+        "slot": "L51+L52",
+        "venue": "TT729",
+        "faculty": "SHAH ARPAN HASMUKH MAYURI"
+      }
+    ],
+    "BECE205L - Engineering Electromagnetics": [
+      {
+        "slot": "F2+TF2",
+        "venue": "TT531A",
+        "faculty": "RAJESHKUMAR V"
+      },
+      {
+        "slot": "F1+TF1",
+        "venue": "TT619",
+        "faculty": "SHAMBAVI K"
+      },
+      {
+        "slot": "F2+TF2",
+        "venue": "TT531",
+        "faculty": "POONKUZHALI R"
+      },
+      {
+        "slot": "F2+TF2",
+        "venue": "TT619",
+        "faculty": "CHRISTINA JOSEPHINE MALATHI A"
+      },
+      {
+        "slot": "F1+TF1",
+        "venue": "TT301",
+        "faculty": "VIJAY KUMAR"
+      },
+      {
+        "slot": "F1+TF1",
+        "venue": "PRP426",
+        "faculty": "YOGESH KUMAR CHOUKIKER"
+      },
+      {
+        "slot": "F2+TF2",
+        "venue": "PRP426",
+        "faculty": "SURESH KUMAR T R"
+      },
+      {
+        "slot": "F2+TF2",
+        "venue": "PRP425",
+        "faculty": "SHAMBAVI K"
+      },
+      {
+        "slot": "F1+TF1",
+        "venue": "PRP427",
+        "faculty": "BOOPALAN G"
+      },
+      {
+        "slot": "F1+TF1",
+        "venue": "PRP429",
+        "faculty": "BISWAJIT DWIVEDY"
+      },
+      {
+        "slot": "F2+TF2",
+        "venue": "PRP427",
+        "faculty": "TANMAYA KUMAR DAS"
+      }
+    ],
+    "BECE206L - Analog Circuits": [
+      {
+        "slot": "D2+TD2",
+        "venue": "TT531A",
+        "faculty": "SATHYANARAYANAN P"
+      },
+      {
+        "slot": "D1+TD1",
+        "venue": "TT531",
+        "faculty": "DEEPIKA RANI SONA"
+      },
+      {
+        "slot": "D2+TD2",
+        "venue": "TT619",
+        "faculty": "JASMIN PEMEENA PRIYADARISINI M"
+      },
+      {
+        "slot": "D1+TD1",
+        "venue": "TT531A",
+        "faculty": "SATHYANARAYANAN P"
+      },
+      {
+        "slot": "D1+TD1",
+        "venue": "TT619",
+        "faculty": "VEERAPU GOUTHAM"
+      },
+      {
+        "slot": "D1+TD1",
+        "venue": "PRP426",
+        "faculty": "GAUTAM NARAYAN"
+      },
+      {
+        "slot": "D2+TD2",
+        "venue": "PRP427",
+        "faculty": "SANDHANA MAHALINGAM M"
+      },
+      {
+        "slot": "D2+TD2",
+        "venue": "PRP425",
+        "faculty": "VEERAPU GOUTHAM"
+      },
+      {
+        "slot": "D1+TD1",
+        "venue": "PRP427",
+        "faculty": "SANDHANA MAHALINGAM M"
+      },
+      {
+        "slot": "D1+TD1",
+        "venue": "PRP429",
+        "faculty": "SAGAR PARESHKUMAR RAMANBHAI"
+      },
+      {
+        "slot": "D2+TD2",
+        "venue": "PRP426",
+        "faculty": "GAUTAM NARAYAN"
+      },
+      {
+        "slot": "D2+TD2",
+        "venue": "PRP429",
+        "faculty": "DEEPIKA RANI SONA"
+      }
+    ],
+    "BECE206P - Analog Circuits Lab": [
+      {
+        "slot": "L3+L4",
+        "venue": "TT246",
+        "faculty": "JASMIN PEMEENA PRIYADARISINI M"
+      },
+      {
+        "slot": "L27+L28",
+        "venue": "TT246",
+        "faculty": "JASMIN PEMEENA PRIYADARISINI M"
+      },
+      {
+        "slot": "L7+L8",
+        "venue": "TT246",
+        "faculty": "SATHYANARAYANAN P"
+      },
+      {
+        "slot": "L15+L16",
+        "venue": "TT246",
+        "faculty": "SATHYANARAYANAN P"
+      },
+      {
+        "slot": "L37+L38",
+        "venue": "TT246",
+        "faculty": "SATHYANARAYANAN P"
+      },
+      {
+        "slot": "L51+L52",
+        "venue": "TT246",
+        "faculty": "SATHYANARAYANAN P"
+      },
+      {
+        "slot": "L39+L40",
+        "venue": "TT246",
+        "faculty": "VEERAPU GOUTHAM"
+      },
+      {
+        "slot": "L59+L60",
+        "venue": "TT246",
+        "faculty": "VEERAPU GOUTHAM"
+      },
+      {
+        "slot": "L41+L42",
+        "venue": "TT246",
+        "faculty": "DEEPIKA RANI SONA"
+      },
+      {
+        "slot": "L37+L38",
+        "venue": "SJT207",
+        "faculty": "GAUTAM NARAYAN"
+      },
+      {
+        "slot": "L13+L14",
+        "venue": "SJT207",
+        "faculty": "SANDHANA MAHALINGAM M"
+      },
+      {
+        "slot": "L33+L34",
+        "venue": "SJT207",
+        "faculty": "SAGAR PARESHKUMAR RAMANBHAI"
+      },
+      {
+        "slot": "L21+L22",
+        "venue": "TT246",
+        "faculty": "VEERAPU GOUTHAM"
+      },
+      {
+        "slot": "L9+L10",
+        "venue": "TT246",
+        "faculty": "VEERAPU GOUTHAM"
+      },
+      {
+        "slot": "L13+L14",
+        "venue": "TT246",
+        "faculty": "DEEPIKA RANI SONA"
+      },
+      {
+        "slot": "L11+L12",
+        "venue": "TT246",
+        "faculty": "DEEPIKA RANI SONA"
+      },
+      {
+        "slot": "L57+L58",
+        "venue": "TT246",
+        "faculty": "DEEPIKA RANI SONA"
+      },
+      {
+        "slot": "L7+L8",
+        "venue": "SJT207",
+        "faculty": "GAUTAM NARAYAN"
+      },
+      {
+        "slot": "L39+L40",
+        "venue": "SJT207",
+        "faculty": "SANDHANA MAHALINGAM M"
+      },
+      {
+        "slot": "L15+L16",
+        "venue": "SJT207",
+        "faculty": "GAUTAM NARAYAN"
+      },
+      {
+        "slot": "L23+L24",
+        "venue": "SJT207",
+        "faculty": "SANDHANA MAHALINGAM M"
+      },
+      {
+        "slot": "L55+L56",
+        "venue": "SJT207",
+        "faculty": "GAUTAM NARAYAN"
+      },
+      {
+        "slot": "L57+L58",
+        "venue": "SJT207",
+        "faculty": "SANDHANA MAHALINGAM M"
+      },
+      {
+        "slot": "L49+L50",
+        "venue": "SJT207",
+        "faculty": "SAGAR PARESHKUMAR RAMANBHAI"
+      }
+    ],
+    "BECE207L - Random Processes": [
+      {
+        "slot": "C1+TC1",
+        "venue": "TT531A",
+        "faculty": "HARIHARAN  S"
+      }
+    ],
+    "BECE301L - Digital Signal Processing": [
+      {
+        "slot": "G2+TG2",
+        "venue": "TT305",
+        "faculty": "KALAIVANI S"
+      }
+    ],
+    "BECE301P - Digital Signal Processing Lab": [
+      {
+        "slot": "L23+L24",
+        "venue": "TT231",
+        "faculty": "KALAIVANI S"
+      },
+      {
+        "slot": "L29+L30",
+        "venue": "TT231",
+        "faculty": "KALAIVANI S"
+      }
+    ],
+    "BECE302L - Control Systems": [
+      {
+        "slot": "G1+TG1",
+        "venue": "TT523",
+        "faculty": "RAJESH R"
+      },
+      {
+        "slot": "G1+TG1",
+        "venue": "TT524",
+        "faculty": "BAGUBALI A"
+      },
+      {
+        "slot": "G2+TG2",
+        "venue": "TT524",
+        "faculty": "NISHA J S"
+      },
+      {
+        "slot": "G1+TG1",
+        "venue": "TT530A",
+        "faculty": "NISHA J S"
+      },
+      {
+        "slot": "G1+TG1",
+        "venue": "TT531",
+        "faculty": "VENUGOPAL P"
+      },
+      {
+        "slot": "G2+TG2",
+        "venue": "TT530",
+        "faculty": "SULTAN MAHMOOD  CHOWDHURY"
+      },
+      {
+        "slot": "G2+TG2",
+        "venue": "TT530A",
+        "faculty": "GOPINATH P"
+      },
+      {
+        "slot": "G2+TG2",
+        "venue": "TT523",
+        "faculty": "RAJESH R"
+      }
+    ],
+    "BECE303L - VLSI System Design": [
+      {
+        "slot": "D1+TD1",
+        "venue": "TT504",
+        "faculty": "VIKAS VIJAYVARGIYA"
+      },
+      {
+        "slot": "D2+TD2",
+        "venue": "TT523",
+        "faculty": "VIKAS VIJAYVARGIYA"
+      },
+      {
+        "slot": "D2+TD2",
+        "venue": "TT530",
+        "faculty": "SANDEEP MOPARTHI"
+      },
+      {
+        "slot": "D1+TD1",
+        "venue": "TT523",
+        "faculty": "AARTHY M"
+      },
+      {
+        "slot": "D2+TD2",
+        "venue": "TT524",
+        "faculty": "AARTHY M"
+      },
+      {
+        "slot": "D2+TD2",
+        "venue": "TT530A",
+        "faculty": "JYOTISHMAN SAIKIA"
+      },
+      {
+        "slot": "D1+TD1",
+        "venue": "TT524",
+        "faculty": "SANDEEP MOPARTHI"
+      },
+      {
+        "slot": "D1+TD1",
+        "venue": "TT530",
+        "faculty": "JYOTISHMAN SAIKIA"
+      }
+    ],
+    "BECE303P - VLSI System Design Lab": [
+      {
+        "slot": "L7+L8",
+        "venue": "TT727",
+        "faculty": "VIKAS VIJAYVARGIYA"
+      },
+      {
+        "slot": "L21+L22",
+        "venue": "TT727",
+        "faculty": "VIKAS VIJAYVARGIYA"
+      },
+      {
+        "slot": "L55+L56",
+        "venue": "TT727",
+        "faculty": "VIKAS VIJAYVARGIYA"
+      },
+      {
+        "slot": "L5+L6",
+        "venue": "TT727",
+        "faculty": "AARTHY M"
+      },
+      {
+        "slot": "L13+L14",
+        "venue": "TT727",
+        "faculty": "AARTHY M"
+      },
+      {
+        "slot": "L41+L42",
+        "venue": "TT727",
+        "faculty": "AARTHY M"
+      },
+      {
+        "slot": "L57+L58",
+        "venue": "TT727",
+        "faculty": "AARTHY M"
+      },
+      {
+        "slot": "L9+L10",
+        "venue": "TT727",
+        "faculty": "SANDEEP MOPARTHI"
+      },
+      {
+        "slot": "L11+L12",
+        "venue": "TT727",
+        "faculty": "JYOTISHMAN SAIKIA"
+      },
+      {
+        "slot": "L59+L60",
+        "venue": "TT727",
+        "faculty": "JYOTISHMAN SAIKIA"
+      },
+      {
+        "slot": "L37+L38",
+        "venue": "TT727",
+        "faculty": "SANDEEP MOPARTHI"
+      },
+      {
+        "slot": "L51+L52",
+        "venue": "TT727",
+        "faculty": "SANDEEP MOPARTHI"
+      },
+      {
+        "slot": "L15+L16",
+        "venue": "TT727",
+        "faculty": "JYOTISHMAN SAIKIA"
+      },
+      {
+        "slot": "L39+L40",
+        "venue": "TT727",
+        "faculty": "VIKAS VIJAYVARGIYA"
+      },
+      {
+        "slot": "L25+L26",
+        "venue": "TT727",
+        "faculty": "SANDEEP MOPARTHI"
+      },
+      {
+        "slot": "L43+L44",
+        "venue": "TT727",
+        "faculty": "JYOTISHMAN SAIKIA"
+      }
+    ],
+    "BECE304L - Analog Communication Systems": [
+      {
+        "slot": "D1+TD1",
+        "venue": "TT530A",
+        "faculty": "HARIHARAN  S"
+      }
+    ],
+    "BECE304P - Analog Communication Systems Lab": [
+      {
+        "slot": "L31+L32",
+        "venue": "TT135",
+        "faculty": "HARIHARAN  S"
+      },
+      {
+        "slot": "L43+L44",
+        "venue": "TT135",
+        "faculty": "HARIHARAN  S"
+      }
+    ],
+    "BECE305L - Antenna and Microwave Engineering": [
+      {
+        "slot": "E1+TE1",
+        "venue": "TT524",
+        "faculty": "POONKUZHALI R"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "TT524",
+        "faculty": "YOGESH KUMAR CHOUKIKER"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "TT531",
+        "faculty": "BOOPALAN G"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "TT531",
+        "faculty": "CHRISTINA JOSEPHINE MALATHI A"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "TT530A",
+        "faculty": "SURESH KUMAR T R"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "TT530A",
+        "faculty": "BISWAJIT DWIVEDY"
+      },
+      {
+        "slot": "E1+TE1",
+        "venue": "TT530",
+        "faculty": "RAJKISHOR KUMAR"
+      },
+      {
+        "slot": "E2+TE2",
+        "venue": "TT531A",
+        "faculty": "ROHIT MATHUR"
+      }
+    ],
+    "BECE305P - Antenna and Microwave Engineering Lab": [
+      {
+        "slot": "L39+L40",
+        "venue": "TT145",
+        "faculty": "CHRISTINA JOSEPHINE MALATHI A"
+      },
+      {
+        "slot": "L23+L24",
+        "venue": "TT145",
+        "faculty": "YOGESH KUMAR CHOUKIKER"
+      },
+      {
+        "slot": "L9+L10",
+        "venue": "TT145",
+        "faculty": "BOOPALAN G"
+      },
+      {
+        "slot": "L37+L38",
+        "venue": "TT145",
+        "faculty": "POONKUZHALI R"
+      },
+      {
+        "slot": "L51+L52",
+        "venue": "TT145",
+        "faculty": "POONKUZHALI R"
+      },
+      {
+        "slot": "L7+L8",
+        "venue": "TT145",
+        "faculty": "YOGESH KUMAR CHOUKIKER"
+      },
+      {
+        "slot": "L21+L22",
+        "venue": "TT145",
+        "faculty": "BOOPALAN G"
+      },
+      {
+        "slot": "L53+L54",
+        "venue": "TT145",
+        "faculty": "CHRISTINA JOSEPHINE MALATHI A"
+      },
+      {
+        "slot": "L35+L36",
+        "venue": "TT145",
+        "faculty": "SURESH KUMAR T R"
+      },
+      {
+        "slot": "L49+L50",
+        "venue": "TT145",
+        "faculty": "SURESH KUMAR T R"
+      },
+      {
+        "slot": "L25+L26",
+        "venue": "TT145",
+        "faculty": "BISWAJIT DWIVEDY"
+      },
+      {
+        "slot": "L11+L12",
+        "venue": "TT145",
+        "faculty": "BISWAJIT DWIVEDY"
+      },
+      {
+        "slot": "L55+L56",
+        "venue": "TT145",
+        "faculty": "RAJKISHOR KUMAR"
+      },
+      {
+        "slot": "L5+L6",
+        "venue": "TT145",
+        "faculty": "ROHIT MATHUR"
+      },
+      {
+        "slot": "L41+L42",
+        "venue": "TT145",
+        "faculty": "RAJKISHOR KUMAR"
+      },
+      {
+        "slot": "L19+L20",
+        "venue": "TT145",
+        "faculty": "ROHIT MATHUR"
+      }
+    ],
+    "BECE306L - Digital Communication Systems": [
+      {
+        "slot": "C2+TC2",
+        "venue": "TT523",
+        "faculty": "SARAVANAN K"
+      },
+      {
+        "slot": "C1+TC1",
+        "venue": "TT524",
+        "faculty": "THANIKAISELVAN V"
+      },
+      {
+        "slot": "C2+TC2",
+        "venue": "TT524",
+        "faculty": "NOOR MOHAMMED V"
+      },
+      {
+        "slot": "C2+TC2",
+        "venue": "TT530",
+        "faculty": "NANDAKUMAR S"
+      },
+      {
+        "slot": "C1+TC1",
+        "venue": "TT530A",
+        "faculty": "MUGELAN R K"
+      },
+      {
+        "slot": "C1+TC1",
+        "venue": "TT530",
+        "faculty": "VELMURUGAN T"
+      }
+    ],
+    "BECE306P - Digital Communication Systems Lab": [
+      {
+        "slot": "L5+L6",
+        "venue": "TT135",
+        "faculty": "NOOR MOHAMMED V"
+      },
+      {
+        "slot": "L37+L38",
+        "venue": "TT135",
+        "faculty": "THANIKAISELVAN V"
+      },
+      {
+        "slot": "L55+L56",
+        "venue": "TT135",
+        "faculty": "THANIKAISELVAN V"
+      },
+      {
+        "slot": "L29+L30",
+        "venue": "TT135",
+        "faculty": "NANDAKUMAR S"
+      },
+      {
+        "slot": "L47+L48",
+        "venue": "TT135",
+        "faculty": "MUGELAN R K"
+      },
+      {
+        "slot": "L19+L20",
+        "venue": "TT135",
+        "faculty": "NANDAKUMAR S"
+      },
+      {
+        "slot": "L9+L10",
+        "venue": "TT135",
+        "faculty": "NOOR MOHAMMED V"
+      },
+      {
+        "slot": "L7+L8",
+        "venue": "TT135",
+        "faculty": "SARAVANAN K"
+      },
+      {
+        "slot": "L23+L24",
+        "venue": "TT135",
+        "faculty": "SARAVANAN K"
+      },
+      {
+        "slot": "L33+L34",
+        "venue": "TT135",
+        "faculty": "VELMURUGAN T"
+      },
+      {
+        "slot": "L49+L50",
+        "venue": "TT135",
+        "faculty": "VELMURUGAN T"
+      },
+      {
+        "slot": "L57+L58",
+        "venue": "TT135",
+        "faculty": "MUGELAN R K"
+      }
+    ],
+    "BECE317L - Wireless and Mobile Communications": [
+      {
+        "slot": "B2+TB2",
+        "venue": "TT504",
+        "faculty": "SHANKAR T"
+      },
+      {
+        "slot": "B1+TB1",
+        "venue": "TT301",
+        "faculty": "PRAKASAM P"
+      }
+    ],
+    "BECE317P - Wireless and Mobile Communications Lab": [
+      {
+        "slot": "L29+L30",
+        "venue": "TT134",
+        "faculty": "SHANKAR T"
+      },
+      {
+        "slot": "L53+L54",
+        "venue": "TT134",
+        "faculty": "PRAKASAM P"
+      },
+      {
+        "slot": "L15+L16",
+        "venue": "TT134",
+        "faculty": "SHANKAR T"
+      },
+      {
+        "slot": "L45+L46",
+        "venue": "TT134",
+        "faculty": "PRAKASAM P"
+      }
+    ],
+    "BECE318L - Optical Fiber Communications": [
+      {
+        "slot": "A2+TA2",
+        "venue": "TT301",
+        "faculty": "REVATHI S"
+      },
+      {
+        "slot": "A1+TA1",
+        "venue": "TT504",
+        "faculty": "SANGEETHA A"
+      },
+      {
+        "slot": "A2+TA2",
+        "venue": "TT504",
+        "faculty": "SANGEETHA A"
+      },
+      {
+        "slot": "A2+TA2",
+        "venue": "TT523",
+        "faculty": "AARTHI G"
+      },
+      {
+        "slot": "A1+TA1",
+        "venue": "TT301",
+        "faculty": "REVATHI S"
+      },
+      {
+        "slot": "A1+TA1",
+        "venue": "TT524",
+        "faculty": "RAJALAKSHMI S"
+      },
+      {
+        "slot": "A2+TA2",
+        "venue": "TT530",
+        "faculty": "SANGEETHA N"
+      },
+      {
+        "slot": "A1+TA1",
+        "venue": "TT530",
+        "faculty": "SANGEETHA N"
+      },
+      {
+        "slot": "A2+TA2",
+        "venue": "TT524",
+        "faculty": "RAJALAKSHMI S"
+      },
+      {
+        "slot": "A1+TA1",
+        "venue": "TT523",
+        "faculty": "AARTHI G"
+      },
+      {
+        "slot": "A1+TA1",
+        "venue": "TT530A",
+        "faculty": "SUBHRA SANKHA SARMA"
+      }
+    ],
+    "BECE318P - Optical Fiber Communications Lab": [
+      {
+        "slot": "L11+L12",
+        "venue": "TT144",
+        "faculty": "REVATHI S"
+      },
+      {
+        "slot": "L7+L8",
+        "venue": "TT144",
+        "faculty": "AARTHI G"
+      },
+      {
+        "slot": "L21+L22",
+        "venue": "TT144",
+        "faculty": "REVATHI S"
+      },
+      {
+        "slot": "L55+L56",
+        "venue": "TT144",
+        "faculty": "REVATHI S"
+      },
+      {
+        "slot": "L25+L26",
+        "venue": "TT144",
+        "faculty": "SANGEETHA A"
+      },
+      {
+        "slot": "L33+L34",
+        "venue": "TT144",
+        "faculty": "SANGEETHA A"
+      },
+      {
+        "slot": "L45+L46",
+        "venue": "TT144",
+        "faculty": "REVATHI S"
+      },
+      {
+        "slot": "L9+L10",
+        "venue": "TT144",
+        "faculty": "SANGEETHA A"
+      },
+      {
+        "slot": "L49+L50",
+        "venue": "TT144",
+        "faculty": "SANGEETHA A"
+      },
+      {
+        "slot": "L37+L38",
+        "venue": "TT144",
+        "faculty": "AARTHI G"
+      },
+      {
+        "slot": "L39+L40",
+        "venue": "TT144",
+        "faculty": "RAJALAKSHMI S"
+      },
+      {
+        "slot": "L29+L30",
+        "venue": "TT144",
+        "faculty": "AARTHI G"
+      },
+      {
+        "slot": "L47+L48",
+        "venue": "TT144",
+        "faculty": "AARTHI G"
+      },
+      {
+        "slot": "L53+L54",
+        "venue": "TT144",
+        "faculty": "RAJALAKSHMI S"
+      },
+      {
+        "slot": "L23+L24",
+        "venue": "TT144",
+        "faculty": "RAJALAKSHMI S"
+      },
+      {
+        "slot": "L3+L4",
+        "venue": "TT144",
+        "faculty": "RAJALAKSHMI S"
+      },
+      {
+        "slot": "L5+L6",
+        "venue": "TT144",
+        "faculty": "SANGEETHA N"
+      },
+      {
+        "slot": "L51+L52",
+        "venue": "TT144",
+        "faculty": "SANGEETHA N"
+      },
+      {
+        "slot": "L59+L60",
+        "venue": "TT144",
+        "faculty": "SANGEETHA N"
+      },
+      {
+        "slot": "L31+L32",
+        "venue": "TT144",
+        "faculty": "SUBHRA SANKHA SARMA"
+      },
+      {
+        "slot": "L57+L58",
+        "venue": "TT144",
+        "faculty": "SUBHRA SANKHA SARMA"
+      },
+      {
+        "slot": "L19+L20",
+        "venue": "TT144",
+        "faculty": "SANGEETHA N"
+      }
+    ],
+    "BECE401L - Computer Communications and Networks": [
+      {
+        "slot": "C1+TC1",
+        "venue": "TT531",
+        "faculty": "NANDAKUMAR S"
+      },
+      {
+        "slot": "C2+TC2",
+        "venue": "TT530A",
+        "faculty": "VELMURUGAN T"
+      },
+      {
+        "slot": "C2+TC2",
+        "venue": "TT104",
+        "faculty": "PRAKASAM P"
+      }
+    ],
+    "BECE401P - Computer Communications and Networks Lab": [
+      {
+        "slot": "L31+L32",
+        "venue": "TT134",
+        "faculty": "NANDAKUMAR S"
+      },
+      {
+        "slot": "L51+L52",
+        "venue": "TT134",
+        "faculty": "NANDAKUMAR S"
+      },
+      {
+        "slot": "L5+L6",
+        "venue": "TT134",
+        "faculty": "VELMURUGAN T"
+      },
+      {
+        "slot": "L21+L22",
+        "venue": "TT134",
+        "faculty": "VELMURUGAN T"
+      },
+      {
+        "slot": "L25+L26",
+        "venue": "TT134",
+        "faculty": "PRAKASAM P"
+      },
+      {
+        "slot": "L11+L12",
+        "venue": "TT134",
+        "faculty": "PRAKASAM P"
+      }
+    ]
+  },
+  "DisciplineLinked": {
+    "BECE201L - Electronic Materials and Devices": [
+      {
+        "slot": "C2+TC2",
+        "venue": "PRP426",
+        "faculty": "MUTHU RAJA S"
+      }
+    ],
+    "BECE202L - Signals and Systems": [
+      {
+        "slot": "B1+TB1",
+        "venue": "TT619",
+        "faculty": "KARTHIKEYAN M"
+      },
+      {
+        "slot": "B2+TB2",
+        "venue": "TT619",
+        "faculty": "KARTHIKEYAN M"
+      },
+      {
+        "slot": "B1+TB1",
+        "venue": "PRP426",
+        "faculty": "NAWAZ SHAFI"
+      },
+      {
+        "slot": "B1+TB1",
+        "venue": "PRP429",
+        "faculty": "BIJAYLAXMI DAS"
+      },
+      {
+        "slot": "B1+TB1",
+        "venue": "PRP427",
+        "faculty": "JAGANA BIHARI PADHY"
+      },
+      {
+        "slot": "B1+TB1",
+        "venue": "PRP134",
+        "faculty": "ASHISH  P"
+      },
+      {
+        "slot": "B1+TB1",
+        "venue": "TT314",
+        "faculty": "RAJESH N"
+      },
+      {
+        "slot": "B2+TB2",
+        "venue": "PRP230",
+        "faculty": "RAJESH N"
+      },
+      {
+        "slot": "B2+TB2",
+        "venue": "PRP134",
+        "faculty": "NAWAZ SHAFI"
+      },
+      {
+        "slot": "B2+TB2",
+        "venue": "PRP238A",
+        "faculty": "JAGANA BIHARI PADHY"
+      },
+      {
+        "slot": "B2+TB2",
+        "venue": "PRP330",
+        "faculty": "SARANYA K.C."
+      }
+    ],
+    "BECE203L - Circuit Theory": [
+      {
+        "slot": "C2+TC2+TCC2",
+        "venue": "PRP424",
+        "faculty": "VIJAY KUMAR"
+      }
+    ]
+  },
+  "DisciplineElective": {
+    "BECE201L - Electronic Materials and Devices": [
+      {
+        "slot": "C2+TC2",
+        "venue": "PRP426",
+        "faculty": "MUTHU RAJA S"
+      }
+    ],
+    "BECE202L - Signals and Systems": [
+      {
+        "slot": "B1+TB1",
+        "venue": "TT619",
+        "faculty": "KARTHIKEYAN M"
+      },
+      {
+        "slot": "B2+TB2",
+        "venue": "TT619",
+        "faculty": "KARTHIKEYAN M"
+      },
+      {
+        "slot": "B1+TB1",
+        "venue": "PRP426",
+        "faculty": "NAWAZ SHAFI"
+      },
+      {
+        "slot": "B1+TB1",
+        "venue": "PRP429",
+        "faculty": "BIJAYLAXMI DAS"
+      },
+      {
+        "slot": "B1+TB1",
+        "venue": "PRP427",
+        "faculty": "JAGANA BIHARI PADHY"
+      },
+      {
+        "slot": "B1+TB1",
+        "venue": "PRP134",
+        "faculty": "ASHISH  P"
+      },
+      {
+        "slot": "B1+TB1",
+        "venue": "TT314",
+        "faculty": "RAJESH N"
+      },
+      {
+        "slot": "B2+TB2",
+        "venue": "PRP230",
+        "faculty": "RAJESH N"
+      },
+      {
+        "slot": "B2+TB2",
+        "venue": "PRP134",
+        "faculty": "NAWAZ SHAFI"
+      },
+      {
+        "slot": "B2+TB2",
+        "venue": "PRP238A",
+        "faculty": "JAGANA BIHARI PADHY"
+      },
+      {
+        "slot": "B2+TB2",
+        "venue": "PRP330",
+        "faculty": "SARANYA K.C."
+      }
+    ],
+    "BECE203L - Circuit Theory": [
+      {
+        "slot": "C2+TC2+TCC2",
+        "venue": "PRP424",
+        "faculty": "VIJAY KUMAR"
+      }
+    ]
+  }
+}

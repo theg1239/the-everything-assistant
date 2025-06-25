@@ -12,7 +12,7 @@ import {
   getAllCourseMatches,
   recognizeCourseInText,
 } from './course-map'
-import { getCourseData } from './ffcs-tool'
+import { getCourseData, School } from './ffcs-tool'
 
 async function searchRedditKnowledge(query: string, limit: number = 10) {
   try {
@@ -118,7 +118,7 @@ async function getRedditOverview() {
     ])
 
     const trending = trendingResponse.ok ? (await trendingResponse.json()).trending || [] : []
-    const stats = statsResponse.ok ? (await statsResponse.json()).stats || {} : {}
+    const stats = statsResponse.ok ? (await statsResponse.json()).stats || {} : {    }
 
     return {
       success: true,
@@ -792,9 +792,9 @@ export function createVITTools() {
     }),
 
     getCourseInfo: tool({
-      description: 'Get information about courses from the FFCS dataset (for SMEC / SCOPE), such as faculty names, slots, or course codes.',
+      description: 'Get information about courses from the FFCS dataset (supports all schools: SMEC, SCORE, SCOPE, SBST, SCE, SCHEME, SELECT, SENSE). Returns faculty names, slots, venue, etc.',
       parameters: z.object({
-        school: z.enum(['smec', 'scope']).describe('The school to search within (smec or scope). smec is the school of mechanical engineering, scope is the school of computer science and engineering'),
+        school: z.enum(['smec', 'score', 'scope', 'sbst', 'sce', 'scheme', 'select', 'sense']).describe('The school to search within. Examples: smec (mechanical), score (information tech), scope (computer science), sbst (biosciences and technology), sce (civil), scheme (chemical engineering), select (electrical engineering), sense (electronics and communication engineering'),
         courseQuery: z.string().describe('The course code or title to search for. Can be a partial match.'),
         slot: z.string().optional().describe('An optional specific slot to filter by (e.g., "A1", "L1+L2").'),
       }),
@@ -858,13 +858,15 @@ export function createVITTools() {
 
 For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'CIVIL') and full or partial department names (e.g., 'computer science', 'school of mechanical engineering', 'information technology', 'civil engineering'). The search is robust to acronyms, full names, and partial matches in either direction.`,
       parameters: z.object({
-        department: z
-          .string()
-          .optional()
-          .describe('Department like computer science, mechanical, electronics'),
+        department: z.string().optional().describe('Department name or acronym to filter faculty (e.g., CSE, Mechanical).'),
         facultyName: z.string().optional().describe('Specific faculty member name'),
+        includeCourses: z.boolean().optional().describe('If true, also return courses the faculty teaches.'),
+        school: z
+          .enum(['smec', 'score', 'scope', 'sbst', 'sce', 'scheme', 'select', 'sense'])
+          .optional()
+          .describe('Limit course lookup to a specific school; defaults to all.'),
       }),
-      execute: async ({ department, facultyName }) => {
+      execute: async ({ department, facultyName, includeCourses = false, school }) => {
         try {
           const res = await fetch(
             typeof window === 'undefined'
@@ -924,18 +926,29 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                   } else if (facultyFilter && !faculty.name) {
                     continue
                   }
-                  results.push({
-                    school: school.school,
-                    department: dept.department,
-                    departmentUrl: dept.url,
+                  const facultyEntry: any = {
+                    name: faculty.name,
+                    department: faculty.department || schoolName,
+                    school: schoolName,
+                    email: faculty.email || undefined,
                     profileUrl: faculty.profile_url || faculty.profileUrl || undefined,
                     ...faculty,
                     image: faculty.image_url || faculty.image || undefined,
-                  })
+                  };
+                  if (includeCourses) {
+                    const { allCourses } = await getCourseData(schoolName);
+                    const facultyCourses = allCourses.filter(course => course.FACULTY === faculty.name);
+                    facultyEntry.courses = facultyCourses.map(course => ({
+                      code: course.CODE,
+                      title: course.TITLE,
+                      slot: course.SLOT,
+                      type: course.TYPE,
+                    }));
+                  }
+                  results.push(facultyEntry)
                 }
                 continue
               }
-              // Otherwise, match on department name
               if (
                 deptFilter &&
                 (!dept.department || !matchesDepartment(dept.department, deptFilter))
@@ -975,14 +988,26 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 } else if (facultyFilter && !faculty.name) {
                   continue
                 }
-                results.push({
-                  school: school.school,
-                  department: dept.department,
-                  departmentUrl: dept.url,
+                const facultyEntry: any = {
+                  name: faculty.name,
+                  department: faculty.department || schoolName,
+                  school: schoolName,
+                  email: faculty.email || undefined,
                   profileUrl: faculty.profile_url || faculty.profileUrl || undefined,
                   ...faculty,
                   image: faculty.image_url || faculty.image || undefined,
-                })
+                };
+                if (includeCourses) {
+                  const { allCourses } = await getCourseData(schoolName);
+                  const facultyCourses = allCourses.filter(course => course.FACULTY === faculty.name);
+                  facultyEntry.courses = facultyCourses.map(course => ({
+                    code: course.CODE,
+                    title: course.TITLE,
+                    slot: course.SLOT,
+                    type: course.TYPE,
+                  }));
+                }
+                results.push(facultyEntry)
               }
             }
           }

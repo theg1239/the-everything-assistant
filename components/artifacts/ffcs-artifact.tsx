@@ -5,7 +5,15 @@ import { v4 as uuidv4 } from 'uuid';
 import { Calendar, X } from 'lucide-react';
 
 const FFCSArtifact: React.FC = () => {
-    const [campus, setCampus] = useState<'vellore' | 'chennai' | 'ap'>('vellore');
+    const [school, setSchool] = useState<'smec' | 'score' | 'scope' | 'sbst' | 'sce' | 'scheme' | 'select' | 'sense'>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('ffcs_school');
+            const valid = ['smec','score','scope','sbst','sce','scheme','select','sense'];
+            if (saved && valid.includes(saved)) return saved as any;
+        }
+        return 'smec';
+    });
+    const campus = 'vellore';
     const [courseData, setCourseData] = useState<FFCSToolData>({ allCourses: [], uniqueCourses: [] });
     const [timetableSchema, setTimetableSchema] = useState<TimetableSchema | null>(null);
     const [loading, setLoading] = useState(true);
@@ -16,12 +24,18 @@ const FFCSArtifact: React.FC = () => {
     const [showTimetable, setShowTimetable] = useState(false);
 
     useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('ffcs_school', school);
+        }
+    }, [school]);
+
+    useEffect(() => {
         const loadData = async () => {
             setLoading(true);
             setSelectedCourse(null);
             setTimetableSchema(null);
 
-            const savedTimetable = localStorage.getItem(`ffcs_timetable_${campus}`);
+            const savedTimetable = localStorage.getItem(`ffcs_timetable_${school}`);
             if (savedTimetable) {
                 setTimetable(JSON.parse(savedTimetable));
             } else {
@@ -29,10 +43,10 @@ const FFCSArtifact: React.FC = () => {
             }
 
             try {
-                const data = await getCourseData(campus);
+                const data = await getCourseData(school);
                 setCourseData(data);
 
-                const schemaResponse = await fetch(`/ffcs/${campus}.json`);
+                const schemaResponse = await fetch(`/ffcs/schemas/${campus}.json`);
                 const schemaData = await schemaResponse.json();
                 setTimetableSchema(schemaData);
 
@@ -44,10 +58,10 @@ const FFCSArtifact: React.FC = () => {
             setLoading(false);
         };
         loadData();
-    }, [campus]);
+    }, [school]);
 
     useEffect(() => {
-        localStorage.setItem(`ffcs_timetable_${campus}`, JSON.stringify(timetable));
+        localStorage.setItem(`ffcs_timetable_${school}`, JSON.stringify(timetable));
     }, [timetable, campus]);
 
     useEffect(() => {
@@ -118,13 +132,18 @@ const FFCSArtifact: React.FC = () => {
                 <div className="bg-gray-800 p-4 rounded-lg space-y-4">
                     <h3 className="text-xl font-semibold">Course Selection</h3>
                     <select
-                        value={campus}
-                        onChange={(e) => setCampus(e.target.value as any)}
+                        value={school}
+                        onChange={(e) => setSchool(e.target.value as any)}
                         className="w-full bg-gray-700 border border-gray-600 rounded-md p-2"
                     >
-                        <option value="vellore">Vellore</option>
-                        <option value="chennai">Chennai</option>
-                        <option value="ap">AP</option>
+                        <option value="smec">SMEC</option>
+                        <option value="score">SCORE</option>
+                        <option value="scope">SCOPE</option>
+                        <option value="sbst">SBST</option>
+                        <option value="sce">SCE</option>
+                        <option value="scheme">SCHEME</option>
+                        <option value="select">SELECT</option>
+                        <option value="sense">SENSE</option>
                     </select>
 
                     <div className="relative">
@@ -201,7 +220,7 @@ const FFCSArtifact: React.FC = () => {
                         </div>
                                                 <div className="p-4 overflow-auto">
                             {timetableSchema ? (
-                                <TimetableGrid timetable={timetable} schema={timetableSchema} />
+                                <TimetableGrid timetable={timetable} schema={timetableSchema as TimetableSchema} />
                             ) : (
                                 <p className="text-center text-gray-400">Loading timetable view...</p>
                             )}

@@ -32,8 +32,16 @@ const TimetableGrid: React.FC<TimetableGridProps> = ({ timetable, schema }) => {
         const sortedDayKeys = dayKeys.sort((a, b) => dayOrder.indexOf(a) - dayOrder.indexOf(b));
         const days = sortedDayKeys.map(d => d.charAt(0).toUpperCase() + d.slice(1));
 
+        const timeToMinutes = (timeStr: string) => {
+            const [time, period] = timeStr.split(' ');
+            let [hours, minutes] = time.split(':').map(Number);
+            if (period === 'PM' && hours !== 12) hours += 12;
+            if (period === 'AM' && hours === 12) hours = 0;
+            return hours * 60 + minutes;
+        };
+
         const timeHeaders = [...new Set(allSlots.filter(s => !s.lunch).map(s => s.start))]
-            .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+            .sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
 
         const slotGridMap: { [key: string]: { day: number; start: number; span: number }[] } = {};
         const dayIndexMap = new Map(sortedDayKeys.map((d, i) => [d, i]));

@@ -839,11 +839,48 @@ const PaperCard = ({
   )
 }
 
+interface Course {
+  code: string;
+  title: string;
+  slot?: string;
+  type?: string;
+  [key: string]: any;
+}
+
+interface CourseWithSlots extends Course {
+  slots: string[];
+  count: number;
+}
+
 const FacultyCard = ({ faculty }: { faculty: any }) => {
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [expanded, setExpanded] = useState(false)
   const [showCourses, setShowCourses] = useState(false)
   const hasCourses = Array.isArray(faculty.courses) && faculty.courses.length > 0
+  
+  const groupedCourses = React.useMemo(() => {
+    if (!hasCourses) return [];
+    
+    const courseMap: Record<string, CourseWithSlots> = {};
+    
+    faculty.courses.forEach((course: Course) => {
+      if (!courseMap[course.code]) {
+        courseMap[course.code] = {
+          ...course,
+          slots: course.slot ? [course.slot] : [],
+          count: 1
+        };
+      } else {
+        const existing = courseMap[course.code];
+        if (course.slot && !existing.slots.includes(course.slot)) {
+          existing.slots.push(course.slot);
+        }
+        existing.count++;
+      }
+    });
+    
+    return Object.values(courseMap);
+  }, [faculty.courses, hasCourses]);
 
   return (
     <Card className="w-full max-w-full hover:shadow-sm transition-all duration-200 border-border bg-card">
@@ -917,64 +954,101 @@ const FacultyCard = ({ faculty }: { faculty: any }) => {
           )}
         </div>
 
-        {isMobile && (
-          <>
-            {hasCourses && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowCourses(!showCourses)}
-                  className="h-7 px-3 text-xs mt-2"
+        {hasCourses && (
+          <div className="mt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowCourses(!showCourses)}
+              className="h-8 px-3 text-xs w-full sm:w-auto flex items-center gap-1.5"
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              {showCourses ? 'Hide Courses' : `View ${groupedCourses.length} Course${groupedCourses.length !== 1 ? 's' : ''}`}
+            </Button>
+            
+            <AnimatePresence>
+              {showCourses && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
                 >
-                  {showCourses ? 'Hide Courses' : 'View Courses'}
-                </Button>
-                {showCourses && (
-                  <div className="mt-2 max-h-40 overflow-y-auto grid gap-2 text-xs">
-                    {faculty.courses.map((c: any, idx: number) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <Badge variant="secondary" className="px-1.5 py-0.5 whitespace-nowrap">
-                          {c.code}
-                        </Badge>
-                        <span className="flex-1 min-w-0 truncate" title={c.title}>
-                          {c.title}
-                        </span>
-                        {c.slot && (
-                          <Badge variant="outline" className="px-1.5 py-0.5 whitespace-nowrap">
-                            {c.slot}
-                          </Badge>
-                        )}
-                      </div>
-                    ))}
+                  <div className="mt-3 border rounded-lg divide-y">
+                    <div className="bg-muted/30 p-2 px-3 text-xs font-medium text-muted-foreground flex items-center justify-between">
+                      <span>Course Code</span>
+                      <span>Title & Slots</span>
+                    </div>
+                    <div className="max-h-[300px] overflow-y-auto">
+                      {groupedCourses.map((course: any, idx: number) => (
+                        <div 
+                          key={`${course.code}-${idx}`} 
+                          className="p-2 px-3 text-sm hover:bg-muted/30 transition-colors"
+                        >
+                          <div className="flex items-start gap-4">
+                            <div className="font-mono text-xs font-medium min-w-[80px] pt-0.5">
+                              {course.code}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-foreground">
+                                {course.title}
+                              </div>
+                              {course.slots && course.slots.length > 0 && (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {course.slots.map((slot: string, slotIdx: number) => (
+                                    <Badge 
+                                      key={slotIdx} 
+                                      variant="outline" 
+                                      className="text-xs font-normal py-0.5 h-5"
+                                    >
+                                      {slot}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                )}
-              </>
-            )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
 
-            {(faculty.specialization?.length > 30 ||
-              faculty.department?.length > 30 ||
-              faculty.email?.length > 30) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setExpanded(!expanded)}
-                className="w-full text-xs h-7 mt-2"
-              >
-                {expanded ? (
-                  <>
-                    <ChevronUp className="h-3 w-3 mr-1" />
-                    Show Less
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown className="h-3 w-3 mr-1" />
-                    Show More
-                  </>
-                )}
-              </Button>
-            )}
+{(() => {
+  const longFields = [
+    faculty.specialization?.length > 30 ? 'specialization' : null,
+    faculty.department?.length > 30 ? 'department' : null,
+    faculty.email?.length > 30 ? 'email' : null
+  ].filter(Boolean);
+  
+  if (longFields.length > 1) {
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setExpanded(!expanded)}
+        className="w-full text-xs h-7 mt-2"
+      >
+        {expanded ? (
+          <>
+            <ChevronUp className="h-3 w-3 mr-1" />
+            Show Less
+          </>
+        ) : (
+          <>
+            <ChevronDown className="h-3 w-3 mr-1" />
+            Show More
           </>
         )}
+      </Button>
+    );
+  }
+})()}
       </CardContent>
     </Card>
   )

@@ -348,7 +348,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
       title: `${result.faculty.length} Faculty Members`,
       icon: <Users className="h-5 w-5 text-purple-400" />,
       data: result.faculty,
-      source: result.source || toolName || 'Faculty Directory',
+      source: 'Faculty Directory',
     }
   }
 
@@ -359,7 +359,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         result.faculty.length > 0 ? `${result.faculty.length} Faculty Members` : 'Faculty Search',
       icon: <Users className="h-5 w-5 text-purple-400" />,
       data: result.faculty,
-      source: result.source || toolName || 'Faculty Directory',
+      source: 'Faculty Directory',
       message: result.message,
       total: result.total,
       success: result.success,
@@ -685,7 +685,6 @@ const ToolCallResultsSummary = ({
       (config): config is NonNullable<typeof config> =>
         config !== null &&
         config !== undefined &&
-        // Always show faculty artifact, even if empty, to trigger pretty empty state
         (config.type === 'faculty' ||
           (config.data && (Array.isArray(config.data) ? config.data.length > 0 : true)))
     )

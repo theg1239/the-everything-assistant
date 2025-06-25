@@ -323,6 +323,14 @@ export async function POST(req: Request) {
       const tool = tools[directToolCall.toolName as keyof typeof tools]
 
       if (tool && typeof tool.execute === 'function') {
+        if (
+          directToolCall.toolName === 'getFacultyInfo' &&
+          directToolCall.args &&
+          directToolCall.args.facultyName &&
+          !directToolCall.args.includeCourses
+        ) {
+          directToolCall.args.includeCourses = true;
+        }
         try {
           const result = await tool.execute(directToolCall.args, {
             toolCallId: directToolCall.toolCallId || Date.now().toString(),
@@ -441,9 +449,9 @@ ADDITIONAL COMPREHENSIVE KNOWLEDGE:
 ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
 
     // Log the full combined system prompt for debugging
-    console.log('--- SYSTEM PROMPT START ---')
-    console.log(combinedSystemPrompt)
-    console.log('--- SYSTEM PROMPT END ---')
+    // console.log('--- SYSTEM PROMPT START ---')
+    // console.log(combinedSystemPrompt)
+    // console.log('--- SYSTEM PROMPT END ---')
 
     const enhancedMessages = messages.map((message: any) => {
       if (

@@ -20,7 +20,10 @@ export type School = 'smec' | 'score' | 'scope' | 'sbst' | 'sce' | 'scheme' | 's
 export async function getCourseData(
     school: School = 'smec',
 ): Promise<FFCSToolData> {
-    const response = await fetch(`/ffcs/${school}.json`);
+    const baseUrl = typeof window === 'undefined' 
+        ? process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000' 
+        : '';
+    const response = await fetch(`${baseUrl}/ffcs/${school}.json`);
     if (!response.ok) {
         throw new Error(`Failed to fetch course data for ${school}`);
     }

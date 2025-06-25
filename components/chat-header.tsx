@@ -5,9 +5,17 @@ import { memo, useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 
 const getTimeOfDayGreeting = () => {
-  const hour = new Date().getHours()
-  const now = new Date()
-  const dayOfWeek = now.getDay()
+  const hour = new Date().getHours();
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const season = getSeason();
+
+  const seasonalGreetings = {
+    spring: ['spring in your step', 'fresh beginnings'],
+    summer: ['sunny vibes', 'summer breeze'],
+    autumn: ['cozy season', 'autumn leaves'],
+    winter: ['winter wonderland', 'stay warm'],
+  };
 
   if (hour >= 5 && hour < 12) {
     const morningGreetings = [
@@ -29,8 +37,9 @@ const getTimeOfDayGreeting = () => {
       'morning champion',
       hour < 7 ? 'wow, early riser' : 'perfect timing',
       dayOfWeek === 1 ? 'monday warrior' : 'morning superstar',
-    ]
-    return morningGreetings[Math.floor(Math.random() * morningGreetings.length)]
+      ...seasonalGreetings[season],
+    ];
+    return morningGreetings[Math.floor(Math.random() * morningGreetings.length)];
   } else if (hour >= 12 && hour < 17) {
     const afternoonGreetings = [
       'hey',
@@ -51,8 +60,9 @@ const getTimeOfDayGreeting = () => {
       'golden hours',
       hour === 12 ? "lunch o'clock" : 'afternoon momentum',
       dayOfWeek >= 1 && dayOfWeek <= 5 ? 'weekday warrior' : 'weekend bliss',
-    ]
-    return afternoonGreetings[Math.floor(Math.random() * afternoonGreetings.length)]
+      ...seasonalGreetings[season],
+    ];
+    return afternoonGreetings[Math.floor(Math.random() * afternoonGreetings.length)];
   } else if (hour >= 17 && hour < 22) {
     const eveningGreetings = [
       'hey',
@@ -73,8 +83,9 @@ const getTimeOfDayGreeting = () => {
       'twilight magic',
       hour >= 19 ? 'late evening' : 'early evening',
       dayOfWeek === 5 ? 'friday freedom' : 'evening momentum',
-    ]
-    return eveningGreetings[Math.floor(Math.random() * eveningGreetings.length)]
+      ...seasonalGreetings[season],
+    ];
+    return eveningGreetings[Math.floor(Math.random() * eveningGreetings.length)];
   } else {
     if (dayOfWeek === 5 || dayOfWeek === 6) {
       const weekendNightGreetings = [
@@ -91,8 +102,8 @@ const getTimeOfDayGreeting = () => {
         'saturday night',
         'weekend mode',
         'night owl hours',
-      ]
-      return weekendNightGreetings[Math.floor(Math.random() * weekendNightGreetings.length)]
+      ];
+      return weekendNightGreetings[Math.floor(Math.random() * weekendNightGreetings.length)];
     }
 
     const nightGreetings = [
@@ -114,10 +125,10 @@ const getTimeOfDayGreeting = () => {
       'owl hours',
       hour >= 2 && hour < 5 ? 'seriously, sleep maybe' : 'night excellence',
       hour >= 3 ? 'dedication level: max' : 'night owl extraordinaire',
-    ]
-    return nightGreetings[Math.floor(Math.random() * nightGreetings.length)]
+    ];
+    return nightGreetings[Math.floor(Math.random() * nightGreetings.length)];
   }
-}
+};
 
 const PureChatHeader = () => {
   const { data: session } = useSession()

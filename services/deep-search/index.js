@@ -137,7 +137,7 @@ app.listen(PORT, () => {
     .initialize()
     .then(() => {
       logger.info('Knowledge base initialized')
-      if (process.env.NODE_ENV === 'development' && process.env.ENABLE_INITIAL_SCRAPE === 'true') {
+      if (process.env.ENABLE_INITIAL_SCRAPE === 'true') {
         logger.info('Performing initial dev mode scrape…')
         redditScraper
           .scrapeAllTargetSubreddits()

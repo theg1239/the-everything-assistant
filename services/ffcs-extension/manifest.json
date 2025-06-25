@@ -1,0 +1,17 @@
+{
+    "manifest_version": 3,
+    "name": "VTOP Course Fetcher",
+    "version": "1.1",
+    "description": "Scrapes course allocation details from VTOP and exports to CSV.",
+    "permissions": [
+      "activeTab",
+      "scripting",
+      "downloads"
+    ],
+    "host_permissions": [
+      "*://vtop.vit.ac.in/*"
+    ],
+    "action": {
+      "default_popup": "popup.html"
+    }
+  }

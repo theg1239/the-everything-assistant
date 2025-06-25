@@ -38,7 +38,7 @@ class RedditScraper {
     try {
       const {
         limit = 25,
-        sort = 'best',
+        sort = 'new',
         timeframe = 'DAY',
         includeComments = true,
         maxCommentsPerPost = 50,
@@ -154,7 +154,7 @@ class RedditScraper {
     try {
       const {
         limit = 25,
-        sort = 'best',
+        sort = 'new',
         timeframe = 'DAY',
         maxPages = parseInt(process.env.MAX_PAGES_PER_SUBREDDIT) || 50,
       } = options

@@ -337,21 +337,23 @@ const PureChatInterface = ({
     setMessages,
   })
   const scrollToBottom = useCallback(() => {
-    if (messagesEndRef.current) {
-      const container = contentRef.current?.parentElement
-      if (container && isMobile) {
-        container.scrollTo({
-          top: container.scrollHeight,
-          behavior: 'smooth',
-        })
-      } else {
-        messagesEndRef.current.scrollIntoView({
-          behavior: 'smooth',
-          block: 'end',
-        })
-      }
+    if (!messagesEndRef.current) return
+
+    const container = contentRef.current?.parentElement
+    const scrollBehavior: ScrollBehavior = isLoading ? 'auto' : 'smooth'
+
+    if (container && isMobile) {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: scrollBehavior,
+      })
+    } else {
+      messagesEndRef.current.scrollIntoView({
+        behavior: scrollBehavior,
+        block: 'end',
+      })
     }
-  }, [isMobile])
+  }, [isMobile, isLoading])
 
   // Throttle scroll operations to prevent excessive reflows
   const throttledScrollToBottom = useThrottle(scrollToBottom, 100)

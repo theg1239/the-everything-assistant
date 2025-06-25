@@ -33,8 +33,6 @@
   body {
     height: 100%;
     height: var(--app-height);
-    overflow: hidden;
-    position: fixed;
     width: 100%;
     overscroll-behavior-y: none;
     -webkit-overflow-scrolling: touch;

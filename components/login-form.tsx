@@ -51,7 +51,10 @@ export function LoginForm() {
             </Button>
 
             <div className="text-xs text-slate-300 text-center">
-              by signing in, you agree to our terms of service and privacy policy
+              by signing in, you agree to our{' '}
+              <a href="/guidelines/terms" className="underline hover:text-slate-100 transition-colors">terms of service</a>
+              {' '}and{' '}
+              <a href="/guidelines/privacy" className="underline hover:text-slate-100 transition-colors">privacy policy</a>
             </div>
           </CardContent>
         </Card>

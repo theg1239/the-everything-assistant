@@ -5,16 +5,6 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-html,
-body {
-  height: 100%;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  position: fixed;
-  overscroll-behavior: none;
-}
 
 @media (max-width: 768px) {
   .sidebar-container {
@@ -51,15 +41,6 @@ body {
   -webkit-overflow-scrolling: touch !important;
   overscroll-behavior: contain !important;
   touch-action: pan-y !important;
-}
-
-main {
-  height: 100vh;
-  height: var(--app-height);
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  overflow: hidden;
 }
 
 .chat-page-header {

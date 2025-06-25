@@ -47,8 +47,8 @@ export default function RootLayout({
           }
         `}</style>
       </head>
-      <body className={`${inter.className} h-full overflow-hidden`}>
-        <script
+      <body className={`${inter.className}`}>
+        {/* <script
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
@@ -82,7 +82,7 @@ export default function RootLayout({
               })();
             `,
           }}
-        />{' '}
+        />{' '} */}
         <SessionProvider>
           <ThemeProvider
             attribute="class"

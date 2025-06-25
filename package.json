@@ -39,6 +39,7 @@
     "@react-three/drei": "^10.3.0",
     "@react-three/fiber": "^9.1.2",
     "@react-three/postprocessing": "^3.0.4",
+    "@react-three/rapier": "^2.1.0",
     "@sparticuz/chromium": "latest",
     "@tailwindcss/typography": "latest",
     "@types/crypto-js": "^4.2.2",
@@ -51,6 +52,7 @@
     "dotenv": "^16.3.1",
     "framer-motion": "latest",
     "lucide-react": "latest",
+    "meshline": "^3.3.1",
     "nanoid": "latest",
     "next": "^15.3.4",
     "next-auth": "^4.24.11",
@@ -74,8 +76,8 @@
     "tailwind-merge": "^3.3.0",
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.177.0",
-    "zod": "latest",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "zod": "latest"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",

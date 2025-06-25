@@ -792,29 +792,40 @@ export function createVITTools() {
     }),
 
     getCourseInfo: tool({
-      description: 'Get information about courses from the FFCS dataset, such as faculty names, slots, or course codes.',
+      description: 'Get information about courses from the FFCS dataset (for SMEC / SCOPE), such as faculty names, slots, or course codes.',
       parameters: z.object({
-        campus: z.enum(['vellore', 'chennai', 'ap']).describe('The campus to search for courses in.'),
+        school: z.enum(['smec', 'scope']).describe('The school to search within (smec or scope). smec is the school of mechanical engineering, scope is the school of computer science and engineering'),
         courseQuery: z.string().describe('The course code or title to search for. Can be a partial match.'),
         slot: z.string().optional().describe('An optional specific slot to filter by (e.g., "A1", "L1+L2").'),
       }),
-      execute: async ({ campus, courseQuery, slot }) => {
+      execute: async ({ school, courseQuery, slot }) => {
         try {
-          const { allCourses } = await getCourseData(campus);
-  
-          let filteredCourses = allCourses.filter(course =>
-            course.CODE.toLowerCase().includes(courseQuery.toLowerCase()) ||
-            course.TITLE.toLowerCase().includes(courseQuery.toLowerCase())
-          );
-  
+          const { allCourses } = await getCourseData(school);
+
+          let matchCodes: string[] = [];
+          const matches = getAllCourseMatches(courseQuery);
+          if (matches.length > 0) {
+            matchCodes = matches.map(m => m.code.toUpperCase());
+          }
+
+          let filteredCourses = allCourses.filter(course => {
+            if (matchCodes.length) {
+              return matchCodes.includes(course.CODE.toUpperCase());
+            }
+            return (
+              course.CODE.toLowerCase().includes(courseQuery.toLowerCase()) ||
+              course.TITLE.toLowerCase().includes(courseQuery.toLowerCase())
+            );
+          });
+
           if (slot) {
             filteredCourses = filteredCourses.filter(course => course.SLOT === slot);
           }
-  
+
           if (filteredCourses.length === 0) {
             return {
               success: true,
-              message: `No courses found matching "${courseQuery}"` + (slot ? ` in slot ${slot}` : '') + ` for ${campus} campus.`,
+              message: `No courses found matching "${courseQuery}"` + (slot ? ` in slot ${slot}` : '') + ` for ${school.toUpperCase()} school.`,
               results: [],
             };
           }

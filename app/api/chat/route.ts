@@ -331,9 +331,10 @@ export async function POST(req: Request) {
 
           if (
             directToolCall.toolName === 'queryVTOP' &&
-            result.success &&
+            'success' in result &&
+            (result as any).success &&
             'data' in result &&
-            result.data
+            (result as any).data
           ) {
             try {
               const command = (
@@ -500,7 +501,7 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
 
     const resultStream = await rateLimitedGoogle.streamText(
       {
-        model: await rateLimitedGoogle.model('gemini-2.5-flash'),
+        model: await rateLimitedGoogle.model('gemini-2.5-flash-lite-preview-06-17'),
         messages: [{ role: 'system', content: combinedSystemPrompt }, ...enhancedMessages],
         tools,
         temperature: 0.7,

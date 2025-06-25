@@ -28,13 +28,14 @@ export interface FFCSToolData {
  * @returns A promise that resolves to an object containing both `allCourses` and `uniqueCourses`.
  */
 export async function getCourseData(
-    campus: 'vellore' | 'chennai' | 'ap',
+    school: 'smec' | 'scope' = 'smec',
 ): Promise<FFCSToolData> {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
     if (!baseUrl) {
         throw new Error('NEXT_PUBLIC_BASE_URL environment variable is not set.');
     }
-    const response = await fetch(`${baseUrl}/ffcs/report_${campus}.csv`);
+        const fileName = school === 'smec' ? 'vtop_course_details.csv' : 'vtop_course_details2.csv.xls';
+    const response = await fetch(`${baseUrl}/ffcs/${fileName}`);
     const csvText = await response.text();
 
     const parsedData = await new Promise<Papa.ParseResult<Course>>(
@@ -59,5 +60,5 @@ export async function getCourseData(
             ) === index,
     );
 
-    return { allCourses, uniqueCourses };
+        return { allCourses, uniqueCourses };
 }

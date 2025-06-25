@@ -18,7 +18,7 @@ async function generateChatTitle(userMessage: string, userId?: string): Promise<
 
     const cleanMessage = userMessage.trim().toLowerCase()
     if (cleanMessage.length < 10 || ['hi', 'hello', 'hey', 'test', 'help'].includes(cleanMessage)) {
-      console.log('⏭Skipping title generation for simple message')
+      //console.log('⏭Skipping title generation for simple message')
       return extractTitleFromContent(userMessage)
     }
 

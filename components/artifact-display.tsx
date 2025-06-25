@@ -173,7 +173,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
 
           if (process.env.NODE_ENV !== 'production') {
             // eslint-disable-next-line no-console
-            console.log('[VTOP] validSubjects length', validSubjects.length)
+            //console.log('[VTOP] validSubjects length', validSubjects.length)
           }
 
           if (validSubjects.length === 0) {

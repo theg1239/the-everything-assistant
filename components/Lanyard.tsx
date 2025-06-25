@@ -261,6 +261,17 @@ function Band({ maxSpeed = 50, minSpeed = 0 }: BandProps) {
                   .sub(vec.copy(card.current.translation()))
               );
             }}
+            onClick={() => {
+              if (card.current) {
+                const current = card.current.rotation();
+                card.current.setRotation({
+                  x: current.x,
+                  y: current.y + Math.PI / 2,
+                  z: current.z,
+                  w: current.w,
+                });
+              }
+            }}
           >
             <mesh geometry={nodes.card.geometry}>
               <meshPhysicalMaterial

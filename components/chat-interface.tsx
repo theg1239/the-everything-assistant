@@ -963,7 +963,7 @@ const PureChatInterface = ({
               />
               <div className="px-2 sm:px-4 pb-0.5">
                 <p className="text-[10px] sm:text-xs text-muted-foreground text-center leading-tight">
-                  the assistant can make mistakes. please verify important information.
+                  the assistant can make mistakes. please verify information.
                 </p>
               </div>
             </div>

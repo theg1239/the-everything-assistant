@@ -128,7 +128,6 @@ function generateQuestionsByCategory(): { [key: string]: string[] } {
       'explain the cat and fat system',
     ],
     vtop: [
-      'show me my vtop profile',
       'what are my marks this semester?',
       'check my attendance percentage',
       'show me my current timetable',

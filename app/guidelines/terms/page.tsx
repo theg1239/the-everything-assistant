@@ -33,63 +33,56 @@ export default function TermsOfServicePage() {
         </section>
 
         <section className="mb-6">
-          <h2 className="text-xl font-semibold mb-2">4. Intellectual Property</h2>
-          <p>
-            All content, code, and data provided through the Service is owned by us or licensed to us. You may not reproduce, distribute, or create derivative works without our express permission.
-          </p>
-        </section>
-
-        <section className="mb-6">
-          <h2 className="text-xl font-semibold mb-2">5. Third-Party Model Providers</h2>
+          <h2 className="text-xl font-semibold mb-2">4. Third-Party Model Providers</h2>
           <p>
             The Service may use third-party AI providers to process requests. Their use of data is governed by their own Terms of Service and Privacy Policies. We encourage you to review those documents.
           </p>
         </section>
 
         <section className="mb-6">
-          <h2 className="text-xl font-semibold mb-2">6. No Affiliation</h2>
+          <h2 className="text-xl font-semibold mb-2">5. No Affiliation</h2>
           <p>
             This Service is an independent entity and is not affiliated with, endorsed by, or sponsored by any academic institution, government agency, or other organization unless explicitly stated. Any references to external entities are for informational purposes only.
           </p>
         </section>
 
         <section className="mb-6">
-          <h2 className="text-xl font-semibold mb-2">7. Rate Limiting</h2>
+          <h2 className="text-xl font-semibold mb-2">6. Rate Limiting</h2>
           <p>
             To ensure fair use and stable performance, we enforce rate limits on the number of API requests per user over a set time period. Excessive requests may result in temporary suspension. Contact support if you require higher limits.
           </p>
         </section>
 
         <section className="mb-6">
-          <h2 className="text-xl font-semibold mb-2">8. Disclaimer of Warranties</h2>
+          <h2 className="text-xl font-semibold mb-2">7. Disclaimer of Warranties</h2>
           <p>
             The Service is provided "as is" without warranties of any kind, express or implied, including fitness for a particular purpose.
           </p>
         </section>
 
         <section className="mb-6">
-          <h2 className="text-xl font-semibold mb-2">9. Limitation of Liability</h2>
+          <h2 className="text-xl font-semibold mb-2">8. Limitation of Liability</h2>
           <p>
             Under no circumstances shall we be liable for indirect, incidental, or consequential damages arising from your use of the Service.
           </p>
         </section>
 
         <section className="mb-6">
-          <h2 className="text-xl font-semibold mb-2">10. Termination</h2>
+          <h2 className="text-xl font-semibold mb-2">9. Termination</h2>
           <p>
             We may suspend or terminate your access at any time for violations of these Terms or for maintenance reasons.
           </p>
         </section>
 
         <section className="mb-6">
-          <h2 className="text-xl font-semibold mb-2">11. Changes to Terms</h2>
+          <h2 className="text-xl font-semibold mb-2">10. Changes to Terms</h2>
           <p>
             We reserve the right to modify these Terms at any time. Continued use after changes constitutes acceptance.
           </p>
         </section>
 
         <section>
-          <h2 className="text-xl font-semibold mb-2">12. Governing Law & Contact</h2>
+          <h2 className="text-xl font-semibold mb-2">11. Governing Law & Contact</h2>
           <p>
             These Terms are governed by applicable local laws. For questions or rate limit inquiries, contact{' '}
             <a href="mailto:support@vimegle.com" className="underline">

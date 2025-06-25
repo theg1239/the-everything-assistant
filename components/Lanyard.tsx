@@ -281,6 +281,17 @@ function Band({ maxSpeed = 50, minSpeed = 0 }: BandProps) {
                 clearcoatRoughness={0.15}
                 roughness={0.9}
                 metalness={0.8}
+                side={THREE.FrontSide}
+                transparent={false}
+              />
+            </mesh>
+            <mesh geometry={nodes.card.geometry} position={[0, 0, 0.01]}>
+              <meshPhysicalMaterial
+                color={"#222"} // Solid color for the back
+                roughness={0.9}
+                metalness={0.8}
+                side={THREE.BackSide}
+                transparent={false}
               />
             </mesh>
             <mesh

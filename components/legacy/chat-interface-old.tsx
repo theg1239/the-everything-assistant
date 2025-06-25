@@ -88,7 +88,7 @@ const PureChatInterface = ({ initialMessages = [], chatId }: ChatInterfaceProps)
       onError: error => {
         console.error('Chat error:', error)
         toast.error('Something went wrong. Please try again.')
-        setErrorMessage('something went wrong. please try again.')
+        // setErrorMessage('something went wrong. please try again.')
       },
     })
 

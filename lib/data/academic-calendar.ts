@@ -19,7 +19,7 @@ Course Registration & Setup:
 - June 28, 2025 (Saturday): Course registration by students
 - July 9, 2025 (Wednesday): Commencement of Fall Semester 2025-26
 - July 9-11, 2025 (Wednesday to Friday): Course add/drop option to students
-- July 20, 2025 (Sunday): Last date for payment of re-registration fees
+- July 20, 2025 (Sunday): Last date for payment of re-registration fees (if applicable, for students with backlogs)
 
 Holidays & Breaks:
 - August 15, 2025 (Friday): Independence Day (Holiday)

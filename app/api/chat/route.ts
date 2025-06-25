@@ -305,17 +305,21 @@ export async function POST(req: Request) {
 
       const userMessage = messages[0]?.content || ''
       if (userMessage.trim()) {
-        generateChatTitle(userMessage, session.user.id)
-          .then(async properTitle => {
-            if (properTitle !== tempTitle) {
-              await updateChat(chat!.id, properTitle)
-              console.log('Chat title updated successfully:', properTitle)
-            }
-          })
-          .catch(error => {
-            console.error('Failed to update chat title:', error)
-          })
+        setTimeout(() => {
+          generateChatTitle(userMessage, session.user.id)
+            .then(async properTitle => {
+              if (properTitle !== tempTitle) {
+                await updateChat(chat!.id, properTitle)
+                console.log('Chat title updated successfully:', properTitle)
+              }
+            })
+            .catch(error => {
+              console.error('Failed to update chat title:', error)
+            })
+        }, 2000) // Delay of 2 seconds
       }
+
+      
     }
 
     if (directToolCall) {
@@ -574,6 +578,17 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
           error: 'RATE_LIMIT_EXCEEDED',
           message: error.message,
           type: 'user_rate_limit',
+        }),
+        { status: 429, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    if (error.message?.toLowerCase().includes('rate limit')) {
+      return new Response(
+        JSON.stringify({
+          error: 'RATE_LIMIT_EXCEEDED',
+          message: 'The model is currently overloaded. Please try again later.',
+          type: 'model_rate_limit',
         }),
         { status: 429, headers: { 'Content-Type': 'application/json' } }
       )

@@ -100,6 +100,7 @@ export class ApiKeyManager {
   private keyBuckets: Map<string, TokenBucket> = new Map()
   private keyStatuses: Map<string, RateLimitStatus> = new Map()
   private lastHealthCheck: number = 0
+  private initPromise: Promise<void>
 
   constructor(config: ApiKeyConfig) {
     this.config = config
@@ -107,12 +108,11 @@ export class ApiKeyManager {
       url: process.env.UPSTASH_REDIS_REST_URL!,
       token: process.env.UPSTASH_REDIS_REST_TOKEN!,
     })
-    // initialize asynchronously (you might await this in an init() in future)
-    this.initializeBuckets()
-    this.loadCurrentKeyIndex()
+    this.initPromise = Promise.all([this.initializeBuckets(), this.loadCurrentKeyIndex()]).then(() => void 0)
   }
 
   private async initializeBuckets(): Promise<void> {
+    if (this.config.keys.length === 0) return
     for (const key of this.config.keys) {
       const keyHash = this.hashKey(key)
       this.keyBuckets.set(
@@ -187,6 +187,9 @@ export class ApiKeyManager {
   }
 
   private async consumeTokens(keyHash: string): Promise<boolean> {
+    if (this.initPromise) {
+      await this.initPromise
+    }
     const m = this.keyBuckets.get(`${keyHash}:minute`)
     const h = this.keyBuckets.get(`${keyHash}:hour`)
     const d = this.keyBuckets.get(`${keyHash}:day`)
@@ -246,6 +249,9 @@ export class ApiKeyManager {
   // ——————————————————————————————————————————————
 
   async getCurrentKey(): Promise<string> {
+  if (this.initPromise) {
+    await this.initPromise
+  }
     if (!this.config.enableRotation) {
       return this.config.keys[0]
     }
@@ -290,6 +296,7 @@ export class ApiKeyManager {
             await this.saveCurrentKeyIndex()
             const nxtHash = this.hashKey(nxt.key)
             if (await this.consumeTokens(nxtHash)) {
+              console.log(`[ApiKeyManager] Executing request with rotated API key index ${this.currentKeyIndex}`)
               await this.recordKeyUsage(nxtHash)
               return apiCall(nxt.key)
             }
@@ -298,6 +305,7 @@ export class ApiKeyManager {
         }
 
         if (ok) {
+          console.log(`[ApiKeyManager] Executing request with API key index ${this.currentKeyIndex}`)
           await this.recordKeyUsage(hash)
           return apiCall(key)
         }

@@ -44,6 +44,8 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { ResponsiveCard } from '@/components/responsive-card'
+import FFCSArtifact from './artifacts/ffcs-artifact';
+import FfcsCourseSearchResult from './artifacts/get-course-info-artifact';
 import { ResponsiveTable } from '@/components/responsive-table'
 
 interface ArtifactDisplayProps {
@@ -64,6 +66,8 @@ interface ArtifactDisplayProps {
     | 'error'
     | 'campus-info'
     | 'getPlacementInfo'
+    | 'ffcs-planner'
+    | 'course-info'
   className?: string
   onLoginClick?: () => void
   maximizedItem?: any
@@ -489,6 +493,13 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
           )
         }
         break
+      case 'course-info':
+        try {
+          const parsedOutput = JSON.parse(content);
+          return <FfcsCourseSearchResult data={parsedOutput} />;
+        } catch (error) {
+          return <pre className="text-xs text-red-400">Error parsing tool output: {String(error)}</pre>;
+        }
       default:
         return null
     }
@@ -2136,6 +2147,13 @@ const PureArtifactDisplay = ({
   }, [pdfUrl])
 
   const renderContent = () => {
+    if (type === 'ffcs-planner') {
+        return <FFCSArtifact />;
+      }
+
+    if (type === 'course-info') {
+        return <FfcsCourseSearchResult data={data} />;
+      }
     if (type === 'placements' && data && !Array.isArray(data)) {
       return <PlacementInfoCard data={data} />
     }
@@ -2456,4 +2474,4 @@ PureArtifactDisplay.displayName = 'PureArtifactDisplay'
 const ArtifactDisplay = memo(PureArtifactDisplay)
 ArtifactDisplay.displayName = 'ArtifactDisplay'
 
-export { ArtifactDisplay }
+export { ArtifactDisplay, type ArtifactDisplayProps }

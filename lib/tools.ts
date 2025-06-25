@@ -12,6 +12,7 @@ import {
   getAllCourseMatches,
   recognizeCourseInText,
 } from './course-map'
+import { getCourseData } from './ffcs-tool'
 
 async function searchRedditKnowledge(query: string, limit: number = 10) {
   try {
@@ -778,6 +779,69 @@ export function createVITTools() {
       },
     }),
 
+    ffcs_planner: tool({
+      description:
+        'Launch the FFCS (Fully Flexible Credit System) course planner. Use this tool to help the user plan their courses for the upcoming semester. This tool provides an interactive UI for searching, selecting, and visualizing a timetable.',
+      parameters: z.object({}),
+      execute: async () => {
+        return {
+          status: 'requires_user_interface',
+          ui: 'ffcs_planner',
+        }
+      },
+    }),
+
+    getCourseInfo: tool({
+      description: 'Get information about courses from the FFCS dataset, such as faculty names, slots, or course codes.',
+      parameters: z.object({
+        campus: z.enum(['vellore', 'chennai', 'ap']).describe('The campus to search for courses in.'),
+        courseQuery: z.string().describe('The course code or title to search for. Can be a partial match.'),
+        slot: z.string().optional().describe('An optional specific slot to filter by (e.g., "A1", "L1+L2").'),
+      }),
+      execute: async ({ campus, courseQuery, slot }) => {
+        try {
+          const { allCourses } = await getCourseData(campus);
+  
+          let filteredCourses = allCourses.filter(course =>
+            course.CODE.toLowerCase().includes(courseQuery.toLowerCase()) ||
+            course.TITLE.toLowerCase().includes(courseQuery.toLowerCase())
+          );
+  
+          if (slot) {
+            filteredCourses = filteredCourses.filter(course => course.SLOT === slot);
+          }
+  
+          if (filteredCourses.length === 0) {
+            return {
+              success: true,
+              message: `No courses found matching "${courseQuery}"` + (slot ? ` in slot ${slot}` : '') + ` for ${campus} campus.`,
+              results: [],
+            };
+          }
+  
+          const results = filteredCourses.map(course => ({
+            code: course.CODE,
+            title: course.TITLE,
+            faculty: course.FACULTY,
+            slot: course.SLOT,
+            type: course.TYPE,
+          }));
+  
+          return {
+            success: true,
+            message: `Found ${results.length} matching course(s).`,
+            results,
+          };
+        } catch (error) {
+          console.error('Error in getCourseInfo tool:', error);
+          return {
+            success: false,
+            message: 'An error occurred while fetching course information.',
+          };
+        }
+      }, 
+    }),
+    
     getFacultyInfo: tool({
       description: `Get current faculty information from a local JSON file (public/faculty.json). NEVER return all faculty members at once—ALWAYS require at least a department or faculty name filter. If no filter is provided, ask the user to specify a department or faculty name. Returns school, department, and faculty info. Do NOT provide a full list of all faculty.
 

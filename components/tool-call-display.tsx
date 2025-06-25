@@ -20,7 +20,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ArtifactDisplay } from './artifact-display'
+import { ArtifactDisplay, type ArtifactDisplayProps } from './artifact-display'
 import { useVTOP } from '../contexts/vtop-context'
 import { useMediaQuery } from '@/hooks/use-media-query'
 
@@ -33,7 +33,7 @@ interface ToolCallDisplayProps {
 }
 
 const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) => {
-  if (toolName === 'queryVTOP') {
+    if (toolName === 'queryVTOP') {
     if (result.data || result.output) {
       const vtopData = result.data || result.output
       const command = result.command || 'unknown'
@@ -373,6 +373,26 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
       icon: <Building2 className="h-5 w-5 text-cyan-400" />,
       data: result.companies,
       source: result.source || toolName || 'Company Database',
+    }
+  }
+
+  if (toolName === 'getCourseInfo') {
+    return {
+      type: 'course-info' as const,
+      title: 'Course Information',
+      icon: <GraduationCap className="h-4 w-4" />,
+      data: result,
+      source: 'Course Information'
+    }
+  }
+
+  if (toolName === 'ffcs_planner') {
+    return {
+      type: 'ffcs-planner' as const,
+      title: 'FFCS Timetable Planner',
+      icon: <GraduationCap className="h-4 w-4" />,
+      data: result,
+      source: 'FFCS Planner'
     }
   }
 

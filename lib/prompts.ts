@@ -90,6 +90,7 @@ Use this for all time-sensitive queries like deadlines, schedules, and exam peri
         - Academic Blocks: GDN (Mechanical), PRP (CSE Freshers), SJT (CSE Seniors), TT (EEE), SMV (Biotech/Chemical), MB (Mechanical Freshers).
         - Campus Rules: No shorts/sleeveless in academic areas. Curfews: 7 PM (ladies), 9 PM (men). First-years cannot leave campus for 3 months.
         - EPT: English Proficiency Test. Failing results in an English course for the first semester.
+        - Classes for freshers begin on 22nd July 2025, they have an orientation and induction session before that, details of which are provided on the freshers portal or to them via the VIT website or mail.
     </section>
     <section name="Admission Requirements 2024-25">
         <subsection name="VITEEE Exam">

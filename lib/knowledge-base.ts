@@ -160,7 +160,6 @@ category 4 (management quota):
 - n grade: audit (no grade points)
 - w grade: withdrawal (no impact on gpa)
 
-
 ## semester info
 
 - VIT has two main semesters, Fall Semester and Winter Semester, these follow the regular academic calendar, with the Fall Semester starting in August and ending in December, and the Winter Semester starting in late December/January and ending in May.

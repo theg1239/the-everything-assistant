@@ -1,4 +1,4 @@
-import { rateLimitedGoogle } from '@/lib/rate-limited-ai'
+import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getCurrentVITContext } from '@/lib/data/context-integration'
@@ -93,9 +93,9 @@ Generate exactly 3 follow-up questions that:
 Output exactly 3 questions, one per line, without numbering or bullet points.`
 
     // console.log('Calling AI model with prompt length:', prompt.length)
-    const result = await rateLimitedGoogle.generateText(
+    const result = await rateLimitedAI.google.generateText(
       {
-        model: rateLimitedGoogle.model(),
+        model: await rateLimitedAI.google.model(),
         prompt,
         maxTokens: 150,
         temperature: 0.7,

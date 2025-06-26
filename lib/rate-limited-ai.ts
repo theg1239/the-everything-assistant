@@ -2,6 +2,7 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { ApiKeyManager, ApiKeyConfig, DEFAULT_API_KEY_CONFIG } from './api-key-manager'
 import { UserRateLimiter, UserRateLimitConfig, loadUserRateLimitConfig } from './user-rate-limiter'
 import { streamText, generateObject, generateText, embed } from 'ai'
+import { groq } from '@ai-sdk/groq';
 
 export class RateLimitedGoogleAI {
   private apiKeyManager: ApiKeyManager

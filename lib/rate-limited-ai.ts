@@ -1,232 +1,208 @@
 // RateLimitedAI.ts
 
-import { createGoogleGenerativeAI } from '@ai-sdk/google';        // Google Generative AI provider 0
-import { createGroq } from '@ai-sdk/groq';                         // Groq provider 1
+import { createGoogleGenerativeAI } from '@ai-sdk/google'    // Google provider
+import { createGroq } from '@ai-sdk/groq'                   // Groq provider
 import {
   ApiKeyManager,
   ApiKeyConfig,
   DEFAULT_API_KEY_CONFIG,
-} from './api-key-manager';
+} from './api-key-manager'
 import {
   UserRateLimiter,
   UserRateLimitConfig,
   loadUserRateLimitConfig,
-} from './user-rate-limiter';
-import { streamText, generateText, generateObject, embed } from 'ai';
+} from './user-rate-limiter'
+import { streamText, generateText, generateObject, embed } from 'ai'
 
-type Provider = 'google' | 'groq';
+type Provider = 'google' | 'groq'
 
 export class RateLimitedAI {
-  private apiKeyManager: ApiKeyManager;
-  private userRateLimiter: UserRateLimiter;
-  private config: ApiKeyConfig;
-  private userConfig: UserRateLimitConfig;
-  private provider: Provider;
+  private apiKeyManager: ApiKeyManager
+  private userRateLimiter: UserRateLimiter
+  private config: ApiKeyConfig
+  private userConfig: UserRateLimitConfig
+  private provider: Provider
 
   constructor(
     provider: Provider,
     customConfig?: Partial<ApiKeyConfig>,
     customUserConfig?: Partial<UserRateLimitConfig>
   ) {
-    this.provider = provider;
+    this.provider = provider
 
-    const apiKeys = this.loadApiKeysFromEnvironment();
-
+    const apiKeys = this.loadApiKeysFromEnvironment()
     this.config = {
       ...DEFAULT_API_KEY_CONFIG,
       ...customConfig,
       keys: apiKeys,
-    };
-
+    }
     this.userConfig = {
       ...loadUserRateLimitConfig(),
       ...customUserConfig,
-    };
-
-    this.apiKeyManager = new ApiKeyManager(this.config);
-    this.userRateLimiter = new UserRateLimiter(this.userConfig);
+    }
+    this.apiKeyManager = new ApiKeyManager(this.config)
+    this.userRateLimiter = new UserRateLimiter(this.userConfig)
   }
 
   private loadApiKeysFromEnvironment(): string[] {
-    const keys: string[] = [];
+    const keys: string[] = []
 
     if (this.provider === 'google') {
-      // GOOGLE_GENERATIVE_AI_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY_2... 2
       if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-        keys.push(process.env.GOOGLE_GENERATIVE_AI_API_KEY);
+        keys.push(process.env.GOOGLE_GENERATIVE_AI_API_KEY)
       }
       for (let i = 2; i <= 10; i++) {
-        const key = process.env[`GOOGLE_GENERATIVE_AI_API_KEY_${i}`];
-        if (key) keys.push(key);
+        const k = process.env[`GOOGLE_GENERATIVE_AI_API_KEY_${i}`]
+        if (k) keys.push(k)
       }
       if (keys.length === 0 && process.env.GOOGLE_AI_API_KEYS) {
         keys.push(
           ...process.env.GOOGLE_AI_API_KEYS
             .split(',')
-            .map((k) => k.trim())
+            .map((x) => x.trim())
             .filter(Boolean)
-        );
+        )
       }
       if (keys.length === 0) {
         throw new Error(
           'No Google AI API keys found. Please set GOOGLE_GENERATIVE_AI_API_KEY or GOOGLE_AI_API_KEYS.'
-        );
+        )
       }
     } else {
-      // GROQ_API_KEY, GROQ_API_KEY_2... 3
       if (process.env.GROQ_API_KEY) {
-        keys.push(process.env.GROQ_API_KEY);
+        keys.push(process.env.GROQ_API_KEY)
       }
       for (let i = 2; i <= 10; i++) {
-        const key = process.env[`GROQ_API_KEY_${i}`];
-        if (key) keys.push(key);
+        const k = process.env[`GROQ_API_KEY_${i}`]
+        if (k) keys.push(k)
       }
       if (keys.length === 0 && process.env.GROQ_API_KEYS) {
         keys.push(
           ...process.env.GROQ_API_KEYS
             .split(',')
-            .map((k) => k.trim())
+            .map((x) => x.trim())
             .filter(Boolean)
-        );
+        )
       }
       if (keys.length === 0) {
         throw new Error(
           'No Groq API keys found. Please set GROQ_API_KEY or GROQ_API_KEYS.'
-        );
+        )
       }
     }
 
-    console.log(
-      `Loaded ${keys.length} ${this.provider.toUpperCase()} API key(s)`
-    );
-    return keys;
+    console.log(`Loaded ${keys.length} ${this.provider} API key(s)`)
+    return keys
   }
 
   private createProviderInstance(apiKey: string) {
     if (this.provider === 'google') {
-      return createGoogleGenerativeAI({ apiKey });
+      return createGoogleGenerativeAI({ apiKey })
     }
-    return createGroq({ apiKey });
+    return createGroq({ apiKey })
   }
 
   getModel(modelName: string) {
     return async () => {
-      const key = await this.apiKeyManager.getCurrentKey();
-      const provider = this.createProviderInstance(key);
-      return provider(modelName);
-    };
+      const key = await this.apiKeyManager.getCurrentKey()
+      const provider = this.createProviderInstance(key)
+      return provider(modelName)
+    }
   }
 
-  getEmbeddingModel(modelName: string) {
+  // We no longer rely on provider.embedding because Groq doesn't support it.
+  // Embeddings always use Google.
+  getEmbeddingModel(modelName: string = 'text-embedding-004') {
     return async () => {
-      const key = await this.apiKeyManager.getCurrentKey();
-      const provider = this.createProviderInstance(key);
-      // Both Google and Groq providers expose `.embedding(…)`
-      // @ts-ignore
-      return provider.embedding(modelName);
-    };
+      const key = await this.apiKeyManager.getCurrentKey()
+      const google = createGoogleGenerativeAI({ apiKey: key })
+      return google.embedding(modelName)
+    }
   }
 
   async streamText(options: any, userId?: string) {
     if (userId && this.userConfig.enabled) {
-      const u = await this.userRateLimiter.checkRateLimit(userId);
-      if (!u.allowed) throw new Error(`Rate limit: ${u.error}`);
+      const u = await this.userRateLimiter.checkRateLimit(userId)
+      if (!u.allowed) throw new Error(`Rate limit: ${u.error}`)
     }
     return this.apiKeyManager.executeWithRateLimit(async (key) => {
-      const provider = this.createProviderInstance(key);
-      const modelFn = provider(options.model?.modelId);
-      return streamText({
-        ...options,
-        model: modelFn,
-      });
-    });
+      const provider = this.createProviderInstance(key)
+      const modelFn = provider(options.model?.modelId)
+      return streamText({ ...options, model: modelFn })
+    })
   }
 
   async generateText(options: any, userId?: string) {
     if (userId && this.userConfig.enabled) {
-      const u = await this.userRateLimiter.checkRateLimit(userId);
-      if (!u.allowed) throw new Error(`Rate limit: ${u.error}`);
+      const u = await this.userRateLimiter.checkRateLimit(userId)
+      if (!u.allowed) throw new Error(`Rate limit: ${u.error}`)
     }
     return this.apiKeyManager.executeWithRateLimit(async (key) => {
-      const provider = this.createProviderInstance(key);
-      const modelFn = provider(options.model?.modelId);
-      return generateText({
-        ...options,
-        model: modelFn,
-      });
-    });
+      const provider = this.createProviderInstance(key)
+      const modelFn = provider(options.model?.modelId)
+      return generateText({ ...options, model: modelFn })
+    })
   }
 
   async generateObject(options: any, userId?: string) {
     if (userId && this.userConfig.enabled) {
-      const u = await this.userRateLimiter.checkRateLimit(userId);
-      if (!u.allowed) throw new Error(`Rate limit: ${u.error}`);
+      const u = await this.userRateLimiter.checkRateLimit(userId)
+      if (!u.allowed) throw new Error(`Rate limit: ${u.error}`)
     }
     return this.apiKeyManager.executeWithRateLimit(async (key) => {
-      const provider = this.createProviderInstance(key);
-      const modelFn = provider(options.model?.modelId);
-      return generateObject({
-        ...options,
-        model: modelFn,
-      });
-    });
+      const provider = this.createProviderInstance(key)
+      const modelFn = provider(options.model?.modelId)
+      return generateObject({ ...options, model: modelFn })
+    })
   }
 
   async embed(options: any, userId?: string) {
-    if (userId && this.userConfig.enabled) {
-      const u = await this.userRateLimiter.checkRateLimit(userId);
-      if (!u.allowed) throw new Error(`Rate limit: ${u.error}`);
-    }
+    // Delegate embeddings always to Google
     return this.apiKeyManager.executeWithRateLimit(async (key) => {
-      const provider = this.createProviderInstance(key);
-      // @ts-ignore
-      return embed({
-        ...options,
-        model: provider.embedding(options.model?.modelId),
-      });
-    });
+      const google = createGoogleGenerativeAI({ apiKey: key })
+      const embeddingModel = google.embedding(options.model?.modelId || 'text-embedding-004')
+      return embed({ ...options, model: embeddingModel })
+    })
   }
 
   // Utility methods
   async getUsageStats() {
-    return this.apiKeyManager.getKeyUsageStats();
+    return this.apiKeyManager.getKeyUsageStats()
   }
   async rotateKey() {
-    return this.apiKeyManager.rotateToNextKey();
+    return this.apiKeyManager.rotateToNextKey()
   }
   async resetRateLimits() {
-    return this.apiKeyManager.resetAllRateLimits();
+    return this.apiKeyManager.resetAllRateLimits()
   }
   getConfig() {
-    return { ...this.config };
+    return { ...this.config }
   }
   updateConfig(c: Partial<ApiKeyConfig>) {
-    this.config = { ...this.config, ...c };
-    this.apiKeyManager = new ApiKeyManager(this.config);
+    this.config = { ...this.config, ...c }
+    this.apiKeyManager = new ApiKeyManager(this.config)
   }
 
   async getUserUsageStats(userId: string) {
-    return this.userRateLimiter.getUserUsageStats(userId);
+    return this.userRateLimiter.getUserUsageStats(userId)
   }
   async checkUserRateLimit(userId: string) {
-    return this.userRateLimiter.checkRateLimit(userId);
+    return this.userRateLimiter.checkRateLimit(userId)
   }
   async resetUserRateLimits(userId: string) {
-    return this.userRateLimiter.resetUserLimits(userId);
+    return this.userRateLimiter.resetUserLimits(userId)
   }
   getUserConfig() {
-    return { ...this.userConfig };
+    return { ...this.userConfig }
   }
   updateUserConfig(c: Partial<UserRateLimitConfig>) {
-    this.userConfig = { ...this.userConfig, ...c };
-    this.userRateLimiter.updateConfig(c);
+    this.userConfig = { ...this.userConfig, ...c }
+    this.userRateLimiter.updateConfig(c)
   }
 
   async getFullStatus(userId?: string) {
-    const apiKeys = await this.getUsageStats();
-    const userStats = userId
-      ? await this.getUserUsageStats(userId)
-      : null;
+    const apiKeys = await this.getUsageStats()
+    const userStats = userId ? await this.getUserUsageStats(userId) : null
     return {
       apiKeys: { stats: apiKeys, config: this.getConfig() },
       userRateLimit: {
@@ -234,38 +210,29 @@ export class RateLimitedAI {
         config: this.getUserConfig(),
         enabled: this.userConfig.enabled,
       },
-    };
+    }
   }
 }
 
 // -- singleton managers per provider --
 
-const instances: Partial<Record<Provider, RateLimitedAI>> = {};
+const instances: Partial<Record<Provider, RateLimitedAI>> = {}
 
-export function getRateLimitedAI(
-  provider: Provider,
-  config?: Partial<ApiKeyConfig>
-) {
+export function getRateLimitedAI(provider: Provider, config?: Partial<ApiKeyConfig>) {
   if (!instances[provider]) {
-    instances[provider] = new RateLimitedAI(provider, config);
+    instances[provider] = new RateLimitedAI(provider, config)
   }
-  return instances[provider]!;
+  return instances[provider]!
 }
 
-/** Convenience exports **/
+// Convenience exports
 
-export async function getModel(
-  provider: Provider,
-  modelName: string
-) {
-  return (await getRateLimitedAI(provider)).getModel(modelName)();
+export async function getModel(provider: Provider, modelName: string) {
+  return (await getRateLimitedAI(provider)).getModel(modelName)()
 }
 
-export async function getEmbeddingModel(
-  provider: Provider,
-  modelName: string
-) {
-  return (await getRateLimitedAI(provider)).getEmbeddingModel(modelName)();
+export async function getEmbeddingModel(provider: Provider, modelName: string) {
+  return (await getRateLimitedAI(provider)).getEmbeddingModel(modelName)()
 }
 
 export const rateLimitedAI = {
@@ -304,8 +271,9 @@ export const rateLimitedAI = {
   groq: {
     model: (n = 'gemma2-9b-it') =>
       getModel('groq', n),
-    embedding: (n = 'YOUR_GROQ_EMBED_MODEL_ID') =>
-      getEmbeddingModel('groq', n),
+    embedding: (n = 'text-embedding-004') =>
+      // embeddings always use Google under the hood
+      getEmbeddingModel('google', n),
     streamText: (o: any, u?: string) =>
       getRateLimitedAI('groq').streamText(o, u),
     generateText: (o: any, u?: string) =>
@@ -332,7 +300,7 @@ export const rateLimitedAI = {
     getFullStatus: (u?: string) =>
       getRateLimitedAI('groq').getFullStatus(u),
   },
-};
+}
 
-export default rateLimitedAI;
-export type { ApiKeyConfig, Provider };
+export default rateLimitedAI
+export type { ApiKeyConfig, Provider }

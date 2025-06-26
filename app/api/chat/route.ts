@@ -513,7 +513,7 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
 
     const resultStream = await rateLimitedGoogle.streamText(
       {
-        model: await rateLimitedGoogle.model('gemini-2.5-flash-lite-preview-06-17'),
+        model: await rateLimitedGoogle.model('gemini-2.0-flash'),
         messages: [{ role: 'system', content: combinedSystemPrompt }, ...enhancedMessages],
         tools,
         temperature: 0.7,

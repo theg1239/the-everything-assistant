@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { getRateLimitedGoogle } from '@/lib/rate-limited-ai'
+import { getRateLimitedAI } from '@/lib/rate-limited-ai'
 import { validateEnvironmentConfig, getEnvironmentSummary } from '@/lib/env-config'
 
 export async function GET(req: NextRequest) {
@@ -16,16 +16,14 @@ export async function GET(req: NextRequest) {
     if (!session?.user?.email || session.user.email !== adminEmail) {
       return NextResponse.json({ error: 'Unauthorized access - admin only' }, { status: 403 })
     }
-    const rateLimitedGoogle = getRateLimitedGoogle()
 
-    const usageStats = await rateLimitedGoogle.getUsageStats()
+    // use Groq provider
+    const rateLimited = getRateLimitedAI('groq')
 
-    const config = rateLimitedGoogle.getConfig()
-
-    const userConfig = rateLimitedGoogle.getUserConfig()
-
+    const usageStats = await rateLimited.getUsageStats()
+    const config = rateLimited.getConfig()
+    const userConfig = rateLimited.getUserConfig()
     const envValidation = validateEnvironmentConfig()
-
     const envSummary = getEnvironmentSummary()
 
     return NextResponse.json({
@@ -85,18 +83,19 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { action } = body
 
-    const rateLimitedGoogle = getRateLimitedGoogle()
+    // use Groq provider
+    const rateLimited = getRateLimitedAI('groq')
 
     switch (action) {
       case 'rotate':
-        await rateLimitedGoogle.rotateKey()
+        await rateLimited.rotateKey()
         return NextResponse.json({
           message: 'API key rotated successfully',
           timestamp: new Date().toISOString(),
         })
 
       case 'reset':
-        await rateLimitedGoogle.resetRateLimits()
+        await rateLimited.resetRateLimits()
         return NextResponse.json({
           message: 'Rate limits reset successfully',
           timestamp: new Date().toISOString(),
@@ -108,10 +107,10 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'Configuration object required' }, { status: 400 })
         }
 
-        rateLimitedGoogle.updateConfig(config)
+        rateLimited.updateConfig(config)
         return NextResponse.json({
           message: 'Configuration updated successfully',
-          newConfig: rateLimitedGoogle.getConfig(),
+          newConfig: rateLimited.getConfig(),
           timestamp: new Date().toISOString(),
         })
 

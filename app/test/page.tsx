@@ -1,4 +1,4 @@
-import Lanyard from '@/components/lanyardd'
+import Lanyard from '@/components/Lanyard'
 import React from 'react'
 
 export default function TestPage() {

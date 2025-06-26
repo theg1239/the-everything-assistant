@@ -491,9 +491,9 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
       return message
     })
 
-    const resultStream = await rateLimitedAI.groq.streamText(
+    const resultStream = await rateLimitedAI.google.streamText(
       {
-        model: await rateLimitedAI.groq.model('meta-llama/llama-4-scout-17b-16e-instruct'),
+        model: await rateLimitedAI.google.model(),
         messages: [{ role: 'system', content: combinedSystemPrompt }, ...enhancedMessages],
         tools,
         temperature: 0.7,

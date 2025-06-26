@@ -1,7 +1,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import Papa from 'papaparse'
-import { rateLimitedGoogle } from '@/lib/rate-limited-ai'
+import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { z } from 'zod'
 
 interface Company {
@@ -74,14 +74,14 @@ function preprocessAndFilterData(records: PlacementRecord[]): PlacementRecord[] 
   const recordsWithNumericCtc = records.map(record => ({
     ...record,
     numericCTC: convertCtcToNumeric(record.CTC),
-  }))
+  } as PlacementRecord & { numericCTC: number | null }))
 
   const sorted = recordsWithNumericCtc.sort((a, b) => {
     if (a.Reg_No !== b.Reg_No) {
       return a.Reg_No.localeCompare(b.Reg_No)
     }
-    if (b.numericCTC !== a.numericCTC) {
-      return (b.numericCTC ?? 0) - (a.numericCTC ?? 0)
+    if ((b as any).numericCTC !== (a as any).numericCTC) {
+      return ((b as any).numericCTC ?? 0) - ((a as any).numericCTC ?? 0)
     }
     return a.Company.localeCompare(b.Company)
   })
@@ -107,27 +107,19 @@ export async function scrapePlacementInfo(
     const normalOffersPath = path.join(basePath, 'google_sheet_data.csv')
     const witchOffersPath = path.join(basePath, 'WITCH-P.csv')
 
-    // Always load both data sources
     let normalOffers = await readCsvFile(normalOffersPath)
     const witchOffers = await readCsvFile(witchOffersPath)
 
-    // Preprocess both data sources
     const processedNormalOffers = preprocessAndFilterData(normalOffers)
     const processedWitchOffers = preprocessAndFilterData(witchOffers)
 
-    // If we're filtering by campus, we need to include WITCH data
-    // since it contains the campus information
     const shouldIncludeWitch = combineWitch || !!campus
 
-    // Combine offers based on conditions
     let allOffers: PlacementRecord[] = [...processedNormalOffers]
     if (shouldIncludeWitch) {
       allOffers = [...allOffers, ...processedWitchOffers]
     }
 
-    // If campus is specified, we'll need to filter by it
-    // Since normal offers don't have campus info, we'll include them all
-    // and only filter the WITCH offers by campus
     let processedOffers = allOffers
 
     if (companyFilter) {
@@ -142,17 +134,11 @@ export async function scrapePlacementInfo(
       const campusLower = campus.toLowerCase()
       console.log(`Total offers before campus filter: ${processedOffers.length}`)
 
-      // Get unique campus values for debugging
       const allCampuses = [...new Set(processedOffers.map(o => o.Campus).filter(Boolean))]
       console.log('All Campus values in data:', allCampuses)
 
-      // If we have campus info, filter by it
-      // If no campus info is available, include all offers (assume they're for the requested campus)
       processedOffers = processedOffers.filter(offer => {
-        // If no campus info is available, include the offer
         if (!offer.Campus) return true
-
-        // Otherwise, check if it matches the requested campus
         const offerCampus = offer.Campus.toLowerCase()
         const matches = offerCampus.includes(campusLower)
         if (matches) {
@@ -237,7 +223,11 @@ export async function scrapePlacementInfo(
   }
 }
 
-export async function parsePlacementData(rawData: any, userContext: string = '', userId?: string) {
+export async function parsePlacementData(
+  rawData: any,
+  userContext: string = '',
+  userId?: string
+) {
   try {
     const placementParseSchema = z.object({
       success: z.boolean(),
@@ -245,9 +235,9 @@ export async function parsePlacementData(rawData: any, userContext: string = '',
       summary: z.string(),
     })
 
-    const result = await rateLimitedGoogle.generateObject(
+    const result = await rateLimitedAI.google.generateObject(
       {
-        model: await rateLimitedGoogle.model('gemini-2.5-flash-lite-preview-06-17'),
+        model: await rateLimitedAI.google.model('gemini-2.5-flash-lite-preview-06-17'),
         schema: placementParseSchema,
         prompt: `You are a friendly and insightful university career advisor. Your goal is to summarize placement data in a clear, engaging, and easy-to-understand way for students.
 

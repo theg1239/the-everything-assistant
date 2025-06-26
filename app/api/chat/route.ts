@@ -1,5 +1,5 @@
 import { smoothStream } from 'ai'
-import { rateLimitedGoogle } from '@/lib/rate-limited-ai'
+import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { createVITTools } from '@/lib/tools'
 import { VIT_SYSTEM_PROMPT } from '@/lib/prompts'
 import { VIT_COMPREHENSIVE_KNOWLEDGE } from '@/lib/knowledge-base'
@@ -14,11 +14,8 @@ export const maxDuration = 60
 
 async function generateChatTitle(userMessage: string, userId?: string): Promise<string> {
   try {
-    //console.log('Generating title for:', userMessage.substring(0, 50) + '...')
-
     const cleanMessage = userMessage.trim().toLowerCase()
     if (cleanMessage.length < 10 || ['hi', 'hello', 'hey', 'test', 'help'].includes(cleanMessage)) {
-      //console.log('⏭Skipping title generation for simple message')
       return extractTitleFromContent(userMessage)
     }
 
@@ -26,9 +23,9 @@ async function generateChatTitle(userMessage: string, userId?: string): Promise<
       setTimeout(() => reject(new Error('Title generation timeout')), 10000)
     )
 
-    const modelPromise = rateLimitedGoogle.generateText(
+    const modelPromise = rateLimitedAI.groq.generateText(
       {
-        model: await rateLimitedGoogle.model('gemma-3-12b-it'),
+        model: await rateLimitedAI.groq.model('meta-llama/llama-4-scout-17b-16e-instruct'),
         prompt: `Generate a concise, descriptive title for a chat conversation based on the user's first message. The title should:
 - Be 3-8 words maximum
 - Capture the main topic or intent
@@ -55,7 +52,6 @@ Respond with ONLY the title, nothing else.`,
     const cleanTitle = generatedTitle.trim().replace(/^["']|["']$/g, '')
 
     if (cleanTitle && cleanTitle.length <= 60 && cleanTitle.length >= 3) {
-      //console.log('Using AI-generated title:', cleanTitle)
       return cleanTitle
     }
 
@@ -76,15 +72,6 @@ async function parseVTOPData(
   userId?: string
 ) {
   try {
-    // if (process.env.NODE_ENV !== 'production') {
-    //   console.log('parseVTOPData received:', {
-    //     hasDownloadInfo: !!rawData.downloadInfo,
-    //     hasServedFiles: !!(rawData.downloadInfo?.servedFiles),
-    //     servedFilesLength: rawData.downloadInfo?.servedFiles?.length || 0,
-    //     command
-    //   });
-    // }
-
     const vtopParseSchema = z.object({
       success: z.boolean(),
       formatted_content: z.string(),
@@ -94,9 +81,9 @@ async function parseVTOPData(
       summary: z.string(),
     })
 
-    const result = await rateLimitedGoogle.generateObject(
+    const result = await rateLimitedAI.groq.generateObject(
       {
-        model: await rateLimitedGoogle.model('gemini-2.5-flash-lite-preview-06-17'),
+        model: await rateLimitedAI.groq.model('meta-llama/llama-4-scout-17b-16e-instruct'),
         schema: vtopParseSchema,
         prompt: `
 You are a helpful assistant that parses VTOP (VIT Online Portal) data and formats it in a clean, natural language format.
@@ -116,8 +103,8 @@ ${
 SERVED FILES WITH DOWNLOAD LINKS:
 ${rawData.downloadInfo.servedFiles
   .map((file: any) => {
-    const cleanName = file.name.replace(/_\d+\.(pdf|pptx|docx|txt)$/i, '.$1')
-    return `- <strong>${cleanName}</strong> <span style=  "color: #6b7280; font-size: 0.875rem;">(${(file.size / 1024 / 1024).toFixed(2)} MB)</span> <a href="${file.downloadUrl}" download="${file.name}">Download</a>`
+    const cleanName = file.name.replace(/_\\d+\\.(pdf|pptx|docx|txt)$/i, '.$1')
+    return `- <strong>${cleanName}</strong> <span style=  "color: #6b7280; font-size: 0.875rem;">(${(file.size / 1024 / 1024).toFixed(2)} MB)</span> <a href="\${file.downloadUrl}" download="\${file.name}">Download</a>`
   })
   .join('\n')}
 
@@ -316,10 +303,8 @@ export async function POST(req: Request) {
             .catch(error => {
               console.error('Failed to update chat title:', error)
             })
-        }, 2000) // Delay of 2 seconds
+        }, 2000)
       }
-
-      
     }
 
     if (directToolCall) {
@@ -416,11 +401,12 @@ export async function POST(req: Request) {
         })
       }
     }
-    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+
+    if (!process.env.GROQ_API_KEY) {
       return new Response(
         JSON.stringify({
           error:
-            'API key not configured. Please add GOOGLE_GENERATIVE_AI_API_KEY to your environment variables.',
+            'API key not configured. Please add GROQ_API_KEY to your environment variables.',
         }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
       )
@@ -433,7 +419,6 @@ export async function POST(req: Request) {
 
     const tools = createVITTools()
 
-    // Create tool preference guidance
     const toolPreferenceGuidance = preferredTool
       ? `
 
@@ -451,11 +436,6 @@ If the user's query is relevant to the selected tool "${preferredTool}", use it 
 
 ADDITIONAL COMPREHENSIVE KNOWLEDGE:
 ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
-
-    // Log the full combined system prompt for debugging
-    // console.log('--- SYSTEM PROMPT START ---')
-    // console.log(combinedSystemPrompt)
-    // console.log('--- SYSTEM PROMPT END ---')
 
     const enhancedMessages = messages.map((message: any) => {
       if (
@@ -511,9 +491,9 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
       return message
     })
 
-    const resultStream = await rateLimitedGoogle.streamText(
+    const resultStream = await rateLimitedAI.groq.streamText(
       {
-        model: await rateLimitedGoogle.model('gemini-2.0-flash'),
+        model: await rateLimitedAI.groq.model('meta-llama/llama-4-scout-17b-16e-instruct'),
         messages: [{ role: 'system', content: combinedSystemPrompt }, ...enhancedMessages],
         tools,
         temperature: 0.7,

@@ -160,6 +160,13 @@ category 4 (management quota):
 - n grade: audit (no grade points)
 - w grade: withdrawal (no impact on gpa)
 
+
+## semester info
+
+- VIT has two main semesters, Fall Semester and Winter Semester, these follow the regular academic calendar, with the Fall Semester starting in August and ending in December, and the Winter Semester starting in late December/January and ending in May.
+- There is also a Weekend Intra semester that runs during these semesters where students can register courses that they have a backlog (F/N grade) in, and they can clear these backlogs by attending classes and writing the Mid Term exam and the FAT exam.
+- Apart from that, there is also a Summer Semester that runs during the summer vacation, where students can register courses that they have a backlog (F/N grade) in, and they can clear these backlogs by attending classes and writing the Mid Term exam and the FAT exam.
+
 ### gpa calculation
 - sgpa = Σ(grade points * credits) / total credits (semester)
 - cgpa = Σ(grade points * credits) / total credits (cumulative)

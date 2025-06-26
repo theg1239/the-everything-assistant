@@ -81,9 +81,9 @@ async function parseVTOPData(
       summary: z.string(),
     })
 
-    const result = await rateLimitedAI.groq.generateObject(
+    const result = await rateLimitedAI.google.generateObject(
       {
-        model: await rateLimitedAI.groq.model('meta-llama/llama-4-scout-17b-16e-instruct'),
+        model: await rateLimitedAI.google.model(),
         schema: vtopParseSchema,
         prompt: `
 You are a helpful assistant that parses VTOP (VIT Online Portal) data and formats it in a clean, natural language format.

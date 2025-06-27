@@ -152,6 +152,7 @@ async function executeVTOPCommand(username, password, command, flags) {
     }
 
     let cliArgs = ['proxy', username, password, command]
+    
     if (flags && typeof flags === 'object') {
       for (const [key, value] of Object.entries(flags)) {
         if (value !== undefined && value !== null && value !== '' && key !== 'semesterQuery') {
@@ -166,8 +167,7 @@ async function executeVTOPCommand(username, password, command, flags) {
             else if (key === 'fuzzyIndex') flagName = 'i'
             else if (key === 'debug') flagName = 'd'
 
-            cliArgs.push(`-${flagName}`)
-            cliArgs.push(value.toString())
+            cliArgs.push(`-${flagName}`, value.toString())
           }
         }
       }
@@ -966,11 +966,26 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
   }
 
   if (step === 'semester' && flags && flags.semester) {
-    console.log(
-      `Semester step with resolved semester ${flags.semester}, proceeding to show courses`
+    console.log(`Semester step with resolved semester ${flags.semester}, proceeding to show courses`)
+    return await executeInteractiveCoursePageWorkflow(
+      username,
+      password,
+      'course',
+      flags,
+      sessionData
     )
-    step = 'course'
   }
+
+  /*
+    // ...resolveSemesterQuery → semesterChoice
+    if (semesterChoice) {
+      flags.semester = semesterChoice
+      delete flags.semesterQuery
+  
+      // Advance to next logical step
+      
+    }
+  */
 
   if (step === 'course' && (!flags || !flags.semester)) {
     console.log('Course step requested but no semester selected. Getting semester options first.')
@@ -1236,27 +1251,23 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
     return tempResult
   }
 
-  const cliArgs = ['proxy', username, password, 'course-page']
+  const cliBaseArgs = ['proxy', username, password, 'course-page']
+  const flagArgs = []
+  // Build flagArgs for non-interactive overrides
+  if (flags && typeof flags === 'object') {
+    if (flags.semester && flags.semester > 0) flagArgs.push('-s', flags.semester.toString())
+    if (flags.course && flags.course > 0) flagArgs.push('-c', flags.course.toString())
+    if (flags.faculty && flags.faculty > 0) flagArgs.push('-f', flags.faculty.toString())
+  }
+  // Final CLI argument array that will be executed
+  const cliArgs = [...cliBaseArgs, ...flagArgs]
 
   if (flags && flags.semesterQuery && !flags.semester) {
     console.log(`Resolving semesterQuery: ${flags.semesterQuery}`)
   }
 
-  console.log(`CLI args will be: ${cliArgs.join(' ')}`)
-
-  if (flags && typeof flags === 'object') {
-    for (const [key, value] of Object.entries(flags)) {
-      if (value !== undefined && value !== null && value !== '') {
-        if (key === 'semester' && value > 0) {
-          cliArgs.push('-s', value.toString())
-        } else if (key === 'course' && value > 0) {
-          cliArgs.push('-c', value.toString())
-        } else if (key === 'faculty' && value > 0) {
-          cliArgs.push('-f', value.toString())
-        }
-      }
-    }
-  }
+  // console.log(`CLI args will be: ${cliArgs.join(' ')}`)
+  
 
   return new Promise((resolve, reject) => {
     if (!fs.existsSync(BINARY_PATH)) {
@@ -1509,20 +1520,28 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           selection = flags.course.toString()
           shouldAutoProgress = true
         } else if (promptData.type === 'faculty' && flags.faculty) {
+          // After faculty is chosen, default to downloading all materials (selection "0")
+          if (!flags.materialSelection) {
+            flags.materialSelection = '0'
+          }
           selection = flags.faculty.toString()
           shouldAutoProgress = true
-        } else if (promptData.type === 'materials' && flags.materialSelection) {
+        } else if (promptData.type === 'materials') {
+          if (!flags.materialSelection) {
+            flags.materialSelection = '0'
+          }
           selection = flags.materialSelection
           shouldAutoProgress = true
         }
+
         if (selection && shouldAutoProgress) {
           if (process.env.NODE_ENV !== 'production') {
             console.log(`Auto-progressing with selection: ${selection}`)
           }
           child.stdin.write(selection + '\n')
-
           hasReceivedPrompt = false
           promptData = null
+          return
         } else {
           const sessionInfo = {
             currentStep: step,

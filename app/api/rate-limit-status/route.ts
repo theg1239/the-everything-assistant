@@ -17,12 +17,30 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized access - admin only' }, { status: 403 })
     }
 
-    // use Groq provider
-    const rateLimited = getRateLimitedAI('groq')
+    const googleAI = getRateLimitedAI('google')
+    const groqAI = getRateLimitedAI('groq')
 
-    const usageStats = await rateLimited.getUsageStats()
-    const config = rateLimited.getConfig()
-    const userConfig = rateLimited.getUserConfig()
+    const [googleUsageStats, groqUsageStats, googleConfig, groqConfig] = await Promise.all([
+      googleAI.getUsageStats(),
+      groqAI.getUsageStats(),
+      googleAI.getConfig(),
+      groqAI.getConfig(),
+    ])
+
+    const combinedUsageStats = {
+      ...Object.entries(googleUsageStats).reduce((acc, [key, value]) => {
+        acc[`google_${key}`] = value
+        return acc
+      }, {} as Record<string, any>),
+      ...Object.entries(groqUsageStats).reduce((acc, [key, value]) => {
+        acc[`groq_${key}`] = value
+        return acc
+      }, {} as Record<string, any>),
+    }
+
+    const totalKeyCount = googleConfig.keys.length + groqConfig.keys.length
+    const mainConfig = groqConfig // Base config is same
+    const userConfig = groqAI.getUserConfig() // User config is not provider-specific
     const envValidation = validateEnvironmentConfig()
     const envSummary = getEnvironmentSummary()
 
@@ -35,12 +53,12 @@ export async function GET(req: NextRequest) {
       },
       configuration: {
         apiKeys: {
-          enableRotation: config.enableRotation,
-          rotateOnRateLimit: config.rotateOnRateLimit,
-          keyCount: config.keys.length,
-          rateLimit: config.rateLimit,
-          retryConfig: config.retryConfig,
-          keyHealthCheckInterval: config.keyHealthCheckInterval,
+          enableRotation: mainConfig.enableRotation,
+          rotateOnRateLimit: mainConfig.rotateOnRateLimit,
+          keyCount: totalKeyCount,
+          rateLimit: mainConfig.rateLimit,
+          retryConfig: mainConfig.retryConfig,
+          keyHealthCheckInterval: mainConfig.keyHealthCheckInterval,
         },
         userRateLimit: {
           enabled: userConfig.enabled,
@@ -49,7 +67,7 @@ export async function GET(req: NextRequest) {
           requestsPerDay: userConfig.requestsPerDay,
         },
       },
-      keyUsage: usageStats,
+      keyUsage: combinedUsageStats,
       healthCheck: {
         redis: envSummary.hasRedis ? 'Connected' : 'Not configured',
         apiKeys: envSummary.apiKeys.totalAvailable > 0 ? 'Available' : 'None configured',

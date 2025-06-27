@@ -481,45 +481,65 @@ export default function ManagementPage() {
                       <div className="mt-6 space-y-4">
                         <h4 className="font-medium text-sm md:text-base">Individual Key Status</h4>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {Object.entries(data.keyUsage).map(([keyIndex, usage]) => {
-                            const isHealthy = !usage.isRateLimited
-                            const StatusIcon = getStatusIcon(isHealthy)
-                            return (
-                              <div
-                                key={keyIndex}
-                                className="p-4 rounded-lg bg-black/20 border border-border/20"
-                              >
-                                <div className="flex items-center justify-between mb-2">
-                                  <h5 className="font-medium text-sm md:text-base">
-                                    Key {keyIndex}
-                                  </h5>
-                                  <StatusIcon
-                                    className={cn('w-4 h-4', getStatusColor(isHealthy))}
-                                  />
+                          {Object.entries(data.keyUsage)
+                            .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+                            .map(([key, usage]) => {
+                              const parts = key.split('_');
+                              const provider = parts[0] || 'Unknown';
+                              const keyIndex = parts.length > 2 ? parts.slice(2).join('_') : 'N/A';
+                              const displayName = `${provider.charAt(0).toUpperCase() + provider.slice(1)} Key ${keyIndex}`;
+
+                              return (
+                                <div
+                                  key={key}
+                                  className={cn(
+                                    'p-4 rounded-lg bg-black/20 border',
+                                    usage.isRateLimited && 'border-red-500/80'
+                                  )}
+                                >
+                                  <div className="flex justify-between items-start mb-3">
+                                    <h4 className="font-semibold">
+                                      {displayName}
+                                    </h4>
+                                    <div className="flex gap-2">
+                                      {/* {usage.isCurrent && (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-blue-400 border-blue-400/50"
+                                        >
+                                          Current
+                                        </Badge>
+                                      )} */}
+                                      {usage.isRateLimited && (
+                                        <Badge variant="destructive">Rate Limited</Badge>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="space-y-2 text-sm text-muted-foreground">
+                                    <div className="flex justify-between">
+                                      <span>Requests</span>
+                                      <span className="font-mono">{usage.requests}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span>Failures</span>
+                                      <span className="font-mono">{usage.failures}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span>Last Used</span>
+                                      <span className="font-mono">
+                                        {formatTimestamp(usage.lastUsed)}
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span>Last Failed</span>
+                                      <span className="font-mono">
+                                        {formatTimestamp(usage.lastFailed)}
+                                      </span>
+                                    </div>
+                                  </div>
                                 </div>
-                                <div className="space-y-2 text-xs md:text-sm">
-                                  <div className="flex justify-between">
-                                    <span>Requests:</span>
-                                    <span>{usage.requests}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span>Last Used:</span>
-                                    <span className="truncate max-w-[200px]">
-                                      {formatTimestamp(usage.lastUsed)}
-                                    </span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span>Failures:</span>
-                                    <Badge
-                                      variant={usage.failures > 0 ? 'destructive' : 'secondary'}
-                                    >
-                                      {usage.failures}
-                                    </Badge>
-                                  </div>
-                                </div>
-                              </div>
-                            )
-                          })}
+                              )
+                            })}
                         </div>
                       </div>
                     )}

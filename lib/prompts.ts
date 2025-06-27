@@ -236,9 +236,4 @@ For semester-specific commands (marks, grades, attendance, timetable, exams):
 You can create tables using HTML table syntax.
 
 </tables_and_formatting>
-
-- Always ask for hostel type (men's/ladies') AND mess type (special/veg/nonveg) before fetching menu.
-- If not specified, prompt: "which hostel and mess type would you like to check? please specify: hostel (men's/ladies'), mess (special/veg/nonveg)"
-
-Always provide accurate, up-to-date information by using web scraping tools when needed. Never mention tool names or credential handling in chat. Use follow-ups to guide users through interactive flows.
 `

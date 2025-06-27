@@ -1,7 +1,7 @@
 'use client'
 
 import type React from 'react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter, usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
@@ -34,6 +34,37 @@ interface SidebarProps {
   [key: string]: any
 }
 
+// Optimized animation variants for better mobile performance
+const sidebarVariants = {
+  open: {
+    x: 0,
+    transition: {
+      type: 'tween',
+      duration: 0.25,
+      ease: [0.25, 0.46, 0.45, 0.94], // Custom easing for smoothness
+    },
+  },
+  closed: {
+    x: -320,
+    transition: {
+      type: 'tween',
+      duration: 0.2,
+      ease: [0.25, 0.46, 0.45, 0.94],
+    },
+  },
+}
+
+const overlayVariants = {
+  open: {
+    opacity: 1,
+    transition: { duration: 0.2, ease: 'easeOut' },
+  },
+  closed: {
+    opacity: 0,
+    transition: { duration: 0.15, ease: 'easeIn' },
+  },
+}
+
 export function Sidebar(props: SidebarProps) {
   const { isOpen, onToggle } = props as { isOpen: boolean; onToggle: () => void }
   const [chats, setChats] = useState<Chat[]>([])
@@ -57,12 +88,19 @@ export function Sidebar(props: SidebarProps) {
     setMounted(true)
   }, [])
 
-  const redactName = (name: string) => {
+  const redactName = useCallback((name: string) => {
     if (!name) return 'User'
     const parts = name.split(' ')
     if (parts.length <= 3) return name
     return parts.slice(0, 3).join(' ')
-  }
+  }, [])
+
+  // Memoize user info to prevent unnecessary re-renders
+  const userInfo = useMemo(() => ({
+    name: redactName(session?.user?.name || 'User'),
+    email: session?.user?.email,
+    image: session?.user?.image
+  }), [session?.user, redactName])
 
   useEffect(() => {
     fetchChats(true) // Reset and fetch initial chats
@@ -77,14 +115,9 @@ export function Sidebar(props: SidebarProps) {
   useEffect(() => {
     const handleNewChat = (event: CustomEvent) => {
       const newChat = event.detail
-      // console.log('Sidebar received newChatCreated event:', newChat)
       setChats(prevChats => {
         const exists = prevChats.some(chat => chat.id === newChat.id)
-        if (exists) {
-          // console.log('Chat already exists, skipping duplicate')
-          return prevChats
-        }
-        // console.log('Adding new chat to list. Previous count:', prevChats.length)
+        if (exists) return prevChats
         return [newChat, ...prevChats]
       })
     }
@@ -98,20 +131,11 @@ export function Sidebar(props: SidebarProps) {
   useEffect(() => {
     const handleChatTitleUpdate = (event: CustomEvent) => {
       const { chatId, title } = event.detail
-      // console.log('Sidebar received chatTitleUpdated event:', { chatId, title })
-      // console.log('Current chats:', chats.map(c => ({ id: c.id, title: c.title })))
-
-      setChats(prevChats => {
-        const updated = prevChats.map(chat => {
-          if (chat.id === chatId) {
-            // console.log('Found matching chat, updating title from:', chat.title, 'to:', title)
-            return { ...chat, title }
-          }
-          return chat
-        })
-        // console.log('Updated chats:', updated.map(c => ({ id: c.id, title: c.title })))
-        return updated
-      })
+      setChats(prevChats => 
+        prevChats.map(chat => 
+          chat.id === chatId ? { ...chat, title } : chat
+        )
+      )
     }
 
     window.addEventListener('chatTitleUpdated', handleChatTitleUpdate as EventListener)
@@ -121,13 +145,8 @@ export function Sidebar(props: SidebarProps) {
   }, [])
 
   useEffect(() => {
-    const handleChatsDeleted = () => {
-      fetchChats(true)
-    }
-
-    const handleChatsArchived = () => {
-      fetchChats(true)
-    }
+    const handleChatsDeleted = () => fetchChats(true)
+    const handleChatsArchived = () => fetchChats(true)
 
     window.addEventListener('chatsDeleted', handleChatsDeleted)
     window.addEventListener('chatsArchived', handleChatsArchived)
@@ -138,7 +157,7 @@ export function Sidebar(props: SidebarProps) {
     }
   }, [])
 
-  const fetchChats = async (reset: boolean = false) => {
+  const fetchChats = useCallback(async (reset: boolean = false) => {
     try {
       if (reset) {
         setLoading(true)
@@ -159,14 +178,6 @@ export function Sidebar(props: SidebarProps) {
           setChats(prevChats => {
             const existingIds = new Set(prevChats.map(chat => chat.id))
             const newChats = data.filter((chat: Chat) => !existingIds.has(chat.id))
-
-            // if (process.env.NODE_ENV === 'development') {
-            //   console.log('Existing chats:', prevChats.length)
-            //   console.log('New chats fetched:', data.length)
-            //   console.log('New chats after dedup:', newChats.length)
-            //   console.log('Duplicate chat IDs found:', data.length - newChats.length)
-            // }
-
             return [...prevChats, ...newChats]
           })
         }
@@ -182,39 +193,39 @@ export function Sidebar(props: SidebarProps) {
       setLoadingMore(false)
       setIsLoadingMore(false)
     }
-  }
+  }, [chats.length])
 
-  const loadMoreChats = () => {
+  const loadMoreChats = useCallback(() => {
     if (!loadingMore && !isLoadingMore && hasMore) {
       setIsLoadingMore(true)
       fetchChats(false).finally(() => {
         setIsLoadingMore(false)
       })
     }
-  }
+  }, [loadingMore, isLoadingMore, hasMore, fetchChats])
 
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget
     setScrollPosition(scrollTop)
 
     if (scrollHeight - scrollTop - clientHeight < 10 && hasMore && !loadingMore && !isLoadingMore) {
-      setTimeout(() => {
+      requestAnimationFrame(() => {
         if (hasMore && !loadingMore && !isLoadingMore) {
           loadMoreChats()
         }
-      }, 100)
+      })
     }
-  }
+  }, [hasMore, loadingMore, isLoadingMore, loadMoreChats])
 
-  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     const touch = e.touches[0]
     const scrollContainer = e.currentTarget
     setTouchStartY(touch.clientY)
     setTouchStartScrollTop(scrollContainer.scrollTop)
     setIsDragging(true)
-  }
+  }, [])
 
-  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+  const handleTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     if (!isDragging) return
 
     const touch = e.touches[0]
@@ -226,13 +237,13 @@ export function Sidebar(props: SidebarProps) {
       0,
       Math.min(newScrollTop, scrollContainer.scrollHeight - scrollContainer.clientHeight)
     )
-  }
+  }, [isDragging, touchStartY, touchStartScrollTop])
 
-  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+  const handleTouchEnd = useCallback(() => {
     setIsDragging(false)
-  }
+  }, [])
 
-  const deleteChat = async (chatId: string, e: React.MouseEvent) => {
+  const deleteChat = useCallback(async (chatId: string, e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     try {
@@ -240,7 +251,7 @@ export function Sidebar(props: SidebarProps) {
         method: 'DELETE',
       })
       if (response.ok) {
-        setChats(chats.filter(chat => chat.id !== chatId))
+        setChats(prevChats => prevChats.filter(chat => chat.id !== chatId))
         if (pathname === `/chat/${chatId}`) {
           router.push('/')
         }
@@ -248,9 +259,9 @@ export function Sidebar(props: SidebarProps) {
     } catch (error) {
       console.error('Error deleting chat:', error)
     }
-  }
+  }, [pathname, router])
 
-  const startNewChat = () => {
+  const startNewChat = useCallback(() => {
     const tempId = `temp-${Date.now()}`
     setChats(prev => [
       {
@@ -267,79 +278,63 @@ export function Sidebar(props: SidebarProps) {
     if (window.innerWidth < 768) {
       onToggle()
     }
-  }
+  }, [router, onToggle])
 
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth <= 768) {
-        const scrollElement = document.querySelector('.sidebar-scroll-area') as HTMLElement
-        if (scrollElement) {
-          scrollElement.style.display = 'none'
-          scrollElement.offsetHeight
-          scrollElement.style.display = ''
-        }
-      }
+  const handleChatClick = useCallback((chatId: string) => {
+    setSelectedChatId(chatId)
+    router.replace(`/chat/${chatId}`)
+    if (window.innerWidth < 768) {
+      onToggle()
     }
+  }, [router, onToggle])
 
-    window.addEventListener('resize', handleResize)
-    window.addEventListener('orientationchange', handleResize)
-
-    return () => {
-      window.removeEventListener('resize', handleResize)
-      window.removeEventListener('orientationchange', handleResize)
+  // Optimize overlay click handler
+  const handleOverlayClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    if (e.target === e.currentTarget) {
+      onToggle()
     }
-  }, [])
+  }, [onToggle])
 
-  // Create the sidebar content
+  // Create the sidebar content with optimized styles
   const sidebarContent = (
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
       {isOpen && (
         <>
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="sidebar-overlay fixed inset-0 bg-black/50 z-40 md:hidden"
-            onClick={onToggle}
-            style={{ pointerEvents: 'auto' }}
-            onTouchStart={e => {
-              if (e.target === e.currentTarget) {
-                onToggle()
-              }
+            variants={overlayVariants}
+            initial="closed"
+            animate="open"
+            exit="closed"
+            className="fixed inset-0 bg-black/50 z-40 md:hidden"
+            onClick={handleOverlayClick}
+            onTouchStart={handleOverlayClick}
+            style={{ 
+              pointerEvents: 'auto',
+              willChange: 'opacity'
             }}
           />
 
           <motion.div
-            initial={{ x: -300 }}
-            animate={{ x: 0 }}
-            exit={{ x: -300 }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="sidebar-container sidebar-content fixed left-0 top-0 z-50 h-full w-[var(--sidebar-width)] bg-black/30 backdrop-blur-md border-r border-border/50 flex flex-col shadow-xl"
+            variants={sidebarVariants}
+            initial="closed"
+            animate="open"
+            exit="closed"
+            className="fixed left-0 top-0 z-50 h-full w-[320px] bg-background/95 border-r border-border/50 flex flex-col shadow-2xl"
             onMouseEnter={() => setHovering(true)}
             onMouseLeave={() => setHovering(false)}
-            onTouchStart={e => {
-              // console.log('Sidebar container touch start:', {
-              //   target: (e.target as HTMLElement)?.className || 'unknown',
-              //   currentTarget: (e.currentTarget as HTMLElement)?.className || 'unknown',
-              //   touches: e.touches.length
-              // })
-            }}
-            onTouchMove={e => {
-              // console.log('Sidebar container touch move:', {
-              //   touches: e.touches.length,
-              //   preventDefault: e.defaultPrevented
-              // })
-            }}
             style={{
               pointerEvents: 'auto',
-              position: 'fixed',
-              overflow: 'hidden',
+              willChange: 'transform',
+              backfaceVisibility: 'hidden',
+              WebkitBackfaceVisibility: 'hidden',
+              transform: 'translate3d(0, 0, 0)',
             }}
           >
-            <div className="p-4 border-b border-border flex items-center justify-between">
+            {/* Header */}
+            <div className="p-4 border-b border-border flex items-center justify-between bg-background/98">
               <div className="flex items-center space-x-2">
                 {loading ? (
-                  <div className="h-7 w-32 bg-muted/60 rounded sidebar-loading-item"></div>
+                  <div className="h-7 w-32 bg-muted/60 rounded animate-pulse"></div>
                 ) : (
                   <h2 className="text-lg font-medium text-foreground">the everything assistant</h2>
                 )}
@@ -355,16 +350,14 @@ export function Sidebar(props: SidebarProps) {
               </Button>
             </div>
 
-            <div className="p-4 border-b border-border">
+            {/* New Chat Button */}
+            <div className="p-4 border-b border-border bg-background/98">
               {loading ? (
-                <div
-                  className="h-10 bg-muted/60 rounded-lg sidebar-loading-item"
-                  style={{ '--delay': 0 } as React.CSSProperties}
-                ></div>
+                <div className="h-10 bg-muted/60 rounded-lg animate-pulse"></div>
               ) : (
                 <Button
                   onClick={startNewChat}
-                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground border-0 rounded-lg transition-all duration-200"
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground border-0 rounded-lg transition-colors duration-150"
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   new chat
@@ -372,44 +365,43 @@ export function Sidebar(props: SidebarProps) {
               )}
             </div>
 
+            {/* Chat List */}
             <div className="flex-1 min-h-0 flex flex-col">
               <div
-                className="sidebar-mobile-scroll sidebar-scroll-area p-4 custom-scrollbar"
+                className="p-4 overflow-auto"
                 onScroll={handleScroll}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
                 style={{
-                  overflow: 'auto',
                   WebkitOverflowScrolling: 'touch',
                   overscrollBehavior: 'contain',
                   height: 'calc(100vh - 200px)',
-                  position: 'relative',
-                  touchAction: 'none', // Prevent default touch behavior
                   transform: 'translate3d(0, 0, 0)',
-                  userSelect: 'none', // Prevent text selection during drag
+                  willChange: 'scroll-position',
                 }}
               >
                 <div className="space-y-1">
                   {loading ? (
-                    <div className="h-full w-full flex flex-col space-y-3">
-                      <div className="flex flex-col space-y-2">
-                        {[...Array(8)].map((_, i) => (
-                          <div
-                            key={i}
-                            className="h-12 bg-muted/60 rounded-lg sidebar-loading-item"
-                            style={{ '--delay': i } as React.CSSProperties}
-                          >
-                            <div className="flex items-center p-3">
-                              <div className="w-4 h-4 rounded-full bg-muted-foreground/20 mr-3"></div>
-                              <div className="flex-1">
-                                <div className="h-3 bg-muted-foreground/20 rounded w-3/4 mb-2"></div>
-                                <div className="h-2 bg-muted-foreground/10 rounded w-1/2"></div>
-                              </div>
+                    <div className="space-y-2">
+                      {[...Array(8)].map((_, i) => (
+                        <div
+                          key={i}
+                          className="h-12 bg-muted/60 rounded-lg animate-pulse"
+                          style={{ 
+                            animationDelay: `${i * 50}ms`,
+                            animationDuration: '1.5s'
+                          }}
+                        >
+                          <div className="flex items-center p-3">
+                            <div className="w-4 h-4 rounded-full bg-muted-foreground/20 mr-3"></div>
+                            <div className="flex-1">
+                              <div className="h-3 bg-muted-foreground/20 rounded w-3/4 mb-2"></div>
+                              <div className="h-2 bg-muted-foreground/10 rounded w-1/2"></div>
                             </div>
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      ))}
                     </div>
                   ) : chats.length === 0 ? (
                     <div className="text-center text-muted-foreground py-6">
@@ -423,24 +415,16 @@ export function Sidebar(props: SidebarProps) {
                     </div>
                   ) : (
                     <>
-                      {chats.map((chat, index) => (
-                        <motion.div
-                          key={`chat-${chat.id}-${chat.updatedAt || index}`}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
+                      {chats.map((chat) => (
+                        <div
+                          key={`chat-${chat.id}`}
                           className={cn(
-                            'group relative flex items-center p-3 rounded-lg cursor-pointer transition-all',
+                            'group relative flex items-center p-3 rounded-lg cursor-pointer transition-colors duration-150',
                             selectedChatId === chat.id || pathname === `/chat/${chat.id}`
                               ? 'bg-muted text-foreground shadow-sm'
                               : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
                           )}
-                          onClick={() => {
-                            setSelectedChatId(chat.id)
-                            router.replace(`/chat/${chat.id}`)
-                            if (window.innerWidth < 768) {
-                              onToggle()
-                            }
-                          }}
+                          onClick={() => handleChatClick(chat.id)}
                         >
                           <MessageSquare className="h-4 w-4 mr-3 flex-shrink-0" />
                           <div className="flex-1 min-w-0">
@@ -452,12 +436,12 @@ export function Sidebar(props: SidebarProps) {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0"
+                            className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 transition-opacity duration-150"
                             onClick={e => deleteChat(chat.id, e)}
                           >
                             <Trash2 className="h-3 w-3" />
                           </Button>
-                        </motion.div>
+                        </div>
                       ))}
 
                       {(loadingMore || isLoadingMore) && hasMore && (
@@ -468,23 +452,16 @@ export function Sidebar(props: SidebarProps) {
                           </div>
                         </div>
                       )}
-
-                      {!hasMore && chats.length > 0 && (
-                        <div className="text-center py-2 mt-2">
-                          {/* <div className="text-xs text-muted-foreground/70">
-                          no more chats to load
-                        </div> */}
-                        </div>
-                      )}
                     </>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="p-4 border-t border-border bg-background/95 backdrop-blur-sm sidebar-user-section">
+            {/* User Section */}
+            <div className="p-4 border-t border-border bg-background/98">
               {loading ? (
-                <div className="sidebar-loading-profile">
+                <div className="animate-pulse">
                   <div className="flex items-center space-x-3 mb-3">
                     <div className="h-8 w-8 rounded-full bg-muted-foreground/20"></div>
                     <div className="flex-1 min-w-0">
@@ -500,10 +477,10 @@ export function Sidebar(props: SidebarProps) {
               ) : (
                 <>
                   <div className="flex items-center space-x-3 mb-3">
-                    {session?.user?.image ? (
+                    {userInfo.image ? (
                       <img
-                        src={session.user.image || '/placeholder.svg'}
-                        alt={session.user.name || 'User'}
+                        src={userInfo.image || '/placeholder.svg'}
+                        alt={userInfo.name}
                         className="h-8 w-8 rounded-full"
                       />
                     ) : (
@@ -513,37 +490,35 @@ export function Sidebar(props: SidebarProps) {
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-foreground truncate">
-                        {redactName(session?.user?.name || 'User')}
+                        {userInfo.name}
                       </p>
                       <p className="text-xs text-muted-foreground truncate">
-                        {session?.user?.email}
+                        {userInfo.email}
                       </p>
                     </div>
                   </div>
-                </>
-              )}
 
-              {!loading && (
-                <div className="space-y-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
-                    onClick={() => setSettingsOpen(true)}
-                  >
-                    <Settings className="h-4 w-4 mr-2" />
-                    settings
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
-                    onClick={() => signOut()}
-                  >
-                    <LogOut className="h-4 w-4 mr-2" />
-                    sign out
-                  </Button>
-                </div>
+                  <div className="space-y-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors duration-150"
+                      onClick={() => setSettingsOpen(true)}
+                    >
+                      <Settings className="h-4 w-4 mr-2" />
+                      settings
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors duration-150"
+                      onClick={() => signOut()}
+                    >
+                      <LogOut className="h-4 w-4 mr-2" />
+                      sign out
+                    </Button>
+                  </div>
+                </>
               )}
             </div>
           </motion.div>
@@ -561,9 +536,7 @@ export function Sidebar(props: SidebarProps) {
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
         onTriggerOnboarding={() => {
-          //console.log('Dispatching triggerOnboarding event from sidebar')
           window.dispatchEvent(new CustomEvent('triggerOnboarding'))
-          //console.log('Event dispatched from sidebar')
         }}
       />
     </>

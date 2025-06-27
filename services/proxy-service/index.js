@@ -629,8 +629,12 @@ function resolveSemesterQuery(semesterQuery, semesterOptions) {
 
   const query = semesterQuery.toLowerCase().trim()
 
-  if (query.includes('latest') || query.includes('current') || query.includes('ongoing')) {
-    return semesterOptions[0].number
+  if (query.includes('latest')) {
+    return semesterOptions[semesterOptions.length - 1].number
+  }
+
+  if (query.includes('current') || query.includes('ongoing')) {
+    return semesterOptions[semesterOptions.length - 1].number
   }
 
   const numberMatch = query.match(/(?:semester\s*)?(\d+)(?:rd|th|st|nd)?/)

@@ -982,9 +982,21 @@ const PureToolCallDisplay = ({
 }: ToolCallDisplayProps) => {
   const { getToolResult, version } = useVTOP()
 
-  const filteredToolCalls = toolCalls.filter(
-    tc => tc.toolName !== 'knowledgeBase' && !(tc.result && tc.result.hidden)
-  )
+  // Remove hidden knowledgeBase tool calls and deduplicate by toolName + toolCallId
+  const filteredToolCalls = (() => {
+    const map = new Map<string, any>()
+    for (const tc of toolCalls) {
+      if (tc.toolName === 'knowledgeBase' || (tc.result && tc.result.hidden)) {
+        continue
+      }
+      const key = `${tc.toolName}-${tc.toolCallId || tc.id || ''}`
+      const existing = map.get(key) 
+      if (!existing || (tc.result && !existing.result)) {
+        map.set(key, tc)
+      }
+    }
+    return Array.from(map.values())
+  })()
 
   const enrichedToolCalls = filteredToolCalls.map(tool => {
     if (tool.toolName === 'queryVTOP' && tool.toolCallId) {

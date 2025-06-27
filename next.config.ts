@@ -1,4 +1,10 @@
-import type { NextConfig } from 'next'
+import type { NextConfig } from 'next';
+
+const withPWA = require('@ducanh2912/next-pwa').default({
+  dest: 'public',
+  register: true,
+  skipWaiting: true,
+});
 
 const nextConfig: NextConfig = {
   eslint: { ignoreDuringBuilds: false },
@@ -6,10 +12,9 @@ const nextConfig: NextConfig = {
   images: { unoptimized: true },
   serverExternalPackages: ['playwright-core', '@sparticuz/chromium'],
   outputFileTracingExcludes: { '*': ['./ai-chatbot-main/**/*'] },
-
   // compiler: {
   //   removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
   // },
-}
+};
 
-export default nextConfig
+export default withPWA(nextConfig);

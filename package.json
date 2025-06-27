@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "npx prisma generate && next build",
+    "build": "npx prisma generate && next build --turbopack",
     "start": "next start",
     "lint": "next lint",
     "format": "npx prettier --write .",
@@ -31,6 +31,7 @@
     "@ai-sdk/google": "latest",
     "@ai-sdk/groq": "latest",
     "@dqbd/tiktoken": "^1.0.21",
+    "@ducanh2912/next-pwa": "^10.2.9",
     "@emotion/is-prop-valid": "^1.2.1",
     "@langchain/core": "^0.3.61",
     "@langchain/textsplitters": "^0.1.0",

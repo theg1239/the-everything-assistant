@@ -1,0 +1,20 @@
+{
+  "short_name": "everything assistant",
+  "name": "the everything assistant",
+  "icons": [
+    {
+      "src": "/onboarding-artwork/artwork.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/onboarding-artwork/artwork.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#ffffff"
+}

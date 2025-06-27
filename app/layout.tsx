@@ -18,12 +18,18 @@ import { PerformanceMonitor } from '@/components/performance-monitor'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { GlobalBroadcastDialog } from '@/components/global-broadcast-dialog'
+import { PWAInstallDialog } from '@/components/pwa-install-dialog'
 
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'the everything assistant',
-  description: 'comprehensive ai assistant',
+  title: 'The Everything Assistant',
+  description: 'A comprehensive AI assistant that can be installed on your home screen.',
+  manifest: '/manifest.json',
+  themeColor: '#000000',
+  icons: {
+    apple: '/onboarding-artwork/artwork.png',
+  },
 }
 
 async function getLatestBroadcast() {
@@ -107,6 +113,7 @@ export default async function RootLayout({
             {session?.user && latestBroadcast && (
               <GlobalBroadcastDialog latestBroadcast={latestBroadcast} />
             )}
+            <PWAInstallDialog />
           </ThemeProvider>
         </SessionProvider>
       </body>

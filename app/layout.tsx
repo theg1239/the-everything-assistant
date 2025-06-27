@@ -23,12 +23,12 @@ import { PWAInstallDialog } from '@/components/pwa-install-dialog'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'The Everything Assistant',
-  description: 'A comprehensive AI assistant that can be installed on your home screen.',
+  title: 'the everything assistant',
+  description: 'your personal agentic AI assistant',
   manifest: '/manifest.json',
   themeColor: '#000000',
   icons: {
-    apple: '/onboarding-artwork/artwork.png',
+    apple: '/assets/tea-icon.png',
   },
 }
 

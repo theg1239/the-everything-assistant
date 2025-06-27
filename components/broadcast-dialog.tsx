@@ -144,7 +144,7 @@ export function BroadcastDialog({ isOpen, onClose, payload }: BroadcastDialogPro
                       onClick={handleFinish}
                       className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-8 py-4 rounded-xl font-semibold text-base shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl"
                     >
-                      Got it!
+                      got it!
                     </Button>
                   </div>
                 )}

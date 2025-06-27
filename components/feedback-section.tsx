@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useSession } from 'next-auth/react'
-import { Loader2, MessageSquarePlus } from 'lucide-react'
+import { Loader2, MessageSquarePlus, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 
@@ -28,6 +28,7 @@ export function FeedbackSection() {
   const [error, setError] = useState<string | null>(null)
   const [feedbackTitle, setFeedbackTitle] = useState('')
   const [feedbackBody, setFeedbackBody] = useState('')
+  const [newChunks, setNewChunks] = useState<string[]>([])
 
   const handleFetchAndSetView = async () => {
     setIsLoading(true)
@@ -52,6 +53,20 @@ export function FeedbackSection() {
     setEditedChunks(prev => ({ ...prev, [id]: content }))
   }
 
+  const handleAddChunk = () => {
+    setNewChunks(prev => [...prev, ''])
+  }
+
+  const handleNewChunkChange = (index: number, value: string) => {
+    const updated = [...newChunks]
+    updated[index] = value
+    setNewChunks(updated)
+  }
+
+  const handleRemoveNewChunk = (index: number) => {
+    setNewChunks(prev => prev.filter((_, i) => i !== index))
+  }
+
   const handleSubmitContribution = async () => {
     setIsSubmitting(true)
     const changedChunks = Object.entries(editedChunks).map(([id, content]) => {
@@ -64,14 +79,21 @@ export function FeedbackSection() {
       }
     })
 
-    const body = `Changed Chunks:\n\n${changedChunks
+    const editedChunksBody = changedChunks.length > 0 ? `### Edited Chunks\n\n${changedChunks
       .map(
         (c, index) =>
-          `Knowledge #${index + 1} (ID: ${c.id})\nMetadata: ${JSON.stringify(
+          `**Knowledge #${index + 1} (ID: ${c.id})**\n*Metadata: ${JSON.stringify(
             c.metadata
-          )}\n--- Original ---\n${c.original}\n--- New ---\n${c.new}`
+          )}*\n\n**--- Original ---**\n${c.original}\n\n**--- New ---**\n${c.new}`
       )
-      .join('\n\n')}`
+      .join('\n\n---\n')}` : ''
+
+    const newChunksBody = newChunks.filter(c => c.trim() !== '').length > 0 ? `### New Knowledge Suggestions\n\n${newChunks
+      .filter(c => c.trim() !== '')
+      .map((c, index) => `**Suggestion #${index + 1}**\n${c}`)
+      .join('\n\n---\n')}` : ''
+
+    const body = [editedChunksBody, newChunksBody].filter(Boolean).join('\n\n<br/>\n\n')
 
     try {
       const response = await fetch('/api/feedback', {
@@ -140,7 +162,7 @@ export function FeedbackSection() {
                 <Button
                   size="sm"
                   onClick={handleSubmitContribution}
-                  disabled={isSubmitting || Object.keys(editedChunks).length === 0}
+                  disabled={isSubmitting || (Object.keys(editedChunks).length === 0 && newChunks.every(c => c.trim() === ''))}
                 >
                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null}
                   submit contribution
@@ -150,20 +172,51 @@ export function FeedbackSection() {
                 </Button>
               </div>
             </div>
-            <div className="space-y-4">
-              {error && <p className="text-destructive text-center text-sm">{error}</p>}
-              {knowledgeChunks.map((chunk, index) => (
-                <div key={chunk.id}>
-                  <Label htmlFor={`chunk-${chunk.id}`} className="text-sm font-medium">knowledge #{index + 1}</Label>
-                  <Textarea
-                    id={`chunk-${chunk.id}`}
-                    value={editedChunks[chunk.id] ?? chunk.chunk}
-                    onChange={e => handleChunkChange(chunk.id, e.target.value)}
-                    rows={6}
-                    className="mt-1 text-sm bg-background/30"
-                  />
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-medium text-base">suggest new knowledge</h4>
+                  <Button variant="ghost" size="icon" onClick={handleAddChunk} className="h-8 w-8">
+                    <Plus className="h-4 w-4" />
+                  </Button>
                 </div>
-              ))}
+                {newChunks.map((chunk, index) => (
+                  <div key={index} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor={`new-chunk-${index}`} className="text-sm font-medium">suggestion #{index + 1}</Label>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveNewChunk(index)}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <Textarea
+                      id={`new-chunk-${index}`}
+                      value={chunk}
+                      onChange={e => handleNewChunkChange(index, e.target.value)}
+                      placeholder="add a new piece of knowledge..."
+                      rows={5}
+                      className="text-sm bg-background/30"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {knowledgeChunks.length > 0 && (
+                <div className="space-y-4">
+                  <h4 className="font-medium text-base">edit existing knowledge</h4>
+                  {knowledgeChunks.map((chunk, index) => (
+                    <div key={chunk.id}>
+                      <Label htmlFor={`chunk-${chunk.id}`} className="text-sm font-medium">knowledge #{index + 1}</Label>
+                      <Textarea
+                        id={`chunk-${chunk.id}`}
+                        value={editedChunks[chunk.id] ?? chunk.chunk}
+                        onChange={e => handleChunkChange(chunk.id, e.target.value)}
+                        rows={6}
+                        className="mt-1 text-sm bg-background/30"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </motion.div>
         )

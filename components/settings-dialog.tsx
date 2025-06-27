@@ -31,6 +31,7 @@ import {
   Copy,
   Eye,
   EyeOff,
+  MessageSquarePlus,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -38,6 +39,7 @@ import { useCustomBackground } from '@/hooks/use-custom-background'
 import type { BackgroundType } from '@/components/backgrounds/custom-background'
 import dynamic from 'next/dynamic'
 import { useMemo } from 'react'
+import { FeedbackSection } from '@/components/feedback-section'
 
 const Aurora = dynamic(() => import('@/components/backgrounds/aurora'), {
   ssr: false,
@@ -499,6 +501,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     { id: 'data', label: 'data controls', icon: Archive },
     { id: 'security', label: 'security', icon: Shield },
     { id: 'onboarding', label: 'view tutorial', icon: Zap },
+    { id: 'feedback', label: 'feedback', icon: MessageSquarePlus },
   ]
   const themeOptions = [
     { id: 'light', label: 'Light', icon: Sun },
@@ -1481,6 +1484,9 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
             </div>
           </div>
         )
+
+      case 'feedback':
+        return <FeedbackSection />
 
       case 'onboarding':
         return (

@@ -4,7 +4,7 @@ import { getContextForAIPrompt } from './data/context-integration'
 import { rateLimitedAI } from './rate-limited-ai'
 
 let _ragPool: import('pg').Pool | null = null
-async function getRagPool() {
+export async function getRagPool() {
   if (_ragPool) return _ragPool
   const { Pool } = await import('pg')
   if (!process.env.DATABASE_URL2) {

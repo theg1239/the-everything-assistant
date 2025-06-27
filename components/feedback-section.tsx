@@ -171,10 +171,12 @@ export function FeedbackSection() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.2 }}
+            className="w-full"
           >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg md:text-xl font-semibold">contribute to knowledge base</h3>
-              <div className="flex items-center gap-2">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+              <h3 className="text-xl sm:text-2xl font-semibold">contribute to knowledge base</h3>
+              <div className="flex flex-col xs:flex-row gap-2">
                 <Button
                   size="sm"
                   onClick={handleSubmitContribution}
@@ -183,36 +185,53 @@ export function FeedbackSection() {
                     (Object.keys(editedChunks).length === 0 &&
                       newChunks.every(c => c.trim() === ''))
                   }
+                  className="w-full xs:w-auto"
                 >
                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null}
-                  submit contribution
+                  <span className="hidden xs:inline">submit contribution</span>
+                  <span className="xs:hidden">submit</span>
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setView('menu')}>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setView('menu')}
+                  className="w-full xs:w-auto"
+                >
                   back
                 </Button>
               </div>
             </div>
-            <div className="space-y-6">
+
+            <div className="space-y-8">
+              {/* New Knowledge Section */}
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-medium text-base">suggest new knowledge</h4>
-                  <Button variant="ghost" size="icon" onClick={handleAddChunk} className="h-8 w-8">
+                <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-3">
+                  <h4 className="font-medium text-base sm:text-lg">suggest new knowledge</h4>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={handleAddChunk} 
+                    className="w-full xs:w-auto flex items-center justify-center gap-2"
+                  >
                     <Plus className="h-4 w-4" />
+                    <span className="xs:hidden">add suggestion</span>
                   </Button>
                 </div>
+                
                 {newChunks.map((chunk, index) => (
-                  <div key={index} className="space-y-2">
-                    <div className="flex items-center justify-between">
+                  <div key={index} className="space-y-3 p-4 border border-border rounded-lg bg-background/30">
+                    <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-2">
                       <Label htmlFor={`new-chunk-${index}`} className="text-sm font-medium">
                         suggestion #{index + 1}
                       </Label>
                       <Button
                         variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
+                        size="sm"
                         onClick={() => handleRemoveNewChunk(index)}
+                        className="w-full xs:w-auto flex items-center justify-center gap-2 text-destructive hover:text-destructive"
                       >
                         <X className="h-4 w-4" />
+                        <span className="xs:hidden">remove</span>
                       </Button>
                     </div>
                     <Textarea
@@ -220,35 +239,39 @@ export function FeedbackSection() {
                       value={chunk}
                       onChange={e => handleNewChunkChange(index, e.target.value)}
                       placeholder="add a new piece of knowledge..."
-                      rows={5}
-                      className="text-sm bg-background/30"
+                      rows={4}
+                      className="text-sm bg-background/50 min-h-[100px] resize-y"
                     />
                   </div>
                 ))}
               </div>
 
+              {/* Existing Knowledge Section */}
               {knowledgeChunks.length > 0 && (
                 <div className="space-y-4">
-                  <h4 className="font-medium text-base">edit existing knowledge</h4>
-                  {knowledgeChunks.map((chunk, index) => (
-                    <div key={chunk.id}>
-                      <Label htmlFor={`chunk-${chunk.id}`} className="text-sm font-medium">
-                        knowledge #{index + 1}
-                      </Label>
-                      <Textarea
-                        id={`chunk-${chunk.id}`}
-                        value={editedChunks[chunk.id] ?? chunk.chunk}
-                        onChange={e => handleChunkChange(chunk.id, e.target.value)}
-                        rows={6}
-                        className="mt-1 text-sm bg-background/30"
-                      />
-                    </div>
-                  ))}
+                  <h4 className="font-medium text-base sm:text-lg">edit existing knowledge</h4>
+                  <div className="grid gap-4">
+                    {knowledgeChunks.map((chunk, index) => (
+                      <div key={chunk.id} className="space-y-3 p-4 border border-border rounded-lg bg-background/30">
+                        <Label htmlFor={`chunk-${chunk.id}`} className="text-sm font-medium block">
+                          knowledge #{index + 1}
+                        </Label>
+                        <Textarea
+                          id={`chunk-${chunk.id}`}
+                          value={editedChunks[chunk.id] ?? chunk.chunk}
+                          onChange={e => handleChunkChange(chunk.id, e.target.value)}
+                          rows={6}
+                          className="text-sm bg-background/50 min-h-[150px] resize-y"
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
           </motion.div>
         )
+
       case 'feedback':
         return (
           <motion.div
@@ -256,48 +279,59 @@ export function FeedbackSection() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.2 }}
+            className="w-full"
           >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg md:text-xl font-semibold">submit feedback</h3>
-              <div className="flex items-center gap-2">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+              <h3 className="text-xl sm:text-2xl font-semibold">submit feedback</h3>
+              <div className="flex flex-col xs:flex-row gap-2">
                 <Button
                   size="sm"
                   onClick={handleSubmitFeedback}
                   disabled={isSubmitting || !feedbackTitle || !feedbackBody}
+                  className="w-full xs:w-auto"
                 >
                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null}
-                  submit feedback
+                  <span className="hidden xs:inline">submit feedback</span>
+                  <span className="xs:hidden">submit</span>
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setView('menu')}>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setView('menu')}
+                  className="w-full xs:w-auto"
+                >
                   back
                 </Button>
               </div>
             </div>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="feedback-title">title</Label>
+
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <Label htmlFor="feedback-title" className="text-sm font-medium">title</Label>
                 <Input
                   id="feedback-title"
                   placeholder="e.g., issue with chat history"
                   value={feedbackTitle}
                   onChange={e => setFeedbackTitle(e.target.value)}
-                  className="bg-background/30"
+                  className="bg-background/30 text-sm sm:text-base"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="feedback-body">description</Label>
+              <div className="space-y-3">
+                <Label htmlFor="feedback-body" className="text-sm font-medium">description</Label>
                 <Textarea
                   id="feedback-body"
-                  placeholder="please provide as much detail as possible."
-                  rows={6}
+                  placeholder="please provide as much detail as possible..."
+                  rows={8}
                   value={feedbackBody}
                   onChange={e => setFeedbackBody(e.target.value)}
-                  className="bg-background/30"
+                  className="bg-background/30 text-sm sm:text-base min-h-[200px] resize-y"
                 />
               </div>
             </div>
           </motion.div>
         )
+
       case 'menu':
       default:
         return (
@@ -306,51 +340,61 @@ export function FeedbackSection() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.2 }}
+            className="w-full"
           >
             <div className="space-y-6">
               <div>
-                <h3 className="text-lg md:text-xl font-semibold mb-4">feedback & contributions</h3>
-                <div className="space-y-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
-                    <div className="flex items-start sm:items-center gap-3">
-                      <MessageSquarePlus className="w-4 h-4 flex-shrink-0 mt-0.5 sm:mt-0" />
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-sm md:text-base">
+                <h3 className="text-xl sm:text-2xl font-semibold mb-6">feedback & contributions</h3>
+                <div className="grid gap-4">
+                  {/* Contribute Card */}
+                  <div className="flex flex-col gap-4 p-4 sm:p-6 rounded-lg border border-border bg-background/30">
+                    <div className="flex items-start gap-4">
+                      <MessageSquarePlus className="w-5 h-5 flex-shrink-0 mt-1 text-primary" />
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-base sm:text-lg mb-2">
                           contribute to knowledge base
-                        </p>
-                        <p className="text-xs md:text-sm text-muted-foreground">
-                          suggest edits to improve the assistant's knowledge.
+                        </h4>
+                        <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
+                          suggest edits to improve the assistant's knowledge and help make it more accurate.
                         </p>
                       </div>
                     </div>
                     <Button
                       variant="outline"
-                      size="sm"
                       onClick={handleFetchAndSetView}
                       disabled={isLoading}
-                      className="w-full sm:w-auto flex-shrink-0"
+                      className="w-full sm:w-auto sm:self-start"
                     >
-                      {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'contribute'}
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                          loading...
+                        </>
+                      ) : (
+                        'contribute'
+                      )}
                     </Button>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
-                    <div className="flex items-start sm:items-center gap-3">
-                      <MessageSquarePlus className="w-4 h-4 flex-shrink-0 mt-0.5 sm:mt-0" />
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-sm md:text-base">submit feedback</p>
-                        <p className="text-xs md:text-sm text-muted-foreground">
-                          report an issue or request a new feature.
+                  {/* Feedback Card */}
+                  <div className="flex flex-col gap-4 p-4 sm:p-6 rounded-lg border border-border bg-background/30">
+                    <div className="flex items-start gap-4">
+                      <MessageSquarePlus className="w-5 h-5 flex-shrink-0 mt-1 text-primary" />
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-base sm:text-lg mb-2">
+                          submit feedback
+                        </h4>
+                        <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
+                          report an issue, request a new feature, or share your thoughts on improvements.
                         </p>
                       </div>
                     </div>
                     <Button
                       variant="outline"
-                      size="sm"
                       onClick={() => setView('feedback')}
-                      className="w-full sm:w-auto flex-shrink-0"
+                      className="w-full sm:w-auto sm:self-start"
                     >
-                      submit
+                      submit feedback
                     </Button>
                   </div>
                 </div>
@@ -361,5 +405,9 @@ export function FeedbackSection() {
     }
   }
 
-  return renderContent()
+  return (
+    <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      {renderContent()}
+    </div>
+  )
 }

@@ -3,12 +3,12 @@
   "name": "the everything assistant",
   "icons": [
     {
-      "src": "/onboarding-artwork/artwork.png",
+      "src": "/assets/tea-icon.png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "/assets/teaaa.png",
+      "src": "/assets/tea-icon.png",
       "type": "image/png",
       "sizes": "512x512"
     }

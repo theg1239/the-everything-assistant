@@ -92,12 +92,22 @@ interface RateLimitStatus {
   }
 }
 
+interface Stats {
+  totalUsers: number;
+  messagesInLast30Minutes: number;
+  toolCallStats: {
+    toolName: string;
+    count: number;
+  }[];
+}
+
 export default function ManagementPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [data, setData] = useState<RateLimitStatus | null>(null)
+  const [stats, setStats] = useState<Stats | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [showSensitiveData, setShowSensitiveData] = useState(false)
@@ -106,10 +116,25 @@ export default function ManagementPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/rate-limit-status')
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Failed to fetch status')
-      setData(json)
+      const [rateLimitRes, statsRes] = await Promise.all([
+        fetch('/api/rate-limit-status'),
+        fetch('/api/stats'),
+      ])
+
+      if (!rateLimitRes.ok) {
+        const json = await rateLimitRes.json()
+        throw new Error(json.error || 'Failed to fetch rate limit status')
+      }
+      if (!statsRes.ok) {
+        const json = await statsRes.json()
+        throw new Error(json.error || 'Failed to fetch stats')
+      }
+
+      const rateLimitData = await rateLimitRes.json()
+      const statsData = await statsRes.json()
+
+      setData(rateLimitData)
+      setStats(statsData)
       setLastUpdate(new Date())
     } catch (err: any) {
       setError(err.message || 'Failed to fetch data')
@@ -335,6 +360,57 @@ export default function ManagementPage() {
                   </div>
                 </motion.div>
 
+                {/* System Statistics */}
+                {stats && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.15 }}
+                  >
+                    <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
+                      <div className="flex flex-col space-y-1.5 mb-6">
+                        <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
+                          <Database className="w-5 h-5" /> System Statistics
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          High-level overview of system activity
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
+                          <Users className="w-5 h-5 text-blue-500" />
+                          <div>
+                            <p className="font-medium text-sm md:text-base">Total Users</p>
+                            <p className="text-2xl font-bold">{stats.totalUsers}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
+                          <Clock className="w-5 h-5 text-green-500" />
+                          <div>
+                            <p className="font-medium text-sm md:text-base">Messages (30min)</p>
+                            <p className="text-2xl font-bold">{stats.messagesInLast30Minutes}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-6">
+                        <h4 className="font-semibold mb-2">Tool Call Stats</h4>
+                        <div className="space-y-2">
+                          {stats.toolCallStats.length > 0 ? (
+                            stats.toolCallStats.map(tool => (
+                              <div key={tool.toolName} className="flex justify-between items-center text-sm p-2 rounded-md bg-black/20">
+                                <span>{tool.toolName}</span>
+                                <span className="font-bold">{tool.count}</span>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-sm text-muted-foreground">No tool calls recorded yet.</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
                 {/* API Key Management */}
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
@@ -449,6 +525,57 @@ export default function ManagementPage() {
                     )}
                   </div>
                 </motion.div>
+
+                {/* System Statistics
+                {stats && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.15 }}
+                  >
+                    <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
+                      <div className="flex flex-col space-y-1.5 mb-6">
+                        <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
+                          <Database className="w-5 h-5" /> System Statistics
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          High-level overview of system activity
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
+                          <Users className="w-5 h-5 text-blue-500" />
+                          <div>
+                            <p className="font-medium text-sm md:text-base">Total Users</p>
+                            <p className="text-2xl font-bold">{stats.totalUsers}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
+                          <Clock className="w-5 h-5 text-green-500" />
+                          <div>
+                            <p className="font-medium text-sm md:text-base">Messages (30min)</p>
+                            <p className="text-2xl font-bold">{stats.messagesInLast30Minutes}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-6">
+                        <h4 className="font-semibold mb-2">Tool Call Stats</h4>
+                        <div className="space-y-2">
+                          {stats.toolCallStats.length > 0 ? (
+                            stats.toolCallStats.map(tool => (
+                              <div key={tool.toolName} className="flex justify-between items-center text-sm p-2 rounded-md bg-black/20">
+                                <span>{tool.toolName}</span>
+                                <span className="font-bold">{tool.count}</span>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-sm text-muted-foreground">No tool calls recorded yet.</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )} */}
 
                 {/* User Rate Limiting */}
                 <motion.div

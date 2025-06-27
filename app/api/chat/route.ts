@@ -317,7 +317,7 @@ export async function POST(req: Request) {
           directToolCall.args.facultyName &&
           !directToolCall.args.includeCourses
         ) {
-          directToolCall.args.includeCourses = true;
+          directToolCall.args.includeCourses = true
         }
         try {
           const result = await tool.execute(directToolCall.args, {
@@ -404,8 +404,7 @@ export async function POST(req: Request) {
     if (!process.env.GROQ_API_KEY) {
       return new Response(
         JSON.stringify({
-          error:
-            'API key not configured. Please add GROQ_API_KEY to your environment variables.',
+          error: 'API key not configured. Please add GROQ_API_KEY to your environment variables.',
         }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
       )
@@ -531,7 +530,6 @@ ${toolPreferenceGuidance}`
               } catch (e) {
                 console.error('Failed to parse VTOP data in stream:', e)
               }
-              
             } else if (
               tr.toolName === 'knowledgeBase' &&
               tr.result?.success &&
@@ -558,7 +556,7 @@ ${toolPreferenceGuidance}`
 
           const safeInvocations = JSON.parse(JSON.stringify(toolResults))
           await saveMessage(chat.id, 'assistant', result.text, safeInvocations, result.response.id)
-        }
+        },
       },
       session.user.id
     )

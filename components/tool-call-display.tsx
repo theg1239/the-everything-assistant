@@ -33,7 +33,7 @@ interface ToolCallDisplayProps {
 }
 
 const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) => {
-    if (toolName === 'queryVTOP') {
+  if (toolName === 'queryVTOP') {
     if (result.data || result.output) {
       const vtopData = result.data || result.output
       const command = result.command || 'unknown'
@@ -95,10 +95,10 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
               let processedRows = rows
               if (command === 'attendance' && Array.isArray(processedRows)) {
                 if (process.env.NODE_ENV !== 'production') {
-                // eslint-disable-next-line no-console
-                //console.log('[VTOP parser] raw attendance row', processedRows)
-              }
-              processedRows = processedRows.map((row: any) => {
+                  // eslint-disable-next-line no-console
+                  //console.log('[VTOP parser] raw attendance row', processedRows)
+                }
+                processedRows = processedRows.map((row: any) => {
                   const clean = (val: any) => (typeof val === 'string' ? val.trim() : val)
                   return {
                     SUBJECT:
@@ -382,7 +382,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
       title: 'Course Information',
       icon: <GraduationCap className="h-4 w-4" />,
       data: result,
-      source: 'Course Information'
+      source: 'Course Information',
     }
   }
 
@@ -392,7 +392,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
       title: 'FFCS Timetable Planner',
       icon: <GraduationCap className="h-4 w-4" />,
       data: result,
-      source: 'FFCS Planner'
+      source: 'FFCS Planner',
     }
   }
 
@@ -990,7 +990,7 @@ const PureToolCallDisplay = ({
         continue
       }
       const key = `${tc.toolName}-${tc.toolCallId || tc.id || ''}`
-      const existing = map.get(key) 
+      const existing = map.get(key)
       if (!existing || (tc.result && !existing.result)) {
         map.set(key, tc)
       }

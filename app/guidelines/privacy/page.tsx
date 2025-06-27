@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import React from 'react'
 
@@ -45,9 +45,9 @@ export default function PrivacyPolicyPage() {
           <h2 className="text-xl font-semibold mb-2">5. Third-Party Model Providers</h2>
           <p>
             When you interact with the assistant, requests may be processed by third-party AI model
-            providers like Google. Their handling of your data is governed by their own Terms of Service and
-            Privacy Policies. We encourage you to review those policies to understand how they may
-            collect, use, or store data.
+            providers like Google. Their handling of your data is governed by their own Terms of
+            Service and Privacy Policies. We encourage you to review those policies to understand
+            how they may collect, use, or store data.
           </p>
         </section>
 
@@ -69,7 +69,9 @@ export default function PrivacyPolicyPage() {
 
         <section className="mb-6">
           <h2 className="text-xl font-semibold mb-2">8. Retention</h2>
-          <p>Data is retained only as long as necessary to provide the service or meet legal duties.</p>
+          <p>
+            Data is retained only as long as necessary to provide the service or meet legal duties.
+          </p>
         </section>
 
         <section className="mb-6">
@@ -94,7 +96,8 @@ export default function PrivacyPolicyPage() {
             For questions or privacy requests, email{' '}
             <a href="mailto:privacy@vimegle.com" className="underline">
               here
-            </a>.
+            </a>
+            .
           </p>
         </section>
       </main>

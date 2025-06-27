@@ -1,10 +1,10 @@
-import type { NextConfig } from 'next';
+import type { NextConfig } from 'next'
 
 const withPWA = require('@ducanh2912/next-pwa').default({
   dest: 'public',
   register: true,
   skipWaiting: true,
-});
+})
 
 const nextConfig: NextConfig = {
   eslint: { ignoreDuringBuilds: false },
@@ -15,6 +15,6 @@ const nextConfig: NextConfig = {
   // compiler: {
   //   removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
   // },
-};
+}
 
-export default withPWA(nextConfig);
+export default withPWA(nextConfig)

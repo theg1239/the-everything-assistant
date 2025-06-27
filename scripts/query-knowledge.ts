@@ -18,7 +18,10 @@ import { createKnowledgeTools } from '../lib/knowledge-tools'
 
 async function runQuery(query: string, maxChunks = 4) {
   const { knowledgeBase } = createKnowledgeTools()
-  const result = (await (knowledgeBase as any).execute({ query, max_chunks: maxChunks }, undefined)) as any
+  const result = (await (knowledgeBase as any).execute(
+    { query, max_chunks: maxChunks },
+    undefined
+  )) as any
 
   if (!result.success) {
     console.error('Query failed:', result.error)
@@ -43,7 +46,7 @@ async function main() {
   }
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
-  const ask = (q: string) => new Promise<string>((res) => rl.question(q, res))
+  const ask = (q: string) => new Promise<string>(res => rl.question(q, res))
 
   console.log('VIT Knowledge Base CLI - type "exit" to quit')
   while (true) {
@@ -58,7 +61,7 @@ async function main() {
   rl.close()
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error(err)
   process.exit(1)
 })

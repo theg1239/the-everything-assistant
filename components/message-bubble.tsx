@@ -32,7 +32,13 @@ const PureMessageBubble = ({
   const { version } = useVTOP()
   const isUser = message.role === 'user'
 
-  if (!isUser && (!message.content || (message.content as string).trim() === '') && message.toolInvocations?.some((t: any)=> t.toolName === 'knowledgeBase' && t.state !== 'result')) {
+  if (
+    !isUser &&
+    (!message.content || (message.content as string).trim() === '') &&
+    message.toolInvocations?.some(
+      (t: any) => t.toolName === 'knowledgeBase' && t.state !== 'result'
+    )
+  ) {
     return null
   }
 
@@ -66,15 +72,15 @@ const PureMessageBubble = ({
             )
             return visibleToolCalls && visibleToolCalls.length > 0 ? (
               <ToolCallDisplay
-              key={
-                hasVTOPCalls ? `tool-calls-${message.id}-${version}` : `tool-calls-${message.id}`
-              }
-              toolCalls={visibleToolCalls}
-              onLoginClick={onLoginClick}
-              onPlacementSearch={onPlacementSearch}
-              maximizedItem={maximizedItem}
-              setMaximizedItem={setMaximizedItem}
-            />
+                key={
+                  hasVTOPCalls ? `tool-calls-${message.id}-${version}` : `tool-calls-${message.id}`
+                }
+                toolCalls={visibleToolCalls}
+                onLoginClick={onLoginClick}
+                onPlacementSearch={onPlacementSearch}
+                maximizedItem={maximizedItem}
+                setMaximizedItem={setMaximizedItem}
+              />
             ) : null
           })()}
 
@@ -100,9 +106,10 @@ const PureMessageBubble = ({
                 }
 
                 const kbResult = message.toolInvocations?.find(
-                  (t: any) => t.toolName === 'knowledgeBase' && t.state === 'result' && t.result?.answer
+                  (t: any) =>
+                    t.toolName === 'knowledgeBase' && t.state === 'result' && t.result?.answer
                 )
-                if ((!message.content || (message.content as string).trim()==='') && kbResult) {
+                if ((!message.content || (message.content as string).trim() === '') && kbResult) {
                   return (
                     <div className="prose prose-invert prose-base max-w-none">
                       <ReactMarkdown
@@ -119,15 +126,21 @@ const PureMessageBubble = ({
                           ol: ({ children }) => (
                             <ol className="list-decimal pl-5 mb-3 space-y-1">{children}</ol>
                           ),
-                          li: ({ children }) => <li className="text-muted-foreground">{children}</li>,
+                          li: ({ children }) => (
+                            <li className="text-muted-foreground">{children}</li>
+                          ),
                           strong: ({ children }) => (
                             <strong className="font-semibold text-foreground">{children}</strong>
                           ),
                           h1: ({ children }) => (
-                            <h1 className="text-xl font-semibold text-foreground mb-3">{children}</h1>
+                            <h1 className="text-xl font-semibold text-foreground mb-3">
+                              {children}
+                            </h1>
                           ),
                           h2: ({ children }) => (
-                            <h2 className="text-lg font-semibold text-foreground mb-2">{children}</h2>
+                            <h2 className="text-lg font-semibold text-foreground mb-2">
+                              {children}
+                            </h2>
                           ),
                           h3: ({ children }) => (
                             <h3 className="text-base font-semibold text-foreground mb-2">

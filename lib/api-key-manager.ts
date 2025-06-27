@@ -108,7 +108,9 @@ export class ApiKeyManager {
       url: process.env.UPSTASH_REDIS_REST_URL!,
       token: process.env.UPSTASH_REDIS_REST_TOKEN!,
     })
-    this.initPromise = Promise.all([this.initializeBuckets(), this.loadCurrentKeyIndex()]).then(() => void 0)
+    this.initPromise = Promise.all([this.initializeBuckets(), this.loadCurrentKeyIndex()]).then(
+      () => void 0
+    )
   }
 
   private async initializeBuckets(): Promise<void> {
@@ -171,7 +173,7 @@ export class ApiKeyManager {
 
   private hashKey(key: string): string {
     if (typeof key !== 'string' || !key) {
-      throw new Error('ApiKeyManager: Tried to hash an undefined or non-string key');
+      throw new Error('ApiKeyManager: Tried to hash an undefined or non-string key')
     }
     return `key_${key.slice(-8)}_${key.length}`
   }
@@ -291,9 +293,7 @@ export class ApiKeyManager {
   }
 
   private getRandomKeyIndex(exclude: Set<number> = new Set()): number | null {
-    const available = this.config.keys
-      .map((_, idx) => idx)
-      .filter(idx => !exclude.has(idx))
+    const available = this.config.keys.map((_, idx) => idx).filter(idx => !exclude.has(idx))
     if (available.length === 0) return null
     const randIdx = Math.floor(Math.random() * available.length)
     return available[randIdx]
@@ -312,14 +312,20 @@ export class ApiKeyManager {
     await this.redis.set(banKey, until.toString(), { ex: Math.ceil(cooldownMs / 1000) })
   }
 
-  private async incrementFailure(keyHash: string, maxFails = 5, cooldownMs = 5 * 60 * 1000): Promise<void> {
+  private async incrementFailure(
+    keyHash: string,
+    maxFails = 5,
+    cooldownMs = 5 * 60 * 1000
+  ): Promise<void> {
     const failKey = `failures:${keyHash}`
     const fails = (parseInt((await this.redis.get(failKey)) as string) || 0) + 1
     await this.redis.set(failKey, fails.toString(), { ex: 3600 })
     if (fails >= maxFails) {
       await this.banKey(keyHash, cooldownMs)
       await this.redis.set(failKey, '0', { ex: 3600 })
-      console.warn(`[ApiKeyManager] Banned key ${keyHash} for ${cooldownMs / 1000}s due to repeated failures`)
+      console.warn(
+        `[ApiKeyManager] Banned key ${keyHash} for ${cooldownMs / 1000}s due to repeated failures`
+      )
     }
   }
 
@@ -382,7 +388,9 @@ export class ApiKeyManager {
         continue
       }
     }
-    throw new Error(`All API keys failed, are rate limited, or are temporarily banned. Last error: ${lastErr?.message || 'Unknown'}`)
+    throw new Error(
+      `All API keys failed, are rate limited, or are temporarily banned. Last error: ${lastErr?.message || 'Unknown'}`
+    )
   }
 
   private isRateLimitError(error: any): boolean {

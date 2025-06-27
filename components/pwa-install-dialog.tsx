@@ -32,9 +32,7 @@ export function PWAInstallDialog() {
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent
-        className="max-w-md w-[95vw] bg-white dark:bg-slate-900 flex flex-col p-0 rounded-2xl shadow-2xl overflow-hidden h-auto max-h-[90vh] sm:max-h-[80vh] border-0"
-      >
+      <DialogContent className="max-w-md w-[95vw] bg-white dark:bg-slate-900 flex flex-col p-0 rounded-2xl shadow-2xl overflow-hidden h-auto max-h-[90vh] sm:max-h-[80vh] border-0">
         <DialogTitle className="sr-only">install app</DialogTitle>
         <button
           onClick={handleClose}
@@ -61,7 +59,8 @@ export function PWAInstallDialog() {
                 </h2>
               </div>
               <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 mb-3 leading-relaxed">
-                to install this app on your iOS device, tap the share button and then find and tap 'add to home screen'.
+                to install this app on your iOS device, tap the share button and then find and tap
+                'add to home screen'.
               </p>
               <div className="mt-6 mb-3">
                 <Button

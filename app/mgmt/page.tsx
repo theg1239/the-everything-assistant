@@ -94,12 +94,12 @@ interface RateLimitStatus {
 }
 
 interface Stats {
-  totalUsers: number;
-  messagesInLast30Minutes: number;
+  totalUsers: number
+  messagesInLast30Minutes: number
   toolCallStats: {
-    toolName: string;
-    count: number;
-  }[];
+    toolName: string
+    count: number
+  }[]
 }
 
 export default function ManagementPage() {
@@ -112,9 +112,7 @@ export default function ManagementPage() {
   const [error, setError] = useState<string | null>(null)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [showSensitiveData, setShowSensitiveData] = useState(false)
-  const [broadcastSlides, setBroadcastSlides] = useState([
-    { title: '', text: '', image: '' },
-  ])
+  const [broadcastSlides, setBroadcastSlides] = useState([{ title: '', text: '', image: '' }])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -418,26 +416,29 @@ export default function ManagementPage() {
 
                     <div className="space-y-4">
                       {broadcastSlides.map((slide, index) => (
-                        <div key={index} className="p-4 rounded-lg bg-black/20 border border-border/20 relative space-y-3">
+                        <div
+                          key={index}
+                          className="p-4 rounded-lg bg-black/20 border border-border/20 relative space-y-3"
+                        >
                           <h4 className="font-medium">Slide {index + 1}</h4>
                           <input
                             type="text"
                             placeholder="Title"
                             value={slide.title}
-                            onChange={(e) => handleSlideChange(index, 'title', e.target.value)}
+                            onChange={e => handleSlideChange(index, 'title', e.target.value)}
                             className="w-full bg-slate-800/50 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                           <textarea
                             placeholder="Text content"
                             value={slide.text}
-                            onChange={(e) => handleSlideChange(index, 'text', e.target.value)}
+                            onChange={e => handleSlideChange(index, 'text', e.target.value)}
                             className="w-full bg-slate-800/50 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[80px]"
                           />
                           <input
                             type="text"
                             placeholder="Image URL"
                             value={slide.image}
-                            onChange={(e) => handleSlideChange(index, 'image', e.target.value)}
+                            onChange={e => handleSlideChange(index, 'image', e.target.value)}
                             className="w-full bg-slate-800/50 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                           {broadcastSlides.length > 1 && (
@@ -458,7 +459,11 @@ export default function ManagementPage() {
                       <Button variant="outline" onClick={addSlide} className="gap-2">
                         <Plus className="w-4 h-4" /> Add Slide
                       </Button>
-                      <Button onClick={handleSendBroadcast} disabled={loading} className="gap-2 bg-purple-600 hover:bg-purple-700">
+                      <Button
+                        onClick={handleSendBroadcast}
+                        disabled={loading}
+                        className="gap-2 bg-purple-600 hover:bg-purple-700"
+                      >
                         <Send className="w-4 h-4" /> Send Broadcast
                       </Button>
                     </div>
@@ -502,13 +507,18 @@ export default function ManagementPage() {
                         <div className="space-y-2">
                           {stats.toolCallStats.length > 0 ? (
                             stats.toolCallStats.map(tool => (
-                              <div key={tool.toolName} className="flex justify-between items-center text-sm p-2 rounded-md bg-black/20">
+                              <div
+                                key={tool.toolName}
+                                className="flex justify-between items-center text-sm p-2 rounded-md bg-black/20"
+                              >
                                 <span>{tool.toolName}</span>
                                 <span className="font-bold">{tool.count}</span>
                               </div>
                             ))
                           ) : (
-                            <p className="text-sm text-muted-foreground">No tool calls recorded yet.</p>
+                            <p className="text-sm text-muted-foreground">
+                              No tool calls recorded yet.
+                            </p>
                           )}
                         </div>
                       </div>
@@ -589,10 +599,10 @@ export default function ManagementPage() {
                           {Object.entries(data.keyUsage)
                             .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
                             .map(([key, usage]) => {
-                              const parts = key.split('_');
-                              const provider = parts[0] || 'Unknown';
-                              const keyIndex = parts.length > 2 ? parts.slice(2).join('_') : 'N/A';
-                              const displayName = `${provider.charAt(0).toUpperCase() + provider.slice(1)} Key ${keyIndex}`;
+                              const parts = key.split('_')
+                              const provider = parts[0] || 'Unknown'
+                              const keyIndex = parts.length > 2 ? parts.slice(2).join('_') : 'N/A'
+                              const displayName = `${provider.charAt(0).toUpperCase() + provider.slice(1)} Key ${keyIndex}`
 
                               return (
                                 <div
@@ -603,9 +613,7 @@ export default function ManagementPage() {
                                   )}
                                 >
                                   <div className="flex justify-between items-start mb-3">
-                                    <h4 className="font-semibold">
-                                      {displayName}
-                                    </h4>
+                                    <h4 className="font-semibold">{displayName}</h4>
                                     <div className="flex gap-2">
                                       {/* {usage.isCurrent && (
                                         <Badge

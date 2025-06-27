@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { PrismaClient, Prisma } from '@prisma/client';
-import { prisma } from '@/lib/prisma';
+import { PrismaClient, Prisma } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -16,24 +16,18 @@ export async function POST(req: NextRequest) {
     const { slides } = body
 
     if (!slides || !Array.isArray(slides) || slides.length === 0) {
-      return NextResponse.json(
-        { error: 'Invalid broadcast payload' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invalid broadcast payload' }, { status: 400 })
     }
 
     const newBroadcast = await prisma.broadcast.create({
       data: {
-        slides: slides, 
+        slides: slides,
       },
     })
 
     return NextResponse.json(newBroadcast, { status: 201 })
   } catch (error) {
     console.error('Error creating broadcast:', error)
-    return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

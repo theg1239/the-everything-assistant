@@ -71,10 +71,13 @@ async function readCsvFile(filePath: string): Promise<PlacementRecord[]> {
 }
 
 function preprocessAndFilterData(records: PlacementRecord[]): PlacementRecord[] {
-  const recordsWithNumericCtc = records.map(record => ({
-    ...record,
-    numericCTC: convertCtcToNumeric(record.CTC),
-  } as PlacementRecord & { numericCTC: number | null }))
+  const recordsWithNumericCtc = records.map(
+    record =>
+      ({
+        ...record,
+        numericCTC: convertCtcToNumeric(record.CTC),
+      }) as PlacementRecord & { numericCTC: number | null }
+  )
 
   const sorted = recordsWithNumericCtc.sort((a, b) => {
     if (a.Reg_No !== b.Reg_No) {
@@ -223,11 +226,7 @@ export async function scrapePlacementInfo(
   }
 }
 
-export async function parsePlacementData(
-  rawData: any,
-  userContext: string = '',
-  userId?: string
-) {
+export async function parsePlacementData(rawData: any, userContext: string = '', userId?: string) {
   try {
     const placementParseSchema = z.object({
       success: z.boolean(),

@@ -28,14 +28,20 @@ export async function GET(req: NextRequest) {
     ])
 
     const combinedUsageStats = {
-      ...Object.entries(googleUsageStats).reduce((acc, [key, value]) => {
-        acc[`google_${key}`] = value
-        return acc
-      }, {} as Record<string, any>),
-      ...Object.entries(groqUsageStats).reduce((acc, [key, value]) => {
-        acc[`groq_${key}`] = value
-        return acc
-      }, {} as Record<string, any>),
+      ...Object.entries(googleUsageStats).reduce(
+        (acc, [key, value]) => {
+          acc[`google_${key}`] = value
+          return acc
+        },
+        {} as Record<string, any>
+      ),
+      ...Object.entries(groqUsageStats).reduce(
+        (acc, [key, value]) => {
+          acc[`groq_${key}`] = value
+          return acc
+        },
+        {} as Record<string, any>
+      ),
     }
 
     const totalKeyCount = googleConfig.keys.length + groqConfig.keys.length

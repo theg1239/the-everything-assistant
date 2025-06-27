@@ -119,7 +119,7 @@ async function getRedditOverview() {
     ])
 
     const trending = trendingResponse.ok ? (await trendingResponse.json()).trending || [] : []
-    const stats = statsResponse.ok ? (await statsResponse.json()).stats || {} : {    }
+    const stats = statsResponse.ok ? (await statsResponse.json()).stats || {} : {}
 
     return {
       success: true,
@@ -794,80 +794,104 @@ export function createVITTools() {
     }),
 
     getCourseInfo: tool({
-      description: 'Get information about courses from the FFCS dataset (supports all schools: SMEC, SCORE, SCOPE, SBST, SCE, SCHEME, SELECT, SENSE). Returns faculty names, slots, venue, etc.',
+      description:
+        'Get information about courses from the FFCS dataset (supports all schools: SMEC, SCORE, SCOPE, SBST, SCE, SCHEME, SELECT, SENSE). Returns faculty names, slots, venue, etc.',
       parameters: z.object({
-        school: z.enum(['smec', 'score', 'scope', 'sbst', 'sce', 'scheme', 'select', 'sense']).describe('The school to search within. Examples: smec (mechanical), score (information tech), scope (computer science), sbst (biosciences and technology), sce (civil), scheme (chemical engineering), select (electrical engineering), sense (electronics and communication engineering'),
-        courseQuery: z.string().describe('The course code or title to search for. Can be a partial match.'),
-        slot: z.string().optional().describe('An optional specific slot to filter by (e.g., "A1", "L1+L2").'),
+        school: z
+          .enum(['smec', 'score', 'scope', 'sbst', 'sce', 'scheme', 'select', 'sense'])
+          .describe(
+            'The school to search within. Examples: smec (mechanical), score (information tech), scope (computer science), sbst (biosciences and technology), sce (civil), scheme (chemical engineering), select (electrical engineering), sense (electronics and communication engineering'
+          ),
+        courseQuery: z
+          .string()
+          .describe('The course code or title to search for. Can be a partial match.'),
+        slot: z
+          .string()
+          .optional()
+          .describe('An optional specific slot to filter by (e.g., "A1", "L1+L2").'),
       }),
       execute: async ({ school, courseQuery, slot }) => {
         try {
-          const { allCourses } = await getCourseData(school);
+          const { allCourses } = await getCourseData(school)
 
-          let matchCodes: string[] = [];
-          const matches = getAllCourseMatches(courseQuery);
+          let matchCodes: string[] = []
+          const matches = getAllCourseMatches(courseQuery)
           if (matches.length > 0) {
-            matchCodes = matches.map(m => m.code.toUpperCase());
+            matchCodes = matches.map(m => m.code.toUpperCase())
           }
 
           let filteredCourses = allCourses.filter(course => {
             if (matchCodes.length) {
-              return matchCodes.includes(course.CODE.toUpperCase());
+              return matchCodes.includes(course.CODE.toUpperCase())
             }
             return (
               course.CODE.toLowerCase().includes(courseQuery.toLowerCase()) ||
               course.TITLE.toLowerCase().includes(courseQuery.toLowerCase())
-            );
-          });
+            )
+          })
 
           if (slot) {
-            filteredCourses = filteredCourses.filter(course => course.SLOT === slot);
+            filteredCourses = filteredCourses.filter(course => course.SLOT === slot)
           }
 
           if (filteredCourses.length === 0) {
             return {
               success: true,
-              message: `No courses found matching "${courseQuery}"` + (slot ? ` in slot ${slot}` : '') + ` for ${school.toUpperCase()} school.`,
+              message:
+                `No courses found matching "${courseQuery}"` +
+                (slot ? ` in slot ${slot}` : '') +
+                ` for ${school.toUpperCase()} school.`,
               results: [],
-            };
+            }
           }
-  
+
           const results = filteredCourses.map(course => ({
             code: course.CODE,
             title: course.TITLE,
             faculty: course.FACULTY,
             slot: course.SLOT,
             type: course.TYPE,
-          }));
-  
+          }))
+
           return {
             success: true,
             message: `Found ${results.length} matching course(s).`,
             results,
-          };
+          }
         } catch (error) {
-          console.error('Error in getCourseInfo tool:', error);
+          console.error('Error in getCourseInfo tool:', error)
           return {
             success: false,
             message: 'An error occurred while fetching course information.',
-          };
+          }
         }
-      }, 
+      },
     }),
-    
+
     getFacultyInfo: tool({
       description: `Get current faculty information from a local JSON file (public/faculty.json). NEVER return all faculty members at once—ALWAYS require at least a department or faculty name filter. If no filter is provided, ask the user to specify a department or faculty name. Returns school, department, and faculty info. Do NOT provide a full list of all faculty.
 
 For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'CIVIL') and full or partial department names (e.g., 'computer science', 'school of mechanical engineering', 'information technology', 'civil engineering'). The search is robust to acronyms, full names, and partial matches in either direction.`,
       parameters: z.object({
-        department: z.string().optional().describe('Department name or acronym to filter faculty (e.g., CSE, Mechanical).'),
+        department: z
+          .string()
+          .optional()
+          .describe('Department name or acronym to filter faculty (e.g., CSE, Mechanical).'),
         facultyName: z.string().optional().describe('Specific faculty member name'),
-        includeCourses: z.boolean().optional().describe('If true, also return courses the faculty teaches.'),
+        includeCourses: z
+          .boolean()
+          .optional()
+          .describe('If true, also return courses the faculty teaches.'),
         school: z
           .enum(['smec', 'score', 'scope', 'sbst', 'sce', 'scheme', 'select', 'sense'])
           .optional()
-          .describe('Limit course lookup to a specific school; defaults to all, while using the parameter, use the acronym (like smec, score, scope, sbst, sce, scheme, select, sense)'),
-        courseQuery: z.string().optional().describe('Course code or title to filter faculty who teach a specific course.'),
+          .describe(
+            'Limit course lookup to a specific school; defaults to all, while using the parameter, use the acronym (like smec, score, scope, sbst, sce, scheme, select, sense)'
+          ),
+        courseQuery: z
+          .string()
+          .optional()
+          .describe('Course code or title to filter faculty who teach a specific course.'),
       }),
       execute: async ({ department, facultyName, includeCourses = false, school, courseQuery }) => {
         try {
@@ -939,35 +963,38 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                     profileUrl: faculty.profile_url || faculty.profileUrl || undefined,
                     ...faculty,
                     image: faculty.image_url || faculty.image || undefined,
-                  };
-                  let teachesCourse = true;
+                  }
+                  let teachesCourse = true
                   if (courseFilter) {
                     // Only include faculty who teach the course
                     const schoolAcronym = (() => {
-                      const match = schoolName.match(/\(([^)]+)\)/);
+                      const match = schoolName.match(/\(([^)]+)\)/)
                       if (match && match[1]) {
-                        return match[1].toLowerCase();
+                        return match[1].toLowerCase()
                       }
-                      return schoolName.toLowerCase();
-                    })();
+                      return schoolName.toLowerCase()
+                    })()
                     try {
-                      const courseDataResult = await getCourseData(schoolAcronym as any);
-                      const { allCourses } = courseDataResult;
-                      const normalizeName = (name: string) => 
-                        name.replace(/^Dr\.?\s*|\s+/g, '').toLowerCase().trim();
-                      const facultyNameNormalized = normalizeName(faculty.name);
+                      const courseDataResult = await getCourseData(schoolAcronym as any)
+                      const { allCourses } = courseDataResult
+                      const normalizeName = (name: string) =>
+                        name
+                          .replace(/^Dr\.?\s*|\s+/g, '')
+                          .toLowerCase()
+                          .trim()
+                      const facultyNameNormalized = normalizeName(faculty.name)
                       const facultyCourses = allCourses.filter(course => {
-                        const courseFacultyNormalized = normalizeName(course.FACULTY);
-                        const courseTitle = course.TITLE.toLowerCase();
-                        const courseCode = course.CODE.toLowerCase();
+                        const courseFacultyNormalized = normalizeName(course.FACULTY)
+                        const courseTitle = course.TITLE.toLowerCase()
+                        const courseCode = course.CODE.toLowerCase()
                         return (
-                          (courseFacultyNormalized.includes(facultyNameNormalized) || 
+                          (courseFacultyNormalized.includes(facultyNameNormalized) ||
                             facultyNameNormalized.includes(courseFacultyNormalized)) &&
                           (courseTitle.includes(courseFilter) || courseCode.includes(courseFilter))
-                        );
-                      });
+                        )
+                      })
                       if (facultyCourses.length === 0) {
-                        teachesCourse = false;
+                        teachesCourse = false
                       } else {
                         if (includeCourses) {
                           facultyEntry.courses = facultyCourses.map(course => ({
@@ -975,39 +1002,44 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                             title: course.TITLE,
                             slot: course.SLOT,
                             type: course.TYPE,
-                          }));
+                          }))
                         }
                       }
                     } catch (error) {
-                      teachesCourse = false;
+                      teachesCourse = false
                     }
                   } else if (includeCourses) {
                     const schoolAcronym = (() => {
-                      const match = schoolName.match(/\(([^)]+)\)/);
+                      const match = schoolName.match(/\(([^)]+)\)/)
                       if (match && match[1]) {
-                        return match[1].toLowerCase();
+                        return match[1].toLowerCase()
                       }
-                      return schoolName.toLowerCase();
-                    })();
+                      return schoolName.toLowerCase()
+                    })()
                     try {
-                      const courseDataResult = await getCourseData(schoolAcronym as any);
-                      const { allCourses } = courseDataResult;
-                      const normalizeName = (name: string) => 
-                        name.replace(/^Dr\.?\s*|\s+/g, '').toLowerCase().trim();
-                      const facultyNameNormalized = normalizeName(faculty.name);
+                      const courseDataResult = await getCourseData(schoolAcronym as any)
+                      const { allCourses } = courseDataResult
+                      const normalizeName = (name: string) =>
+                        name
+                          .replace(/^Dr\.?\s*|\s+/g, '')
+                          .toLowerCase()
+                          .trim()
+                      const facultyNameNormalized = normalizeName(faculty.name)
                       const facultyCourses = allCourses.filter(course => {
-                        const courseFacultyNormalized = normalizeName(course.FACULTY);
-                        return courseFacultyNormalized.includes(facultyNameNormalized) || 
-                          facultyNameNormalized.includes(courseFacultyNormalized);
-                      });
+                        const courseFacultyNormalized = normalizeName(course.FACULTY)
+                        return (
+                          courseFacultyNormalized.includes(facultyNameNormalized) ||
+                          facultyNameNormalized.includes(courseFacultyNormalized)
+                        )
+                      })
                       facultyEntry.courses = facultyCourses.map(course => ({
                         code: course.CODE,
                         title: course.TITLE,
                         slot: course.SLOT,
                         type: course.TYPE,
-                      }));
+                      }))
                     } catch (error) {
-                      facultyEntry.courses = [];
+                      facultyEntry.courses = []
                     }
                   }
                   if (teachesCourse) {
@@ -1064,34 +1096,37 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                   profileUrl: faculty.profile_url || faculty.profileUrl || undefined,
                   ...faculty,
                   image: faculty.image_url || faculty.image || undefined,
-                };
-                let teachesCourse = true;
+                }
+                let teachesCourse = true
                 if (courseFilter) {
                   const schoolAcronym = (() => {
-                    const match = schoolName.match(/\(([^)]+)\)/);
+                    const match = schoolName.match(/\(([^)]+)\)/)
                     if (match && match[1]) {
-                      return match[1].toLowerCase();
+                      return match[1].toLowerCase()
                     }
-                    return schoolName.toLowerCase();
-                  })();
+                    return schoolName.toLowerCase()
+                  })()
                   try {
-                    const courseDataResult = await getCourseData(schoolAcronym as any);
-                    const { allCourses } = courseDataResult;
-                    const normalizeName = (name: string) => 
-                      name.replace(/^Dr\.?\s*|\s+/g, '').toLowerCase().trim();
-                    const facultyNameNormalized = normalizeName(faculty.name);
+                    const courseDataResult = await getCourseData(schoolAcronym as any)
+                    const { allCourses } = courseDataResult
+                    const normalizeName = (name: string) =>
+                      name
+                        .replace(/^Dr\.?\s*|\s+/g, '')
+                        .toLowerCase()
+                        .trim()
+                    const facultyNameNormalized = normalizeName(faculty.name)
                     const facultyCourses = allCourses.filter(course => {
-                      const courseFacultyNormalized = normalizeName(course.FACULTY);
-                      const courseTitle = course.TITLE.toLowerCase();
-                      const courseCode = course.CODE.toLowerCase();
+                      const courseFacultyNormalized = normalizeName(course.FACULTY)
+                      const courseTitle = course.TITLE.toLowerCase()
+                      const courseCode = course.CODE.toLowerCase()
                       return (
-                        (courseFacultyNormalized.includes(facultyNameNormalized) || 
+                        (courseFacultyNormalized.includes(facultyNameNormalized) ||
                           facultyNameNormalized.includes(courseFacultyNormalized)) &&
                         (courseTitle.includes(courseFilter) || courseCode.includes(courseFilter))
-                      );
-                    });
+                      )
+                    })
                     if (facultyCourses.length === 0) {
-                      teachesCourse = false;
+                      teachesCourse = false
                     } else {
                       if (includeCourses) {
                         facultyEntry.courses = facultyCourses.map(course => ({
@@ -1099,39 +1134,44 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                           title: course.TITLE,
                           slot: course.SLOT,
                           type: course.TYPE,
-                        }));
+                        }))
                       }
                     }
                   } catch (error) {
-                    teachesCourse = false;
+                    teachesCourse = false
                   }
                 } else if (includeCourses) {
                   const schoolAcronym = (() => {
-                    const match = schoolName.match(/\(([^)]+)\)/);
+                    const match = schoolName.match(/\(([^)]+)\)/)
                     if (match && match[1]) {
-                      return match[1].toLowerCase();
+                      return match[1].toLowerCase()
                     }
-                    return schoolName.toLowerCase();
-                  })();
+                    return schoolName.toLowerCase()
+                  })()
                   try {
-                    const courseDataResult = await getCourseData(schoolAcronym as any);
-                    const { allCourses } = courseDataResult;
-                    const normalizeName = (name: string) => 
-                      name.replace(/^Dr\.?\s*|\s+/g, '').toLowerCase().trim();
-                    const facultyNameNormalized = normalizeName(faculty.name);
+                    const courseDataResult = await getCourseData(schoolAcronym as any)
+                    const { allCourses } = courseDataResult
+                    const normalizeName = (name: string) =>
+                      name
+                        .replace(/^Dr\.?\s*|\s+/g, '')
+                        .toLowerCase()
+                        .trim()
+                    const facultyNameNormalized = normalizeName(faculty.name)
                     const facultyCourses = allCourses.filter(course => {
-                      const courseFacultyNormalized = normalizeName(course.FACULTY);
-                      return courseFacultyNormalized.includes(facultyNameNormalized) || 
-                        facultyNameNormalized.includes(courseFacultyNormalized);
-                    });
+                      const courseFacultyNormalized = normalizeName(course.FACULTY)
+                      return (
+                        courseFacultyNormalized.includes(facultyNameNormalized) ||
+                        facultyNameNormalized.includes(courseFacultyNormalized)
+                      )
+                    })
                     facultyEntry.courses = facultyCourses.map(course => ({
                       code: course.CODE,
                       title: course.TITLE,
                       slot: course.SLOT,
                       type: course.TYPE,
-                    }));
+                    }))
                   } catch (error) {
-                    facultyEntry.courses = [];
+                    facultyEntry.courses = []
                   }
                 }
                 if (teachesCourse) {
@@ -1144,52 +1184,57 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           // If we found exactly one faculty member and no course filter was applied,
           // automatically fetch their courses
           if (results.length === 1 && !courseQuery && !includeCourses) {
-            const faculty = results[0];
+            const faculty = results[0]
             const schoolAcronym = (() => {
-              const match = faculty.school?.match(/\(([^)]+)\)/);
+              const match = faculty.school?.match(/\(([^)]+)\)/)
               if (match && match[1]) {
-                return match[1].toLowerCase();
+                return match[1].toLowerCase()
               }
-              return faculty.school?.toLowerCase() || '';
-            })();
-            
+              return faculty.school?.toLowerCase() || ''
+            })()
+
             if (schoolAcronym) {
               try {
-                const courseDataResult = await getCourseData(schoolAcronym as any);
-                const { allCourses } = courseDataResult;
-                const normalizeName = (name: string) => 
-                  name.replace(/^Dr\.?\s*|\s+/g, '').toLowerCase().trim();
-                const facultyNameNormalized = normalizeName(faculty.name);
+                const courseDataResult = await getCourseData(schoolAcronym as any)
+                const { allCourses } = courseDataResult
+                const normalizeName = (name: string) =>
+                  name
+                    .replace(/^Dr\.?\s*|\s+/g, '')
+                    .toLowerCase()
+                    .trim()
+                const facultyNameNormalized = normalizeName(faculty.name)
                 const facultyCourses = allCourses.filter(course => {
-                  const courseFacultyNormalized = normalizeName(course.FACULTY);
-                  return courseFacultyNormalized.includes(facultyNameNormalized) || 
-                    facultyNameNormalized.includes(courseFacultyNormalized);
-                });
-                
+                  const courseFacultyNormalized = normalizeName(course.FACULTY)
+                  return (
+                    courseFacultyNormalized.includes(facultyNameNormalized) ||
+                    facultyNameNormalized.includes(courseFacultyNormalized)
+                  )
+                })
+
                 faculty.courses = facultyCourses.map(course => ({
                   code: course.CODE,
                   title: course.TITLE,
                   slot: course.SLOT,
                   type: course.TYPE,
-                }));
-                
+                }))
+
                 // Update the message to indicate courses were automatically included
                 return {
                   success: true,
                   total: 1,
                   faculty: [faculty],
-                  message: `Found faculty member ${faculty.name} in ${faculty.department || faculty.school}.` +
+                  message:
+                    `Found faculty member ${faculty.name} in ${faculty.department || faculty.school}.` +
                     `\n\nCourses taught (${faculty.courses.length}):` +
-                    `\n${faculty.courses.map((c: { code: string; title: string }) => `- ${c.code}: ${c.title}`).join('\n')}`
-                };
+                    `\n${faculty.courses.map((c: { code: string; title: string }) => `- ${c.code}: ${c.title}`).join('\n')}`,
+                }
               } catch (error) {
-                console.error('Error fetching courses for faculty:', error);
+                console.error('Error fetching courses for faculty:', error)
                 // Continue with normal response if course fetch fails
               }
             }
           }
 
-          
           return {
             success: true,
             total: results.length,
@@ -1202,7 +1247,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           return {
             success: false,
             error: error.message || 'Failed to search faculty.json',
-            message: error.message
+            message: error.message,
           }
         }
       },

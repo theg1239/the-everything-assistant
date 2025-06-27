@@ -56,9 +56,9 @@ async function main() {
 
   const splitter = new RecursiveCharacterTextSplitter({
     separators: ['\n## ', '\n# ', '\n\n', '\n', ' ', ''],
-    chunkSize: 200,      // ~200 tokens per chunk
-    chunkOverlap: 40,    // 40-token overlap
-    lengthFunction: (text) => enc.encode(text).length,
+    chunkSize: 200, // ~200 tokens per chunk
+    chunkOverlap: 40, // 40-token overlap
+    lengthFunction: text => enc.encode(text).length,
   })
 
   const docs = await splitter.createDocuments([raw])
@@ -84,12 +84,7 @@ async function main() {
         VALUES ($1, $2, $3::jsonb, $4)
         ON CONFLICT (id) DO NOTHING
       `,
-        [
-          id,
-          doc.pageContent.trim(),
-          JSON.stringify(metadata),
-          '[' + embedding.join(',') + ']',
-        ]
+        [id, doc.pageContent.trim(), JSON.stringify(metadata), '[' + embedding.join(',') + ']']
       )
     } catch (err) {
       console.error(`Error on chunk ${idx}:`, err)
@@ -100,7 +95,7 @@ async function main() {
   console.log('✅ Seeding completed.')
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error(err)
   process.exit(1)
 })

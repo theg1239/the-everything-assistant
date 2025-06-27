@@ -6,7 +6,9 @@ export async function GET() {
     const pool = await getRagPool()
     const client = await pool.connect()
     try {
-      const { rows } = await client.query('SELECT id, chunk, metadata FROM vit_rag_chunks ORDER BY id')
+      const { rows } = await client.query(
+        'SELECT id, chunk, metadata FROM vit_rag_chunks ORDER BY id'
+      )
       return NextResponse.json(rows)
     } finally {
       client.release()

@@ -4,7 +4,11 @@ import { Octokit } from '@octokit/rest'
 export async function POST(req: Request) {
   const { type, title, body, contribution, user } = await req.json()
 
-  if (!process.env.GITHUB_TOKEN || !process.env.GITHUB_REPO_OWNER || !process.env.GITHUB_REPO_NAME) {
+  if (
+    !process.env.GITHUB_TOKEN ||
+    !process.env.GITHUB_REPO_OWNER ||
+    !process.env.GITHUB_REPO_NAME
+  ) {
     console.error('GitHub environment variables are not set.')
     return NextResponse.json({ error: 'Server configuration error.' }, { status: 500 })
   }
@@ -18,7 +22,9 @@ export async function POST(req: Request) {
 
   let issueTitle: string
   let issueBody: string
-  const submittedBy = user ? `**Submitted by:** ${user.name} (${user.email})` : '**Submitted by:** An anonymous user'
+  const submittedBy = user
+    ? `**Submitted by:** ${user.name} (${user.email})`
+    : '**Submitted by:** An anonymous user'
   let labels: string[]
 
   if (type === 'contribution' && contribution) {
@@ -44,6 +50,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, issueUrl: response.data.html_url })
   } catch (error: any) {
     console.error('Failed to create GitHub issue:', error)
-    return NextResponse.json({ error: 'Failed to create GitHub issue.', details: error.message }, { status: 500 })
+    return NextResponse.json(
+      { error: 'Failed to create GitHub issue.', details: error.message },
+      { status: 500 }
+    )
   }
 }

@@ -35,7 +35,6 @@ export async function POST(request: Request) {
     //   backupCodeCount: user?.backupCodes?.length,
     // })
 
-
     if (!user || !user.mfaEnabled) {
       return NextResponse.json({ error: 'MFA not enabled' }, { status: 400 })
     }

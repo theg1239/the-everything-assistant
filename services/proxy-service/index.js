@@ -152,7 +152,7 @@ async function executeVTOPCommand(username, password, command, flags) {
     }
 
     let cliArgs = ['proxy', username, password, command]
-    
+
     if (flags && typeof flags === 'object') {
       for (const [key, value] of Object.entries(flags)) {
         if (value !== undefined && value !== null && value !== '' && key !== 'semesterQuery') {
@@ -966,7 +966,9 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
   }
 
   if (step === 'semester' && flags && flags.semester) {
-    console.log(`Semester step with resolved semester ${flags.semester}, proceeding to show courses`)
+    console.log(
+      `Semester step with resolved semester ${flags.semester}, proceeding to show courses`
+    )
     return await executeInteractiveCoursePageWorkflow(
       username,
       password,
@@ -1267,7 +1269,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
   }
 
   // console.log(`CLI args will be: ${cliArgs.join(' ')}`)
-  
 
   return new Promise((resolve, reject) => {
     if (!fs.existsSync(BINARY_PATH)) {

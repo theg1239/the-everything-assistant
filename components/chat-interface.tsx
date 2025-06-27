@@ -251,8 +251,7 @@ const PureChatInterface = ({
               return r
             })
           }
-        } catch {
-        }
+        } catch {}
       }
       return fetch(inputUrl as any, init)
     },
@@ -855,7 +854,7 @@ const PureChatInterface = ({
           <div
             className={cn(
               'absolute inset-0 overflow-y-auto chat-content',
-              isMobile && 'mobile-chat-container',  
+              isMobile && 'mobile-chat-container',
               isMobile && isFirstMessageInNewChat && 'mobile-prevent-auto-scroll'
             )}
           >
@@ -883,15 +882,19 @@ const PureChatInterface = ({
                 maximizedItem={maximizedArtifact}
                 setMaximizedItem={setMaximizedArtifact}
               />
-              {(isLoading && messages.length>0 && (() => {
-                    const last = messages[messages.length-1];
-                    if(last.role==='user') return true;
-                    if(last.role==='assistant') {
-                      const kbInv = last.toolInvocations?.find((t:any)=>t.toolName==='knowledgeBase');
-                      if(kbInv && kbInv.state!=='result') return true;
-                    }
-                    return false;
-                  })()) &&
+              {isLoading &&
+                messages.length > 0 &&
+                (() => {
+                  const last = messages[messages.length - 1]
+                  if (last.role === 'user') return true
+                  if (last.role === 'assistant') {
+                    const kbInv = last.toolInvocations?.find(
+                      (t: any) => t.toolName === 'knowledgeBase'
+                    )
+                    if (kbInv && kbInv.state !== 'result') return true
+                  }
+                  return false
+                })() && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -910,7 +913,7 @@ const PureChatInterface = ({
                     </div>
                     <span className="text-sm">thinking...</span>
                   </motion.div>
-                }
+                )}
               <div ref={messagesEndRef} className={isLoading ? 'h-20' : 'h-0'} aria-hidden="true" />
             </div>
           </div>

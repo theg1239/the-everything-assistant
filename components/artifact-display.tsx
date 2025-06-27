@@ -44,8 +44,8 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { ResponsiveCard } from '@/components/responsive-card'
-import FFCSArtifact from './artifacts/ffcs-artifact';
-import FfcsCourseSearchResult from './artifacts/get-course-info-artifact';
+import FFCSArtifact from './artifacts/ffcs-artifact'
+import FfcsCourseSearchResult from './artifacts/get-course-info-artifact'
 import { ResponsiveTable } from '@/components/responsive-table'
 
 interface ArtifactDisplayProps {
@@ -495,10 +495,12 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
         break
       case 'course-info':
         try {
-          const parsedOutput = JSON.parse(content);
-          return <FfcsCourseSearchResult data={parsedOutput} />;
+          const parsedOutput = JSON.parse(content)
+          return <FfcsCourseSearchResult data={parsedOutput} />
         } catch (error) {
-          return <pre className="text-xs text-red-400">Error parsing tool output: {String(error)}</pre>;
+          return (
+            <pre className="text-xs text-red-400">Error parsing tool output: {String(error)}</pre>
+          )
         }
       default:
         return null
@@ -840,16 +842,16 @@ const PaperCard = ({
 }
 
 interface Course {
-  code: string;
-  title: string;
-  slot?: string;
-  type?: string;
-  [key: string]: any;
+  code: string
+  title: string
+  slot?: string
+  type?: string
+  [key: string]: any
 }
 
 interface CourseWithSlots extends Course {
-  slots: string[];
-  count: number;
+  slots: string[]
+  count: number
 }
 
 const FacultyCard = ({ faculty }: { faculty: any }) => {
@@ -857,30 +859,30 @@ const FacultyCard = ({ faculty }: { faculty: any }) => {
   const [expanded, setExpanded] = useState(false)
   const [showCourses, setShowCourses] = useState(false)
   const hasCourses = Array.isArray(faculty.courses) && faculty.courses.length > 0
-  
+
   const groupedCourses = React.useMemo(() => {
-    if (!hasCourses) return [];
-    
-    const courseMap: Record<string, CourseWithSlots> = {};
-    
+    if (!hasCourses) return []
+
+    const courseMap: Record<string, CourseWithSlots> = {}
+
     faculty.courses.forEach((course: Course) => {
       if (!courseMap[course.code]) {
         courseMap[course.code] = {
           ...course,
           slots: course.slot ? [course.slot] : [],
-          count: 1
-        };
-      } else {
-        const existing = courseMap[course.code];
-        if (course.slot && !existing.slots.includes(course.slot)) {
-          existing.slots.push(course.slot);
+          count: 1,
         }
-        existing.count++;
+      } else {
+        const existing = courseMap[course.code]
+        if (course.slot && !existing.slots.includes(course.slot)) {
+          existing.slots.push(course.slot)
+        }
+        existing.count++
       }
-    });
-    
-    return Object.values(courseMap);
-  }, [faculty.courses, hasCourses]);
+    })
+
+    return Object.values(courseMap)
+  }, [faculty.courses, hasCourses])
 
   return (
     <Card className="w-full max-w-full hover:shadow-sm transition-all duration-200 border-border bg-card">
@@ -963,12 +965,14 @@ const FacultyCard = ({ faculty }: { faculty: any }) => {
               className="h-8 px-3 text-xs w-full sm:w-auto flex items-center gap-1.5"
             >
               <BookOpen className="h-3.5 w-3.5" />
-              {showCourses ? 'Hide Courses' : `View ${groupedCourses.length} Course${groupedCourses.length !== 1 ? 's' : ''}`}
+              {showCourses
+                ? 'Hide Courses'
+                : `View ${groupedCourses.length} Course${groupedCourses.length !== 1 ? 's' : ''}`}
             </Button>
-            
+
             <AnimatePresence>
               {showCourses && (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
@@ -982,8 +986,8 @@ const FacultyCard = ({ faculty }: { faculty: any }) => {
                     </div>
                     <div className="max-h-[300px] overflow-y-auto">
                       {groupedCourses.map((course: any, idx: number) => (
-                        <div 
-                          key={`${course.code}-${idx}`} 
+                        <div
+                          key={`${course.code}-${idx}`}
                           className="p-2 px-3 text-sm hover:bg-muted/30 transition-colors"
                         >
                           <div className="flex items-start gap-4">
@@ -991,15 +995,13 @@ const FacultyCard = ({ faculty }: { faculty: any }) => {
                               {course.code}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="font-medium text-foreground">
-                                {course.title}
-                              </div>
+                              <div className="font-medium text-foreground">{course.title}</div>
                               {course.slots && course.slots.length > 0 && (
                                 <div className="mt-1 flex flex-wrap gap-1">
                                   {course.slots.map((slot: string, slotIdx: number) => (
-                                    <Badge 
-                                      key={slotIdx} 
-                                      variant="outline" 
+                                    <Badge
+                                      key={slotIdx}
+                                      variant="outline"
                                       className="text-xs font-normal py-0.5 h-5"
                                     >
                                       {slot}
@@ -1019,36 +1021,36 @@ const FacultyCard = ({ faculty }: { faculty: any }) => {
           </div>
         )}
 
-{(() => {
-  const longFields = [
-    faculty.specialization?.length > 30 ? 'specialization' : null,
-    faculty.department?.length > 30 ? 'department' : null,
-    faculty.email?.length > 30 ? 'email' : null
-  ].filter(Boolean);
-  
-  if (longFields.length > 1) {
-    return (
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => setExpanded(!expanded)}
-        className="w-full text-xs h-7 mt-2"
-      >
-        {expanded ? (
-          <>
-            <ChevronUp className="h-3 w-3 mr-1" />
-            Show Less
-          </>
-        ) : (
-          <>
-            <ChevronDown className="h-3 w-3 mr-1" />
-            Show More
-          </>
-        )}
-      </Button>
-    );
-  }
-})()}
+        {(() => {
+          const longFields = [
+            faculty.specialization?.length > 30 ? 'specialization' : null,
+            faculty.department?.length > 30 ? 'department' : null,
+            faculty.email?.length > 30 ? 'email' : null,
+          ].filter(Boolean)
+
+          if (longFields.length > 1) {
+            return (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setExpanded(!expanded)}
+                className="w-full text-xs h-7 mt-2"
+              >
+                {expanded ? (
+                  <>
+                    <ChevronUp className="h-3 w-3 mr-1" />
+                    Show Less
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-3 w-3 mr-1" />
+                    Show More
+                  </>
+                )}
+              </Button>
+            )
+          }
+        })()}
       </CardContent>
     </Card>
   )
@@ -2259,12 +2261,12 @@ const PureArtifactDisplay = ({
 
   const renderContent = () => {
     if (type === 'ffcs-planner') {
-        return <FFCSArtifact />;
-      }
+      return <FFCSArtifact />
+    }
 
     if (type === 'course-info') {
-        return <FfcsCourseSearchResult data={data} />;
-      }
+      return <FfcsCourseSearchResult data={data} />
+    }
     if (type === 'placements' && data && !Array.isArray(data)) {
       return <PlacementInfoCard data={data} />
     }

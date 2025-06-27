@@ -1,45 +1,39 @@
-"use client"
+'use client'
 
-import { useState, useEffect } from "react";
-import { BroadcastDialog } from "@/components/broadcast-dialog";
+import { useState, useEffect } from 'react'
+import { BroadcastDialog } from '@/components/broadcast-dialog'
 
 interface GlobalBroadcastDialogProps {
-  latestBroadcast: any;
+  latestBroadcast: any
 }
 
 function getBroadcastId(broadcast: any) {
-  return broadcast?.id || broadcast?.createdAt || JSON.stringify(broadcast);
+  return broadcast?.id || broadcast?.createdAt || JSON.stringify(broadcast)
 }
 
 export function GlobalBroadcastDialog({ latestBroadcast }: GlobalBroadcastDialogProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(false)
 
   useEffect(() => {
-    if (!latestBroadcast) return;
-    const id = getBroadcastId(latestBroadcast);
-    const seen = typeof window !== 'undefined' ? localStorage.getItem('seen-broadcast-id') : null;
+    if (!latestBroadcast) return
+    const id = getBroadcastId(latestBroadcast)
+    const seen = typeof window !== 'undefined' ? localStorage.getItem('seen-broadcast-id') : null
     if (seen !== id) {
-      setOpen(true);
+      setOpen(true)
     } else {
-      setOpen(false);
+      setOpen(false)
     }
-  }, [latestBroadcast]);
+  }, [latestBroadcast])
 
   const handleClose = () => {
-    const id = getBroadcastId(latestBroadcast);
+    const id = getBroadcastId(latestBroadcast)
     if (typeof window !== 'undefined') {
-      localStorage.setItem('seen-broadcast-id', id);
+      localStorage.setItem('seen-broadcast-id', id)
     }
-    setOpen(false);
-  };
+    setOpen(false)
+  }
 
-  if (!latestBroadcast) return null;
+  if (!latestBroadcast) return null
 
-  return (
-    <BroadcastDialog
-      isOpen={open}
-      onClose={handleClose}
-      payload={latestBroadcast}
-    />
-  );
+  return <BroadcastDialog isOpen={open} onClose={handleClose} payload={latestBroadcast} />
 }

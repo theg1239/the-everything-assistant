@@ -7,24 +7,19 @@ import { ContextData } from './index'
 export const workingSaturdays: ContextData = {
   section: 'working-saturdays',
   title: 'Working Saturdays Schedule',
-  lastUpdated: '2024-12-20',
+  lastUpdated: '2025-06-28',
   priority: 'high',
   content: `
-**Working Saturdays for Winter Semester 2024-25:**
+**Working Saturdays for Fall Semester 2025-26:**
 
-**January 2025:**
-- January 25, 2025 (Saturday) - Working day to compensate for Republic Day holiday
+- July 19, 2025 (Saturday) — Instructional Day (Monday Day Order)
+- August 2, 2025 (Saturday) — Instructional Day (Tuesday Order)
+- August 30, 2025 (Saturday) — Instructional Day (Wednesday Order)
 
-**February 2025:**
-- February 15, 2025 (Saturday) - Working day to compensate for other holidays
-- February 22, 2025 (Saturday) - Working day before mid-term exams
-
-**March 2025:**
-- March 15, 2025 (Saturday) - Working day to compensate for Holi
-- March 29, 2025 (Saturday) - Working day to make up for lost classes
-
-**April 2025:**
-- April 12, 2025 (Saturday) - Working day before end-semester exams
+**Notes:**
+- Most other Saturdays in the semester are regular instructional days (not compensatory/"special" working Saturdays).
+- Exam Saturdays (CAT-I: Aug 23, CAT-II: Oct 11) are not counted as working Saturdays for compensation.
+- Event Saturdays (e.g., Gravitas: Sep 27) are non-instructional.
 
 **Schedule for Working Saturdays:**
 - Regular class timings apply (same as weekdays)
@@ -44,8 +39,8 @@ export const workingSaturdays: ContextData = {
 - Student Services: studentservices@vit.ac.in
 `,
   metadata: {
-    nextWorkingSaturday: '2025-01-25',
-    totalWorkingSaturdays: 5,
-    currentSemester: 'Winter 2024-25',
+    nextWorkingSaturday: '2025-07-19',
+    totalWorkingSaturdays: 3,
+    currentSemester: 'Fall 2025-26',
   },
 }

@@ -9,9 +9,9 @@ export interface ContextData {
 
 export function getAllContextData(): ContextData[] {
   const { academicCalendar } = require('./academic-calendar')
-  //   const { workingSaturdays } = require('./working-saturdays')
+  const { workingSaturdays } = require('./working-saturdays')
   const { examSchedule } = require('./exam-schedule')
-  //   const { holidays } = require('./holidays')
+  const { holidays } = require('./holidays')
   const { currentStatus } = require('./current-status')
   const { latestEvents } = require('./latest-events')
 
@@ -19,9 +19,9 @@ export function getAllContextData(): ContextData[] {
     currentStatus,
     academicCalendar,
     examSchedule,
-    // workingSaturdays,
+    workingSaturdays,
     latestEvents,
-    // holidays,
+    holidays,
   ].filter(Boolean)
 }
 

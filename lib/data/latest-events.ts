@@ -7,13 +7,13 @@ import { ContextData } from './index'
 export const latestEvents: ContextData = {
   section: 'latest-events',
   title: 'Latest Events & Campus Updates',
-  lastUpdated: '2025-06-20',
+  lastUpdated: '2025-06-28',
   priority: 'medium',
   content: `
 TRENDING NOW AT VIT:
 
 Academic Events:
-- Course Allocation Week: Schools are currently allocating courses to students (June 9-20, 2025)
+- Course Allocation Week: Schools have allocated courses (June 9-20, 2025)
 - Registration Prep: Students preparing for course registration on June 28, 2025
 - Academic Counseling: Available for course selection guidance
 - VTOP Updates: Regular notifications being sent for allocation status
@@ -29,12 +29,6 @@ Placement & Career Events:
 - Internship Opportunities: Summer 2025 internships in progress
 - Industry Mentorship Programs: Applications opening for new academic year
 
-Sports & Recreation:
-- Inter-hostel Sports: Summer sports tournaments ongoing
-- Gym Facilities: All fitness centers operating with extended hours
-- Swimming Pool: Open with summer timings (6 AM - 10 PM)
-- Sports Club Recruitment: Preparing for new academic year
-
 Research & Innovation:
 - Research Project Submissions: Summer project presentations ongoing
 - Innovation Labs: New equipment installations in progress
@@ -46,7 +40,7 @@ Campus Life Updates:
 - Transportation: Campus shuttle services running on summer schedule
 
 Recent Announcements:
-- Fee Structure 2025-26: Fee details available on VTOP, last day without fine is June 25, 2025
+- Fee Structure 2025-26: Fee details available on VTOP, last day without fine was June 25, 2025
 
 Special Initiatives:
 - Green Campus Drive: Tree plantation and sustainability initiatives
@@ -55,7 +49,7 @@ Special Initiatives:
 - Alumni Connect: Enhanced alumni networking programs launching
 
 This Week's Highlights:
-- Monday-Friday (June 9-20): Course allocation by Schools (ongoing)
+- Monday-Friday (June 9-20): Course allocation by Schools
 - Weekend (June 28): Course registration (FFCS)
 
 Where to Get Updates:

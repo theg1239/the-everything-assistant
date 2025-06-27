@@ -494,7 +494,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
   const menuItems = [
     { id: 'general', label: 'general', icon: Settings },
-    { id: 'notifications', label: 'notifications', icon: Bell },
+    // { id: 'notifications', label: 'notifications', icon: Bell },
     { id: 'personalization', label: 'personalization', icon: User },
     // { id: 'appearance', label: 'appearance', icon: Palette },
     // { id: 'language', label: 'language', icon: Globe },

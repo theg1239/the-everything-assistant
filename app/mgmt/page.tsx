@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { Plus, Send, Trash2 } from 'lucide-react'
 
 interface RateLimitStatus {
   status: string
@@ -111,6 +112,9 @@ export default function ManagementPage() {
   const [error, setError] = useState<string | null>(null)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [showSensitiveData, setShowSensitiveData] = useState(false)
+  const [broadcastSlides, setBroadcastSlides] = useState([
+    { title: '', text: '', image: '' },
+  ])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -156,6 +160,42 @@ export default function ManagementPage() {
     const iv = setInterval(fetchData, 10000)
     return () => clearInterval(iv)
   }, [autoRefresh, fetchData])
+
+  const handleSlideChange = (index: number, field: string, value: string) => {
+    const newSlides = [...broadcastSlides]
+    newSlides[index] = { ...newSlides[index], [field]: value }
+    setBroadcastSlides(newSlides)
+  }
+
+  const addSlide = () => {
+    setBroadcastSlides([...broadcastSlides, { title: '', text: '', image: '' }])
+  }
+
+  const removeSlide = (index: number) => {
+    if (broadcastSlides.length > 1) {
+      const newSlides = broadcastSlides.filter((_, i) => i !== index)
+      setBroadcastSlides(newSlides)
+    }
+  }
+
+  const handleSendBroadcast = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/broadcast/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slides: broadcastSlides }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Broadcast failed')
+      toast.success(json.message)
+      setBroadcastSlides([{ title: '', text: '', image: '' }]) // Reset form
+    } catch (err: any) {
+      toast.error(err.message || 'Broadcast failed')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleAction = async (action: string, config?: any) => {
     setLoading(true)
@@ -356,6 +396,71 @@ export default function ManagementPage() {
                           <p className="text-xs md:text-sm text-muted-foreground">{data.status}</p>
                         </div>
                       </div>
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Broadcast Dialog */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
+                    <div className="flex flex-col space-y-1.5 mb-6">
+                      <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
+                        <Send className="w-5 h-5" /> broadcast dialog
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        send a dialog to all connected users in real-time
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      {broadcastSlides.map((slide, index) => (
+                        <div key={index} className="p-4 rounded-lg bg-black/20 border border-border/20 relative space-y-3">
+                          <h4 className="font-medium">Slide {index + 1}</h4>
+                          <input
+                            type="text"
+                            placeholder="Title"
+                            value={slide.title}
+                            onChange={(e) => handleSlideChange(index, 'title', e.target.value)}
+                            className="w-full bg-slate-800/50 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <textarea
+                            placeholder="Text content"
+                            value={slide.text}
+                            onChange={(e) => handleSlideChange(index, 'text', e.target.value)}
+                            className="w-full bg-slate-800/50 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[80px]"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Image URL"
+                            value={slide.image}
+                            onChange={(e) => handleSlideChange(index, 'image', e.target.value)}
+                            className="w-full bg-slate-800/50 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          {broadcastSlides.length > 1 && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeSlide(index)}
+                              className="absolute top-2 right-2 w-8 h-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-4 flex justify-between items-center">
+                      <Button variant="outline" onClick={addSlide} className="gap-2">
+                        <Plus className="w-4 h-4" /> Add Slide
+                      </Button>
+                      <Button onClick={handleSendBroadcast} disabled={loading} className="gap-2 bg-purple-600 hover:bg-purple-700">
+                        <Send className="w-4 h-4" /> Send Broadcast
+                      </Button>
                     </div>
                   </div>
                 </motion.div>

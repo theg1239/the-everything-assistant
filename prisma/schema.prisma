@@ -175,3 +175,11 @@ model StreamId {
   @@index([chatId, createdAt])
   @@map("stream_ids")
 }
+
+model Broadcast {
+  id        String   @id @default(cuid())
+  slides    Json
+  createdAt DateTime @default(now())
+
+  @@map("broadcasts")
+}

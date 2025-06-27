@@ -15,6 +15,9 @@ import MobileViewportFix from '@/components/mobile-viewport-fix'
 import ScrollToTop from '@/components/scroll-to-top'
 import CustomBackground from '@/components/backgrounds/custom-background'
 import { PerformanceMonitor } from '@/components/performance-monitor'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { GlobalBroadcastDialog } from '@/components/global-broadcast-dialog'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -23,11 +26,29 @@ export const metadata: Metadata = {
   description: 'comprehensive ai assistant',
 }
 
-export default function RootLayout({
+async function getLatestBroadcast() {
+  try {
+    const res = await fetch(
+      process.env.NEXT_PUBLIC_BASE_URL
+        ? `${process.env.NEXT_PUBLIC_BASE_URL}/api/broadcast/latest`
+        : 'http://localhost:3000/api/broadcast/latest',
+      { cache: 'no-store' }
+    )
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const session = await getServerSession(authOptions)
+  const latestBroadcast = session?.user ? await getLatestBroadcast() : null
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -48,41 +69,6 @@ export default function RootLayout({
         `}</style>
       </head>
       <body className={`${inter.className}`}>
-        {/* <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                function setAppHeight() {
-                  document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
-                }
-                setAppHeight();
-                window.scrollTo(0, 0);
-                setTimeout(function() {
-                  window.scrollTo(0, 0);
-                }, 100);
-                
-                document.addEventListener('focusin', function(e) {
-                  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
-                    setTimeout(function() {
-                      var rect = e.target.getBoundingClientRect();
-                      if (rect.top < 100) {
-                        window.scrollBy(0, rect.top - 120);
-                      }
-                    }, 300);
-                  }
-                });
-                
-                document.addEventListener('click', function(e) {
-                  if (e.target && e.target.tagName === 'A') {
-                    window.scrollTo(0, 0);
-                  }
-                });
-                
-                window.addEventListener('resize', setAppHeight);
-              })();
-            `,
-          }}
-        />{' '} */}
         <SessionProvider>
           <ThemeProvider
             attribute="class"
@@ -117,6 +103,10 @@ export default function RootLayout({
                 className: 'sonner-toast',
               }}
             />
+            {/* Render the global broadcast dialog for authenticated users */}
+            {session?.user && latestBroadcast && (
+              <GlobalBroadcastDialog latestBroadcast={latestBroadcast} />
+            )}
           </ThemeProvider>
         </SessionProvider>
       </body>

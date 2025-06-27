@@ -25,6 +25,8 @@ interface BroadcastDialogProps {
 export function BroadcastDialog({ isOpen, onClose, payload }: BroadcastDialogProps) {
   const [currentStep, setCurrentStep] = useState(0)
   const [isMounted, setIsMounted] = useState(false)
+  const [touchStart, setTouchStart] = useState<number | null>(null)
+  const [touchEnd, setTouchEnd] = useState<number | null>(null)
 
   useEffect(() => {
     setIsMounted(true)
@@ -32,6 +34,7 @@ export function BroadcastDialog({ isOpen, onClose, payload }: BroadcastDialogPro
 
   const slides = payload?.slides || []
   const currentSlide = slides[currentStep]
+  const minSwipeDistance = 50
 
   useEffect(() => {
     if (isOpen) {
@@ -59,6 +62,32 @@ export function BroadcastDialog({ isOpen, onClose, payload }: BroadcastDialogPro
     onClose()
   }
 
+  // Touch handlers for swipe support
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null)
+    setTouchStart(e.targetTouches[0].clientX)
+  }
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX)
+  }
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return
+
+    const distance = touchStart - touchEnd
+    const isLeftSwipe = distance > minSwipeDistance
+    const isRightSwipe = distance < -minSwipeDistance
+
+    if (isLeftSwipe && currentStep < slides.length - 1) {
+      nextStep()
+    }
+    if (isRightSwipe && currentStep > 0) {
+      prevStep()
+    }
+  }
+
+  // Updated chevron navigation based on OnboardingDialog approach
   const ChevronNavigation = () => {
     if (!isMounted || slides.length <= 1 || !isOpen) return null
 
@@ -83,7 +112,7 @@ export function BroadcastDialog({ isOpen, onClose, payload }: BroadcastDialogPro
           >
             <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
           </Button>
-
+          
           <Button
             variant="ghost"
             size="sm"
@@ -140,7 +169,12 @@ export function BroadcastDialog({ isOpen, onClose, payload }: BroadcastDialogPro
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
           </div>
-          <div className="flex-1 relative">
+          <div 
+            className="flex-1 relative"
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+          >
             <div className="h-full flex flex-col px-5 py-2 sm:px-8 sm:py-4">
               <div className="flex-1 min-h-0 overflow-y-auto">
                 <div className="flex items-center space-x-3 mb-3">

@@ -27,11 +27,11 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
   const checkForRateLimitError = useCallback((error: any): boolean => {
     if (!error) return false
 
-    console.log('Checking error for rate limit:', error)
+    //console.log('Checking error for rate limit:', error)
 
     const errorMessage = error.message || error.toString()
 
-    console.log('Error message:', errorMessage)
+    //console.log('Error message:', errorMessage)
 
     if (
       errorMessage.includes('429') ||
@@ -39,7 +39,7 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
       errorMessage.toLowerCase().includes('too many requests') ||
       errorMessage.toLowerCase().includes('an error occurred')
     ) {
-      console.log('Rate limit error detected!')
+      //console.log('Rate limit error detected!')
 
       try {
         let errorData: any = {}
@@ -65,11 +65,11 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
               : 'rate limit exceeded. please try again later.'),
         }
 
-        console.log('💾 Setting rate limit error:', rateLimitInfo)
+        //console.log('💾 Setting rate limit error:', rateLimitInfo)
         setRateLimitError(rateLimitInfo)
         return true
       } catch (parseError) {
-        console.log('Failed to parse error data, using fallback')
+        //console.log('Failed to parse error data, using fallback')
         const isUserLimit = errorMessage.toLowerCase().includes('user')
         const fallbackError = {
           isRateLimit: true,
@@ -78,7 +78,7 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
             ? 'you have exceeded your rate limit. please wait before sending another message.'
             : 'rate limit exceeded. please try again later.',
         }
-        console.log('Setting fallback rate limit error:', fallbackError)
+        //console.log('Setting fallback rate limit error:', fallbackError)
         setRateLimitError(fallbackError)
         return true
       }

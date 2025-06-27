@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, memo, useCallback } from 'react'
-import { useChat } from 'ai/react'
+import { useChat } from '@ai-sdk/react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { VirtualizedMessages } from '@/components/virtualized-messages'
@@ -37,20 +37,16 @@ const useViewportHeight = () => {
 
     const setVh = () => {
       clearTimeout(timeoutId)
-
       timeoutId = setTimeout(() => {
         requestAnimationFrame(() => {
           const vh = window.innerHeight * 0.01
           document.documentElement.style.setProperty('--vh', `${vh}px`)
-
           const viewport = window.visualViewport
           const height = viewport ? viewport.height : window.innerHeight
           document.documentElement.style.setProperty('--app-height', `${height}px`)
-
           if (mainRef.current) {
             mainRef.current.style.height = `calc(var(--vh, 1vh) * 100)`
           }
-
           if (
             window.innerWidth <= 768 &&
             (!window.visualViewport || window.visualViewport.scale <= 1)
@@ -61,14 +57,11 @@ const useViewportHeight = () => {
       }, 50)
     }
 
-    const handleVisualViewportChange = () => {
-      setVh()
-    }
+    const handleVisualViewportChange = () => setVh()
 
     setVh()
     window.addEventListener('resize', setVh, { passive: true })
     window.addEventListener('orientationchange', () => setTimeout(setVh, 100), { passive: true })
-
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', handleVisualViewportChange)
     }
@@ -128,7 +121,6 @@ const PureChatInterface = ({
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout
-
     const checkMobile = () => {
       clearTimeout(timeoutId)
       timeoutId = setTimeout(() => {
@@ -138,7 +130,6 @@ const PureChatInterface = ({
         }
       }, 100)
     }
-
     const checkZoom = () => {
       if (window.visualViewport) {
         const scale = window.visualViewport.scale || 1
@@ -148,20 +139,15 @@ const PureChatInterface = ({
         }
       }
     }
-
     checkMobile()
     checkZoom()
-
     window.addEventListener('resize', checkMobile, { passive: true })
-
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', checkZoom, { passive: true })
     }
-
     if (window.innerWidth <= 768 && document.readyState === 'complete') {
       setTimeout(() => window.scrollTo(0, 0), 50)
     }
-
     return () => {
       clearTimeout(timeoutId)
       window.removeEventListener('resize', checkMobile)
@@ -193,7 +179,6 @@ const PureChatInterface = ({
   useEffect(() => {
     const loadPreferences = async () => {
       if (!session?.user?.email) return
-
       try {
         const response = await fetch('/api/user/preferences')
         if (response.ok) {
@@ -204,11 +189,11 @@ const PureChatInterface = ({
         console.error('Error loading user preferences:', error)
       }
     }
-
     if (session?.user?.email) {
       loadPreferences()
     }
   }, [session?.user?.email])
+
   const {
     messages,
     input,
@@ -224,6 +209,53 @@ const PureChatInterface = ({
     experimental_resume,
     data,
   } = useChat({
+    fetch: (inputUrl, init) => {
+      if (
+        (!init || init.method === 'GET') &&
+        ((typeof inputUrl === 'string' && inputUrl.startsWith('/api/chat')) ||
+          (inputUrl instanceof Request && inputUrl.url.includes('/api/chat')))
+      ) {
+        try {
+          const url =
+            typeof inputUrl === 'string'
+              ? new URL(inputUrl, window.location.origin)
+              : new URL(inputUrl.url)
+          const chatIdParam = url.searchParams.get('chatId')
+          if (chatIdParam) {
+            return fetch(`/api/chats/${chatIdParam}`, { ...init, method: 'GET' }).then(async r => {
+              if (!r.ok) return r
+              const payload = await r.json()
+              if (payload && Array.isArray(payload.messages)) {
+                let sse = ''
+                for (const m of payload.messages) {
+                  const part = {
+                    type: 'append-message',
+                    message: {
+                      id: m.id,
+                      role: m.role,
+                      content: m.content,
+                      toolInvocations: m.toolInvocations,
+                    },
+                  }
+                  sse += `event: message\ndata: ${JSON.stringify(part)}\n\n`
+                }
+                sse += `event: done\ndata: {}\n\n`
+                return new Response(sse, {
+                  status: 200,
+                  headers: {
+                    'Content-Type': 'text/event-stream; charset=utf-8',
+                    'x-vercel-ai-ui-message-stream': 'v1',
+                  },
+                })
+              }
+              return r
+            })
+          }
+        } catch {
+        }
+      }
+      return fetch(inputUrl as any, init)
+    },
     api: '/api/chat',
     initialMessages: initialMessages.map(msg => ({
       id: msg.id,
@@ -243,88 +275,62 @@ const PureChatInterface = ({
       const newPath = res.headers.get('X-Chat-Path')
       if (newId && newPath && !chatId && !chatCreatedEventDispatched) {
         setOptimisticChatId(newId)
-        currentChatIdRef.current = newId // Update the ref as well
-        setChatCreatedEventDispatched(true) // Prevent duplicate events
-
-        // Try both methods to ensure URL updates
+        currentChatIdRef.current = newId
+        setChatCreatedEventDispatched(true)
         router.push(newPath)
-        // Also use window.history as fallback
         window.history.replaceState({}, '', newPath)
-        const newChatEvent = new CustomEvent('newChatCreated', {
-          detail: {
-            id: newId,
-            title: extractTitleFromContent(messages[0]?.content || 'New Chat'),
-            path: newPath,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        })
-        window.dispatchEvent(newChatEvent)
+        window.dispatchEvent(
+          new CustomEvent('newChatCreated', {
+            detail: {
+              id: newId,
+              title: extractTitleFromContent(messages[0]?.content || 'New Chat'),
+              path: newPath,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          })
+        )
       }
     },
     onFinish: message => {
       const currentChatId = currentChatIdRef.current
-      // console.log('🏁 AI response finished', {
-      //   currentChatId,
-      //   optimisticChatId,
-      //   chatId,
-      //   isFirstMessageInNewChat,
-      // })
       if (message.role === 'assistant' && message.content) {
         setLastAssistantMessage(message.content)
         if (userPreferences.followUpSuggestions !== false) {
           setShowFollowUpSuggestions(true)
         }
       }
-
       if (currentChatId && isFirstMessageInNewChat) {
         setIsFirstMessageInNewChat(false)
-        //console.log('⏱Starting title update check in 3 seconds...')
-
         const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
           try {
-            //console.log(`Attempt ${attempt}: Fetching updated chat data for:`, currentChatId)
             const response = await fetch(`/api/chats/${currentChatId}`)
             if (response.ok) {
               const chatData = await response.json()
-              //console.log('Chat data received:', chatData)
               if (chatData.title && chatData.title !== 'New Chat') {
-                //console.log('Title updated! Dispatching event:', chatData.title)
-                const titleUpdateEvent = new CustomEvent('chatTitleUpdated', {
-                  detail: {
-                    chatId: currentChatId,
-                    title: chatData.title,
-                  },
-                })
-                window.dispatchEvent(titleUpdateEvent)
+                window.dispatchEvent(
+                  new CustomEvent('chatTitleUpdated', {
+                    detail: { chatId: currentChatId, title: chatData.title },
+                  })
+                )
               } else if (attempt < maxAttempts) {
-                //console.log(`Title not updated yet (attempt ${attempt}/${maxAttempts}). Retrying in 2 seconds...`)
                 setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
-              } else {
-                //console.log('Title still not updated after all attempts')
               }
-            } else {
-              console.error('Failed to fetch chat data:', response.status)
             }
           } catch (error) {
-            console.error(`Failed to check for title update (attempt ${attempt}):`, error)
             if (attempt < maxAttempts) {
               setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
             }
           }
         }
-
         setTimeout(() => checkTitleUpdate(), 3000)
       }
     },
     onError: err => {
-      console.error(err)
-
       const isRateLimit = checkForRateLimitError(err)
-
       if (!isRateLimit) {
         toast.error('Something went wrong. Please try again.')
-        setErrorMessage('Unable to connect. Please check your connection and try again.')
+        // setErrorMessage('Unable to connect. Please check your connection and try again.')
       }
     },
   })
@@ -336,26 +342,18 @@ const PureChatInterface = ({
     data,
     setMessages,
   })
+
   const scrollToBottom = useCallback(() => {
     if (!messagesEndRef.current) return
-
     const container = contentRef.current?.parentElement
     const scrollBehavior: ScrollBehavior = isLoading ? 'auto' : 'smooth'
-
     if (container && isMobile) {
-      container.scrollTo({
-        top: container.scrollHeight,
-        behavior: scrollBehavior,
-      })
+      container.scrollTo({ top: container.scrollHeight, behavior: scrollBehavior })
     } else {
-      messagesEndRef.current.scrollIntoView({
-        behavior: scrollBehavior,
-        block: 'end',
-      })
+      messagesEndRef.current.scrollIntoView({ behavior: scrollBehavior, block: 'end' })
     }
   }, [isMobile, isLoading])
 
-  // Throttle scroll operations to prevent excessive reflows
   const throttledScrollToBottom = useThrottle(scrollToBottom, 100)
 
   useEffect(() => {
@@ -381,6 +379,7 @@ const PureChatInterface = ({
       throttledScrollToBottom()
     }
   }, [messages, isLoading, isInitialRender, throttledScrollToBottom])
+
   useEffect(() => {
     if (isLoading && !isInitialRender) {
       const targetNode = contentRef.current
@@ -400,6 +399,7 @@ const PureChatInterface = ({
       }
     }
   }, [isLoading, isInitialRender, throttledScrollToBottom])
+
   useEffect(() => {
     if (isMobile && !isInitialRender && messages.length > 0) {
       const timeoutId = setTimeout(() => {
@@ -415,10 +415,11 @@ const PureChatInterface = ({
       const isRateLimit = checkForRateLimitError(error)
 
       if (!isRateLimit) {
-        setErrorMessage('Unable to connect. Please check your connection and try again.')
+        // setErrorMessage('Unable to connect. Please check your connection and try again.')
       }
     }
   }, [error, checkForRateLimitError])
+
   const handleFormSubmit = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault()
@@ -448,6 +449,7 @@ const PureChatInterface = ({
       setHasUserInitiatedConversation,
     ]
   )
+
   const handleSuggestedQuestion = useCallback(
     async (question: string) => {
       setInput('')
@@ -520,15 +522,12 @@ const PureChatInterface = ({
         return
       }
       const toolCallId = originalToolCall.toolCallId || Date.now().toString()
-      //console.log('Handling VTOP credentials for toolCallId:', toolCallId, 'command:', command)
-
       clearToolResult(toolCallId)
 
       const updatedMessagesForLoading = messages.map((message: any) => {
         if (message.toolInvocations) {
           const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
             if (toolInvocation.toolCallId && toolCallId) {
-              //console.log('Clearing credentials state for toolCallId:', toolCallId)
               return {
                 ...toolInvocation,
                 toolCallId: toolCallId,
@@ -547,8 +546,6 @@ const PureChatInterface = ({
       })
 
       setMessages([...updatedMessagesForLoading])
-
-      // const loadingToast = toast.loading(`Executing VTOP ${command} command...`)
 
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -571,12 +568,8 @@ const PureChatInterface = ({
         }),
       })
 
-      // toast.dismiss(loadingToast)
-
       if (response.ok) {
         const result = await response.json()
-
-        //console.log('VTOP credential submission result:', result)
         if (toolCallId) {
           updateToolResult(toolCallId, command, result.result)
         }
@@ -584,12 +577,6 @@ const PureChatInterface = ({
           if (message.toolInvocations) {
             const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
               if (toolInvocation.toolCallId && toolInvocation.toolCallId === toolCallId) {
-                // console.log(
-                //   'Updating tool invocation with result:',
-                //   result.result,
-                //   'for toolCallId:',
-                //   toolCallId
-                // )
                 return {
                   ...toolInvocation,
                   result: result.result,
@@ -644,7 +631,7 @@ const PureChatInterface = ({
                   }
                 }
               } catch (error) {
-                //console.warn('Failed to refresh conversation after VTOP data retrieval:', error)
+                console.warn('Failed to refresh conversation after VTOP data retrieval:', error)
               }
             }, 500)
           }
@@ -656,11 +643,7 @@ const PureChatInterface = ({
             errorMessage.includes('Login failed')
           ) {
             toast.error('Invalid VTOP credentials. Please check your username and password.')
-          } else {
-            // toast.error(`VTOP Error: ${errorMessage}`)
           }
-        } else {
-          // toast.success(`VTOP ${command} command executed successfully!`)
         }
       } else {
         toast.error('Failed to retrieve VTOP data. Please try again.')
@@ -680,6 +663,7 @@ const PureChatInterface = ({
       }, 100)
     }
   }, [chatId, optimisticChatId])
+
   useEffect(() => {
     if (chatId || optimisticChatId) {
       const forceScrollToTop = () => {
@@ -709,6 +693,7 @@ const PureChatInterface = ({
       setChatCreatedEventDispatched(false)
     }
   }, [chatId, optimisticChatId])
+
   useEffect(() => {
     if (messages && messages.length > 0) {
       const lastMessage = messages[messages.length - 1]
@@ -870,7 +855,7 @@ const PureChatInterface = ({
           <div
             className={cn(
               'absolute inset-0 overflow-y-auto chat-content',
-              isMobile && 'mobile-chat-container',
+              isMobile && 'mobile-chat-container',  
               isMobile && isFirstMessageInNewChat && 'mobile-prevent-auto-scroll'
             )}
           >
@@ -898,9 +883,15 @@ const PureChatInterface = ({
                 maximizedItem={maximizedArtifact}
                 setMaximizedItem={setMaximizedArtifact}
               />
-              {isLoading &&
-                messages.length > 0 &&
-                messages[messages.length - 1].role === 'user' && (
+              {(isLoading && messages.length>0 && (() => {
+                    const last = messages[messages.length-1];
+                    if(last.role==='user') return true;
+                    if(last.role==='assistant') {
+                      const kbInv = last.toolInvocations?.find((t:any)=>t.toolName==='knowledgeBase');
+                      if(kbInv && kbInv.state!=='result') return true;
+                    }
+                    return false;
+                  })()) &&
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -919,7 +910,7 @@ const PureChatInterface = ({
                     </div>
                     <span className="text-sm">thinking...</span>
                   </motion.div>
-                )}
+                }
               <div ref={messagesEndRef} className={isLoading ? 'h-20' : 'h-0'} aria-hidden="true" />
             </div>
           </div>

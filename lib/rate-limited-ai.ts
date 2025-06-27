@@ -1,5 +1,3 @@
-// RateLimitedAI.ts
-
 import { createGoogleGenerativeAI } from '@ai-sdk/google'    // Google provider
 import { createGroq } from '@ai-sdk/groq'                   // Groq provider
 import {
@@ -12,7 +10,16 @@ import {
   UserRateLimitConfig,
   loadUserRateLimitConfig,
 } from './user-rate-limiter'
-import { streamText, generateText, generateObject, embed } from 'ai'
+import {
+  streamText,
+  generateText,
+  generateObject,
+  embed,
+  embedMany,
+  type EmbedResult,
+  type EmbedManyResult,
+} from 'ai'
+import type { EmbeddingModel } from 'ai'
 
 type Provider = 'google' | 'groq'
 
@@ -110,9 +117,9 @@ export class RateLimitedAI {
     }
   }
 
-  // We no longer rely on provider.embedding because Groq doesn't support it.
-  // Embeddings always use Google.
-  getEmbeddingModel(modelName: string = 'text-embedding-004') {
+  getEmbeddingModel(
+    modelName: string = 'text-embedding-004'
+  ): () => Promise<EmbeddingModel<string>> {
     return async () => {
       const key = await this.apiKeyManager.getCurrentKey()
       const google = createGoogleGenerativeAI({ apiKey: key })
@@ -156,28 +163,65 @@ export class RateLimitedAI {
     })
   }
 
-  async embed(options: any, userId?: string) {
-    // Delegate embeddings always to Google
+  /**
+   * SINGLE‐VALUE embedding overload
+   */
+  async embed(
+    options: { model?: { modelId: string }; value: string },
+    userId?: string
+  ): Promise<EmbedResult<string>>
+
+
+  async embed(
+    options: { model?: { modelId: string }; values: string[] },
+    userId?: string
+  ): Promise<EmbedManyResult<string>>
+
+
+  async embed(
+    options: {
+      model?: { modelId: string }
+      value?: string
+      values?: string[]
+    },
+    userId?: string
+  ): Promise<EmbedResult<string> | EmbedManyResult<string>> {
     return this.apiKeyManager.executeWithRateLimit(async (key) => {
       const google = createGoogleGenerativeAI({ apiKey: key })
-      const embeddingModel = google.embedding(options.model?.modelId || 'text-embedding-004')
-      return embed({ ...options, model: embeddingModel })
+      const modelFn = google.embedding(
+        options.model?.modelId || 'text-embedding-004'
+      )
+
+      if (Array.isArray(options.values)) {
+        return embedMany({
+          model: modelFn,
+          values: options.values,
+        })
+      } else {
+        return embed({
+          model: modelFn,
+          value: options.value ?? '',
+        })
+      }
     })
   }
 
-  // Utility methods
   async getUsageStats() {
     return this.apiKeyManager.getKeyUsageStats()
   }
+
   async rotateKey() {
     return this.apiKeyManager.rotateToNextKey()
   }
+
   async resetRateLimits() {
     return this.apiKeyManager.resetAllRateLimits()
   }
+
   getConfig() {
     return { ...this.config }
   }
+
   updateConfig(c: Partial<ApiKeyConfig>) {
     this.config = { ...this.config, ...c }
     this.apiKeyManager = new ApiKeyManager(this.config)
@@ -218,20 +262,24 @@ export class RateLimitedAI {
 
 const instances: Partial<Record<Provider, RateLimitedAI>> = {}
 
-export function getRateLimitedAI(provider: Provider, config?: Partial<ApiKeyConfig>) {
+export function getRateLimitedAI(
+  provider: Provider,
+  config?: Partial<ApiKeyConfig>
+) {
   if (!instances[provider]) {
     instances[provider] = new RateLimitedAI(provider, config)
   }
   return instances[provider]!
 }
 
-// Convenience exports
 
 export async function getModel(provider: Provider, modelName: string) {
   return (await getRateLimitedAI(provider)).getModel(modelName)()
 }
-
-export async function getEmbeddingModel(provider: Provider, modelName: string) {
+export async function getEmbeddingModel(
+  provider: Provider,
+  modelName: string
+) {
   return (await getRateLimitedAI(provider)).getEmbeddingModel(modelName)()
 }
 
@@ -267,12 +315,10 @@ export const rateLimitedAI = {
     getFullStatus: (u?: string) =>
       getRateLimitedAI('google').getFullStatus(u),
   },
-
   groq: {
     model: (n = 'gemma2-9b-it') =>
       getModel('groq', n),
     embedding: (n = 'text-embedding-004') =>
-      // embeddings always use Google under the hood
       getEmbeddingModel('google', n),
     streamText: (o: any, u?: string) =>
       getRateLimitedAI('groq').streamText(o, u),
@@ -303,4 +349,3 @@ export const rateLimitedAI = {
 }
 
 export default rateLimitedAI
-export type { ApiKeyConfig, Provider }

@@ -1,0 +1,95 @@
+#!/usr/bin/env ts-node
+/**
+ * scripts/seed-rag.ts
+ *
+ * Splits your combined context + VIT comprehensive KB into ~800-token chunks,
+ * then upserts embeddings into PostgreSQL/pgvector.
+ */
+
+import { getContextForAIPrompt } from '../lib/data/context-integration'
+import { VIT_COMPREHENSIVE_KNOWLEDGE } from '../lib/knowledge-base'
+import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter'
+import { encoding_for_model } from 'tiktoken'
+import 'dotenv/config'
+import pg from 'pg'
+import { randomUUID } from 'crypto'
+import { rateLimitedAI } from '../lib/rate-limited-ai'
+const { Pool } = pg
+
+async function main() {
+  if (!process.env.DATABASE_URL2) {
+    console.error('ERROR: DATABASE_URL2 env var is required')
+    process.exit(1)
+  }
+
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL2,
+    max: 4,
+  })
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS vit_rag_chunks (
+      id uuid PRIMARY KEY,
+      chunk text NOT NULL,
+      metadata jsonb,
+      embedding vector(768) NOT NULL
+    );
+  `)
+
+  const raw =
+    getContextForAIPrompt({ includeAll: true, maxLength: 20000 }) +
+    '\n\n' +
+    VIT_COMPREHENSIVE_KNOWLEDGE
+
+  const enc = await encoding_for_model('gpt-3.5-turbo')
+
+  const splitter = new RecursiveCharacterTextSplitter({
+    separators: ['\n## ', '\n# ', '\n\n', '\n', ' ', ''],
+    chunkSize: 200,      // ~200 tokens per chunk
+    chunkOverlap: 40,    // 40-token overlap
+    lengthFunction: (text) => enc.encode(text).length,
+  })
+
+  const docs = await splitter.createDocuments([raw])
+  console.log(`Prepared ${docs.length} chunks; generating embeddings…`)
+
+  for (const [idx, doc] of docs.entries()) {
+    try {
+      const { embedding } = await rateLimitedAI.google.embed({
+        model: { modelId: 'text-embedding-004' },
+        value: doc.pageContent,
+      })
+
+      const id = randomUUID()
+      const metadata = {
+        source: 'seed-rag-ts',
+        idx,
+        length: doc.pageContent.length,
+      }
+
+      await pool.query(
+        `
+        INSERT INTO vit_rag_chunks (id, chunk, metadata, embedding)
+        VALUES ($1, $2, $3::jsonb, $4)
+        ON CONFLICT (id) DO NOTHING
+      `,
+        [
+          id,
+          doc.pageContent.trim(),
+          JSON.stringify(metadata),
+          '[' + embedding.join(',') + ']',
+        ]
+      )
+    } catch (err) {
+      console.error(`Error on chunk ${idx}:`, err)
+    }
+  }
+
+  await pool.end()
+  console.log('✅ Seeding completed.')
+}
+
+main().catch((err) => {
+  console.error(err)
+  process.exit(1)
+})

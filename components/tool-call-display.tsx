@@ -982,7 +982,11 @@ const PureToolCallDisplay = ({
 }: ToolCallDisplayProps) => {
   const { getToolResult, version } = useVTOP()
 
-  const enrichedToolCalls = toolCalls.map(tool => {
+  const filteredToolCalls = toolCalls.filter(
+    tc => tc.toolName !== 'knowledgeBase' && !(tc.result && tc.result.hidden)
+  )
+
+  const enrichedToolCalls = filteredToolCalls.map(tool => {
     if (tool.toolName === 'queryVTOP' && tool.toolCallId) {
       const contextResult = getToolResult(tool.toolCallId)
       if (contextResult && contextResult.result) {

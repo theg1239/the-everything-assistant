@@ -13,6 +13,7 @@ import {
   recognizeCourseInText,
 } from './course-map'
 import { getCourseData, School } from './ffcs-tool'
+import { createKnowledgeTools } from './knowledge-tools'
 
 async function searchRedditKnowledge(query: string, limit: number = 10) {
   try {
@@ -695,6 +696,7 @@ export const courseUtils = {
 
 export function createVITTools() {
   return {
+    ...createKnowledgeTools(),
     findPastPapers: tool({
       description:
         'find past examination papers for VIT courses from real repositories. You can use course names or codes.',

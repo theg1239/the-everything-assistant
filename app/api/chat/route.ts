@@ -2,7 +2,6 @@ import { smoothStream } from 'ai'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { createVITTools } from '@/lib/tools'
 import { VIT_SYSTEM_PROMPT } from '@/lib/prompts'
-import { VIT_COMPREHENSIVE_KNOWLEDGE } from '@/lib/knowledge-base'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getChat, createChat, saveMessage, updateChat } from '@/lib/db'
@@ -432,10 +431,9 @@ IMPORTANT: The user has specifically selected the "${preferredTool}" tool. When 
 If the user's query is relevant to the selected tool "${preferredTool}", use it even if other tools might also be applicable.`
       : ''
 
-    const combinedSystemPrompt = `${VIT_SYSTEM_PROMPT}
+    const combinedSystemPrompt = `${VIT_SYSTEM_PROMPT}  
 
-ADDITIONAL COMPREHENSIVE KNOWLEDGE:
-${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
+${toolPreferenceGuidance}`
 
     const enhancedMessages = messages.map((message: any) => {
       if (
@@ -533,12 +531,34 @@ ${VIT_COMPREHENSIVE_KNOWLEDGE}${toolPreferenceGuidance}`
               } catch (e) {
                 console.error('Failed to parse VTOP data in stream:', e)
               }
+              
+            } else if (
+              tr.toolName === 'knowledgeBase' &&
+              tr.result?.success &&
+              Array.isArray(tr.result.chunks)
+            ) {
+              try {
+                const cleanedChunks = tr.result.chunks
+                  .map((c: any) => (c.content || '').trim())
+                  .filter(Boolean)
+                  .join('\n\n')
+                  .replace(/\s+/g, ' ')
+                  .trim()
+
+                const answer = (tr.result as any).answer || ''
+                const injection = answer || cleanedChunks
+                if (injection) {
+                  result.text += `\n\n${injection}`
+                }
+              } catch (e) {
+                console.error('Failed to merge knowledgeBase chunks:', e)
+              }
             }
           }
 
           const safeInvocations = JSON.parse(JSON.stringify(toolResults))
           await saveMessage(chat.id, 'assistant', result.text, safeInvocations, result.response.id)
-        },
+        }
       },
       session.user.id
     )

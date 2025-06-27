@@ -32,6 +32,10 @@ const PureMessageBubble = ({
   const { version } = useVTOP()
   const isUser = message.role === 'user'
 
+  if (!isUser && (!message.content || (message.content as string).trim() === '') && message.toolInvocations?.some((t: any)=> t.toolName === 'knowledgeBase' && t.state !== 'result')) {
+    return null
+  }
+
   const hasVTOPCalls = message.toolInvocations?.some((tool: any) => tool.toolName === 'queryVTOP')
 
   return (
@@ -56,18 +60,23 @@ const PureMessageBubble = ({
         )} */}
 
         <div className="flex flex-col gap-4 w-full">
-          {message.toolInvocations && message.toolInvocations.length > 0 && (
-            <ToolCallDisplay
+          {(() => {
+            const visibleToolCalls = message.toolInvocations?.filter(
+              (t: any) => t.toolName !== 'knowledgeBase'
+            )
+            return visibleToolCalls && visibleToolCalls.length > 0 ? (
+              <ToolCallDisplay
               key={
                 hasVTOPCalls ? `tool-calls-${message.id}-${version}` : `tool-calls-${message.id}`
               }
-              toolCalls={message.toolInvocations}
+              toolCalls={visibleToolCalls}
               onLoginClick={onLoginClick}
               onPlacementSearch={onPlacementSearch}
               maximizedItem={maximizedItem}
               setMaximizedItem={setMaximizedItem}
             />
-          )}
+            ) : null
+          })()}
 
           <div
             className={cn('flex flex-col gap-4', {
@@ -89,6 +98,93 @@ const PureMessageBubble = ({
                 if (hasSuccessfulVTOPWithContent) {
                   return null
                 }
+
+                const kbResult = message.toolInvocations?.find(
+                  (t: any) => t.toolName === 'knowledgeBase' && t.state === 'result' && t.result?.answer
+                )
+                if ((!message.content || (message.content as string).trim()==='') && kbResult) {
+                  return (
+                    <div className="prose prose-invert prose-base max-w-none">
+                      <ReactMarkdown
+                        rehypePlugins={[rehypeRaw]}
+                        components={{
+                          p: ({ children }) => (
+                            <p className="mb-3 last:mb-0 leading-relaxed text-foreground">
+                              {children}
+                            </p>
+                          ),
+                          ul: ({ children }) => (
+                            <ul className="list-disc pl-5 mb-3 space-y-1">{children}</ul>
+                          ),
+                          ol: ({ children }) => (
+                            <ol className="list-decimal pl-5 mb-3 space-y-1">{children}</ol>
+                          ),
+                          li: ({ children }) => <li className="text-muted-foreground">{children}</li>,
+                          strong: ({ children }) => (
+                            <strong className="font-semibold text-foreground">{children}</strong>
+                          ),
+                          h1: ({ children }) => (
+                            <h1 className="text-xl font-semibold text-foreground mb-3">{children}</h1>
+                          ),
+                          h2: ({ children }) => (
+                            <h2 className="text-lg font-semibold text-foreground mb-2">{children}</h2>
+                          ),
+                          h3: ({ children }) => (
+                            <h3 className="text-base font-semibold text-foreground mb-2">
+                              {children}
+                            </h3>
+                          ),
+                          code: ({ children }) => (
+                            <code className="bg-muted px-2 py-1 rounded text-sm font-mono break-all">
+                              {children}
+                            </code>
+                          ),
+                          pre: ({ children }) => (
+                            <pre className="bg-muted p-4 rounded-lg overflow-x-auto border mb-3 max-w-full">
+                              {children}
+                            </pre>
+                          ),
+                          table: ({ children }) => (
+                            <div className="overflow-x-auto mb-3">
+                              <table className="min-w-full border border-border rounded-lg text-sm">
+                                {children}
+                              </table>
+                            </div>
+                          ),
+                          th: ({ children }) => (
+                            <th className="border border-border px-3 py-2 bg-muted text-foreground font-semibold text-sm">
+                              {children}
+                            </th>
+                          ),
+                          td: ({ children }) => (
+                            <td className="border border-border px-3 py-2 text-muted-foreground text-sm">
+                              {children}
+                            </td>
+                          ),
+                          a: ({ children, href }) => (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:text-primary/80 underline"
+                            >
+                              {children}
+                            </a>
+                          ),
+                        }}
+                      >
+                        {(kbResult as any).result.answer}
+                      </ReactMarkdown>
+                    </div>
+                  )
+                }
+
+                // // if no content yet (e.g., waiting on knowledgeBase answer) show thinking indicator
+                // if (!message.content || (message.content as string).trim() === '') {
+                //   return (
+                //     <p className="text-muted-foreground italic">Thinking…</p>
+                //   )
+                // }
 
                 return (
                   <div className="prose prose-invert prose-base max-w-none">

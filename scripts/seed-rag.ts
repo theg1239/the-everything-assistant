@@ -4,6 +4,10 @@
  *
  * Splits your combined context + VIT comprehensive KB into ~800-token chunks,
  * then upserts embeddings into PostgreSQL/pgvector.
+ *
+ * Usage:
+ *   ts-node scripts/seed-rag.ts            # normal seed (append)
+ *   ts-node scripts/seed-rag.ts --fresh    # clear vit_rag_chunks and reseed
  */
 
 import { getContextForAIPrompt } from '../lib/data/context-integration'
@@ -17,6 +21,8 @@ import { rateLimitedAI } from '../lib/rate-limited-ai'
 const { Pool } = pg
 
 async function main() {
+  const fresh = process.argv.includes('--fresh')
+
   if (!process.env.DATABASE_URL2) {
     console.error('ERROR: DATABASE_URL2 env var is required')
     process.exit(1)
@@ -35,6 +41,11 @@ async function main() {
       embedding vector(768) NOT NULL
     );
   `)
+
+  if (fresh) {
+    console.log('Clearing vit_rag_chunks table...')
+    await pool.query('TRUNCATE vit_rag_chunks;')
+  }
 
   const raw =
     getContextForAIPrompt({ includeAll: true, maxLength: 20000 }) +

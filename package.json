@@ -16,6 +16,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "seed:rag": "tsx scripts/seed-rag.ts",
+    "seed:rag-fresh": "tsx scripts/seed-rag.ts --fresh",
     "prisma:studio": "prisma studio",
     "heroku-postbuild": "cd services/deep-search && npm install --legacy-peer-deps",
     "test:performance": "tsx scripts/test-performance.ts",

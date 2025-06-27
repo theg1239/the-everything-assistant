@@ -10,7 +10,7 @@ async function getRagPool() {
   if (!process.env.DATABASE_URL2) {
     throw new Error('DATABASE_URL2 is not configured for RAG search')
   }
-  _ragPool = new Pool({ connectionString: process.env.DATABASE_URL2, max: 2 })
+  _ragPool = new Pool({ connectionString: process.env.DATABASE_URL2, max: 20 })
   return _ragPool
 }
 

@@ -60,38 +60,51 @@ export function BroadcastDialog({ isOpen, onClose, payload }: BroadcastDialogPro
   }
 
   const ChevronNavigation = () => {
-    if (!isMounted || slides.length <= 1) return null
+    if (!isMounted || slides.length <= 1 || !isOpen) return null
 
-    return (
-      <>
-        {createPortal(
-          <>
-            <button
-              data-chevron
-              onClick={prevStep}
-              className={cn(
-                'fixed top-1/2 -translate-y-1/2 left-2 sm:left-4 z-50 p-2 rounded-full bg-white/50 dark:bg-black/50 backdrop-blur-sm shadow-lg hover:scale-110 transition-transform',
-                currentStep === 0 ? 'opacity-0 pointer-events-none' : ''
-              )}
-            >
-              <ChevronLeft className="w-5 h-5 text-slate-700 dark:text-slate-200" />
-            </button>
-            <button
-              data-chevron
-              onClick={nextStep}
-              className={cn(
-                'fixed top-1/2 -translate-y-1/2 right-2 sm:right-4 z-50 p-2 rounded-full bg-white/50 dark:bg-black/50 backdrop-blur-sm shadow-lg hover:scale-110 transition-transform',
-                currentStep >= slides.length - 1
-                  ? 'opacity-0 pointer-events-none'
-                  : ''
-              )}
-            >
-              <ChevronRight className="w-5 h-5 text-slate-700 dark:text-slate-200" />
-            </button>
-          </>,
-          document.body
-        )}
-      </>
+    return createPortal(
+      <div className="fixed inset-0 pointer-events-none z-[60] flex items-center justify-center">
+        <div className="relative max-w-md w-[95vw] flex items-center justify-between">
+          <Button
+            variant="ghost"
+            size="sm"
+            data-chevron="left"
+            onMouseDown={e => {
+              e.preventDefault()
+              e.stopPropagation()
+            }}
+            onClick={e => {
+              e.preventDefault()
+              e.stopPropagation()
+              prevStep()
+            }}
+            disabled={currentStep === 0}
+            className="absolute left-[-60px] sm:left-[-80px] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full w-10 h-10 sm:w-12 sm:h-12 p-0 disabled:opacity-20 disabled:cursor-not-allowed pointer-events-auto shadow-lg bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm"
+          >
+            <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+          </Button>
+          
+          <Button
+            variant="ghost"
+            size="sm"
+            data-chevron="right"
+            onMouseDown={e => {
+              e.preventDefault()
+              e.stopPropagation()
+            }}
+            onClick={e => {
+              e.preventDefault()
+              e.stopPropagation()
+              nextStep()
+            }}
+            disabled={currentStep >= slides.length - 1}
+            className="absolute right-[-60px] sm:right-[-80px] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 bg-white/90 dark:bg-slate-900/90 rounded-full w-10 h-10 sm:w-12 sm:h-12 p-0 disabled:opacity-20 disabled:cursor-not-allowed pointer-events-auto shadow-lg backdrop-blur-sm"
+          >
+            <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
+          </Button>
+        </div>
+      </div>,
+      document.body
     )
   }
 

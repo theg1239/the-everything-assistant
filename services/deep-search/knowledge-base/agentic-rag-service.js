@@ -4,10 +4,18 @@ const { google } = require('@ai-sdk/google')
 const logger = require('../utils/logger')
 
 class AgenticRAGService {
-  constructor() {
+  constructor(options = {}) {
     this.knowledgeBase = new KnowledgeBase()
     this.maxContextLength = parseInt(process.env.MAX_CONTEXT_LENGTH) || 6000
-    this.chatModel = google('gemini-2.5-flash-lite-preview-06-17')
+    
+    this.thinkingBudget = options.thinkingBudget !== undefined ? options.thinkingBudget : 1024
+    
+    this.chatModel = google('gemini-2.5-flash-lite-preview-06-17', {
+      thinkingConfig: {
+        thinkingBudget: this.thinkingBudget
+      }
+    })
+    
     this.maxIterations = 3
     this.relevanceThreshold = 0.6
   }
@@ -62,33 +70,53 @@ class AgenticRAGService {
 
   async agenticSearch(originalQuery) {
     logger.info(`Starting agentic search for: "${originalQuery}"`)
+    
+    const relevanceAgent = new QueryRelevanceAgent(this.chatModel, 512)
+    const refinementAgent = new QueryRefinementAgent(this.chatModel, 512)
+    const qualityAgent = new ResultQualityAgent(this.chatModel, 512)
 
     let bestResults = []
     let maxRelevanceScore = 0
-    let attempts = 0
-    let queriesUsed = [originalQuery]
+    const attempts = []
+    const queriesUsed = [originalQuery]
+    
+    // Track if we've had too many refinements that didn't help
+    let failedRefinements = 0;
+    const MAX_FAILED_REFINEMENTS = 1; // Allow only 1 failed refinement before giving up
 
-    // Agent 1: Query Relevance Analyzer
-    const relevanceAgent = new QueryRelevanceAgent(this.chatModel)
-
-    // Agent 2: Query Refinement Generator
-    const refinementAgent = new QueryRefinementAgent(this.chatModel)
-
-    // Agent 3: Result Quality Assessor
-    const qualityAgent = new ResultQualityAgent(this.chatModel)
-
-    for (let iteration = 0; iteration < this.maxIterations; iteration++) {
-      attempts++
-      const currentQuery =
-        iteration === 0
-          ? originalQuery
-          : await this.getNextQuery(originalQuery, bestResults, refinementAgent, iteration)
-
-      if (iteration > 0) {
-        queriesUsed.push(currentQuery)
+    for (let i = 0; i < this.maxIterations; i++) {
+      let currentQuery;
+      
+      if (i === 0) {
+        currentQuery = originalQuery;
+      } else {
+        // Only refine if we haven't had too many failed refinements
+        if (failedRefinements >= MAX_FAILED_REFINEMENTS) {
+          logger.info('Too many failed refinements, using best results so far');
+          break;
+        }
+        
+        const refinedQuery = await this.getNextQuery(
+          originalQuery,
+          bestResults,
+          refinementAgent,
+          i
+        );
+        
+        if (!refinedQuery || queriesUsed.includes(refinedQuery) || 
+            refinedQuery === originalQuery || refinedQuery.length < 5) {
+          logger.info('Query refinement exhausted, duplicate, or invalid');
+          failedRefinements++;
+          continue;
+        }
+        
+        currentQuery = refinedQuery;
       }
+      
+      queriesUsed.push(currentQuery);
+      attempts.push({ iteration: i, query: currentQuery });
 
-      logger.info(`Iteration ${iteration + 1}: Searching with query: "${currentQuery}"`)
+      logger.info(`Iteration ${i + 1}: Searching with query: "${currentQuery}"`)
 
       const searchResults = await this.knowledgeBase.search(currentQuery, 30)
 
@@ -154,20 +182,60 @@ class AgenticRAGService {
       return refinedQuery
     } catch (error) {
       logger.error('Error generating refined query:', error)
-      return this.extractKeywords(originalQuery).join(' ')
+      return AgenticRAGService.extractKeyTerms(originalQuery).join(' ')
     }
   }
 
-  extractKeywords(query) {
-    return query
-      .toLowerCase()
-      .split(/\s+/)
-      .filter(
-        word =>
-          word.length > 3 &&
-          !['about', 'what', 'where', 'when', 'how', 'tell', 'need', 'want'].includes(word)
-      )
-      .slice(0, 3)
+  static extractKeyTerms(query) {
+    if (!query || typeof query !== 'string') return [];
+    
+    try {
+      // First remove any punctuation and make lowercase
+      const cleaned = query.toLowerCase().replace(/[^\w\s]|_/g, '');
+      
+      // Define common words to exclude
+      const stopWords = new Set([
+        'about', 'what', 'where', 'when', 'how', 'tell', 'need', 'want',
+        'with', 'from', 'into', 'during', 'including', 'until', 'against',
+        'among', 'throughout', 'despite', 'towards', 'upon', 'concerning',
+        'like', 'than', 'that', 'which', 'whom', 'whose', 'whether',
+        'the', 'a', 'an', 'and', 'or', 'but', 'if', 'because', 'as', 'until',
+        'while', 'of', 'at', 'by', 'for', 'with', 'about', 'between', 'into',
+        'through', 'to', 'in', 'on', 'at', 'from', 'up', 'down', 'off', 'over',
+        'under', 'again', 'further', 'then', 'once', 'here', 'there', 'when',
+        'where', 'why', 'how', 'all', 'any', 'both', 'each', 'few', 'more',
+        'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own',
+        'same', 'so', 'than', 'too', 'very', 'can', 'will', 'just', 'don',
+        'should', 'now', 'd'
+      ]);
+      
+      // Extract words, filter out stop words and short words
+      const terms = cleaned
+        .split(/\s+/)
+        .filter(term => 
+          term.length >= 3 && 
+          !stopWords.has(term) &&
+          !/^\d+$/.test(term) // Exclude numbers
+        )
+        .slice(0, 5); // Limit to 5 key terms
+      
+      // If we filtered out everything, fall back to original words (except very short ones)
+      if (terms.length === 0) {
+        return cleaned
+          .split(/\s+/)
+          .filter(term => term.length >= 3)
+          .slice(0, 3);
+      }
+      
+      return terms;
+    } catch (error) {
+      logger.error('Error extracting key terms:', error);
+      // Fallback to simple word extraction
+      return (query || '').toLowerCase()
+        .split(/\s+/)
+        .filter(term => term.length >= 3)
+        .slice(0, 3);
+    }
   }
 
   buildContext(searchResults) {
@@ -298,6 +366,9 @@ Context: ${context}`
     try {
       const result = await generateText({
         model: this.chatModel,
+        thinkingConfig: {
+          thinkingBudget: this.thinkingBudget
+        },
         messages: messages,
         maxTokens: 4500,
         temperature: 0.7,
@@ -369,11 +440,14 @@ Context: ${context}`
 }
 
 class QueryRelevanceAgent {
-  constructor(model) {
+  constructor(model, thinkingBudget = 512) {
     this.model = model
+    this.thinkingBudget = thinkingBudget
+    logger.info(`QueryRelevanceAgent initialized with thinkingBudget: ${thinkingBudget}`)
   }
 
   async analyzeRelevance(originalQuery, searchResults) {
+    logger.info(`Analyzing relevance for query: "${originalQuery}" with ${searchResults.length} results, thinkingBudget: ${this.thinkingBudget}`)
     try {
       const resultsText = searchResults
         .map((result, index) =>
@@ -401,6 +475,9 @@ Respond with ONLY a JSON array of relevance scores (0.0-1.0), one for each resul
         prompt: prompt,
         maxTokens: 500,
         temperature: 0.3,
+        thinkingConfig: {
+          thinkingBudget: this.thinkingBudget
+        }
       })
 
       try {
@@ -423,11 +500,14 @@ Respond with ONLY a JSON array of relevance scores (0.0-1.0), one for each resul
 }
 
 class QueryRefinementAgent {
-  constructor(model) {
+  constructor(model, thinkingBudget = 512) {
     this.model = model
+    this.thinkingBudget = thinkingBudget
+    logger.info(`QueryRefinementAgent initialized with thinkingBudget: ${thinkingBudget}`)
   }
 
   async refineQuery(originalQuery, currentResults, iteration) {
+    logger.info(`Refining query: "${originalQuery}" (iteration: ${iteration}), thinkingBudget: ${this.thinkingBudget}`)
     try {
       const resultsSummary =
         currentResults.length > 0
@@ -437,29 +517,51 @@ class QueryRefinementAgent {
               .join(', ')
           : 'No relevant results found'
 
-      const prompt = `You are a search query refinement expert. Improve the search query to find better Reddit discussions.
+      // Extract key terms from original query to ensure they're preserved
+      const keyTerms = AgenticRAGService.extractKeyTerms(originalQuery);
+      
+      const prompt = `You are a search query refinement expert. Your task is to IMPROVE the search query while PRESERVING the original intent.
 
-Original Query: "${originalQuery}"
+ORIGINAL USER QUERY: "${originalQuery}"
+Key terms to preserve: ${keyTerms.join(', ')}
 Iteration: ${iteration + 1}
-Current Results Summary: ${resultsSummary}
+Current Results: ${resultsSummary}
 
-Create a better search query that:
-- Uses different keywords or synonyms
-- Is more specific if previous results were too broad
-- Is more general if no results were found
-- Focuses on the core intent of the original query
-- Uses terms that are likely to appear in Reddit discussions
+Create a BETTER search query that:
+1. MUST include ALL key terms from the original query (${keyTerms.join(', ')})
+2. Can add related terms or synonyms to improve results
+3. Should be more specific if results were too broad
+4. Can be more general ONLY if no results were found
+5. Must maintain the original query's core intent
+6. Should use natural language that would appear in Reddit discussions
 
-Respond with ONLY the improved search query, no explanation:`
+CRITICAL: The refined query MUST still be about: ${originalQuery}
+
+Respond with ONLY the improved search query, no explanation or formatting.`
 
       const result = await generateText({
         model: this.model,
         prompt: prompt,
         maxTokens: 50,
-        temperature: 0.7,
+        temperature: 0.3,  // Lower temperature for more focused results
+        thinkingConfig: {
+          thinkingBudget: this.thinkingBudget
+        }
       })
 
-      return result.text.trim().replace(/['"]/g, '')
+      const refinedQuery = result.text.trim().replace(/['"]/g, '');
+      
+      // Ensure key terms are preserved in the refined query
+      const missingTerms = keyTerms.filter(term => 
+        !refinedQuery.toLowerCase().includes(term.toLowerCase())
+      );
+      
+      if (missingTerms.length > 0) {
+        logger.warn(`Refined query is missing key terms: ${missingTerms.join(', ')}. Falling back to original query.`);
+        return originalQuery;
+      }
+      
+      return refinedQuery;
     } catch (error) {
       logger.error('Error refining query:', error)
       // Fallback refinement strategy
@@ -470,11 +572,14 @@ Respond with ONLY the improved search query, no explanation:`
 }
 
 class ResultQualityAgent {
-  constructor(model) {
+  constructor(model, thinkingBudget = 512) {
     this.model = model
+    this.thinkingBudget = thinkingBudget
+    logger.info(`ResultQualityAgent initialized with thinkingBudget: ${thinkingBudget}`)
   }
 
   async assessQuality(originalQuery, results) {
+    logger.info(`Assessing quality for query: "${originalQuery}" with ${results.length} results, thinkingBudget: ${this.thinkingBudget}`)
     try {
       const resultsInfo = results.slice(0, 5).map(r => ({
         upvotes: r.upvotes || 0,

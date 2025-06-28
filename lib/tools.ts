@@ -181,7 +181,7 @@ async function searchRedditWithContext(query: string) {
     if (isBroadQuery) {
       const [trendingTopics, searchResults] = await Promise.all([
         getTrendingRedditTopics(),
-        searchRedditKnowledge('VIT college life discussions recent trends'),
+        searchRedditKnowledge(query),
       ])
 
       return {

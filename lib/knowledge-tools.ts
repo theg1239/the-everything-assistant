@@ -73,7 +73,7 @@ export function createKnowledgeTools() {
             const answerResp = await rateLimitedAI.google.generateText(
               {
                 model: await rateLimitedAI.google.model(),
-                prompt: `You are a friendly assistant for VIT Vellore students. Using ONLY the context below, write a clear answer that is easy to skim.\n\nFormatting rules:\n1. Break information into short paragraphs or bullet lists (markdown "- item" format).\n2. Bold important keywords or club names with **double asterisks**.\n3. If a table is genuinely the best way to show structured data, you MAY use a simple HTML table (<table>, <tr>, <td>). Otherwise, avoid HTML tags.\n4. Use all lowercase in your output other than proper nouns or course codes.\n5. If the context is insufficient, return exactly: I_DONT_KNOW\n\nCONTEXT:\n${context}\n\nQUESTION: ${query}\n\nAnswer:`,
+                prompt: `You are a friendly assistant for VIT Vellore students. Using ONLY the context below, write a clear answer that is easy to skim.\n\nFormatting rules:\n1. Break information into short paragraphs or bullet lists (markdown "- item" format).\n2. Bold important keywords or club names with **double asterisks**.\n3. If a table is genuinely the best way to show structured data, you MAY use a simple HTML table (<table>, <tr>, <td>). Otherwise, avoid HTML tags.\n4. Use all lowercase in your output other than proper nouns or course codes.\n5. If the context is insufficient, say you cannot answer the query due to lack of context, try to still help out the user based on what you know about VIT Vellore. \n\nCONTEXT:\n${context}\n\nQUESTION: ${query}\n\nAnswer:`,
                 maxTokens: 1024,
                 temperature: 0.3,
               },
@@ -82,7 +82,6 @@ export function createKnowledgeTools() {
             answer = answerResp.text.trim()
             console.info('[knowledgeBase] synthesized answer length:', answer.length)
 
-            // If the model indicates it doesn't know, try searching Reddit
             if (answer.trim() === 'I_DONT_KNOW' || answer.toLowerCase().includes('insufficient context')) {
               console.log('[knowledgeBase] Context insufficient, trying Reddit search...')
               const redditResults = await searchRedditWithContext(query)

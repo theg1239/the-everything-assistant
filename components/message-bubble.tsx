@@ -111,66 +111,76 @@ const PureMessageBubble = ({
                 )
                 if ((!message.content || (message.content as string).trim() === '') && kbResult) {
                   return (
-                    <div className="prose prose-invert prose-base max-w-none">
+                    <div className="prose prose-invert prose-base max-w-none text-foreground dark:text-gray-100">
                       <ReactMarkdown
                         rehypePlugins={[rehypeRaw]}
                         components={{
                           p: ({ children }) => (
-                            <p className="mb-3 last:mb-0 leading-relaxed text-foreground">
+                            <p className="mb-4 last:mb-0 leading-relaxed text-foreground dark:text-gray-100">
                               {children}
                             </p>
                           ),
                           ul: ({ children }) => (
-                            <ul className="list-disc pl-5 mb-3 space-y-1">{children}</ul>
+                            <ul className="list-disc pl-6 mb-4 space-y-1.5">{children}</ul>
                           ),
                           ol: ({ children }) => (
-                            <ol className="list-decimal pl-5 mb-3 space-y-1">{children}</ol>
+                            <ol className="list-decimal pl-6 mb-4 space-y-1.5">{children}</ol>
                           ),
                           li: ({ children }) => (
-                            <li className="text-muted-foreground">{children}</li>
+                            <li className="text-foreground dark:text-gray-200">{children}</li>
                           ),
                           strong: ({ children }) => (
-                            <strong className="font-semibold text-foreground">{children}</strong>
+                            <strong className="font-semibold text-foreground dark:text-white">
+                              {children}
+                            </strong>
+                          ),
+                          em: ({ children }) => (
+                            <em className="italic">{children}</em>
                           ),
                           h1: ({ children }) => (
-                            <h1 className="text-xl font-semibold text-foreground mb-3">
+                            <h1 className="text-2xl font-bold text-foreground dark:text-white mb-4 mt-6">
                               {children}
                             </h1>
                           ),
                           h2: ({ children }) => (
-                            <h2 className="text-lg font-semibold text-foreground mb-2">
+                            <h2 className="text-xl font-semibold text-foreground dark:text-white mb-3 mt-5">
                               {children}
                             </h2>
                           ),
                           h3: ({ children }) => (
-                            <h3 className="text-base font-semibold text-foreground mb-2">
+                            <h3 className="text-lg font-semibold text-foreground dark:text-white mb-2.5 mt-4">
                               {children}
                             </h3>
                           ),
                           code: ({ children }) => (
-                            <code className="bg-muted px-2 py-1 rounded text-sm font-mono break-all">
+                            <code className="bg-muted/50 text-foreground dark:text-gray-100 px-1.5 py-0.5 rounded text-sm font-mono break-words">
                               {children}
                             </code>
                           ),
                           pre: ({ children }) => (
-                            <pre className="bg-muted p-4 rounded-lg overflow-x-auto border mb-3 max-w-full">
+                            <pre className="bg-muted/50 dark:bg-muted/30 p-3 rounded-lg overflow-x-auto border border-border dark:border-border/50 mb-4 max-w-full text-sm">
                               {children}
                             </pre>
                           ),
+                          blockquote: ({ children }) => (
+                            <blockquote className="border-l-4 border-muted-foreground/30 pl-4 italic my-4 text-foreground/90 dark:text-gray-200">
+                              {children}
+                            </blockquote>
+                          ),
                           table: ({ children }) => (
-                            <div className="overflow-x-auto mb-3">
-                              <table className="min-w-full border border-border rounded-lg text-sm">
+                            <div className="overflow-x-auto my-4">
+                              <table className="min-w-full border border-border dark:border-border/50 rounded-lg text-sm">
                                 {children}
                               </table>
                             </div>
                           ),
                           th: ({ children }) => (
-                            <th className="border border-border px-3 py-2 bg-muted text-foreground font-semibold text-sm">
+                            <th className="border border-border dark:border-border/50 px-4 py-2 bg-muted/50 dark:bg-muted/30 text-foreground dark:text-white font-semibold text-left">
                               {children}
                             </th>
                           ),
                           td: ({ children }) => (
-                            <td className="border border-border px-3 py-2 text-muted-foreground text-sm">
+                            <td className="border border-border dark:border-border/50 px-4 py-2 text-foreground dark:text-gray-200">
                               {children}
                             </td>
                           ),
@@ -179,7 +189,7 @@ const PureMessageBubble = ({
                               href={href}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-primary hover:text-primary/80 underline"
+                              className="text-primary hover:underline hover:text-primary/80 transition-colors"
                             >
                               {children}
                             </a>

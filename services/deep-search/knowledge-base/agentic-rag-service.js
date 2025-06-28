@@ -68,12 +68,18 @@ class AgenticRAGService {
     }
   }
 
-  async agenticSearch(originalQuery) {
+  async agenticSearch(originalQuery, options = {}) {
+    const { includeThoughts = false } = options;
+    
+    if (includeThoughts) {
+      logger.info('Thought logging is enabled for this search session');
+    }
+    
     logger.info(`Starting agentic search for: "${originalQuery}"`)
     
-    const relevanceAgent = new QueryRelevanceAgent(this.chatModel, 512)
-    const refinementAgent = new QueryRefinementAgent(this.chatModel, 512)
-    const qualityAgent = new ResultQualityAgent(this.chatModel, 512)
+    const relevanceAgent = new QueryRelevanceAgent(this.chatModel, 512, { includeThoughts })
+    const refinementAgent = new QueryRefinementAgent(this.chatModel, 512, { includeThoughts })
+    const qualityAgent = new ResultQualityAgent(this.chatModel, 512, { includeThoughts })
 
     let bestResults = []
     let maxRelevanceScore = 0
@@ -440,10 +446,11 @@ Context: ${context}`
 }
 
 class QueryRelevanceAgent {
-  constructor(model, thinkingBudget = 512) {
+  constructor(model, thinkingBudget = 512, options = {}) {
     this.model = model
     this.thinkingBudget = thinkingBudget
-    logger.info(`QueryRelevanceAgent initialized with thinkingBudget: ${thinkingBudget}`)
+    this.includeThoughts = options.includeThoughts || false;
+    logger.info(`QueryRelevanceAgent initialized with thinkingBudget: ${thinkingBudget}, includeThoughts: ${this.includeThoughts}`)
   }
 
   async analyzeRelevance(originalQuery, searchResults) {
@@ -500,10 +507,11 @@ Respond with ONLY a JSON array of relevance scores (0.0-1.0), one for each resul
 }
 
 class QueryRefinementAgent {
-  constructor(model, thinkingBudget = 512) {
+  constructor(model, thinkingBudget = 512, options = {}) {
     this.model = model
     this.thinkingBudget = thinkingBudget
-    logger.info(`QueryRefinementAgent initialized with thinkingBudget: ${thinkingBudget}`)
+    this.includeThoughts = options.includeThoughts || false;
+    logger.info(`QueryRefinementAgent initialized with thinkingBudget: ${thinkingBudget}, includeThoughts: ${this.includeThoughts}`)
   }
 
   async refineQuery(originalQuery, currentResults, iteration) {
@@ -572,10 +580,11 @@ Respond with ONLY the improved search query, no explanation or formatting.`
 }
 
 class ResultQualityAgent {
-  constructor(model, thinkingBudget = 512) {
+  constructor(model, thinkingBudget = 512, options = {}) {
     this.model = model
     this.thinkingBudget = thinkingBudget
-    logger.info(`ResultQualityAgent initialized with thinkingBudget: ${thinkingBudget}`)
+    this.includeThoughts = options.includeThoughts || false;
+    logger.info(`ResultQualityAgent initialized with thinkingBudget: ${thinkingBudget}, includeThoughts: ${this.includeThoughts}`)
   }
 
   async assessQuality(originalQuery, results) {

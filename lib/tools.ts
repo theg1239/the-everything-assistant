@@ -136,7 +136,7 @@ async function getRedditOverview() {
   }
 }
 
-async function searchRedditWithContext(query: string) {
+export async function searchRedditWithContext(query: string) {
   try {
     const broadQueryKeywords = [
       "what's happening",

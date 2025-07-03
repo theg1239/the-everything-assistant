@@ -6,7 +6,7 @@ export function createMemoryTool(userId: string) {
   return {
     saveMemory: tool({
       description:
-        'Save a memory to the knowledge base. Use this to remember important information about the user, their preferences, or key facts from the conversation. Use it when the user explicitly asks to remember something, or when you infer a piece of information is important for future interactions.',
+        'Save a memory to the knowledge base. Use this to remember important information about the user, their preferences, or key facts from the conversation. Use it when the user explicitly asks to remember something, or when you infer a piece of information is important for future interactions. If a similar memory already exists, it will be updated instead of creating a duplicate.',
       parameters: z.object({
         memoryContent: z.string().describe('The content of the memory to save.'),
         importance: z
@@ -17,15 +17,45 @@ export function createMemoryTool(userId: string) {
       }),
       execute: async ({ memoryContent, importance, tags }) => {
         try {
-          const memory = await memoryService.upsertMemory(userId, {
-            content: memoryContent,
-            importance: importance as any,
-            tags: tags || [],
-          })
+          const similarMemory = await memoryService.findSimilarMemory(userId, memoryContent)
+          
+          let memory
+          let message
+          
+          if (similarMemory) {
+            const updatedContent = memoryContent.length > similarMemory.content.length 
+              ? memoryContent 
+              : similarMemory.content
+            
+            const updatedImportance = importance 
+              ? Math.max(importance as any, similarMemory.importance)
+              : similarMemory.importance
+            
+            const updatedTags = tags && tags.length > 0
+              ? [...new Set([...similarMemory.tags, ...tags])]
+              : similarMemory.tags
+            
+            memory = await memoryService.upsertMemory(userId, {
+              id: similarMemory.id,
+              content: updatedContent,
+              importance: updatedImportance,
+              tags: updatedTags,
+            })
+            message = 'Similar memory found and updated with new information.'
+          } else {
+            memory = await memoryService.upsertMemory(userId, {
+              content: memoryContent,
+              importance: importance as any,
+              tags: tags || [],
+            })
+            message = 'New memory saved successfully.'
+          }
+          
           return {
             success: true,
             memoryId: memory.id,
-            message: 'Memory saved successfully.',
+            message,
+            updated: !!similarMemory,
           }
         } catch (error: any) {
           return {

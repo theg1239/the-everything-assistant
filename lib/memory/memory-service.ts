@@ -48,7 +48,7 @@ export class MemoryService {
     return Math.ceil(text.length / 4)
   }
   
-  private calculateSimilarity(a: string, b: string): number {
+  calculateSimilarity(a: string, b: string): number {
     const setA = new Set(a.toLowerCase().split(/\s+/))
     const setB = new Set(b.toLowerCase().split(/\s+/))
     
@@ -208,12 +208,9 @@ export class MemoryService {
 
     const memoryContent = relevantSentences.join('. ').trim()
     
-    const existingMemories = await this.getUserMemories(userId)
-    const isDuplicate = existingMemories.some((memory: Memory) => 
-      this.calculateSimilarity(memory.content, memoryContent) > 0.8
-    )
-    
-    if (isDuplicate) return null
+    // Check for duplicate using the new helper method
+    const existingMemory = await this.findSimilarMemory(userId, memoryContent)
+    if (existingMemory) return null
 
     return this.upsertMemory(userId, {
       content: memoryContent,
@@ -263,6 +260,14 @@ export class MemoryService {
     }[filter]
 
     return Math.min(Math.max(importance, filterThreshold), 5) as MemoryImportance
+  }
+
+  async findSimilarMemory(userId: string, content: string, threshold: number = 0.8): Promise<Memory | null> {
+    const memories = await this.getUserMemories(userId)
+    
+    return memories.find(memory => 
+      this.calculateSimilarity(memory.content, content) > threshold
+    ) || null
   }
 }
 

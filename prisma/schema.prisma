@@ -64,6 +64,8 @@ model User {
   sessions    Session[]
   chats       Chat[]
   securityLogs SecurityLog[]
+  memories     Memory[]
+  memorySettings MemorySettings?
 
   @@index([email])
   @@map("users")
@@ -162,6 +164,38 @@ model Migration {
   executed_at DateTime @default(now())
 
   @@map("migrations")
+}
+
+model Memory {
+  id          String   @id @default(cuid())
+  userId      String
+  content     String   @db.Text
+  tags        String[] @default([])
+  importance  Int      @default(1) // 1-5 scale, 5 being most important
+  lastUsedAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, importance, lastUsedAt(sort: Desc)])
+  @@index([userId, updatedAt(sort: Desc)])
+  @@map("memories")
+}
+
+model MemorySettings {
+  id              String   @id @default(cuid())
+  userId         String   @unique
+  isEnabled      Boolean  @default(true)
+  maxTokens      Int      @default(2000)
+  autoSave       Boolean  @default(true)
+  autoSaveFilter String   @default("medium") // 'low', 'medium', 'high' importance threshold
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("memory_settings")
 }
 
 model StreamId {

@@ -2,7 +2,6 @@ import { tool } from 'ai'
 import { z } from 'zod'
 import { scrapePapersCodeChef } from './scrapers/papers-codechef'
 import { scrapeVITPaperVault } from './scrapers/vit-papervault'
-import { scrapeFacultyInfo } from './scrapers/faculty-scraper'
 import { scrapePlacementInfo } from './scrapers/placement-scraper'
 import { getMessMenu, formatMenuItems, getAvailableDateRange } from './scrapers/mess-menu-scraper'
 import { getCourseCode } from './question-generator'
@@ -14,6 +13,7 @@ import {
 } from './course-map'
 import { getCourseData, School } from './ffcs-tool'
 import { createKnowledgeTools } from './knowledge-tools'
+import { createMemoryTool } from './memory/memory-tools'
 
 async function searchRedditKnowledge(query: string, limit: number = 10) {
   try {
@@ -694,9 +694,10 @@ export const courseUtils = {
   },
 }
 
-export function createVITTools() {
+export function createVITTools(userId: string) {
   return {
     ...createKnowledgeTools(),
+    ...createMemoryTool(userId),
     findPastPapers: tool({
       description:
         'find past examination papers for VIT courses from real repositories. You can use course names or codes.',
@@ -1302,7 +1303,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
 
     getMessMenu: tool({
       description:
-        "get mess menu for VIT hostels (both men's and ladies' hostels). Use this when users ask about mess menu, today's food, what's for lunch/dinner/breakfast/snacks, tomorrow's menu, etc. Covers special mess, veg mess, and non-veg mess for both hostels. IMPORTANT: Always ask the user to specify hostelType and messType if not provided.",
+        "get mess menu for VIT hostels (both men's and ladies' hostels). Use this when users ask about mess menu, today's food, what's for lunch/dinner/breakfast/snacks, tomorrow's menu, etc. Covers special mess, veg mess, and non-veg mess for both hostels. IMPORTANT: Do NOT ask for hostelType and messType if you are already aware of the user's preference through memory, populate them from memory.",
       parameters: z.object({
         hostelType: z
           .enum(['mens', 'ladies'])

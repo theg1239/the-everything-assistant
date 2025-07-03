@@ -51,6 +51,8 @@
     "@react-three/rapier": "^2.1.0",
     "@sparticuz/chromium": "latest",
     "@tailwindcss/typography": "latest",
+    "@tanstack/react-query": "^5.81.5",
+    "@tanstack/react-query-devtools": "^5.81.5",
     "@types/crypto-js": "^4.2.2",
     "@upstash/redis": "^1.35.0",
     "ai": "latest",

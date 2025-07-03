@@ -982,11 +982,10 @@ const PureToolCallDisplay = ({
 }: ToolCallDisplayProps) => {
   const { getToolResult, version } = useVTOP()
 
-  // Remove hidden knowledgeBase tool calls and deduplicate by toolName + toolCallId
   const filteredToolCalls = (() => {
     const map = new Map<string, any>()
     for (const tc of toolCalls) {
-      if (tc.toolName === 'knowledgeBase' || (tc.result && tc.result.hidden)) {
+      if (tc.toolName === 'knowledgeBase' || tc.toolName === 'saveMemory' || (tc.result && tc.result.hidden)) {
         continue
       }
       const key = `${tc.toolName}-${tc.toolCallId || tc.id || ''}`

@@ -32,6 +32,7 @@ import {
   Eye,
   EyeOff,
   MessageSquarePlus,
+  Brain,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -40,6 +41,7 @@ import type { BackgroundType } from '@/components/backgrounds/custom-background'
 import dynamic from 'next/dynamic'
 import { useMemo } from 'react'
 import { FeedbackSection } from '@/components/feedback-section'
+import { MemoryManagement } from '@/components/memory-management'
 
 const Aurora = dynamic(() => import('@/components/backgrounds/aurora'), {
   ssr: false,
@@ -151,6 +153,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
   const [loadingPreferences, setLoadingPreferences] = useState(false)
   const [mfaEnabled, setMfaEnabled] = useState(false)
   const [mfaMethod, setMfaMethod] = useState<'email' | 'authenticator'>('email')
+  const [memoryEnabled, setMemoryEnabled] = useState(true)
   const [loadingMfa, setLoadingMfa] = useState(false)
   const [showMfaSetup, setShowMfaSetup] = useState(false)
   const [backupCodes, setBackupCodes] = useState<string[]>([])
@@ -170,10 +173,14 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
   useEffect(() => {
     const loadPreferences = async () => {
-      if (!session?.user?.email) return
+      if (!session?.user?.id) return
 
       setLoadingPreferences(true)
       try {
+        // Load memory settings
+        const memorySettings = await fetch('/api/memories/settings').then(res => res.ok ? res.json() : null)
+        setMemoryEnabled(memorySettings?.isEnabled ?? true)
+
         // Load user preferences
         const response = await fetch('/api/user/preferences')
         if (response.ok) {
@@ -223,13 +230,13 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       }
     }
 
-    if (open && session?.user?.email) {
+    if (open && session?.user?.id) {
       loadPreferences()
     }
-  }, [open, session?.user?.email])
+  }, [open, session?.user?.id])
 
   const savePreferences = async (newPreferences: any) => {
-    if (!session?.user?.email) return
+    if (!session?.user?.id) return
 
     try {
       const response = await fetch('/api/user/preferences', {
@@ -259,6 +266,21 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       followUpSuggestions: checked,
       backgroundConfig,
     })
+  }
+
+  const handleMemoryToggle = async (checked: boolean) => {
+    try {
+      setMemoryEnabled(checked)
+      await fetch('/api/memories/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isEnabled: checked })
+      })
+    } catch (error) {
+      console.error('Failed to update memory settings:', error)
+      toast.error('Failed to update memory settings')
+      setMemoryEnabled(!checked) // Revert on error
+    }
   }
 
   const handleBackgroundTypeChange = async (type: BackgroundType) => {
@@ -501,6 +523,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     { id: 'data', label: 'data controls', icon: Archive },
     { id: 'security', label: 'security', icon: Shield },
     { id: 'onboarding', label: 'view tutorial', icon: Zap },
+    { id: 'memories', label: 'memories', icon: Brain },
     { id: 'feedback', label: 'feedback', icon: MessageSquarePlus },
   ]
   const themeOptions = [
@@ -645,22 +668,40 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
               <h3 className="text-lg md:text-xl font-semibold mb-4">general settings</h3>
 
               <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="follow-up" className="text-sm md:text-base">
-                      show follow up suggestions in chats
-                    </Label>
-                    <p className="text-xs md:text-sm text-muted-foreground">
-                      display suggested follow-up questions after AI responses
-                    </p>
+                <div className="space-y-4 p-4 rounded-lg border border-border bg-muted/10">
+                  <h4 className="font-semibold text-base">chat features</h4>
+                  
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-background">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="follow-up-suggestions" className="text-sm md:text-base">
+                        follow-up suggestions
+                      </Label>
+                      <p className="text-xs md:text-sm text-muted-foreground">
+                        get AI-suggested follow-up questions
+                      </p>
+                    </div>
+                    <Switch
+                      id="follow-up-suggestions"
+                      checked={followUpSuggestions}
+                      onCheckedChange={handleFollowUpSuggestionsChange}
+                    />
                   </div>
-                  <Switch
-                    id="follow-up"
-                    checked={followUpSuggestions}
-                    onCheckedChange={handleFollowUpSuggestionsChange}
-                    disabled={loadingPreferences}
-                    className="flex-shrink-0"
-                  />
+
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-background">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="memory-enabled" className="text-sm md:text-base">
+                        memory & context
+                      </Label>
+                      <p className="text-xs md:text-sm text-muted-foreground">
+                        remember conversation details for better context
+                      </p>
+                    </div>
+                    <Switch
+                      id="memory-enabled"
+                      checked={memoryEnabled}
+                      onCheckedChange={handleMemoryToggle}
+                    />
+                  </div>
                 </div>
               </div>
             </div>{' '}
@@ -1507,6 +1548,18 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                 <Zap className="w-4 h-4 mr-2" />
                 start tutorial
               </Button>
+            </div>
+          </div>
+        )
+
+      case 'memories':
+        return (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg md:text-xl font-semibold mb-4">memory management</h3>
+              <div className="border border-border/60 rounded-lg p-4 bg-background">
+                <MemoryManagement />
+              </div>
             </div>
           </div>
         )

@@ -9,6 +9,8 @@ import '@/styles/mobile-fixes.css'
 import '@/styles/reddit-mobile.css'
 import { ThemeProvider } from '@/providers/theme-provider'
 import { SessionProvider } from '@/providers/session-provider'
+import { MemoryProvider } from '@/providers/memory-provider'
+import QueryProvider from '@/providers/query-provider'
 import { MFAGate } from '@/components/mfa-gate'
 import { Toaster } from 'sonner'
 import MobileViewportFix from '@/components/mobile-viewport-fix'
@@ -26,10 +28,13 @@ export const metadata: Metadata = {
   title: 'the everything assistant',
   description: 'your personal agentic AI assistant',
   manifest: '/manifest.json',
-  themeColor: '#000000',
   icons: {
     apple: '/assets/tea-icon.png',
   },
+}
+
+export const viewport = {
+  themeColor: '#000000',
 }
 
 async function getLatestBroadcast() {
@@ -88,7 +93,11 @@ export default async function RootLayout({
             <MobileViewportFix />
             <ScrollToTop />
             {process.env.NODE_ENV === 'development' && <PerformanceMonitor />}
-            <MFAGate>{children}</MFAGate>
+            <QueryProvider>
+              <MemoryProvider>
+                <MFAGate>{children}</MFAGate>
+              </MemoryProvider>
+            </QueryProvider>
             <Toaster
               position="top-right"
               closeButton
@@ -109,7 +118,6 @@ export default async function RootLayout({
                 className: 'sonner-toast',
               }}
             />
-            {/* Render the global broadcast dialog for authenticated users */}
             {session?.user && latestBroadcast && (
               <GlobalBroadcastDialog latestBroadcast={latestBroadcast} />
             )}

@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useRef, useEffect, memo, useCallback } from 'react'
-import { useChat } from '@ai-sdk/react'
+import { useChat, type Message as AIMessage } from '@ai-sdk/react'
+import type { ToolInvocation } from '@ai-sdk/ui-utils'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
+import { useMemory } from '@/contexts/memory-context'
 import { VirtualizedMessages } from '@/components/virtualized-messages'
 import { motion } from 'framer-motion'
 import { FileText, Plus } from 'lucide-react'
@@ -79,8 +81,32 @@ const useViewportHeight = () => {
   return mainRef
 }
 
+import { MemoryWithId } from '@/hooks/use-memories'
+
+interface Message extends AIMessage {
+  metadata?: Record<string, any> & {
+    memory?: boolean
+    importance?: number
+    tags?: string[]
+  }
+}
+
+function memoryToMessage(memory: MemoryWithId): Message {
+  return {
+    id: memory.id,
+    content: memory.content,
+    role: 'system',
+    createdAt: memory.createdAt,
+    metadata: {
+      memory: true,
+      importance: memory.importance,
+      tags: memory.tags,
+    },
+  }
+}
+
 interface ChatInterfaceProps {
-  initialMessages?: any[]
+  initialMessages?: Message[]
   chatId?: string
   autoResume?: boolean
 }
@@ -115,6 +141,7 @@ const PureChatInterface = ({
   const { updateToolResult, clearToolResult } = useVTOP()
   const { rateLimitError, clearRateLimitError, checkForRateLimitError } = useRateLimit()
   const { data: session } = useSession()
+  const memory = useMemory()
   const { showOnboarding, closeOnboarding } = useOnboarding()
 
   const mainRef = useViewportHeight()
@@ -193,80 +220,50 @@ const PureChatInterface = ({
       loadPreferences()
     }
   }, [session?.user?.email])
+  
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!input.trim()) return
+    
+    try {
+      setShowFollowUpSuggestions(false)
+      setLastUserMessage(input)
+      
+      if (!showFullChat) {
+        setShowFullChat(true)
+      }
+      
+      setErrorMessage(null)
+      clearRateLimitError()
+      originalHandleSubmit(e)
+    } catch (error) {
+      console.error('Error submitting message:', error)
+      setErrorMessage('Failed to send message. Please try again.')
+    }
+  }
 
   const {
-    messages,
+    messages = [],
     input,
     handleInputChange,
     handleSubmit: originalHandleSubmit,
     isLoading,
-    setInput,
     error,
-    stop,
     append,
-    setMessages,
     reload,
+    stop,
+    setMessages,
+    setInput,
     experimental_resume,
-    data,
+    data
   } = useChat({
-    fetch: (inputUrl, init) => {
-      if (
-        (!init || init.method === 'GET') &&
-        ((typeof inputUrl === 'string' && inputUrl.startsWith('/api/chat')) ||
-          (inputUrl instanceof Request && inputUrl.url.includes('/api/chat')))
-      ) {
-        try {
-          const url =
-            typeof inputUrl === 'string'
-              ? new URL(inputUrl, window.location.origin)
-              : new URL(inputUrl.url)
-          const chatIdParam = url.searchParams.get('chatId')
-          if (chatIdParam) {
-            return fetch(`/api/chats/${chatIdParam}`, { ...init, method: 'GET' }).then(async r => {
-              if (!r.ok) return r
-              const payload = await r.json()
-              if (payload && Array.isArray(payload.messages)) {
-                let sse = ''
-                for (const m of payload.messages) {
-                  const part = {
-                    type: 'append-message',
-                    message: {
-                      id: m.id,
-                      role: m.role,
-                      content: m.content,
-                      toolInvocations: m.toolInvocations,
-                    },
-                  }
-                  sse += `event: message\ndata: ${JSON.stringify(part)}\n\n`
-                }
-                sse += `event: done\ndata: {}\n\n`
-                return new Response(sse, {
-                  status: 200,
-                  headers: {
-                    'Content-Type': 'text/event-stream; charset=utf-8',
-                    'x-vercel-ai-ui-message-stream': 'v1',
-                  },
-                })
-              }
-              return r
-            })
-          }
-        } catch {}
-      }
-      return fetch(inputUrl as any, init)
-    },
     api: '/api/chat',
-    initialMessages: initialMessages.map(msg => ({
-      id: msg.id,
-      role: msg.role,
-      content: msg.content,
-      toolInvocations: msg.toolInvocations,
-    })),
+    initialMessages: initialMessages,
     body: {
       ...(optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : {}),
       ...(selectedTool ? { preferredTool: selectedTool } : {}),
     },
-    onResponse: res => {
+    onResponse: (res) => {
       if (!showFullChat) setShowFullChat(true)
       setErrorMessage(null)
       clearRateLimitError()

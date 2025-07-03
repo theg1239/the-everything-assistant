@@ -1,4 +1,5 @@
 import { prisma } from './prisma'
+import { sanitizeToolInvocations } from './sanitize-tools'
 
 export interface User {
   id: string
@@ -309,10 +310,17 @@ export async function getMessages(chatId: string): Promise<Message[]> {
         created_at: true,
       },
     })
-    return messages.map(msg => ({
-      ...msg,
-      toolInvocations: msg.tool_invocations ?? undefined,
-    })) as Message[]
+    return messages.map(msg => {
+      let toolInvocations = msg.tool_invocations ?? undefined
+      // Sanitize tool invocations when retrieving to handle any existing unsanitized data
+      if (toolInvocations && Array.isArray(toolInvocations)) {
+        toolInvocations = sanitizeToolInvocations(toolInvocations)
+      }
+      return {
+        ...msg,
+        toolInvocations,
+      }
+    }) as Message[]
   } catch (error) {
     console.error('Error getting messages:', error)
     return []
@@ -329,7 +337,9 @@ export async function saveMessage(
   let safeToolInvocations = undefined
   if (toolInvocations) {
     try {
-      safeToolInvocations = JSON.parse(JSON.stringify(toolInvocations))
+      // Sanitize tool invocations to remove sensitive data before storage
+      const sanitized = sanitizeToolInvocations(Array.isArray(toolInvocations) ? toolInvocations : [toolInvocations])
+      safeToolInvocations = JSON.parse(JSON.stringify(sanitized))
     } catch (e) {
       console.error('Failed to serialize toolInvocations for DB:', e)
       safeToolInvocations = undefined
@@ -643,8 +653,15 @@ export async function getRecentMessagesForUser(
     },
   })
 
-  return messages.map(msg => ({
-    ...msg,
-    toolInvocations: msg.tool_invocations ?? undefined,
-  })) as Message[]
+  return messages.map(msg => {
+    let toolInvocations = msg.tool_invocations ?? undefined
+    // Sanitize tool invocations when retrieving to handle any existing unsanitized data
+    if (toolInvocations && Array.isArray(toolInvocations)) {
+      toolInvocations = sanitizeToolInvocations(toolInvocations)
+    }
+    return {
+      ...msg,
+      toolInvocations,
+    }
+  }) as Message[]
 }

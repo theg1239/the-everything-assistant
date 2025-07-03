@@ -5,7 +5,9 @@ import { VIT_SYSTEM_PROMPT } from '@/lib/prompts'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getChat, createChat, saveMessage, updateChat } from '@/lib/db'
+import { memoryService } from '@/lib/memory/memory-service'
 import { generateChatPath, extractTitleFromContent } from '@/lib/utils'
+import { sanitizeToolInvocations } from '@/lib/sanitize-tools'
 import { z } from 'zod'
 
 export const runtime = 'nodejs'
@@ -307,7 +309,7 @@ export async function POST(req: Request) {
     }
 
     if (directToolCall) {
-      const tools = createVITTools()
+      const tools = createVITTools(session.user.id)
       const tool = tools[directToolCall.toolName as keyof typeof tools]
 
       if (tool && typeof tool.execute === 'function') {
@@ -415,7 +417,33 @@ export async function POST(req: Request) {
       await saveMessage(chat.id, 'user', userMessage.content, undefined, userMessage.id)
     }
 
-    const tools = createVITTools()
+    const memorySettings = await memoryService.getUserMemorySettings(session.user.id)
+    const isMemoryEnabled = memorySettings?.isEnabled ?? true
+    
+    let memoryContext = ''
+    if (isMemoryEnabled && userMessage.role === 'user') {
+      try {
+        const memories = await memoryService.getUserMemories(session.user.id, { pageSize: 100 })
+        
+        if (memories.length > 0) {
+          memoryContext = `
+<memories>
+  <context>Saved information from previous conversations:</context>
+  <memory_list>
+${memories.map((m: { content: string; updatedAt: string | number | Date }) => 
+    `    <memory>
+      <content>${m.content}</content>
+      <last_updated>${new Date(m.updatedAt).toLocaleDateString()}</last_updated>
+    </memory>`
+  ).join('\n')}
+  </memory_list>
+</memories>`
+        }
+      } catch (error) {
+      }
+    }
+
+    const tools = createVITTools(session.user.id)
 
     const toolPreferenceGuidance = preferredTool
       ? `
@@ -430,9 +458,16 @@ IMPORTANT: The user has specifically selected the "${preferredTool}" tool. When 
 If the user's query is relevant to the selected tool "${preferredTool}", use it even if other tools might also be applicable.`
       : ''
 
+    const memoryGuidance = memoryContext && isMemoryEnabled
+      ? `\n\n<memory_context>\n  <instructions>Use the following information to provide more personalized and relevant responses.</instructions>\n  ${memoryContext}\n</memory_context>`
+      : ''
+
     const combinedSystemPrompt = `${VIT_SYSTEM_PROMPT}  
 
-${toolPreferenceGuidance}`
+${toolPreferenceGuidance}${memoryGuidance}`
+
+console.log('Memory stuff:', memoryGuidance)
+
 
     const enhancedMessages = messages.map((message: any) => {
       if (
@@ -490,7 +525,7 @@ ${toolPreferenceGuidance}`
 
     const resultStream = await rateLimitedAI.google.streamText(
       {
-        model: await rateLimitedAI.google.model(),
+        model: await rateLimitedAI.google.model('gemini-2.5-pro'),
         messages: [{ role: 'system', content: combinedSystemPrompt }, ...enhancedMessages],
         tools,
         temperature: 0.7,
@@ -554,7 +589,7 @@ ${toolPreferenceGuidance}`
             }
           }
 
-          const safeInvocations = JSON.parse(JSON.stringify(toolResults))
+          const safeInvocations = sanitizeToolInvocations(toolResults)
           await saveMessage(chat.id, 'assistant', result.text, safeInvocations, result.response.id)
         },
       },

@@ -6,8 +6,10 @@
  * then upserts embeddings into PostgreSQL/pgvector.
  *
  * Usage:
- *   ts-node scripts/seed-rag.ts            # normal seed (append)
- *   ts-node scripts/seed-rag.ts --fresh    # clear vit_rag_chunks and reseed
+ *   ts-node scripts/seed-rag.ts                   # normal seed (append)
+ *   ts-node scripts/seed-rag.ts --fresh           # clear vit_rag_chunks and reseed
+ *   ts-node scripts/seed-rag.ts --chunk 400       # custom chunk size (default 200)
+ *   ts-node scripts/seed-rag.ts --custom "your custom text"   # add a custom chunk
  */
 
 import { getContextForAIPrompt } from '../lib/data/context-integration'
@@ -20,8 +22,40 @@ import { randomUUID } from 'crypto'
 import { rateLimitedAI } from '../lib/rate-limited-ai'
 const { Pool } = pg
 
+async function promptForChunkSize(defaultSize: number): Promise<number> {
+  const readline = await import('readline')
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  })
+
+  return new Promise(resolve => {
+    rl.question(`Enter chunk size (tokens) [default: ${defaultSize}]: `, answer => {
+      rl.close()
+      const parsed = parseInt(answer, 10)
+      resolve(isNaN(parsed) ? defaultSize : parsed)
+    })
+  })
+}
+
 async function main() {
   const fresh = process.argv.includes('--fresh')
+  const chunkArgIndex = process.argv.findIndex(arg => arg === '--chunk')
+  const customArgIndex = process.argv.findIndex(arg => arg === '--custom')
+  let chunkSize = 200
+  let customText: string | null = null
+
+  if (chunkArgIndex !== -1 && process.argv[chunkArgIndex + 1]) {
+    const parsed = parseInt(process.argv[chunkArgIndex + 1], 10)
+    if (!isNaN(parsed)) chunkSize = parsed
+  } else {
+    // Prompt user for chunk size if not provided
+    chunkSize = await promptForChunkSize(chunkSize)
+  }
+
+  if (customArgIndex !== -1 && process.argv[customArgIndex + 1]) {
+    customText = process.argv[customArgIndex + 1]
+  }
 
   if (!process.env.DATABASE_URL2) {
     console.error('ERROR: DATABASE_URL2 env var is required')
@@ -47,6 +81,34 @@ async function main() {
     await pool.query('TRUNCATE vit_rag_chunks;')
   }
 
+  // Insert custom chunk if provided
+  if (customText) {
+    console.log('Inserting custom chunk:', customText)
+    try {
+      const { embedding } = await rateLimitedAI.google.embed({
+        model: { modelId: 'text-embedding-004' },
+        value: customText,
+      })
+      const id = randomUUID()
+      const metadata = {
+        source: 'custom',
+        note: 'Inserted via --custom param',
+        length: customText.length,
+      }
+      await pool.query(
+        `
+        INSERT INTO vit_rag_chunks (id, chunk, metadata, embedding)
+        VALUES ($1, $2, $3::jsonb, $4)
+        ON CONFLICT (id) DO NOTHING
+      `,
+        [id, customText.trim(), JSON.stringify(metadata), '[' + embedding.join(',') + ']']
+      )
+      console.log('✅ Custom chunk inserted.')
+    } catch (err) {
+      console.error('Error inserting custom chunk:', err)
+    }
+  }
+
   const raw =
     getContextForAIPrompt({ includeAll: true, maxLength: 20000 }) +
     '\n\n' +
@@ -56,13 +118,13 @@ async function main() {
 
   const splitter = new RecursiveCharacterTextSplitter({
     separators: ['\n## ', '\n# ', '\n\n', '\n', ' ', ''],
-    chunkSize: 200, // ~200 tokens per chunk
-    chunkOverlap: 40, // 40-token overlap
+    chunkSize,
+    chunkOverlap: 40,
     lengthFunction: text => enc.encode(text).length,
   })
 
   const docs = await splitter.createDocuments([raw])
-  console.log(`Prepared ${docs.length} chunks; generating embeddings…`)
+  console.log(`Prepared ${docs.length} chunks (chunk size: ${chunkSize}); generating embeddings…`)
 
   for (const [idx, doc] of docs.entries()) {
     try {

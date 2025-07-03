@@ -1,7 +1,7 @@
 'use client'
 
 import type React from 'react'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter, usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
@@ -20,6 +20,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/utils'
 import { SettingsDialog } from '@/components/settings-dialog'
+import { useSidebar } from '@/contexts/sidebar-context'
 
 interface Chat {
   id: string
@@ -65,10 +66,29 @@ const overlayVariants = {
   },
 }
 
-export function Sidebar(props: SidebarProps) {
+export const Sidebar = memo(function Sidebar(props: SidebarProps) {
   const { isOpen, onToggle } = props as { isOpen: boolean; onToggle: () => void }
-  const [chats, setChats] = useState<Chat[]>([])
-  const [loading, setLoading] = useState(true)
+  const { 
+    isInitialized, 
+    chats, 
+    setChats, 
+    chatsLoaded, 
+    setChatsLoaded 
+  } = useSidebar()
+  
+  // Use a ref to track if we've ever loaded chats to prevent loading animation on remounts
+  const hasLoadedOnceRef = useRef(chatsLoaded)
+  useEffect(() => {
+    if (chatsLoaded) {
+      hasLoadedOnceRef.current = true
+    }
+  }, [chatsLoaded])
+  
+  // Use the global chat state instead of local state
+  const [loading, setLoading] = useState(() => {
+    // Only show loading if we've never loaded chats before
+    return !hasLoadedOnceRef.current
+  })
   const [loadingMore, setLoadingMore] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
@@ -102,9 +122,55 @@ export function Sidebar(props: SidebarProps) {
     image: session?.user?.image
   }), [session?.user, redactName])
 
+  const fetchChats = useCallback(async (reset: boolean = false, forceLoading: boolean = false) => {
+    try {
+      if (reset) {
+        // Only show loading animation if we've never loaded chats or explicitly forced
+        if (!hasLoadedOnceRef.current || forceLoading) {
+          setLoading(true)
+        }
+        setHasMore(true)
+      } else {
+        setLoadingMore(true)
+      }
+
+      const offset = reset ? 0 : chats.length
+      const response = await fetch(`/api/chats?limit=15&offset=${offset}`)
+
+      if (response.ok) {
+        const data = await response.json()
+
+        if (reset) {
+          setChats(data)
+          setChatsLoaded(true)
+          hasLoadedOnceRef.current = true
+        } else {
+          setChats(prevChats => {
+            const existingIds = new Set(prevChats.map(chat => chat.id))
+            const newChats = data.filter((chat: Chat) => !existingIds.has(chat.id))
+            return [...prevChats, ...newChats]
+          })
+        }
+
+        if (data.length < 15) {
+          setHasMore(false)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching chats:', error)
+    } finally {
+      setLoading(false)
+      setLoadingMore(false)
+      setIsLoadingMore(false)
+    }
+  }, [chats.length, setChats, setChatsLoaded])
+
   useEffect(() => {
-    fetchChats(true) // Reset and fetch initial chats
-  }, [])
+    // Only fetch chats if they haven't been loaded yet
+    if (!chatsLoaded) {
+      fetchChats(true) // Reset and fetch initial chats
+    }
+  }, [chatsLoaded, fetchChats])
 
   useEffect(() => {
     const match = pathname.match(/\/chat\/(.+)$/)
@@ -126,7 +192,7 @@ export function Sidebar(props: SidebarProps) {
     return () => {
       window.removeEventListener('newChatCreated', handleNewChat as EventListener)
     }
-  }, [])
+  }, [setChats])
 
   useEffect(() => {
     const handleChatTitleUpdate = (event: CustomEvent) => {
@@ -142,11 +208,11 @@ export function Sidebar(props: SidebarProps) {
     return () => {
       window.removeEventListener('chatTitleUpdated', handleChatTitleUpdate as EventListener)
     }
-  }, [])
+  }, [setChats])
 
   useEffect(() => {
-    const handleChatsDeleted = () => fetchChats(true)
-    const handleChatsArchived = () => fetchChats(true)
+    const handleChatsDeleted = () => fetchChats(true, true) // Force loading for explicit user actions
+    const handleChatsArchived = () => fetchChats(true, true) // Force loading for explicit user actions
 
     window.addEventListener('chatsDeleted', handleChatsDeleted)
     window.addEventListener('chatsArchived', handleChatsArchived)
@@ -155,45 +221,7 @@ export function Sidebar(props: SidebarProps) {
       window.removeEventListener('chatsDeleted', handleChatsDeleted)
       window.removeEventListener('chatsArchived', handleChatsArchived)
     }
-  }, [])
-
-  const fetchChats = useCallback(async (reset: boolean = false) => {
-    try {
-      if (reset) {
-        setLoading(true)
-        setHasMore(true)
-      } else {
-        setLoadingMore(true)
-      }
-
-      const offset = reset ? 0 : chats.length
-      const response = await fetch(`/api/chats?limit=15&offset=${offset}`)
-
-      if (response.ok) {
-        const data = await response.json()
-
-        if (reset) {
-          setChats(data)
-        } else {
-          setChats(prevChats => {
-            const existingIds = new Set(prevChats.map(chat => chat.id))
-            const newChats = data.filter((chat: Chat) => !existingIds.has(chat.id))
-            return [...prevChats, ...newChats]
-          })
-        }
-
-        if (data.length < 15) {
-          setHasMore(false)
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching chats:', error)
-    } finally {
-      setLoading(false)
-      setLoadingMore(false)
-      setIsLoadingMore(false)
-    }
-  }, [chats.length])
+  }, [fetchChats])
 
   const loadMoreChats = useCallback(() => {
     if (!loadingMore && !isLoadingMore && hasMore) {
@@ -259,7 +287,7 @@ export function Sidebar(props: SidebarProps) {
     } catch (error) {
       console.error('Error deleting chat:', error)
     }
-  }, [pathname, router])
+  }, [pathname, router, setChats])
 
   const startNewChat = useCallback(() => {
     const tempId = `temp-${Date.now()}`
@@ -275,18 +303,16 @@ export function Sidebar(props: SidebarProps) {
     ])
     setSelectedChatId(tempId)
     router.push('/')
-    if (window.innerWidth < 768) {
-      onToggle()
-    }
-  }, [router, onToggle])
+    // Don't auto-close sidebar on mobile to avoid unnecessary re-renders
+    // Users can manually close it if needed
+  }, [router, setChats])
 
   const handleChatClick = useCallback((chatId: string) => {
     setSelectedChatId(chatId)
     router.replace(`/chat/${chatId}`)
-    if (window.innerWidth < 768) {
-      onToggle()
-    }
-  }, [router, onToggle])
+    // Don't auto-close sidebar on mobile to avoid unnecessary re-renders
+    // Users can manually close it if needed
+  }, [router])
 
   // Optimize overlay click handler
   const handleOverlayClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
@@ -297,10 +323,11 @@ export function Sidebar(props: SidebarProps) {
 
   // Create the sidebar content with optimized styles
   const sidebarContent = (
-    <AnimatePresence mode="wait">
+    <AnimatePresence mode="sync">
       {isOpen && (
         <>
           <motion.div
+            key="overlay"
             variants={overlayVariants}
             initial="closed"
             animate="open"
@@ -315,6 +342,7 @@ export function Sidebar(props: SidebarProps) {
           />
 
           <motion.div
+            key="sidebar"
             variants={sidebarVariants}
             initial="closed"
             animate="open"
@@ -541,4 +569,8 @@ export function Sidebar(props: SidebarProps) {
       />
     </>
   )
-}
+}, (prevProps, nextProps) => {
+  // Only re-render if isOpen changes - ignore all other props
+  return prevProps.isOpen === nextProps.isOpen && 
+         prevProps.onToggle === nextProps.onToggle
+})

@@ -187,6 +187,19 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     }
 
     if (result.requiresCredentials === true) {
+      // Auto-trigger login if credentials exist
+      React.useEffect(() => {
+        if (hasVTOPCredentials()) {
+          const triggerEvent = new CustomEvent('vtopLoginTrigger', {
+            detail: {
+              command: result.command || 'attendance',
+              toolCallId: toolCallId,
+            },
+          })
+          window.dispatchEvent(triggerEvent)
+        }
+      }, [result.command, toolCallId])
+      
       return null
     }
 

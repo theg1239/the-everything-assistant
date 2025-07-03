@@ -7,7 +7,6 @@ import ReactMarkdown from 'react-markdown'
 import { ToolCallDisplay } from './tool-call-display'
 import { MessageActions } from './message-actions'
 import { memo } from 'react'
-import { useVTOP } from '../contexts/vtop-context'
 import rehypeRaw from 'rehype-raw'
 
 interface MessageBubbleProps {
@@ -29,7 +28,6 @@ const PureMessageBubble = ({
   maximizedItem,
   setMaximizedItem,
 }: MessageBubbleProps) => {
-  const { version } = useVTOP()
   const isUser = message.role === 'user'
 
   if (
@@ -41,8 +39,6 @@ const PureMessageBubble = ({
   ) {
     return null
   }
-
-  const hasVTOPCalls = message.toolInvocations?.some((tool: any) => tool.toolName === 'queryVTOP')
 
   return (
     <motion.div
@@ -72,9 +68,7 @@ const PureMessageBubble = ({
             )
             return visibleToolCalls && visibleToolCalls.length > 0 ? (
               <ToolCallDisplay
-                key={
-                  hasVTOPCalls ? `tool-calls-${message.id}-${version}` : `tool-calls-${message.id}`
-                }
+                key={`tool-calls-${message.id}`}
                 toolCalls={visibleToolCalls}
                 onLoginClick={onLoginClick}
                 onPlacementSearch={onPlacementSearch}

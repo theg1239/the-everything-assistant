@@ -15,7 +15,6 @@ import { SuggestedQuestions } from '@/components/suggested-questions'
 import { FollowUpSuggestions } from '@/components/follow-up-suggestions'
 import { ChatHeader } from '@/components/chat-header'
 import { MultimodalInput } from '@/components/multimodal-input'
-import { Sidebar } from '@/components/sidebar'
 import { Canvas } from '@/components/canvas'
 import { extractTitleFromContent } from '@/lib/utils'
 import ResearchPreviewModal from '@/components/research-preview-modal'
@@ -30,6 +29,7 @@ import ScrollToTopButton from '@/components/scroll-to-top-button'
 import { cn } from '@/lib/utils'
 import { useThrottle } from '@/hooks/use-debounce'
 import { useAutoResume } from '@/hooks/use-auto-resume'
+import { useSidebar } from '@/contexts/sidebar-context'
 
 const useViewportHeight = () => {
   const mainRef = useRef<HTMLDivElement>(null)
@@ -111,13 +111,14 @@ interface ChatInterfaceProps {
   autoResume?: boolean
 }
 
-const PureChatInterface = ({
+const PureChatInterface = memo(({
   initialMessages = [],
   chatId,
   autoResume = false,
 }: ChatInterfaceProps) => {
   const [showFullChat, setShowFullChat] = useState(initialMessages.length > 0)
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  // Use the global sidebar context instead of local state
+  const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebar()
   const [canvasOpen, setCanvasOpen] = useState(false)
   const [canvasContent, setCanvasContent] = useState<string>('')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -183,16 +184,6 @@ const PureChatInterface = ({
       }
     }
   }, [isMobile, isZoomed])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const saved = localStorage.getItem('sidebarOpen')
-    if (saved !== null) setSidebarOpen(saved === 'true')
-  }, [])
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    localStorage.setItem('sidebarOpen', String(sidebarOpen))
-  }, [sidebarOpen])
 
   useEffect(() => {
     currentChatIdRef.current = optimisticChatId || chatId
@@ -715,13 +706,12 @@ const PureChatInterface = ({
       >
         <ResearchPreviewModal />
         <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
-        <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />{' '}
         <div className="flex flex-col h-[100dvh] bg-transparent text-foreground relative overflow-hidden mobile-viewport-fix">
           <div className="relative z-10 flex flex-col h-full">
             <header className="flex-shrink-0 sticky top-0 z-40">
               <div className="flex h-14 items-center px-4 gap-2">
                 <HamburgerButton
-                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  onClick={toggleSidebar}
                   className="md:hidden"
                 />
               </div>
@@ -796,7 +786,6 @@ const PureChatInterface = ({
     >
       <ResearchPreviewModal />
       <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
-      <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(!sidebarOpen)} />
       <Canvas
         isOpen={canvasOpen}
         onClose={() => {
@@ -830,7 +819,7 @@ const PureChatInterface = ({
           )}
         >
           <div className="flex h-14 items-center px-4 gap-2">
-            <HamburgerButton onClick={() => setSidebarOpen(!sidebarOpen)} className="md:block" />
+            <HamburgerButton onClick={toggleSidebar} className="md:block" />
             <Button
               variant="ghost"
               onClick={() => {
@@ -963,7 +952,7 @@ const PureChatInterface = ({
       </div>
     </VTOPToolHandler>
   )
-}
+})
 
 export const ChatInterface = memo(
   ({ initialMessages = [], chatId, autoResume = true }: ChatInterfaceProps) => {
@@ -977,6 +966,18 @@ export const ChatInterface = memo(
           />
         </VTOPProvider>
       </RateLimitProvider>
+    )
+  },
+  (prevProps, nextProps) => {
+    // Custom comparison to reduce unnecessary re-renders
+    return (
+      prevProps.chatId === nextProps.chatId &&
+      prevProps.autoResume === nextProps.autoResume &&
+      prevProps.initialMessages?.length === nextProps.initialMessages?.length &&
+      // Only compare message IDs to avoid deep equality checks
+      (prevProps.initialMessages?.every((msg, index) => 
+        msg.id === nextProps.initialMessages?.[index]?.id
+      ) ?? true)
     )
   }
 )

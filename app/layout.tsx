@@ -10,6 +10,7 @@ import '@/styles/reddit-mobile.css'
 import { ThemeProvider } from '@/providers/theme-provider'
 import { SessionProvider } from '@/providers/session-provider'
 import { MemoryProvider } from '@/providers/memory-provider'
+import { SidebarProvider } from '@/contexts/sidebar-context'
 import QueryProvider from '@/providers/query-provider'
 import { MFAGate } from '@/components/mfa-gate'
 import { Toaster } from 'sonner'
@@ -21,6 +22,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { GlobalBroadcastDialog } from '@/components/global-broadcast-dialog'
 import { PWAInstallDialog } from '@/components/pwa-install-dialog'
+import { SidebarWrapper } from '@/components/sidebar-wrapper'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -95,7 +97,10 @@ export default async function RootLayout({
             {process.env.NODE_ENV === 'development' && <PerformanceMonitor />}
             <QueryProvider>
               <MemoryProvider>
-                <MFAGate>{children}</MFAGate>
+                <SidebarProvider>
+                  <SidebarWrapper />
+                  <MFAGate>{children}</MFAGate>
+                </SidebarProvider>
               </MemoryProvider>
             </QueryProvider>
             <Toaster

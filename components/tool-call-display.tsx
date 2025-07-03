@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo } from 'react'
+import React, { memo, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Loader2,
@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { ArtifactDisplay, type ArtifactDisplayProps } from './artifact-display'
 import { useVTOP } from '../contexts/vtop-context'
 import { useMediaQuery } from '@/hooks/use-media-query'
+import { hasVTOPCredentials, getFormattedVTOPCredentials } from '@/lib/vtop-credentials'
 
 interface ToolCallDisplayProps {
   toolCalls: any[]
@@ -30,6 +31,7 @@ interface ToolCallDisplayProps {
   onPlacementSearch?: (company: string) => void
   maximizedItem?: any
   setMaximizedItem?: (item: any) => void
+  attemptedAutoRetries?: Set<string>
 }
 
 const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) => {
@@ -660,12 +662,14 @@ const ToolCallResultsSummary = ({
   onPlacementSearch,
   maximizedItem,
   setMaximizedItem,
+  attemptedAutoRetries,
 }: {
   toolCalls: any[]
   onLoginClick?: () => void
   onPlacementSearch?: (company: string) => void
   maximizedItem?: any
   setMaximizedItem?: (item: any) => void
+  attemptedAutoRetries?: Set<string>
 }) => {
   const [companySearch, setCompanySearch] = React.useState('')
 
@@ -860,6 +864,32 @@ const ToolCallResultsSummary = ({
         return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ')
       }
 
+      if (hasVTOPCredentials()) {
+        const hasAttempted = attemptedAutoRetries?.has(tool.toolCallId || '') || false
+        
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3">
+            <Card className="w-full overflow-hidden border-blue-500/20 bg-blue-500/5">
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center space-x-3">
+                  <div className="relative">
+                    <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-foreground truncate">
+                      {hasAttempted ? 'Authenticating with VTOP' : 'Preparing VTOP Authentication'}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                      Using your linked credentials to access {formatCommandName(command)} data
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )
+      }
+
       return (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3">
           <Card className="w-full overflow-hidden border-blue-500/20 bg-blue-500/5">
@@ -981,7 +1011,7 @@ const PureToolCallDisplay = ({
   setMaximizedItem,
 }: ToolCallDisplayProps) => {
   const { getToolResult, version } = useVTOP()
-
+  
   const filteredToolCalls = (() => {
     const map = new Map<string, any>()
     for (const tc of toolCalls) {
@@ -1073,4 +1103,139 @@ const PureToolCallDisplay = ({
   )
 }
 
-export const ToolCallDisplay = memo(PureToolCallDisplay)
+export const ToolCallDisplay = memo(function ToolCallDisplay({
+  toolCalls,
+  onLoginClick,
+  onPlacementSearch,
+  maximizedItem,
+  setMaximizedItem,
+}: ToolCallDisplayProps) {
+  const isMobile = useMediaQuery('(max-width: 768px)')
+  const { getToolResult, version } = useVTOP()
+
+  const [attemptedAutoRetries, setAttemptedAutoRetries] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (!hasVTOPCredentials()) return
+
+    const vtopCredentialTools = toolCalls.filter(
+      tool =>
+        tool.toolName === 'queryVTOP' && 
+        tool.result && 
+        tool.result.requiresCredentials === true &&
+        !tool.result.data &&
+        !tool.result.output &&
+        !attemptedAutoRetries.has(tool.toolCallId || '')
+    )
+
+    if (vtopCredentialTools.length > 0) {
+      const tool = vtopCredentialTools[0]
+      const command = tool.result.command || tool.args?.command || 'data'
+      
+      setAttemptedAutoRetries(prev => new Set([...prev, tool.toolCallId || '']))
+      
+      setTimeout(() => {
+        const triggerEvent = new CustomEvent('vtopLoginTrigger', {
+          detail: {
+            command,
+            toolCallId: tool.toolCallId,
+          },
+        })
+        window.dispatchEvent(triggerEvent)
+      }, 500)
+    }
+  }, [toolCalls, attemptedAutoRetries])
+
+  const filteredToolCalls = (() => {
+    const map = new Map<string, any>()
+    for (const tc of toolCalls) {
+      if (tc.toolName === 'knowledgeBase' || tc.toolName === 'saveMemory' || (tc.result && tc.result.hidden)) {
+        continue
+      }
+      const key = `${tc.toolName}-${tc.toolCallId || tc.id || ''}`
+      const existing = map.get(key)
+      if (!existing || (tc.result && !existing.result)) {
+        map.set(key, tc)
+      }
+    }
+    return Array.from(map.values())
+  })()
+
+  const enrichedToolCalls = filteredToolCalls.map(tool => {
+    if (tool.toolName === 'queryVTOP' && tool.toolCallId) {
+      const contextResult = getToolResult(tool.toolCallId)
+      if (contextResult && contextResult.result) {
+        return {
+          ...tool,
+          result: contextResult.result,
+          state: 'result',
+        }
+      }
+      if (tool.result && !contextResult) {
+        return {
+          ...tool,
+          result: undefined,
+          state: 'call',
+        }
+      }
+    }
+    return tool
+  })
+
+  const allCompleted = enrichedToolCalls.every(toolCall => {
+    if (!toolCall.result) {
+      return false
+    }
+
+    if (toolCall.toolName === 'queryVTOP') {
+      const isCredentialRequired =
+        toolCall.result.requiresCredentials === true ||
+        (toolCall.result.error &&
+          (toolCall.result.error.includes('VTOP credentials required') ||
+            toolCall.result.error.includes('credentials') ||
+            toolCall.result.error.includes('Invalid LoginId/Password') ||
+            toolCall.result.error.includes('Login failed')))
+
+      if (isCredentialRequired) {
+        return true
+      }
+
+      return (
+        toolCall.result &&
+        toolCall.state === 'result' &&
+        (toolCall.result.data || toolCall.result.output || toolCall.result.error)
+      )
+    }
+
+    if (
+      toolCall.toolName === 'searchRedditKnowledge' ||
+      toolCall.toolName === 'searchRedditWithContext'
+    ) {
+      return toolCall.result && (toolCall.result.success || toolCall.result.error)
+    }
+
+    const hasValidResult =
+      toolCall.result &&
+      !toolCall.result.requiresCredentials &&
+      (toolCall.state === 'result' || toolCall.type === 'tool-result')
+
+    return hasValidResult
+  })
+
+  if (!allCompleted && enrichedToolCalls.length > 0) {
+    return <ToolCallLoadingState toolCalls={enrichedToolCalls} />
+  }
+
+  if (enrichedToolCalls.length === 0) return null
+
+  return (
+    <ToolCallResultsSummary
+      toolCalls={enrichedToolCalls}
+      onLoginClick={onLoginClick}
+      onPlacementSearch={onPlacementSearch}
+      maximizedItem={maximizedItem}
+      setMaximizedItem={setMaximizedItem}
+      attemptedAutoRetries={attemptedAutoRetries}
+    />
+  )
+})

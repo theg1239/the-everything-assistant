@@ -145,7 +145,7 @@ function generateQuestionsByCategory(): { [key: string]: string[] } {
       'show me facility booking details',
       'what classes do i have on thursday?',
       'when is my next exam?',
-      'how much attendance do i need for chemistry?',
+      'how much attendance do i need for my classes',
       'show me my grades',
       "what's my last class tomorrow",
     ],

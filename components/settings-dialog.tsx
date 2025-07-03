@@ -42,6 +42,7 @@ import dynamic from 'next/dynamic'
 import { useMemo } from 'react'
 import { FeedbackSection } from '@/components/feedback-section'
 import { MemoryManagement } from '@/components/memory-management'
+import { VTOPSettings } from '@/components/vtop-settings'
 
 const Aurora = dynamic(() => import('@/components/backgrounds/aurora'), {
   ssr: false,
@@ -520,6 +521,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     { id: 'personalization', label: 'personalization', icon: User },
     // { id: 'appearance', label: 'appearance', icon: Palette },
     // { id: 'language', label: 'language', icon: Globe },
+    { id: 'vtop', label: 'VTOP integration', icon: Key },
     { id: 'data', label: 'data controls', icon: Archive },
     { id: 'security', label: 'security', icon: Shield },
     { id: 'onboarding', label: 'view tutorial', icon: Zap },
@@ -1560,6 +1562,15 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
               <div className="border border-border/60 rounded-lg p-4 bg-background">
                 <MemoryManagement />
               </div>
+            </div>
+          </div>
+        )
+
+      case 'vtop':
+        return (
+          <div className="space-y-6">
+            <div>
+              <VTOPSettings />
             </div>
           </div>
         )

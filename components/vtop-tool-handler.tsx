@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { VTOPCredentialsDialog } from './vtop-credentials-dialog'
+import { hasVTOPCredentials, getFormattedVTOPCredentials } from '@/lib/vtop-credentials'
 
 interface VTOPToolHandlerProps {
   children: React.ReactNode
@@ -25,6 +26,32 @@ export function VTOPToolHandler({
     const handleVTOPLoginTrigger = (event: CustomEvent) => {
       const { command: triggerCommand, toolCallId: triggerToolCallId } = event.detail
 
+      // First check if we have saved credentials and can auto-login
+      if (hasVTOPCredentials()) {
+        const savedCredentials = getFormattedVTOPCredentials()
+        if (savedCredentials && onCredentialsSubmit) {
+          // Find the relevant tool call
+          let vtopToolCall = null
+          if (triggerToolCallId) {
+            vtopToolCall = toolInvocations?.find(tool => tool.toolCallId === triggerToolCallId)
+          }
+          
+          if (!vtopToolCall) {
+            vtopToolCall = {
+              toolName: 'queryVTOP',
+              args: { command: triggerCommand || 'attendance' },
+              result: { requiresCredentials: true, command: triggerCommand || 'attendance' },
+              toolCallId: triggerToolCallId || Date.now().toString(),
+            }
+          }
+
+          // Auto-submit with saved credentials
+          onCredentialsSubmit(savedCredentials, vtopToolCall)
+          return
+        }
+      }
+
+      // Fallback to manual credential entry
       let vtopToolCall = null
 
       if (triggerToolCallId) {
@@ -48,7 +75,6 @@ export function VTOPToolHandler({
       }
 
       if (vtopToolCall) {
-        //console.log('Found VTOP tool call that needs credentials:', vtopToolCall)
         setCommand(
           vtopToolCall.result.command ||
             vtopToolCall.args?.command ||
@@ -58,7 +84,6 @@ export function VTOPToolHandler({
         setPendingToolCall(vtopToolCall)
         setShowCredentialsDialog(true)
       } else {
-        //console.log('No VTOP tool call found, creating new one')
         setCommand(triggerCommand || 'attendance')
         setPendingToolCall({
           toolName: 'queryVTOP',
@@ -74,7 +99,7 @@ export function VTOPToolHandler({
     return () => {
       window.removeEventListener('vtopLoginTrigger', handleVTOPLoginTrigger as EventListener)
     }
-  }, [toolInvocations])
+  }, [toolInvocations, onCredentialsSubmit])
   useEffect(() => {
     if (toolInvocations) {
       // disable automatic credential detection - we now rely on manual button clicks

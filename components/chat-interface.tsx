@@ -260,18 +260,19 @@ const PureChatInterface = memo(({
       clearRateLimitError()
       const newId = res.headers.get('X-Chat-Id')
       const newPath = res.headers.get('X-Chat-Path')
-      if (newId && newPath && !chatId && !chatCreatedEventDispatched) {
+      if (newId && !chatId && !chatCreatedEventDispatched) {
         setOptimisticChatId(newId)
         currentChatIdRef.current = newId
         setChatCreatedEventDispatched(true)
-        router.push(newPath)
-        window.history.replaceState({}, '', newPath)
+        const chatPath = `/chat/${newId}`
+        router.push(chatPath)
+        window.history.replaceState({}, '', chatPath)
         window.dispatchEvent(
           new CustomEvent('newChatCreated', {
             detail: {
               id: newId,
               title: extractTitleFromContent(messages[0]?.content || 'New Chat'),
-              path: newPath,
+              path: chatPath,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
             },

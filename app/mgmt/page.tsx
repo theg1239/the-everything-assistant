@@ -23,12 +23,17 @@ import {
   Eye,
   EyeOff,
   Loader2,
+  Edit,
+  History,
+  Calendar,
+  X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Plus, Send, Trash2 } from 'lucide-react'
+import { BroadcastDialog } from '@/components/broadcast-dialog'
 
 interface RateLimitStatus {
   status: string
@@ -102,6 +107,19 @@ interface Stats {
   }[]
 }
 
+interface BroadcastSlide {
+  title: string
+  text: string
+  image: string
+}
+
+interface PastBroadcast {
+  id: string
+  slides: BroadcastSlide[]
+  timestamp: string
+  sentBy: string
+}
+
 export default function ManagementPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -113,6 +131,12 @@ export default function ManagementPage() {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [showSensitiveData, setShowSensitiveData] = useState(false)
   const [broadcastSlides, setBroadcastSlides] = useState([{ title: '', text: '', image: '' }])
+  const [pastBroadcasts, setPastBroadcasts] = useState<PastBroadcast[]>([])
+  const [editingBroadcast, setEditingBroadcast] = useState<string | null>(null)
+  const [editSlides, setEditSlides] = useState<BroadcastSlide[]>([])
+  const [loadingBroadcasts, setLoadingBroadcasts] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+  const [showEditPreview, setShowEditPreview] = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -145,13 +169,33 @@ export default function ManagementPage() {
     }
   }, [])
 
+  const fetchPastBroadcasts = useCallback(async () => {
+    setLoadingBroadcasts(true)
+    try {
+      const res = await fetch('/api/broadcast')
+      if (!res.ok) {
+        const json = await res.json()
+        throw new Error(json.error || 'Failed to fetch past broadcasts')
+      }
+      const data = await res.json()
+      setPastBroadcasts(data.broadcasts || [])
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to fetch past broadcasts')
+    } finally {
+      setLoadingBroadcasts(false)
+    }
+  }, [])
+
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login?callbackUrl=%2Fmgmt')
       return
     }
-    if (status === 'authenticated') fetchData()
-  }, [status, router, fetchData])
+    if (status === 'authenticated') {
+      fetchData()
+      fetchPastBroadcasts()
+    }
+  }, [status, router, fetchData, fetchPastBroadcasts])
 
   useEffect(() => {
     if (!autoRefresh) return
@@ -188,10 +232,80 @@ export default function ManagementPage() {
       if (!res.ok) throw new Error(json.error || 'Broadcast failed')
       toast.success(json.message)
       setBroadcastSlides([{ title: '', text: '', image: '' }]) // Reset form
+      fetchPastBroadcasts() // Refresh past broadcasts
     } catch (err: any) {
       toast.error(err.message || 'Broadcast failed')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleEditBroadcast = (broadcast: PastBroadcast) => {
+    setEditingBroadcast(broadcast.id)
+    setEditSlides([...broadcast.slides])
+  }
+
+  const handleSaveEditedBroadcast = async () => {
+    if (!editingBroadcast) return
+    setLoading(true)
+    try {
+      const res = await fetch('/api/broadcast', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          id: editingBroadcast,
+          slides: editSlides 
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Failed to update broadcast')
+      toast.success('Broadcast updated successfully')
+      setEditingBroadcast(null)
+      setEditSlides([])
+      fetchPastBroadcasts() // Refresh past broadcasts
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update broadcast')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteBroadcast = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this broadcast? This action cannot be undone.')) {
+      return
+    }
+    setLoading(true)
+    try {
+      const res = await fetch('/api/broadcast', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Failed to delete broadcast')
+      toast.success('Broadcast deleted successfully')
+      fetchPastBroadcasts() // Refresh past broadcasts
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete broadcast')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleEditSlideChange = (index: number, field: string, value: string) => {
+    const newSlides = [...editSlides]
+    newSlides[index] = { ...newSlides[index], [field]: value }
+    setEditSlides(newSlides)
+  }
+
+  const addEditSlide = () => {
+    setEditSlides([...editSlides, { title: '', text: '', image: '' }])
+  }
+
+  const removeEditSlide = (index: number) => {
+    if (editSlides.length > 1) {
+      const newSlides = editSlides.filter((_, i) => i !== index)
+      setEditSlides(newSlides)
     }
   }
 
@@ -456,9 +570,19 @@ export default function ManagementPage() {
                     </div>
 
                     <div className="mt-4 flex justify-between items-center">
-                      <Button variant="outline" onClick={addSlide} className="gap-2">
-                        <Plus className="w-4 h-4" /> Add Slide
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button variant="outline" onClick={addSlide} className="gap-2">
+                          <Plus className="w-4 h-4" /> Add Slide
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => setShowPreview(true)}
+                          className="gap-2"
+                          disabled={!broadcastSlides.some(slide => slide.title.trim() || slide.text.trim() || slide.image.trim())}
+                        >
+                          <Eye className="w-4 h-4" /> Preview
+                        </Button>
+                      </div>
                       <Button
                         onClick={handleSendBroadcast}
                         disabled={loading}
@@ -470,12 +594,214 @@ export default function ManagementPage() {
                   </div>
                 </motion.div>
 
+                {/* Past Broadcasts Management */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.25 }}
+                >
+                  <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
+                    <div className="flex flex-col space-y-1.5 mb-6">
+                      <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
+                        <History className="w-5 h-5" /> Past Broadcasts
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        View, edit, and manage previously sent broadcasts
+                      </div>
+                    </div>
+
+                    {loadingBroadcasts ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          Loading past broadcasts...
+                        </div>
+                      </div>
+                    ) : pastBroadcasts.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        No past broadcasts found.
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {pastBroadcasts.map((broadcast) => (
+                          <div
+                            key={broadcast.id}
+                            className="border border-border/20 rounded-lg bg-black/20 p-4"
+                          >
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Calendar className="w-4 h-4 text-blue-500" />
+                                  <span className="text-sm font-medium">
+                                    {new Date(broadcast.timestamp).toLocaleString()}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  Sent by: {broadcast.sentBy}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleEditBroadcast(broadcast)}
+                                  disabled={editingBroadcast === broadcast.id}
+                                  className="gap-1"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                  Edit
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteBroadcast(broadcast.id)}
+                                  disabled={loading}
+                                  className="gap-1 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Delete
+                                </Button>
+                              </div>
+                            </div>
+
+                            {editingBroadcast === broadcast.id ? (
+                              <div className="space-y-4 mt-4">
+                                <div className="text-sm font-medium text-yellow-400 mb-2">
+                                  Editing broadcast slides:
+                                </div>
+                                {editSlides.map((slide, index) => (
+                                  <div
+                                    key={index}
+                                    className="p-3 rounded-lg bg-slate-800/50 border border-slate-700 relative space-y-3"
+                                  >
+                                    <h5 className="font-medium text-sm">Edit Slide {index + 1}</h5>
+                                    <input
+                                      type="text"
+                                      placeholder="Title"
+                                      value={slide.title}
+                                      onChange={(e) => handleEditSlideChange(index, 'title', e.target.value)}
+                                      className="w-full bg-slate-900/50 border border-slate-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <textarea
+                                      placeholder="Text content"
+                                      value={slide.text}
+                                      onChange={(e) => handleEditSlideChange(index, 'text', e.target.value)}
+                                      className="w-full bg-slate-900/50 border border-slate-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[60px]"
+                                    />
+                                    <input
+                                      type="text"
+                                      placeholder="Image URL"
+                                      value={slide.image}
+                                      onChange={(e) => handleEditSlideChange(index, 'image', e.target.value)}
+                                      className="w-full bg-slate-900/50 border border-slate-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    {editSlides.length > 1 && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => removeEditSlide(index)}
+                                        className="absolute top-2 right-2 w-6 h-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                ))}
+                                <div className="flex justify-between items-center pt-2">
+                                  <div className="flex gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={addEditSlide}
+                                      className="gap-1"
+                                    >
+                                      <Plus className="w-4 h-4" />
+                                      Add Slide
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setShowEditPreview(true)}
+                                      className="gap-1"
+                                      disabled={!editSlides.some(slide => slide.title.trim() || slide.text.trim() || slide.image.trim())}
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                      Preview
+                                    </Button>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        setEditingBroadcast(null)
+                                        setEditSlides([])
+                                      }}
+                                      disabled={loading}
+                                    >
+                                      Cancel
+                                    </Button>
+                                    <Button
+                                      onClick={handleSaveEditedBroadcast}
+                                      disabled={loading}
+                                      size="sm"
+                                      className="gap-1"
+                                    >
+                                      {loading ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                      ) : (
+                                        <CheckCircle className="w-4 h-4" />
+                                      )}
+                                      Save Changes
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                <div className="text-sm font-medium text-blue-400 mb-2">
+                                  Broadcast slides ({broadcast.slides.length}):
+                                </div>
+                                {broadcast.slides.map((slide, index) => (
+                                  <div
+                                    key={index}
+                                    className="p-3 rounded-lg bg-slate-800/30 border border-slate-700/50"
+                                  >
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-medium text-muted-foreground">
+                                        Slide {index + 1}
+                                      </span>
+                                    </div>
+                                    {slide.title && (
+                                      <div className="font-medium text-sm mb-1">{slide.title}</div>
+                                    )}
+                                    {slide.text && (
+                                      <div className="text-sm text-muted-foreground mb-2">
+                                        {slide.text}
+                                      </div>
+                                    )}
+                                    {slide.image && (
+                                      <div className="text-xs text-blue-400 truncate">
+                                        Image: {slide.image}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+
                 {/* System Statistics */}
                 {stats && (
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.15 }}
+                    transition={{ delay: 0.3 }}
                   >
                     <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
                       <div className="flex flex-col space-y-1.5 mb-6">
@@ -530,7 +856,7 @@ export default function ManagementPage() {
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
+                  transition={{ delay: 0.35 }}
                 >
                   <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
                     <div className="flex flex-col space-y-1.5 mb-6">
@@ -714,7 +1040,7 @@ export default function ManagementPage() {
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
+                  transition={{ delay: 0.4 }}
                 >
                   <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
                     <div className="flex flex-col space-y-1.5 mb-6">
@@ -761,7 +1087,7 @@ export default function ManagementPage() {
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
+                  transition={{ delay: 0.45 }}
                 >
                   <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
                     <div className="flex flex-col space-y-1.5 mb-6">
@@ -797,6 +1123,31 @@ export default function ManagementPage() {
           </div>
         </div>
       </div>
+
+      {/* Preview Modals */}
+      <BroadcastDialog
+        isOpen={showPreview}
+        onClose={() => setShowPreview(false)}
+        payload={{ 
+          slides: broadcastSlides
+            .filter(slide => slide.title.trim() || slide.text.trim() || slide.image.trim())
+            .length > 0 
+            ? broadcastSlides.filter(slide => slide.title.trim() || slide.text.trim() || slide.image.trim())
+            : [{ title: 'Preview', text: 'No content to preview yet. Add a title, text, or image to see the preview.', image: '/onboarding-artwork/artwork1.png' }]
+        }}
+      />
+      
+      <BroadcastDialog
+        isOpen={showEditPreview}
+        onClose={() => setShowEditPreview(false)}
+        payload={{ 
+          slides: editSlides
+            .filter(slide => slide.title.trim() || slide.text.trim() || slide.image.trim())
+            .length > 0 
+            ? editSlides.filter(slide => slide.title.trim() || slide.text.trim() || slide.image.trim())
+            : [{ title: 'Preview', text: 'No content to preview yet. Add a title, text, or image to see the preview.', image: '/onboarding-artwork/artwork1.png' }]
+        }}
+      />
     </div>
   )
 }

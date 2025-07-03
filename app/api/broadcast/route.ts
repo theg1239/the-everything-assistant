@@ -15,15 +15,14 @@ export async function GET() {
       orderBy: {
         createdAt: 'desc',
       },
-      take: 50, // Limit to last 50 broadcasts
+      take: 50,
     })
 
-    // Transform the data to match the expected interface
     const transformedBroadcasts = broadcasts.map(broadcast => ({
       id: broadcast.id,
       slides: broadcast.slides,
       timestamp: broadcast.createdAt.toISOString(),
-      sentBy: session?.user?.email || 'Admin' // Use the admin email as sentBy
+      sentBy: session?.user?.email || 'Admin'
     }))
 
     return NextResponse.json({ broadcasts: transformedBroadcasts })

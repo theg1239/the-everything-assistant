@@ -25,11 +25,9 @@ export function VTOPToolHandler({
     const handleVTOPLoginTrigger = (event: CustomEvent) => {
       const { command: triggerCommand, toolCallId: triggerToolCallId } = event.detail
 
-      // First check if we have saved credentials and can auto-login
       if (hasVTOPCredentials()) {
         const savedCredentials = getFormattedVTOPCredentials()
         if (savedCredentials && onCredentialsSubmit) {
-          // Find the relevant tool call
           let vtopToolCall = null
           if (triggerToolCallId) {
             vtopToolCall = toolInvocations?.find(tool => tool.toolCallId === triggerToolCallId)
@@ -44,13 +42,11 @@ export function VTOPToolHandler({
             }
           }
 
-          // Auto-submit with saved credentials
           onCredentialsSubmit(savedCredentials, vtopToolCall)
           return
         }
       }
 
-      // Fallback to manual credential entry
       let vtopToolCall = null
 
       if (triggerToolCallId) {

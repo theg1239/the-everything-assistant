@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useSession } from 'next-auth/react'
+import { usePathname } from 'next/navigation'
 
 const Aurora = dynamic(() => import('@/components/backgrounds/aurora'), {
   ssr: false,
@@ -101,12 +102,25 @@ const defaultBackgroundConfig: BackgroundConfig = {
 
 export default function CustomBackground() {
   const { data: session, status } = useSession()
+  const pathname = usePathname()
   const [backgroundConfig, setBackgroundConfig] =
     useState<BackgroundConfig>(defaultBackgroundConfig)
   const [preferencesLoaded, setPreferencesLoaded] = useState(false)
 
+  const isLoginPage = pathname === '/login'
+
   useEffect(() => {
     const loadBackgroundPreference = async () => {
+      if (isLoginPage) {
+        setBackgroundConfig({
+          ...defaultBackgroundConfig,
+          type: 'aurora',
+          enabled: true,
+        })
+        setPreferencesLoaded(true)
+        return
+      }
+
       if (status === 'unauthenticated' || !session?.user?.email) {
         setBackgroundConfig(defaultBackgroundConfig)
         setPreferencesLoaded(true)
@@ -146,7 +160,7 @@ export default function CustomBackground() {
     }
 
     loadBackgroundPreference()
-  }, [session?.user?.email, status])
+  }, [session?.user?.email, status, isLoginPage])
 
   useEffect(() => {
     const handleBackgroundToggle = (event: CustomEvent<{ config: BackgroundConfig }>) => {

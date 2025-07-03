@@ -7,6 +7,7 @@ const withPWA = require('@ducanh2912/next-pwa').default({
 })
 
 const nextConfig: NextConfig = {
+  turbopack: {},
   eslint: { ignoreDuringBuilds: false },
   typescript: { ignoreBuildErrors: false },
   images: { unoptimized: true },

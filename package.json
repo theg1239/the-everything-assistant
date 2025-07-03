@@ -7,7 +7,7 @@
     "npm": "10.x"
   },
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev --turbo",
     "build": "npx prisma generate && next build",
     "start": "next start",
     "lint": "next lint",

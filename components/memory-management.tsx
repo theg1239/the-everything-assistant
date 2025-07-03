@@ -405,7 +405,7 @@ export function MemoryManagement() {
               id="content"
               value={memoryContent}
               onChange={(e) => setMemoryContent(e.target.value)}
-              placeholder="what would you like to remember..."
+              placeholder="what would you like me to remember..."
               className="min-h-[120px] bg-background/30 text-sm sm:text-base resize-y"
               rows={6}
             />

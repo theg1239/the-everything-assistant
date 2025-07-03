@@ -21,7 +21,6 @@ export function VTOPToolHandler({
   const [showCredentialsDialog, setShowCredentialsDialog] = useState(false)
   const [pendingToolCall, setPendingToolCall] = useState<any>(null)
   const [command, setCommand] = useState('')
-  const [processedToolCalls, setProcessedToolCalls] = useState<Set<string>>(new Set())
   useEffect(() => {
     const handleVTOPLoginTrigger = (event: CustomEvent) => {
       const { command: triggerCommand, toolCallId: triggerToolCallId } = event.detail
@@ -124,7 +123,7 @@ export function VTOPToolHandler({
       }
       */
     }
-  }, [toolInvocations, showCredentialsDialog, processedToolCalls])
+  }, [toolInvocations, showCredentialsDialog])
 
   const handleCredentialsSubmit = (credentials: {
     username: string

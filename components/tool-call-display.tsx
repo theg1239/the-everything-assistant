@@ -31,7 +31,6 @@ interface ToolCallDisplayProps {
   onPlacementSearch?: (company: string) => void
   maximizedItem?: any
   setMaximizedItem?: (item: any) => void
-  attemptedAutoRetries?: Set<string>
 }
 
 const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) => {
@@ -662,14 +661,12 @@ const ToolCallResultsSummary = ({
   onPlacementSearch,
   maximizedItem,
   setMaximizedItem,
-  attemptedAutoRetries,
 }: {
   toolCalls: any[]
   onLoginClick?: () => void
   onPlacementSearch?: (company: string) => void
   maximizedItem?: any
   setMaximizedItem?: (item: any) => void
-  attemptedAutoRetries?: Set<string>
 }) => {
   const [companySearch, setCompanySearch] = React.useState('')
 
@@ -865,8 +862,6 @@ const ToolCallResultsSummary = ({
       }
 
       if (hasVTOPCredentials()) {
-        const hasAttempted = attemptedAutoRetries?.has(tool.toolCallId || '') || false
-        
         return (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3">
             <Card className="w-full overflow-hidden border-blue-500/20 bg-blue-500/5">
@@ -877,10 +872,10 @@ const ToolCallResultsSummary = ({
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-foreground truncate">
-                      {hasAttempted ? 'Authenticating with VTOP' : 'Preparing VTOP Authentication'}
+                      Preparing VTOP Authentication
                     </div>
                     <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                      Using your linked credentials to access {formatCommandName(command)} data
+                      Click "Login" button to authenticate with your linked credentials for {formatCommandName(command)} data
                     </div>
                   </div>
                 </div>
@@ -1113,38 +1108,7 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
   const isMobile = useMediaQuery('(max-width: 768px)')
   const { getToolResult, version } = useVTOP()
 
-  const [attemptedAutoRetries, setAttemptedAutoRetries] = useState<Set<string>>(new Set())
-
-  useEffect(() => {
-    if (!hasVTOPCredentials()) return
-
-    const vtopCredentialTools = toolCalls.filter(
-      tool =>
-        tool.toolName === 'queryVTOP' && 
-        tool.result && 
-        tool.result.requiresCredentials === true &&
-        !tool.result.data &&
-        !tool.result.output &&
-        !attemptedAutoRetries.has(tool.toolCallId || '')
-    )
-
-    if (vtopCredentialTools.length > 0) {
-      const tool = vtopCredentialTools[0]
-      const command = tool.result.command || tool.args?.command || 'data'
-      
-      setAttemptedAutoRetries(prev => new Set([...prev, tool.toolCallId || '']))
-      
-      setTimeout(() => {
-        const triggerEvent = new CustomEvent('vtopLoginTrigger', {
-          detail: {
-            command,
-            toolCallId: tool.toolCallId,
-          },
-        })
-        window.dispatchEvent(triggerEvent)
-      }, 500)
-    }
-  }, [toolCalls, attemptedAutoRetries])
+  // Auto-retry logic removed to prevent infinite loops
 
   const filteredToolCalls = (() => {
     const map = new Map<string, any>()
@@ -1235,7 +1199,6 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
       onPlacementSearch={onPlacementSearch}
       maximizedItem={maximizedItem}
       setMaximizedItem={setMaximizedItem}
-      attemptedAutoRetries={attemptedAutoRetries}
     />
   )
 })

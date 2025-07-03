@@ -345,29 +345,28 @@ export function FeedbackSection() {
             <div className="space-y-6">
               <div>
                 <h3 className="text-xl sm:text-2xl font-semibold mb-6">feedback & contributions</h3>
-                <div className="grid gap-4">
-                  {/* Contribute Card */}
-                  <div className="flex flex-col gap-4 p-4 sm:p-6 rounded-lg border border-border bg-background/30">
-                    <div className="flex items-start gap-4">
-                      <MessageSquarePlus className="w-5 h-5 flex-shrink-0 mt-1 text-primary" />
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-base sm:text-lg mb-2">
-                          contribute to knowledge base
-                        </h4>
-                        <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-                          suggest edits to improve the assistant's knowledge and help make it more accurate.
+                <div className="space-y-4">
+                  {/* Contribute Option */}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
+                    <div className="flex items-start sm:items-center gap-3">
+                      <MessageSquarePlus className="w-4 h-4 flex-shrink-0 mt-0.5 sm:mt-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm md:text-base">contribute to knowledge base</p>
+                        <p className="text-xs md:text-sm text-muted-foreground">
+                          suggest edits to improve the assistant's knowledge and help make it more accurate
                         </p>
                       </div>
                     </div>
                     <Button
                       variant="outline"
+                      size="sm"
                       onClick={handleFetchAndSetView}
                       disabled={isLoading}
-                      className="w-full sm:w-auto sm:self-start"
+                      className="w-full sm:w-auto flex-shrink-0"
                     >
                       {isLoading ? (
                         <>
-                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
                           loading...
                         </>
                       ) : (
@@ -376,23 +375,22 @@ export function FeedbackSection() {
                     </Button>
                   </div>
 
-                  {/* Feedback Card */}
-                  <div className="flex flex-col gap-4 p-4 sm:p-6 rounded-lg border border-border bg-background/30">
-                    <div className="flex items-start gap-4">
-                      <MessageSquarePlus className="w-5 h-5 flex-shrink-0 mt-1 text-primary" />
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-base sm:text-lg mb-2">
-                          submit feedback
-                        </h4>
-                        <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-                          report an issue, request a new feature, or share your thoughts on improvements.
+                  {/* Feedback Option */}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
+                    <div className="flex items-start sm:items-center gap-3">
+                      <MessageSquarePlus className="w-4 h-4 flex-shrink-0 mt-0.5 sm:mt-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm md:text-base">submit feedback</p>
+                        <p className="text-xs md:text-sm text-muted-foreground">
+                          report an issue, request a new feature, or share your thoughts on improvements
                         </p>
                       </div>
                     </div>
                     <Button
                       variant="outline"
+                      size="sm"
                       onClick={() => setView('feedback')}
-                      className="w-full sm:w-auto sm:self-start"
+                      className="w-full sm:w-auto flex-shrink-0"
                     >
                       submit feedback
                     </Button>

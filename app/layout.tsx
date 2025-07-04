@@ -54,13 +54,56 @@ export const metadata: Metadata = {
   title: 'the everything assistant',
   description: 'your personal agentic AI assistant',
   manifest: '/manifest.json',
+  keywords: [
+    'VIT Vellore', 'VIT Vellore assistant', 'VTOP helper', 'VIT student assistant',
+    'Vellore Institute of Technology', 'VIT Tamil Nadu', 'VIT TN',
+    
+    'VIT past papers', 'VIT FAT past papers', 'VIT CAT past papers', 'VIT quiz papers',
+    'VIT exam papers', 'VIT previous year papers', 'VIT question papers',
+    'VIT study materials', 'VIT notes', 'VIT syllabus', 'VIT paper vault', 'examcooker',
+    'codechef papers', 'VIT coding papers', 'VIT programming papers',
+    
+    'VTOP login', 'VTOP assistant', 'VIT timetable', 'VIT attendance tracker',
+    'VIT grades', 'VIT marks', 'VIT CGPA calculator', 'VIT GPA',
+    'VTOP automation', 'VIT course registration', 'VIT academic calendar',
+    
+    'VIT mess menu', 'VIT hostel mess', 'VIT food menu', 'VIT dining',
+    'VIT campus assistant', 'VIT student life', 'VIT facilities', 'mess it',
+    
+    'VIT placements', 'VIT placement statistics', 'VIT career guidance',
+    'VIT internships', 'VIT job opportunities', 'VIT companies',
+    
+    'AI assistant', 'student AI helper', 'academic AI assistant',
+    'chatbot for students', 'VIT chatbot', 'study assistant AI',
+    'personal assistant', 'agentic AI', 'intelligent assistant',
+    
+    'student portal', 'academic tracker', 'study planner',
+    'exam preparation', 'student productivity', 'college assistant',
+    'university helper', 'academic management', 'student tools'
+  ],
+  authors: [{ name: 'the everything assistant team' }],
+  creator: 'the everything assistant',
+  publisher: 'the everything assistant',
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+  category: 'Education',
+  classification: 'Educational Assistant',
   icons: {
     icon: '/assets/tea-icon.png',
     apple: '/assets/tea-icon.png',
   },
   openGraph: {
-    title: 'the everything assistant',
-    description: 'your personal agentic AI assistant',
+    title: 'the everything assistant - VIT Vellore Student Assistant',
+    description: 'Your personal AI assistant for VIT Vellore - Access VTOP, past papers, mess menu, timetables, attendance, grades, and more',
     url: 'https://the-everything-assistant.vercel.app',
     siteName: 'the everything assistant',
     images: [
@@ -68,7 +111,7 @@ export const metadata: Metadata = {
         url: '/onboarding-artwork/artwork.png',
         width: 1200,
         height: 630,
-        alt: 'the everything assistant - your personal agentic AI assistant',
+        alt: 'the everything assistant - VIT Vellore AI assistant for students',
       },
     ],
     locale: 'en_US',
@@ -76,9 +119,15 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'the everything assistant',
-    description: 'your personal agentic AI assistant',
+    title: 'the everything assistant - VIT Vellore Student Assistant',
+    description: 'your personal AI assistant for VIT Vellore - access VTOP, past papers, mess menu, timetables, attendance, grades, and more',
     images: ['/onboarding-artwork/artwork.png'],
+  },
+  verification: {
+    google: process.env.GOOGLE_SITE_VERIFICATION,
+  },
+  alternates: {
+    canonical: 'https://the-everything-assistant.vercel.app',
   },
 }
 
@@ -115,6 +164,20 @@ export default async function RootLayout({
         <BotIdClient protect={protectedRoutes} />
         <link rel="icon" href="/assets/tea-icon.png" type="image/png" />
         <link rel="shortcut icon" href="/assets/tea-icon.png" type="image/png" />
+        <meta name="theme-color" content="#000000" />
+        <meta name="application-name" content="the everything assistant" />
+        <meta name="apple-mobile-web-app-title" content="the everything assistant" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="format-detection" content="telephone=no" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="msapplication-TileColor" content="#000000" />
+        <meta name="msapplication-tap-highlight" content="no" />
+        <meta name="geo.region" content="IN-TN" />
+        <meta name="geo.placename" content="Vellore, Tamil Nadu, India" />
+        <meta name="geo.position" content="12.9698;79.1566" />
+        <meta name="ICBM" content="12.9698, 79.1566" />
+        <link rel="canonical" href="https://the-everything-assistant.vercel.app" />
         <meta
           name="viewport"
           content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, height=device-height"

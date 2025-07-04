@@ -51,6 +51,7 @@ const protectedRoutes = [
 ]
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://the-everything-assistant.vercel.app'),
   title: 'the everything assistant',
   description: 'your personal agentic AI assistant',
   manifest: '/manifest.json',

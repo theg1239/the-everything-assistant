@@ -31,5 +31,9 @@
     "**/*.tsx",
     ".next/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "ai-chatbot-main"]
+  "exclude": [
+    "node_modules",
+    "ai-chatbot-main",
+    "services/papers"
+  ]
 }

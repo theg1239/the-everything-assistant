@@ -104,7 +104,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: 'the everything assistant',
-    description: 'Your personal AI assistant for VIT Vellore - Access VTOP, past papers, mess menu, timetables, attendance, grades, and more',
+    description: 'your personal AI assistant for VIT Vellore - Access VTOP, past papers, mess menu, timetables, attendance, grades, and more',
     url: 'https://the-everything-assistant.vercel.app',
     siteName: 'the everything assistant',
     images: [

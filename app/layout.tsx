@@ -104,7 +104,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: 'the everything assistant',
-    description: 'your personal AI assistant for VIT Vellore - Access VTOP, past papers, mess menu, timetables, attendance, grades, and more',
+    description: 'your personal AI assistant for vit vellore - access vtop, past papers, mess menu, timetables, attendance, grades, and more',
     url: 'https://the-everything-assistant.vercel.app',
     siteName: 'the everything assistant',
     images: [
@@ -120,8 +120,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'the everything assistant - VIT Vellore Student Assistant',
-    description: 'your personal AI assistant for VIT Vellore - access VTOP, past papers, mess menu, timetables, attendance, grades, and more',
+    title: 'the everything assistant',
+    description: 'your personal AI assistant for vit vellore - access vtop, past papers, mess menu, timetables, attendance, grades, and more',
     images: ['/onboarding-artwork/artwork.png'],
   },
   verification: {

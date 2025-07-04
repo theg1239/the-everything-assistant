@@ -30,14 +30,12 @@ const PureMessageBubble = ({
 }: MessageBubbleProps) => {
   const isUser = message.role === 'user'
 
-  if (
-    !isUser &&
-    (!message.content || (message.content as string).trim() === '') &&
-    message.toolInvocations?.some(
-      (t: any) => t.toolName === 'knowledgeBase' && t.state !== 'result'
-    )
-  ) {
-    return null
+  if (!isUser && 
+      (!message.content || (message.content as string).trim() === '')) {
+    if (message.toolInvocations?.some((t: any) => t.toolName === 'knowledgeBase' && t.state !== 'result') ||
+        (message.toolInvocations && message.toolInvocations.length > 0)) {
+      return null;
+    }
   }
 
   return (

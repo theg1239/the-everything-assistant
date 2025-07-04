@@ -35,6 +35,7 @@ export interface SearchResult {
     originalFilename?: string
     fileSize?: number
     mimeType?: string
+    ocrText?: string
   }>
   totalCount: number
   hasMore: boolean
@@ -144,6 +145,7 @@ export async function searchPapers(
         originalFilename: papers.originalFilename,
         fileSize: papers.fileSize,
         mimeType: papers.mimeType,
+        ocrText: papers.ocrText,
       })
       .from(papers)
       .where(whereClause)
@@ -164,6 +166,8 @@ export async function searchPapers(
         examType: paper.examType || undefined,
         originalFilename: paper.originalFilename || undefined,
         fileSize: paper.fileSize || undefined,
+        mimeType: paper.mimeType || undefined,
+        ocrText: paper.ocrText || undefined,
         // URL already includes extension since we upload with extension
         fileUrl: paper.fileUrl,
       })),

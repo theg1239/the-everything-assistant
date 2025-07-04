@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, forwardRef, useImperativeHandle } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Search,
@@ -40,7 +40,11 @@ interface Paper {
   mimeType?: string
 }
 
-export default function PapersList() {
+export interface PapersListRef {
+  refreshPapers: () => void
+}
+
+const PapersList = forwardRef<PapersListRef>((props, ref) => {
   const [papers, setPapers] = useState<Paper[]>([])
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState<SearchFilters>({})
@@ -61,6 +65,12 @@ export default function PapersList() {
       setLoading(false)
     }
   }
+
+  useImperativeHandle(ref, () => ({
+    refreshPapers: () => {
+      loadPapers()
+    }
+  }), [filters, pagination])
 
   const loadFilterOptions = async () => {
     try {
@@ -461,4 +471,8 @@ export default function PapersList() {
       )}
     </motion.div>
   )
-}
+})
+
+PapersList.displayName = "PapersList"
+
+export default PapersList

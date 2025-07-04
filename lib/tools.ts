@@ -1,6 +1,7 @@
 import { tool } from 'ai'
 import { z } from 'zod'
 import { scrapePapersCodeChef } from './scrapers/papers-codechef'
+import { scrapePapersService } from './scrapers/papers-scraper'
 import { scrapeVITPaperVault } from './scrapers/vit-papervault'
 import { scrapePlacementInfo } from './scrapers/placement-scraper'
 import { getMessMenu, formatMenuItems, getAvailableDateRange } from './scrapers/mess-menu-scraper'
@@ -748,6 +749,7 @@ export function createVITTools(userId: string) {
           }
 
           const results = await Promise.allSettled([
+            scrapePapersService(resolvedCourseCode, examType, year),
             scrapePapersCodeChef(resolvedCourseCode, examType, year),
             scrapeVITPaperVault(resolvedCourseCode, examType, year),
           ])

@@ -464,12 +464,25 @@ If the user's query is relevant to the selected tool "${preferredTool}", use it 
 
     const combinedSystemPrompt = `${VIT_SYSTEM_PROMPT}  
 
-${toolPreferenceGuidance}${memoryGuidance}`
+${toolPreferenceGuidance}${memoryGuidance}
+
+CRITICAL TOOL CONTINUATION RULES:
+- YOU MUST NEVER STOP AFTER CALLING A TOOL
+- Tool calls are ONLY information gathering steps, NOT final responses
+- After ANY tool call (especially knowledgeBase), you MUST immediately continue with a natural response
+- When you call knowledgeBase, that's step 1 - step 2 is ALWAYS providing your answer using that information
+- If you call a tool and don't continue with text, you have failed the user
+- The conversation flow is: [user question] → [tool call] → [YOUR RESPONSE USING TOOL RESULTS]
+- NEVER end the conversation at a tool call - always synthesize and respond`
 
 console.log('Memory stuff:', memoryGuidance)
 
 
-    const enhancedMessages = messages.map((message: any) => {
+    const enhancedMessages = messages.map((message: any, index: number) => {
+      if (message.role === 'user' && index === messages.length - 1) {
+        return message
+      }
+      
       if (
         message.role === 'assistant' &&
         message.toolInvocations &&
@@ -479,7 +492,18 @@ console.log('Memory stuff:', memoryGuidance)
 
         for (const toolCall of message.toolInvocations) {
           if (toolCall.result) {
-            if (toolCall.toolName === 'queryVTOP' && toolCall.result.success) {
+            if (toolCall.toolName === 'knowledgeBase' && toolCall.result.success && toolCall.result.chunks) {
+              const knowledgeContext = toolCall.result.chunks
+                .map((c: any) => (c.content || '').trim())
+                .filter(Boolean)
+                .join('\n\n')
+                .slice(0, 6000)
+              
+              if (knowledgeContext) {
+                toolContext += `\n\n[KNOWLEDGE BASE CONTEXT]:\n${knowledgeContext}`
+                toolContext += `\n\n[IMPORTANT]: Use the above knowledge base information to answer the user's question. Format your response naturally with proper markdown formatting, bullet points, and lowercase text (except for proper nouns and course codes).`
+              }
+            } else if (toolCall.toolName === 'queryVTOP' && toolCall.result.success) {
               const command = toolCall.result.command || toolCall.args?.command || 'data'
               let dataContext = ''
 
@@ -531,7 +555,22 @@ console.log('Memory stuff:', memoryGuidance)
         temperature: 0.7,
         maxTokens: 4096,
         experimental_transform: smoothStream({ chunking: 'word' }),
-        toolChoice: 'auto',
+        maxSteps: 5,
+        experimental_continueSteps: true,
+        onStepFinish: async ({ text, toolCalls, toolResults, finishReason, usage, stepIndex }: any) => {
+          console.log(`Step ${stepIndex} finished:`, {
+            hasText: !!text,
+            toolCallsCount: toolCalls?.length || 0,
+            toolResultsCount: toolResults?.length || 0,
+            finishReason,
+            stepIndex
+          })
+          
+          const knowledgeBaseCalls = toolCalls?.filter((tc: any) => tc.toolName === 'knowledgeBase') || []
+          if (knowledgeBaseCalls.length > 0) {
+            console.log('Knowledge base tool called, model should continue automatically...')
+          }
+        },
         onFinish: async (result: any) => {
           const toolResults = (result as any).toolResults ?? result.toolCalls ?? []
           for (const tr of toolResults) {
@@ -564,27 +603,6 @@ console.log('Memory stuff:', memoryGuidance)
                 })
               } catch (e) {
                 console.error('Failed to parse VTOP data in stream:', e)
-              }
-            } else if (
-              tr.toolName === 'knowledgeBase' &&
-              tr.result?.success &&
-              Array.isArray(tr.result.chunks)
-            ) {
-              try {
-                const cleanedChunks = tr.result.chunks
-                  .map((c: any) => (c.content || '').trim())
-                  .filter(Boolean)
-                  .join('\n\n')
-                  .replace(/\s+/g, ' ')
-                  .trim()
-
-                const answer = (tr.result as any).answer || ''
-                const injection = answer || cleanedChunks
-                if (injection) {
-                  result.text += `\n\n${injection}`
-                }
-              } catch (e) {
-                console.error('Failed to merge knowledgeBase chunks:', e)
               }
             }
           }

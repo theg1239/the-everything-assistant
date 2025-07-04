@@ -18,7 +18,7 @@ export async function getRagPool() {
 export function createKnowledgeTools() {
   const knowledgeBase = tool({
     description:
-      'Retrieve the most relevant chunks from the VIT knowledge base and structured context. The result is injected into chat hidden from UI.',
+      'Retrieve the most relevant chunks from the VIT knowledge base. Use this when you need information about VIT policies, facilities, or general university information. After calling this tool, you MUST continue with a comprehensive response using the retrieved information - do not stop at the tool call.',
     parameters: z.object({
       query: z.string().describe('User query requiring university knowledge'),
       max_chunks: z
@@ -62,41 +62,17 @@ export function createKnowledgeTools() {
           console.debug(`[knowledgeBase] retrieved ${chunks.length} chunks`, {
             topScore: chunks[0]?.score,
           })
-          let answer = ''
-          try {
-            const context = chunks
-              .map(c => c.content)
-              .join('\n\n')
-              .slice(0, 6000)
-            
-            const answerResp = await rateLimitedAI.google.generateText(
-              {
-                model: await rateLimitedAI.google.model(),
-                prompt: `You are a friendly assistant for VIT Vellore students. Using ONLY the context below, write a clear answer that is easy to skim.\n\nFormatting rules:\n1. Break information into short paragraphs or bullet lists (markdown "- item" format).\n2. Bold important keywords or club names with **double asterisks**.\n3. If a table is genuinely the best way to show structured data, you MAY use a simple HTML table (<table>, <tr>, <td>). Otherwise, avoid HTML tags.\n4. Use all lowercase in your output other than proper nouns or course codes.\n5. If the context is insufficient, say you cannot answer the query due to lack of context also try suggesting that if they know this information, they can suggest to add it to the knowledge base via settings -> feedback, try to still help out the user based on what you know about VIT Vellore. \n\nCONTEXT:\n${context}\n\nQUESTION: ${query}\n\nAnswer:`,
-                maxTokens: 1024,
-                temperature: 0.3,
-              },
-              undefined
-            )
-            answer = answerResp.text.trim()
-            console.info('[knowledgeBase] synthesized answer length:', answer.length)
-
-            if (answer.trim() === 'I_DONT_KNOW' || answer.toLowerCase().includes('insufficient context')) {
-              console.log('[knowledgeBase] Context insufficient, trying Reddit search...')
-              const redditResults = await searchRedditWithContext(query)
-              if (redditResults.success && redditResults.response) {
-                answer = `Here's what I found from Reddit discussions:\n\n${redditResults.response}`
-                if (redditResults.sources && redditResults.sources.length > 0) {
-                  answer += '\n\nSources:\n' + redditResults.sources.map((s: any) => `- ${s.title}: ${s.url}`).join('\n')
-                }
-              } else {
-                answer = "I couldn't find relevant information in either the knowledge base or Reddit discussions. Could you try rephrasing your question or providing more details?"
-              }
-            }
-          } catch (genErr) {
-            console.error('[knowledgeBaseTool] Failed to generate answer:', genErr)
+          
+          return { 
+            success: true, 
+            hidden: false,
+            chunks: chunks.map(c => ({
+              content: c.content,
+              metadata: c.metadata,
+              score: c.score
+            })),
+            instruction: `You have successfully retrieved relevant information from the knowledge base. You must now provide a comprehensive answer to the user's question: "${query}". Use the information in the chunks above to formulate your response. Format your answer with proper markdown, bullet points, and use a conversational tone.`
           }
-          return { success: true, hidden: true, chunks, answer }
         } finally {
           client.release()
         }

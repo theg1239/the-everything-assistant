@@ -11,7 +11,11 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "./ui/
 import { Input } from "./ui/input"
 import { toast } from "sonner"
 
-export default function UploadForm() {
+interface UploadFormProps {
+  onUploadSuccess?: () => void
+}
+
+export default function UploadForm({ onUploadSuccess }: UploadFormProps) {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadStatus, setUploadStatus] = useState("")
@@ -58,6 +62,8 @@ export default function UploadForm() {
         toast.success("paper uploaded successfully", {
           description: `"${result.paper?.title}" has been processed and saved.`,
         })
+        
+        onUploadSuccess?.()
         
         setTimeout(() => {
           setResult(null)

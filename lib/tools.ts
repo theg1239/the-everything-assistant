@@ -1297,16 +1297,15 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           const parsed = (await parsePlacementData(raw, '', undefined)) as ParsedPlacementData
           return {
             ...raw,
-            campus, // Include the campus in the response
+            campus,
             formatted_content: parsed.formatted_content,
             summary: parsed.summary,
             message: parsed.summary || parsed.formatted_content,
           }
         } catch (err) {
-          // fallback if parsing fails
           return {
             ...raw,
-            campus, // Include the campus in the fallback response
+            campus,
           }
         }
       },

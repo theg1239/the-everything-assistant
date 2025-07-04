@@ -202,10 +202,10 @@ const PureMultimodalInput = ({
                             className="size-9 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm"
                           >
                             <StopCircleIcon size={16} />
-                            <span className="sr-only">Stop generating</span>
+                            <span className="sr-only">stop generating</span>
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>Stop generating</TooltipContent>
+                        <TooltipContent>stop generating</TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
                   </motion.div>

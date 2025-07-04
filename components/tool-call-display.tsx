@@ -813,6 +813,19 @@ const ToolCallResultsSummary = ({
                       ? 'Invalid VTOP credentials. Please try logging in again.'
                       : errorMessage}
                   </div>
+                  {firstFailedTool.result.suggestions && Array.isArray(firstFailedTool.result.suggestions) && firstFailedTool.result.suggestions.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      <div className="text-xs font-medium text-muted-foreground">Suggestions:</div>
+                      <ul className="text-xs text-muted-foreground space-y-0.5">
+                        {firstFailedTool.result.suggestions.map((suggestion: string, index: number) => (
+                          <li key={index} className="flex items-start">
+                            <span className="text-muted-foreground mr-1">•</span>
+                            <span>{suggestion}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
                 {isAuthError && onLoginClick && (
                   <Button

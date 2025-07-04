@@ -700,7 +700,7 @@ export function createVITTools(userId: string) {
     ...createMemoryTool(userId),
     findPastPapers: tool({
       description:
-        'find past examination papers for VIT courses from real repositories. You can use course names or codes.',
+        'find past examination papers for VIT courses from real repositories. You can use course names or codes. You don\' need the user to specify the year, when no year is specified, the tool will search for all available years.',
       parameters: z.object({
         courseCode: z
           .string()
@@ -731,6 +731,18 @@ export function createVITTools(userId: string) {
               const courseMatches = getAllCourseMatches(courseCode)
               if (courseMatches.length > 0) {
                 resolvedCourseCode = courseMatches[0].code
+              } else {
+                return {
+                  success: false,
+                  courseCode,
+                  papers: [],
+                  message: `Could not find a valid course code for "${courseCode}". Please provide a valid VIT course code.`,
+                  suggestions: [
+                    'Use the exact VIT course code',
+                    'Check your course timetable or VTOP for the exact course code',
+                    'Contact course faculty for the correct course code',
+                  ],
+                }
               }
             }
           }
@@ -753,16 +765,20 @@ export function createVITTools(userId: string) {
           if (papers.length === 0) {
             return {
               success: false,
-              courseCode,
+              courseCode: resolvedCourseCode,
+              originalQuery: courseCode,
               papers: [],
-              message: `no papers found for ${courseCode}${
-                examType ? ` (${examType})` : ''
-              }${year ? ` from ${year}` : ''}. try checking the course code or contact faculty for materials.`,
+              message: `No papers found for course code "${resolvedCourseCode}"${
+                resolvedCourseCode !== courseCode ? ` (searched for: "${courseCode}")` : ''
+              }${examType ? ` (${examType})` : ''}${year ? ` from ${year}` : ''}.`,
               suggestions: [
-                'verify the course code format (e.g., CSE1001, MAT1001)',
-                'check with course faculty for official materials',
-                'visit VIT library for physical copies',
-                'contact senior students or study groups',
+                resolvedCourseCode !== courseCode 
+                  ? `Double-check that "${resolvedCourseCode}" is the correct course code for "${courseCode}"`
+                  : 'Verify the course code format (e.g., MECH2001, BMEE302L)',
+                'Try different exam types: CAT1, CAT2, FAT, or Quiz',
+                'Check with course faculty for official study materials',
+                'Visit VIT library for physical copies of past papers',
+                'Contact senior students or study groups for materials',
               ],
             }
           }

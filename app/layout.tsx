@@ -23,8 +23,32 @@ import { authOptions } from '@/lib/auth'
 import { GlobalBroadcastDialog } from '@/components/global-broadcast-dialog'
 import { PWAInstallDialog } from '@/components/pwa-install-dialog'
 import { SidebarWrapper } from '@/components/sidebar-wrapper'
+import { BotIdClient } from 'botid/client'
 
 const inter = Inter({ subsets: ['latin'] })
+
+const protectedRoutes = [
+  {
+    path: '/api/auth/signin/google',
+    method: 'POST',
+  },
+  {
+    path: '/api/auth/callback/google',
+    method: 'POST',
+  },
+  {
+    path: '/api/auth/session',
+    method: 'POST',
+  },
+  {
+    path: '/api/auth/mfa-verify',
+    method: 'POST',
+  },
+  {
+    path: '/login',
+    method: 'GET',
+  },
+]
 
 export const metadata: Metadata = {
   title: 'the everything assistant',
@@ -65,6 +89,7 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <BotIdClient protect={protectedRoutes} />
         <meta
           name="viewport"
           content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, height=device-height"

@@ -57,6 +57,7 @@
     "@upstash/redis": "^1.35.0",
     "ai": "latest",
     "bcryptjs": "^3.0.2",
+    "botid": "^1.4.1",
     "class-variance-authority": "^0.7.1",
     "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",

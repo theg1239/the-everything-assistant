@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next'
+import { withBotId } from 'botid/next/config'
 
 const withPWA = require('@ducanh2912/next-pwa').default({
   dest: 'public',
@@ -18,4 +19,4 @@ const nextConfig: NextConfig = {
   // },
 }
 
-export default withPWA(nextConfig)
+export default withBotId(withPWA(nextConfig))

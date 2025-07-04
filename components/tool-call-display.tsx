@@ -83,16 +83,15 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
                   if (cell !== undefined) {
                     let cellValue = cells[index + (indexOffset > 0 ? 1 : 0)]
                     cellValue = cellValue
-                      .replace(/\[32m|\[0m|\[31m|\[33m|\[34m|\[35m|\[36m|\[37m/g, '') // Remove ANSI color codes
-                      .replace(/[^\x20-\x7E]/g, ' ') // Replace non-ASCII characters with space
-                      .replace(/\s+/g, ' ') // Normalize whitespace
+                      .replace(/\[32m|\[0m|\[31m|\[33m|\[34m|\[35m|\[36m|\[37m/g, '')
+                      .replace(/[^\x20-\x7E]/g, ' ')
+                      .replace(/\s+/g, ' ')
                       .trim()
                     row[header] = cellValue
                   }
                 })
                 return row
               })
-              // Post-process attendance rows to normalize keys
               let processedRows = rows
               if (command === 'attendance' && Array.isArray(processedRows)) {
                 if (process.env.NODE_ENV !== 'production') {
@@ -187,7 +186,6 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     }
 
     if (result.requiresCredentials === true) {
-      // Auto-trigger login if credentials exist
       React.useEffect(() => {
         if (hasVTOPCredentials()) {
           const triggerEvent = new CustomEvent('vtopLoginTrigger', {
@@ -481,7 +479,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     if (result.success && result.response) {
       const displayConfidence =
         result.confidence === 0 && result.sources?.length > 0
-          ? Math.floor(Math.random() * 21) + 60 // Random between 60-80%
+          ? Math.floor(Math.random() * 21) + 60
           : result.confidence || 0
 
       return {
@@ -517,10 +515,9 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
 
   if (toolName === 'searchRedditWithContext') {
     if (result.success && result.response) {
-      // Show a random confidence percentage (60-80%) if backend returns 0%
       const displayConfidence =
         result.confidence === 0 && result.sources?.length > 0
-          ? Math.floor(Math.random() * 21) + 60 // Random between 60-80%
+          ? Math.floor(Math.random() * 21) + 60
           : result.confidence || 0
 
       return {
@@ -595,7 +592,6 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
 
   if (toolName === 'getCampusInfo') {
     if (result.success && result.name) {
-      // Combine the name and description for a more informative display
       const description = result.description ? `${result.name}: ${result.description}` : result.name
 
       return {

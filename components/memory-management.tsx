@@ -35,6 +35,7 @@ export function MemoryManagement() {
   const [memoryContent, setMemoryContent] = useState('')
   const [memoryImportance, setMemoryImportance] = useState<1 | 2 | 3 | 4 | 5>(3)
   const [memoryTags, setMemoryTags] = useState('')
+  const [deletingMemoryId, setDeletingMemoryId] = useState<string | null>(null)
 
   const { data: memoriesData, isLoading: isLoadingMemories, error: memoriesError, refetch } = useQuery({
     queryKey: ['memories'],
@@ -88,24 +89,33 @@ export function MemoryManagement() {
   }, [refetch]);
 
   const handleDeleteMemory = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this memory?')) return
-    
-    try {
-      setIsLoading(true)
-      const response = await fetch(`/api/memories/${id}`, {
-        method: 'DELETE'
-      })
-      
-      if (!response.ok) {
-        throw new Error('Failed to delete memory')
+    if (deletingMemoryId === id) {
+      // Confirm delete
+      try {
+        setIsLoading(true)
+        const response = await fetch(`/api/memories/${id}`, {
+          method: 'DELETE'
+        })
+        
+        if (!response.ok) {
+          throw new Error('Failed to delete memory')
+        }
+        
+        toast.success('Memory deleted')
+        setDeletingMemoryId(null)
+        await refreshMemories()
+      } catch (err: any) {
+        toast.error(err.message)
+      } finally {
+        setIsLoading(false)
       }
-      
-      toast.success('Memory deleted')
-      await refreshMemories()
-    } catch (err: any) {
-      toast.error(err.message)
-    } finally {
-      setIsLoading(false)
+    } else {
+      // Show confirmation
+      setDeletingMemoryId(id)
+      // Auto-cancel confirmation after 3 seconds
+      setTimeout(() => {
+        setDeletingMemoryId(null)
+      }, 3000)
     }
   }
 
@@ -346,10 +356,16 @@ export function MemoryManagement() {
                             variant="ghost" 
                             size="sm"
                             onClick={() => handleDeleteMemory(memory.id)}
-                            className="flex items-center gap-2 text-destructive hover:text-destructive"
+                            className={`flex items-center gap-2 ${
+                              deletingMemoryId === memory.id
+                                ? 'bg-destructive/10 border-destructive/30 text-destructive'
+                                : 'text-destructive hover:text-destructive'
+                            }`}
                           >
                             <Trash2 className="h-4 w-4" />
-                            <span className="hidden xs:inline">delete</span>
+                            <span className="hidden xs:inline">
+                              {deletingMemoryId === memory.id ? 'confirm?' : 'delete'}
+                            </span>
                           </Button>
                         </div>
                       </div>

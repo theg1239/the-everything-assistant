@@ -63,6 +63,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
   const { data: session } = useSession()
   const { setBackgroundType, toggleBackground } = useCustomBackground()
   const [activeSection, setActiveSection] = useState('general')
+  const [pendingSection, setPendingSection] = useState<string | null>(null)
   const [followUpSuggestions, setFollowUpSuggestions] = useState(true)
   const [backgroundConfig, setBackgroundConfig] = useState({
     type: 'aurora' as BackgroundType,
@@ -1622,6 +1623,22 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     setConfirmArchive(false)
   }, [activeSection])
   useEffect(() => {
+    const handleOpenSettings = (event: CustomEvent) => {
+      const { section } = event.detail || {}
+      if (section === 'feedback') {
+        onOpenChange(true)
+        setTimeout(() => setActiveSection('feedback'), 50)
+      }
+    }
+
+    window.addEventListener('openSettings', handleOpenSettings as EventListener)
+    
+    return () => {
+      window.removeEventListener('openSettings', handleOpenSettings as EventListener)
+    }
+  }, [onOpenChange])
+
+  useEffect(() => {
     if (!open) {
       setConfirmDelete(false)
       setConfirmArchive(false)
@@ -1634,9 +1651,12 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       setShowBackupCodes(false)
       setShowBackupCodesReveal(false)
     } else {
-      setActiveSection('general')
+      if (activeSection === 'general' || !open) {
+        setActiveSection('general')
+      }
     }
   }, [open])
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {' '}
@@ -1655,7 +1675,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
             </div>
             <nav className="space-y-1">
               <div className="grid grid-cols-2 gap-1 md:grid-cols-1 md:gap-1">
-                {menuItems.map(item => {
+                {menuItems.map((item: { id: string; label: string; icon: any }) => {
                   const Icon = item.icon
                   return (
                     <button

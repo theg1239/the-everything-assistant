@@ -17,7 +17,7 @@ import { ChatHeader } from '@/components/chat-header'
 import { MultimodalInput } from '@/components/multimodal-input'
 import { Canvas } from '@/components/canvas'
 import { extractTitleFromContent } from '@/lib/utils'
-import ResearchPreviewModal from '@/components/research-preview-modal'
+import UpsellBanner from '@/components/upsell-banner'
 import { VTOPToolHandler } from '@/components/vtop-tool-handler'
 import { VTOPProvider, useVTOP } from '@/contexts/vtop-context'
 import { RateLimitProvider, useRateLimit } from '@/contexts/rate-limit-context'
@@ -705,7 +705,7 @@ const PureChatInterface = memo(({
         toolInvocations={messages[messages.length - 1]?.toolInvocations}
         onCredentialsSubmit={handleVTOPCredentials}
       >
-        <ResearchPreviewModal />
+        <UpsellBanner />
         <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
         <div className="flex flex-col h-[100dvh] bg-transparent text-foreground relative overflow-hidden mobile-viewport-fix">
           <div className="relative z-10 flex flex-col h-full">
@@ -785,7 +785,7 @@ const PureChatInterface = memo(({
       toolInvocations={messages[messages.length - 1]?.toolInvocations}
       onCredentialsSubmit={handleVTOPCredentials}
     >
-      <ResearchPreviewModal />
+      <UpsellBanner />
       <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
       <Canvas
         isOpen={canvasOpen}

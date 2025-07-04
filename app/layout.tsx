@@ -103,7 +103,7 @@ export const metadata: Metadata = {
     apple: '/assets/tea-icon.png',
   },
   openGraph: {
-    title: 'the everything assistant - VIT Vellore Student Assistant',
+    title: 'the everything assistant',
     description: 'Your personal AI assistant for VIT Vellore - Access VTOP, past papers, mess menu, timetables, attendance, grades, and more',
     url: 'https://the-everything-assistant.vercel.app',
     siteName: 'the everything assistant',

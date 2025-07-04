@@ -144,7 +144,7 @@ async function tryAPIApproach(
               if (yearMatch) extractedYear = yearMatch[0]
             }
 
-            const paperUrl = paper._id ? `https://papers.codechefvit.com/paper/${paper._id}` : ''
+            const paperUrl = paper.finalUrl || (paper._id ? `https://papers.codechefvit.com/paper/${paper._id}` : '')
 
             let isValid = true
             if (paper.finalUrl) {
@@ -157,7 +157,8 @@ async function tryAPIApproach(
               }
             }
 
-            if (!isValid) {
+            // If finalUrl is not available or invalid, skip this paper
+            if (!paper.finalUrl || !isValid) {
               return null
             }
 
@@ -253,7 +254,7 @@ async function tryAPIApproach(
               if (yearMatch) extractedYear = yearMatch[0]
             }
 
-            const paperUrl = paper._id ? `https://papers.codechefvit.com/paper/${paper._id}` : ''
+            const paperUrl = paper.finalUrl || (paper._id ? `https://papers.codechefvit.com/paper/${paper._id}` : '')
 
             let isValid = true
             if (paper.finalUrl) {
@@ -266,7 +267,8 @@ async function tryAPIApproach(
               }
             }
 
-            if (!isValid) {
+            // If finalUrl is not available or invalid, skip this paper
+            if (!paper.finalUrl || !isValid) {
               return null
             }
 
@@ -419,7 +421,42 @@ async function tryBrowserScraping(
       year
     )
 
-    const deduplicatedPapers = deduplicatePapers(papers as Paper[])
+    const papersWithFinalUrls = await Promise.all(
+      papers.map(async (paper) => {
+        if (paper.url.includes('.pdf') || paper.url.includes('cloudinary.com')) {
+          return paper
+        }
+
+        try {
+          const finalUrlPromise = extractFinalUrlFromPaperPage(paper.url)
+          const timeoutPromise = new Promise<string | null>((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), 15000)
+          )
+          
+          const finalUrl = await Promise.race([finalUrlPromise, timeoutPromise])
+          
+          if (finalUrl && finalUrl.includes('cloudinary.com')) {
+            try {
+              const response = await fetch(finalUrl, { method: 'HEAD' })
+              if (response.ok) {
+                return {
+                  ...paper,
+                  url: finalUrl, // Use the Cloudinary PDF URL instead of the paper page URL
+                }
+              }
+            } catch (validationError) {
+              console.warn(`Final URL validation failed for ${paper.title}:`, validationError)
+            }
+          }
+        } catch (error) {
+          console.warn(`Failed to extract finalUrl for ${paper.title}:`, error)
+        }
+
+        return paper
+      })
+    )
+
+    const deduplicatedPapers = deduplicatePapers(papersWithFinalUrls as Paper[])
 
     return {
       success: true,
@@ -435,6 +472,90 @@ async function tryBrowserScraping(
       error: errorMessage,
       source: 'papers.codechefvit.com',
     }
+  } finally {
+    if (browser) {
+      await browser.close()
+    }
+  }
+}
+
+async function extractFinalUrlFromPaperPage(paperPageUrl: string): Promise<string | null> {
+  let browser
+  try {
+    browser = await puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+    })
+
+    const page = await browser.newPage()
+    await page.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    )
+
+    await page.goto(paperPageUrl, { waitUntil: 'networkidle2', timeout: 8000 })
+
+    await new Promise(res => setTimeout(res, 1000))
+
+    const finalUrl = await page.evaluate(() => {
+      const cloudinaryLinks = Array.from(document.querySelectorAll('a[href*="cloudinary.com"]'))
+      if (cloudinaryLinks.length > 0) {
+        return (cloudinaryLinks[0] as HTMLAnchorElement).href
+      }
+
+      const downloadButtons = Array.from(document.querySelectorAll('button, a, [role="button"]'))
+      for (const button of downloadButtons) {
+        const text = button.textContent?.toLowerCase() || ''
+        if (text.includes('download') || text.includes('view') || text.includes('open') || text.includes('pdf')) {
+          const href = button.getAttribute('href') || 
+                      button.getAttribute('data-url') || 
+                      button.getAttribute('data-href') ||
+                      button.getAttribute('onclick')?.match(/window\.open\(['"]([^'"]+)['"]/)?.[1]
+          if (href && href.includes('cloudinary.com')) {
+            return href
+          }
+        }
+      }
+
+      const scripts = Array.from(document.querySelectorAll('script'))
+      for (const script of scripts) {
+        const content = script.textContent || ''
+        
+        const finalUrlMatch = content.match(/finalUrl['"]?\s*:\s*['"]([^'"]+)['"]/i)
+        if (finalUrlMatch && finalUrlMatch[1].includes('cloudinary.com')) {
+          return finalUrlMatch[1]
+        }
+        
+        const cloudinaryMatch = content.match(/https?:\/\/[^"']*cloudinary\.com[^"']*\.pdf/g)
+        if (cloudinaryMatch && cloudinaryMatch.length > 0) {
+          return cloudinaryMatch[0]
+        }
+      }
+
+      const iframes = Array.from(document.querySelectorAll('iframe'))
+      for (const iframe of iframes) {
+        const src = iframe.getAttribute('src')
+        if (src && src.includes('cloudinary.com') && src.includes('.pdf')) {
+          return src
+        }
+      }
+
+      const embeds = Array.from(document.querySelectorAll('embed, object'))
+      for (const embed of embeds) {
+        const src = embed.getAttribute('src') || embed.getAttribute('data')
+        if (src && src.includes('cloudinary.com') && src.includes('.pdf')) {
+          return src
+        }
+      }
+
+      return null
+    })
+
+    return finalUrl
+  } catch (error) {
+    console.warn(`Failed to extract finalUrl from ${paperPageUrl}:`, error)
+    return null
   } finally {
     if (browser) {
       await browser.close()

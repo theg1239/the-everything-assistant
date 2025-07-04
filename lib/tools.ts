@@ -704,12 +704,23 @@ export function createVITTools(userId: string) {
       parameters: z.object({
         courseCode: z
           .string()
+          .optional()
           .describe("course code like BCSE302L or course name like 'database systems'"),
         examType: z.string().optional().describe('exam type: cat1, cat2, fat, quiz'),
         year: z.string().optional().describe('academic year like 2023, 2022'),
       }),
       execute: async ({ courseCode, examType, year }) => {
         try {
+          if (!courseCode) {
+            return {
+              success: false,
+              error: 'Course code required',
+              requiresCourseCode: true,
+              message: 'I could not find the course code for the course, can you provide it?',
+              suggestion: 'You can use course codes like BCSE302L or course names like "database systems".',
+            }
+          }
+
           let resolvedCourseCode = courseCode.trim().toUpperCase()
 
           if (!/^[A-Z]{4}\d{3}[A-Z]?$/.test(resolvedCourseCode)) {

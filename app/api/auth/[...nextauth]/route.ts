@@ -6,8 +6,8 @@ const handler = async (request: Request, context: any) => {
   // Check for bot protection on POST requests (login attempts)
   if (request.method === 'POST') {
     try {
-      // Skip BotID in development mode
-      if (process.env.NODE_ENV !== 'development') {
+      // Skip BotID if disabled via env variable or in development mode
+      if (process.env.DISABLE_BOTID !== 'true' && process.env.NODE_ENV !== 'development') {
         const verification = await checkBotId()
         if (verification.isBot) {
           return new Response(

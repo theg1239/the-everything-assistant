@@ -162,7 +162,7 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <BotIdClient protect={protectedRoutes} />
+        {process.env.DISABLE_BOTID !== 'true' && <BotIdClient protect={protectedRoutes} />}
         <link rel="icon" href="/assets/tea-icon.png" type="image/png" />
         <link rel="shortcut icon" href="/assets/tea-icon.png" type="image/png" />
         <meta name="theme-color" content="#000000" />

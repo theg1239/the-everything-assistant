@@ -6,7 +6,8 @@ import { verifyTOTP, verifyBackupCode } from '@/lib/mfa'
 
 export async function POST(request: Request) {
   try {
-    if (process.env.NODE_ENV !== 'development') {
+    // Skip BotID if disabled via env variable or in development mode
+    if (process.env.DISABLE_BOTID !== 'true' && process.env.NODE_ENV !== 'development') {
       const verification = await checkBotId()
       if (verification.isBot) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 })

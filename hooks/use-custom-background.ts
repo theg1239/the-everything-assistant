@@ -6,7 +6,6 @@ import type { BackgroundType, BackgroundConfig } from '@/components/backgrounds/
 export function useCustomBackground() {
   const updateBackgroundConfig = useCallback(async (config: Partial<BackgroundConfig>) => {
     try {
-      // Update user preferences in the database
       const response = await fetch('/api/user/preferences', {
         method: 'PATCH',
         headers: {
@@ -18,7 +17,6 @@ export function useCustomBackground() {
       })
 
       if (response.ok) {
-        // Dispatch event to update the background component
         window.dispatchEvent(
           new CustomEvent('backgroundToggle', {
             detail: { config },
@@ -47,7 +45,6 @@ export function useCustomBackground() {
     [updateBackgroundConfig]
   )
 
-  // Legacy aurora support
   const toggleAurora = useCallback(
     async (enabled: boolean) => {
       return updateBackgroundConfig({ type: 'aurora', enabled })
@@ -59,6 +56,6 @@ export function useCustomBackground() {
     updateBackgroundConfig,
     setBackgroundType,
     toggleBackground,
-    toggleAurora, // For backward compatibility
+    toggleAurora,
   }
 }

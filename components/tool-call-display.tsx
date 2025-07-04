@@ -309,7 +309,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         ...paper,
         link: paper.link || paper.url || paper.pdfUrl || paper.downloadUrl,
       })),
-      source: result.source || toolName || 'Database Search',
+      source: 'papers.codechef & vitpapervault',
     }
   }
 
@@ -329,7 +329,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         formattedMenu: result.formattedMenu || result.data.formattedMenu,
         message: result.message,
       },
-      source: toolName || 'Mess Menu System',
+      source: 'MessIt',
     }
   }
 
@@ -352,7 +352,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         availableDateRange: result.availableDateRange,
         success: false,
       },
-      source: 'Mess Menu',
+      source: 'MessIt',
     }
   }
 

@@ -186,18 +186,8 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     }
 
     if (result.requiresCredentials === true) {
-      React.useEffect(() => {
-        if (hasVTOPCredentials()) {
-          const triggerEvent = new CustomEvent('vtopLoginTrigger', {
-            detail: {
-              command: result.command || 'attendance',
-              toolCallId: toolCallId,
-            },
-          })
-          window.dispatchEvent(triggerEvent)
-        }
-      }, [result.command, toolCallId])
-      
+      // Removed automatic login trigger to prevent repeated /chat calls.
+      // Require manual login via the credentials dialog instead.
       return null
     }
 
@@ -881,30 +871,6 @@ const ToolCallResultsSummary = ({
           'course-page': 'Course Page',
         }
         return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ')
-      }
-
-      if (hasVTOPCredentials()) {
-        return (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3">
-            <Card className="w-full overflow-hidden border-blue-500/20 bg-blue-500/5">
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex items-center space-x-3">
-                  <div className="relative">
-                    <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-foreground truncate">
-                      Preparing VTOP Authentication
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                      Click "Login" button to authenticate with your linked credentials for {formatCommandName(command)} data
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )
       }
 
       return (

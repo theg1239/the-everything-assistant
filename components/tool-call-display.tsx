@@ -297,7 +297,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         ...paper,
         link: paper.link || paper.url || paper.pdfUrl || paper.downloadUrl,
       })),
-      source: 'papers.codechef & vitpapervault',
+      source: 'internal, papers.codechef & vitpapervault',
     }
   }
 

@@ -21,25 +21,36 @@ export default function UploadForm({ onUploadSuccess }: UploadFormProps) {
   const [uploadStatus, setUploadStatus] = useState("")
   const [result, setResult] = useState<{ success: boolean; error?: string; paper?: any } | null>(null)
   const [dragActive, setDragActive] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLFormElement>) => {
+    const items = e.clipboardData.items
+    const newFiles: File[] = []
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
+      if (item.kind === "file" && item.type.startsWith("image/")) {
+        const file = item.getAsFile()
+        if (file) newFiles.push(file)
+      }
+    }
+    if (newFiles.length > 0) {
+      setSelectedFiles(prev => [...prev, ...newFiles])
+    }
+  }
 
   const handleSubmit = async (formData: FormData) => {
-    if (!selectedFile || isUploading) return
-
+    if (selectedFiles.length === 0 || isUploading) return
     setIsUploading(true)
     setResult(null)
     setUploadProgress(5)
     setUploadStatus("preparing file...")
-
     try {
       await new Promise(resolve => setTimeout(resolve, 500))
       setUploadProgress(15)
       setUploadStatus("validating file...")
-      
       await new Promise(resolve => setTimeout(resolve, 300))
       setUploadProgress(25)
       setUploadStatus("uploading to cloud...")
-      
       const progressInterval = setInterval(() => {
         setUploadProgress(prev => {
           if (prev < 80) {
@@ -48,26 +59,21 @@ export default function UploadForm({ onUploadSuccess }: UploadFormProps) {
           return prev
         })
       }, 200)
-      
       const result = await uploadPaper(formData)
-      
       clearInterval(progressInterval)
       setUploadProgress(95)
       setUploadStatus("processing content...")
       setResult(result)
-
       if (result.success) {
         setUploadProgress(100)
         setUploadStatus("upload complete!")
         toast.success("paper uploaded successfully", {
           description: `"${result.paper?.title}" has been processed and saved.`,
         })
-        
         onUploadSuccess?.()
-        
         setTimeout(() => {
           setResult(null)
-          setSelectedFile(null)
+          setSelectedFiles([])
           setUploadProgress(0)
           setUploadStatus("")
           const fileInput = document.getElementById('file') as HTMLInputElement
@@ -112,21 +118,21 @@ export default function UploadForm({ onUploadSuccess }: UploadFormProps) {
     e.preventDefault()
     e.stopPropagation()
     setDragActive(false)
-
     const files = e.dataTransfer.files
-    if (files && files[0]) {
-      setSelectedFile(files[0])
-      const formData = new FormData()
-      formData.append("file", files[0])
-      handleSubmit(formData)
+    if (files && files.length > 0) {
+      setSelectedFiles(prev => [...prev, ...Array.from(files)])
     }
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
-    if (files && files[0]) {
-      setSelectedFile(files[0])
+    if (files && files.length > 0) {
+      setSelectedFiles(prev => [...prev, ...Array.from(files)])
     }
+  }
+
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index))
   }
 
   return (
@@ -137,19 +143,23 @@ export default function UploadForm({ onUploadSuccess }: UploadFormProps) {
             upload paper
           </CardTitle>
           <CardDescription className="text-sm text-gray-600 dark:text-gray-400">
-            pdf or image files
+            pdf or image files (paste, drag, or select multiple)
           </CardDescription>
         </CardHeader>
-
         <CardContent className="space-y-6">
-          <form onSubmit={(e) => {
-            e.preventDefault()
-            if (selectedFile && !isUploading) {
-              const formData = new FormData()
-              formData.append("file", selectedFile)
-              handleSubmit(formData)
-            }
-          }} className="space-y-4">
+          <form
+            onPaste={handlePaste}
+            onSubmit={e => {
+              e.preventDefault()
+              if (selectedFiles.length > 0 && !isUploading) {
+                const formData = new FormData()
+                // Append each file as 'file' (adjust to 'files' or 'files[]' if needed by backend)
+                selectedFiles.forEach(file => formData.append('file', file))
+                handleSubmit(formData)
+              }
+            }}
+            className="space-y-4"
+          >
             <div
               className={`group relative overflow-hidden rounded-2xl border-2 border-dashed p-8 text-center transition-all duration-300 ${
                 dragActive
@@ -166,104 +176,53 @@ export default function UploadForm({ onUploadSuccess }: UploadFormProps) {
                 id="file"
                 name="file"
                 accept=".pdf,.jpg,.jpeg,.png,.webp"
-                required
+                multiple
+                required={selectedFiles.length === 0}
                 disabled={isUploading}
                 onChange={handleFileChange}
                 className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
               />
-
               <div className="flex flex-col items-center gap-4">
                 <motion.div
                   animate={dragActive ? { scale: 1.05 } : { scale: 1 }}
-                  className={`rounded-full p-4 transition-colors ${
-                    dragActive
-                      ? "bg-blue-100/80 dark:bg-blue-900/20"
-                      : "bg-gray-100/80 group-hover:bg-gray-200/80 dark:bg-gray-800/80 dark:group-hover:bg-gray-700/80"
-                  }`}
+                  className={`rounded-full p-4 transition-colors ${dragActive ? "bg-blue-100/80 dark:bg-blue-900/20" : "bg-white/80 dark:bg-gray-900/40"}`}
                 >
-                  {isUploading ? (
-                    <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
-                  ) : dragActive ? (
-                    <Upload className="h-8 w-8 text-blue-600 dark:text-blue-400" />
-                  ) : (
-                    <FileText className="h-8 w-8 text-gray-600 dark:text-gray-400" />
-                  )}
+                  <CloudUpload className="h-8 w-8 text-blue-500" />
                 </motion.div>
-
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    {isUploading 
-                      ? uploadStatus || "processing..." 
-                      : dragActive 
-                        ? "drop file here" 
-                        : selectedFile 
-                          ? selectedFile.name 
-                          : "choose file or drag & drop"
-                    }
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {selectedFile 
-                      ? `${(selectedFile.size / (1024 * 1024)).toFixed(1)} mb` 
-                      : "pdf, jpg, png, webp • max 10mb"
-                    }
-                  </p>
-                </div>
-
-                {isUploading && (
-                  <div className="w-full max-w-xs">
-                    <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
-                      <motion.div
-                        className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-500"
-                        initial={{ width: 0 }}
-                        animate={{ width: `${uploadProgress}%` }}
-                        transition={{ duration: 0.3 }}
-                      />
+                <div className="text-gray-700 dark:text-gray-300">
+                  {selectedFiles.length === 0 ? (
+                    <span>paste, drag, or select pdf or image files</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      {selectedFiles.map((file, idx) => (
+                        <div key={idx} className="relative group">
+                          {file.type.startsWith('image/') ? (
+                            <img src={URL.createObjectURL(file)} alt={file.name} className="h-16 w-16 object-cover rounded shadow" />
+                          ) : (
+                            <FileText className="h-16 w-16 text-gray-400" />
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFile(idx)}
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 text-xs opacity-80 hover:opacity-100"
+                            aria-label="Remove file"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                    <p className="mt-1 text-xs text-center text-gray-500 dark:text-gray-400">
-                      {uploadProgress.toFixed(0)}% complete
-                    </p>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
-
-            <div className="flex gap-2">
-              <Button
-                type="submit"
-                disabled={isUploading || !selectedFile}
-                className="flex-1 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 py-3 text-sm font-medium transition-all hover:from-blue-700 hover:to-purple-700 disabled:opacity-50"
-              >
-                {isUploading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    processing...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-4 w-4" />
-                    upload
-                  </>
-                )}
-              </Button>
-              
-              {selectedFile && !isUploading && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setSelectedFile(null)
-                    setResult(null)
-                    setUploadProgress(0)
-                    setUploadStatus("")
-                    const fileInput = document.getElementById('file') as HTMLInputElement
-                    if (fileInput) fileInput.value = ''
-                  }}
-                  className="rounded-xl px-4 py-3 text-sm"
-                >
-                  clear
-                </Button>
+            <Button type="submit" disabled={isUploading || selectedFiles.length === 0} className="w-full">
+              {isUploading ? (
+                <span className="flex items-center gap-2"><Loader2 className="animate-spin h-4 w-4" /> Uploading...</span>
+              ) : (
+                <span className="flex items-center gap-2"><Upload className="h-4 w-4" /> Upload Paper</span>
               )}
-            </div>
+            </Button>
           </form>
 
           <AnimatePresence>
@@ -327,7 +286,7 @@ export default function UploadForm({ onUploadSuccess }: UploadFormProps) {
                             size="sm"
                             onClick={() => {
                               setResult(null)
-                              setSelectedFile(null)
+                              setSelectedFiles([])
                               setUploadProgress(0)
                               setUploadStatus("")
                               const fileInput = document.getElementById('file') as HTMLInputElement

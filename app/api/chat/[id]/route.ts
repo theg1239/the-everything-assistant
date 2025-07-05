@@ -28,7 +28,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         parts: msg.toolInvocations && msg.toolInvocations.length > 0 
           ? [
               ...(msg.content ? [{ type: 'text', text: msg.content }] : []),
-              ...msg.toolInvocations.map(toolInvocation => ({
+              ...msg.toolInvocations.map((toolInvocation: any) => ({
                 type: 'tool-invocation',
                 toolInvocation
               }))

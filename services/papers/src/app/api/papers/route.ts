@@ -5,7 +5,6 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     
-    // Extract query parameters
     const query = searchParams.get('query') || undefined
     const courseCode = searchParams.get('courseCode') || searchParams.get('subject') || undefined
     const year = searchParams.get('year') ? parseInt(searchParams.get('year')!) : undefined
@@ -15,7 +14,6 @@ export async function GET(request: NextRequest) {
     const page = searchParams.get('page') ? parseInt(searchParams.get('page')!) : 1
     const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : 50
 
-    // Build filters object
     const filters: any = {}
     if (query) filters.query = query
     if (courseCode) filters.courseCode = courseCode
@@ -24,7 +22,6 @@ export async function GET(request: NextRequest) {
     if (semester) filters.semester = semester
     if (examType) filters.examType = examType
 
-    // Build pagination object
     const pagination = {
       page,
       limit,

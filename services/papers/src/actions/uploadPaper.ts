@@ -16,12 +16,16 @@ cloudinary.config({
 })
 
 const PaperMetadataSchema = z.object({
-  title: z.string().describe('The title or subject of the exam paper'),
-  courseCode: z.string().optional().describe('The course code (e.g., CSE1001, MAT1001)'),
-  year: z.number().optional().describe('The year the exam was conducted'),
-  slot: z.string().optional().describe('The exam slot (e.g., A1, B1, C1)'),
-  semester: z.string().optional().describe('The semester (e.g., Fall, Winter, Summer)'),
-  examType: z.string().optional().describe('Type of exam (e.g., CAT1, CAT2, FAT, Quiz)'),
+  title: z.string().min(1, 'Title is required').describe('The full course name/title as written on the exam paper (e.g., "Computer Programming", "Mathematics for Engineers", "Digital Logic Design")'),
+  courseCode: z.string().min(1, 'Course code is required').describe('The exact course code as written (e.g., CSE1001, MAT1011, ECE2025, CHE1007)'),
+  year: z.number().min(2000).max(2030, 'Year must be between 2000-2030').describe('The academic year when the exam was conducted (e.g., 2023, 2024)'),
+  slot: z.string().min(1, 'Slot is required').describe('The exact slot as written on the paper (e.g., A1, A2, B1, B2, C1, C2, D1, D2, E1, E2, F1, F2, G1, G2, L1-L60)'),
+  semester: z.enum(['Fall', 'Winter', 'Summer', 'Spring'], {
+    errorMap: () => ({ message: 'Semester must be one of: Fall, Winter, Summer, Spring' })
+  }).describe('The semester when exam was conducted (Fall/Winter/Summer/Spring)'),
+  examType: z.enum(['CAT-1', 'CAT-2', 'FAT', 'Quiz', 'Assignment', 'Lab'], {
+    errorMap: () => ({ message: 'Exam type must be one of: CAT-1, CAT-2, FAT, Quiz, Assignment, Lab' })
+  }).describe('Type of assessment: CAT-1 (Continuous Assessment Test 1), CAT-2 (Continuous Assessment Test 2), FAT (Final Assessment Test), Quiz, Assignment, or Lab'),
 })
 
 type PaperMetadata = z.infer<typeof PaperMetadataSchema>
@@ -32,11 +36,11 @@ interface UploadResult {
   paper?: {
     id: string
     title: string
-    courseCode?: string
-    year?: number
-    slot?: string
-    semester?: string
-    examType?: string
+    courseCode: string
+    year: number
+    slot: string
+    semester: string
+    examType: string
     fileUrl: string
     thumbnailUrl: string
     ocrText?: string
@@ -46,39 +50,105 @@ interface UploadResult {
 
 export async function uploadPaper(formData: FormData): Promise<UploadResult> {
   try {
-    const file = formData.get('file') as File
+    const files = formData.getAll('file') as File[]
     
-    if (!file) {
+    if (!files || files.length === 0) {
       return { success: false, error: 'No file provided' }
     }
 
     const maxFileSize = 10 * 1024 * 1024
-    if (file.size > maxFileSize) {
-      return { 
-        success: false, 
-        error: 'File size too large. Please upload files smaller than 10MB.' 
-      }
-    }
-
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
-    if (!allowedTypes.includes(file.type)) {
-      return { 
-        success: false, 
-        error: 'Invalid file type. Please upload a PDF or image file (JPEG, PNG, WebP)' 
+    
+    // Validate all files
+    for (const file of files) {
+      if (file.size > maxFileSize) {
+        return { 
+          success: false, 
+          error: `File "${file.name}" is too large. Please upload files smaller than 10MB.` 
+        }
+      }
+      
+      if (!allowedTypes.includes(file.type)) {
+        return { 
+          success: false, 
+          error: `Invalid file type for "${file.name}". Please upload PDF or image files (JPEG, PNG, WebP)` 
+        }
       }
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer())
-    console.log(`Processing file: ${file.name}, size: ${file.size} bytes, type: ${file.type}`)
-    console.log(`Buffer size: ${buffer.length} bytes`)
+    console.log(`Processing ${files.length} file(s)`)
+    
+    let finalBuffer: Buffer
+    let finalMimeType: string
+    let combinedFilename: string
+
+    if (files.length === 1) {
+      // Single file - process as before
+      const file = files[0]
+      finalBuffer = Buffer.from(await file.arrayBuffer())
+      finalMimeType = file.type
+      combinedFilename = file.name
+      console.log(`Processing single file: ${file.name}, size: ${file.size} bytes, type: ${file.type}`)
+    } else {
+      // Multiple files - combine into PDF
+      console.log(`Combining ${files.length} files into a single PDF`)
+      const pdfDoc = await PDFDocument.create()
+      
+      for (const file of files) {
+        const buffer = Buffer.from(await file.arrayBuffer())
+        console.log(`Processing file: ${file.name}, size: ${file.size} bytes, type: ${file.type}`)
+        
+        if (file.type === 'application/pdf') {
+          // If it's a PDF, merge its pages
+          const existingPdf = await PDFDocument.load(buffer)
+          const pages = await pdfDoc.copyPages(existingPdf, existingPdf.getPageIndices())
+          pages.forEach((page) => pdfDoc.addPage(page))
+        } else {
+          // If it's an image, add it as a new page
+          let image
+          if (file.type === 'image/png') {
+            image = await pdfDoc.embedPng(buffer)
+          } else if (file.type === 'image/jpeg') {
+            image = await pdfDoc.embedJpg(buffer)
+          } else {
+            // Convert WebP to PNG using Sharp
+            const pngBuffer = await sharp(buffer).png().toBuffer()
+            image = await pdfDoc.embedPng(pngBuffer)
+          }
+          
+          const page = pdfDoc.addPage()
+          const { width, height } = image.scale(1)
+          
+          // Scale image to fit page while maintaining aspect ratio
+          const pageWidth = page.getWidth()
+          const pageHeight = page.getHeight()
+          const scale = Math.min(pageWidth / width, pageHeight / height)
+          
+          const scaledWidth = width * scale
+          const scaledHeight = height * scale
+          
+          page.drawImage(image, {
+            x: (pageWidth - scaledWidth) / 2,
+            y: (pageHeight - scaledHeight) / 2,
+            width: scaledWidth,
+            height: scaledHeight,
+          })
+        }
+      }
+      
+      finalBuffer = Buffer.from(await pdfDoc.save())
+      finalMimeType = 'application/pdf'
+      combinedFilename = files.length > 1 ? `combined_paper_${files.length}_files.pdf` : files[0].name
+      console.log(`Combined PDF created, size: ${finalBuffer.length} bytes`)
+    }
     
     let ocrText = ''
     let metadata: PaperMetadata
-    let fileBuffer = buffer
+    let fileBuffer = finalBuffer
 
-    if (file.type === 'application/pdf') {
+    if (finalMimeType === 'application/pdf') {
       try {
-        await PDFDocument.load(buffer)
+        await PDFDocument.load(finalBuffer)
       } catch (error) {
         return { 
           success: false, 
@@ -86,12 +156,12 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
         }
       }
       
-      const base64Pdf = buffer.toString('base64')
+      const base64Pdf = finalBuffer.toString('base64')
       
       // Generate metadata and OCR text using Gemini in a single call
       try {
         const { object: extractedData } = await generateObject({
-          model: google('gemini-2.0-flash-exp'),
+          model: google('gemini-2.0-flash'),
           schema: z.object({
             metadata: PaperMetadataSchema,
             text: z.string().describe('Full text content of the document'),
@@ -112,26 +182,36 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
               ],
             },
           ],
-          system: 'You are an AI that extracts metadata from VIT university exam papers. Extract the title, course code, year, slot, semester, and exam type from the document. Also extract all the text content. Be as accurate as possible.',
+          system: 'You are an AI that extracts metadata from VIT university exam papers with high accuracy. Follow these extraction rules:\n\n1. TITLE: Extract the full course name exactly as written (e.g., "Computer Programming", "Digital Logic Design", "Mathematics for Engineers")\n2. COURSE CODE: Find the exact alphanumeric course code (e.g., CSE1001, MAT1011, ECE2025, CHE1007)\n3. EXAM TYPE: Identify the assessment type - CAT-1 (Continuous Assessment Test 1), CAT-2 (Continuous Assessment Test 2), FAT (Final Assessment Test), Quiz, Assignment, or Lab\n4. SLOT: Extract the exact slot designation (A1, A2, B1, B2, C1, C2, D1, D2, E1, E2, F1, F2, G1, G2, or L1-L60 for lab slots)\n5. YEAR: Extract the academic year (e.g., 2023, 2024)\n6. SEMESTER: Identify the semester (Fall, Winter, Summer, Spring)\n\nLook for these details in headers, footers, and throughout the document. Be precise and only extract information that is clearly visible. ALL FIELDS ARE REQUIRED - if you cannot find a field, make your best educated guess based on the document content.',
         })
         
-        metadata = extractedData.metadata
+        // Validate the extracted metadata
+        const validationResult = PaperMetadataSchema.safeParse(extractedData.metadata)
+        if (!validationResult.success) {
+          console.error('Schema validation failed for PDF:', validationResult.error.issues)
+          return {
+            success: false,
+            error: `Failed to extract required metadata from PDF: ${validationResult.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join(', ')}`,
+          }
+        }
+        
+        metadata = validationResult.data
         ocrText = extractedData.text
       } catch (error) {
         console.error('Gemini API error for PDF:', error)
         return {
           success: false,
-          error: 'Failed to process PDF content. Please ensure the PDF is readable and try again.',
+          error: 'Failed to process PDF content. Please ensure the PDF contains clear exam paper information and try again.',
         }
       }
       
     } else {
-      const base64Image = buffer.toString('base64')
-      const mimeType = file.type
+      const base64Image = finalBuffer.toString('base64')
+      const mimeType = finalMimeType
       
       try {
         const { object: extractedData } = await generateObject({
-          model: google('gemini-2.0-flash-exp'),
+          model: google('gemini-2.0-flash'),
           schema: z.object({
             metadata: PaperMetadataSchema,
             text: z.string().describe('Full text content of the document'),
@@ -152,16 +232,26 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
               ],
             },
           ],
-          system: 'You are an AI that extracts metadata from VIT university exam papers. Extract the title, course code, year, slot, semester, and exam type from the document. Also extract all the text content. Be as accurate as possible.',
+          system: 'You are an AI that extracts metadata from VIT university exam papers with high accuracy. Follow these extraction rules:\n\n1. TITLE: Extract the full course name exactly as written (e.g., "Computer Programming", "Digital Logic Design", "Mathematics for Engineers")\n2. COURSE CODE: Find the exact alphanumeric course code (e.g., CSE1001, MAT1011, ECE2025, CHE1007)\n3. EXAM TYPE: Identify the assessment type - CAT-1 (Continuous Assessment Test 1), CAT-2 (Continuous Assessment Test 2), FAT (Final Assessment Test), Quiz, Assignment, or Lab\n4. SLOT: Extract the exact slot designation (A1, A2, B1, B2, C1, C2, D1, D2, E1, E2, F1, F2, G1, G2, or L1-L60 for lab slots)\n5. YEAR: Extract the academic year (e.g., 2023, 2024)\n6. SEMESTER: Identify the semester (Fall, Winter, Summer, Spring)\n\nLook for these details in headers, footers, and throughout the document. Be precise and only extract information that is clearly visible. ALL FIELDS ARE REQUIRED - if you cannot find a field, make your best educated guess based on the document content.',
         })
 
-        metadata = extractedData.metadata
+        // Validate the extracted metadata
+        const validationResult = PaperMetadataSchema.safeParse(extractedData.metadata)
+        if (!validationResult.success) {
+          console.error('Schema validation failed for image:', validationResult.error.issues)
+          return {
+            success: false,
+            error: `Failed to extract required metadata from image: ${validationResult.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join(', ')}`,
+          }
+        }
+
+        metadata = validationResult.data
         ocrText = extractedData.text
       } catch (error) {
         console.error('Gemini API error for image:', error)
         return {
           success: false,
-          error: 'Failed to process image content. Please ensure the image is clear and readable.',
+          error: 'Failed to process image content. Please ensure the image contains clear exam paper information and is readable.',
         }
       }
     }
@@ -169,7 +259,7 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
     const timestamp = Date.now()
     const fileUploadResult = await new Promise<{secure_url: string; public_id: string}>((resolve, reject) => {
       
-      if (file.type === 'application/pdf') {
+      if (finalMimeType === 'application/pdf') {
         const uploadStream = cloudinary.uploader.upload_stream(
           {
             resource_type: 'raw',
@@ -215,7 +305,7 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
 
     let thumbnailUploadResult: {secure_url: string; public_id: string}
     
-    if (file.type === 'application/pdf') {
+    if (finalMimeType === 'application/pdf') {
       thumbnailUploadResult = await new Promise<{secure_url: string; public_id: string}>((resolve, reject) => {
         const uploadStream = cloudinary.uploader.upload_stream(
           {
@@ -239,10 +329,10 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
             }
           }
         )
-        uploadStream.end(buffer)
+        uploadStream.end(finalBuffer)
       })
     } else {
-      const thumbnailBuffer = await sharp(buffer)
+      const thumbnailBuffer = await sharp(finalBuffer)
         .resize(800, 1200, { fit: 'inside', withoutEnlargement: true })
         .webp({ quality: 90 })
         .toBuffer()
@@ -274,21 +364,21 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
     }
 
     const newPaper: NewPaper = {
-      title: metadata.title || 'Untitled Paper',
-      courseCode: metadata.courseCode || null,
-      year: metadata.year || null,
-      slot: metadata.slot || null,
-      semester: metadata.semester || null,
-      examType: metadata.examType || null,
+      title: metadata.title,
+      courseCode: metadata.courseCode,
+      year: metadata.year,
+      slot: metadata.slot,
+      semester: metadata.semester,
+      examType: metadata.examType,
       fileUrl: fileUploadResult.secure_url,
       thumbnailUrl: thumbnailUploadResult.secure_url,
       ocrText,
       extractedText: ocrText,
       cloudinaryPublicId: fileUploadResult.public_id,
       thumbnailPublicId: thumbnailUploadResult.public_id,
-      originalFilename: file.name,
-      fileSize: file.size,
-      mimeType: file.type,
+      originalFilename: combinedFilename,
+      fileSize: finalBuffer.length,
+      mimeType: finalMimeType,
     }
 
     const [insertedPaper] = await db.insert(papers).values(newPaper).returning()
@@ -298,11 +388,11 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
       paper: {
         id: insertedPaper.id,
         title: insertedPaper.title,
-        courseCode: insertedPaper.courseCode || undefined,
-        year: insertedPaper.year || undefined,
-        slot: insertedPaper.slot || undefined,
-        semester: insertedPaper.semester || undefined,
-        examType: insertedPaper.examType || undefined,
+        courseCode: insertedPaper.courseCode,
+        year: insertedPaper.year,
+        slot: insertedPaper.slot,
+        semester: insertedPaper.semester,
+        examType: insertedPaper.examType,
         fileUrl: insertedPaper.fileUrl,
         thumbnailUrl: insertedPaper.thumbnailUrl,
         ocrText: insertedPaper.ocrText || undefined,

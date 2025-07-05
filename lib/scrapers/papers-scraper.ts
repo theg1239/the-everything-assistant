@@ -69,8 +69,8 @@ export async function scrapePapersService(
 ): Promise<ScraperResult> {
   try {
     const baseUrl = process.env.NODE_ENV === 'development' 
-      ? 'http://localhost:3001' 
-      : process.env.PAPERS_SERVICE_URL || 'https://papers.vitassistant.com'
+      ? 'https://the-everything-assistant-bqip.vercel.app' 
+      : process.env.PAPERS_SERVICE_URL || 'https://the-everything-assistant-bqip.vercel.app'
     
     const params = new URLSearchParams()
     if (courseCode) params.append('courseCode', courseCode)

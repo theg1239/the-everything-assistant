@@ -8,6 +8,7 @@ import { ToolCallDisplay } from './tool-call-display'
 import { MessageActions } from './message-actions'
 import { memo } from 'react'
 import rehypeRaw from 'rehype-raw'
+import remarkGfm from 'remark-gfm'
 
 interface MessageBubbleProps {
   message: Message
@@ -106,6 +107,7 @@ const PureMessageBubble = ({
                     <div className="prose prose-invert prose-base max-w-none text-foreground dark:text-gray-100">
                       <ReactMarkdown
                         rehypePlugins={[rehypeRaw]}
+                        remarkPlugins={[remarkGfm]}
                         components={{
                           p: ({ children }) => (
                             <p className="mb-4 last:mb-0 leading-relaxed text-foreground dark:text-gray-100">
@@ -160,19 +162,29 @@ const PureMessageBubble = ({
                             </blockquote>
                           ),
                           table: ({ children }) => (
-                            <div className="overflow-x-auto my-4">
-                              <table className="min-w-full border border-border dark:border-border/50 rounded-lg text-sm">
+                            <div className="overflow-x-auto my-4 rounded-lg border border-border dark:border-border/50">
+                              <table className="min-w-full divide-y divide-border dark:divide-border/50 text-sm">
                                 {children}
                               </table>
                             </div>
                           ),
+                          thead: ({ children }) => (
+                            <thead className="bg-muted/50 dark:bg-muted/30">
+                              {children}
+                            </thead>
+                          ),
+                          tbody: ({ children }) => (
+                            <tbody className="divide-y divide-border dark:divide-border/50 bg-background">
+                              {children}
+                            </tbody>
+                          ),
                           th: ({ children }) => (
-                            <th className="border border-border dark:border-border/50 px-4 py-2 bg-muted/50 dark:bg-muted/30 text-foreground dark:text-white font-semibold text-left">
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-foreground dark:text-white uppercase tracking-wider">
                               {children}
                             </th>
                           ),
                           td: ({ children }) => (
-                            <td className="border border-border dark:border-border/50 px-4 py-2 text-foreground dark:text-gray-200">
+                            <td className="px-4 py-3 text-sm text-foreground dark:text-gray-200 whitespace-nowrap">
                               {children}
                             </td>
                           ),
@@ -205,6 +217,7 @@ const PureMessageBubble = ({
                   <div className="prose prose-invert prose-base max-w-none">
                     <ReactMarkdown
                       rehypePlugins={[rehypeRaw]}
+                      remarkPlugins={[remarkGfm]}
                       components={{
                         p: ({ children }) => (
                           <p className="mb-3 last:mb-0 leading-relaxed text-foreground">
@@ -243,19 +256,29 @@ const PureMessageBubble = ({
                           </pre>
                         ),
                         table: ({ children }) => (
-                          <div className="overflow-x-auto mb-3">
-                            <table className="min-w-full border border-border rounded-lg text-sm">
+                          <div className="overflow-x-auto mb-4 rounded-lg border border-border">
+                            <table className="min-w-full divide-y divide-border text-sm">
                               {children}
                             </table>
                           </div>
                         ),
+                        thead: ({ children }) => (
+                          <thead className="bg-muted/50">
+                            {children}
+                          </thead>
+                        ),
+                        tbody: ({ children }) => (
+                          <tbody className="divide-y divide-border bg-background">
+                            {children}
+                          </tbody>
+                        ),
                         th: ({ children }) => (
-                          <th className="border border-border px-3 py-2 bg-muted text-foreground font-semibold text-sm">
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider">
                             {children}
                           </th>
                         ),
                         td: ({ children }) => (
-                          <td className="border border-border px-3 py-2 text-muted-foreground text-sm">
+                          <td className="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap">
                             {children}
                           </td>
                         ),

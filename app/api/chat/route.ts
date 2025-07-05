@@ -21,7 +21,7 @@ async function generateChatTitle(userMessage: string, userId?: string): Promise<
     }
 
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Title generation timeout')), 10000)
+      setTimeout(() => reject(new Error('Title generation timeout')), 5000) // Reduced from 10s to 5s for faster TTFT
     )
 
     const modelPromise = rateLimitedAI.groq.generateText(
@@ -387,6 +387,33 @@ export async function POST(req: Request) {
             headers: { 'Content-Type': 'application/json' },
           })
         } catch (error: any) {
+          console.error('Direct tool call failed:', error)
+          
+          const failedInvocation = {
+            toolCallId: directToolCall.toolCallId || Date.now().toString(),
+            toolName: directToolCall.toolName,
+            args: directToolCall.args,
+            result: {
+              success: false,
+              error: error.message || 'Tool execution failed',
+              timestamp: new Date().toISOString()
+            },
+            state: 'error'
+          }
+          
+          try {
+            await saveMessage(
+              chat.id,
+              'assistant',
+              `Failed to execute ${directToolCall.toolName}: ${error.message || 'Unknown error'}`,
+              [failedInvocation],
+              Date.now().toString()
+            )
+            console.log('Failed tool invocation saved to database')
+          } catch (saveError) {
+            console.error('Failed to save failed tool invocation:', saveError)
+          }
+          
           return new Response(
             JSON.stringify({
               success: false,
@@ -396,6 +423,33 @@ export async function POST(req: Request) {
           )
         }
       } else {
+        console.error('Direct tool call - tool not found:', directToolCall.toolName)
+        
+        const notFoundInvocation = {
+          toolCallId: directToolCall.toolCallId || Date.now().toString(),
+          toolName: directToolCall.toolName,
+          args: directToolCall.args,
+          result: {
+            success: false,
+            error: 'Tool not found',
+            timestamp: new Date().toISOString()
+          },
+          state: 'error'
+        }
+        
+        try {
+          await saveMessage(
+            chat.id,
+            'assistant',
+            `Tool "${directToolCall.toolName}" not found`,
+            [notFoundInvocation],
+            Date.now().toString()
+          )
+          console.log('Tool not found invocation saved to database')
+        } catch (saveError) {
+          console.error('Failed to save tool not found invocation:', saveError)
+        }
+        
         return new Response(JSON.stringify({ success: false, error: 'Tool not found' }), {
           status: 400,
           headers: { 'Content-Type': 'application/json' },
@@ -557,6 +611,22 @@ console.log('Memory stuff:', memoryGuidance)
         experimental_transform: smoothStream({ chunking: 'word' }),
         maxSteps: 5,
         experimental_continueSteps: true,
+        onError: async (error: any) => {
+          console.error('Streaming error occurred:', error)
+          
+          try {
+            await saveMessage(
+              chat.id,
+              'assistant',
+              `I encountered an error while processing your request: ${error.message || 'Unknown streaming error'}`,
+              [],
+              `error-${Date.now()}`
+            )
+            console.log('Streaming error saved to database')
+          } catch (saveError) {
+            console.error('Failed to save streaming error:', saveError)
+          }
+        },
         onStepFinish: async ({ text, toolCalls, toolResults, finishReason, usage, stepIndex }: any) => {
           console.log(`Step ${stepIndex} finished:`, {
             hasText: !!text,
@@ -566,14 +636,36 @@ console.log('Memory stuff:', memoryGuidance)
             stepIndex
           })
           
+          // Don't save intermediate steps - we'll save everything in onFinish
+          // This prevents creating separate messages for each tool invocation
+          
           const knowledgeBaseCalls = toolCalls?.filter((tc: any) => tc.toolName === 'knowledgeBase') || []
           if (knowledgeBaseCalls.length > 0) {
             console.log('Knowledge base tool called, model should continue automatically...')
           }
         },
         onFinish: async (result: any) => {
-          const toolResults = (result as any).toolResults ?? result.toolCalls ?? []
-          for (const tr of toolResults) {
+          console.log('Stream finished, processing final result...')
+          
+          const allToolResults: any[] = []
+          
+          const finalToolResults = (result as any).toolResults ?? result.toolCalls ?? []
+          allToolResults.push(...finalToolResults)
+          
+          if ((result as any).steps) {
+            for (const step of (result as any).steps) {
+              const stepToolResults = step.toolResults ?? step.toolCalls ?? []
+              allToolResults.push(...stepToolResults)
+            }
+          }
+          
+          const uniqueToolResults = allToolResults.filter((result, index, array) => 
+            index === array.findIndex(r => r.toolCallId === result.toolCallId)
+          )
+          
+          console.log(`Collected ${uniqueToolResults.length} unique tool results from all steps`)
+          
+          for (const tr of uniqueToolResults) {
             if (
               tr.toolName === 'queryVTOP' &&
               tr.result?.success &&
@@ -602,13 +694,33 @@ console.log('Memory stuff:', memoryGuidance)
                   summary: (parsed as any).summary,
                 })
               } catch (e) {
-                console.error('Failed to parse VTOP data in stream:', e)
+                console.error('Failed to parse VTOP data in final result:', e)
               }
             }
           }
 
-          const safeInvocations = sanitizeToolInvocations(toolResults)
-          await saveMessage(chat.id, 'assistant', result.text, safeInvocations, result.response.id)
+          const allInvocations = uniqueToolResults.map((tr: any) => ({
+            toolCallId: tr.toolCallId || `${tr.toolName}-${Date.now()}`,
+            toolName: tr.toolName,
+            args: tr.args || {},
+            result: tr.result || null,
+            state: tr.result ? (tr.result.success !== false ? 'result' : 'error') : 'error'
+          }))
+
+          const safeInvocations = sanitizeToolInvocations(allInvocations)
+          
+          try {
+            await saveMessage(chat.id, 'assistant', result.text, safeInvocations, result.response.id)
+            console.log(`Final message saved with ${safeInvocations.length} tool invocations`)
+          } catch (error) {
+            console.error('Failed to save final message:', error)
+            try {
+              await saveMessage(chat.id, 'assistant', result.text, [], result.response.id)
+              console.log('Final message saved without tool invocations (fallback)')
+            } catch (fallbackError) {
+              console.error('Failed to save final message even without tool invocations:', fallbackError)
+            }
+          }
         },
       },
       session.user.id

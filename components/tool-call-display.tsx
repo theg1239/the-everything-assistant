@@ -685,8 +685,22 @@ const ToolCallResultsSummary = ({
       (config): config is NonNullable<typeof config> =>
         config !== null &&
         config !== undefined &&
-        (config.type === 'faculty' ||
-          (config.data && (Array.isArray(config.data) ? config.data.length > 0 : true)))
+        (config.type && 
+         (config.type === 'faculty' || 
+          config.type === 'reddit-knowledge' || 
+          config.type === 'campus-info' || 
+          config.type === 'papers' || 
+          config.type === 'vtop-data' || 
+          config.type === 'error' ||
+          config.type === 'general' ||
+          config.type === 'mess-menu' ||
+          config.type === 'companies' ||
+          config.type === 'course-info' ||
+          config.type === 'ffcs-planner' ||
+          config.type === 'placements' ||
+          config.type === 'interactive-course-page' ||
+          config.type === 'reddit-overview' ||
+          (('data' in config) && (config as { data?: unknown }).data !== undefined && (config as { data?: unknown }).data !== null)))
     )
 
   const failedTools = enrichedToolCalls.filter(tool => {

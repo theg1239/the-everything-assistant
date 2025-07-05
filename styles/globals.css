@@ -346,7 +346,7 @@
     max-width: 1400px;
   }
 
-  @media (max-width: 768px) {
+  /* @media (max-width: 768px) {
     .container {
       padding-left: 1rem;
       padding-right: 1rem;
@@ -359,7 +359,7 @@
     .text-xl {
       font-size: 1.125rem;
     }
-  }
+  } */
 
   *:focus,
   *:focus-visible {

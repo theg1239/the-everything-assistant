@@ -31,11 +31,31 @@ const PureMessageBubble = ({
 }: MessageBubbleProps) => {
   const isUser = message.role === 'user'
 
+  const getToolInvocations = (message: Message) => {
+    if (message.parts) {
+      return message.parts
+        .filter((part: any) => part.type === 'tool-invocation')
+        .map((part: any) => part.toolInvocation)
+    }
+    return (message as any).toolInvocations || []
+  }
+
+  const toolInvocations = getToolInvocations(message)
+
   if (!isUser && 
       (!message.content || (message.content as string).trim() === '')) {
-    if (message.toolInvocations?.some((t: any) => t.toolName === 'knowledgeBase' && t.state !== 'result') ||
-        (message.toolInvocations && message.toolInvocations.length > 0)) {
-      return null;
+    const hasVisibleToolCalls = toolInvocations?.some((t: any) => 
+      t.toolName !== 'knowledgeBase' && t.toolName !== 'saveMemory'
+    )
+    
+    if (!hasVisibleToolCalls) {
+      const hasKnowledgeBaseInProgress = toolInvocations?.some((t: any) => 
+        t.toolName === 'knowledgeBase' && t.state !== 'result'
+      )
+      
+      if (!hasKnowledgeBaseInProgress) {
+        return null;
+      }
     }
   }
 
@@ -62,7 +82,7 @@ const PureMessageBubble = ({
 
         <div className="flex flex-col gap-4 w-full">
           {(() => {
-            const visibleToolCalls = message.toolInvocations?.filter(
+            const visibleToolCalls = toolInvocations?.filter(
               (t: any) => t.toolName !== 'knowledgeBase'
             )
             return visibleToolCalls && visibleToolCalls.length > 0 ? (
@@ -86,7 +106,7 @@ const PureMessageBubble = ({
               <p className="text-base leading-relaxed">{message.content}</p>
             ) : (
               (() => {
-                const hasSuccessfulVTOPWithContent = message.toolInvocations?.some(
+                const hasSuccessfulVTOPWithContent = toolInvocations?.some(
                   (tool: any) =>
                     tool.toolName === 'queryVTOP' &&
                     tool.result &&
@@ -98,7 +118,7 @@ const PureMessageBubble = ({
                   return null
                 }
 
-                const kbResult = message.toolInvocations?.find(
+                const kbResult = toolInvocations?.find(
                   (t: any) =>
                     t.toolName === 'knowledgeBase' && t.state === 'result' && t.result?.answer
                 )

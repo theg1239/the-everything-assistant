@@ -140,8 +140,19 @@
 }
 
 @media (max-width: 768px) {
+  .mobile-input-area {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    background: rgba(0, 0, 0, 0.95) !important;
+    backdrop-filter: blur(20px) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+    padding-bottom: env(safe-area-inset-bottom) !important;
+  }
+
   .chat-content {
-    padding-bottom: calc(100px + var(--safe-bottom)) !important;
+    padding-bottom: calc(140px + var(--safe-bottom)) !important;
     padding-top: 0 !important;
   }
 

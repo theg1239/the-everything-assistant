@@ -24,6 +24,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         role: msg.role,
         content: msg.content,
         toolInvocations: msg.toolInvocations,
+        // Convert toolInvocations to parts format for new API compatibility
+        parts: msg.toolInvocations && msg.toolInvocations.length > 0 
+          ? [
+              ...(msg.content ? [{ type: 'text', text: msg.content }] : []),
+              ...msg.toolInvocations.map(toolInvocation => ({
+                type: 'tool-invocation',
+                toolInvocation
+              }))
+            ]
+          : msg.content 
+            ? [{ type: 'text', text: msg.content }]
+            : [],
         createdAt: msg.created_at,
       })),
     })

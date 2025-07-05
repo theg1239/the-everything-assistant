@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, memo, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useChat, type Message as AIMessage } from '@ai-sdk/react'
 import type { ToolInvocation } from '@ai-sdk/ui-utils'
 import { useRouter } from 'next/navigation'
@@ -8,7 +9,7 @@ import { useSession } from 'next-auth/react'
 import { useMemory } from '@/contexts/memory-context'
 import { VirtualizedMessages } from '@/components/virtualized-messages'
 import { motion } from 'framer-motion'
-import { FileText, Plus } from 'lucide-react'
+import { FileText, Plus, ChevronDown } from 'lucide-react'
 import { HamburgerButton } from '@/components/hamburger-button'
 import { Button } from '@/components/ui/button'
 import { SuggestedQuestions } from '@/components/suggested-questions'
@@ -56,14 +57,14 @@ const useViewportHeight = () => {
             window.scrollTo(0, 0)
           }
         })
-      }, 50)
+      }, 25)
     }
 
     const handleVisualViewportChange = () => setVh()
 
     setVh()
     window.addEventListener('resize', setVh, { passive: true })
-    window.addEventListener('orientationchange', () => setTimeout(setVh, 100), { passive: true })
+    window.addEventListener('orientationchange', () => setTimeout(setVh, 50), { passive: true }) // Reduced from 100ms to 50ms
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', handleVisualViewportChange)
     }
@@ -71,7 +72,7 @@ const useViewportHeight = () => {
     return () => {
       clearTimeout(timeoutId)
       window.removeEventListener('resize', setVh)
-      window.removeEventListener('orientationchange', () => setTimeout(setVh, 100))
+      window.removeEventListener('orientationchange', () => setTimeout(setVh, 50)) // Updated to match the above
       if (window.visualViewport) {
         window.visualViewport.removeEventListener('resize', handleVisualViewportChange)
       }
@@ -117,7 +118,6 @@ const PureChatInterface = memo(({
   autoResume = false,
 }: ChatInterfaceProps) => {
   const [showFullChat, setShowFullChat] = useState(initialMessages.length > 0)
-  // Use the global sidebar context instead of local state
   const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebar()
   const [canvasOpen, setCanvasOpen] = useState(false)
   const [canvasContent, setCanvasContent] = useState<string>('')
@@ -134,6 +134,8 @@ const PureChatInterface = memo(({
   const [selectedTool, setSelectedTool] = useState<string>('')
   const [chatCreatedEventDispatched, setChatCreatedEventDispatched] = useState(false)
   const [maximizedArtifact, setMaximizedArtifact] = useState<any>(null)
+  const [isAtBottom, setIsAtBottom] = useState(true)
+  const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -250,6 +252,7 @@ const PureChatInterface = memo(({
   } = useChat({
     api: '/api/chat',
     initialMessages: initialMessages,
+    // experimental_throttle: 25,
     body: {
       ...(optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : {}),
       ...(selectedTool ? { preferredTool: selectedTool } : {}),
@@ -340,9 +343,51 @@ const PureChatInterface = memo(({
     } else {
       messagesEndRef.current.scrollIntoView({ behavior: scrollBehavior, block: 'end' })
     }
+    setIsAtBottom(true)
   }, [isMobile, isLoading])
 
-  const throttledScrollToBottom = useThrottle(scrollToBottom, 100)
+  const checkScrollPosition = useCallback(() => {
+    const container = contentRef.current?.parentElement
+    if (!container) return
+
+    const threshold = 100
+    const isAtBottomNow = container.scrollHeight - container.scrollTop - container.clientHeight < threshold
+    setIsAtBottom(isAtBottomNow)
+  }, [])
+
+  useEffect(() => {
+    const container = contentRef.current?.parentElement
+    if (!container) return
+
+    const handleScroll = () => {
+      checkScrollPosition()
+    }
+
+    container.addEventListener('scroll', handleScroll, { passive: true })
+    return () => container.removeEventListener('scroll', handleScroll)
+  }, [checkScrollPosition])
+
+  useEffect(() => {
+    if (isLoading) {
+      setAutoScrollEnabled(isAtBottom)
+    } else {
+      setAutoScrollEnabled(true)
+    }
+  }, [isLoading, isAtBottom])
+
+  useEffect(() => {
+    if (initialMessages.length > 0 && showFullChat) {
+      const container = contentRef.current?.parentElement
+      if (container) {
+        container.scrollTop = container.scrollHeight
+      } else if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' })
+      }
+      setIsAtBottom(true)
+    }
+  }, [initialMessages.length, showFullChat])
+
+  const throttledScrollToBottom = useThrottle(scrollToBottom, 50)
 
   useEffect(() => {
     if (isInitialRender) {
@@ -363,13 +408,13 @@ const PureChatInterface = memo(({
   }, [messages, isLoading, isInitialRender, throttledScrollToBottom])
 
   useEffect(() => {
-    if (!isInitialRender && messages.length > 0 && isLoading) {
+    if (!isInitialRender && messages.length > 0 && isLoading && autoScrollEnabled) {
       throttledScrollToBottom()
     }
-  }, [messages, isLoading, isInitialRender, throttledScrollToBottom])
+  }, [messages, isLoading, isInitialRender, throttledScrollToBottom, autoScrollEnabled])
 
   useEffect(() => {
-    if (isLoading && !isInitialRender) {
+    if (isLoading && !isInitialRender && autoScrollEnabled) {
       const targetNode = contentRef.current
       if (!targetNode) return
 
@@ -386,17 +431,17 @@ const PureChatInterface = memo(({
         observer.disconnect()
       }
     }
-  }, [isLoading, isInitialRender, throttledScrollToBottom])
+  }, [isLoading, isInitialRender, throttledScrollToBottom, autoScrollEnabled])
 
   useEffect(() => {
-    if (isMobile && !isInitialRender && messages.length > 0) {
+    if (isMobile && !isInitialRender && messages.length > 0 && autoScrollEnabled) {
       const timeoutId = setTimeout(() => {
         throttledScrollToBottom()
       }, 200)
 
       return () => clearTimeout(timeoutId)
     }
-  }, [messages.length, isMobile, isInitialRender, throttledScrollToBottom])
+  }, [messages.length, isMobile, isInitialRender, throttledScrollToBottom, autoScrollEnabled])
 
   useEffect(() => {
     if (error) {
@@ -474,7 +519,24 @@ const PureChatInterface = memo(({
   }
 
   const resetToHome = () => {
-    router.push('/')
+    if (window.location.pathname !== '/') {
+      router.push('/')
+      setMessages([])
+      setInput('')
+      setShowFullChat(false)
+      setHasUserInitiatedConversation(false)
+      setIsFirstMessageInNewChat(false)
+      setShowFollowUpSuggestions(false)
+      setLastAssistantMessage('')
+      setLastUserMessage('')
+      setOptimisticChatId(undefined)
+      setChatCreatedEventDispatched(false)
+      setErrorMessage(null)
+      clearRateLimitError()
+      clearToolResult('')
+    } else {
+      router.push('/')
+    }
   }
 
   const openCanvas = () => {
@@ -660,7 +722,7 @@ const PureChatInterface = memo(({
 
       forceScrollToTop()
 
-      const timeoutId = setTimeout(forceScrollToTop, 100)
+      const timeoutId = setTimeout(forceScrollToTop, 50)
 
       return () => {
         clearTimeout(timeoutId)
@@ -824,7 +886,24 @@ const PureChatInterface = memo(({
             <Button
               variant="ghost"
               onClick={() => {
-                router.push('/')
+                if (window.location.pathname !== '/') {
+                  // router.push('/')
+                  setMessages([])
+                  setInput('')
+                  setShowFullChat(false)
+                  setHasUserInitiatedConversation(false)
+                  setIsFirstMessageInNewChat(false)
+                  setShowFollowUpSuggestions(false)
+                  setLastAssistantMessage('')
+                  setLastUserMessage('')
+                  setOptimisticChatId(undefined)
+                  setChatCreatedEventDispatched(false)
+                  setErrorMessage(null)
+                  clearRateLimitError()
+                  clearToolResult('')
+                } else {
+                  router.push('/')
+                }
               }}
               className="h-9"
             >
@@ -931,12 +1010,13 @@ const PureChatInterface = memo(({
             </div>
           </div>
         </div>
-        <ScrollToTopButton />{' '}
+        <ScrollToTopButton />
         <div
           className={cn(
             'flex-shrink-0 sticky bottom-0 z-30',
-            isMobile ? 'input-area' : 'input-area'
+            isMobile ? 'input-area mobile-input-area' : 'input-area'
           )}
+          style={isMobile ? { paddingBottom: 'env(safe-area-inset-bottom)' } : undefined}
         >
           {!isMobile && (
             <div
@@ -947,7 +1027,7 @@ const PureChatInterface = memo(({
                 borderTop: 'none',
               }}
             ></div>
-          )}{' '}
+          )}
           {!maximizedArtifact && (
             <div className="relative z-10">
               <FollowUpSuggestions
@@ -977,6 +1057,25 @@ const PureChatInterface = memo(({
           )}
         </div>
       </div>
+      
+      {!isAtBottom && !showFollowUpSuggestions && typeof window !== 'undefined' && createPortal(
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.8 }}
+          className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-40"
+        >
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={scrollToBottom}
+            className="h-10 w-10 rounded-full bg-background/80 hover:bg-background/90 border-0 shadow-sm backdrop-blur-sm"
+          >
+            <ChevronDown className="h-5 w-5 text-foreground/70" />
+          </Button>
+        </motion.div>,
+        document.body
+      )}
     </VTOPToolHandler>
   )
 })
@@ -996,12 +1095,10 @@ export const ChatInterface = memo(
     )
   },
   (prevProps, nextProps) => {
-    // Custom comparison to reduce unnecessary re-renders
     return (
       prevProps.chatId === nextProps.chatId &&
       prevProps.autoResume === nextProps.autoResume &&
       prevProps.initialMessages?.length === nextProps.initialMessages?.length &&
-      // Only compare message IDs to avoid deep equality checks
       (prevProps.initialMessages?.every((msg, index) => 
         msg.id === nextProps.initialMessages?.[index]?.id
       ) ?? true)

@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     const { method } = await request.json()
 
-    if (!method || !['email', 'authenticator'].includes(method)) {
+    if (!method || !['email', 'authenticator', 'security_key'].includes(method)) {
       return NextResponse.json({ error: 'Invalid method' }, { status: 400 })
     }
 
@@ -165,6 +165,21 @@ export async function POST(request: NextRequest) {
         qrCode: qrCodeUrl,
         secret: secret.base32,
         manualEntryKey: secret.base32,
+      })
+    } else if (method === 'security_key') {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          tempMfaSecret: null,
+          tempMfaMethod: method,
+          tempMfaExpires: new Date(Date.now() + 15 * 60 * 1000),
+        },
+      })
+
+      return NextResponse.json({
+        success: true,
+        message: 'Security key setup initiated (supports both platform authenticators and external keys)',
+        requiresWebAuthn: true,
       })
     }
   } catch (error) {

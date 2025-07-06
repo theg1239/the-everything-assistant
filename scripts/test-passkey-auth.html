@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Passkey Authentication</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #0052a3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .info { color: #17a2b8; }
+        .warning { color: #ffc107; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Test Passkey Authentication</h1>
+        <p>This page tests the WebAuthn authentication flow with the platform authenticator constraint.</p>
+        
+        <div>
+            <button onclick="testPlatformAuth()">Test Platform Authenticator (Passkey Style)</button>
+            <button onclick="testCrossPlatformAuth()">Test Cross-Platform Authenticator (Security Key Style)</button>
+            <button onclick="testNoConstraint()">Test No Constraint (Default)</button>
+            <button onclick="clearLog()">Clear Log</button>
+        </div>
+        
+        <div id="log" class="log">Click a button above to test WebAuthn authentication...\n</div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type;
+            logDiv.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        function generateChallenge() {
+            const array = new Uint8Array(32);
+            crypto.getRandomValues(array);
+            return array;
+        }
+
+        function generateCredentialId() {
+            const array = new Uint8Array(64);
+            crypto.getRandomValues(array);
+            return array;
+        }
+
+        async function testPlatformAuth() {
+            log('Testing Platform Authenticator (like passkey setup)...', 'info');
+            
+            try {
+                const options = {
+                    challenge: generateChallenge(),
+                    allowCredentials: [{
+                        id: generateCredentialId(),
+                        type: 'public-key',
+                        transports: ['internal']
+                    }],
+                    userVerification: 'required',
+                    authenticatorAttachment: 'platform',
+                    timeout: 60000
+                };
+
+                log(`Options: ${JSON.stringify({
+                    userVerification: options.userVerification,
+                    authenticatorAttachment: options.authenticatorAttachment,
+                    allowCredentials: options.allowCredentials.map(c => ({
+                        transports: c.transports,
+                        type: c.type
+                    }))
+                }, null, 2)}`, 'info');
+
+                const credential = await navigator.credentials.get({
+                    publicKey: options
+                });
+
+                if (credential) {
+                    log('Authentication successful with platform authenticator!', 'success');
+                    log(`Credential ID: ${credential.id}`, 'success');
+                } else {
+                    log('No credential received', 'error');
+                }
+            } catch (error) {
+                log(`Error: ${error.name} - ${error.message}`, 'error');
+                if (error.name === 'NotAllowedError') {
+                    log('This usually means the operation was cancelled or no platform authenticator is available', 'warning');
+                }
+            }
+        }
+
+        async function testCrossPlatformAuth() {
+            log('Testing Cross-Platform Authenticator (like security key)...', 'info');
+
+            try {
+                const options = {
+                    challenge: generateChallenge(),
+                    allowCredentials: [{
+                        id: generateCredentialId(),
+                        type: 'public-key',
+                        transports: ['usb', 'nfc', 'ble', 'hybrid']
+                    }],
+                    userVerification: 'preferred',
+                    authenticatorAttachment: 'cross-platform',
+                    timeout: 60000
+                };
+
+                log(`Options: ${JSON.stringify({
+                    userVerification: options.userVerification,
+                    authenticatorAttachment: options.authenticatorAttachment,
+                    allowCredentials: options.allowCredentials.map(c => ({
+                        transports: c.transports,
+                        type: c.type
+                    }))
+                }, null, 2)}`, 'info');
+
+                const credential = await navigator.credentials.get({
+                    publicKey: options
+                });
+
+                if (credential) {
+                    log('✅ Authentication successful with cross-platform authenticator!', 'success');
+                    log(`Credential ID: ${credential.id}`, 'success');
+                } else {
+                    log('❌ No credential received', 'error');
+                }
+            } catch (error) {
+                log(`❌ Error: ${error.name} - ${error.message}`, 'error');
+            }
+        }
+
+        async function testNoConstraint() {
+            log('🌐 Testing No Authenticator Attachment Constraint...', 'info');
+            
+            try {
+                const options = {
+                    challenge: generateChallenge(),
+                    allowCredentials: [{
+                        id: generateCredentialId(),
+                        type: 'public-key',
+                        transports: ['usb', 'nfc', 'ble', 'hybrid', 'internal']
+                    }],
+                    userVerification: 'preferred',
+                    // No authenticatorAttachment constraint
+                    timeout: 60000
+                };
+
+                log(`Options: ${JSON.stringify({
+                    userVerification: options.userVerification,
+                    authenticatorAttachment: options.authenticatorAttachment || 'undefined',
+                    allowCredentials: options.allowCredentials.map(c => ({
+                        transports: c.transports,
+                        type: c.type
+                    }))
+                }, null, 2)}`, 'info');
+
+                const credential = await navigator.credentials.get({
+                    publicKey: options
+                });
+
+                if (credential) {
+                    log('✅ Authentication successful with any available authenticator!', 'success');
+                    log(`Credential ID: ${credential.id}`, 'success');
+                } else {
+                    log('❌ No credential received', 'error');
+                }
+            } catch (error) {
+                log(`❌ Error: ${error.name} - ${error.message}`, 'error');
+            }
+        }
+
+        // Check WebAuthn support on page load
+        window.addEventListener('load', () => {
+            if (!window.PublicKeyCredential) {
+                log('❌ WebAuthn is not supported in this browser', 'error');
+            } else {
+                log('✅ WebAuthn is supported in this browser', 'success');
+                
+                // Check for platform authenticator support
+                PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+                    .then(available => {
+                        if (available) {
+                            log('✅ Platform authenticator (Windows Hello/Touch ID) is available', 'success');
+                        } else {
+                            log('⚠️ Platform authenticator is not available', 'warning');
+                        }
+                    });
+            }
+        });
+    </script>
+</body>
+</html>

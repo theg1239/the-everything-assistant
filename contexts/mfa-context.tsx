@@ -35,11 +35,10 @@ export function MFAProvider({ children }: { children: React.ReactNode }) {
       setIsCheckingMFA(false)
       setIsMFAVerified(true)
       return
-    } // Check if we have a stored MFA verification in sessionStorage
+    }
     const storedMFAVerification = sessionStorage.getItem(`mfa_verified_${session.user.id}`)
     if (storedMFAVerification) {
       const verificationData = JSON.parse(storedMFAVerification)
-      // Session-persistent: valid until browser session ends, no time limit
       if (verificationData.verified) {
         setIsMFAVerified(true)
         setIsCheckingMFA(false)
@@ -58,16 +57,14 @@ export function MFAProvider({ children }: { children: React.ReactNode }) {
     setIsMFAVerified(verified)
 
     if (verified && session?.user?.id) {
-      // Store MFA verification in sessionStorage (persists until browser session ends)
       sessionStorage.setItem(
         `mfa_verified_${session.user.id}`,
         JSON.stringify({
           verified: true,
-          sessionId: session.user.id, // Additional validation
+          sessionId: session.user.id,
         })
       )
     } else if (session?.user?.id) {
-      // Remove verification if setting to false
       sessionStorage.removeItem(`mfa_verified_${session.user.id}`)
     }
   }

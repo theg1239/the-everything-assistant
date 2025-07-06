@@ -2475,7 +2475,6 @@ const PureArtifactDisplay = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* Left Panel - Paper Details (Hidden on mobile) */}
             {!isMobile && (
               <motion.div
                 className="w-80 bg-muted dark:bg-background h-full border-r border-border flex-shrink-0 overflow-y-auto"

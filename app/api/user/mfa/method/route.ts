@@ -22,7 +22,7 @@ export async function PATCH(request: NextRequest) {
 
     const { newMethod, verificationCode } = await request.json()
 
-    if (!newMethod || !['email', 'authenticator'].includes(newMethod)) {
+    if (!newMethod || !['email', 'authenticator', 'security_key'].includes(newMethod)) {
       return NextResponse.json({ error: 'Invalid method' }, { status: 400 })
     }
 
@@ -75,6 +75,8 @@ export async function PATCH(request: NextRequest) {
         isValidCode = await bcrypt.compare(verificationCode, user.tempMfaSecret)
       } else if (newMethod === 'authenticator') {
         isValidCode = verifyTOTP(verificationCode, user.tempMfaSecret)
+      } else if (newMethod === 'security_key') {
+        return NextResponse.json({ error: 'WebAuthn verification should be handled separately' }, { status: 400 })
       }
 
       if (!isValidCode) {
@@ -162,6 +164,24 @@ export async function PATCH(request: NextRequest) {
         qrCode: qrCodeUrl,
         secret: secret,
         manualEntryKey: secret,
+      })
+    } else if (newMethod === 'security_key') {
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          tempMfaMethod: newMethod,
+          tempMfaExpires: expiresAt,
+          tempMfaSecret: null,
+        },
+      })
+
+      return NextResponse.json({
+        success: true,
+        message: 'Please register your security key (supports both platform authenticators and external keys)',
+        requiresRegistration: true,
+        method: newMethod,
       })
     }
   } catch (error) {

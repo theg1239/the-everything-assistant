@@ -49,6 +49,8 @@
     "@react-three/fiber": "^9.1.2",
     "@react-three/postprocessing": "^3.0.4",
     "@react-three/rapier": "^2.1.0",
+    "@simplewebauthn/browser": "^13.1.2",
+    "@simplewebauthn/server": "^13.1.2",
     "@sparticuz/chromium": "latest",
     "@tailwindcss/typography": "latest",
     "@tanstack/react-query": "^5.81.5",

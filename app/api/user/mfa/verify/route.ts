@@ -18,8 +18,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { code } = await request.json()
-    if (!code || typeof code !== 'string') {
+    const { code, method, credential } = await request.json()
+    
+    if (method === 'security_key') {
+      if (!credential) {
+        return NextResponse.json({ error: 'Credential is required for WebAuthn methods' }, { status: 400 })
+      }
+    } else if (!code || typeof code !== 'string') {
       return NextResponse.json({ error: 'Verification code is required' }, { status: 400 })
     }
 
@@ -69,6 +74,11 @@ export async function POST(request: NextRequest) {
       isValidCode = await bcrypt.compare(code, user.tempMfaSecret)
     } else if (user.tempMfaMethod === 'authenticator') {
       isValidCode = verifyTOTP(code, user.tempMfaSecret)
+    } else if (user.tempMfaMethod === 'security_key') {
+      return NextResponse.json(
+        { error: 'Please use the WebAuthn verification endpoint for security keys' },
+        { status: 400 }
+      )
     }
 
     if (!isValidCode) {

@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
     const availability = {
       email: isSMTPConfigured(),
       authenticator: true,
+      security_key: true,
     }
 
     return NextResponse.json({

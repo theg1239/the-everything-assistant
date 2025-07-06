@@ -90,6 +90,12 @@ export async function POST(request: Request) {
           { error: 'Email MFA verification not yet implemented for login' },
           { status: 400 }
         )
+      } else if (user.mfaMethod === 'security_key') {
+        // WebAuthn methods should use their own endpoints, not this one
+        return NextResponse.json(
+          { error: 'WebAuthn methods require authentication via their dedicated endpoints' },
+          { status: 400 }
+        )
       } else {
         // console.log('No valid MFA method found')
       }

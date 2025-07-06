@@ -33,6 +33,7 @@ import {
   EyeOff,
   MessageSquarePlus,
   Brain,
+  Fingerprint,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -154,7 +155,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
   const [isDeletingArchived, setIsDeletingArchived] = useState(false)
   const [loadingPreferences, setLoadingPreferences] = useState(false)
   const [mfaEnabled, setMfaEnabled] = useState(false)
-  const [mfaMethod, setMfaMethod] = useState<'email' | 'authenticator'>('email')
+  const [mfaMethod, setMfaMethod] = useState<'email' | 'authenticator' | 'security_key'>('email')
   const [memoryEnabled, setMemoryEnabled] = useState(true)
   const [loadingMfa, setLoadingMfa] = useState(false)
   const [showMfaSetup, setShowMfaSetup] = useState(false)
@@ -168,9 +169,11 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
   const [mfaAvailability, setMfaAvailability] = useState<{
     email: boolean
     authenticator: boolean
+    security_key: boolean
   }>({
     email: true,
     authenticator: true,
+    security_key: true,
   })
 
   useEffect(() => {
@@ -203,12 +206,13 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         }
 
         // Load MFA status
-        let loadedMfaMethod: 'email' | 'authenticator' = 'email'
+        let loadedMfaMethod: 'email' | 'authenticator' | 'security_key' = 'email'
         const mfaResponse = await fetch('/api/user/mfa')
         if (mfaResponse.ok) {
           const mfaData = await mfaResponse.json()
           setMfaEnabled(mfaData.mfaEnabled ?? false)
-          loadedMfaMethod = mfaData.mfaMethod === 'authenticator' ? 'authenticator' : 'email'
+          loadedMfaMethod = mfaData.mfaMethod === 'security_key' ? 'security_key' : 
+                           mfaData.mfaMethod === 'authenticator' ? 'authenticator' : 'email'
           setMfaMethod(loadedMfaMethod)
           // Set backup codes count (we don't get the actual codes for security)
           setBackupCodes(new Array(mfaData.backupCodesCount || 0).fill('••••••••'))
@@ -218,11 +222,29 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         const availabilityResponse = await fetch('/api/user/mfa/availability')
         if (availabilityResponse.ok) {
           const availabilityData = await availabilityResponse.json()
-          setMfaAvailability(availabilityData.availability)
+          
+          // Check for WebAuthn browser support for security keys
+          const hasWebAuthnSupport = !!(
+            window.navigator.credentials &&
+            typeof window.navigator.credentials.create === 'function' &&
+            window.PublicKeyCredential
+          )
+          
+          // Update availability based on browser support
+          const updatedAvailability = {
+            ...availabilityData.availability,
+            security_key: availabilityData.availability.security_key && hasWebAuthnSupport
+          }
+          
+          setMfaAvailability(updatedAvailability)
 
           // If email is not available and current method is email, switch to authenticator
-          if (!availabilityData.availability.email && loadedMfaMethod === 'email') {
-            setMfaMethod('authenticator')
+          if (!updatedAvailability.email && loadedMfaMethod === 'email') {
+            if (updatedAvailability.security_key) {
+              setMfaMethod('security_key')
+            } else {
+              setMfaMethod('authenticator')
+            }
           }
         }
       } catch (error) {
@@ -379,37 +401,194 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
   }
 
   const verifyMfaSetup = async () => {
-    if (!verificationCode.trim()) {
+    if (mfaMethod !== 'security_key' && !verificationCode.trim()) {
       toast.error('Please enter the verification code')
       return
     }
 
     setLoadingMfa(true)
     try {
-      const response = await fetch('/api/user/mfa/verify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          code: verificationCode,
-          method: mfaMethod,
-        }),
-      })
+      if (mfaMethod === 'security_key') {
+        // Handle WebAuthn credential creation for security keys
+        if (!window.navigator.credentials) {
+          throw new Error('WebAuthn is not supported in this browser')
+        }
 
-      if (response.ok) {
-        const data = await response.json()
-        setBackupCodes(data.backupCodes)
-        setMfaEnabled(true)
-        setSetupStep('backup')
-        toast.success('MFA setup completed successfully')
+        // Check for specific WebAuthn support
+        if (!window.PublicKeyCredential) {
+          throw new Error('PublicKeyCredential is not supported in this browser')
+        }
+
+        console.log('Starting WebAuthn registration for:', mfaMethod)
+        console.log('Current origin:', window.location.origin)
+        console.log('Is HTTPS:', window.location.protocol === 'https:')
+        console.log('Is localhost:', window.location.hostname === 'localhost')
+
+        // Check platform authenticator availability
+        let isPlatformAvailable = false
+        try {
+          isPlatformAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+          console.log('Platform authenticator available:', isPlatformAvailable)
+        } catch (checkError) {
+          console.warn('Could not check platform authenticator availability:', checkError)
+        }
+
+        // First, get the credential creation options from the server
+        const optionsResponse = await fetch('/api/user/mfa/webauthn/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+
+        if (!optionsResponse.ok) {
+          throw new Error('Failed to get registration options')
+        }
+
+        const options = await optionsResponse.json()
+        console.log('Received WebAuthn options:', options)
+        console.log('Challenge type:', typeof options.challenge, 'Length:', options.challenge?.length)
+        console.log('User ID type:', typeof options.user.id, 'Length:', options.user.id?.length)
+
+        // Helper function to decode base64url to Uint8Array
+        function base64urlToUint8Array(base64url: string): Uint8Array {
+          // Add padding if needed
+          const padding = '='.repeat((4 - base64url.length % 4) % 4)
+          const base64 = (base64url + padding).replace(/-/g, '+').replace(/_/g, '/')
+          const rawData = window.atob(base64)
+          const outputArray = new Uint8Array(rawData.length)
+          for (let i = 0; i < rawData.length; ++i) {
+            outputArray[i] = rawData.charCodeAt(i)
+          }
+          return outputArray
+        }
+
+        // Prepare the credential request - properly decode base64url encoded values
+        const credentialCreationOptions: PublicKeyCredentialCreationOptions = {
+          rp: options.rp,
+          user: {
+            ...options.user,
+            id: typeof options.user.id === 'string' ? base64urlToUint8Array(options.user.id) : new Uint8Array(options.user.id),
+          },
+          challenge: typeof options.challenge === 'string' ? base64urlToUint8Array(options.challenge) : new Uint8Array(options.challenge),
+          pubKeyCredParams: options.pubKeyCredParams,
+          timeout: Math.min(options.timeout || 60000, 60000), // Cap at 60 seconds
+          attestation: 'none', // Use 'none' for better compatibility
+          authenticatorSelection: {
+            userVerification: 'discouraged', // Most compatible setting
+            requireResidentKey: false,
+            residentKey: 'discouraged',
+          },
+        }
+
+        console.log('Final credential creation options:', credentialCreationOptions)
+
+        // Show a more helpful toast before attempting WebAuthn
+        const methodName = 'security key'
+        const instructionText = 'Please use Windows Hello, Touch ID, external key, or your device\'s built-in authenticator when prompted'
+        
+        toast.info(`Setting up ${methodName}. ${instructionText}`, { duration: 5000 })
+
+        // Create the credential with improved error handling
+        let credential: PublicKeyCredential | null = null
+        
+        try {
+          console.log('Attempting WebAuthn credential creation...')
+          credential = await navigator.credentials.create({
+            publicKey: credentialCreationOptions,
+          }) as PublicKeyCredential
+          
+          console.log('WebAuthn credential created successfully:', credential?.id)
+        } catch (webauthnError: any) {
+          console.error('WebAuthn credential creation failed:', webauthnError)
+          
+          // Provide more specific error messages
+          if (webauthnError.name === 'NotAllowedError') {
+            throw new Error('Security key registration was cancelled, timed out, or blocked. This could be due to Windows Hello setup issues, an unconnected security key, or browser restrictions. Please ensure your authenticator is ready and try again.')
+          } else if (webauthnError.name === 'InvalidStateError') {
+            throw new Error(`This ${methodName} is already registered for your account.`)
+          } else if (webauthnError.name === 'NotSupportedError') {
+            throw new Error(`Your ${methodName} is not supported by this browser.`)
+          } else if (webauthnError.name === 'ConstraintError') {
+            throw new Error(`The ${methodName} does not meet the security requirements.`)
+          } else {
+            throw new Error(`Failed to create ${methodName}: ${webauthnError.message || 'Unknown error occurred'}`)
+          }
+        }
+
+        if (!credential) {
+          throw new Error('Failed to create credential - no credential returned')
+        }
+
+        const response = credential.response as AuthenticatorAttestationResponse
+
+        // Helper function to encode Uint8Array to base64url
+        function uint8ArrayToBase64url(buffer: Uint8Array): string {
+          const base64 = btoa(String.fromCharCode(...buffer))
+          return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+        }
+
+        console.log('Sending credential to server for verification...')
+        // Send the credential to the server for verification
+        const verifyResponse = await fetch('/api/user/mfa/webauthn/verify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            credential: {
+              id: credential.id,
+              rawId: uint8ArrayToBase64url(new Uint8Array(credential.rawId)),
+              response: {
+                attestationObject: uint8ArrayToBase64url(new Uint8Array(response.attestationObject)),
+                clientDataJSON: uint8ArrayToBase64url(new Uint8Array(response.clientDataJSON)),
+              },
+              type: credential.type,
+              clientExtensionResults: credential.getClientExtensionResults?.() || {},
+            },
+            method: mfaMethod,
+          }),
+        })
+
+        if (verifyResponse.ok) {
+          const data = await verifyResponse.json()
+          setBackupCodes(data.backupCodes)
+          setMfaEnabled(true)
+          setSetupStep('backup')
+          toast.success('Security key registered successfully!')
+        } else {
+          const errorData = await verifyResponse.json()
+          throw new Error(errorData.error || 'Failed to register security key')
+        }
       } else {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Invalid verification code')
+        // Handle traditional verification codes for email and authenticator
+        const response = await fetch('/api/user/mfa/verify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            code: verificationCode,
+            method: mfaMethod,
+          }),
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setBackupCodes(data.backupCodes)
+          setMfaEnabled(true)
+          setSetupStep('backup')
+          toast.success('MFA setup completed successfully')
+        } else {
+          const errorData = await response.json()
+          throw new Error(errorData.error || 'Invalid verification code')
+        }
       }
     } catch (error: any) {
       console.error('Error verifying MFA setup:', error)
-      toast.error(error.message || 'Failed to verify code')
+      
+      // More specific error handling - the error messages are now coming from our improved logic above
+      toast.error(error.message || 'Failed to verify setup')
     } finally {
       setLoadingMfa(false)
     }
@@ -479,7 +658,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     }
   }
 
-  const handleMfaMethodChange = async (method: 'email' | 'authenticator') => {
+  const handleMfaMethodChange = async (method: 'email' | 'authenticator' | 'security_key') => {
     if (!mfaEnabled && setupStep === 'method') {
       setMfaMethod(method)
       return
@@ -498,19 +677,31 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          method,
+          newMethod: method,
         }),
       })
 
       if (response.ok) {
-        setMfaMethod(method)
-        toast.success('MFA method updated successfully')
+        const data = await response.json()
+        
+        // Handle WebAuthn methods differently
+        if (data.requiresRegistration && method === 'security_key') {
+          // Set the method and trigger the registration flow
+          setMfaMethod(method)
+          setShowMfaSetup(true)
+          setSetupStep('verify') // Skip method selection, go straight to verification
+          toast.success('Please register your security key')
+        } else {
+          setMfaMethod(method)
+          toast.success('MFA method updated successfully')
+        }
       } else {
-        throw new Error('Failed to update MFA method')
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to update MFA method')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating MFA method:', error)
-      toast.error('Failed to update MFA method')
+      toast.error(error.message || 'Failed to update MFA method')
     } finally {
       setLoadingMfa(false)
     }
@@ -1103,7 +1294,9 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                           <div className="space-y-3">
                             <Label className="text-sm font-medium">
                               current method:{' '}
-                              {mfaMethod === 'email' ? 'email verification' : 'authenticator app'}
+                              {mfaMethod === 'email' ? 'email verification' : 
+                               mfaMethod === 'authenticator' ? 'authenticator app' : 
+                               'security key'}
                             </Label>
 
                             <div className="space-y-2">
@@ -1156,6 +1349,32 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                                   <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
                                 )}
                               </button>
+
+                              {mfaAvailability.security_key && (
+                                <button
+                                  onClick={() => handleMfaMethodChange('security_key')}
+                                  disabled={loadingMfa}
+                                  className={cn(
+                                    'w-full flex items-center justify-between p-3 rounded-lg border transition-colors text-sm md:text-base',
+                                    mfaMethod === 'security_key'
+                                      ? 'border-primary bg-primary/5'
+                                      : 'border-border hover:bg-muted/50'
+                                  )}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <Fingerprint className="w-4 h-4 flex-shrink-0" />
+                                    <div className="text-left">
+                                      <div className="font-medium">security key</div>
+                                      <div className="text-xs text-muted-foreground">
+                                        use FIDO2/WebAuthn hardware key
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {mfaMethod === 'security_key' && (
+                                    <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+                                  )}
+                                </button>
+                              )}
                             </div>
                           </div>
 
@@ -1252,7 +1471,6 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                           </div>
                         </>
                       ) : (
-                        // MFA Setup Flow
                         <div className="space-y-4">
                           {setupStep === 'method' && (
                             <>
@@ -1325,6 +1543,32 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                                     <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
                                   )}
                                 </button>
+
+                                {mfaAvailability.security_key && (
+                                  <button
+                                    onClick={() => handleMfaMethodChange('security_key')}
+                                    disabled={loadingMfa}
+                                    className={cn(
+                                      'w-full flex items-center justify-between p-3 rounded-lg border transition-colors text-sm md:text-base',
+                                      mfaMethod === 'security_key'
+                                        ? 'border-primary bg-primary/5'
+                                        : 'border-border hover:bg-muted/50'
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <Fingerprint className="w-4 h-4 flex-shrink-0" />
+                                      <div className="text-left">
+                                        <div className="font-medium">security key</div>
+                                        <div className="text-xs text-muted-foreground">
+                                          use FIDO2/WebAuthn hardware key
+                                        </div>
+                                      </div>
+                                    </div>
+                                    {mfaMethod === 'security_key' && (
+                                      <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+                                    )}
+                                  </button>
+                                )}
                               </div>
 
                               <div className="flex gap-2 pt-2">
@@ -1398,34 +1642,53 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                                 </div>
                               )}
 
-                              <div className="space-y-3">
-                                <Label className="text-sm font-medium">
-                                  enter verification code
-                                </Label>
-                                <input
-                                  type="text"
-                                  value={verificationCode}
-                                  onChange={e => setVerificationCode(e.target.value)}
-                                  placeholder="000000"
-                                  className="w-full px-3 py-2 text-center text-lg font-mono tracking-widest border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                                  maxLength={6}
-                                />
-                              </div>
+                              {mfaMethod === 'security_key' && (
+                                <div className="space-y-3 text-center">
+                                  <div className="flex justify-center mb-3">
+                                    <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-full">
+                                      <Fingerprint className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                                    </div>
+                                  </div>
+                                  <h4 className="font-medium">register your security key</h4>
+                                  <p className="text-sm text-muted-foreground">
+                                    click the button below and follow your browser's prompts to register your security key
+                                  </p>
+                                  <div className="p-3 bg-muted/50 rounded-lg text-xs text-muted-foreground">
+                                    make sure your security key is connected and ready
+                                  </div>
+                                </div>
+                              )}
+
+                              {mfaMethod !== 'security_key' && (
+                                <div className="space-y-3">
+                                  <Label className="text-sm font-medium">
+                                    enter verification code
+                                  </Label>
+                                  <input
+                                    type="text"
+                                    value={verificationCode}
+                                    onChange={e => setVerificationCode(e.target.value)}
+                                    placeholder="000000"
+                                    className="w-full px-3 py-2 text-center text-lg font-mono tracking-widest border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                                    maxLength={6}
+                                  />
+                                </div>
+                              )}
 
                               <div className="flex gap-2">
                                 <Button
                                   onClick={verifyMfaSetup}
-                                  disabled={loadingMfa || !verificationCode.trim()}
+                                  disabled={loadingMfa || (mfaMethod !== 'security_key' && !verificationCode.trim())}
                                   size="sm"
                                   className="flex-1"
                                 >
                                   {loadingMfa ? (
                                     <>
                                       <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                                      verifying...
+                                      {mfaMethod === 'security_key' ? 'registering...' : 'verifying...'}
                                     </>
                                   ) : (
-                                    'verify'
+                                    mfaMethod === 'security_key' ? 'register security key' : 'verify'
                                   )}
                                 </Button>
                                 <Button

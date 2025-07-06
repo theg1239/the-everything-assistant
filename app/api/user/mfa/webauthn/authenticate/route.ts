@@ -23,8 +23,8 @@ export async function POST(request: NextRequest) {
         mfaMethod: true,
         webAuthnCredentials: {
           select: {
-            credentialId: true,
-            transports: true,
+            credentialId: true,     // base64url string
+            transports: true,       // string[]
           },
         },
       },
@@ -46,16 +46,18 @@ export async function POST(request: NextRequest) {
         : 'localhost'
 
     const allowCredentials: PublicKeyCredentialDescriptor[] = user.webAuthnCredentials.map(
-      cred => ({
-        id: cred.credentialId,
+      (cred) => ({
+        id: Buffer.from(cred.credentialId, 'base64url'),
         type: 'public-key',
-        transports: (cred.transports.length > 0
-          ? cred.transports
-          : ['usb', 'nfc', 'ble', 'hybrid', 'internal']) as AuthenticatorTransportFuture[],
+        transports: (
+          cred.transports.length > 0
+            ? cred.transports
+            : ['usb', 'nfc', 'ble', 'hybrid', 'internal']
+        ) as AuthenticatorTransportFuture[],
       })
     )
 
-    const options = await generateAuthenticationOptions({
+    const options = generateAuthenticationOptions({
       rpID,
       allowCredentials,
       userVerification: 'preferred',
@@ -64,8 +66,11 @@ export async function POST(request: NextRequest) {
 
     console.log('Generated WebAuthn authentication options:', {
       userVerification: options.userVerification,
-      allowCredentials: options.allowCredentials?.map(c => ({
-        id: typeof c.id === 'string' ? c.id.slice(0, 10) + '…' : '[Buffer]',
+      allowCredentials: options.allowCredentials?.map((c) => ({
+        id:
+          c.id instanceof ArrayBuffer
+            ? '[ArrayBuffer]'
+            : (c.id as Buffer).toString('base64url').slice(0, 10) + '…',
         transports: c.transports,
       })),
       timeout: options.timeout,

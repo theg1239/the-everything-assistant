@@ -1050,6 +1050,10 @@ const PureToolCallDisplay = ({
       return false
     }
 
+    if (toolCall.state === 'error') {
+      return true
+    }
+
     if (toolCall.toolName === 'queryVTOP') {
       const isCredentialRequired =
         toolCall.result.requiresCredentials === true ||
@@ -1080,7 +1084,7 @@ const PureToolCallDisplay = ({
     const hasValidResult =
       toolCall.result &&
       !toolCall.result.requiresCredentials &&
-      (toolCall.state === 'result' || toolCall.type === 'tool-result')
+      (toolCall.state === 'result' || toolCall.state === 'error' || toolCall.type === 'tool-result')
 
     return hasValidResult
   })
@@ -1096,6 +1100,8 @@ const PureToolCallDisplay = ({
       toolCalls={enrichedToolCalls}
       onLoginClick={onLoginClick}
       onPlacementSearch={onPlacementSearch}
+      maximizedItem={maximizedItem}
+      setMaximizedItem={setMaximizedItem}
     />
   )
 }
@@ -1153,6 +1159,10 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
       return false
     }
 
+    if (toolCall.state === 'error') {
+      return true
+    }
+
     if (toolCall.toolName === 'queryVTOP') {
       const isCredentialRequired =
         toolCall.result.requiresCredentials === true ||
@@ -1183,7 +1193,7 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
     const hasValidResult =
       toolCall.result &&
       !toolCall.result.requiresCredentials &&
-      (toolCall.state === 'result' || toolCall.type === 'tool-result')
+      (toolCall.state === 'result' || toolCall.state === 'error' || toolCall.type === 'tool-result')
 
     return hasValidResult
   })

@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import ReactMarkdown from 'react-markdown'
 import { ToolCallDisplay } from './tool-call-display'
 import { MessageActions } from './message-actions'
-import { memo } from 'react'
+import { memo, useMemo } from 'react'
 import rehypeRaw from 'rehype-raw'
 import remarkGfm from 'remark-gfm'
 
@@ -31,31 +31,39 @@ const PureMessageBubble = ({
 }: MessageBubbleProps) => {
   const isUser = message.role === 'user'
 
-  const getToolInvocations = (message: Message) => {
+  // Memoize tool invocations to prevent unnecessary recalculations
+  const toolInvocations = useMemo(() => {
     if (message.parts) {
       return message.parts
         .filter((part: any) => part.type === 'tool-invocation')
         .map((part: any) => part.toolInvocation)
     }
     return (message as any).toolInvocations || []
-  }
+  }, [message.parts, (message as any).toolInvocations])
 
-  const toolInvocations = getToolInvocations(message)
+  const visibleToolCalls = useMemo(() => {
+    return toolInvocations?.filter(
+      (t: any) => t.toolName !== 'knowledgeBase' && t.toolName !== 'saveMemory'
+    ) || []
+  }, [toolInvocations])
 
-  if (!isUser && 
-      (!message.content || (message.content as string).trim() === '')) {
-    const hasVisibleToolCalls = toolInvocations?.some((t: any) => 
-      t.toolName !== 'knowledgeBase' && t.toolName !== 'saveMemory'
+  const hasContent = useMemo(() => {
+    return message.content && (message.content as string).trim() !== ''
+  }, [message.content])
+
+  const hasVisibleToolCalls = useMemo(() => {
+    return visibleToolCalls.length > 0
+  }, [visibleToolCalls.length])
+
+  const hasKnowledgeBaseInProgress = useMemo(() => {
+    return toolInvocations?.some((t: any) => 
+      t.toolName === 'knowledgeBase' && t.state !== 'result'
     )
-    
-    if (!hasVisibleToolCalls) {
-      const hasKnowledgeBaseInProgress = toolInvocations?.some((t: any) => 
-        t.toolName === 'knowledgeBase' && t.state !== 'result'
-      )
-      
-      if (!hasKnowledgeBaseInProgress) {
-        return null;
-      }
+  }, [toolInvocations])
+
+  if (!isUser && !hasContent) {
+    if (!hasVisibleToolCalls && !hasKnowledgeBaseInProgress) {
+      return null;
     }
   }
 
@@ -81,21 +89,16 @@ const PureMessageBubble = ({
         )} */}
 
         <div className="flex flex-col gap-4 w-full">
-          {(() => {
-            const visibleToolCalls = toolInvocations?.filter(
-              (t: any) => t.toolName !== 'knowledgeBase'
-            )
-            return visibleToolCalls && visibleToolCalls.length > 0 ? (
-              <ToolCallDisplay
-                key={`tool-calls-${message.id}`}
-                toolCalls={visibleToolCalls}
-                onLoginClick={onLoginClick}
-                onPlacementSearch={onPlacementSearch}
-                maximizedItem={maximizedItem}
-                setMaximizedItem={setMaximizedItem}
-              />
-            ) : null
-          })()}
+          {hasVisibleToolCalls && (
+            <ToolCallDisplay
+              key={`tool-calls-${message.id}`}
+              toolCalls={visibleToolCalls}
+              onLoginClick={onLoginClick}
+              onPlacementSearch={onPlacementSearch}
+              maximizedItem={maximizedItem}
+              setMaximizedItem={setMaximizedItem}
+            />
+          )}
 
           <div
             className={cn('flex flex-col gap-4', {
@@ -104,225 +107,36 @@ const PureMessageBubble = ({
           >
             {isUser ? (
               <p className="text-base leading-relaxed">{message.content}</p>
-            ) : (
-              (() => {
-                const hasSuccessfulVTOPWithContent = toolInvocations?.some(
-                  (tool: any) =>
-                    tool.toolName === 'queryVTOP' &&
-                    tool.result &&
-                    tool.result.success !== false &&
-                    (tool.result.formatted_content || tool.result.parsedData?.formatted_content)
-                )
-
-                if (hasSuccessfulVTOPWithContent) {
-                  return null
-                }
-
-                const kbResult = toolInvocations?.find(
-                  (t: any) =>
-                    t.toolName === 'knowledgeBase' && t.state === 'result' && t.result?.answer
-                )
-                if ((!message.content || (message.content as string).trim() === '') && kbResult) {
-                  return (
-                    <div className="prose prose-invert prose-base max-w-none text-foreground dark:text-gray-100">
-                      <ReactMarkdown
-                        rehypePlugins={[rehypeRaw]}
-                        remarkPlugins={[remarkGfm]}
-                        components={{
-                          p: ({ children }) => (
-                            <p className="mb-4 last:mb-0 leading-relaxed text-foreground dark:text-gray-100">
-                              {children}
-                            </p>
-                          ),
-                          ul: ({ children }) => (
-                            <ul className="list-disc pl-6 mb-4 space-y-1.5">{children}</ul>
-                          ),
-                          ol: ({ children }) => (
-                            <ol className="list-decimal pl-6 mb-4 space-y-1.5">{children}</ol>
-                          ),
-                          li: ({ children }) => (
-                            <li className="text-foreground dark:text-gray-200">{children}</li>
-                          ),
-                          strong: ({ children }) => (
-                            <strong className="font-semibold text-foreground dark:text-white">
-                              {children}
-                            </strong>
-                          ),
-                          em: ({ children }) => (
-                            <em className="italic">{children}</em>
-                          ),
-                          h1: ({ children }) => (
-                            <h1 className="text-2xl font-bold text-foreground dark:text-white mb-4 mt-6">
-                              {children}
-                            </h1>
-                          ),
-                          h2: ({ children }) => (
-                            <h2 className="text-xl font-semibold text-foreground dark:text-white mb-3 mt-5">
-                              {children}
-                            </h2>
-                          ),
-                          h3: ({ children }) => (
-                            <h3 className="text-lg font-semibold text-foreground dark:text-white mb-2.5 mt-4">
-                              {children}
-                            </h3>
-                          ),
-                          code: ({ children }) => (
-                            <code className="bg-muted/50 text-foreground dark:text-gray-100 px-1.5 py-0.5 rounded text-sm font-mono break-words">
-                              {children}
-                            </code>
-                          ),
-                          pre: ({ children }) => (
-                            <pre className="bg-muted/50 dark:bg-muted/30 p-3 rounded-lg overflow-x-auto border border-border dark:border-border/50 mb-4 max-w-full text-sm">
-                              {children}
-                            </pre>
-                          ),
-                          blockquote: ({ children }) => (
-                            <blockquote className="border-l-4 border-muted-foreground/30 pl-4 italic my-4 text-foreground/90 dark:text-gray-200">
-                              {children}
-                            </blockquote>
-                          ),
-                          table: ({ children }) => (
-                            <div className="overflow-x-auto my-4 rounded-lg border border-border dark:border-border/50">
-                              <table className="min-w-full divide-y divide-border dark:divide-border/50 text-sm">
-                                {children}
-                              </table>
-                            </div>
-                          ),
-                          thead: ({ children }) => (
-                            <thead className="bg-muted/50 dark:bg-muted/30">
-                              {children}
-                            </thead>
-                          ),
-                          tbody: ({ children }) => (
-                            <tbody className="divide-y divide-border dark:divide-border/50 bg-background">
-                              {children}
-                            </tbody>
-                          ),
-                          th: ({ children }) => (
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-foreground dark:text-white uppercase tracking-wider">
-                              {children}
-                            </th>
-                          ),
-                          td: ({ children }) => (
-                            <td className="px-4 py-3 text-sm text-foreground dark:text-gray-200 whitespace-nowrap">
-                              {children}
-                            </td>
-                          ),
-                          a: ({ children, href }) => (
-                            <a
-                              href={href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-primary hover:underline hover:text-primary/80 transition-colors"
-                            >
-                              {children}
-                            </a>
-                          ),
-                        }}
-                      >
-                        {(kbResult as any).result.answer}
-                      </ReactMarkdown>
-                    </div>
-                  )
-                }
-
-                // // if no content yet (e.g., waiting on knowledgeBase answer) show thinking indicator
-                // if (!message.content || (message.content as string).trim() === '') {
-                //   return (
-                //     <p className="text-muted-foreground italic">Thinking…</p>
-                //   )
-                // }
-
-                return (
-                  <div className="prose prose-invert prose-base max-w-none">
-                    <ReactMarkdown
-                      rehypePlugins={[rehypeRaw]}
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        p: ({ children }) => (
-                          <p className="mb-3 last:mb-0 leading-relaxed text-foreground">
-                            {children}
-                          </p>
-                        ),
-                        ul: ({ children }) => (
-                          <ul className="list-disc pl-5 mb-3 space-y-1">{children}</ul>
-                        ),
-                        ol: ({ children }) => (
-                          <ol className="list-decimal pl-5 mb-3 space-y-1">{children}</ol>
-                        ),
-                        li: ({ children }) => <li className="text-muted-foreground">{children}</li>,
-                        strong: ({ children }) => (
-                          <strong className="font-semibold text-foreground">{children}</strong>
-                        ),
-                        h1: ({ children }) => (
-                          <h1 className="text-xl font-semibold text-foreground mb-3">{children}</h1>
-                        ),
-                        h2: ({ children }) => (
-                          <h2 className="text-lg font-semibold text-foreground mb-2">{children}</h2>
-                        ),
-                        h3: ({ children }) => (
-                          <h3 className="text-base font-semibold text-foreground mb-2">
-                            {children}
-                          </h3>
-                        ),
-                        code: ({ children }) => (
-                          <code className="bg-muted px-2 py-1 rounded text-sm font-mono break-all">
-                            {children}
-                          </code>
-                        ),
-                        pre: ({ children }) => (
-                          <pre className="bg-muted p-4 rounded-lg overflow-x-auto border mb-3 max-w-full">
-                            {children}
-                          </pre>
-                        ),
-                        table: ({ children }) => (
-                          <div className="overflow-x-auto mb-4 rounded-lg border border-border">
-                            <table className="min-w-full divide-y divide-border text-sm">
-                              {children}
-                            </table>
-                          </div>
-                        ),
-                        thead: ({ children }) => (
-                          <thead className="bg-muted/50">
-                            {children}
-                          </thead>
-                        ),
-                        tbody: ({ children }) => (
-                          <tbody className="divide-y divide-border bg-background">
-                            {children}
-                          </tbody>
-                        ),
-                        th: ({ children }) => (
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-foreground uppercase tracking-wider">
-                            {children}
-                          </th>
-                        ),
-                        td: ({ children }) => (
-                          <td className="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap">
-                            {children}
-                          </td>
-                        ),
-                        a: ({ children, href }) => (
-                          <a
-                            href={href}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary hover:text-primary/80 underline"
-                          >
-                            {children}
-                          </a>
-                        ),
-                      }}
-                    >
-                      {message.content as string}
-                    </ReactMarkdown>
-                  </div>
-                )
-              })()
-            )}
+            ) : hasContent ? (
+              <div className="text-base leading-relaxed prose prose-sm max-w-none dark:prose-invert">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeRaw]}
+                  components={{
+                    pre: ({ children }) => (
+                      <pre className="overflow-auto bg-muted p-4 rounded-lg border">
+                        {children}
+                      </pre>
+                    ),
+                    code: ({ children, className }) => {
+                      const isInline = !className
+                      return isInline ? (
+                        <code className="bg-muted px-1 py-0.5 rounded text-sm">
+                          {children}
+                        </code>
+                      ) : (
+                        <code className={className}>{children}</code>
+                      )
+                    },
+                  }}
+                >
+                  {message.content as string}
+                </ReactMarkdown>
+              </div>
+            ) : null}
 
             {/* Message actions */}
-            {!isUser && chatId && (
+            {!isUser && chatId && hasContent && (
               <MessageActions
                 messageId={message.id}
                 chatId={chatId}

@@ -887,7 +887,7 @@ const PureChatInterface = memo(({
               variant="ghost"
               onClick={() => {
                 if (window.location.pathname !== '/') {
-                  // router.push('/')
+                  router.replace('/')
                   setMessages([])
                   setInput('')
                   setShowFullChat(false)

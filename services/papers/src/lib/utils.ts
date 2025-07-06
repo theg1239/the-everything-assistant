@@ -14,11 +14,11 @@ export function getFileUrlWithExtension(fileUrl: string, mimeType: string): stri
 
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return '0 B'
-  
+
   const k = 1024
   const sizes = ['B', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
-  
+
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
 }
 
@@ -27,7 +27,7 @@ export function formatDate(date: Date | string): string {
   const now = new Date()
   const diffInMs = now.getTime() - dateObj.getTime()
   const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24))
-  
+
   if (diffInDays === 0) {
     return 'today'
   } else if (diffInDays === 1) {
@@ -44,7 +44,7 @@ export function formatDate(date: Date | string): string {
     return dateObj.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
     })
   }
 }

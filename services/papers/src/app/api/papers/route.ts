@@ -4,7 +4,7 @@ import { searchPapers } from '../../../actions/searchPapers'
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    
+
     const query = searchParams.get('query') || undefined
     const courseCode = searchParams.get('courseCode') || searchParams.get('subject') || undefined
     const year = searchParams.get('year') ? parseInt(searchParams.get('year')!) : undefined
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     const pagination = {
       page,
       limit,
-      sortBy: 'createdAt' as const
+      sortBy: 'createdAt' as const,
     }
 
     // Call the search function

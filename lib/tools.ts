@@ -701,7 +701,7 @@ export function createVITTools(userId: string) {
     ...createMemoryTool(userId),
     findPastPapers: tool({
       description:
-        'find past examination papers for VIT courses from real repositories. You can use course names or codes. You don\' need the user to specify the year, when no year is specified, the tool will search for all available years.',
+        "find past examination papers for VIT courses from real repositories. You can use course names or codes. You don' need the user to specify the year, when no year is specified, the tool will search for all available years.",
       parameters: z.object({
         courseCode: z
           .string()
@@ -718,7 +718,8 @@ export function createVITTools(userId: string) {
               error: 'Course code required',
               requiresCourseCode: true,
               message: 'I could not find the course code for the course, can you provide it?',
-              suggestion: 'You can use course codes like BCSE302L or course names like "database systems".',
+              suggestion:
+                'You can use course codes like BCSE302L or course names like "database systems".',
             }
           }
 
@@ -774,7 +775,7 @@ export function createVITTools(userId: string) {
                 resolvedCourseCode !== courseCode ? ` (searched for: "${courseCode}")` : ''
               }${examType ? ` (${examType})` : ''}${year ? ` from ${year}` : ''}.`,
               suggestions: [
-                resolvedCourseCode !== courseCode 
+                resolvedCourseCode !== courseCode
                   ? `Double-check that "${resolvedCourseCode}" is the correct course code for "${courseCode}"`
                   : 'Verify the course code format (e.g., MECH2001, BMEE302L)',
                 'Try different exam types: CAT1, CAT2, FAT, or Quiz',

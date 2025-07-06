@@ -19,10 +19,13 @@ export async function POST(request: NextRequest) {
     }
 
     const { code, method, credential } = await request.json()
-    
+
     if (method === 'security_key') {
       if (!credential) {
-        return NextResponse.json({ error: 'Credential is required for WebAuthn methods' }, { status: 400 })
+        return NextResponse.json(
+          { error: 'Credential is required for WebAuthn methods' },
+          { status: 400 }
+        )
       }
     } else if (!code || typeof code !== 'string') {
       return NextResponse.json({ error: 'Verification code is required' }, { status: 400 })

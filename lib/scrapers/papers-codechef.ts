@@ -144,7 +144,9 @@ async function tryAPIApproach(
               if (yearMatch) extractedYear = yearMatch[0]
             }
 
-            const paperUrl = paper.finalUrl || (paper._id ? `https://papers.codechefvit.com/paper/${paper._id}` : '')
+            const paperUrl =
+              paper.finalUrl ||
+              (paper._id ? `https://papers.codechefvit.com/paper/${paper._id}` : '')
 
             let isValid = true
             if (paper.finalUrl) {
@@ -254,7 +256,9 @@ async function tryAPIApproach(
               if (yearMatch) extractedYear = yearMatch[0]
             }
 
-            const paperUrl = paper.finalUrl || (paper._id ? `https://papers.codechefvit.com/paper/${paper._id}` : '')
+            const paperUrl =
+              paper.finalUrl ||
+              (paper._id ? `https://papers.codechefvit.com/paper/${paper._id}` : '')
 
             let isValid = true
             if (paper.finalUrl) {
@@ -422,19 +426,19 @@ async function tryBrowserScraping(
     )
 
     const papersWithFinalUrls = await Promise.all(
-      papers.map(async (paper) => {
+      papers.map(async paper => {
         if (paper.url.includes('.pdf') || paper.url.includes('cloudinary.com')) {
           return paper
         }
 
         try {
           const finalUrlPromise = extractFinalUrlFromPaperPage(paper.url)
-          const timeoutPromise = new Promise<string | null>((_, reject) => 
+          const timeoutPromise = new Promise<string | null>((_, reject) =>
             setTimeout(() => reject(new Error('Timeout')), 15000)
           )
-          
+
           const finalUrl = await Promise.race([finalUrlPromise, timeoutPromise])
-          
+
           if (finalUrl && finalUrl.includes('cloudinary.com')) {
             try {
               const response = await fetch(finalUrl, { method: 'HEAD' })
@@ -507,11 +511,17 @@ async function extractFinalUrlFromPaperPage(paperPageUrl: string): Promise<strin
       const downloadButtons = Array.from(document.querySelectorAll('button, a, [role="button"]'))
       for (const button of downloadButtons) {
         const text = button.textContent?.toLowerCase() || ''
-        if (text.includes('download') || text.includes('view') || text.includes('open') || text.includes('pdf')) {
-          const href = button.getAttribute('href') || 
-                      button.getAttribute('data-url') || 
-                      button.getAttribute('data-href') ||
-                      button.getAttribute('onclick')?.match(/window\.open\(['"]([^'"]+)['"]/)?.[1]
+        if (
+          text.includes('download') ||
+          text.includes('view') ||
+          text.includes('open') ||
+          text.includes('pdf')
+        ) {
+          const href =
+            button.getAttribute('href') ||
+            button.getAttribute('data-url') ||
+            button.getAttribute('data-href') ||
+            button.getAttribute('onclick')?.match(/window\.open\(['"]([^'"]+)['"]/)?.[1]
           if (href && href.includes('cloudinary.com')) {
             return href
           }
@@ -521,12 +531,12 @@ async function extractFinalUrlFromPaperPage(paperPageUrl: string): Promise<strin
       const scripts = Array.from(document.querySelectorAll('script'))
       for (const script of scripts) {
         const content = script.textContent || ''
-        
+
         const finalUrlMatch = content.match(/finalUrl['"]?\s*:\s*['"]([^'"]+)['"]/i)
         if (finalUrlMatch && finalUrlMatch[1].includes('cloudinary.com')) {
           return finalUrlMatch[1]
         }
-        
+
         const cloudinaryMatch = content.match(/https?:\/\/[^"']*cloudinary\.com[^"']*\.pdf/g)
         if (cloudinaryMatch && cloudinaryMatch.length > 0) {
           return cloudinaryMatch[0]

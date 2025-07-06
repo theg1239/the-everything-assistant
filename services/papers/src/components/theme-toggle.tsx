@@ -1,10 +1,10 @@
-"use client"
+'use client'
 
-import * as React from "react"
+import * as React from 'react'
 import { Moon, Sun } from 'lucide-react'
-import { useTheme } from "next-themes"
+import { useTheme } from 'next-themes'
 
-import { Button } from "@/components/ui/button"
+import { Button } from '@/components/ui/button'
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
@@ -13,7 +13,7 @@ export function ThemeToggle() {
     <Button
       variant="outline"
       size="sm"
-      onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+      onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
       className="rounded-full border-gray-200/60 bg-white/90 backdrop-blur-sm hover:bg-gray-50 dark:border-gray-800/60 dark:bg-gray-900/90 dark:hover:bg-gray-800/90"
     >
       <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />

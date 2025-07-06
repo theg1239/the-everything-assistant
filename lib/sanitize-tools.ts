@@ -32,9 +32,10 @@ export function sanitizeToolInvocations(toolInvocations: any[]): any[] {
       // Remove sensitive data from function.arguments if it exists
       if (sanitizedTool.function?.arguments) {
         try {
-          const args = typeof sanitizedTool.function.arguments === 'string' 
-            ? JSON.parse(sanitizedTool.function.arguments)
-            : sanitizedTool.function.arguments
+          const args =
+            typeof sanitizedTool.function.arguments === 'string'
+              ? JSON.parse(sanitizedTool.function.arguments)
+              : sanitizedTool.function.arguments
 
           if (args.password) {
             delete args.password
@@ -43,9 +44,8 @@ export function sanitizeToolInvocations(toolInvocations: any[]): any[] {
             delete args.username
           }
 
-          sanitizedTool.function.arguments = typeof sanitizedTool.function.arguments === 'string'
-            ? JSON.stringify(args)
-            : args
+          sanitizedTool.function.arguments =
+            typeof sanitizedTool.function.arguments === 'string' ? JSON.stringify(args) : args
         } catch (e) {
           // If parsing fails, leave as is
           console.warn('Failed to parse function arguments for sanitization:', e)

@@ -68,10 +68,11 @@ export async function scrapePapersService(
   year?: string
 ): Promise<ScraperResult> {
   try {
-    const baseUrl = process.env.NODE_ENV === 'development' 
-      ? 'https://the-everything-assistant-bqip.vercel.app' 
-      : process.env.PAPERS_SERVICE_URL || 'https://the-everything-assistant-bqip.vercel.app'
-    
+    const baseUrl =
+      process.env.NODE_ENV === 'development'
+        ? 'https://the-everything-assistant-bqip.vercel.app'
+        : process.env.PAPERS_SERVICE_URL || 'https://the-everything-assistant-bqip.vercel.app'
+
     const params = new URLSearchParams()
     if (courseCode) params.append('courseCode', courseCode)
     if (examType) params.append('examType', examType)
@@ -120,13 +121,16 @@ export async function scrapePapersService(
       .map((paper: ApiPaper) => {
         const title = paper.title || paper.name || paper.paperName || 'Untitled Paper'
         const url = paper.finalUrl || paper.downloadUrl || paper.url || ''
-        
+
         let extractedExamType = paper.examType || paper.exam || examType || ''
         if (!extractedExamType) {
           const titleLower = title.toLowerCase()
-          if (titleLower.includes('cat-1') || titleLower.includes('cat 1')) extractedExamType = 'CAT-1'
-          else if (titleLower.includes('cat-2') || titleLower.includes('cat 2')) extractedExamType = 'CAT-2'
-          else if (titleLower.includes('fat') || titleLower.includes('final')) extractedExamType = 'FAT'
+          if (titleLower.includes('cat-1') || titleLower.includes('cat 1'))
+            extractedExamType = 'CAT-1'
+          else if (titleLower.includes('cat-2') || titleLower.includes('cat 2'))
+            extractedExamType = 'CAT-2'
+          else if (titleLower.includes('fat') || titleLower.includes('final'))
+            extractedExamType = 'FAT'
           else if (titleLower.includes('quiz')) extractedExamType = 'Quiz'
         }
 
@@ -184,11 +188,10 @@ export async function scrapePapersService(
       source: 'VIT Papers Archive',
       searchUrl,
     }
-
   } catch (error) {
     console.error('Error in scrapePapersService:', error)
     const errorMessage = error instanceof Error ? error.message : String(error)
-    
+
     return {
       success: false,
       papers: [],

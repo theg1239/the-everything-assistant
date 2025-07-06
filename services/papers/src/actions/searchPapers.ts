@@ -69,12 +69,7 @@ export async function searchPapers(
   pagination: PaginationOptions = {}
 ): Promise<PaperListResult> {
   try {
-    const {
-      page = 1,
-      limit = 20,
-      sortBy = 'createdAt',
-      sortOrder = 'desc'
-    } = pagination
+    const { page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc' } = pagination
 
     const offset = (page - 1) * limit
 
@@ -102,10 +97,7 @@ export async function searchPapers(
 
     if (filters.query) {
       conditions.push(
-        or(
-          ilike(papers.title, `%${filters.query}%`),
-          ilike(papers.ocrText, `%${filters.query}%`)
-        )
+        or(ilike(papers.title, `%${filters.query}%`), ilike(papers.ocrText, `%${filters.query}%`))
       )
     }
 
@@ -123,10 +115,7 @@ export async function searchPapers(
         orderByClause = sortOrder === 'asc' ? asc(papers.createdAt) : desc(papers.createdAt)
     }
 
-    const totalCountResult = await db
-      .select({ count: count() })
-      .from(papers)
-      .where(whereClause)
+    const totalCountResult = await db.select({ count: count() }).from(papers).where(whereClause)
 
     const totalCount = totalCountResult[0]?.count || 0
 
@@ -184,11 +173,7 @@ export async function searchPapers(
 
 export async function getPaperById(id: string) {
   try {
-    const [paper] = await db
-      .select()
-      .from(papers)
-      .where(eq(papers.id, id))
-      .limit(1)
+    const [paper] = await db.select().from(papers).where(eq(papers.id, id)).limit(1)
 
     if (!paper) {
       return null
@@ -213,9 +198,9 @@ export async function getPaperById(id: string) {
 export async function deletePaper(id: string): Promise<{ success: boolean; error?: string }> {
   try {
     const [paperToDelete] = await db
-      .select({ 
+      .select({
         cloudinaryPublicId: papers.cloudinaryPublicId,
-        thumbnailPublicId: papers.thumbnailPublicId 
+        thumbnailPublicId: papers.thumbnailPublicId,
       })
       .from(papers)
       .where(eq(papers.id, id))
@@ -226,11 +211,11 @@ export async function deletePaper(id: string): Promise<{ success: boolean; error
     }
 
     const { v2: cloudinary } = await import('cloudinary')
-    
+
     if (paperToDelete.cloudinaryPublicId) {
       await cloudinary.uploader.destroy(paperToDelete.cloudinaryPublicId)
     }
-    
+
     if (paperToDelete.thumbnailPublicId) {
       await cloudinary.uploader.destroy(paperToDelete.thumbnailPublicId)
     }
@@ -240,9 +225,9 @@ export async function deletePaper(id: string): Promise<{ success: boolean; error
     return { success: true }
   } catch (error) {
     console.error('Error deleting paper:', error)
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Failed to delete paper' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to delete paper',
     }
   }
 }

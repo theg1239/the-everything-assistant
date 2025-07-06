@@ -12,29 +12,33 @@ export function createMemoryTool(userId: string) {
         importance: z
           .number()
           .optional()
-          .describe('The importance of the memory, from 1 (least important) to 5 (most important).'),
+          .describe(
+            'The importance of the memory, from 1 (least important) to 5 (most important).'
+          ),
         tags: z.array(z.string()).optional().describe('Tags to help categorize the memory.'),
       }),
       execute: async ({ memoryContent, importance, tags }) => {
         try {
           const similarMemory = await memoryService.findSimilarMemory(userId, memoryContent)
-          
+
           let memory
           let message
-          
+
           if (similarMemory) {
-            const updatedContent = memoryContent.length > similarMemory.content.length 
-              ? memoryContent 
-              : similarMemory.content
-            
-            const updatedImportance = importance 
+            const updatedContent =
+              memoryContent.length > similarMemory.content.length
+                ? memoryContent
+                : similarMemory.content
+
+            const updatedImportance = importance
               ? Math.max(importance as any, similarMemory.importance)
               : similarMemory.importance
-            
-            const updatedTags = tags && tags.length > 0
-              ? [...new Set([...similarMemory.tags, ...tags])]
-              : similarMemory.tags
-            
+
+            const updatedTags =
+              tags && tags.length > 0
+                ? [...new Set([...similarMemory.tags, ...tags])]
+                : similarMemory.tags
+
             memory = await memoryService.upsertMemory(userId, {
               id: similarMemory.id,
               content: updatedContent,
@@ -50,7 +54,7 @@ export function createMemoryTool(userId: string) {
             })
             message = 'New memory saved successfully.'
           }
-          
+
           return {
             success: true,
             memoryId: memory.id,

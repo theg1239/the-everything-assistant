@@ -10,13 +10,10 @@ const handler = async (request: Request, context: any) => {
       if (process.env.DISABLE_BOTID !== 'true' && process.env.NODE_ENV !== 'development') {
         const verification = await checkBotId()
         if (verification.isBot) {
-          return new Response(
-            JSON.stringify({ error: 'Access denied' }), 
-            { 
-              status: 403,
-              headers: { 'Content-Type': 'application/json' }
-            }
-          )
+          return new Response(JSON.stringify({ error: 'Access denied' }), {
+            status: 403,
+            headers: { 'Content-Type': 'application/json' },
+          })
         }
       }
     } catch (error) {

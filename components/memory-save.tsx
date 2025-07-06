@@ -14,18 +14,18 @@ export const MemorySaveIndicator = ({ toolCalls }: MemorySaveIndicatorProps) => 
 
   useEffect(() => {
     const memoryTools = toolCalls.filter(tool => tool.toolName === 'saveMemory')
-    
+
     if (memoryTools.length > 0) {
       const completedMemories = memoryTools.filter(tool => tool.result)
       const hasRunning = memoryTools.some(tool => !tool.result)
-      
+
       if (hasRunning || completedMemories.length > 0) {
         setShowIndicator(true)
-        
+
         if (completedMemories.length > 0) {
           setIsComplete(true)
           setSavedMemories(completedMemories)
-          
+
           // Auto-hide after 8 seconds if not expanded
           setTimeout(() => {
             if (!isExpanded) {
@@ -50,7 +50,7 @@ export const MemorySaveIndicator = ({ toolCalls }: MemorySaveIndicatorProps) => 
     // Extract content from the tool call
     const args = memory.function?.arguments || memory.args
     let content = ''
-    
+
     if (typeof args === 'string') {
       try {
         const parsed = JSON.parse(args)
@@ -61,14 +61,14 @@ export const MemorySaveIndicator = ({ toolCalls }: MemorySaveIndicatorProps) => 
     } else if (args) {
       content = args.content || args.memory || args.text || ''
     }
-    
+
     return content || 'Memory saved successfully'
   }
 
   const getMemoryType = (memory: any) => {
     const args = memory.function?.arguments || memory.args
     let type = 'general'
-    
+
     if (typeof args === 'string') {
       try {
         const parsed = JSON.parse(args)
@@ -79,7 +79,7 @@ export const MemorySaveIndicator = ({ toolCalls }: MemorySaveIndicatorProps) => 
     } else if (args) {
       type = args.type || args.category || 'general'
     }
-    
+
     return type
   }
 
@@ -90,11 +90,11 @@ export const MemorySaveIndicator = ({ toolCalls }: MemorySaveIndicatorProps) => 
           initial={{ opacity: 0, scale: 0.9, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.9, y: 20 }}
-          transition={{ 
-            type: "spring", 
-            stiffness: 400, 
+          transition={{
+            type: 'spring',
+            stiffness: 400,
             damping: 25,
-            duration: 0.4 
+            duration: 0.4,
           }}
           className="fixed bottom-4 right-4 z-50 max-w-sm"
         >
@@ -105,15 +105,19 @@ export const MemorySaveIndicator = ({ toolCalls }: MemorySaveIndicatorProps) => 
                 <div className="flex items-center gap-2">
                   <motion.div
                     animate={isComplete ? { scale: [1, 1.1, 1] } : { rotate: 360 }}
-                    transition={isComplete ? { 
-                      duration: 0.6, 
-                      times: [0, 0.5, 1],
-                      ease: "easeInOut" 
-                    } : { 
-                      duration: 2, 
-                      repeat: Infinity, 
-                      ease: "linear" 
-                    }}
+                    transition={
+                      isComplete
+                        ? {
+                            duration: 0.6,
+                            times: [0, 0.5, 1],
+                            ease: 'easeInOut',
+                          }
+                        : {
+                            duration: 2,
+                            repeat: Infinity,
+                            ease: 'linear',
+                          }
+                    }
                   >
                     {isComplete ? (
                       <div className="relative">
@@ -124,7 +128,7 @@ export const MemorySaveIndicator = ({ toolCalls }: MemorySaveIndicatorProps) => 
                       <Brain className="h-4 w-4 text-blue-500" />
                     )}
                   </motion.div>
-                  
+
                   <div className="flex flex-col">
                     <span className="text-sm font-medium text-foreground">
                       {isComplete ? 'Saved a memory' : 'Saving memory...'}
@@ -135,15 +139,15 @@ export const MemorySaveIndicator = ({ toolCalls }: MemorySaveIndicatorProps) => 
                       </span>
                     )}
                   </div>
-                  
+
                   {!isComplete && (
                     <motion.div
                       className="flex gap-1"
                       animate={{ opacity: [0.3, 1, 0.3] }}
-                      transition={{ 
-                        duration: 1.5, 
-                        repeat: Infinity, 
-                        ease: "easeInOut" 
+                      transition={{
+                        duration: 1.5,
+                        repeat: Infinity,
+                        ease: 'easeInOut',
                       }}
                     >
                       <div className="w-1 h-1 bg-blue-500 rounded-full" />
@@ -152,7 +156,7 @@ export const MemorySaveIndicator = ({ toolCalls }: MemorySaveIndicatorProps) => 
                     </motion.div>
                   )}
                 </div>
-                
+
                 <div className="flex items-center gap-1">
                   {isComplete && savedMemories.length > 0 && (
                     <button
@@ -183,14 +187,14 @@ export const MemorySaveIndicator = ({ toolCalls }: MemorySaveIndicatorProps) => 
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                  transition={{ duration: 0.3, ease: 'easeInOut' }}
                   className="overflow-hidden"
                 >
                   <div className="px-4 py-3 bg-muted/20 space-y-3 max-h-60 overflow-y-auto">
                     {savedMemories.map((memory, index) => {
                       const content = getMemoryContent(memory)
                       const type = getMemoryType(memory)
-                      
+
                       return (
                         <motion.div
                           key={index}
@@ -207,9 +211,7 @@ export const MemorySaveIndicator = ({ toolCalls }: MemorySaveIndicatorProps) => 
                                   {type}
                                 </span>
                                 <div className="h-1 w-1 bg-muted-foreground/30 rounded-full" />
-                                <span className="text-xs text-muted-foreground">
-                                  Just now
-                                </span>
+                                <span className="text-xs text-muted-foreground">Just now</span>
                               </div>
                               <p className="text-xs text-foreground/80 leading-relaxed line-clamp-3">
                                 {content}

@@ -178,7 +178,8 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: 'Security key setup initiated (supports both platform authenticators and external keys)',
+        message:
+          'Security key setup initiated (supports both platform authenticators and external keys)',
         requiresWebAuthn: true,
       })
     }

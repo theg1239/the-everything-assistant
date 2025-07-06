@@ -80,10 +80,12 @@ export function VTOPCredentialsDialog({
         try {
           saveVTOPCredentials(username.trim(), password.trim())
           toast.success('VTOP credentials linked successfully!')
-          
-          window.dispatchEvent(new CustomEvent('vtopCredentialsLinked', {
-            detail: { username: username.trim() }
-          }))
+
+          window.dispatchEvent(
+            new CustomEvent('vtopCredentialsLinked', {
+              detail: { username: username.trim() },
+            })
+          )
         } catch (error) {
           console.error('Failed to link credentials:', error)
           toast.error('Failed to link credentials, but login will proceed')
@@ -206,7 +208,10 @@ export function VTOPCredentialsDialog({
                   onChange={e => setLinkCredentials(e.target.checked)}
                   className="rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 h-4 w-4"
                 />
-                <label htmlFor="link-credentials" className="text-sm text-slate-300 flex items-center">
+                <label
+                  htmlFor="link-credentials"
+                  className="text-sm text-slate-300 flex items-center"
+                >
                   {/* <Link className="h-3 w-3 mr-1" /> */}
                   Link for auto-login
                 </label>
@@ -224,7 +229,10 @@ export function VTOPCredentialsDialog({
                 <Lock className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
                 <div className="text-xs text-slate-300">
                   <p>
-                    Your password is encrypted and {linkCredentials ? 'stored in secure cookies. Linked credentials enable automatic VTOP access without re-entering credentials.' : 'never stored. Only your username can be remembered.'}
+                    Your password is encrypted and{' '}
+                    {linkCredentials
+                      ? 'stored in secure cookies. Linked credentials enable automatic VTOP access without re-entering credentials.'
+                      : 'never stored. Only your username can be remembered.'}
                   </p>
                 </div>
               </div>

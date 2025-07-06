@@ -51,36 +51,84 @@ const protectedRoutes = [
 ]
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || 'https://the-everything-assistant.vercel.app'),
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_BASE_URL || 'https://the-everything-assistant.vercel.app'
+  ),
   title: 'the everything assistant',
   description: 'your personal agentic AI assistant',
   manifest: '/manifest.json',
   keywords: [
-    'VIT Vellore', 'VIT Vellore assistant', 'VTOP helper', 'VIT student assistant',
-    'Vellore Institute of Technology', 'VIT Tamil Nadu', 'VIT TN',
-    
-    'VIT past papers', 'VIT FAT past papers', 'VIT CAT past papers', 'VIT quiz papers',
-    'VIT exam papers', 'VIT previous year papers', 'VIT question papers',
-    'VIT study materials', 'VIT notes', 'VIT syllabus', 'VIT paper vault', 'examcooker',
-    'codechef papers', 'VIT coding papers', 'VIT programming papers',
-    
-    'VTOP login', 'VTOP assistant', 'VIT timetable', 'VIT attendance tracker',
-    'VIT grades', 'VIT marks', 'VIT CGPA calculator', 'VIT GPA',
-    'VTOP automation', 'VIT course registration', 'VIT academic calendar',
-    
-    'VIT mess menu', 'VIT hostel mess', 'VIT food menu', 'VIT dining',
-    'VIT campus assistant', 'VIT student life', 'VIT facilities', 'mess it',
-    
-    'VIT placements', 'VIT placement statistics', 'VIT career guidance',
-    'VIT internships', 'VIT job opportunities', 'VIT companies',
-    
-    'AI assistant', 'student AI helper', 'academic AI assistant',
-    'chatbot for students', 'VIT chatbot', 'study assistant AI',
-    'personal assistant', 'agentic AI', 'intelligent assistant',
-    
-    'student portal', 'academic tracker', 'study planner',
-    'exam preparation', 'student productivity', 'college assistant',
-    'university helper', 'academic management', 'student tools'
+    'VIT Vellore',
+    'VIT Vellore assistant',
+    'VTOP helper',
+    'VIT student assistant',
+    'Vellore Institute of Technology',
+    'VIT Tamil Nadu',
+    'VIT TN',
+
+    'VIT past papers',
+    'VIT FAT past papers',
+    'VIT CAT past papers',
+    'VIT quiz papers',
+    'VIT exam papers',
+    'VIT previous year papers',
+    'VIT question papers',
+    'VIT study materials',
+    'VIT notes',
+    'VIT syllabus',
+    'VIT paper vault',
+    'examcooker',
+    'codechef papers',
+    'VIT coding papers',
+    'VIT programming papers',
+
+    'VTOP login',
+    'VTOP assistant',
+    'VIT timetable',
+    'VIT attendance tracker',
+    'VIT grades',
+    'VIT marks',
+    'VIT CGPA calculator',
+    'VIT GPA',
+    'VTOP automation',
+    'VIT course registration',
+    'VIT academic calendar',
+
+    'VIT mess menu',
+    'VIT hostel mess',
+    'VIT food menu',
+    'VIT dining',
+    'VIT campus assistant',
+    'VIT student life',
+    'VIT facilities',
+    'mess it',
+
+    'VIT placements',
+    'VIT placement statistics',
+    'VIT career guidance',
+    'VIT internships',
+    'VIT job opportunities',
+    'VIT companies',
+
+    'AI assistant',
+    'student AI helper',
+    'academic AI assistant',
+    'chatbot for students',
+    'VIT chatbot',
+    'study assistant AI',
+    'personal assistant',
+    'agentic AI',
+    'intelligent assistant',
+
+    'student portal',
+    'academic tracker',
+    'study planner',
+    'exam preparation',
+    'student productivity',
+    'college assistant',
+    'university helper',
+    'academic management',
+    'student tools',
   ],
   authors: [{ name: 'the everything assistant team' }],
   creator: 'the everything assistant',
@@ -104,7 +152,8 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: 'the everything assistant',
-    description: 'your personal AI assistant for vit vellore - access vtop, past papers, mess menu, timetables, attendance, grades, and more',
+    description:
+      'your personal AI assistant for vit vellore - access vtop, past papers, mess menu, timetables, attendance, grades, and more',
     url: 'https://the-everything-assistant.vercel.app',
     siteName: 'the everything assistant',
     images: [
@@ -121,7 +170,8 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'the everything assistant',
-    description: 'your personal AI assistant for vit vellore - access vtop, past papers, mess menu, timetables, attendance, grades, and more',
+    description:
+      'your personal AI assistant for vit vellore - access vtop, past papers, mess menu, timetables, attendance, grades, and more',
     images: ['/onboarding-artwork/artwork.png'],
   },
   verification: {

@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { credential, method } = await request.json()
-    
+
     if (!credential || !method || method !== 'security_key') {
       return NextResponse.json({ error: 'Invalid credential or method' }, { status: 400 })
     }
@@ -58,12 +58,14 @@ export async function POST(request: NextRequest) {
       const verification = await verifyRegistrationResponse({
         response: credential,
         expectedChallenge: user.tempMfaSecret,
-        expectedOrigin: process.env.NODE_ENV === 'production' 
-          ? process.env.WEBAUTHN_ORIGIN || 'https://the-everything-assistant.vercel.app'
-          : 'http://localhost:3000',
-        expectedRPID: process.env.NODE_ENV === 'production' 
-          ? process.env.WEBAUTHN_RP_ID || 'the-everything-assistant.vercel.app' 
-          : 'localhost',
+        expectedOrigin:
+          process.env.NODE_ENV === 'production'
+            ? process.env.WEBAUTHN_ORIGIN || 'https://the-everything-assistant.vercel.app'
+            : 'http://localhost:3000',
+        expectedRPID:
+          process.env.NODE_ENV === 'production'
+            ? process.env.WEBAUTHN_RP_ID || 'the-everything-assistant.vercel.app'
+            : 'localhost',
         requireUserVerification: false,
       } as VerifyRegistrationResponseOpts)
 
@@ -111,15 +113,16 @@ export async function POST(request: NextRequest) {
       })
 
       await logSecurityEvent(
-        user.id, 
-        'MFA_WEBAUTHN_ENABLED', 
-        { method, credentialId: credentialIdBase64url }, 
+        user.id,
+        'MFA_WEBAUTHN_ENABLED',
+        { method, credentialId: credentialIdBase64url },
         request
       )
 
       return NextResponse.json({
         success: true,
-        message: 'Security key registered successfully (supports both platform authenticators and external keys)',
+        message:
+          'Security key registered successfully (supports both platform authenticators and external keys)',
         backupCodes,
         mfaEnabled: true,
         mfaMethod: method,

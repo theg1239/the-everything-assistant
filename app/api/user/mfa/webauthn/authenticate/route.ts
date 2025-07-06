@@ -45,15 +45,15 @@ export async function POST(request: NextRequest) {
         ? process.env.WEBAUTHN_RP_ID || 'the-everything-assistant.vercel.app'
         : 'localhost'
 
-    const allowCredentials: PublicKeyCredentialDescriptor[] =
-      user.webAuthnCredentials.map((cred) => ({
+    const allowCredentials: PublicKeyCredentialDescriptor[] = user.webAuthnCredentials.map(
+      cred => ({
         id: cred.credentialId,
         type: 'public-key',
-        transports:
-          (cred.transports.length > 0
-            ? cred.transports
-            : ['usb', 'nfc', 'ble', 'hybrid', 'internal']) as AuthenticatorTransportFuture[],
-      }))
+        transports: (cred.transports.length > 0
+          ? cred.transports
+          : ['usb', 'nfc', 'ble', 'hybrid', 'internal']) as AuthenticatorTransportFuture[],
+      })
+    )
 
     const options = await generateAuthenticationOptions({
       rpID,
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
 
     console.log('Generated WebAuthn authentication options:', {
       userVerification: options.userVerification,
-      allowCredentials: options.allowCredentials?.map((c) => ({
+      allowCredentials: options.allowCredentials?.map(c => ({
         id: typeof c.id === 'string' ? c.id.slice(0, 10) + '…' : '[Buffer]',
         transports: c.transports,
       })),

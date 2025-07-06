@@ -112,7 +112,7 @@ export function BroadcastDialog({ isOpen, onClose, payload }: BroadcastDialogPro
           >
             <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
           </Button>
-          
+
           <Button
             variant="ghost"
             size="sm"
@@ -169,7 +169,7 @@ export function BroadcastDialog({ isOpen, onClose, payload }: BroadcastDialogPro
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
           </div>
-          <div 
+          <div
             className="flex-1 relative"
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}

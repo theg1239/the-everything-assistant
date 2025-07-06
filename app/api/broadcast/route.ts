@@ -22,7 +22,7 @@ export async function GET() {
       id: broadcast.id,
       slides: broadcast.slides,
       timestamp: broadcast.createdAt.toISOString(),
-      sentBy: session?.user?.email || 'Admin'
+      sentBy: session?.user?.email || 'Admin',
     }))
 
     return NextResponse.json({ broadcasts: transformedBroadcasts })
@@ -49,8 +49,8 @@ export async function DELETE(req: NextRequest) {
 
     await prisma.broadcast.delete({
       where: {
-        id: id
-      }
+        id: id,
+      },
     })
 
     return NextResponse.json({ success: true })
@@ -81,11 +81,11 @@ export async function PUT(req: NextRequest) {
 
     const updatedBroadcast = await prisma.broadcast.update({
       where: {
-        id: id
+        id: id,
       },
       data: {
-        slides: slides
-      }
+        slides: slides,
+      },
     })
 
     return NextResponse.json(updatedBroadcast)

@@ -21,7 +21,7 @@ export function GlobalBroadcastDialog({ latestBroadcast }: GlobalBroadcastDialog
       setOpen(false)
       return
     }
-    
+
     const id = getBroadcastId(latestBroadcast)
     const seen = typeof window !== 'undefined' ? localStorage.getItem('seen-broadcast-id') : null
     if (seen !== id) {

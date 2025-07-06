@@ -32,7 +32,7 @@ export function VTOPToolHandler({
           if (triggerToolCallId) {
             vtopToolCall = toolInvocations?.find(tool => tool.toolCallId === triggerToolCallId)
           }
-          
+
           if (!vtopToolCall) {
             vtopToolCall = {
               toolName: 'queryVTOP',

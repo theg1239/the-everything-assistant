@@ -67,8 +67,7 @@ export async function POST(request: NextRequest) {
     ? stored.publicKey
     : Buffer.from(stored.publicKey, 'base64')
 
-  const prevCounter =
-    typeof stored.counter === 'bigint' ? Number(stored.counter) : stored.counter
+  const prevCounter = typeof stored.counter === 'bigint' ? Number(stored.counter) : stored.counter
 
   const formattedResponse = {
     id: credential.id,
@@ -93,15 +92,12 @@ export async function POST(request: NextRequest) {
       process.env.NODE_ENV === 'production'
         ? process.env.WEBAUTHN_ORIGIN!
         : 'http://localhost:3000',
-    expectedRPID:
-      process.env.NODE_ENV === 'production'
-        ? process.env.WEBAUTHN_RP_ID!
-        : 'localhost',
+    expectedRPID: process.env.NODE_ENV === 'production' ? process.env.WEBAUTHN_RP_ID! : 'localhost',
     credential: {
-      id: stored.credentialId,         // base64url string
-      publicKey: credentialPublicKey,  // Buffer or Uint8Array
-      counter: prevCounter,            // number
-      transports: stored.transports,   // e.g. ['usb','nfc']
+      id: stored.credentialId, // base64url string
+      publicKey: credentialPublicKey, // Buffer or Uint8Array
+      counter: prevCounter, // number
+      transports: stored.transports, // e.g. ['usb','nfc']
     },
     requireUserVerification: false,
   }
@@ -113,7 +109,11 @@ export async function POST(request: NextRequest) {
       await logSecurityEvent(
         user.id,
         'MFA_WEBAUTHN_AUTH_FAILED',
-        { method: user.mfaMethod, credentialId: stored.credentialId, reason: 'verification_failed' },
+        {
+          method: user.mfaMethod,
+          credentialId: stored.credentialId,
+          reason: 'verification_failed',
+        },
         request
       )
       return NextResponse.json({ error: 'WebAuthn authentication failed' }, { status: 400 })

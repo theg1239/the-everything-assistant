@@ -338,7 +338,9 @@ export async function saveMessage(
   if (toolInvocations) {
     try {
       // Sanitize tool invocations to remove sensitive data before storage
-      const sanitized = sanitizeToolInvocations(Array.isArray(toolInvocations) ? toolInvocations : [toolInvocations])
+      const sanitized = sanitizeToolInvocations(
+        Array.isArray(toolInvocations) ? toolInvocations : [toolInvocations]
+      )
       safeToolInvocations = JSON.parse(JSON.stringify(sanitized))
     } catch (e) {
       console.error('Failed to serialize toolInvocations for DB:', e)

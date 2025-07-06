@@ -29,17 +29,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         role: msg.role,
         content: msg.content,
         toolInvocations: msg.toolInvocations,
-        parts: msg.toolInvocations && msg.toolInvocations.length > 0 
-          ? [
-              ...(msg.content ? [{ type: 'text', text: msg.content }] : []),
-              ...msg.toolInvocations.map((toolInvocation: any) => ({
-                type: 'tool-invocation',
-                toolInvocation
-              }))
-            ]
-          : msg.content 
-            ? [{ type: 'text', text: msg.content }]
-            : [],
+        parts:
+          msg.toolInvocations && msg.toolInvocations.length > 0
+            ? [
+                ...(msg.content ? [{ type: 'text', text: msg.content }] : []),
+                ...msg.toolInvocations.map((toolInvocation: any) => ({
+                  type: 'tool-invocation',
+                  toolInvocation,
+                })),
+              ]
+            : msg.content
+              ? [{ type: 'text', text: msg.content }]
+              : [],
         createdAt: msg.created_at,
       })),
     })

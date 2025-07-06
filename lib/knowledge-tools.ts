@@ -62,16 +62,16 @@ export function createKnowledgeTools() {
           console.debug(`[knowledgeBase] retrieved ${chunks.length} chunks`, {
             topScore: chunks[0]?.score,
           })
-          
-          return { 
-            success: true, 
+
+          return {
+            success: true,
             hidden: false,
             chunks: chunks.map(c => ({
               content: c.content,
               metadata: c.metadata,
-              score: c.score
+              score: c.score,
             })),
-            instruction: `You have successfully retrieved relevant information from the knowledge base. You must now provide a comprehensive answer to the user's question: "${query}". Use the information in the chunks above to formulate your response. Format your answer with proper markdown, bullet points, and use a conversational tone.`
+            instruction: `You have successfully retrieved relevant information from the knowledge base. You must now provide a comprehensive answer to the user's question: "${query}". Use the information in the chunks above to formulate your response. Format your answer with proper markdown, bullet points, and use a conversational tone.`,
           }
         } finally {
           client.release()

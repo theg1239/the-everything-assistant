@@ -11,18 +11,18 @@ const prisma = new PrismaClient()
 
 async function migratePasskeyToSecurityKey() {
   console.log('🔄 Starting passkey to security_key migration...')
-  
+
   try {
     const users = await prisma.user.findMany({
       where: {
         mfaEnabled: true,
-        mfaMethod: 'passkey'
+        mfaMethod: 'passkey',
       },
       select: {
         id: true,
         email: true,
-        mfaMethod: true
-      }
+        mfaMethod: true,
+      },
     })
 
     console.log(`Found ${users.length} users with passkey method`)
@@ -34,22 +34,21 @@ async function migratePasskeyToSecurityKey() {
 
     const result = await prisma.user.updateMany({
       where: {
-        mfaMethod: 'passkey'
+        mfaMethod: 'passkey',
       },
       data: {
-        mfaMethod: 'security_key'
-      }
+        mfaMethod: 'security_key',
+      },
     })
 
     console.log(`Migrated ${result.count} users from passkey to security_key`)
-    
+
     for (const user of users) {
       console.log(`Migrated ${user.email}: passkey → security_key`)
     }
 
     console.log('\nMigration completed successfully!')
     console.log('All WebAuthn users now use the unified "security_key" method.')
-
   } catch (error) {
     console.error('Migration failed:', error)
     process.exit(1)
@@ -63,7 +62,7 @@ migratePasskeyToSecurityKey()
     console.log('Migration script completed')
     process.exit(0)
   })
-  .catch((error) => {
+  .catch(error => {
     console.error('Migration script failed:', error)
     process.exit(1)
   })

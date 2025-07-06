@@ -12,21 +12,21 @@ export const SidebarWrapper = memo(function SidebarWrapper() {
   const { data: session, status } = useSession()
   const pathname = usePathname()
   const { requiresMFA, isMFAVerified } = useMFA()
-  
-  const shouldHideSidebar = 
-    pathname === '/login' || 
-    status === 'unauthenticated' || 
+
+  const shouldHideSidebar =
+    pathname === '/login' ||
+    status === 'unauthenticated' ||
     (requiresMFA && !isMFAVerified && session?.user)
-  
+
   useEffect(() => {
     if (shouldHideSidebar && isOpen) {
       setIsOpen(false)
     }
   }, [shouldHideSidebar, isOpen, setIsOpen])
-  
+
   if (shouldHideSidebar) {
     return null
   }
-  
+
   return <Sidebar isOpen={isOpen} onToggle={toggle} />
 })

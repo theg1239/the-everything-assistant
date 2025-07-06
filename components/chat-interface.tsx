@@ -112,881 +112,704 @@ interface ChatInterfaceProps {
   autoResume?: boolean
 }
 
-const PureChatInterface = memo(({
-  initialMessages = [],
-  chatId,
-  autoResume = false,
-}: ChatInterfaceProps) => {
-  const [showFullChat, setShowFullChat] = useState(initialMessages.length > 0)
-  const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebar()
-  const [canvasOpen, setCanvasOpen] = useState(false)
-  const [canvasContent, setCanvasContent] = useState<string>('')
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [hasUserInitiatedConversation, setHasUserInitiatedConversation] = useState(false)
-  const [isInitialRender, setIsInitialRender] = useState(true)
-  const [isMobile, setIsMobile] = useState(false)
-  const [isFirstMessageInNewChat, setIsFirstMessageInNewChat] = useState(false)
-  const [isZoomed, setIsZoomed] = useState(false)
-  const [showFollowUpSuggestions, setShowFollowUpSuggestions] = useState(false)
-  const [lastAssistantMessage, setLastAssistantMessage] = useState<string>('')
-  const [lastUserMessage, setLastUserMessage] = useState<string>('')
-  const [userPreferences, setUserPreferences] = useState<any>({ followUpSuggestions: true })
-  const [selectedTool, setSelectedTool] = useState<string>('')
-  const [chatCreatedEventDispatched, setChatCreatedEventDispatched] = useState(false)
-  const [maximizedArtifact, setMaximizedArtifact] = useState<any>(null)
-  const [isAtBottom, setIsAtBottom] = useState(true)
-  const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const contentRef = useRef<HTMLDivElement>(null)
-  const router = useRouter()
-  const [optimisticChatId, setOptimisticChatId] = useState<string | undefined>(chatId)
-  const currentChatIdRef = useRef<string | undefined>(chatId)
-  const { updateToolResult, clearToolResult } = useVTOP()
-  const { rateLimitError, clearRateLimitError, checkForRateLimitError } = useRateLimit()
-  const { data: session } = useSession()
-  const memory = useMemory()
-  const { showOnboarding, closeOnboarding } = useOnboarding()
+const PureChatInterface = memo(
+  ({ initialMessages = [], chatId, autoResume = false }: ChatInterfaceProps) => {
+    const [showFullChat, setShowFullChat] = useState(initialMessages.length > 0)
+    const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebar()
+    const [canvasOpen, setCanvasOpen] = useState(false)
+    const [canvasContent, setCanvasContent] = useState<string>('')
+    const [errorMessage, setErrorMessage] = useState<string | null>(null)
+    const [hasUserInitiatedConversation, setHasUserInitiatedConversation] = useState(false)
+    const [isInitialRender, setIsInitialRender] = useState(true)
+    const [isMobile, setIsMobile] = useState(false)
+    const [isFirstMessageInNewChat, setIsFirstMessageInNewChat] = useState(false)
+    const [isZoomed, setIsZoomed] = useState(false)
+    const [showFollowUpSuggestions, setShowFollowUpSuggestions] = useState(false)
+    const [lastAssistantMessage, setLastAssistantMessage] = useState<string>('')
+    const [lastUserMessage, setLastUserMessage] = useState<string>('')
+    const [userPreferences, setUserPreferences] = useState<any>({ followUpSuggestions: true })
+    const [selectedTool, setSelectedTool] = useState<string>('')
+    const [chatCreatedEventDispatched, setChatCreatedEventDispatched] = useState(false)
+    const [maximizedArtifact, setMaximizedArtifact] = useState<any>(null)
+    const [isAtBottom, setIsAtBottom] = useState(true)
+    const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
+    const messagesEndRef = useRef<HTMLDivElement>(null)
+    const contentRef = useRef<HTMLDivElement>(null)
+    const router = useRouter()
+    const [optimisticChatId, setOptimisticChatId] = useState<string | undefined>(chatId)
+    const currentChatIdRef = useRef<string | undefined>(chatId)
+    const { updateToolResult, clearToolResult } = useVTOP()
+    const { rateLimitError, clearRateLimitError, checkForRateLimitError } = useRateLimit()
+    const { data: session } = useSession()
+    const memory = useMemory()
+    const { showOnboarding, closeOnboarding } = useOnboarding()
 
-  const mainRef = useViewportHeight()
+    const mainRef = useViewportHeight()
 
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout
-    const checkMobile = () => {
-      clearTimeout(timeoutId)
-      timeoutId = setTimeout(() => {
-        const isMobileNow = window.innerWidth <= 768
-        if (isMobileNow !== isMobile) {
-          setIsMobile(isMobileNow)
-        }
-      }, 100)
-    }
-    const checkZoom = () => {
-      if (window.visualViewport) {
-        const scale = window.visualViewport.scale || 1
-        const isZoomedNow = scale > 1.1
-        if (isZoomedNow !== isZoomed) {
-          setIsZoomed(isZoomedNow)
-        }
-      }
-    }
-    checkMobile()
-    checkZoom()
-    window.addEventListener('resize', checkMobile, { passive: true })
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', checkZoom, { passive: true })
-    }
-    if (window.innerWidth <= 768 && document.readyState === 'complete') {
-      setTimeout(() => window.scrollTo(0, 0), 50)
-    }
-    return () => {
-      clearTimeout(timeoutId)
-      window.removeEventListener('resize', checkMobile)
-      if (window.visualViewport) {
-        window.visualViewport.removeEventListener('resize', checkZoom)
-      }
-    }
-  }, [isMobile, isZoomed])
-
-  useEffect(() => {
-    currentChatIdRef.current = optimisticChatId || chatId
-  }, [optimisticChatId, chatId])
-  useEffect(() => {
-    const hasUser = initialMessages.some(m => m.role === 'user')
-    setHasUserInitiatedConversation(hasUser)
-    setIsFirstMessageInNewChat(initialMessages.length === 0)
-  }, [initialMessages])
-
-  useEffect(() => {
-    const loadPreferences = async () => {
-      if (!session?.user?.email) return
-      try {
-        const response = await fetch('/api/user/preferences')
-        if (response.ok) {
-          const data = await response.json()
-          setUserPreferences(data.preferences)
-        }
-      } catch (error) {
-        console.error('Error loading user preferences:', error)
-      }
-    }
-    if (session?.user?.email) {
-      loadPreferences()
-    }
-  }, [session?.user?.email])
-  
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    if (!input.trim()) return
-    
-    try {
-      setShowFollowUpSuggestions(false)
-      setLastUserMessage(input)
-      
-      if (!showFullChat) {
-        setShowFullChat(true)
-      }
-      
-      setErrorMessage(null)
-      clearRateLimitError()
-      originalHandleSubmit(e)
-    } catch (error) {
-      console.error('Error submitting message:', error)
-      setErrorMessage('Failed to send message. Please try again.')
-    }
-  }
-
-  const {
-    messages = [],
-    input,
-    handleInputChange,
-    handleSubmit: originalHandleSubmit,
-    isLoading,
-    error,
-    append,
-    reload,
-    stop,
-    setMessages,
-    setInput,
-    experimental_resume,
-    data
-  } = useChat({
-    api: '/api/chat',
-    initialMessages: initialMessages,
-    // experimental_throttle: 25,
-    body: {
-      ...(optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : {}),
-      ...(selectedTool ? { preferredTool: selectedTool } : {}),
-    },
-    onResponse: (res) => {
-      if (!showFullChat) setShowFullChat(true)
-      setErrorMessage(null)
-      clearRateLimitError()
-      const newId = res.headers.get('X-Chat-Id')
-      const newPath = res.headers.get('X-Chat-Path')
-      if (newId && !chatId && !chatCreatedEventDispatched) {
-        setOptimisticChatId(newId)
-        currentChatIdRef.current = newId
-        setChatCreatedEventDispatched(true)
-        const chatPath = `/chat/${newId}`
-        router.push(chatPath)
-        window.history.replaceState({}, '', chatPath)
-        window.dispatchEvent(
-          new CustomEvent('newChatCreated', {
-            detail: {
-              id: newId,
-              title: extractTitleFromContent(messages[0]?.content || 'New Chat'),
-              path: chatPath,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            },
-          })
-        )
-      }
-    },
-    onFinish: message => {
-      const currentChatId = currentChatIdRef.current
-      if (message.role === 'assistant' && message.content) {
-        setLastAssistantMessage(message.content)
-        if (userPreferences.followUpSuggestions !== false) {
-          setShowFollowUpSuggestions(true)
-        }
-      }
-      if (currentChatId && isFirstMessageInNewChat) {
-        setIsFirstMessageInNewChat(false)
-        const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
-          try {
-            const response = await fetch(`/api/chats/${currentChatId}`)
-            if (response.ok) {
-              const chatData = await response.json()
-              if (chatData.title && chatData.title !== 'New Chat') {
-                window.dispatchEvent(
-                  new CustomEvent('chatTitleUpdated', {
-                    detail: { chatId: currentChatId, title: chatData.title },
-                  })
-                )
-              } else if (attempt < maxAttempts) {
-                setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
-              }
-            }
-          } catch (error) {
-            if (attempt < maxAttempts) {
-              setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
-            }
+    useEffect(() => {
+      let timeoutId: NodeJS.Timeout
+      const checkMobile = () => {
+        clearTimeout(timeoutId)
+        timeoutId = setTimeout(() => {
+          const isMobileNow = window.innerWidth <= 768
+          if (isMobileNow !== isMobile) {
+            setIsMobile(isMobileNow)
           }
-        }
-        setTimeout(() => checkTitleUpdate(), 3000)
-      }
-    },
-    onError: err => {
-      const isRateLimit = checkForRateLimitError(err)
-      if (!isRateLimit) {
-        toast.error('Something went wrong. Please try again.')
-        // setErrorMessage('Unable to connect. Please check your connection and try again.')
-      }
-    },
-  })
-
-  useAutoResume({
-    autoResume: autoResume ?? true,
-    initialMessages,
-    experimental_resume,
-    data,
-    setMessages,
-  })
-
-  const scrollToBottom = useCallback(() => {
-    if (!messagesEndRef.current) return
-    const container = contentRef.current?.parentElement
-    const scrollBehavior: ScrollBehavior = isLoading ? 'auto' : 'smooth'
-    if (container && isMobile) {
-      container.scrollTo({ top: container.scrollHeight, behavior: scrollBehavior })
-    } else {
-      messagesEndRef.current.scrollIntoView({ behavior: scrollBehavior, block: 'end' })
-    }
-    setIsAtBottom(true)
-  }, [isMobile, isLoading])
-
-  const checkScrollPosition = useCallback(() => {
-    const container = contentRef.current?.parentElement
-    if (!container) return
-
-    const threshold = 100
-    const isAtBottomNow = container.scrollHeight - container.scrollTop - container.clientHeight < threshold
-    setIsAtBottom(isAtBottomNow)
-  }, [])
-
-  useEffect(() => {
-    const container = contentRef.current?.parentElement
-    if (!container) return
-
-    const handleScroll = () => {
-      checkScrollPosition()
-    }
-
-    container.addEventListener('scroll', handleScroll, { passive: true })
-    return () => container.removeEventListener('scroll', handleScroll)
-  }, [checkScrollPosition])
-
-  useEffect(() => {
-    if (isLoading) {
-      setAutoScrollEnabled(isAtBottom)
-    } else {
-      setAutoScrollEnabled(true)
-    }
-  }, [isLoading, isAtBottom])
-
-  useEffect(() => {
-    if (initialMessages.length > 0 && showFullChat) {
-      const container = contentRef.current?.parentElement
-      if (container) {
-        container.scrollTop = container.scrollHeight
-      } else if (messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' })
-      }
-      setIsAtBottom(true)
-    }
-  }, [initialMessages.length, showFullChat])
-
-  const throttledScrollToBottom = useThrottle(scrollToBottom, 50)
-
-  useEffect(() => {
-    if (isInitialRender) {
-      setIsInitialRender(false)
-
-      if (isMobile) {
-        setTimeout(() => {
-          window.scrollTo(0, 0)
         }, 100)
       }
-    }
-  }, [isInitialRender, isMobile])
-
-  useEffect(() => {
-    if (!isInitialRender && messages.length > 0 && messages[messages.length - 1].role === 'user') {
-      throttledScrollToBottom()
-    }
-  }, [messages, isLoading, isInitialRender, throttledScrollToBottom])
-
-  useEffect(() => {
-    if (!isInitialRender && messages.length > 0 && isLoading && autoScrollEnabled) {
-      throttledScrollToBottom()
-    }
-  }, [messages, isLoading, isInitialRender, throttledScrollToBottom, autoScrollEnabled])
-
-  useEffect(() => {
-    if (isLoading && !isInitialRender && autoScrollEnabled) {
-      const targetNode = contentRef.current
-      if (!targetNode) return
-
-      const observer = new MutationObserver(throttledScrollToBottom)
-
-      observer.observe(targetNode, {
-        childList: true,
-        subtree: true,
-        characterData: true,
-        attributes: false,
-      })
-
+      const checkZoom = () => {
+        if (window.visualViewport) {
+          const scale = window.visualViewport.scale || 1
+          const isZoomedNow = scale > 1.1
+          if (isZoomedNow !== isZoomed) {
+            setIsZoomed(isZoomedNow)
+          }
+        }
+      }
+      checkMobile()
+      checkZoom()
+      window.addEventListener('resize', checkMobile, { passive: true })
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', checkZoom, { passive: true })
+      }
+      if (window.innerWidth <= 768 && document.readyState === 'complete') {
+        setTimeout(() => window.scrollTo(0, 0), 50)
+      }
       return () => {
-        observer.disconnect()
+        clearTimeout(timeoutId)
+        window.removeEventListener('resize', checkMobile)
+        if (window.visualViewport) {
+          window.visualViewport.removeEventListener('resize', checkZoom)
+        }
       }
-    }
-  }, [isLoading, isInitialRender, throttledScrollToBottom, autoScrollEnabled])
+    }, [isMobile, isZoomed])
 
-  useEffect(() => {
-    if (isMobile && !isInitialRender && messages.length > 0 && autoScrollEnabled) {
-      const timeoutId = setTimeout(() => {
-        throttledScrollToBottom()
-      }, 200)
+    useEffect(() => {
+      currentChatIdRef.current = optimisticChatId || chatId
+    }, [optimisticChatId, chatId])
+    useEffect(() => {
+      const hasUser = initialMessages.some(m => m.role === 'user')
+      setHasUserInitiatedConversation(hasUser)
+      setIsFirstMessageInNewChat(initialMessages.length === 0)
+    }, [initialMessages])
 
-      return () => clearTimeout(timeoutId)
-    }
-  }, [messages.length, isMobile, isInitialRender, throttledScrollToBottom, autoScrollEnabled])
-
-  useEffect(() => {
-    if (error) {
-      const isRateLimit = checkForRateLimitError(error)
-
-      if (!isRateLimit) {
-        // setErrorMessage('Unable to connect. Please check your connection and try again.')
+    useEffect(() => {
+      const loadPreferences = async () => {
+        if (!session?.user?.email) return
+        try {
+          const response = await fetch('/api/user/preferences')
+          if (response.ok) {
+            const data = await response.json()
+            setUserPreferences(data.preferences)
+          }
+        } catch (error) {
+          console.error('Error loading user preferences:', error)
+        }
       }
-    }
-  }, [error, checkForRateLimitError])
+      if (session?.user?.email) {
+        loadPreferences()
+      }
+    }, [session?.user?.email])
 
-  const handleFormSubmit = useCallback(
-    (e: React.FormEvent<HTMLFormElement>) => {
+    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault()
       if (!input.trim()) return
 
-      setShowFollowUpSuggestions(false)
-      setLastUserMessage(input.trim())
+      try {
+        setShowFollowUpSuggestions(false)
+        setLastUserMessage(input)
 
-      if (!showFullChat) {
-        setShowFullChat(true)
-        setIsFirstMessageInNewChat(true)
+        if (!showFullChat) {
+          setShowFullChat(true)
+        }
+
+        setErrorMessage(null)
+        clearRateLimitError()
+        originalHandleSubmit(e)
+      } catch (error) {
+        console.error('Error submitting message:', error)
+        setErrorMessage('Failed to send message. Please try again.')
       }
-      setErrorMessage(null)
-      clearRateLimitError()
-      setHasUserInitiatedConversation(true)
-
-      originalHandleSubmit(e)
-    },
-    [
-      input,
-      showFullChat,
-      clearRateLimitError,
-      originalHandleSubmit,
-      setShowFollowUpSuggestions,
-      setLastUserMessage,
-      setErrorMessage,
-      setHasUserInitiatedConversation,
-    ]
-  )
-
-  const handleSuggestedQuestion = useCallback(
-    async (question: string) => {
-      setInput('')
-      setShowFollowUpSuggestions(false)
-      setLastUserMessage(question)
-
-      if (!showFullChat) {
-        setShowFullChat(true)
-        setIsFirstMessageInNewChat(true)
-      }
-      setErrorMessage(null)
-      clearRateLimitError()
-      setHasUserInitiatedConversation(true)
-
-      await append({
-        role: 'user',
-        content: question,
-      })
-    },
-    [
-      showFullChat,
-      clearRateLimitError,
-      setInput,
-      append,
-      setShowFollowUpSuggestions,
-      setLastUserMessage,
-      setErrorMessage,
-      setHasUserInitiatedConversation,
-    ]
-  )
-
-  const handleToolSelection = (toolId: string) => {
-    setSelectedTool(toolId)
-  }
-
-  const resetToHome = () => {
-    if (window.location.pathname !== '/') {
-      router.push('/')
-      setMessages([])
-      setInput('')
-      setShowFullChat(false)
-      setHasUserInitiatedConversation(false)
-      setIsFirstMessageInNewChat(false)
-      setShowFollowUpSuggestions(false)
-      setLastAssistantMessage('')
-      setLastUserMessage('')
-      setOptimisticChatId(undefined)
-      setChatCreatedEventDispatched(false)
-      setErrorMessage(null)
-      clearRateLimitError()
-      clearToolResult('')
-    } else {
-      router.push('/')
     }
-  }
 
-  const openCanvas = () => {
-    setCanvasOpen(true)
-  }
-  const createCanvasFromMessage = (content: string) => {
-    setCanvasContent(content)
-    setCanvasOpen(true)
-  }
-
-  const handleLoginClick = () => {
-    const triggerEvent = new CustomEvent('vtopLoginTrigger', {
-      detail: { command: 'attendance' },
-    })
-    window.dispatchEvent(triggerEvent)
-  }
-
-  const handlePlacementSearch = (company: string) => {
-    append({
-      role: 'user',
-      content: `Get placement information for ${company}`,
-    })
-  }
-
-  const handleVTOPCredentials = async (
-    credentials: { username: string; encryptedPassword: string },
-    originalToolCall: any
-  ) => {
-    try {
-      const command = originalToolCall?.args?.command || originalToolCall?.result?.command
-      if (!command) {
-        console.error('No command found in original tool call')
-        return
-      }
-      const toolCallId = originalToolCall.toolCallId || Date.now().toString()
-      clearToolResult(toolCallId)
-
-      const updatedMessagesForLoading = messages.map((message: any) => {
-        if (message.toolInvocations) {
-          const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
-            if (toolInvocation.toolCallId && toolCallId) {
-              return {
-                ...toolInvocation,
-                toolCallId: toolCallId,
-                state: 'call',
-                result: undefined,
-              }
-            }
-            return toolInvocation
-          })
-          return {
-            ...message,
-            toolInvocations: updatedToolInvocations,
+    const {
+      messages = [],
+      input,
+      handleInputChange,
+      handleSubmit: originalHandleSubmit,
+      isLoading,
+      error,
+      append,
+      reload,
+      stop,
+      setMessages,
+      setInput,
+      experimental_resume,
+      data,
+    } = useChat({
+      api: '/api/chat',
+      initialMessages: initialMessages,
+      // experimental_throttle: 25,
+      body: {
+        ...(optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : {}),
+        ...(selectedTool ? { preferredTool: selectedTool } : {}),
+      },
+      onResponse: res => {
+        if (!showFullChat) setShowFullChat(true)
+        setErrorMessage(null)
+        clearRateLimitError()
+        const newId = res.headers.get('X-Chat-Id')
+        const newPath = res.headers.get('X-Chat-Path')
+        if (newId && !chatId && !chatCreatedEventDispatched) {
+          setOptimisticChatId(newId)
+          currentChatIdRef.current = newId
+          setChatCreatedEventDispatched(true)
+          const chatPath = `/chat/${newId}`
+          router.push(chatPath)
+          window.history.replaceState({}, '', chatPath)
+          window.dispatchEvent(
+            new CustomEvent('newChatCreated', {
+              detail: {
+                id: newId,
+                title: extractTitleFromContent(messages[0]?.content || 'New Chat'),
+                path: chatPath,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              },
+            })
+          )
+        }
+      },
+      onFinish: message => {
+        const currentChatId = currentChatIdRef.current
+        if (message.role === 'assistant' && message.content) {
+          setLastAssistantMessage(message.content)
+          if (userPreferences.followUpSuggestions !== false) {
+            setShowFollowUpSuggestions(true)
           }
         }
-        return message
-      })
-
-      setMessages([...updatedMessagesForLoading])
-
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: messages,
-          directToolCall: {
-            toolName: 'queryVTOP',
-            args: {
-              command,
-              username: credentials.username,
-              password: credentials.encryptedPassword,
-              ...originalToolCall.args,
-            },
-            toolCallId: toolCallId,
-          },
-          id: chatId || optimisticChatId,
-        }),
-      })
-
-      if (response.ok) {
-        const result = await response.json()
-        if (toolCallId) {
-          updateToolResult(toolCallId, command, result.result)
+        if (currentChatId && isFirstMessageInNewChat) {
+          setIsFirstMessageInNewChat(false)
+          const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
+            try {
+              const response = await fetch(`/api/chats/${currentChatId}`)
+              if (response.ok) {
+                const chatData = await response.json()
+                if (chatData.title && chatData.title !== 'New Chat') {
+                  window.dispatchEvent(
+                    new CustomEvent('chatTitleUpdated', {
+                      detail: { chatId: currentChatId, title: chatData.title },
+                    })
+                  )
+                } else if (attempt < maxAttempts) {
+                  setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
+                }
+              }
+            } catch (error) {
+              if (attempt < maxAttempts) {
+                setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
+              }
+            }
+          }
+          setTimeout(() => checkTitleUpdate(), 3000)
         }
-        const updatedMessages = messages.map((message: any) => {
+      },
+      onError: err => {
+        const isRateLimit = checkForRateLimitError(err)
+        if (!isRateLimit) {
+          toast.error('Something went wrong. Please try again.')
+          // setErrorMessage('Unable to connect. Please check your connection and try again.')
+        }
+      },
+    })
+
+    useAutoResume({
+      autoResume: autoResume ?? true,
+      initialMessages,
+      experimental_resume,
+      data,
+      setMessages,
+    })
+
+    const scrollToBottom = useCallback(() => {
+      if (!messagesEndRef.current) return
+      const container = contentRef.current?.parentElement
+      const scrollBehavior: ScrollBehavior = isLoading ? 'auto' : 'smooth'
+      if (container && isMobile) {
+        container.scrollTo({ top: container.scrollHeight, behavior: scrollBehavior })
+      } else {
+        messagesEndRef.current.scrollIntoView({ behavior: scrollBehavior, block: 'end' })
+      }
+      setIsAtBottom(true)
+    }, [isMobile, isLoading])
+
+    const checkScrollPosition = useCallback(() => {
+      const container = contentRef.current?.parentElement
+      if (!container) return
+
+      const threshold = 100
+      const isAtBottomNow =
+        container.scrollHeight - container.scrollTop - container.clientHeight < threshold
+      setIsAtBottom(isAtBottomNow)
+    }, [])
+
+    useEffect(() => {
+      const container = contentRef.current?.parentElement
+      if (!container) return
+
+      const handleScroll = () => {
+        checkScrollPosition()
+      }
+
+      container.addEventListener('scroll', handleScroll, { passive: true })
+      return () => container.removeEventListener('scroll', handleScroll)
+    }, [checkScrollPosition])
+
+    useEffect(() => {
+      if (isLoading) {
+        setAutoScrollEnabled(isAtBottom)
+      } else {
+        setAutoScrollEnabled(true)
+      }
+    }, [isLoading, isAtBottom])
+
+    useEffect(() => {
+      if (initialMessages.length > 0 && showFullChat) {
+        const container = contentRef.current?.parentElement
+        if (container) {
+          container.scrollTop = container.scrollHeight
+        } else if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' })
+        }
+        setIsAtBottom(true)
+      }
+    }, [initialMessages.length, showFullChat])
+
+    const throttledScrollToBottom = useThrottle(scrollToBottom, 50)
+
+    useEffect(() => {
+      if (isInitialRender) {
+        setIsInitialRender(false)
+
+        if (isMobile) {
+          setTimeout(() => {
+            window.scrollTo(0, 0)
+          }, 100)
+        }
+      }
+    }, [isInitialRender, isMobile])
+
+    useEffect(() => {
+      if (
+        !isInitialRender &&
+        messages.length > 0 &&
+        messages[messages.length - 1].role === 'user'
+      ) {
+        throttledScrollToBottom()
+      }
+    }, [messages, isLoading, isInitialRender, throttledScrollToBottom])
+
+    useEffect(() => {
+      if (!isInitialRender && messages.length > 0 && isLoading && autoScrollEnabled) {
+        throttledScrollToBottom()
+      }
+    }, [messages, isLoading, isInitialRender, throttledScrollToBottom, autoScrollEnabled])
+
+    useEffect(() => {
+      if (isLoading && !isInitialRender && autoScrollEnabled) {
+        const targetNode = contentRef.current
+        if (!targetNode) return
+
+        const observer = new MutationObserver(throttledScrollToBottom)
+
+        observer.observe(targetNode, {
+          childList: true,
+          subtree: true,
+          characterData: true,
+          attributes: false,
+        })
+
+        return () => {
+          observer.disconnect()
+        }
+      }
+    }, [isLoading, isInitialRender, throttledScrollToBottom, autoScrollEnabled])
+
+    useEffect(() => {
+      if (isMobile && !isInitialRender && messages.length > 0 && autoScrollEnabled) {
+        const timeoutId = setTimeout(() => {
+          throttledScrollToBottom()
+        }, 200)
+
+        return () => clearTimeout(timeoutId)
+      }
+    }, [messages.length, isMobile, isInitialRender, throttledScrollToBottom, autoScrollEnabled])
+
+    useEffect(() => {
+      if (error) {
+        const isRateLimit = checkForRateLimitError(error)
+
+        if (!isRateLimit) {
+          // setErrorMessage('Unable to connect. Please check your connection and try again.')
+        }
+      }
+    }, [error, checkForRateLimitError])
+
+    const handleFormSubmit = useCallback(
+      (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault()
+        if (!input.trim()) return
+
+        setShowFollowUpSuggestions(false)
+        setLastUserMessage(input.trim())
+
+        if (!showFullChat) {
+          setShowFullChat(true)
+          setIsFirstMessageInNewChat(true)
+        }
+        setErrorMessage(null)
+        clearRateLimitError()
+        setHasUserInitiatedConversation(true)
+
+        originalHandleSubmit(e)
+      },
+      [
+        input,
+        showFullChat,
+        clearRateLimitError,
+        originalHandleSubmit,
+        setShowFollowUpSuggestions,
+        setLastUserMessage,
+        setErrorMessage,
+        setHasUserInitiatedConversation,
+      ]
+    )
+
+    const handleSuggestedQuestion = useCallback(
+      async (question: string) => {
+        setInput('')
+        setShowFollowUpSuggestions(false)
+        setLastUserMessage(question)
+
+        if (!showFullChat) {
+          setShowFullChat(true)
+          setIsFirstMessageInNewChat(true)
+        }
+        setErrorMessage(null)
+        clearRateLimitError()
+        setHasUserInitiatedConversation(true)
+
+        await append({
+          role: 'user',
+          content: question,
+        })
+      },
+      [
+        showFullChat,
+        clearRateLimitError,
+        setInput,
+        append,
+        setShowFollowUpSuggestions,
+        setLastUserMessage,
+        setErrorMessage,
+        setHasUserInitiatedConversation,
+      ]
+    )
+
+    const handleToolSelection = (toolId: string) => {
+      setSelectedTool(toolId)
+    }
+
+    const resetToHome = () => {
+      if (window.location.pathname !== '/') {
+        router.push('/')
+        setMessages([])
+        setInput('')
+        setShowFullChat(false)
+        setHasUserInitiatedConversation(false)
+        setIsFirstMessageInNewChat(false)
+        setShowFollowUpSuggestions(false)
+        setLastAssistantMessage('')
+        setLastUserMessage('')
+        setOptimisticChatId(undefined)
+        setChatCreatedEventDispatched(false)
+        setErrorMessage(null)
+        clearRateLimitError()
+        clearToolResult('')
+      } else {
+        router.push('/')
+      }
+    }
+
+    const openCanvas = () => {
+      setCanvasOpen(true)
+    }
+    const createCanvasFromMessage = (content: string) => {
+      setCanvasContent(content)
+      setCanvasOpen(true)
+    }
+
+    const handleLoginClick = () => {
+      const triggerEvent = new CustomEvent('vtopLoginTrigger', {
+        detail: { command: 'attendance' },
+      })
+      window.dispatchEvent(triggerEvent)
+    }
+
+    const handlePlacementSearch = (company: string) => {
+      append({
+        role: 'user',
+        content: `Get placement information for ${company}`,
+      })
+    }
+
+    const handleVTOPCredentials = async (
+      credentials: { username: string; encryptedPassword: string },
+      originalToolCall: any
+    ) => {
+      try {
+        const command = originalToolCall?.args?.command || originalToolCall?.result?.command
+        if (!command) {
+          console.error('No command found in original tool call')
+          return
+        }
+        const toolCallId = originalToolCall.toolCallId || Date.now().toString()
+        clearToolResult(toolCallId)
+
+        const updatedMessagesForLoading = messages.map((message: any) => {
           if (message.toolInvocations) {
             const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
-              if (toolInvocation.toolCallId && toolInvocation.toolCallId === toolCallId) {
+              if (toolInvocation.toolCallId && toolCallId) {
                 return {
                   ...toolInvocation,
-                  result: result.result,
-                  state: 'result',
+                  toolCallId: toolCallId,
+                  state: 'call',
+                  result: undefined,
                 }
               }
               return toolInvocation
             })
-
-            const updatedParts = message.parts
-              ? message.parts.map((part: any) => {
-                  if (
-                    part.type === 'tool-invocation' &&
-                    part.toolInvocation?.toolCallId === toolCallId
-                  ) {
-                    return {
-                      ...part,
-                      toolInvocation: {
-                        ...part.toolInvocation,
-                        result: result.result,
-                        state: 'result',
-                      },
-                    }
-                  }
-                  return part
-                })
-              : message.parts
-
             return {
               ...message,
               toolInvocations: updatedToolInvocations,
-              parts: updatedParts,
             }
           }
           return message
         })
-        setMessages([...updatedMessages])
 
-        if (
-          result.result &&
-          result.result.success !== false &&
-          (result.result.data || result.result.output)
-        ) {
-          if (chatId) {
-            setTimeout(async () => {
-              try {
-                const refreshResponse = await fetch(`/api/chats/${chatId}`)
-                if (refreshResponse.ok) {
-                  const chatData = await refreshResponse.json()
-                  if (chatData.messages) {
-                    setMessages(chatData.messages)
+        setMessages([...updatedMessagesForLoading])
+
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messages: messages,
+            directToolCall: {
+              toolName: 'queryVTOP',
+              args: {
+                command,
+                username: credentials.username,
+                password: credentials.encryptedPassword,
+                ...originalToolCall.args,
+              },
+              toolCallId: toolCallId,
+            },
+            id: chatId || optimisticChatId,
+          }),
+        })
+
+        if (response.ok) {
+          const result = await response.json()
+          if (toolCallId) {
+            updateToolResult(toolCallId, command, result.result)
+          }
+          const updatedMessages = messages.map((message: any) => {
+            if (message.toolInvocations) {
+              const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
+                if (toolInvocation.toolCallId && toolInvocation.toolCallId === toolCallId) {
+                  return {
+                    ...toolInvocation,
+                    result: result.result,
+                    state: 'result',
                   }
                 }
-              } catch (error) {
-                console.warn('Failed to refresh conversation after VTOP data retrieval:', error)
+                return toolInvocation
+              })
+
+              const updatedParts = message.parts
+                ? message.parts.map((part: any) => {
+                    if (
+                      part.type === 'tool-invocation' &&
+                      part.toolInvocation?.toolCallId === toolCallId
+                    ) {
+                      return {
+                        ...part,
+                        toolInvocation: {
+                          ...part.toolInvocation,
+                          result: result.result,
+                          state: 'result',
+                        },
+                      }
+                    }
+                    return part
+                  })
+                : message.parts
+
+              return {
+                ...message,
+                toolInvocations: updatedToolInvocations,
+                parts: updatedParts,
               }
-            }, 500)
-          }
-        } else if (result.result && result.result.success === false) {
-          const errorMessage =
-            result.result.error || result.result.message || 'Unknown error occurred'
+            }
+            return message
+          })
+          setMessages([...updatedMessages])
+
           if (
-            errorMessage.includes('Invalid LoginId/Password') ||
-            errorMessage.includes('Login failed')
+            result.result &&
+            result.result.success !== false &&
+            (result.result.data || result.result.output)
           ) {
-            toast.error('Invalid VTOP credentials. Please check your username and password.')
+            if (chatId) {
+              setTimeout(async () => {
+                try {
+                  const refreshResponse = await fetch(`/api/chats/${chatId}`)
+                  if (refreshResponse.ok) {
+                    const chatData = await refreshResponse.json()
+                    if (chatData.messages) {
+                      setMessages(chatData.messages)
+                    }
+                  }
+                } catch (error) {
+                  console.warn('Failed to refresh conversation after VTOP data retrieval:', error)
+                }
+              }, 500)
+            }
+          } else if (result.result && result.result.success === false) {
+            const errorMessage =
+              result.result.error || result.result.message || 'Unknown error occurred'
+            if (
+              errorMessage.includes('Invalid LoginId/Password') ||
+              errorMessage.includes('Login failed')
+            ) {
+              toast.error('Invalid VTOP credentials. Please check your username and password.')
+            }
           }
+        } else {
+          toast.error('Failed to retrieve VTOP data. Please try again.')
         }
-      } else {
-        toast.error('Failed to retrieve VTOP data. Please try again.')
-      }
-    } catch (error) {
-      console.error('Error executing VTOP tool:', error)
-      toast.error('An error occurred while retrieving VTOP data.')
-    }
-  }
-
-  useEffect(() => {
-    if (chatId || optimisticChatId) {
-      window.scrollTo(0, 0)
-
-      setTimeout(() => {
-        window.scrollTo(0, 0)
-      }, 100)
-    }
-  }, [chatId, optimisticChatId])
-
-  useEffect(() => {
-    if (chatId || optimisticChatId) {
-      const forceScrollToTop = () => {
-        window.scrollTo(0, 0)
-      }
-
-      forceScrollToTop()
-
-      const timeoutId = setTimeout(forceScrollToTop, 50)
-
-      return () => {
-        clearTimeout(timeoutId)
+      } catch (error) {
+        console.error('Error executing VTOP tool:', error)
+        toast.error('An error occurred while retrieving VTOP data.')
       }
     }
-  }, [chatId, optimisticChatId])
 
-  useEffect(() => {
-    if (showFullChat && isMobile && isFirstMessageInNewChat) {
-      setTimeout(() => {
+    useEffect(() => {
+      if (chatId || optimisticChatId) {
         window.scrollTo(0, 0)
-      }, 50)
-    }
-  }, [showFullChat, isMobile, isFirstMessageInNewChat])
 
-  useEffect(() => {
-    if (!chatId && !optimisticChatId) {
-      setChatCreatedEventDispatched(false)
-    }
-  }, [chatId, optimisticChatId])
+        setTimeout(() => {
+          window.scrollTo(0, 0)
+        }, 100)
+      }
+    }, [chatId, optimisticChatId])
 
-  useEffect(() => {
-    if (messages && messages.length > 0) {
-      const lastMessage = messages[messages.length - 1]
-      if (lastMessage && lastMessage.toolInvocations) {
-        for (const tool of lastMessage.toolInvocations) {
-          if (tool.toolName === 'queryVTOP' && tool.state === 'result' && tool.toolCallId) {
-            const toolResult = (tool as any).result
-            if (toolResult) {
-              const command = toolResult.command || tool.args?.command || 'unknown'
-              updateToolResult(tool.toolCallId, command, toolResult)
+    useEffect(() => {
+      if (chatId || optimisticChatId) {
+        const forceScrollToTop = () => {
+          window.scrollTo(0, 0)
+        }
+
+        forceScrollToTop()
+
+        const timeoutId = setTimeout(forceScrollToTop, 50)
+
+        return () => {
+          clearTimeout(timeoutId)
+        }
+      }
+    }, [chatId, optimisticChatId])
+
+    useEffect(() => {
+      if (showFullChat && isMobile && isFirstMessageInNewChat) {
+        setTimeout(() => {
+          window.scrollTo(0, 0)
+        }, 50)
+      }
+    }, [showFullChat, isMobile, isFirstMessageInNewChat])
+
+    useEffect(() => {
+      if (!chatId && !optimisticChatId) {
+        setChatCreatedEventDispatched(false)
+      }
+    }, [chatId, optimisticChatId])
+
+    useEffect(() => {
+      if (messages && messages.length > 0) {
+        const lastMessage = messages[messages.length - 1]
+        if (lastMessage && lastMessage.toolInvocations) {
+          for (const tool of lastMessage.toolInvocations) {
+            if (tool.toolName === 'queryVTOP' && tool.state === 'result' && tool.toolCallId) {
+              const toolResult = (tool as any).result
+              if (toolResult) {
+                const command = toolResult.command || tool.args?.command || 'unknown'
+                updateToolResult(tool.toolCallId, command, toolResult)
+              }
             }
           }
         }
       }
-    }
-  }, [messages, updateToolResult])
+    }, [messages, updateToolResult])
 
-  if (!showFullChat) {
-    return (
-      <VTOPToolHandler
-        toolInvocations={messages[messages.length - 1]?.toolInvocations}
-        onCredentialsSubmit={handleVTOPCredentials}
-      >
-        <UpsellBanner />
-        <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
-        <div className="flex flex-col h-[100dvh] bg-transparent text-foreground relative overflow-hidden mobile-viewport-fix">
-          <div className="relative z-10 flex flex-col h-full">
-            <header className="flex-shrink-0 sticky top-0 z-40">
-              <div className="flex h-14 items-center px-4 gap-2">
-                <HamburgerButton
-                  onClick={toggleSidebar}
-                  className="md:hidden"
-                />
-              </div>
-            </header>
-            <div className="flex-1 flex flex-col items-center justify-center px-4 space-y-8 overflow-y-auto overflow-fix pt-6 md:pt-0">
-              <ChatHeader />
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
-                className="w-full max-w-3xl"
-              >
-                <MultimodalInput
-                  input={input}
-                  setInput={setInput}
-                  handleSubmit={handleFormSubmit}
-                  isLoading={isLoading}
-                  onToolSelect={handleToolSelection}
-                  selectedTool={selectedTool}
-                  placeholder="ask anything..."
-                />{' '}
-              </motion.div>
-
-              {errorMessage && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl p-4 text-center max-w-md"
-                >
-                  {errorMessage}
-                </motion.div>
-              )}
-
-              <RateLimitErrorDisplay />
-
-              {isLoading && input.trim() !== '' && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center justify-center space-x-3 text-muted-foreground py-4"
-                >
-                  <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
-                    <div
-                      className="w-2 h-2 bg-primary rounded-full animate-pulse"
-                      style={{ animationDelay: '0.2s' }}
-                    ></div>
-                    <div
-                      className="w-2 h-2 bg-primary rounded-full animate-pulse"
-                      style={{ animationDelay: '0.4s' }}
-                    ></div>
-                  </div>
-                  <span className="text-sm">thinking...</span>
-                </motion.div>
-              )}
-
-              <SuggestedQuestions
-                isFirstMessage={true}
-                onQuestionClick={handleSuggestedQuestion}
-                sidebarOpen={sidebarOpen}
-              />
-            </div>
-          </div>
-        </div>
-      </VTOPToolHandler>
-    )
-  }
-  return (
-    <VTOPToolHandler
-      toolInvocations={messages[messages.length - 1]?.toolInvocations}
-      onCredentialsSubmit={handleVTOPCredentials}
-    >
-      <UpsellBanner />
-      <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
-      <Canvas
-        isOpen={canvasOpen}
-        onClose={() => {
-          setCanvasOpen(false)
-          setCanvasContent('')
-        }}
-        chatId={optimisticChatId}
-        initialDocument={
-          canvasContent
-            ? {
-                title: 'New Document',
-                content: canvasContent,
-                type: 'document',
-              }
-            : undefined
-        }
-      />{' '}
-      <div
-        ref={mainRef}
-        className="flex flex-col h-[calc(var(--vh,1vh)*100)] bg-transparent text-foreground overflow-hidden mobile-viewport-fix"
-        style={{
-          height: 'var(--app-height, 100vh)',
-          position: 'relative',
-          width: '100%',
-        }}
-      >
-        <header
-          className={cn(
-            'flex-shrink-0 sticky top-0 z-40 bg-black/20 backdrop-blur-sm border-b border-border/50 chat-page-header',
-            isMobile && 'mobile-header-sticky'
-          )}
+    if (!showFullChat) {
+      return (
+        <VTOPToolHandler
+          toolInvocations={messages[messages.length - 1]?.toolInvocations}
+          onCredentialsSubmit={handleVTOPCredentials}
         >
-          <div className="flex h-14 items-center px-4 gap-2">
-            <HamburgerButton onClick={toggleSidebar} className="md:block" />
-            <Button
-              variant="ghost"
-              onClick={() => {
-                if (window.location.pathname !== '/') {
-                  router.replace('/')
-                  setMessages([])
-                  setInput('')
-                  setShowFullChat(false)
-                  setHasUserInitiatedConversation(false)
-                  setIsFirstMessageInNewChat(false)
-                  setShowFollowUpSuggestions(false)
-                  setLastAssistantMessage('')
-                  setLastUserMessage('')
-                  setOptimisticChatId(undefined)
-                  setChatCreatedEventDispatched(false)
-                  setErrorMessage(null)
-                  clearRateLimitError()
-                  clearToolResult('')
-                } else {
-                  router.push('/')
-                }
-              }}
-              className="h-9"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              new chat
-            </Button>
-            <Button variant="ghost" onClick={openCanvas} className="ml-auto h-9">
-              <FileText className="h-4 w-4 mr-2" />
-              canvas
-            </Button>
-          </div>
-        </header>{' '}
-        <div className="flex-1 relative overflow-hidden">
-          <div
-            className={cn(
-              'absolute inset-0 overflow-y-auto chat-content',
-              isMobile && 'mobile-chat-container',
-              isMobile && isFirstMessageInNewChat && 'mobile-prevent-auto-scroll'
-            )}
-          >
-            {' '}
-            <div
-              ref={contentRef}
-              className={cn('max-w-3xl mx-auto px-4 space-y-6', isMobile ? 'pt-2 pb-6' : 'pt-5')}
-            >
-              {errorMessage && (
+          <UpsellBanner />
+          <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
+          <div className="flex flex-col h-[100dvh] bg-transparent text-foreground relative overflow-hidden mobile-viewport-fix">
+            <div className="relative z-10 flex flex-col h-full">
+              <header className="flex-shrink-0 sticky top-0 z-40">
+                <div className="flex h-14 items-center px-4 gap-2">
+                  <HamburgerButton onClick={toggleSidebar} className="md:hidden" />
+                </div>
+              </header>
+              <div className="flex-1 flex flex-col items-center justify-center px-4 space-y-8 overflow-y-auto overflow-fix pt-6 md:pt-0">
+                <ChatHeader />
                 <motion.div
-                  initial={{ opacity: 0, y: 10 }}
+                  initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl p-4 text-center"
+                  transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
+                  className="w-full max-w-3xl"
                 >
-                  {errorMessage}
+                  <MultimodalInput
+                    input={input}
+                    setInput={setInput}
+                    handleSubmit={handleFormSubmit}
+                    isLoading={isLoading}
+                    onToolSelect={handleToolSelection}
+                    selectedTool={selectedTool}
+                    placeholder="ask anything..."
+                  />{' '}
                 </motion.div>
-              )}
-              <RateLimitErrorDisplay />{' '}
-              <VirtualizedMessages
-                messages={messages.filter((msg: any) => {
-                  if (msg.role === 'assistant') {
-                    if ((!msg.content || (msg.content as string).trim() === '') && 
-                        msg.toolInvocations?.some((t: any) => t.toolName === 'knowledgeBase')) {
-                      return msg.toolInvocations.some((t: any) => 
-                        t.toolName === 'knowledgeBase' && 
-                        t.state === 'result' && 
-                        t.result?.chunks);
-                    }
-                    
-                    if ((!msg.content || (msg.content as string).trim() === '') && 
-                        msg.toolInvocations?.length > 0) {
-                      return false;
-                    }
-                  }
-                  return true;
-                })}
-                chatId={optimisticChatId}
-                onCreateCanvas={createCanvasFromMessage}
-                onLoginClick={handleLoginClick}
-                onPlacementSearch={handlePlacementSearch}
-                maximizedItem={maximizedArtifact}
-                setMaximizedItem={setMaximizedArtifact}
-              />
-              {isLoading &&
-                messages.length > 0 &&
-                (() => {
-                  const last = messages[messages.length - 1]
-                  
-                  if (last.role === 'user') return true;
-                  
-                  if (last.role === 'assistant') {
-                    if (last.toolInvocations?.some(
-                      (t: any) => t.toolName === 'knowledgeBase' && t.state !== 'result'
-                    )) {
-                      return true;
-                    }
-                    
-                    if ((!last.content || (last.content as string).trim() === '') && 
-                        last.toolInvocations && 
-                        last.toolInvocations.length > 0) {
-                      return true;
-                    }
-                  }
-                  
-                  return false;
-                })() && (
+
+                {errorMessage && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl p-4 text-center max-w-md"
+                  >
+                    {errorMessage}
+                  </motion.div>
+                )}
+
+                <RateLimitErrorDisplay />
+
+                {isLoading && input.trim() !== '' && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1006,79 +829,272 @@ const PureChatInterface = memo(({
                     <span className="text-sm">thinking...</span>
                   </motion.div>
                 )}
-              <div ref={messagesEndRef} className={isLoading ? 'h-20' : 'h-0'} aria-hidden="true" />
-            </div>
-          </div>
-        </div>
-        <ScrollToTopButton />
-        <div
-          className={cn(
-            'flex-shrink-0 sticky bottom-0 z-30',
-            isMobile ? 'input-area mobile-input-area' : 'input-area'
-          )}
-          style={isMobile ? { paddingBottom: 'env(safe-area-inset-bottom)' } : undefined}
-        >
-          {!isMobile && (
-            <div
-              className="absolute inset-0 pointer-events-none"
-              style={{
-                background:
-                  'linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.1) 70%, rgba(0, 0, 0, 0.2) 100%)',
-                borderTop: 'none',
-              }}
-            ></div>
-          )}
-          {!maximizedArtifact && (
-            <div className="relative z-10">
-              <FollowUpSuggestions
-                lastAssistantMessage={lastAssistantMessage}
-                lastUserMessage={lastUserMessage}
-                isVisible={showFollowUpSuggestions && !isLoading}
-                onSuggestionClick={handleSuggestedQuestion}
-                onDismiss={() => setShowFollowUpSuggestions(false)}
-                isMobile={isMobile}
-              />
-              <MultimodalInput
-                input={input}
-                setInput={setInput}
-                handleSubmit={handleFormSubmit}
-                isLoading={isLoading}
-                placeholder="ask anything..."
-                stop={stop}
-                onToolSelect={handleToolSelection}
-                selectedTool={selectedTool}
-              />
-              <div className="px-2 sm:px-4 pb-0.5">
-                <p className="text-[10px] sm:text-xs text-muted-foreground text-center leading-tight">
-                  the assistant can make mistakes. please verify information.
-                </p>
+
+                <SuggestedQuestions
+                  isFirstMessage={true}
+                  onQuestionClick={handleSuggestedQuestion}
+                  sidebarOpen={sidebarOpen}
+                />
               </div>
             </div>
-          )}
-        </div>
-      </div>
-      
-      {!isAtBottom && !showFollowUpSuggestions && typeof window !== 'undefined' && createPortal(
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.8 }}
-          className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-40"
+          </div>
+        </VTOPToolHandler>
+      )
+    }
+    return (
+      <VTOPToolHandler
+        toolInvocations={messages[messages.length - 1]?.toolInvocations}
+        onCredentialsSubmit={handleVTOPCredentials}
+      >
+        <UpsellBanner />
+        <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
+        <Canvas
+          isOpen={canvasOpen}
+          onClose={() => {
+            setCanvasOpen(false)
+            setCanvasContent('')
+          }}
+          chatId={optimisticChatId}
+          initialDocument={
+            canvasContent
+              ? {
+                  title: 'New Document',
+                  content: canvasContent,
+                  type: 'document',
+                }
+              : undefined
+          }
+        />{' '}
+        <div
+          ref={mainRef}
+          className="flex flex-col h-[calc(var(--vh,1vh)*100)] bg-transparent text-foreground overflow-hidden mobile-viewport-fix"
+          style={{
+            height: 'var(--app-height, 100vh)',
+            position: 'relative',
+            width: '100%',
+          }}
         >
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={scrollToBottom}
-            className="h-10 w-10 rounded-full bg-background/80 hover:bg-background/90 border-0 shadow-sm backdrop-blur-sm"
+          <header
+            className={cn(
+              'flex-shrink-0 sticky top-0 z-40 bg-black/20 backdrop-blur-sm border-b border-border/50 chat-page-header',
+              isMobile && 'mobile-header-sticky'
+            )}
           >
-            <ChevronDown className="h-5 w-5 text-foreground/70" />
-          </Button>
-        </motion.div>,
-        document.body
-      )}
-    </VTOPToolHandler>
-  )
-})
+            <div className="flex h-14 items-center px-4 gap-2">
+              <HamburgerButton onClick={toggleSidebar} className="md:block" />
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  if (window.location.pathname !== '/') {
+                    router.replace('/')
+                    setMessages([])
+                    setInput('')
+                    setShowFullChat(false)
+                    setHasUserInitiatedConversation(false)
+                    setIsFirstMessageInNewChat(false)
+                    setShowFollowUpSuggestions(false)
+                    setLastAssistantMessage('')
+                    setLastUserMessage('')
+                    setOptimisticChatId(undefined)
+                    setChatCreatedEventDispatched(false)
+                    setErrorMessage(null)
+                    clearRateLimitError()
+                    clearToolResult('')
+                  } else {
+                    router.push('/')
+                  }
+                }}
+                className="h-9"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                new chat
+              </Button>
+              <Button variant="ghost" onClick={openCanvas} className="ml-auto h-9">
+                <FileText className="h-4 w-4 mr-2" />
+                canvas
+              </Button>
+            </div>
+          </header>{' '}
+          <div className="flex-1 relative overflow-hidden">
+            <div
+              className={cn(
+                'absolute inset-0 overflow-y-auto chat-content',
+                isMobile && 'mobile-chat-container',
+                isMobile && isFirstMessageInNewChat && 'mobile-prevent-auto-scroll'
+              )}
+            >
+              {' '}
+              <div
+                ref={contentRef}
+                className={cn('max-w-3xl mx-auto px-4 space-y-6', isMobile ? 'pt-2 pb-6' : 'pt-5')}
+              >
+                {errorMessage && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl p-4 text-center"
+                  >
+                    {errorMessage}
+                  </motion.div>
+                )}
+                <RateLimitErrorDisplay />{' '}
+                <VirtualizedMessages
+                  messages={messages.filter((msg: any) => {
+                    if (msg.role === 'assistant') {
+                      if (
+                        (!msg.content || (msg.content as string).trim() === '') &&
+                        msg.toolInvocations?.some((t: any) => t.toolName === 'knowledgeBase')
+                      ) {
+                        return msg.toolInvocations.some(
+                          (t: any) =>
+                            t.toolName === 'knowledgeBase' &&
+                            t.state === 'result' &&
+                            t.result?.chunks
+                        )
+                      }
+
+                      if (
+                        (!msg.content || (msg.content as string).trim() === '') &&
+                        msg.toolInvocations?.length > 0
+                      ) {
+                        return false
+                      }
+                    }
+                    return true
+                  })}
+                  chatId={optimisticChatId}
+                  onCreateCanvas={createCanvasFromMessage}
+                  onLoginClick={handleLoginClick}
+                  onPlacementSearch={handlePlacementSearch}
+                  maximizedItem={maximizedArtifact}
+                  setMaximizedItem={setMaximizedArtifact}
+                />
+                {isLoading &&
+                  messages.length > 0 &&
+                  (() => {
+                    const last = messages[messages.length - 1]
+
+                    if (last.role === 'user') return true
+
+                    if (last.role === 'assistant') {
+                      if (
+                        last.toolInvocations?.some(
+                          (t: any) => t.toolName === 'knowledgeBase' && t.state !== 'result'
+                        )
+                      ) {
+                        return true
+                      }
+
+                      if (
+                        (!last.content || (last.content as string).trim() === '') &&
+                        last.toolInvocations &&
+                        last.toolInvocations.length > 0
+                      ) {
+                        return true
+                      }
+                    }
+
+                    return false
+                  })() && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex items-center justify-center space-x-3 text-muted-foreground py-4"
+                    >
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
+                        <div
+                          className="w-2 h-2 bg-primary rounded-full animate-pulse"
+                          style={{ animationDelay: '0.2s' }}
+                        ></div>
+                        <div
+                          className="w-2 h-2 bg-primary rounded-full animate-pulse"
+                          style={{ animationDelay: '0.4s' }}
+                        ></div>
+                      </div>
+                      <span className="text-sm">thinking...</span>
+                    </motion.div>
+                  )}
+                <div
+                  ref={messagesEndRef}
+                  className={isLoading ? 'h-20' : 'h-0'}
+                  aria-hidden="true"
+                />
+              </div>
+            </div>
+          </div>
+          <ScrollToTopButton />
+          <div
+            className={cn(
+              'flex-shrink-0 sticky bottom-0 z-30',
+              isMobile ? 'input-area mobile-input-area' : 'input-area'
+            )}
+            style={isMobile ? { paddingBottom: 'env(safe-area-inset-bottom)' } : undefined}
+          >
+            {!isMobile && (
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  background:
+                    'linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.1) 70%, rgba(0, 0, 0, 0.2) 100%)',
+                  borderTop: 'none',
+                }}
+              ></div>
+            )}
+            {!maximizedArtifact && (
+              <div className="relative z-10">
+                <FollowUpSuggestions
+                  lastAssistantMessage={lastAssistantMessage}
+                  lastUserMessage={lastUserMessage}
+                  isVisible={showFollowUpSuggestions && !isLoading}
+                  onSuggestionClick={handleSuggestedQuestion}
+                  onDismiss={() => setShowFollowUpSuggestions(false)}
+                  isMobile={isMobile}
+                />
+                <MultimodalInput
+                  input={input}
+                  setInput={setInput}
+                  handleSubmit={handleFormSubmit}
+                  isLoading={isLoading}
+                  placeholder="ask anything..."
+                  stop={stop}
+                  onToolSelect={handleToolSelection}
+                  selectedTool={selectedTool}
+                />
+                <div className="px-2 sm:px-4 pb-0.5">
+                  <p className="text-[10px] sm:text-xs text-muted-foreground text-center leading-tight">
+                    the assistant can make mistakes. please verify information.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        {!isAtBottom &&
+          !showFollowUpSuggestions &&
+          typeof window !== 'undefined' &&
+          createPortal(
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-40"
+            >
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={scrollToBottom}
+                className="h-10 w-10 rounded-full bg-background/80 hover:bg-background/90 border-0 shadow-sm backdrop-blur-sm"
+              >
+                <ChevronDown className="h-5 w-5 text-foreground/70" />
+              </Button>
+            </motion.div>,
+            document.body
+          )}
+      </VTOPToolHandler>
+    )
+  }
+)
 
 export const ChatInterface = memo(
   ({ initialMessages = [], chatId, autoResume = true }: ChatInterfaceProps) => {
@@ -1099,9 +1115,10 @@ export const ChatInterface = memo(
       prevProps.chatId === nextProps.chatId &&
       prevProps.autoResume === nextProps.autoResume &&
       prevProps.initialMessages?.length === nextProps.initialMessages?.length &&
-      (prevProps.initialMessages?.every((msg, index) => 
-        msg.id === nextProps.initialMessages?.[index]?.id
-      ) ?? true)
+      (prevProps.initialMessages?.every(
+        (msg, index) => msg.id === nextProps.initialMessages?.[index]?.id
+      ) ??
+        true)
     )
   }
 )

@@ -60,7 +60,7 @@ export function useMemories({
     gcTime: MEMORIES_GC_TIME,
     refetchOnWindowFocus: false,
     retry: 1,
-    placeholderData: (previousData) => previousData,
+    placeholderData: previousData => previousData,
   })
 }
 
@@ -75,7 +75,7 @@ export function useCreateMemory() {
   const { data: session } = useSession()
 
   return useMutation<MemoryWithId, Error, CreateMemoryData>({
-    mutationFn: async (data) => {
+    mutationFn: async data => {
       const response = await fetch('/api/memories', {
         method: 'POST',
         headers: {
@@ -108,7 +108,7 @@ export function useUpdateMemory() {
   const { data: session } = useSession()
 
   return useMutation<MemoryWithId, Error, UpdateMemoryData>({
-    mutationFn: async (data) => {
+    mutationFn: async data => {
       const { id, ...updateData } = data
       const response = await fetch(`/api/memories/${id}`, {
         method: 'PATCH',
@@ -136,7 +136,7 @@ export function useDeleteMemory() {
   const { data: session } = useSession()
 
   return useMutation<void, Error, string>({
-    mutationFn: async (id) => {
+    mutationFn: async id => {
       const response = await fetch(`/api/memories/${id}`, {
         method: 'DELETE',
       })
@@ -146,9 +146,9 @@ export function useDeleteMemory() {
       }
     },
     onSuccess: (_, id) => {
-      queryClient.setQueryData<{ data: MemoryWithId[] }>(memoryKeys.lists(), (oldData) => ({
+      queryClient.setQueryData<{ data: MemoryWithId[] }>(memoryKeys.lists(), oldData => ({
         ...oldData!,
-        data: oldData?.data?.filter((memory) => memory.id !== id) || [],
+        data: oldData?.data?.filter(memory => memory.id !== id) || [],
       }))
     },
   })
@@ -186,7 +186,7 @@ export function useMemorySettings() {
     // Don't retry failed fetches too aggressively
     retry: 1,
     // Keep previous data while refetching
-    placeholderData: (previousData) => previousData,
+    placeholderData: previousData => previousData,
   })
 }
 
@@ -202,7 +202,7 @@ export function useUpdateMemorySettings() {
   const { data: session } = useSession()
 
   return useMutation<MemorySettings, Error, UpdateMemorySettingsData>({
-    mutationFn: async (settings) => {
+    mutationFn: async settings => {
       const response = await fetch('/api/memories/settings', {
         method: 'PATCH',
         headers: {
@@ -222,5 +222,3 @@ export function useUpdateMemorySettings() {
     },
   })
 }
-
-

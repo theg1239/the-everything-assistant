@@ -4,15 +4,15 @@ import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { 
-  Eye, 
-  EyeOff, 
-  Shield, 
-  Link, 
-  Unlink, 
+import {
+  Eye,
+  EyeOff,
+  Shield,
+  Link,
+  Unlink,
   AlertTriangle,
   CheckCircle,
-  Loader2
+  Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -21,7 +21,7 @@ import {
   saveVTOPCredentials,
   clearSavedVTOPCredentials,
   getSavedVTOPCredentials,
-  validateSavedCredentials
+  validateSavedCredentials,
 } from '@/lib/vtop-credentials'
 
 interface VTOPSettingsProps {
@@ -44,7 +44,7 @@ export function VTOPSettings({ className }: VTOPSettingsProps) {
   const checkLinkStatus = () => {
     const linked = hasVTOPCredentials()
     setIsLinked(linked)
-    
+
     if (linked) {
       const saved = getSavedVTOPCredentials()
       if (saved) {
@@ -60,7 +60,7 @@ export function VTOPSettings({ className }: VTOPSettingsProps) {
     }
 
     setIsLinking(true)
-    
+
     try {
       // Save credentials directly - validation will happen on first use
       saveVTOPCredentials(username.trim(), password.trim())
@@ -68,11 +68,13 @@ export function VTOPSettings({ className }: VTOPSettingsProps) {
       setShowLinkForm(false)
       setPassword('')
       toast.success('VTOP credentials linked successfully!')
-      
+
       // Dispatch event to notify other components
-      window.dispatchEvent(new CustomEvent('vtopCredentialsLinked', {
-        detail: { username: username.trim() }
-      }))
+      window.dispatchEvent(
+        new CustomEvent('vtopCredentialsLinked', {
+          detail: { username: username.trim() },
+        })
+      )
     } catch (error) {
       console.error('Error linking VTOP credentials:', error)
       toast.error('Failed to link VTOP credentials. Please try again.')
@@ -88,16 +90,16 @@ export function VTOPSettings({ className }: VTOPSettingsProps) {
     setPassword('')
     setShowLinkForm(false)
     toast.success('VTOP credentials unlinked successfully')
-    
+
     // Dispatch event to notify other components
     window.dispatchEvent(new CustomEvent('vtopCredentialsUnlinked'))
   }
 
   const handleTestCredentials = async () => {
     if (!isLinked) return
-    
+
     toast.info('Testing credentials... This will be validated on your next VTOP query.')
-    
+
     // We don't have a separate API, so just validate the stored credentials exist
     const valid = validateSavedCredentials()
     if (valid) {
@@ -152,11 +154,7 @@ export function VTOPSettings({ className }: VTOPSettingsProps) {
           </div> */}
 
           <div className="flex space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleTestCredentials}
-            >
+            <Button variant="outline" size="sm" onClick={handleTestCredentials}>
               <CheckCircle className="h-4 w-4 mr-2" />
               test connection
             </Button>
@@ -181,10 +179,7 @@ export function VTOPSettings({ className }: VTOPSettingsProps) {
                 <p className="text-xs text-muted-foreground mb-4">
                   link your VTOP account to avoid entering credentials repeatedly
                 </p>
-                <Button
-                  onClick={() => setShowLinkForm(true)}
-                  size="sm"
-                >
+                <Button onClick={() => setShowLinkForm(true)} size="sm">
                   <Link className="h-4 w-4 mr-2" />
                   link VTOP account
                 </Button>
@@ -233,8 +228,8 @@ export function VTOPSettings({ className }: VTOPSettingsProps) {
                   <div className="text-xs text-muted-foreground">
                     <p className="font-medium text-foreground mb-1">security notice:</p>
                     <p>
-                      your credentials are encrypted and stored in secure cookies. they never leave your device
-                      in plain text and can be unlinked at any time.
+                      your credentials are encrypted and stored in secure cookies. they never leave
+                      your device in plain text and can be unlinked at any time.
                     </p>
                   </div>
                 </div>

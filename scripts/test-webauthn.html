@@ -1,194 +1,197 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>WebAuthn Debug Tool</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            line-height: 1.6;
-        }
-        .section {
-            margin: 20px 0;
-            padding: 15px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-        }
-        .success {
-            background-color: #d4edda;
-            border-color: #c3e6cb;
-            color: #155724;
-        }
-        .error {
-            background-color: #f8d7da;
-            border-color: #f5c6cb;
-            color: #721c24;
-        }
-        .info {
-            background-color: #d1ecf1;
-            border-color: #bee5eb;
-            color: #0c5460;
-        }
-        button {
-            background: #007bff;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            margin: 5px;
-        }
-        button:hover {
-            background: #0056b3;
-        }
-        button:disabled {
-            background: #6c757d;
-            cursor: not-allowed;
-        }
-        pre {
-            background: #f8f9fa;
-            padding: 10px;
-            border-radius: 5px;
-            overflow-x: auto;
-        }
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        line-height: 1.6;
+      }
+      .section {
+        margin: 20px 0;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+      }
+      .success {
+        background-color: #d4edda;
+        border-color: #c3e6cb;
+        color: #155724;
+      }
+      .error {
+        background-color: #f8d7da;
+        border-color: #f5c6cb;
+        color: #721c24;
+      }
+      .info {
+        background-color: #d1ecf1;
+        border-color: #bee5eb;
+        color: #0c5460;
+      }
+      button {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+        margin: 5px;
+      }
+      button:hover {
+        background: #0056b3;
+      }
+      button:disabled {
+        background: #6c757d;
+        cursor: not-allowed;
+      }
+      pre {
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 5px;
+        overflow-x: auto;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <h1>WebAuthn Debug Tool</h1>
     <p>This tool helps debug WebAuthn/Passkey issues on your system.</p>
 
     <div id="browser-support" class="section">
-        <h2>Browser Support Check</h2>
-        <div id="browser-results"></div>
+      <h2>Browser Support Check</h2>
+      <div id="browser-results"></div>
     </div>
 
     <div id="platform-check" class="section">
-        <h2>Platform Authenticator Check</h2>
-        <div id="platform-results"></div>
-        <button onclick="checkPlatformAuth()">Check Platform Authenticator</button>
+      <h2>Platform Authenticator Check</h2>
+      <div id="platform-results"></div>
+      <button onclick="checkPlatformAuth()">Check Platform Authenticator</button>
     </div>
 
     <div id="credential-test" class="section">
-        <h2>Credential Creation Test</h2>
-        <div id="credential-results"></div>
-        <button onclick="testCredentialCreation()">Test Passkey Creation</button>
-        <button onclick="testSecurityKeyCreation()">Test Security Key Creation</button>
+      <h2>Credential Creation Test</h2>
+      <div id="credential-results"></div>
+      <button onclick="testCredentialCreation()">Test Passkey Creation</button>
+      <button onclick="testSecurityKeyCreation()">Test Security Key Creation</button>
     </div>
 
     <div id="encoding-test" class="section">
-        <h2>Credential ID Encoding Test</h2>
-        <div id="encoding-results"></div>
-        <button onclick="testCredentialIdEncoding()">Test Encoding</button>
+      <h2>Credential ID Encoding Test</h2>
+      <div id="encoding-results"></div>
+      <button onclick="testCredentialIdEncoding()">Test Encoding</button>
     </div>
 
     <div id="system-info" class="section">
-        <h2>System Information</h2>
-        <div id="system-results"></div>
+      <h2>System Information</h2>
+      <div id="system-results"></div>
     </div>
 
     <script>
-        // Check browser support on load
-        window.addEventListener('load', function() {
-            checkBrowserSupport();
-            showSystemInfo();
-        });
+      // Check browser support on load
+      window.addEventListener('load', function () {
+        checkBrowserSupport()
+        showSystemInfo()
+      })
 
-        function checkBrowserSupport() {
-            const results = document.getElementById('browser-results');
-            let html = '<h3>Browser Support Results:</h3>';
-            
-            // Check for basic WebAuthn support
-            if (window.navigator.credentials) {
-                html += '<div class="success">✓ navigator.credentials available</div>';
-            } else {
-                html += '<div class="error">✗ navigator.credentials NOT available</div>';
-            }
-            
-            if (window.PublicKeyCredential) {
-                html += '<div class="success">✓ PublicKeyCredential available</div>';
-            } else {
-                html += '<div class="error">✗ PublicKeyCredential NOT available</div>';
-            }
-            
-            if (typeof navigator.credentials.create === 'function') {
-                html += '<div class="success">✓ navigator.credentials.create available</div>';
-            } else {
-                html += '<div class="error">✗ navigator.credentials.create NOT available</div>';
-            }
-            
-            results.innerHTML = html;
+      function checkBrowserSupport() {
+        const results = document.getElementById('browser-results')
+        let html = '<h3>Browser Support Results:</h3>'
+
+        // Check for basic WebAuthn support
+        if (window.navigator.credentials) {
+          html += '<div class="success">✓ navigator.credentials available</div>'
+        } else {
+          html += '<div class="error">✗ navigator.credentials NOT available</div>'
         }
 
-        async function checkPlatformAuth() {
-            const results = document.getElementById('platform-results');
-            results.innerHTML = '<div class="info">Checking platform authenticator...</div>';
-            
-            try {
-                const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-                if (available) {
-                    results.innerHTML = '<div class="success">✓ Platform authenticator is available (Windows Hello, Touch ID, etc.)</div>';
-                } else {
-                    results.innerHTML = '<div class="error">✗ Platform authenticator is NOT available. You may need to set up Windows Hello, Touch ID, or other device security.</div>';
-                }
-            } catch (error) {
-                results.innerHTML = `<div class="error">✗ Error checking platform authenticator: ${error.message}</div>`;
-            }
+        if (window.PublicKeyCredential) {
+          html += '<div class="success">✓ PublicKeyCredential available</div>'
+        } else {
+          html += '<div class="error">✗ PublicKeyCredential NOT available</div>'
         }
 
-        async function testCredentialCreation() {
-            const results = document.getElementById('credential-results');
-            results.innerHTML = '<div class="info">Testing passkey creation...</div>';
-            
-            try {
-                // Generate random challenge and user ID
-                const challenge = new Uint8Array(32);
-                crypto.getRandomValues(challenge);
-                
-                const userId = new Uint8Array(16);
-                crypto.getRandomValues(userId);
-                
-                const options = {
-                    rp: {
-                        name: "WebAuthn Debug Test",
-                        id: window.location.hostname
-                    },
-                    user: {
-                        id: userId,
-                        name: "test@example.com",
-                        displayName: "Test User"
-                    },
-                    challenge: challenge,
-                    pubKeyCredParams: [
-                        { alg: -7, type: "public-key" },  // ES256
-                        { alg: -257, type: "public-key" } // RS256
-                    ],
-                    timeout: 60000,
-                    attestation: "none",
-                    authenticatorSelection: {
-                        authenticatorAttachment: "platform",
-                        userVerification: "discouraged",
-                        requireResidentKey: false,
-                        residentKey: "preferred"
-                    }
-                };
-                
-                console.log('Creating credential with options:', options);
-                const credential = await navigator.credentials.create({ publicKey: options });
-                
-                results.innerHTML = `
+        if (typeof navigator.credentials.create === 'function') {
+          html += '<div class="success">✓ navigator.credentials.create available</div>'
+        } else {
+          html += '<div class="error">✗ navigator.credentials.create NOT available</div>'
+        }
+
+        results.innerHTML = html
+      }
+
+      async function checkPlatformAuth() {
+        const results = document.getElementById('platform-results')
+        results.innerHTML = '<div class="info">Checking platform authenticator...</div>'
+
+        try {
+          const available =
+            await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+          if (available) {
+            results.innerHTML =
+              '<div class="success">✓ Platform authenticator is available (Windows Hello, Touch ID, etc.)</div>'
+          } else {
+            results.innerHTML =
+              '<div class="error">✗ Platform authenticator is NOT available. You may need to set up Windows Hello, Touch ID, or other device security.</div>'
+          }
+        } catch (error) {
+          results.innerHTML = `<div class="error">✗ Error checking platform authenticator: ${error.message}</div>`
+        }
+      }
+
+      async function testCredentialCreation() {
+        const results = document.getElementById('credential-results')
+        results.innerHTML = '<div class="info">Testing passkey creation...</div>'
+
+        try {
+          // Generate random challenge and user ID
+          const challenge = new Uint8Array(32)
+          crypto.getRandomValues(challenge)
+
+          const userId = new Uint8Array(16)
+          crypto.getRandomValues(userId)
+
+          const options = {
+            rp: {
+              name: 'WebAuthn Debug Test',
+              id: window.location.hostname,
+            },
+            user: {
+              id: userId,
+              name: 'test@example.com',
+              displayName: 'Test User',
+            },
+            challenge: challenge,
+            pubKeyCredParams: [
+              { alg: -7, type: 'public-key' }, // ES256
+              { alg: -257, type: 'public-key' }, // RS256
+            ],
+            timeout: 60000,
+            attestation: 'none',
+            authenticatorSelection: {
+              authenticatorAttachment: 'platform',
+              userVerification: 'discouraged',
+              requireResidentKey: false,
+              residentKey: 'preferred',
+            },
+          }
+
+          console.log('Creating credential with options:', options)
+          const credential = await navigator.credentials.create({ publicKey: options })
+
+          results.innerHTML = `
                     <div class="success">✓ Passkey created successfully!</div>
                     <pre>Credential ID: ${credential.id}</pre>
                     <pre>Credential Type: ${credential.type}</pre>
-                `;
-            } catch (error) {
-                let errorMessage = `Error: ${error.name}: ${error.message}`;
-                
-                if (error.name === 'NotAllowedError') {
-                    errorMessage += `
+                `
+        } catch (error) {
+          let errorMessage = `Error: ${error.name}: ${error.message}`
+
+          if (error.name === 'NotAllowedError') {
+            errorMessage += `
                     
 Possible causes:
 - User cancelled the operation
@@ -196,64 +199,64 @@ Possible causes:
 - Platform authenticator not available or not set up
 - Windows Hello or Touch ID not configured
 - Browser permissions blocked
-                    `;
-                }
-                
-                results.innerHTML = `<div class="error">✗ ${errorMessage}</div>`;
-                console.error('WebAuthn Error:', error);
-            }
-        }
+                    `
+          }
 
-        async function testSecurityKeyCreation() {
-            const results = document.getElementById('credential-results');
-            results.innerHTML = '<div class="info">Testing security key creation...</div>';
-            
-            try {
-                // Generate random challenge and user ID
-                const challenge = new Uint8Array(32);
-                crypto.getRandomValues(challenge);
-                
-                const userId = new Uint8Array(16);
-                crypto.getRandomValues(userId);
-                
-                const options = {
-                    rp: {
-                        name: "WebAuthn Debug Test",
-                        id: window.location.hostname
-                    },
-                    user: {
-                        id: userId,
-                        name: "test@example.com",
-                        displayName: "Test User"
-                    },
-                    challenge: challenge,
-                    pubKeyCredParams: [
-                        { alg: -7, type: "public-key" },  // ES256
-                        { alg: -257, type: "public-key" } // RS256
-                    ],
-                    timeout: 60000,
-                    attestation: "none",
-                    authenticatorSelection: {
-                        authenticatorAttachment: "cross-platform",
-                        userVerification: "discouraged",
-                        requireResidentKey: false,
-                        residentKey: "discouraged"
-                    }
-                };
-                
-                console.log('Creating credential with options:', options);
-                const credential = await navigator.credentials.create({ publicKey: options });
-                
-                results.innerHTML = `
+          results.innerHTML = `<div class="error">✗ ${errorMessage}</div>`
+          console.error('WebAuthn Error:', error)
+        }
+      }
+
+      async function testSecurityKeyCreation() {
+        const results = document.getElementById('credential-results')
+        results.innerHTML = '<div class="info">Testing security key creation...</div>'
+
+        try {
+          // Generate random challenge and user ID
+          const challenge = new Uint8Array(32)
+          crypto.getRandomValues(challenge)
+
+          const userId = new Uint8Array(16)
+          crypto.getRandomValues(userId)
+
+          const options = {
+            rp: {
+              name: 'WebAuthn Debug Test',
+              id: window.location.hostname,
+            },
+            user: {
+              id: userId,
+              name: 'test@example.com',
+              displayName: 'Test User',
+            },
+            challenge: challenge,
+            pubKeyCredParams: [
+              { alg: -7, type: 'public-key' }, // ES256
+              { alg: -257, type: 'public-key' }, // RS256
+            ],
+            timeout: 60000,
+            attestation: 'none',
+            authenticatorSelection: {
+              authenticatorAttachment: 'cross-platform',
+              userVerification: 'discouraged',
+              requireResidentKey: false,
+              residentKey: 'discouraged',
+            },
+          }
+
+          console.log('Creating credential with options:', options)
+          const credential = await navigator.credentials.create({ publicKey: options })
+
+          results.innerHTML = `
                     <div class="success">✓ Security key registered successfully!</div>
                     <pre>Credential ID: ${credential.id}</pre>
                     <pre>Credential Type: ${credential.type}</pre>
-                `;
-            } catch (error) {
-                let errorMessage = `Error: ${error.name}: ${error.message}`;
-                
-                if (error.name === 'NotAllowedError') {
-                    errorMessage += `
+                `
+        } catch (error) {
+          let errorMessage = `Error: ${error.name}: ${error.message}`
+
+          if (error.name === 'NotAllowedError') {
+            errorMessage += `
                     
 Possible causes:
 - User cancelled the operation
@@ -261,77 +264,86 @@ Possible causes:
 - Security key not connected
 - Security key not touched/activated
 - Browser permissions blocked
-                    `;
-                }
-                
-                results.innerHTML = `<div class="error">✗ ${errorMessage}</div>`;
-                console.error('WebAuthn Error:', error);
-            }
-        }
+                    `
+          }
 
-        function testCredentialIdEncoding() {
-            const results = document.getElementById('encoding-results');
-            
-            try {
-                // Test various credential ID formats
-                const testData = "test-credential-id-12345";
-                const uint8Array = new TextEncoder().encode(testData);
-                
-                // Test base64 encoding
-                const base64 = btoa(String.fromCharCode(...uint8Array));
-                
-                // Test base64url encoding
-                const base64url = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-                
-                // Test round-trip conversion
-                const backToUint8Array = new Uint8Array(
-                    atob(base64url.replace(/-/g, '+').replace(/_/g, '/').padEnd(base64url.length + (4 - base64url.length % 4) % 4, '='))
-                    .split('').map(char => char.charCodeAt(0))
-                );
-                
-                const backToString = new TextDecoder().decode(backToUint8Array);
-                
-                let html = `
+          results.innerHTML = `<div class="error">✗ ${errorMessage}</div>`
+          console.error('WebAuthn Error:', error)
+        }
+      }
+
+      function testCredentialIdEncoding() {
+        const results = document.getElementById('encoding-results')
+
+        try {
+          // Test various credential ID formats
+          const testData = 'test-credential-id-12345'
+          const uint8Array = new TextEncoder().encode(testData)
+
+          // Test base64 encoding
+          const base64 = btoa(String.fromCharCode(...uint8Array))
+
+          // Test base64url encoding
+          const base64url = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+
+          // Test round-trip conversion
+          const backToUint8Array = new Uint8Array(
+            atob(
+              base64url
+                .replace(/-/g, '+')
+                .replace(/_/g, '/')
+                .padEnd(base64url.length + ((4 - (base64url.length % 4)) % 4), '=')
+            )
+              .split('')
+              .map(char => char.charCodeAt(0))
+          )
+
+          const backToString = new TextDecoder().decode(backToUint8Array)
+
+          let html = `
                     <h3>Credential ID Encoding Test:</h3>
                     <div><strong>Original:</strong> ${testData}</div>
                     <div><strong>Base64:</strong> ${base64}</div>
                     <div><strong>Base64URL:</strong> ${base64url}</div>
                     <div><strong>Round-trip Success:</strong> ${backToString === testData ? '<span class="success">✓ Yes</span>' : '<span class="error">✗ No</span>'}</div>
-                `;
-                
-                results.innerHTML = html;
-            } catch (error) {
-                results.innerHTML = `<div class="error">✗ Encoding test failed: ${error.message}</div>`;
-            }
-        }
+                `
 
-        function showSystemInfo() {
-            const results = document.getElementById('system-results');
-            const userAgent = navigator.userAgent;
-            const isHTTPS = location.protocol === 'https:';
-            const isLocalhost = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-            
-            let html = `
+          results.innerHTML = html
+        } catch (error) {
+          results.innerHTML = `<div class="error">✗ Encoding test failed: ${error.message}</div>`
+        }
+      }
+
+      function showSystemInfo() {
+        const results = document.getElementById('system-results')
+        const userAgent = navigator.userAgent
+        const isHTTPS = location.protocol === 'https:'
+        const isLocalhost = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+
+        let html = `
                 <h3>System Information:</h3>
                 <div><strong>User Agent:</strong> ${userAgent}</div>
                 <div><strong>Protocol:</strong> ${location.protocol} ${isHTTPS ? '<span class="success">(Secure)</span>' : '<span class="error">(Not Secure - may cause issues)</span>'}</div>
                 <div><strong>Hostname:</strong> ${location.hostname} ${isLocalhost ? '<span class="success">(Localhost - OK)</span>' : ''}</div>
                 <div><strong>Full URL:</strong> ${location.href}</div>
-            `;
-            
-            // Check if it's a supported platform
-            if (userAgent.includes('Windows')) {
-                html += '<div class="info">Windows detected - Windows Hello should be available if configured</div>';
-            } else if (userAgent.includes('Mac')) {
-                html += '<div class="info">macOS detected - Touch ID should be available if configured</div>';
-            } else if (userAgent.includes('Android')) {
-                html += '<div class="info">Android detected - Biometric authentication should be available</div>';
-            } else if (userAgent.includes('iOS')) {
-                html += '<div class="info">iOS detected - Face ID/Touch ID should be available</div>';
-            }
-            
-            results.innerHTML = html;
+            `
+
+        // Check if it's a supported platform
+        if (userAgent.includes('Windows')) {
+          html +=
+            '<div class="info">Windows detected - Windows Hello should be available if configured</div>'
+        } else if (userAgent.includes('Mac')) {
+          html +=
+            '<div class="info">macOS detected - Touch ID should be available if configured</div>'
+        } else if (userAgent.includes('Android')) {
+          html +=
+            '<div class="info">Android detected - Biometric authentication should be available</div>'
+        } else if (userAgent.includes('iOS')) {
+          html += '<div class="info">iOS detected - Face ID/Touch ID should be available</div>'
         }
+
+        results.innerHTML = html
+      }
     </script>
-</body>
+  </body>
 </html>

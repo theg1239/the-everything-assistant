@@ -17,8 +17,8 @@ async function generateChatTitle(userMessage: string, userId?: string): Promise<
       return extractTitleFromContent(userMessage)
     }
 
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Title generation timeout')), 5000) // Reduced from 10s to 5s for faster TTFT
+    const timeoutPromise = new Promise(
+      (_, reject) => setTimeout(() => reject(new Error('Title generation timeout')), 5000) // Reduced from 10s to 5s for faster TTFT
     )
 
     const modelPromise = rateLimitedAI.groq.generateText(
@@ -385,7 +385,7 @@ export async function POST(req: Request) {
           })
         } catch (error: any) {
           console.error('Direct tool call failed:', error)
-          
+
           const failedInvocation = {
             toolCallId: directToolCall.toolCallId || Date.now().toString(),
             toolName: directToolCall.toolName,
@@ -393,11 +393,11 @@ export async function POST(req: Request) {
             result: {
               success: false,
               error: error.message || 'Tool execution failed',
-              timestamp: new Date().toISOString()
+              timestamp: new Date().toISOString(),
             },
-            state: 'error'
+            state: 'error',
           }
-          
+
           try {
             await saveMessage(
               chat.id,
@@ -410,7 +410,7 @@ export async function POST(req: Request) {
           } catch (saveError) {
             console.error('Failed to save failed tool invocation:', saveError)
           }
-          
+
           return new Response(
             JSON.stringify({
               success: false,
@@ -421,7 +421,7 @@ export async function POST(req: Request) {
         }
       } else {
         console.error('Direct tool call - tool not found:', directToolCall.toolName)
-        
+
         const notFoundInvocation = {
           toolCallId: directToolCall.toolCallId || Date.now().toString(),
           toolName: directToolCall.toolName,
@@ -429,11 +429,11 @@ export async function POST(req: Request) {
           result: {
             success: false,
             error: 'Tool not found',
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
           },
-          state: 'error'
+          state: 'error',
         }
-        
+
         try {
           await saveMessage(
             chat.id,
@@ -446,7 +446,7 @@ export async function POST(req: Request) {
         } catch (saveError) {
           console.error('Failed to save tool not found invocation:', saveError)
         }
-        
+
         return new Response(JSON.stringify({ success: false, error: 'Tool not found' }), {
           status: 400,
           headers: { 'Content-Type': 'application/json' },
@@ -470,28 +470,30 @@ export async function POST(req: Request) {
 
     const memorySettings = await memoryService.getUserMemorySettings(session.user.id)
     const isMemoryEnabled = memorySettings?.isEnabled ?? true
-    
+
     let memoryContext = ''
     if (isMemoryEnabled && userMessage.role === 'user') {
       try {
         const memories = await memoryService.getUserMemories(session.user.id, { pageSize: 100 })
-        
+
         if (memories.length > 0) {
           memoryContext = `
 <memories>
   <context>Saved information from previous conversations:</context>
   <memory_list>
-${memories.map((m: { content: string; updatedAt: string | number | Date }) => 
-    `    <memory>
+${memories
+  .map(
+    (m: { content: string; updatedAt: string | number | Date }) =>
+      `    <memory>
       <content>${m.content}</content>
       <last_updated>${new Date(m.updatedAt).toLocaleDateString()}</last_updated>
     </memory>`
-  ).join('\n')}
+  )
+  .join('\n')}
   </memory_list>
 </memories>`
         }
-      } catch (error) {
-      }
+      } catch (error) {}
     }
 
     const tools = createVITTools(session.user.id)
@@ -509,9 +511,10 @@ IMPORTANT: The user has specifically selected the "${preferredTool}" tool. When 
 If the user's query is relevant to the selected tool "${preferredTool}", use it even if other tools might also be applicable.`
       : ''
 
-    const memoryGuidance = memoryContext && isMemoryEnabled
-      ? `\n\n<memory_context>\n  <instructions>Use the following information to provide more personalized and relevant responses.</instructions>\n  ${memoryContext}\n</memory_context>`
-      : ''
+    const memoryGuidance =
+      memoryContext && isMemoryEnabled
+        ? `\n\n<memory_context>\n  <instructions>Use the following information to provide more personalized and relevant responses.</instructions>\n  ${memoryContext}\n</memory_context>`
+        : ''
 
     const combinedSystemPrompt = `${VIT_SYSTEM_PROMPT}  
 
@@ -526,14 +529,13 @@ CRITICAL TOOL CONTINUATION RULES:
 - The conversation flow is: [user question] → [tool call] → [YOUR RESPONSE USING TOOL RESULTS]
 - NEVER end the conversation at a tool call - always synthesize and respond`
 
-console.log('Memory stuff:', memoryGuidance)
-
+    console.log('Memory stuff:', memoryGuidance)
 
     const enhancedMessages = messages.map((message: any, index: number) => {
       if (message.role === 'user' && index === messages.length - 1) {
         return message
       }
-      
+
       if (
         message.role === 'assistant' &&
         message.toolInvocations &&
@@ -543,13 +545,17 @@ console.log('Memory stuff:', memoryGuidance)
 
         for (const toolCall of message.toolInvocations) {
           if (toolCall.result) {
-            if (toolCall.toolName === 'knowledgeBase' && toolCall.result.success && toolCall.result.chunks) {
+            if (
+              toolCall.toolName === 'knowledgeBase' &&
+              toolCall.result.success &&
+              toolCall.result.chunks
+            ) {
               const knowledgeContext = toolCall.result.chunks
                 .map((c: any) => (c.content || '').trim())
                 .filter(Boolean)
                 .join('\n\n')
                 .slice(0, 6000)
-              
+
               if (knowledgeContext) {
                 toolContext += `\n\n[KNOWLEDGE BASE CONTEXT]:\n${knowledgeContext}`
                 toolContext += `\n\n[IMPORTANT]: Use the above knowledge base information to answer the user's question. Format your response naturally with proper markdown formatting, bullet points, and lowercase text (except for proper nouns and course codes).`
@@ -610,7 +616,7 @@ console.log('Memory stuff:', memoryGuidance)
         experimental_continueSteps: true,
         onError: async (error: any) => {
           console.error('Streaming error occurred:', error)
-          
+
           try {
             await saveMessage(
               chat.id,
@@ -624,44 +630,53 @@ console.log('Memory stuff:', memoryGuidance)
             console.error('Failed to save streaming error:', saveError)
           }
         },
-        onStepFinish: async ({ text, toolCalls, toolResults, finishReason, usage, stepIndex }: any) => {
+        onStepFinish: async ({
+          text,
+          toolCalls,
+          toolResults,
+          finishReason,
+          usage,
+          stepIndex,
+        }: any) => {
           console.log(`Step ${stepIndex} finished:`, {
             hasText: !!text,
             toolCallsCount: toolCalls?.length || 0,
             toolResultsCount: toolResults?.length || 0,
             finishReason,
-            stepIndex
+            stepIndex,
           })
-          
+
           // Don't save intermediate steps - we'll save everything in onFinish
           // This prevents creating separate messages for each tool invocation
-          
-          const knowledgeBaseCalls = toolCalls?.filter((tc: any) => tc.toolName === 'knowledgeBase') || []
+
+          const knowledgeBaseCalls =
+            toolCalls?.filter((tc: any) => tc.toolName === 'knowledgeBase') || []
           if (knowledgeBaseCalls.length > 0) {
             console.log('Knowledge base tool called, model should continue automatically...')
           }
         },
         onFinish: async (result: any) => {
           console.log('Stream finished, processing final result...')
-          
+
           const allToolResults: any[] = []
-          
+
           const finalToolResults = (result as any).toolResults ?? result.toolCalls ?? []
           allToolResults.push(...finalToolResults)
-          
+
           if ((result as any).steps) {
             for (const step of (result as any).steps) {
               const stepToolResults = step.toolResults ?? step.toolCalls ?? []
               allToolResults.push(...stepToolResults)
             }
           }
-          
-          const uniqueToolResults = allToolResults.filter((result, index, array) => 
-            index === array.findIndex(r => r.toolCallId === result.toolCallId)
+
+          const uniqueToolResults = allToolResults.filter(
+            (result, index, array) =>
+              index === array.findIndex(r => r.toolCallId === result.toolCallId)
           )
-          
+
           console.log(`Collected ${uniqueToolResults.length} unique tool results from all steps`)
-          
+
           for (const tr of uniqueToolResults) {
             if (
               tr.toolName === 'queryVTOP' &&
@@ -701,13 +716,19 @@ console.log('Memory stuff:', memoryGuidance)
             toolName: tr.toolName,
             args: tr.args || {},
             result: tr.result || null,
-            state: tr.result ? (tr.result.success !== false ? 'result' : 'error') : 'error'
+            state: tr.result ? (tr.result.success !== false ? 'result' : 'error') : 'error',
           }))
 
           const safeInvocations = sanitizeToolInvocations(allInvocations)
-          
+
           try {
-            await saveMessage(chat.id, 'assistant', result.text, safeInvocations, result.response.id)
+            await saveMessage(
+              chat.id,
+              'assistant',
+              result.text,
+              safeInvocations,
+              result.response.id
+            )
             console.log(`Final message saved with ${safeInvocations.length} tool invocations`)
           } catch (error) {
             console.error('Failed to save final message:', error)
@@ -715,7 +736,10 @@ console.log('Memory stuff:', memoryGuidance)
               await saveMessage(chat.id, 'assistant', result.text, [], result.response.id)
               console.log('Final message saved without tool invocations (fallback)')
             } catch (fallbackError) {
-              console.error('Failed to save final message even without tool invocations:', fallbackError)
+              console.error(
+                'Failed to save final message even without tool invocations:',
+                fallbackError
+              )
             }
           }
         },

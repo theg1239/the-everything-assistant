@@ -252,9 +252,9 @@ export default function ManagementPage() {
       const res = await fetch('/api/broadcast', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           id: editingBroadcast,
-          slides: editSlides 
+          slides: editSlides,
         }),
       })
       const json = await res.json()
@@ -578,7 +578,11 @@ export default function ManagementPage() {
                           variant="outline"
                           onClick={() => setShowPreview(true)}
                           className="gap-2"
-                          disabled={!broadcastSlides.some(slide => slide.title.trim() || slide.text.trim() || slide.image.trim())}
+                          disabled={
+                            !broadcastSlides.some(
+                              slide => slide.title.trim() || slide.text.trim() || slide.image.trim()
+                            )
+                          }
                         >
                           <Eye className="w-4 h-4" /> Preview
                         </Button>
@@ -623,7 +627,7 @@ export default function ManagementPage() {
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        {pastBroadcasts.map((broadcast) => (
+                        {pastBroadcasts.map(broadcast => (
                           <div
                             key={broadcast.id}
                             className="border border-border/20 rounded-lg bg-black/20 p-4"
@@ -679,20 +683,26 @@ export default function ManagementPage() {
                                       type="text"
                                       placeholder="Title"
                                       value={slide.title}
-                                      onChange={(e) => handleEditSlideChange(index, 'title', e.target.value)}
+                                      onChange={e =>
+                                        handleEditSlideChange(index, 'title', e.target.value)
+                                      }
                                       className="w-full bg-slate-900/50 border border-slate-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                     <textarea
                                       placeholder="Text content"
                                       value={slide.text}
-                                      onChange={(e) => handleEditSlideChange(index, 'text', e.target.value)}
+                                      onChange={e =>
+                                        handleEditSlideChange(index, 'text', e.target.value)
+                                      }
                                       className="w-full bg-slate-900/50 border border-slate-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[60px]"
                                     />
                                     <input
                                       type="text"
                                       placeholder="Image URL"
                                       value={slide.image}
-                                      onChange={(e) => handleEditSlideChange(index, 'image', e.target.value)}
+                                      onChange={e =>
+                                        handleEditSlideChange(index, 'image', e.target.value)
+                                      }
                                       className="w-full bg-slate-900/50 border border-slate-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                     {editSlides.length > 1 && (
@@ -723,7 +733,14 @@ export default function ManagementPage() {
                                       size="sm"
                                       onClick={() => setShowEditPreview(true)}
                                       className="gap-1"
-                                      disabled={!editSlides.some(slide => slide.title.trim() || slide.text.trim() || slide.image.trim())}
+                                      disabled={
+                                        !editSlides.some(
+                                          slide =>
+                                            slide.title.trim() ||
+                                            slide.text.trim() ||
+                                            slide.image.trim()
+                                        )
+                                      }
                                     >
                                       <Eye className="w-4 h-4" />
                                       Preview
@@ -1128,24 +1145,42 @@ export default function ManagementPage() {
       <BroadcastDialog
         isOpen={showPreview}
         onClose={() => setShowPreview(false)}
-        payload={{ 
-          slides: broadcastSlides
-            .filter(slide => slide.title.trim() || slide.text.trim() || slide.image.trim())
-            .length > 0 
-            ? broadcastSlides.filter(slide => slide.title.trim() || slide.text.trim() || slide.image.trim())
-            : [{ title: 'Preview', text: 'No content to preview yet. Add a title, text, or image to see the preview.', image: '/onboarding-artwork/artwork1.png' }]
+        payload={{
+          slides:
+            broadcastSlides.filter(
+              slide => slide.title.trim() || slide.text.trim() || slide.image.trim()
+            ).length > 0
+              ? broadcastSlides.filter(
+                  slide => slide.title.trim() || slide.text.trim() || slide.image.trim()
+                )
+              : [
+                  {
+                    title: 'Preview',
+                    text: 'No content to preview yet. Add a title, text, or image to see the preview.',
+                    image: '/onboarding-artwork/artwork1.png',
+                  },
+                ],
         }}
       />
-      
+
       <BroadcastDialog
         isOpen={showEditPreview}
         onClose={() => setShowEditPreview(false)}
-        payload={{ 
-          slides: editSlides
-            .filter(slide => slide.title.trim() || slide.text.trim() || slide.image.trim())
-            .length > 0 
-            ? editSlides.filter(slide => slide.title.trim() || slide.text.trim() || slide.image.trim())
-            : [{ title: 'Preview', text: 'No content to preview yet. Add a title, text, or image to see the preview.', image: '/onboarding-artwork/artwork1.png' }]
+        payload={{
+          slides:
+            editSlides.filter(
+              slide => slide.title.trim() || slide.text.trim() || slide.image.trim()
+            ).length > 0
+              ? editSlides.filter(
+                  slide => slide.title.trim() || slide.text.trim() || slide.image.trim()
+                )
+              : [
+                  {
+                    title: 'Preview',
+                    text: 'No content to preview yet. Add a title, text, or image to see the preview.',
+                    image: '/onboarding-artwork/artwork1.png',
+                  },
+                ],
         }}
       />
     </div>

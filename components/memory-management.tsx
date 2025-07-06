@@ -30,63 +30,68 @@ export function MemoryManagement() {
   const [searchQuery, setSearchQuery] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  
+
   const [editingMemory, setEditingMemory] = useState<Memory | null>(null)
   const [memoryContent, setMemoryContent] = useState('')
   const [memoryImportance, setMemoryImportance] = useState<1 | 2 | 3 | 4 | 5>(3)
   const [memoryTags, setMemoryTags] = useState('')
   const [deletingMemoryId, setDeletingMemoryId] = useState<string | null>(null)
 
-  const { data: memoriesData, isLoading: isLoadingMemories, error: memoriesError, refetch } = useQuery({
+  const {
+    data: memoriesData,
+    isLoading: isLoadingMemories,
+    error: memoriesError,
+    refetch,
+  } = useQuery({
     queryKey: ['memories'],
     queryFn: async () => {
-      const response = await fetch('/api/memories');
+      const response = await fetch('/api/memories')
       if (!response.ok) {
-        throw new Error('Failed to fetch memories');
+        throw new Error('Failed to fetch memories')
       }
-      return response.json();
+      return response.json()
     },
     enabled: !!session?.user?.id,
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
-  });
+  })
 
   useEffect(() => {
     if (memoriesData) {
-      setMemories(memoriesData);
-      setFilteredMemories(memoriesData);
+      setMemories(memoriesData)
+      setFilteredMemories(memoriesData)
     }
-  }, [memoriesData]);
+  }, [memoriesData])
 
   useEffect(() => {
     if (!searchQuery.trim()) {
-      setFilteredMemories(memories);
-      return;
+      setFilteredMemories(memories)
+      return
     }
-    
-    const query = searchQuery.toLowerCase();
+
+    const query = searchQuery.toLowerCase()
     const filtered = memories.filter(
-      memory => 
+      memory =>
         memory.content.toLowerCase().includes(query) ||
         memory.tags.some(tag => tag.toLowerCase().includes(query))
-    );
-    setFilteredMemories(filtered);
-  }, [searchQuery, memories]);
+    )
+    setFilteredMemories(filtered)
+  }, [searchQuery, memories])
 
   useEffect(() => {
-    setIsLoading(isLoadingMemories);
-  }, [isLoadingMemories]);
+    setIsLoading(isLoadingMemories)
+  }, [isLoadingMemories])
 
   useEffect(() => {
     if (memoriesError) {
-      setError(memoriesError.message);
-      toast.error('Failed to load memories');
+      setError(memoriesError.message)
+      toast.error('Failed to load memories')
     }
-  }, [memoriesError]);
+  }, [memoriesError])
 
   const refreshMemories = useCallback(() => {
-    refetch();
-  }, [refetch]);
+    refetch()
+  }, [refetch])
 
   const handleDeleteMemory = async (id: string) => {
     if (deletingMemoryId === id) {
@@ -94,13 +99,13 @@ export function MemoryManagement() {
       try {
         setIsLoading(true)
         const response = await fetch(`/api/memories/${id}`, {
-          method: 'DELETE'
+          method: 'DELETE',
         })
-        
+
         if (!response.ok) {
           throw new Error('Failed to delete memory')
         }
-        
+
         toast.success('Memory deleted')
         setDeletingMemoryId(null)
         await refreshMemories()
@@ -144,17 +149,18 @@ export function MemoryManagement() {
     const memoryData = {
       content: memoryContent,
       importance: memoryImportance,
-      tags: memoryTags.split(',').map(tag => tag.trim()).filter(Boolean)
+      tags: memoryTags
+        .split(',')
+        .map(tag => tag.trim())
+        .filter(Boolean),
     }
 
     try {
       setIsLoading(true)
-      const url = editingMemory 
-        ? `/api/memories/${editingMemory.id}`
-        : '/api/memories'
-      
+      const url = editingMemory ? `/api/memories/${editingMemory.id}` : '/api/memories'
+
       const method = editingMemory ? 'PATCH' : 'POST'
-      
+
       const response = await fetch(url, {
         method,
         headers: {
@@ -162,11 +168,11 @@ export function MemoryManagement() {
         },
         body: JSON.stringify(memoryData),
       })
-      
+
       if (!response.ok) {
         throw new Error(editingMemory ? 'Failed to update memory' : 'Failed to create memory')
       }
-      
+
       toast.success(editingMemory ? 'Memory updated' : 'Memory saved')
       setView('list')
       await refreshMemories()
@@ -177,27 +183,33 @@ export function MemoryManagement() {
     }
   }
 
-  const renderStars = (importance: number, interactive = false, onClick?: (level: number) => void) => {
-    return Array(5).fill(0).map((_, i) => (
-      <Star 
-        key={i} 
-        className={`w-4 h-4 transition-colors ${
-          i < importance 
-            ? 'fill-yellow-400 text-yellow-400' 
-            : 'text-gray-300 hover:text-yellow-300'
-        } ${interactive ? 'cursor-pointer' : ''}`}
-        onClick={() => interactive && onClick && onClick(i + 1)}
-      />
-    ))
+  const renderStars = (
+    importance: number,
+    interactive = false,
+    onClick?: (level: number) => void
+  ) => {
+    return Array(5)
+      .fill(0)
+      .map((_, i) => (
+        <Star
+          key={i}
+          className={`w-4 h-4 transition-colors ${
+            i < importance
+              ? 'fill-yellow-400 text-yellow-400'
+              : 'text-gray-300 hover:text-yellow-300'
+          } ${interactive ? 'cursor-pointer' : ''}`}
+          onClick={() => interactive && onClick && onClick(i + 1)}
+        />
+      ))
   }
 
   const getImportanceLabel = (level: number) => {
     const labels = {
       1: 'very low',
-      2: 'low', 
+      2: 'low',
       3: 'medium',
       4: 'high',
-      5: 'very high'
+      5: 'very high',
     }
     return labels[level as keyof typeof labels]
   }
@@ -220,8 +232,8 @@ export function MemoryManagement() {
                 manage your personal knowledge and important information
               </p>
             </div>
-            <Button 
-              onClick={handleNewMemory} 
+            <Button
+              onClick={handleNewMemory}
               className="w-full sm:w-auto flex items-center justify-center gap-2"
             >
               <Plus className="w-4 h-4" />
@@ -229,7 +241,7 @@ export function MemoryManagement() {
               <span className="xs:hidden">new</span>
             </Button>
           </div>
-          
+
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -237,10 +249,10 @@ export function MemoryManagement() {
               placeholder="search memories and tags..."
               className="pl-10 bg-background/30"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={e => setSearchQuery(e.target.value)}
             />
           </div>
-          
+
           {/* Content */}
           {isLoading ? (
             <div className="flex justify-center py-12">
@@ -268,10 +280,9 @@ export function MemoryManagement() {
                   {searchQuery ? 'no matching memories found' : 'no memories yet'}
                 </h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  {searchQuery 
+                  {searchQuery
                     ? 'try adjusting your search terms or browse all memories'
-                    : 'create your first memory to start building your personal knowledge base'
-                  }
+                    : 'create your first memory to start building your personal knowledge base'}
                 </p>
                 {searchQuery ? (
                   <Button variant="outline" size="sm" onClick={() => setSearchQuery('')}>
@@ -292,9 +303,9 @@ export function MemoryManagement() {
                   {filteredMemories.length} of {memories.length} memories
                 </p>
               </div>
-              
+
               <div className="grid gap-4 max-h-[60vh] overflow-y-auto pr-2">
-                {filteredMemories.map((memory) => (
+                {filteredMemories.map(memory => (
                   <motion.div
                     key={memory.id}
                     initial={{ opacity: 0, y: 10 }}
@@ -308,13 +319,13 @@ export function MemoryManagement() {
                           {memory.content}
                         </p>
                       </div>
-                      
+
                       {/* Tags */}
                       {memory.tags.length > 0 && (
                         <div className="flex flex-wrap gap-2">
-                          {memory.tags.map((tag) => (
-                            <span 
-                              key={tag} 
+                          {memory.tags.map(tag => (
+                            <span
+                              key={tag}
                               className="inline-flex items-center gap-1 text-xs bg-muted px-2 py-1 rounded-full"
                             >
                               <Tag className="w-3 h-3" />
@@ -323,28 +334,26 @@ export function MemoryManagement() {
                           ))}
                         </div>
                       )}
-                      
+
                       {/* Footer */}
                       <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-3 pt-2 border-t border-border/50">
                         <div className="flex flex-col xs:flex-row xs:items-center gap-3">
                           <div className="flex items-center gap-2">
-                            <div className="flex">
-                              {renderStars(memory.importance)}
-                            </div>
+                            <div className="flex">{renderStars(memory.importance)}</div>
                             <span className="text-xs text-muted-foreground">
                               {getImportanceLabel(memory.importance)}
                             </span>
                           </div>
-                          
+
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
                             <Calendar className="w-3 h-3" />
                             {new Date(memory.updatedAt).toLocaleDateString()}
                           </div>
                         </div>
-                        
+
                         <div className="flex gap-2">
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             size="sm"
                             onClick={() => handleEditMemory(memory)}
                             className="flex items-center gap-2"
@@ -352,8 +361,8 @@ export function MemoryManagement() {
                             <Edit className="h-4 w-4" />
                             <span className="hidden xs:inline">edit</span>
                           </Button>
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             size="sm"
                             onClick={() => handleDeleteMemory(memory.id)}
                             className={`flex items-center gap-2 ${
@@ -396,14 +405,13 @@ export function MemoryManagement() {
               {editingMemory ? 'edit memory' : 'new memory'}
             </h2>
             <p className="text-sm text-muted-foreground mt-1">
-              {editingMemory 
+              {editingMemory
                 ? 'update your memory content and settings'
-                : 'add a new piece of information to remember'
-              }
+                : 'add a new piece of information to remember'}
             </p>
           </div>
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             onClick={() => setView('list')}
             className="w-full sm:w-auto flex items-center justify-center gap-2"
           >
@@ -411,29 +419,33 @@ export function MemoryManagement() {
             cancel
           </Button>
         </div>
-        
+
         {/* Form */}
         <div className="space-y-6">
           {/* Content */}
           <div className="space-y-3">
-            <Label htmlFor="content" className="text-sm font-medium">content</Label>
+            <Label htmlFor="content" className="text-sm font-medium">
+              content
+            </Label>
             <Textarea
               id="content"
               value={memoryContent}
-              onChange={(e) => setMemoryContent(e.target.value)}
+              onChange={e => setMemoryContent(e.target.value)}
               placeholder="what would you like me to remember..."
               className="min-h-[120px] bg-background/30 text-sm sm:text-base resize-y"
               rows={6}
             />
           </div>
-          
+
           {/* Importance */}
           <div className="space-y-3">
             <Label className="text-sm font-medium">importance level</Label>
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <div className="flex">
-                  {renderStars(memoryImportance, true, (level) => setMemoryImportance(level as 1 | 2 | 3 | 4 | 5))}
+                  {renderStars(memoryImportance, true, level =>
+                    setMemoryImportance(level as 1 | 2 | 3 | 4 | 5)
+                  )}
                 </div>
                 <span className="text-sm text-muted-foreground">
                   {getImportanceLabel(memoryImportance)}
@@ -444,14 +456,16 @@ export function MemoryManagement() {
               </p>
             </div>
           </div>
-          
+
           {/* Tags */}
           <div className="space-y-3">
-            <Label htmlFor="tags" className="text-sm font-medium">tags</Label>
+            <Label htmlFor="tags" className="text-sm font-medium">
+              tags
+            </Label>
             <Input
               id="tags"
               value={memoryTags}
-              onChange={(e) => setMemoryTags(e.target.value)}
+              onChange={e => setMemoryTags(e.target.value)}
               placeholder="e.g., personal, work, important"
               className="bg-background/30 text-sm sm:text-base"
             />
@@ -460,11 +474,11 @@ export function MemoryManagement() {
             </p>
           </div>
         </div>
-        
+
         {/* Actions */}
         <div className="flex flex-col xs:flex-row gap-3 pt-6 border-t border-border">
-          <Button 
-            onClick={handleSaveMemory} 
+          <Button
+            onClick={handleSaveMemory}
             disabled={!memoryContent.trim() || isLoading}
             className="w-full xs:w-auto flex items-center justify-center gap-2"
           >
@@ -477,12 +491,8 @@ export function MemoryManagement() {
             )}
             {editingMemory ? 'update memory' : 'save memory'}
           </Button>
-          
-          <Button 
-            variant="outline" 
-            onClick={() => setView('list')}
-            className="w-full xs:w-auto"
-          >
+
+          <Button variant="outline" onClick={() => setView('list')} className="w-full xs:w-auto">
             cancel
           </Button>
         </div>

@@ -1,8 +1,8 @@
-"use client"
+'use client'
 
-import { motion } from "framer-motion"
+import { motion } from 'framer-motion'
 import { GraduationCap, Search, Upload, Zap, BookOpen, Filter, Sparkles } from 'lucide-react'
-import { ThemeToggle } from "./theme-toggle"
+import { ThemeToggle } from './theme-toggle'
 
 export function PapersHeader() {
   return (
@@ -10,7 +10,10 @@ export function PapersHeader() {
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 h-80 w-80 animate-float rounded-full bg-gradient-to-br from-blue-200/30 to-purple-200/30 blur-3xl dark:from-blue-800/20 dark:to-purple-800/20" />
-        <div className="absolute -bottom-40 -left-40 h-80 w-80 animate-float rounded-full bg-gradient-to-tr from-green-200/30 to-blue-200/30 blur-3xl dark:from-green-800/20 dark:to-blue-800/20" style={{ animationDelay: '2s' }} />
+        <div
+          className="absolute -bottom-40 -left-40 h-80 w-80 animate-float rounded-full bg-gradient-to-tr from-green-200/30 to-blue-200/30 blur-3xl dark:from-green-800/20 dark:to-blue-800/20"
+          style={{ animationDelay: '2s' }}
+        />
         <div className="absolute top-1/2 left-1/2 h-96 w-96 animate-pulse-slow -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-r from-indigo-200/20 to-purple-200/20 blur-3xl dark:from-indigo-800/10 dark:to-purple-800/10" />
       </div>
 
@@ -62,7 +65,6 @@ export function PapersHeader() {
               exam papers, simplified
             </motion.p>
           </motion.div>
-
 
           {/* Feature highlights */}
           {/* <motion.div

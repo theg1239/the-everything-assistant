@@ -191,9 +191,9 @@ export function FeedbackSection() {
                   <span className="hidden xs:inline">submit contribution</span>
                   <span className="xs:hidden">submit</span>
                 </Button>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setView('menu')}
                   className="w-full xs:w-auto"
                 >
@@ -207,19 +207,22 @@ export function FeedbackSection() {
               <div className="space-y-4">
                 <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-3">
                   <h4 className="font-medium text-base sm:text-lg">suggest new knowledge</h4>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={handleAddChunk} 
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleAddChunk}
                     className="w-full xs:w-auto flex items-center justify-center gap-2"
                   >
                     <Plus className="h-4 w-4" />
                     <span className="xs:hidden">add suggestion</span>
                   </Button>
                 </div>
-                
+
                 {newChunks.map((chunk, index) => (
-                  <div key={index} className="space-y-3 p-4 border border-border rounded-lg bg-background/30">
+                  <div
+                    key={index}
+                    className="space-y-3 p-4 border border-border rounded-lg bg-background/30"
+                  >
                     <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-2">
                       <Label htmlFor={`new-chunk-${index}`} className="text-sm font-medium">
                         suggestion #{index + 1}
@@ -252,7 +255,10 @@ export function FeedbackSection() {
                   <h4 className="font-medium text-base sm:text-lg">edit existing knowledge</h4>
                   <div className="grid gap-4">
                     {knowledgeChunks.map((chunk, index) => (
-                      <div key={chunk.id} className="space-y-3 p-4 border border-border rounded-lg bg-background/30">
+                      <div
+                        key={chunk.id}
+                        className="space-y-3 p-4 border border-border rounded-lg bg-background/30"
+                      >
                         <Label htmlFor={`chunk-${chunk.id}`} className="text-sm font-medium block">
                           knowledge #{index + 1}
                         </Label>
@@ -295,9 +301,9 @@ export function FeedbackSection() {
                   <span className="hidden xs:inline">submit feedback</span>
                   <span className="xs:hidden">submit</span>
                 </Button>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setView('menu')}
                   className="w-full xs:w-auto"
                 >
@@ -308,7 +314,9 @@ export function FeedbackSection() {
 
             <div className="space-y-6">
               <div className="space-y-3">
-                <Label htmlFor="feedback-title" className="text-sm font-medium">title</Label>
+                <Label htmlFor="feedback-title" className="text-sm font-medium">
+                  title
+                </Label>
                 <Input
                   id="feedback-title"
                   placeholder="e.g., issue with chat history"
@@ -318,7 +326,9 @@ export function FeedbackSection() {
                 />
               </div>
               <div className="space-y-3">
-                <Label htmlFor="feedback-body" className="text-sm font-medium">description</Label>
+                <Label htmlFor="feedback-body" className="text-sm font-medium">
+                  description
+                </Label>
                 <Textarea
                   id="feedback-body"
                   placeholder="please provide as much detail as possible..."
@@ -351,9 +361,12 @@ export function FeedbackSection() {
                     <div className="flex items-start sm:items-center gap-3">
                       <MessageSquarePlus className="w-4 h-4 flex-shrink-0 mt-0.5 sm:mt-0" />
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium text-sm md:text-base">contribute to knowledge base</p>
+                        <p className="font-medium text-sm md:text-base">
+                          contribute to knowledge base
+                        </p>
                         <p className="text-xs md:text-sm text-muted-foreground">
-                          suggest edits to improve the assistant's knowledge and help make it more accurate
+                          suggest edits to improve the assistant's knowledge and help make it more
+                          accurate
                         </p>
                       </div>
                     </div>
@@ -382,7 +395,8 @@ export function FeedbackSection() {
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-sm md:text-base">submit feedback</p>
                         <p className="text-xs md:text-sm text-muted-foreground">
-                          report an issue, request a new feature, or share your thoughts on improvements
+                          report an issue, request a new feature, or share your thoughts on
+                          improvements
                         </p>
                       </div>
                     </div>
@@ -403,9 +417,5 @@ export function FeedbackSection() {
     }
   }
 
-  return (
-    <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-      {renderContent()}
-    </div>
-  )
+  return <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">{renderContent()}</div>
 }

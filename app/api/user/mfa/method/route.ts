@@ -76,7 +76,10 @@ export async function PATCH(request: NextRequest) {
       } else if (newMethod === 'authenticator') {
         isValidCode = verifyTOTP(verificationCode, user.tempMfaSecret)
       } else if (newMethod === 'security_key') {
-        return NextResponse.json({ error: 'WebAuthn verification should be handled separately' }, { status: 400 })
+        return NextResponse.json(
+          { error: 'WebAuthn verification should be handled separately' },
+          { status: 400 }
+        )
       }
 
       if (!isValidCode) {
@@ -179,7 +182,8 @@ export async function PATCH(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: 'Please register your security key (supports both platform authenticators and external keys)',
+        message:
+          'Please register your security key (supports both platform authenticators and external keys)',
         requiresRegistration: true,
         method: newMethod,
       })

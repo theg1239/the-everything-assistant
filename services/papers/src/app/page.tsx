@@ -1,9 +1,9 @@
-"use client"
+'use client'
 
-import { useRef } from "react"
-import UploadForm from "@/components/upload-form"
-import PapersList, { type PapersListRef } from "@/components/papers-list"
-import { PapersHeader } from "@/components/papers-header"
+import { useRef } from 'react'
+import UploadForm from '@/components/upload-form'
+import PapersList, { type PapersListRef } from '@/components/papers-list'
+import { PapersHeader } from '@/components/papers-header'
 
 export default function Home() {
   const papersListRef = useRef<PapersListRef | null>(null)
@@ -21,7 +21,7 @@ export default function Home() {
           <div className="absolute left-1/4 top-20 h-96 w-96 rounded-full bg-gradient-to-br from-blue-100/20 to-purple-100/20 blur-3xl animate-float dark:from-blue-900/10 dark:to-purple-900/10" />
           <div
             className="absolute right-1/4 bottom-20 h-96 w-96 rounded-full bg-gradient-to-br from-green-100/20 to-blue-100/20 blur-3xl animate-float dark:from-green-900/10 dark:to-blue-900/10"
-            style={{ animationDelay: "3s" }}
+            style={{ animationDelay: '3s' }}
           />
         </div>
 

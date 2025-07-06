@@ -80,8 +80,12 @@ const UpsellBanner: React.FC = () => {
           {/* Artwork section for mobile */}
           <div className="relative h-16 overflow-hidden">
             <Image
-              src={showFeedback ? "/onboarding-artwork/artwork2.png" : "/onboarding-artwork/artwork.png"}
-              alt={showFeedback ? "Feedback artwork" : "Research Preview artwork"}
+              src={
+                showFeedback
+                  ? '/onboarding-artwork/artwork2.png'
+                  : '/onboarding-artwork/artwork.png'
+              }
+              alt={showFeedback ? 'Feedback artwork' : 'Research Preview artwork'}
               fill
               className="object-cover object-center"
               priority
@@ -92,15 +96,14 @@ const UpsellBanner: React.FC = () => {
           <div className="px-4 py-3">
             <div className="flex items-center space-x-2 mb-2">
               <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
-                {showFeedback ? "help us improve" : "research preview"}
+                {showFeedback ? 'help us improve' : 'research preview'}
               </h2>
             </div>
 
             <p className="text-xs text-slate-600 dark:text-slate-300 mb-3 leading-relaxed">
-              {showFeedback 
-                ? "your feedback helps us build better features. share your thoughts, report bugs, or suggest improvements."
-                : "this is an early research preview. features may change or be removed without notice. we're improving the experience based on your feedback."
-              }
+              {showFeedback
+                ? 'your feedback helps us build better features. share your thoughts, report bugs, or suggest improvements.'
+                : "this is an early research preview. features may change or be removed without notice. we're improving the experience based on your feedback."}
             </p>
 
             {showFeedback && (
@@ -132,8 +135,10 @@ const UpsellBanner: React.FC = () => {
 
         <div className="relative h-24 sm:h-32 overflow-hidden">
           <Image
-            src={showFeedback ? "/onboarding-artwork/artwork2.png" : "/onboarding-artwork/artwork3.png"}
-            alt={showFeedback ? "Feedback artwork" : "Research Preview artwork"}
+            src={
+              showFeedback ? '/onboarding-artwork/artwork2.png' : '/onboarding-artwork/artwork3.png'
+            }
+            alt={showFeedback ? 'Feedback artwork' : 'Research Preview artwork'}
             fill
             className="object-cover object-center"
             priority
@@ -151,21 +156,20 @@ const UpsellBanner: React.FC = () => {
                   </div>
                 )} */}
                 <h2 className="text-lg sm:text-xl font-semibold text-slate-900 dark:text-white">
-                  {showFeedback ? "help us improve" : "research preview"}
+                  {showFeedback ? 'help us improve' : 'research preview'}
                 </h2>
               </div>
 
               <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 mb-3 leading-relaxed">
-                {showFeedback 
-                  ? "your feedback is invaluable to us. share your thoughts, report bugs, or suggest new features to help us build a better experience for everyone."
-                  : "this is an early research preview."
-                }
+                {showFeedback
+                  ? 'your feedback is invaluable to us. share your thoughts, report bugs, or suggest new features to help us build a better experience for everyone.'
+                  : 'this is an early research preview.'}
               </p>
-              
+
               {!showFeedback && (
                 <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 mb-3 leading-relaxed">
-                  features may change or be removed without notice.
-                  we're improving the experience based on your feedback.
+                  features may change or be removed without notice. we're improving the experience
+                  based on your feedback.
                 </p>
               )}
 

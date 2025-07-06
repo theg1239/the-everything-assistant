@@ -34,7 +34,10 @@ export async function POST(request: NextRequest) {
 
     const options = await generateRegistrationOptions({
       rpName: 'The Everything Assistant',
-      rpID: process.env.NODE_ENV === 'production' ? process.env.WEBAUTHN_RP_ID || 'the-everything-assistant.vercel.app' : 'localhost',
+      rpID:
+        process.env.NODE_ENV === 'production'
+          ? process.env.WEBAUTHN_RP_ID || 'the-everything-assistant.vercel.app'
+          : 'localhost',
       userID: new TextEncoder().encode(session.user.email),
       userName: session.user.email,
       userDisplayName: session.user.name || session.user.email,
@@ -50,13 +53,20 @@ export async function POST(request: NextRequest) {
       excludeCredentials: [],
     })
 
-    console.log('Generated WebAuthn options for security_key:', JSON.stringify({
-      rpName: options.rp.name,
-      rpID: options.rp.id,
-      userEmail: session.user.email,
-      timeout: options.timeout,
-      authenticatorSelection: options.authenticatorSelection,
-    }, null, 2))
+    console.log(
+      'Generated WebAuthn options for security_key:',
+      JSON.stringify(
+        {
+          rpName: options.rp.name,
+          rpID: options.rp.id,
+          userEmail: session.user.email,
+          timeout: options.timeout,
+          authenticatorSelection: options.authenticatorSelection,
+        },
+        null,
+        2
+      )
+    )
 
     await prisma.user.update({
       where: { id: user.id },

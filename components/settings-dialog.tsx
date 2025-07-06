@@ -183,7 +183,9 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       setLoadingPreferences(true)
       try {
         // Load memory settings
-        const memorySettings = await fetch('/api/memories/settings').then(res => res.ok ? res.json() : null)
+        const memorySettings = await fetch('/api/memories/settings').then(res =>
+          res.ok ? res.json() : null
+        )
         setMemoryEnabled(memorySettings?.isEnabled ?? true)
 
         // Load user preferences
@@ -211,8 +213,12 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         if (mfaResponse.ok) {
           const mfaData = await mfaResponse.json()
           setMfaEnabled(mfaData.mfaEnabled ?? false)
-          loadedMfaMethod = mfaData.mfaMethod === 'security_key' ? 'security_key' : 
-                           mfaData.mfaMethod === 'authenticator' ? 'authenticator' : 'email'
+          loadedMfaMethod =
+            mfaData.mfaMethod === 'security_key'
+              ? 'security_key'
+              : mfaData.mfaMethod === 'authenticator'
+                ? 'authenticator'
+                : 'email'
           setMfaMethod(loadedMfaMethod)
           // Set backup codes count (we don't get the actual codes for security)
           setBackupCodes(new Array(mfaData.backupCodesCount || 0).fill('••••••••'))
@@ -222,20 +228,20 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         const availabilityResponse = await fetch('/api/user/mfa/availability')
         if (availabilityResponse.ok) {
           const availabilityData = await availabilityResponse.json()
-          
+
           // Check for WebAuthn browser support for security keys
           const hasWebAuthnSupport = !!(
             window.navigator.credentials &&
             typeof window.navigator.credentials.create === 'function' &&
             window.PublicKeyCredential
           )
-          
+
           // Update availability based on browser support
           const updatedAvailability = {
             ...availabilityData.availability,
-            security_key: availabilityData.availability.security_key && hasWebAuthnSupport
+            security_key: availabilityData.availability.security_key && hasWebAuthnSupport,
           }
-          
+
           setMfaAvailability(updatedAvailability)
 
           // If email is not available and current method is email, switch to authenticator
@@ -298,7 +304,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       await fetch('/api/memories/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isEnabled: checked })
+        body: JSON.stringify({ isEnabled: checked }),
       })
     } catch (error) {
       console.error('Failed to update memory settings:', error)
@@ -427,7 +433,8 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         // Check platform authenticator availability
         let isPlatformAvailable = false
         try {
-          isPlatformAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+          isPlatformAvailable =
+            await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
           console.log('Platform authenticator available:', isPlatformAvailable)
         } catch (checkError) {
           console.warn('Could not check platform authenticator availability:', checkError)
@@ -447,13 +454,18 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
         const options = await optionsResponse.json()
         console.log('Received WebAuthn options:', options)
-        console.log('Challenge type:', typeof options.challenge, 'Length:', options.challenge?.length)
+        console.log(
+          'Challenge type:',
+          typeof options.challenge,
+          'Length:',
+          options.challenge?.length
+        )
         console.log('User ID type:', typeof options.user.id, 'Length:', options.user.id?.length)
 
         // Helper function to decode base64url to Uint8Array
         function base64urlToUint8Array(base64url: string): Uint8Array {
           // Add padding if needed
-          const padding = '='.repeat((4 - base64url.length % 4) % 4)
+          const padding = '='.repeat((4 - (base64url.length % 4)) % 4)
           const base64 = (base64url + padding).replace(/-/g, '+').replace(/_/g, '/')
           const rawData = window.atob(base64)
           const outputArray = new Uint8Array(rawData.length)
@@ -468,9 +480,15 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
           rp: options.rp,
           user: {
             ...options.user,
-            id: typeof options.user.id === 'string' ? base64urlToUint8Array(options.user.id) : new Uint8Array(options.user.id),
+            id:
+              typeof options.user.id === 'string'
+                ? base64urlToUint8Array(options.user.id)
+                : new Uint8Array(options.user.id),
           },
-          challenge: typeof options.challenge === 'string' ? base64urlToUint8Array(options.challenge) : new Uint8Array(options.challenge),
+          challenge:
+            typeof options.challenge === 'string'
+              ? base64urlToUint8Array(options.challenge)
+              : new Uint8Array(options.challenge),
           pubKeyCredParams: options.pubKeyCredParams,
           timeout: Math.min(options.timeout || 60000, 60000), // Cap at 60 seconds
           attestation: 'none', // Use 'none' for better compatibility
@@ -485,26 +503,29 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
         // Show a more helpful toast before attempting WebAuthn
         const methodName = 'security key'
-        const instructionText = 'Please use Windows Hello, Touch ID, external key, or your device\'s built-in authenticator when prompted'
-        
+        const instructionText =
+          "Please use Windows Hello, Touch ID, external key, or your device's built-in authenticator when prompted"
+
         toast.info(`Setting up ${methodName}. ${instructionText}`, { duration: 5000 })
 
         // Create the credential with improved error handling
         let credential: PublicKeyCredential | null = null
-        
+
         try {
           console.log('Attempting WebAuthn credential creation...')
-          credential = await navigator.credentials.create({
+          credential = (await navigator.credentials.create({
             publicKey: credentialCreationOptions,
-          }) as PublicKeyCredential
-          
+          })) as PublicKeyCredential
+
           console.log('WebAuthn credential created successfully:', credential?.id)
         } catch (webauthnError: any) {
           console.error('WebAuthn credential creation failed:', webauthnError)
-          
+
           // Provide more specific error messages
           if (webauthnError.name === 'NotAllowedError') {
-            throw new Error('Security key registration was cancelled, timed out, or blocked. This could be due to Windows Hello setup issues, an unconnected security key, or browser restrictions. Please ensure your authenticator is ready and try again.')
+            throw new Error(
+              'Security key registration was cancelled, timed out, or blocked. This could be due to Windows Hello setup issues, an unconnected security key, or browser restrictions. Please ensure your authenticator is ready and try again.'
+            )
           } else if (webauthnError.name === 'InvalidStateError') {
             throw new Error(`This ${methodName} is already registered for your account.`)
           } else if (webauthnError.name === 'NotSupportedError') {
@@ -512,7 +533,9 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
           } else if (webauthnError.name === 'ConstraintError') {
             throw new Error(`The ${methodName} does not meet the security requirements.`)
           } else {
-            throw new Error(`Failed to create ${methodName}: ${webauthnError.message || 'Unknown error occurred'}`)
+            throw new Error(
+              `Failed to create ${methodName}: ${webauthnError.message || 'Unknown error occurred'}`
+            )
           }
         }
 
@@ -540,7 +563,9 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
               id: credential.id,
               rawId: uint8ArrayToBase64url(new Uint8Array(credential.rawId)),
               response: {
-                attestationObject: uint8ArrayToBase64url(new Uint8Array(response.attestationObject)),
+                attestationObject: uint8ArrayToBase64url(
+                  new Uint8Array(response.attestationObject)
+                ),
                 clientDataJSON: uint8ArrayToBase64url(new Uint8Array(response.clientDataJSON)),
               },
               type: credential.type,
@@ -586,7 +611,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       }
     } catch (error: any) {
       console.error('Error verifying MFA setup:', error)
-      
+
       // More specific error handling - the error messages are now coming from our improved logic above
       toast.error(error.message || 'Failed to verify setup')
     } finally {
@@ -683,7 +708,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
       if (response.ok) {
         const data = await response.json()
-        
+
         // Handle WebAuthn methods differently
         if (data.requiresRegistration && method === 'security_key') {
           // Set the method and trigger the registration flow
@@ -864,7 +889,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
               <div className="space-y-4">
                 <div className="space-y-4 p-4 rounded-lg border border-border bg-muted/10">
                   <h4 className="font-semibold text-base">chat features</h4>
-                  
+
                   <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-background">
                     <div className="space-y-0.5">
                       <Label htmlFor="follow-up-suggestions" className="text-sm md:text-base">
@@ -1294,9 +1319,11 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                           <div className="space-y-3">
                             <Label className="text-sm font-medium">
                               current method:{' '}
-                              {mfaMethod === 'email' ? 'email verification' : 
-                               mfaMethod === 'authenticator' ? 'authenticator app' : 
-                               'security key'}
+                              {mfaMethod === 'email'
+                                ? 'email verification'
+                                : mfaMethod === 'authenticator'
+                                  ? 'authenticator app'
+                                  : 'security key'}
                             </Label>
 
                             <div className="space-y-2">
@@ -1651,7 +1678,8 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                                   </div>
                                   <h4 className="font-medium">register your security key</h4>
                                   <p className="text-sm text-muted-foreground">
-                                    click the button below and follow your browser's prompts to register your security key
+                                    click the button below and follow your browser's prompts to
+                                    register your security key
                                   </p>
                                   <div className="p-3 bg-muted/50 rounded-lg text-xs text-muted-foreground">
                                     make sure your security key is connected and ready
@@ -1678,17 +1706,24 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                               <div className="flex gap-2">
                                 <Button
                                   onClick={verifyMfaSetup}
-                                  disabled={loadingMfa || (mfaMethod !== 'security_key' && !verificationCode.trim())}
+                                  disabled={
+                                    loadingMfa ||
+                                    (mfaMethod !== 'security_key' && !verificationCode.trim())
+                                  }
                                   size="sm"
                                   className="flex-1"
                                 >
                                   {loadingMfa ? (
                                     <>
                                       <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                                      {mfaMethod === 'security_key' ? 'registering...' : 'verifying...'}
+                                      {mfaMethod === 'security_key'
+                                        ? 'registering...'
+                                        : 'verifying...'}
                                     </>
+                                  ) : mfaMethod === 'security_key' ? (
+                                    'register security key'
                                   ) : (
-                                    mfaMethod === 'security_key' ? 'register security key' : 'verify'
+                                    'verify'
                                   )}
                                 </Button>
                                 <Button
@@ -1895,7 +1930,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     }
 
     window.addEventListener('openSettings', handleOpenSettings as EventListener)
-    
+
     return () => {
       window.removeEventListener('openSettings', handleOpenSettings as EventListener)
     }

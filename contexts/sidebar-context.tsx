@@ -51,16 +51,18 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   return (
-    <SidebarContext.Provider value={{ 
-      isOpen, 
-      setIsOpen, 
-      toggle, 
-      isInitialized, 
-      chats, 
-      setChats, 
-      chatsLoaded, 
-      setChatsLoaded 
-    }}>
+    <SidebarContext.Provider
+      value={{
+        isOpen,
+        setIsOpen,
+        toggle,
+        isInitialized,
+        chats,
+        setChats,
+        chatsLoaded,
+        setChatsLoaded,
+      }}
+    >
       {children}
     </SidebarContext.Provider>
   )

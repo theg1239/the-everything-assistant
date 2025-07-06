@@ -685,12 +685,12 @@ const ToolCallResultsSummary = ({
       (config): config is NonNullable<typeof config> =>
         config !== null &&
         config !== undefined &&
-        (config.type && 
-         (config.type === 'faculty' || 
-          config.type === 'reddit-knowledge' || 
-          config.type === 'campus-info' || 
-          config.type === 'papers' || 
-          config.type === 'vtop-data' || 
+        config.type &&
+        (config.type === 'faculty' ||
+          config.type === 'reddit-knowledge' ||
+          config.type === 'campus-info' ||
+          config.type === 'papers' ||
+          config.type === 'vtop-data' ||
           config.type === 'error' ||
           config.type === 'general' ||
           config.type === 'mess-menu' ||
@@ -700,7 +700,9 @@ const ToolCallResultsSummary = ({
           config.type === 'placements' ||
           config.type === 'interactive-course-page' ||
           config.type === 'reddit-overview' ||
-          (('data' in config) && (config as { data?: unknown }).data !== undefined && (config as { data?: unknown }).data !== null)))
+          ('data' in config &&
+            (config as { data?: unknown }).data !== undefined &&
+            (config as { data?: unknown }).data !== null))
     )
 
   const failedTools = enrichedToolCalls.filter(tool => {
@@ -817,19 +819,25 @@ const ToolCallResultsSummary = ({
                       ? 'Invalid VTOP credentials. Please try logging in again.'
                       : errorMessage}
                   </div>
-                  {firstFailedTool.result.suggestions && Array.isArray(firstFailedTool.result.suggestions) && firstFailedTool.result.suggestions.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      <div className="text-xs font-medium text-muted-foreground">Suggestions:</div>
-                      <ul className="text-xs text-muted-foreground space-y-0.5">
-                        {firstFailedTool.result.suggestions.map((suggestion: string, index: number) => (
-                          <li key={index} className="flex items-start">
-                            <span className="text-muted-foreground mr-1">•</span>
-                            <span>{suggestion}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                  {firstFailedTool.result.suggestions &&
+                    Array.isArray(firstFailedTool.result.suggestions) &&
+                    firstFailedTool.result.suggestions.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        <div className="text-xs font-medium text-muted-foreground">
+                          Suggestions:
+                        </div>
+                        <ul className="text-xs text-muted-foreground space-y-0.5">
+                          {firstFailedTool.result.suggestions.map(
+                            (suggestion: string, index: number) => (
+                              <li key={index} className="flex items-start">
+                                <span className="text-muted-foreground mr-1">•</span>
+                                <span>{suggestion}</span>
+                              </li>
+                            )
+                          )}
+                        </ul>
+                      </div>
+                    )}
                 </div>
                 {isAuthError && onLoginClick && (
                   <Button
@@ -1008,11 +1016,15 @@ const PureToolCallDisplay = ({
   setMaximizedItem,
 }: ToolCallDisplayProps) => {
   const { getToolResult, version } = useVTOP()
-  
+
   const filteredToolCalls = (() => {
     const map = new Map<string, any>()
     for (const tc of toolCalls) {
-      if (tc.toolName === 'knowledgeBase' || tc.toolName === 'saveMemory' || (tc.result && tc.result.hidden)) {
+      if (
+        tc.toolName === 'knowledgeBase' ||
+        tc.toolName === 'saveMemory' ||
+        (tc.result && tc.result.hidden)
+      ) {
         continue
       }
       const key = `${tc.toolName}-${tc.toolCallId || tc.id || ''}`
@@ -1121,7 +1133,11 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
   const filteredToolCalls = (() => {
     const map = new Map<string, any>()
     for (const tc of toolCalls) {
-      if (tc.toolName === 'knowledgeBase' || tc.toolName === 'saveMemory' || (tc.result && tc.result.hidden)) {
+      if (
+        tc.toolName === 'knowledgeBase' ||
+        tc.toolName === 'saveMemory' ||
+        (tc.result && tc.result.hidden)
+      ) {
         continue
       }
       const key = `${tc.toolName}-${tc.toolCallId || tc.id || ''}`

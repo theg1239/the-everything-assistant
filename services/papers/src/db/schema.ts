@@ -3,7 +3,9 @@ import { pgTable, text, timestamp, integer, index } from 'drizzle-orm/pg-core'
 export const papers = pgTable(
   'papers',
   {
-    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
     title: text('title').notNull(),
     courseCode: text('course_code').notNull(),
     year: integer('year').notNull(),
@@ -23,7 +25,7 @@ export const papers = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
-  (table) => ({
+  table => ({
     courseCodeIdx: index('course_code_idx').on(table.courseCode),
     yearIdx: index('year_idx').on(table.year),
     examTypeIdx: index('exam_type_idx').on(table.examType),

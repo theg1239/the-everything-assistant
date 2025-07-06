@@ -42,9 +42,11 @@ const PureMessageBubble = ({
   }, [message.parts, (message as any).toolInvocations])
 
   const visibleToolCalls = useMemo(() => {
-    return toolInvocations?.filter(
-      (t: any) => t.toolName !== 'knowledgeBase' && t.toolName !== 'saveMemory'
-    ) || []
+    return (
+      toolInvocations?.filter(
+        (t: any) => t.toolName !== 'knowledgeBase' && t.toolName !== 'saveMemory'
+      ) || []
+    )
   }, [toolInvocations])
 
   const hasContent = useMemo(() => {
@@ -56,14 +58,12 @@ const PureMessageBubble = ({
   }, [visibleToolCalls.length])
 
   const hasKnowledgeBaseInProgress = useMemo(() => {
-    return toolInvocations?.some((t: any) => 
-      t.toolName === 'knowledgeBase' && t.state !== 'result'
-    )
+    return toolInvocations?.some((t: any) => t.toolName === 'knowledgeBase' && t.state !== 'result')
   }, [toolInvocations])
 
   if (!isUser && !hasContent) {
     if (!hasVisibleToolCalls && !hasKnowledgeBaseInProgress) {
-      return null;
+      return null
     }
   }
 
@@ -114,16 +114,12 @@ const PureMessageBubble = ({
                   rehypePlugins={[rehypeRaw]}
                   components={{
                     pre: ({ children }) => (
-                      <pre className="overflow-auto bg-muted p-4 rounded-lg border">
-                        {children}
-                      </pre>
+                      <pre className="overflow-auto bg-muted p-4 rounded-lg border">{children}</pre>
                     ),
                     code: ({ children, className }) => {
                       const isInline = !className
                       return isInline ? (
-                        <code className="bg-muted px-1 py-0.5 rounded text-sm">
-                          {children}
-                        </code>
+                        <code className="bg-muted px-1 py-0.5 rounded text-sm">{children}</code>
                       ) : (
                         <code className={className}>{children}</code>
                       )

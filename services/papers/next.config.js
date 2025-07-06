@@ -1,8 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    turbo: {
-    },
+    turbo: {},
   },
   images: {
     domains: ['res.cloudinary.com'],

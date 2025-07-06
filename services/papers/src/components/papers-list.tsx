@@ -1,7 +1,7 @@
-"use client"
+'use client'
 
-import { useState, useEffect, forwardRef, useImperativeHandle } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { useState, useEffect, forwardRef, useImperativeHandle } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search,
   Download,
@@ -15,14 +15,19 @@ import {
   X,
   SlidersHorizontal,
   Star,
-} from "lucide-react"
-import { searchPapers, getFilterOptions, type SearchFilters, type PaginationOptions } from "../actions/searchPapers"
-import { formatFileSize, formatDate } from "../lib/utils"
-import { Button } from "./ui/button"
-import { Card, CardContent } from "./ui/card"
-import { Input } from "./ui/input"
-import { Label } from "./ui/label"
-import { Badge } from "./ui/badge"
+} from 'lucide-react'
+import {
+  searchPapers,
+  getFilterOptions,
+  type SearchFilters,
+  type PaginationOptions,
+} from '../actions/searchPapers'
+import { formatFileSize, formatDate } from '../lib/utils'
+import { Button } from './ui/button'
+import { Card, CardContent } from './ui/card'
+import { Input } from './ui/input'
+import { Label } from './ui/label'
+import { Badge } from './ui/badge'
 
 interface Paper {
   id: string
@@ -60,24 +65,28 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
       setPapers(result.papers)
       setTotalPages(result.totalPages)
     } catch (error) {
-      console.error("Error loading papers:", error)
+      console.error('Error loading papers:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  useImperativeHandle(ref, () => ({
-    refreshPapers: () => {
-      loadPapers()
-    }
-  }), [filters, pagination])
+  useImperativeHandle(
+    ref,
+    () => ({
+      refreshPapers: () => {
+        loadPapers()
+      },
+    }),
+    [filters, pagination]
+  )
 
   const loadFilterOptions = async () => {
     try {
       const options = await getFilterOptions()
       setFilterOptions(options)
     } catch (error) {
-      console.error("Error loading filter options:", error)
+      console.error('Error loading filter options:', error)
     }
   }
 
@@ -90,39 +99,41 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
   }, [])
 
   const handleFilterChange = (key: keyof SearchFilters, value: string) => {
-    setFilters((prev) => ({
+    setFilters(prev => ({
       ...prev,
       [key]: value || undefined,
     }))
-    setPagination((prev) => ({ ...prev, page: 1 }))
+    setPagination(prev => ({ ...prev, page: 1 }))
   }
 
   const handlePageChange = (page: number) => {
-    setPagination((prev) => ({ ...prev, page }))
-    window.scrollTo({ top: 0, behavior: "smooth" })
+    setPagination(prev => ({ ...prev, page }))
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const formatFileSize = (bytes?: number) => {
-    if (!bytes) return ""
+    if (!bytes) return ''
     const mb = bytes / (1024 * 1024)
     return `${mb.toFixed(1)} MB`
   }
 
   const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
+    return new Date(date).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
     })
   }
 
   const clearFilters = () => {
     setFilters({})
-    setPagination((prev) => ({ ...prev, page: 1 }))
+    setPagination(prev => ({ ...prev, page: 1 }))
   }
 
-  const hasActiveFilters = Object.values(filters).some((value) => value !== undefined && value !== "")
-  const activeFilterCount = Object.values(filters).filter((value) => value !== undefined && value !== "").length
+  const hasActiveFilters = Object.values(filters).some(value => value !== undefined && value !== '')
+  const activeFilterCount = Object.values(filters).filter(
+    value => value !== undefined && value !== ''
+  ).length
 
   return (
     <motion.div
@@ -139,8 +150,8 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
             <Search className="absolute left-6 top-1/2 h-6 w-6 -translate-y-1/2 text-gray-400" />
             <Input
               placeholder="search papers by title, content, or course code..."
-              value={filters.query || ""}
-              onChange={(e) => handleFilterChange("query", e.target.value)}
+              value={filters.query || ''}
+              onChange={e => handleFilterChange('query', e.target.value)}
               className="border-0 bg-transparent pl-16 pr-6 py-6 text-lg placeholder:text-gray-500 focus:outline-none focus:ring-0"
             />
           </div>
@@ -157,7 +168,10 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
               <SlidersHorizontal className="h-5 w-5" />
               filters
               {activeFilterCount > 0 && (
-                <Badge variant="secondary" className="ml-2 h-6 w-6 rounded-full p-0 text-xs font-bold">
+                <Badge
+                  variant="secondary"
+                  className="ml-2 h-6 w-6 rounded-full p-0 text-xs font-bold"
+                >
                   {activeFilterCount}
                 </Badge>
               )}
@@ -192,7 +206,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
               </div>
             ) : (
               <span className="font-medium">
-                {papers.length} paper{papers.length !== 1 ? "s" : ""} found
+                {papers.length} paper{papers.length !== 1 ? 's' : ''} found
               </span>
             )}
           </div>
@@ -203,7 +217,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
           {showFilters && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
+              animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.4 }}
               className="overflow-hidden"
@@ -213,18 +227,28 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
                   <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
                     {[
                       {
-                        key: "courseCode",
-                        label: "course code",
+                        key: 'courseCode',
+                        label: 'course code',
                         options: filterOptions.courseCodes,
-                        placeholder: "all courses",
+                        placeholder: 'all courses',
                       },
-                      { key: "year", label: "year", options: filterOptions.years, placeholder: "all years" },
-                      { key: "slot", label: "slot", options: filterOptions.slots, placeholder: "all slots" },
                       {
-                        key: "examType",
-                        label: "exam type",
+                        key: 'year',
+                        label: 'year',
+                        options: filterOptions.years,
+                        placeholder: 'all years',
+                      },
+                      {
+                        key: 'slot',
+                        label: 'slot',
+                        options: filterOptions.slots,
+                        placeholder: 'all slots',
+                      },
+                      {
+                        key: 'examType',
+                        label: 'exam type',
                         options: filterOptions.examTypes,
-                        placeholder: "all types",
+                        placeholder: 'all types',
                       },
                     ].map((filter, index) => (
                       <motion.div
@@ -234,10 +258,14 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
                         transition={{ duration: 0.4, delay: index * 0.1 }}
                         className="space-y-3"
                       >
-                        <Label className="text-sm font-semibold text-gray-900 dark:text-white">{filter.label}</Label>
+                        <Label className="text-sm font-semibold text-gray-900 dark:text-white">
+                          {filter.label}
+                        </Label>
                         <select
-                          value={filters[filter.key as keyof SearchFilters] || ""}
-                          onChange={(e) => handleFilterChange(filter.key as keyof SearchFilters, e.target.value)}
+                          value={filters[filter.key as keyof SearchFilters] || ''}
+                          onChange={e =>
+                            handleFilterChange(filter.key as keyof SearchFilters, e.target.value)
+                          }
                           className="w-full rounded-xl border border-gray-200/60 bg-white/90 px-4 py-3 text-sm backdrop-blur-sm transition-all focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100/50 dark:border-gray-800/60 dark:bg-gray-900/90 dark:focus:border-blue-500 dark:focus:ring-blue-900/30"
                         >
                           <option value="">{filter.placeholder}</option>
@@ -270,7 +298,9 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
             <div className="rounded-3xl bg-blue-100 p-8 dark:bg-blue-900/30">
               <Loader2 className="h-16 w-16 animate-spin text-blue-600 dark:text-blue-400" />
             </div>
-            <p className="mt-6 text-xl font-semibold text-gray-600 dark:text-gray-400">loading papers...</p>
+            <p className="mt-6 text-xl font-semibold text-gray-600 dark:text-gray-400">
+              loading papers...
+            </p>
           </motion.div>
         ) : papers.length === 0 ? (
           <motion.div
@@ -283,9 +313,13 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
             <div className="rounded-3xl bg-gray-100 p-8 dark:bg-gray-800">
               <FileText className="h-20 w-20 text-gray-400" />
             </div>
-            <h3 className="mt-8 text-3xl font-bold text-gray-900 dark:text-white">no papers found</h3>
+            <h3 className="mt-8 text-3xl font-bold text-gray-900 dark:text-white">
+              no papers found
+            </h3>
             <p className="mt-3 text-lg text-gray-600 dark:text-gray-400 max-w-md">
-              {hasActiveFilters ? "try adjusting your filters or search terms" : "upload some papers to get started"}
+              {hasActiveFilters
+                ? 'try adjusting your filters or search terms'
+                : 'upload some papers to get started'}
             </p>
             {hasActiveFilters && (
               <Button
@@ -315,7 +349,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
                 {/* Thumbnail */}
                 <div className="relative aspect-[3/4] overflow-hidden rounded-t-3xl bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700">
                   <img
-                    src={paper.thumbnailUrl || "/placeholder.svg?height=400&width=300"}
+                    src={paper.thumbnailUrl || '/placeholder.svg?height=400&width=300'}
                     alt={paper.title}
                     className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
                   />
@@ -370,7 +404,9 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
                       <div className="rounded-lg bg-blue-100 p-2 dark:bg-blue-900/30">
                         <GraduationCap className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                       </div>
-                      <span className="font-mono font-bold text-blue-900 dark:text-blue-100">{paper.courseCode}</span>
+                      <span className="font-mono font-bold text-blue-900 dark:text-blue-100">
+                        {paper.courseCode}
+                      </span>
                     </div>
                   )}
 
@@ -410,7 +446,9 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
                       <Clock className="h-3 w-3" />
                       {formatDate(paper.createdAt)}
                     </div>
-                    {paper.fileSize && <span className="font-mono">{formatFileSize(paper.fileSize)}</span>}
+                    {paper.fileSize && (
+                      <span className="font-mono">{formatFileSize(paper.fileSize)}</span>
+                    )}
                   </div>
                 </CardContent>
               </motion.div>
@@ -445,7 +483,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
                   return (
                     <Button
                       key={page}
-                      variant={page === pagination.page ? "default" : "outline"}
+                      variant={page === pagination.page ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => handlePageChange(page)}
                       className="rounded-xl w-10 h-10"
@@ -473,6 +511,6 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
   )
 })
 
-PapersList.displayName = "PapersList"
+PapersList.displayName = 'PapersList'
 
 export default PapersList

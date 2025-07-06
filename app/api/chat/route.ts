@@ -10,9 +10,6 @@ import { generateChatPath, extractTitleFromContent } from '@/lib/utils'
 import { sanitizeToolInvocations } from '@/lib/sanitize-tools'
 import { z } from 'zod'
 
-export const runtime = 'nodejs'
-export const maxDuration = 60
-
 async function generateChatTitle(userMessage: string, userId?: string): Promise<string> {
   try {
     const cleanMessage = userMessage.trim().toLowerCase()

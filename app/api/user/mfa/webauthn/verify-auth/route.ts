@@ -6,19 +6,31 @@ import { logSecurityEvent } from '@/lib/mfa'
 import {
   verifyAuthenticationResponse,
   type VerifyAuthenticationResponseOpts,
+  type AuthenticatorTransport,
 } from '@simplewebauthn/server'
 
+const VALID_TRANSPORTS: AuthenticatorTransport[] = [
+  'usb',
+  'nfc',
+  'ble',
+  'hybrid',
+  'internal',
+]
+
 export async function POST(request: NextRequest) {
+  // 1) Ensure user is signed in
   const session = await getServerSession(authOptions)
   if (!session?.user?.email) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // 2) Parse incoming credential from client
   const { credential } = await request.json()
   if (!credential) {
     return NextResponse.json({ error: 'Credential is required' }, { status: 400 })
   }
 
+  // 3) Load user and their stored WebAuthn credentials
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
     select: {
@@ -31,9 +43,9 @@ export async function POST(request: NextRequest) {
         select: {
           id: true,
           credentialId: true,
-          publicKey: true,
+          publicKey: true,    // Buffer | Uint8Array
           counter: true,
-          transports: true,
+          transports: true,   // string[]
         },
       },
     },
@@ -52,23 +64,33 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  // 4) Find the matching stored credential
   const stored = user.webAuthnCredentials.find(c => c.credentialId === credential.id)
   if (!stored) {
     await logSecurityEvent(
       user.id,
       'MFA_WEBAUTHN_AUTH_FAILED',
-      { method: user.mfaMethod, credentialId: credential.id, reason: 'no_matching_credential' },
+      {
+        method: user.mfaMethod,
+        credentialId: credential.id,
+        reason: 'no_matching_credential',
+      },
       request
     )
     return NextResponse.json({ error: 'No matching credential found' }, { status: 400 })
   }
 
+  // 5) Convert stored.publicKey (Buffer or Uint8Array) into a Node Buffer
   const credentialPublicKey = Buffer.isBuffer(stored.publicKey)
     ? stored.publicKey
-    : Buffer.from(stored.publicKey, 'base64')
+    : Buffer.from(stored.publicKey)
 
-  const prevCounter = typeof stored.counter === 'bigint' ? Number(stored.counter) : stored.counter
+  // 6) Normalize the counter
+  const prevCounter = typeof stored.counter === 'bigint'
+    ? Number(stored.counter)
+    : stored.counter
 
+  // 7) Reconstruct the client's assertion object
   const formattedResponse = {
     id: credential.id,
     rawId: credential.rawId,
@@ -82,9 +104,14 @@ export async function POST(request: NextRequest) {
     clientExtensionResults: credential.clientExtensionResults || {},
   }
 
-  // —————————————————————————————
-  // 7) Build the nested `credential` object per the v13 API
-  // —————————————————————————————
+  // 8) Filter transports down to the spec-defined set
+  const filteredTransports: AuthenticatorTransport[] =
+    stored.transports.filter((t): t is AuthenticatorTransport =>
+      VALID_TRANSPORTS.includes(t as AuthenticatorTransport)
+    )
+  const transportsToUse = filteredTransports.length ? filteredTransports : VALID_TRANSPORTS
+
+  // 9) Build the VerifyAuthenticationResponseOpts
   const verificationOpts: VerifyAuthenticationResponseOpts = {
     response: formattedResponse,
     expectedChallenge: user.tempMfaSecret,
@@ -92,16 +119,20 @@ export async function POST(request: NextRequest) {
       process.env.NODE_ENV === 'production'
         ? process.env.WEBAUTHN_ORIGIN!
         : 'http://localhost:3000',
-    expectedRPID: process.env.NODE_ENV === 'production' ? process.env.WEBAUTHN_RP_ID! : 'localhost',
+    expectedRPID:
+      process.env.NODE_ENV === 'production'
+        ? process.env.WEBAUTHN_RP_ID!
+        : 'localhost',
     credential: {
-      id: stored.credentialId, // base64url string
-      publicKey: credentialPublicKey, // Buffer or Uint8Array
-      counter: prevCounter, // number
-      transports: stored.transports, // e.g. ['usb','nfc']
+      id: stored.credentialId,      // base64url string
+      publicKey: credentialPublicKey,
+      counter: prevCounter,
+      transports: transportsToUse,
     },
     requireUserVerification: false,
   }
 
+  // 10) Perform verification
   try {
     const verification = await verifyAuthenticationResponse(verificationOpts)
 
@@ -109,24 +140,24 @@ export async function POST(request: NextRequest) {
       await logSecurityEvent(
         user.id,
         'MFA_WEBAUTHN_AUTH_FAILED',
-        {
-          method: user.mfaMethod,
-          credentialId: stored.credentialId,
-          reason: 'verification_failed',
-        },
+        { method: user.mfaMethod, credentialId: stored.credentialId, reason: 'verification_failed' },
         request
       )
       return NextResponse.json({ error: 'WebAuthn authentication failed' }, { status: 400 })
     }
 
-    const newCounter = verification.authenticationInfo.newCounter
-    if (newCounter !== undefined) {
+    // 11) Persist the new counter to prevent replay
+    if (verification.authenticationInfo?.newCounter !== undefined) {
       await prisma.webAuthnCredential.update({
         where: { id: stored.id },
-        data: { counter: BigInt(newCounter), lastUsedAt: new Date() },
+        data: {
+          counter: BigInt(verification.authenticationInfo.newCounter),
+          lastUsedAt: new Date(),
+        },
       })
     }
 
+    // 12) Clear the one-time challenge
     await prisma.user.update({
       where: { id: user.id },
       data: { tempMfaSecret: null, tempMfaExpires: null },
@@ -140,7 +171,7 @@ export async function POST(request: NextRequest) {
     )
     return NextResponse.json({ success: true, message: 'WebAuthn authentication successful' })
   } catch (err: any) {
-    console.error('WebAuthn authentication error:', err)
+    console.error('🔐 WebAuthn authentication error:', err)
     await logSecurityEvent(
       user.id,
       'MFA_WEBAUTHN_AUTH_ERROR',

@@ -2,11 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { generateAuthenticationOptions } from '@simplewebauthn/server'
-import type {
-  PublicKeyCredentialDescriptor,
-  AuthenticatorTransportFuture,
+import { logSecurityEvent } from '@/lib/mfa'
+import {
+  verifyAuthenticationResponse,
+  type VerifyAuthenticationResponseOpts,
+  type AuthenticatorTransport,
 } from '@simplewebauthn/server'
+
+const VALID_TRANSPORTS: AuthenticatorTransport[] = [
+  'usb',
+  'nfc',
+  'ble',
+  'hybrid',
+  'internal',
+]
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,78 +24,144 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { credential } = await request.json()
+    if (!credential) {
+      return NextResponse.json({ error: 'Credential is required' }, { status: 400 })
+    }
+
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
       select: {
         id: true,
         mfaEnabled: true,
         mfaMethod: true,
+        tempMfaSecret: true,
+        tempMfaExpires: true,
         webAuthnCredentials: {
           select: {
-            credentialId: true,     // base64url string
-            transports: true,       // string[]
+            id: true,
+            credentialId: true,
+            publicKey: true,    // Buffer | Uint8Array
+            counter: true,
+            transports: true,   // string[]
           },
         },
       },
     })
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-    if (!user.mfaEnabled || user.mfaMethod !== 'security_key') {
-      return NextResponse.json({ error: 'WebAuthn not enabled for this user' }, { status: 400 })
-    }
-    if (user.webAuthnCredentials.length === 0) {
-      return NextResponse.json({ error: 'No WebAuthn credentials found' }, { status: 400 })
+    if (
+      !user ||
+      !user.mfaEnabled ||
+      user.mfaMethod !== 'security_key' ||
+      !user.tempMfaSecret ||
+      (user.tempMfaExpires && new Date() > user.tempMfaExpires)
+    ) {
+      return NextResponse.json(
+        { error: 'WebAuthn not enabled or challenge missing/expired' },
+        { status: 400 }
+      )
     }
 
-    const rpID =
-      process.env.NODE_ENV === 'production'
-        ? process.env.WEBAUTHN_RP_ID || 'the-everything-assistant.vercel.app'
-        : 'localhost'
+    const stored = user.webAuthnCredentials.find((c) => c.credentialId === credential.id)
+    if (!stored) {
+      await logSecurityEvent(
+        user.id,
+        'MFA_WEBAUTHN_AUTH_FAILED',
+        {
+          method: user.mfaMethod,
+          credentialId: credential.id,
+          reason: 'no_matching_credential',
+        },
+        request
+      )
+      return NextResponse.json({ error: 'No matching credential found' }, { status: 400 })
+    }
 
-    const allowCredentials: PublicKeyCredentialDescriptor[] = user.webAuthnCredentials.map(
-      (cred) => ({
-        id: Buffer.from(cred.credentialId, 'base64url'),
-        type: 'public-key',
-        transports: (
-          cred.transports.length > 0
-            ? cred.transports
-            : ['usb', 'nfc', 'ble', 'hybrid', 'internal']
-        ) as AuthenticatorTransportFuture[],
+    const credentialPublicKey = Buffer.isBuffer(stored.publicKey)
+      ? stored.publicKey
+      : Buffer.from(stored.publicKey)
+
+    const prevCounter = typeof stored.counter === 'bigint'
+      ? Number(stored.counter)
+      : stored.counter
+
+    const formattedResponse = {
+      id: credential.id,
+      rawId: credential.rawId,
+      type: credential.type,
+      response: {
+        authenticatorData: credential.response.authenticatorData,
+        clientDataJSON: credential.response.clientDataJSON,
+        signature: credential.response.signature,
+        userHandle: credential.response.userHandle,
+      },
+      clientExtensionResults: credential.clientExtensionResults || {},
+    }
+
+    // Filter transports down to the spec-defined set
+    const filteredTransports: AuthenticatorTransport[] =
+      stored.transports.filter((t): t is AuthenticatorTransport =>
+        VALID_TRANSPORTS.includes(t as AuthenticatorTransport)
+      )
+    const transportsToUse = filteredTransports.length
+      ? filteredTransports
+      : VALID_TRANSPORTS
+
+    const verificationOpts: VerifyAuthenticationResponseOpts = {
+      response: formattedResponse,
+      expectedChallenge: user.tempMfaSecret,
+      expectedOrigin:
+        process.env.NODE_ENV === 'production'
+          ? process.env.WEBAUTHN_ORIGIN!
+          : 'http://localhost:3000',
+      expectedRPID:
+        process.env.NODE_ENV === 'production'
+          ? process.env.WEBAUTHN_RP_ID!
+          : 'localhost',
+      credential: {
+        id: stored.credentialId,
+        publicKey: credentialPublicKey,
+        counter: prevCounter,
+        transports: transportsToUse,
+      },
+      requireUserVerification: false,
+    }
+
+    const verification = await verifyAuthenticationResponse(verificationOpts)
+    if (!verification.verified) {
+      await logSecurityEvent(
+        user.id,
+        'MFA_WEBAUTHN_AUTH_FAILED',
+        { method: user.mfaMethod, credentialId: stored.credentialId, reason: 'verification_failed' },
+        request
+      )
+      return NextResponse.json({ error: 'WebAuthn authentication failed' }, { status: 400 })
+    }
+
+    if (verification.authenticationInfo?.newCounter !== undefined) {
+      await prisma.webAuthnCredential.update({
+        where: { id: stored.id },
+        data: {
+          counter: BigInt(verification.authenticationInfo.newCounter),
+          lastUsedAt: new Date(),
+        },
       })
-    )
-
-    const options = generateAuthenticationOptions({
-      rpID,
-      allowCredentials,
-      userVerification: 'preferred',
-      timeout: 300_000,
-    })
-
-    console.log('Generated WebAuthn authentication options:', {
-      userVerification: options.userVerification,
-      allowCredentials: options.allowCredentials?.map((c) => ({
-        id:
-          c.id instanceof ArrayBuffer
-            ? '[ArrayBuffer]'
-            : (c.id as Buffer).toString('base64url').slice(0, 10) + '…',
-        transports: c.transports,
-      })),
-      timeout: options.timeout,
-    })
+    }
 
     await prisma.user.update({
       where: { id: user.id },
-      data: {
-        tempMfaSecret: options.challenge,
-        tempMfaExpires: new Date(Date.now() + 5 * 60 * 1000),
-      },
+      data: { tempMfaSecret: null, tempMfaExpires: null },
     })
 
-    return NextResponse.json(options)
-  } catch (error) {
-    console.error('WebAuthn authentication options error:', error)
+    await logSecurityEvent(
+      user.id,
+      'MFA_WEBAUTHN_AUTH_SUCCESS',
+      { method: user.mfaMethod, credentialId: stored.credentialId },
+      request
+    )
+    return NextResponse.json({ success: true, message: 'WebAuthn authentication successful' })
+  } catch (err: any) {
+    console.error('🔐 WebAuthn authentication error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

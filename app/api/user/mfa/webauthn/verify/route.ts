@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
       select: {
         id: true,
         tempMfaMethod: true,
-        tempMfaSecret: true, // This contains the challenge
+        tempMfaSecret: true,
         tempMfaExpires: true,
       },
     })
@@ -46,7 +46,6 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      // Log the credential structure for debugging
       console.log('Received credential structure:', {
         id: credential.id,
         type: credential.type,
@@ -65,7 +64,7 @@ export async function POST(request: NextRequest) {
         expectedRPID: process.env.NODE_ENV === 'production' 
           ? process.env.WEBAUTHN_RP_ID || 'the-everything-assistant.vercel.app' 
           : 'localhost',
-        requireUserVerification: false, // Keep false for compatibility
+        requireUserVerification: false,
       } as VerifyRegistrationResponseOpts)
 
       if (!verification.verified || !verification.registrationInfo) {
@@ -80,22 +79,30 @@ export async function POST(request: NextRequest) {
 
       const registrationInfo = verification.registrationInfo
       const webauthnCredential = registrationInfo.credential
-      const credentialID = webauthnCredential.id
       const credentialPublicKey = webauthnCredential.publicKey
       const signatureCounter = webauthnCredential.counter
 
-      // Convert Uint8Array to base64url for consistent storage and retrieval
-      const credentialIdBase64url = Buffer.from(credentialID).toString('base64url')
+      const credentialIdBase64url = credential.id
 
       const backupCodes = generateBackupCodes()
       const hashedBackupCodes = hashBackupCodes(backupCodes)
+
+      await prisma.webAuthnCredential.create({
+        data: {
+          userId: user.id,
+          credentialId: credentialIdBase64url,
+          publicKey: Buffer.from(credentialPublicKey),
+          counter: BigInt(signatureCounter),
+          transports: ['usb', 'nfc', 'ble', 'hybrid', 'internal'],
+          name: 'Security Key',
+        },
+      })
 
       await prisma.user.update({
         where: { id: user.id },
         data: {
           mfaEnabled: true,
           mfaMethod: method,
-          mfaSecret: credentialIdBase64url,
           tempMfaSecret: null,
           tempMfaMethod: null,
           tempMfaExpires: null,

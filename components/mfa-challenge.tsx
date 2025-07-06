@@ -236,9 +236,11 @@ export function MFAChallenge() {
 
   if (!mfaStatus) {
     return (
-      <div className="min-h-screen bg-transparent flex items-center justify-center p-4">
-        <div className="text-4xl font-light text-white drop-shadow-lg">
-          the everything assistant
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="text-center">
+          <div className="text-4xl font-light text-white drop-shadow-lg">
+            the everything assistant
+          </div>
         </div>
       </div>
     )

@@ -66,6 +66,7 @@ model User {
   securityLogs SecurityLog[]
   memories     Memory[]
   memorySettings MemorySettings?
+  webAuthnCredentials WebAuthnCredential[]
 
   @@index([email])
   @@map("users")
@@ -208,6 +209,23 @@ model StreamId {
   
   @@index([chatId, createdAt])
   @@map("stream_ids")
+}
+
+model WebAuthnCredential {
+  id           String   @id @default(cuid())
+  userId       String
+  credentialId String   @unique
+  publicKey    Bytes
+  counter      BigInt
+  transports   String[] @default([])
+  name         String?
+  createdAt    DateTime @default(now())
+  lastUsedAt   DateTime?
+  
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@map("webauthn_credentials")
 }
 
 model Broadcast {

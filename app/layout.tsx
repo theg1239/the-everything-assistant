@@ -212,8 +212,10 @@ export default async function RootLayout({
             <QueryProvider>
               <MemoryProvider>
                 <SidebarProvider>
-                  <SidebarWrapper />
-                  <MFAGate>{children}</MFAGate>
+                  <MFAGate>
+                    <SidebarWrapper />
+                    {children}
+                  </MFAGate>
                 </SidebarProvider>
               </MemoryProvider>
             </QueryProvider>

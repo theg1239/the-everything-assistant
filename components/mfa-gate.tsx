@@ -10,6 +10,8 @@ function MFAGateInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const { requiresMFA, isMFAVerified, isCheckingMFA } = useMFA()
 
+  const showMFAChallenge = requiresMFA && !isMFAVerified && session?.user && pathname !== '/login'
+
   if (status === 'loading' || isCheckingMFA) {
     return (
       <div className="fixed inset-0 flex items-center justify-center p-4 z-10">
@@ -30,8 +32,12 @@ function MFAGateInner({ children }: { children: React.ReactNode }) {
     return <>{children}</>
   }
 
-  if (requiresMFA && !isMFAVerified) {
-    return <MFAChallenge />
+  if (showMFAChallenge) {
+    return (
+      <div className="fixed inset-0 z-50">
+        <MFAChallenge />
+      </div>
+    )
   }
 
   return <>{children}</>

@@ -20,11 +20,38 @@ class KnowledgeBase {
     try {
       await this.createTables()
       await this.migrateVectorDimensions()
+      await this.migrateVideoColumn() // Add video column migration
       await this.createIndexes()
       logger.info('Knowledge base initialized successfully')
     } catch (error) {
       logger.error('Error initializing knowledge base:', error)
       throw error
+    }
+  }
+
+  async migrateVideoColumn() {
+    try {
+      // Check if video column exists
+      const checkVideoColumnSQL = `
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'reddit_posts' 
+          AND column_name = 'video'
+      `
+      
+      const result = await this.pool.query(checkVideoColumnSQL)
+      
+      if (result.rows.length === 0) {
+        logger.info('Adding video column to reddit_posts table...')
+        const addVideoColumnSQL = `
+          ALTER TABLE reddit_posts 
+          ADD COLUMN video JSONB;
+        `
+        await this.pool.query(addVideoColumnSQL)
+        logger.info('Video column migration completed successfully')
+      }
+    } catch (error) {
+      logger.error('Error during video column migration:', error)
     }
   }
 
@@ -98,7 +125,9 @@ class KnowledgeBase {
         is_video BOOLEAN DEFAULT FALSE,
         post_type VARCHAR(20),
         images JSONB,
-        extracted_text TEXT,        tags TEXT[],
+        video JSONB, -- Store video data and analysis
+        extracted_text TEXT,
+        tags TEXT[],
         embedding vector(768),
         processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -214,17 +243,18 @@ class KnowledgeBase {
         INSERT INTO reddit_posts (
           reddit_id, subreddit, title, content, author, created_utc,
           upvotes, downvotes, score, num_comments, url, permalink,
-          is_video, post_type, images, extracted_text, tags, embedding
+          is_video, post_type, images, video, extracted_text, tags, embedding
         ) VALUES (
           $1, $2, $3, $4, $5, $6,
           $7, $8, $9, $10, $11, $12,
-          $13, $14, $15, $16, $17, $18
+          $13, $14, $15, $16, $17, $18, $19
         )
         ON CONFLICT (reddit_id) DO UPDATE SET
           upvotes     = EXCLUDED.upvotes,
           downvotes   = EXCLUDED.downvotes,
           score       = EXCLUDED.score,
           num_comments= EXCLUDED.num_comments,
+          video       = EXCLUDED.video,
           updated_at  = CURRENT_TIMESTAMP
         RETURNING id
       `
@@ -244,6 +274,7 @@ class KnowledgeBase {
         postData.is_video,
         postData.post_type,
         JSON.stringify(postData.images),
+        JSON.stringify(postData.video || null), // Store video data as JSON
         postData.extracted_text,
         postData.tags,
         `[${embedding.join(',')}]`,
@@ -464,6 +495,7 @@ class KnowledgeBase {
           'post' AS type,
           reddit_id, subreddit, title, content, author,
           score, upvotes, created_utc, url, tags,
+          is_video, post_type, images, video,
           1 - (embedding <=> $1) AS similarity
         FROM reddit_posts
         WHERE embedding IS NOT NULL AND embedding <=> $1 < $2
@@ -475,6 +507,7 @@ class KnowledgeBase {
           'comment' AS type,
           reddit_id, subreddit, content AS title, content,
           author, score, upvotes, created_utc, NULL AS url, tags,
+          false AS is_video, 'comment' AS post_type, NULL AS images, NULL AS video,
           1 - (embedding <=> $1) AS similarity
         FROM reddit_comments
         WHERE embedding IS NOT NULL AND embedding <=> $1 < $2
@@ -489,6 +522,7 @@ class KnowledgeBase {
           NULL AS author, relevance_score AS score,
           0 AS upvotes, created_at AS created_utc,
           NULL AS url, ARRAY[]::text[] AS tags,
+          false AS is_video, 'chunk' AS post_type, NULL AS images, NULL AS video,
           1 - (embedding <=> $1) AS similarity
         FROM knowledge_chunks
         WHERE embedding IS NOT NULL AND embedding <=> $1 < $2
@@ -543,6 +577,7 @@ class KnowledgeBase {
           'post' AS type,
           reddit_id, subreddit, title, content, author,
           score, upvotes, created_utc, url, tags,
+          is_video, post_type, images, video,
           ts_rank(to_tsvector('english', COALESCE(title, '') || ' ' || COALESCE(content, '')), to_tsquery('english', $1)) AS similarity
         FROM reddit_posts
         WHERE to_tsvector('english', COALESCE(title, '') || ' ' || COALESCE(content, '')) @@ to_tsquery('english', $1)
@@ -554,6 +589,7 @@ class KnowledgeBase {
           'comment' AS type,
           reddit_id, subreddit, LEFT(content, 100) AS title, content,
           author, score, upvotes, created_utc, NULL AS url, tags,
+          false AS is_video, 'comment' AS post_type, NULL AS images, NULL AS video,
           ts_rank(to_tsvector('english', content), to_tsquery('english', $1)) AS similarity
         FROM reddit_comments
         WHERE to_tsvector('english', content) @@ to_tsquery('english', $1)
@@ -583,6 +619,7 @@ class KnowledgeBase {
           'post' AS type,
           reddit_id, subreddit, title, content, author,
           score, upvotes, created_utc, url, tags,
+          is_video, post_type, images, video,
           0.5 AS similarity
         FROM reddit_posts
         WHERE title ILIKE $1 OR content ILIKE $1
@@ -591,6 +628,7 @@ class KnowledgeBase {
           'comment' AS type,
           reddit_id, subreddit, LEFT(content, 100) AS title, content,
           author, score, upvotes, created_utc, NULL AS url, tags,
+          false AS is_video, 'comment' AS post_type, NULL AS images, NULL AS video,
           0.4 AS similarity
         FROM reddit_comments
         WHERE content ILIKE $1

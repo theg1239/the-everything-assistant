@@ -59,6 +59,20 @@ app.post('/api/search', async (req, res) => {
         similarity: r.similarity,
         url: r.url,
         created: r.created_utc,
+        is_video: r.is_video,
+        post_type: r.post_type,
+        video: r.video ? {
+          url: r.video.url,
+          analysis: r.video.analysis ? {
+            description: r.video.analysis.description,
+            educational_content: r.video.analysis.educational_content,
+            student_relevance: r.video.analysis.student_relevance,
+            content_type: r.video.analysis.content_type,
+            summary: r.video.analysis.summary,
+            context_alignment: r.video.analysis.context_alignment
+          } : null
+        } : null,
+        images: r.images
       })),
       totalResults: searchResults.length,
       query,
@@ -119,6 +133,12 @@ app.get('/api/stats', async (req, res) => {
     const embeddingCountResult = await knowledgeBase.pool.query(
       'SELECT COUNT(*) FROM reddit_posts WHERE embedding IS NOT NULL'
     )
+    const videoCountResult = await knowledgeBase.pool.query(
+      'SELECT COUNT(*) FROM reddit_posts WHERE is_video = true'
+    )
+    const videoWithAnalysisResult = await knowledgeBase.pool.query(
+      'SELECT COUNT(*) FROM reddit_posts WHERE is_video = true AND video IS NOT NULL'
+    )
     const subredditStats = await knowledgeBase.pool.query(`
       SELECT subreddit, COUNT(*) AS post_count
       FROM reddit_posts
@@ -132,6 +152,8 @@ app.get('/api/stats', async (req, res) => {
         totalPosts: parseInt(postCountResult.rows[0].count, 10),
         totalComments: parseInt(commentCountResult.rows[0].count, 10),
         postsWithEmbeddings: parseInt(embeddingCountResult.rows[0].count, 10),
+        totalVideos: parseInt(videoCountResult.rows[0].count, 10),
+        videosWithAnalysis: parseInt(videoWithAnalysisResult.rows[0].count, 10),
         subreddits: subredditStats.rows,
       },
     })
@@ -200,6 +222,84 @@ app.post('/api/compare', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Internal server error during comparison',
+      message: error.message,
+    })
+  }
+})
+
+app.post('/api/search/videos', async (req, res) => {
+  try {
+    const { query, limit = 10 } = req.body
+    if (!query || typeof query !== 'string' || !query.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Query is required and must be a non-empty string',
+      })
+    }
+
+    console.log(`Video search request: "${query}"`)
+    
+    const videosQuery = `
+      SELECT 
+        'post' AS type, reddit_id, subreddit, title, content, author,
+        score, upvotes, created_utc, url, tags, is_video, post_type, 
+        images, video,
+        1 - (embedding <=> $1) AS similarity
+      FROM reddit_posts 
+      WHERE is_video = true 
+        AND video IS NOT NULL 
+        AND embedding IS NOT NULL
+        AND embedding <=> $1 < $2
+      ORDER BY similarity DESC, score DESC
+      LIMIT $3
+    `
+
+    const queryEmbedding = await knowledgeBase.generateEmbedding(query)
+    const result = await knowledgeBase.pool.query(videosQuery, [
+      `[${queryEmbedding.join(',')}]`,
+      1 - knowledgeBase.similarityThreshold,
+      limit
+    ])
+
+    res.json({
+      success: true,
+      results: result.rows.map(r => ({
+        type: r.type,
+        title: r.title,
+        content: r.content?.substring(0, 300) + (r.content?.length > 300 ? '...' : ''),
+        subreddit: r.subreddit,
+        author: r.author,
+        score: r.score,
+        upvotes: r.upvotes,
+        similarity: parseFloat(r.similarity.toFixed(3)),
+        url: r.url,
+        created: r.created_utc,
+        is_video: r.is_video,
+        post_type: r.post_type,
+        video: r.video ? {
+          url: r.video.url,
+          poster: r.video.poster,
+          analysis: r.video.analysis ? {
+            description: r.video.analysis.description,
+            educational_content: r.video.analysis.educational_content,
+            visible_text: r.video.analysis.visible_text,
+            key_topics: r.video.analysis.key_topics,
+            student_relevance: r.video.analysis.student_relevance,
+            content_type: r.video.analysis.content_type,
+            summary: r.video.analysis.summary,
+            context_alignment: r.video.analysis.context_alignment,
+            frames_analyzed: r.video.analysis.frames_analyzed
+          } : null
+        } : null
+      })),
+      totalResults: result.rows.length,
+      query,
+    })
+  } catch (error) {
+    console.error('Video search API error:', error)
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error during video search',
       message: error.message,
     })
   }

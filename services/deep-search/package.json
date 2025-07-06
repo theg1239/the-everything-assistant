@@ -8,6 +8,8 @@
     "dev": "nodemon index.js",
     "scrape": "node cli.js scrape",
     "test": "node test-service.js",
+    "test:video": "node test-video-analysis.js",
+    "test:schema": "node test-zod-schema.js",
     "cli": "node cli.js",
     "init": "node cli.js init",
     "stats": "node cli.js stats",

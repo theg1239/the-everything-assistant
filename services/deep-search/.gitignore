@@ -40,6 +40,16 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+*.tmp
+
+# Video analysis temporary files
+temp/videos/*.mp4
+temp/videos/*.avi
+temp/videos/*.mov
+temp/videos/*.webm
+temp/videos/frames/*.jpg
+temp/videos/frames/*.png
+temp/videos/frames/*.jpeg
 
 # Database
 *.db

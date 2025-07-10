@@ -925,6 +925,13 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           .describe('Course code or title to filter faculty who teach a specific course.'),
       }),
       execute: async ({ department, facultyName, includeCourses = false, school, courseQuery }) => {
+        // if (!department && !facultyName) {
+        //   return {
+        //     success: false,
+        //     requiresFilter: true,
+        //     message: 'Please specify at least a department or facultyName to filter faculty results.',
+        //   }
+        // }
         try {
           const res = await fetch(
             typeof window === 'undefined'
@@ -942,14 +949,12 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             const school = schools[i]
             const schoolName = school.school
             const departments = school.departments || []
-            // If deptFilter matches the school name, include all departments
             let schoolMatches = false
             if (deptFilter && schoolName && matchesDepartment(schoolName, deptFilter)) {
               schoolMatches = true
             }
             for (let j = 0; j < departments.length; ++j) {
               const dept = departments[j]
-              // If school matched, include all departments
               if (schoolMatches) {
                 const facultyArr = dept.faculty || []
                 for (let k = 0; k < facultyArr.length; ++k) {
@@ -985,7 +990,6 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                   } else if (facultyFilter && !faculty.name) {
                     continue
                   }
-                  // Course filtering logic
                   let facultyEntry: any = {
                     name: faculty.name,
                     department: faculty.department || schoolName,
@@ -997,7 +1001,6 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                   }
                   let teachesCourse = true
                   if (courseFilter) {
-                    // Only include faculty who teach the course
                     const schoolAcronym = (() => {
                       const match = schoolName.match(/\(([^)]+)\)/)
                       if (match && match[1]) {
@@ -1212,8 +1215,6 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             }
           }
 
-          // If we found exactly one faculty member and no course filter was applied,
-          // automatically fetch their courses
           if (results.length === 1 && !courseQuery && !includeCourses) {
             const faculty = results[0]
             const schoolAcronym = (() => {
@@ -1249,7 +1250,6 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                   type: course.TYPE,
                 }))
 
-                // Update the message to indicate courses were automatically included
                 return {
                   success: true,
                   total: 1,
@@ -1261,7 +1261,6 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 }
               } catch (error) {
                 console.error('Error fetching courses for faculty:', error)
-                // Continue with normal response if course fetch fails
               }
             }
           }

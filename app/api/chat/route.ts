@@ -604,9 +604,9 @@ CRITICAL TOOL CONTINUATION RULES:
       return message
     })
 
-    const resultStream = await rateLimitedAI.google.streamText(
+    const resultStream = await rateLimitedAI.cerebras.streamText(
       {
-        model: await rateLimitedAI.google.model('gemini-2.5-pro'),
+        model: await rateLimitedAI.cerebras.model(),
         messages: [{ role: 'system', content: combinedSystemPrompt }, ...enhancedMessages],
         tools,
         temperature: 0.7,

@@ -13,7 +13,27 @@ class RAGService {
     try {
       logger.info(`Generating RAG response for query: "${query}"`)
 
-      const searchResults = await this.knowledgeBase.search(query, 40)
+      const facultyPattern = /(?:professor|prof\.?|dr\.?|teacher)\s+([A-Z][a-z]+)/g;
+      const facultyNames = [];
+      let match;
+      while ((match = facultyPattern.exec(query)) !== null) {
+        facultyNames.push(match[1]);
+      }
+      let searchResults = [];
+      if (facultyNames.length > 0) {
+        for (const name of facultyNames) {
+          logger.info(`Detected faculty-specific query for "${name}", performing focused search.`);
+          const facultyResults = await this.knowledgeBase.search(name, 40);
+          if (facultyResults.length > 0) {
+            searchResults = facultyResults;
+            break;
+          }
+        }
+      }
+      // If no faculty-specific results found, do general search
+      if (searchResults.length === 0) {
+        searchResults = await this.knowledgeBase.search(query, 40);
+      }
 
       if (searchResults.length === 0) {
         logger.info('No direct results found, trying broader search...')
@@ -296,7 +316,7 @@ CRITICAL RULES:
 - Use proper HTML tags, NOT markdown
 - Try to not omit anything important from the context
 - Do not hallucinate usernames or upvote counts, if you do not have them, don't include them
-- When you're talking about posts, don't just say stuff like "the first post says this" and all that, instead, use the actual content of the post, but keep it elaborated and concise
+- When you're talking about posts, don't just say stuff like "the first post says this" and all that, use the actual content of the post, but keep it elaborated and concise
 
 Context: ${context}`
 

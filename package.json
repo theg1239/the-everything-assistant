@@ -28,6 +28,7 @@
     "test:performance:seed": "tsx scripts/test-performance.ts seed"
   },
   "dependencies": {
+    "@ai-sdk/cerebras": "^0.2.15",
     "@ai-sdk/google": "latest",
     "@ai-sdk/groq": "latest",
     "@dqbd/tiktoken": "^1.0.21",

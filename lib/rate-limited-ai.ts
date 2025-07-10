@@ -1,5 +1,6 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google' // Google provider
 import { createGroq } from '@ai-sdk/groq' // Groq provider
+import { cerebras, createCerebras } from '@ai-sdk/cerebras' // Cerebras provider
 import { ApiKeyManager, ApiKeyConfig, DEFAULT_API_KEY_CONFIG } from './api-key-manager'
 import { UserRateLimiter, UserRateLimitConfig, loadUserRateLimitConfig } from './user-rate-limiter'
 import {
@@ -13,7 +14,7 @@ import {
 } from 'ai'
 import type { EmbeddingModel } from 'ai'
 
-type Provider = 'google' | 'groq'
+type Provider = 'google' | 'groq' | 'cerebras'
 
 export class RateLimitedAI {
   private apiKeyManager: ApiKeyManager
@@ -84,6 +85,25 @@ export class RateLimitedAI {
       if (keys.length === 0) {
         throw new Error('No Groq API keys found. Please set GROQ_API_KEY or GROQ_API_KEYS.')
       }
+      if (this.provider === 'cerebras') {
+        if (process.env.CEREBRAS_API_KEY) {
+          keys.push(process.env.CEREBRAS_API_KEY)
+        }
+        for (let i = 2; i <= 10; i++) {
+          const k = process.env[`CEREBRAS_API_KEY_${i}`]
+          if (k) keys.push(k)
+        }
+        if (keys.length === 0 && process.env.CEREBRAS_API_KEYS) {
+          keys.push(
+            ...process.env.CEREBRAS_API_KEYS.split(',')
+              .map(x => x.trim())
+              .filter(Boolean)
+          )
+        }
+        if (keys.length === 0) {
+          throw new Error('No Cerebras API keys found. Please set CEREBRAS_API_KEY or CEREBRAS_API_KEYS.')
+        }
+      }
     }
 
     console.log(`Loaded ${keys.length} ${this.provider} API key(s)`)
@@ -94,7 +114,10 @@ export class RateLimitedAI {
     if (this.provider === 'google') {
       return createGoogleGenerativeAI({ apiKey })
     }
-    return createGroq({ apiKey })
+    if (this.provider === 'groq') {
+      return createGroq({ apiKey })
+    }
+    return createCerebras({ apiKey })
   }
 
   getModel(modelName: string) {
@@ -297,6 +320,24 @@ export const rateLimitedAI = {
     updateUserConfig: (c: any) => getRateLimitedAI('groq').updateUserConfig(c),
     getFullStatus: (u?: string) => getRateLimitedAI('groq').getFullStatus(u),
   },
+  cerebras: {
+    model: (n = 'llama-3.3-70b') => getModel('cerebras', n),
+    embedding: (n = 'text-embedding-004') => getEmbeddingModel('google', n),
+    streamText: (o: any, u?: string) => getRateLimitedAI('cerebras').streamText(o, u),
+    generateText: (o: any, u?: string) => getRateLimitedAI('cerebras').generateText(o, u),
+    generateObject: (o: any, u?: string) => getRateLimitedAI('cerebras').generateObject(o, u),
+    embed: (o: any, u?: string) => getRateLimitedAI('cerebras').embed(o, u),
+    getUsageStats: () => getRateLimitedAI('cerebras').getUsageStats(),
+    rotateKey: () => getRateLimitedAI('cerebras').rotateKey(),
+    resetRateLimits: () => getRateLimitedAI('cerebras').resetRateLimits(),
+    updateConfig: (c: Partial<ApiKeyConfig>) => getRateLimitedAI('cerebras').updateConfig(c),
+    getUserUsageStats: (u: string) => getRateLimitedAI('cerebras').getUserUsageStats(u),
+    checkUserRateLimit: (u: string) => getRateLimitedAI('cerebras').checkUserRateLimit(u),
+    resetUserRateLimits: (u: string) => getRateLimitedAI('cerebras').resetUserRateLimits(u),
+    getUserConfig: () => getRateLimitedAI('cerebras').getUserConfig(),
+    updateUserConfig: (c: any) => getRateLimitedAI('cerebras').updateUserConfig(c),
+    getFullStatus: (u?: string) => getRateLimitedAI('cerebras').getFullStatus(u),
+  }
 }
 
 export default rateLimitedAI

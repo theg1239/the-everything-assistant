@@ -198,21 +198,111 @@ class KnowledgeBase {
         ON reddit_comments USING ivfflat (embedding vector_cosine_ops);
       CREATE INDEX IF NOT EXISTS idx_chunks_embedding
         ON knowledge_chunks USING ivfflat (embedding vector_cosine_ops);
-      
-      -- Regular indexes
-      CREATE INDEX IF NOT EXISTS idx_posts_subreddit ON reddit_posts(subreddit);
-      CREATE INDEX IF NOT EXISTS idx_posts_score ON reddit_posts(score);
-      CREATE INDEX IF NOT EXISTS idx_posts_created ON reddit_posts(created_utc);
-      CREATE INDEX IF NOT EXISTS idx_posts_tags ON reddit_posts USING GIN(tags);
-      
-      CREATE INDEX IF NOT EXISTS idx_comments_subreddit ON reddit_comments(subreddit);
-      CREATE INDEX IF NOT EXISTS idx_comments_score ON reddit_comments(score);
-      CREATE INDEX IF NOT EXISTS idx_comments_post ON reddit_comments(post_reddit_id);
-      
-      CREATE INDEX IF NOT EXISTS idx_chunks_subreddit ON knowledge_chunks(subreddit);
-      CREATE INDEX IF NOT EXISTS idx_chunks_source ON knowledge_chunks(source_type, source_id);
     `
     await this.pool.query(indexesSQL)
+  }
+
+  async upsertRedditPost(post) {
+    const {
+      id: reddit_id,
+      subreddit,
+      title,
+      selftext: content,
+      author,
+      created_utc,
+      ups: upvotes = 0,
+      downs: downvotes = 0,
+      score = 0,
+      num_comments = 0,
+      url,
+      permalink,
+      is_video = false,
+      preview,
+      media = null,
+    } = post
+
+    const images = preview?.images?.map(img => img.source.url) || []
+    const imagesJson = JSON.stringify(images)
+    const videoJson = JSON.stringify(media)
+
+    const insertSQL = `
+      INSERT INTO reddit_posts
+        (reddit_id, subreddit, title, content, author, created_utc, upvotes, downvotes, score, num_comments, url, permalink, is_video, images, video, extracted_text)
+      VALUES
+        ($1, $2, $3, $4, $5, to_timestamp($6), $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      ON CONFLICT (reddit_id) DO UPDATE SET
+        content = EXCLUDED.content,
+        upvotes = EXCLUDED.upvotes,
+        downvotes = EXCLUDED.downvotes,
+        score = EXCLUDED.score,
+        num_comments = EXCLUDED.num_comments,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING id;
+    `
+    const values = [
+      reddit_id,
+      subreddit,
+      title,
+      content,
+      author,
+      created_utc,
+      upvotes,
+      downvotes,
+      score,
+      num_comments,
+      url,
+      permalink,
+      is_video,
+      imagesJson,
+      videoJson,
+      `${title}\n\n${content}`
+    ]
+    const res = await this.pool.query(insertSQL, values)
+    return res.rows[0].id
+  }
+
+  // Add or update a Reddit comment in the database
+  async upsertRedditComment(comment) {
+    const {
+      id: reddit_id,
+      link_id,
+      parent_id,
+      body: content,
+      author,
+      created_utc,
+      ups: upvotes = 0,
+      downs: downvotes = 0,
+      score = 0,
+    } = comment
+
+    const postRedditId = link_id.split('_')[1]
+    const parentCommentId = parent_id && parent_id.startsWith('t1_') ? parent_id.split('_')[1] : null
+
+    const insertSQL = `
+      INSERT INTO reddit_comments
+        (reddit_id, post_reddit_id, parent_comment_id, subreddit, author, content, created_utc, upvotes, downvotes, score)
+      VALUES
+        ($1, $2, $3, (SELECT subreddit FROM reddit_posts WHERE reddit_id = $2), $4, $5, to_timestamp($6), $7, $8, $9)
+      ON CONFLICT (reddit_id) DO UPDATE SET
+        content = EXCLUDED.content,
+        upvotes = EXCLUDED.upvotes,
+        downvotes = EXCLUDED.downvotes,
+        score = EXCLUDED.score
+      RETURNING id;
+    `
+    const values = [
+      reddit_id,
+      postRedditId,
+      parentCommentId,
+      author,
+      content,
+      created_utc,
+      upvotes,
+      downvotes,
+      score
+    ]
+    const res = await this.pool.query(insertSQL, values)
+    return res.rows[0].id
   }
 
   async storePost(postData) {

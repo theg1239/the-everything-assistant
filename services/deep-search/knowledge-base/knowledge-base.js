@@ -229,7 +229,7 @@ class KnowledgeBase {
       INSERT INTO reddit_posts
         (reddit_id, subreddit, title, content, author, created_utc, upvotes, downvotes, score, num_comments, url, permalink, is_video, images, video, extracted_text)
       VALUES
-        ($1, $2, $3, $4, $5, to_timestamp($6), $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        ($1, $2, $3, $4, $5, to_timestamp($6), $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       ON CONFLICT (reddit_id) DO UPDATE SET
         content = EXCLUDED.content,
         upvotes = EXCLUDED.upvotes,
@@ -267,6 +267,7 @@ class KnowledgeBase {
       id: reddit_id,
       link_id,
       parent_id,
+      subreddit,
       body: content,
       author,
       created_utc,
@@ -282,7 +283,7 @@ class KnowledgeBase {
       INSERT INTO reddit_comments
         (reddit_id, post_reddit_id, parent_comment_id, subreddit, author, content, created_utc, upvotes, downvotes, score)
       VALUES
-        ($1, $2, $3, (SELECT subreddit FROM reddit_posts WHERE reddit_id = $2), $4, $5, to_timestamp($6), $7, $8, $9)
+        ($1, $2, $3, $4, $5, $6, to_timestamp($7), $8, $9, $10)
       ON CONFLICT (reddit_id) DO UPDATE SET
         content = EXCLUDED.content,
         upvotes = EXCLUDED.upvotes,
@@ -294,6 +295,7 @@ class KnowledgeBase {
       reddit_id,
       postRedditId,
       parentCommentId,
+      subreddit,
       author,
       content,
       created_utc,

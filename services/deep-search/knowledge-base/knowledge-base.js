@@ -38,9 +38,9 @@ class KnowledgeBase {
         WHERE table_name = 'reddit_posts' 
           AND column_name = 'video'
       `
-      
+
       const result = await this.pool.query(checkVideoColumnSQL)
-      
+
       if (result.rows.length === 0) {
         logger.info('Adding video column to reddit_posts table...')
         const addVideoColumnSQL = `
@@ -255,7 +255,7 @@ class KnowledgeBase {
       is_video,
       imagesJson,
       videoJson,
-      `${title}\n\n${content}`
+      `${title}\n\n${content}`,
     ]
     const res = await this.pool.query(insertSQL, values)
     return res.rows[0].id
@@ -277,7 +277,8 @@ class KnowledgeBase {
     } = comment
 
     const postRedditId = link_id.split('_')[1]
-    const parentCommentId = parent_id && parent_id.startsWith('t1_') ? parent_id.split('_')[1] : null
+    const parentCommentId =
+      parent_id && parent_id.startsWith('t1_') ? parent_id.split('_')[1] : null
 
     const insertSQL = `
       INSERT INTO reddit_comments
@@ -301,7 +302,7 @@ class KnowledgeBase {
       created_utc,
       upvotes,
       downvotes,
-      score
+      score,
     ]
     const res = await this.pool.query(insertSQL, values)
     return res.rows[0].id

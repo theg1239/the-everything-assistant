@@ -13,26 +13,26 @@ class RAGService {
     try {
       logger.info(`Generating RAG response for query: "${query}"`)
 
-      const facultyPattern = /(?:professor|prof\.?|dr\.?|teacher)\s+([A-Z][a-z]+)/g;
-      const facultyNames = [];
-      let match;
+      const facultyPattern = /(?:professor|prof\.?|dr\.?|teacher)\s+([A-Z][a-z]+)/g
+      const facultyNames = []
+      let match
       while ((match = facultyPattern.exec(query)) !== null) {
-        facultyNames.push(match[1]);
+        facultyNames.push(match[1])
       }
-      let searchResults = [];
+      let searchResults = []
       if (facultyNames.length > 0) {
         for (const name of facultyNames) {
-          logger.info(`Detected faculty-specific query for "${name}", performing focused search.`);
-          const facultyResults = await this.knowledgeBase.search(name, 40);
+          logger.info(`Detected faculty-specific query for "${name}", performing focused search.`)
+          const facultyResults = await this.knowledgeBase.search(name, 40)
           if (facultyResults.length > 0) {
-            searchResults = facultyResults;
-            break;
+            searchResults = facultyResults
+            break
           }
         }
       }
       // If no faculty-specific results found, do general search
       if (searchResults.length === 0) {
-        searchResults = await this.knowledgeBase.search(query, 40);
+        searchResults = await this.knowledgeBase.search(query, 40)
       }
 
       if (searchResults.length === 0) {

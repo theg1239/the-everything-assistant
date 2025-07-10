@@ -6,7 +6,6 @@ import { verifyTOTP, verifyBackupCode } from '@/lib/mfa'
 
 export async function POST(request: Request) {
   try {
-    // Skip BotID if disabled via env variable or in development mode
     if (process.env.DISABLE_BOTID !== 'true' && process.env.NODE_ENV !== 'development') {
       const verification = await checkBotId()
       if (verification.isBot) {
@@ -91,7 +90,6 @@ export async function POST(request: Request) {
           { status: 400 }
         )
       } else if (user.mfaMethod === 'security_key') {
-        // WebAuthn methods should use their own endpoints, not this one
         return NextResponse.json(
           { error: 'WebAuthn methods require authentication via their dedicated endpoints' },
           { status: 400 }

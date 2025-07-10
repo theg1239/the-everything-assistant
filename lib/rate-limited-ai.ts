@@ -101,7 +101,9 @@ export class RateLimitedAI {
           )
         }
         if (keys.length === 0) {
-          throw new Error('No Cerebras API keys found. Please set CEREBRAS_API_KEY or CEREBRAS_API_KEYS.')
+          throw new Error(
+            'No Cerebras API keys found. Please set CEREBRAS_API_KEY or CEREBRAS_API_KEYS.'
+          )
         }
       }
     }
@@ -337,7 +339,7 @@ export const rateLimitedAI = {
     getUserConfig: () => getRateLimitedAI('cerebras').getUserConfig(),
     updateUserConfig: (c: any) => getRateLimitedAI('cerebras').updateUserConfig(c),
     getFullStatus: (u?: string) => getRateLimitedAI('cerebras').getFullStatus(u),
-  }
+  },
 }
 
 export default rateLimitedAI

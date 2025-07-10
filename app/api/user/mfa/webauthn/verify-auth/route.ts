@@ -9,13 +9,7 @@ import {
   type AuthenticatorTransport,
 } from '@simplewebauthn/server'
 
-const VALID_TRANSPORTS: AuthenticatorTransport[] = [
-  'usb',
-  'nfc',
-  'ble',
-  'hybrid',
-  'internal',
-]
+const VALID_TRANSPORTS: AuthenticatorTransport[] = ['usb', 'nfc', 'ble', 'hybrid', 'internal']
 
 export async function POST(request: NextRequest) {
   // 1) Ensure user is signed in
@@ -43,9 +37,9 @@ export async function POST(request: NextRequest) {
         select: {
           id: true,
           credentialId: true,
-          publicKey: true,    // Buffer | Uint8Array
+          publicKey: true, // Buffer | Uint8Array
           counter: true,
-          transports: true,   // string[]
+          transports: true, // string[]
         },
       },
     },
@@ -86,9 +80,7 @@ export async function POST(request: NextRequest) {
     : Buffer.from(stored.publicKey)
 
   // 6) Normalize the counter
-  const prevCounter = typeof stored.counter === 'bigint'
-    ? Number(stored.counter)
-    : stored.counter
+  const prevCounter = typeof stored.counter === 'bigint' ? Number(stored.counter) : stored.counter
 
   // 7) Reconstruct the client's assertion object
   const formattedResponse = {
@@ -105,10 +97,9 @@ export async function POST(request: NextRequest) {
   }
 
   // 8) Filter transports down to the spec-defined set
-  const filteredTransports: AuthenticatorTransport[] =
-    stored.transports.filter((t): t is AuthenticatorTransport =>
-      VALID_TRANSPORTS.includes(t as AuthenticatorTransport)
-    )
+  const filteredTransports: AuthenticatorTransport[] = stored.transports.filter(
+    (t): t is AuthenticatorTransport => VALID_TRANSPORTS.includes(t as AuthenticatorTransport)
+  )
   const transportsToUse = filteredTransports.length ? filteredTransports : VALID_TRANSPORTS
 
   // 9) Build the VerifyAuthenticationResponseOpts
@@ -119,12 +110,9 @@ export async function POST(request: NextRequest) {
       process.env.NODE_ENV === 'production'
         ? process.env.WEBAUTHN_ORIGIN!
         : 'http://localhost:3000',
-    expectedRPID:
-      process.env.NODE_ENV === 'production'
-        ? process.env.WEBAUTHN_RP_ID!
-        : 'localhost',
+    expectedRPID: process.env.NODE_ENV === 'production' ? process.env.WEBAUTHN_RP_ID! : 'localhost',
     credential: {
-      id: stored.credentialId,      // base64url string
+      id: stored.credentialId, // base64url string
       publicKey: credentialPublicKey,
       counter: prevCounter,
       transports: transportsToUse,
@@ -140,7 +128,11 @@ export async function POST(request: NextRequest) {
       await logSecurityEvent(
         user.id,
         'MFA_WEBAUTHN_AUTH_FAILED',
-        { method: user.mfaMethod, credentialId: stored.credentialId, reason: 'verification_failed' },
+        {
+          method: user.mfaMethod,
+          credentialId: stored.credentialId,
+          reason: 'verification_failed',
+        },
         request
       )
       return NextResponse.json({ error: 'WebAuthn authentication failed' }, { status: 400 })

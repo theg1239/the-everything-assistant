@@ -4,7 +4,9 @@
 require('dotenv').config()
 const path = require('path')
 const fetch = global.fetch || require('node-fetch')
-const KnowledgeBase = require(path.join(__dirname, '..', 'services', 'deep-search', 'knowledge-base', 'knowledge-base'))
+const KnowledgeBase = require(
+  path.join(__dirname, '..', 'services', 'deep-search', 'knowledge-base', 'knowledge-base')
+)
 
 async function main() {
   const url = process.argv[2]
@@ -17,11 +19,11 @@ async function main() {
   const jsonUrl = url.endsWith('/') ? `${url}.json` : `${url}/.json`
 
   const kb = new KnowledgeBase()
-  await kb.initialize()   // create tables/indexes if needed
+  await kb.initialize() // create tables/indexes if needed
 
   console.log(`Fetching ${jsonUrl}…`)
   const res = await fetch(jsonUrl, {
-    headers: { 'User-Agent': 'KnowledgeBaseScraper/1.0' }
+    headers: { 'User-Agent': 'KnowledgeBaseScraper/1.0' },
   })
   if (!res.ok) {
     console.error('Fetch error:', res.status, res.statusText)

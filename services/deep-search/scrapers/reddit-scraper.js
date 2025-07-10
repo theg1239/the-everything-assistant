@@ -474,7 +474,7 @@ class RedditScraper {
                 } catch {}
               }
             }
-            
+
             // Look for shreddit-media-ui (another video player)
             const mediaUi = $post.find('shreddit-media-ui')
             if (mediaUi.length) {
@@ -487,14 +487,14 @@ class RedditScraper {
                 post.poster = poster
               }
             }
-            
+
             // Look for any video elements
             const videoEl = $post.find('video')
             if (videoEl.length && !post.videoSrc) {
               post.videoSrc = videoEl.attr('src')
               post.poster = videoEl.attr('poster')
             }
-            
+
             // If we still don't have a video source, check contentHref for v.redd.it
             if (!post.videoSrc && post.contentHref && post.contentHref.includes('v.redd.it')) {
               post.videoSrc = post.contentHref
@@ -555,9 +555,9 @@ class RedditScraper {
     try {
       const cleanId = postId.replace(/^t3_/, '')
       const url = `${this.baseUrl}/r/${subreddit}/comments/${cleanId}/`
-      
+
       logger.info(`Fetching specific post: ${url}`)
-      
+
       const response = await this.session.get(url, {
         headers: {
           Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -576,7 +576,7 @@ class RedditScraper {
       })
 
       const posts = this.parsePosts(response.data)
-      
+
       if (posts.length > 0) {
         const post = posts[0] // The specific post should be the first one
         logger.info(`Found specific post: ${post.title}`)
@@ -669,7 +669,7 @@ class RedditScraper {
         sentiment: z.enum(['positive', 'negative', 'neutral']).describe('Overall sentiment'),
         keywords: z.array(z.string()).describe('Important keywords'),
         summary: z.string().describe('Brief summary'),
-        relevance: z.enum(['high', 'medium', 'low']).describe('Relevance to students')
+        relevance: z.enum(['high', 'medium', 'low']).describe('Relevance to students'),
       })
 
       const prompt = `Analyze this Reddit content and extract key topics, sentiment, and important information for a student knowledge base:
@@ -694,14 +694,14 @@ Please provide:
       return object
     } catch (error) {
       logger.error('Error analyzing content:', error.message)
-      
+
       // Return a fallback object with the correct schema structure
       return {
         topics: [],
         sentiment: 'neutral',
         keywords: [],
         summary: 'Content analysis failed',
-        relevance: 'medium'
+        relevance: 'medium',
       }
     }
   }
@@ -796,14 +796,14 @@ Please provide:
         // Handle video posts
         if (post.postType === 'video' && (post.videoSrc || post.contentHref)) {
           logger.info(`Processing video post ${post.id}: ${post.title}`)
-          
+
           const videoUrl = post.videoSrc || post.contentHref
           const videoData = {
             url: videoUrl,
             poster: post.poster,
             metadata: post.videoMetadata || {},
           }
-          
+
           try {
             // Prepare rich context for video analysis
             const videoContext = {
@@ -815,23 +815,29 @@ Please provide:
               score: post.score,
               commentCount: post.commentCount || 0,
               flair: post.flair || '',
-              comments: post.comments ? post.comments.slice(0, 10).map(c => ({
-                author: c.author,
-                content: c.content,
-                score: c.score || 0,
-                depth: c.depth || 0
-              })) : []
+              comments: post.comments
+                ? post.comments.slice(0, 10).map(c => ({
+                    author: c.author,
+                    content: c.content,
+                    score: c.score || 0,
+                    depth: c.depth || 0,
+                  }))
+                : [],
             }
-            
-            const videoAnalysis = await this.downloadAndAnalyzeVideo(videoUrl, videoContext, videoData)
-            
+
+            const videoAnalysis = await this.downloadAndAnalyzeVideo(
+              videoUrl,
+              videoContext,
+              videoData
+            )
+
             if (videoAnalysis) {
               postData.video = {
                 ...videoData,
                 analysis: videoAnalysis,
               }
               postData.url = videoUrl
-              
+
               // Add video analysis to extracted text
               const videoText = [
                 videoAnalysis.description,
@@ -841,14 +847,16 @@ Please provide:
               ]
                 .filter(text => text && text.trim())
                 .join(' ')
-              
+
               if (videoText) {
                 postData.extracted_text = [postData.extracted_text, `Video content: ${videoText}`]
                   .filter(Boolean)
                   .join(' ')
               }
-              
-              logger.info(`Video analysis completed for post ${post.id}: relevance=${videoAnalysis.student_relevance}/10, type=${videoAnalysis.content_type}`)
+
+              logger.info(
+                `Video analysis completed for post ${post.id}: relevance=${videoAnalysis.student_relevance}/10, type=${videoAnalysis.content_type}`
+              )
             } else {
               logger.info(`No video analysis result for post ${post.id}`)
               postData.video = videoData
@@ -861,7 +869,7 @@ Please provide:
               error: error.message,
             }
           }
-          
+
           // If there's a poster/thumbnail image, we can still analyze that
           if (post.poster && this.imageAnalysisEnabled) {
             try {
@@ -870,16 +878,16 @@ Please provide:
                 title: post.title,
                 subreddit: subredditName,
               })
-              
+
               if (thumbnailAnalysis) {
                 if (!postData.images) postData.images = []
                 postData.images.push({
                   url: post.poster,
                   alt: 'Video thumbnail',
                   analysis: thumbnailAnalysis,
-                  type: 'video_thumbnail'
+                  type: 'video_thumbnail',
                 })
-                
+
                 // Add thumbnail analysis to extracted text if video analysis failed
                 if (!postData.video?.analysis) {
                   const thumbnailText = [
@@ -889,14 +897,17 @@ Please provide:
                   ]
                     .filter(text => text && text.trim())
                     .join(' ')
-                  
+
                   if (thumbnailText) {
-                    postData.extracted_text = [postData.extracted_text, `Video thumbnail: ${thumbnailText}`]
+                    postData.extracted_text = [
+                      postData.extracted_text,
+                      `Video thumbnail: ${thumbnailText}`,
+                    ]
                       .filter(Boolean)
                       .join(' ')
                   }
                 }
-                
+
                 logger.info(`Video thumbnail analysis completed for post ${post.id}`)
               }
             } catch (error) {
@@ -1021,7 +1032,7 @@ Please provide:
         } else {
           logger.info(`No comments to process for post ${postData.reddit_id}`)
         }
-        
+
         logger.info(
           `Processed and stored ${post.postType} post: ${post.title} with ${post.comments?.length || 0} comments`
         )
@@ -1134,12 +1145,12 @@ Please provide:
         downloadedFile = await this.downloadVideoWithYtDlp(videoUrl, videoTemplate)
       } catch (ytDlpError) {
         logger.warn(`yt-dlp failed: ${ytDlpError.message}`)
-        
+
         // Try manual Reddit video extraction as fallback
         logger.info('Attempting manual Reddit video download as fallback...')
         downloadedFile = await this.downloadRedditVideoManually(videoUrl, videosDir, videoId)
       }
-      
+
       if (!downloadedFile) {
         logger.warn('All video download methods failed')
         return null
@@ -1164,7 +1175,7 @@ Please provide:
 
       // Extract frames using ffmpeg
       const frames = await this.extractVideoFrames(downloadedFile, framesDir, videoId)
-      
+
       if (frames.length === 0) {
         logger.warn('No frames extracted from video')
         // await this.cleanupVideoFiles(downloadedFile, framesDir) // Commented out to preserve videos and frames
@@ -1203,10 +1214,10 @@ Please provide:
         logger.warn('Could not extract video ID from Reddit URL')
         return null
       }
-      
+
       const redditVideoId = videoIdMatch[1]
       logger.info(`Extracted Reddit video ID: ${redditVideoId}`)
-      
+
       // Try common Reddit video URLs
       const possibleUrls = [
         `https://v.redd.it/${redditVideoId}/DASH_720.mp4`,
@@ -1215,11 +1226,11 @@ Please provide:
         `https://v.redd.it/${redditVideoId}/DASH_240.mp4`,
         `https://v.redd.it/${redditVideoId}/DASH_96.mp4`,
       ]
-      
+
       for (const url of possibleUrls) {
         try {
           logger.debug(`Trying direct download: ${url}`)
-          
+
           const response = await this.session.get(url, {
             responseType: 'stream',
             timeout: 30000,
@@ -1228,7 +1239,7 @@ Please provide:
               'User-Agent': this.userAgent,
             },
           })
-          
+
           const videoPath = path.join(videosDir, `${videoId}.mp4`)
           const writer = require('fs').createWriteStream(videoPath)
           response.data.pipe(writer)
@@ -1250,10 +1261,9 @@ Please provide:
           continue
         }
       }
-      
+
       logger.warn('Manual Reddit video download failed for all quality levels')
       return null
-      
     } catch (error) {
       logger.error(`Error in manual Reddit video download: ${error.message}`)
       return null
@@ -1263,40 +1273,45 @@ Please provide:
   async downloadVideoWithYtDlp(videoUrl, outputTemplate) {
     return new Promise((resolve, reject) => {
       logger.info(`Using yt-dlp to download: ${videoUrl}`)
-      
+
       const ytDlpArgs = [
         videoUrl,
-        '-o', outputTemplate,
+        '-o',
+        outputTemplate,
         '--no-playlist',
-        '--format', 'bestvideo[height<=720]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best',
-        '--max-filesize', '50M',
-        '--merge-output-format', 'mp4',
+        '--format',
+        'bestvideo[height<=720]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best',
+        '--max-filesize',
+        '50M',
+        '--merge-output-format',
+        'mp4',
         '--no-check-certificate',
         '--no-warnings',
         '--quiet',
-        '--print', 'after_move:filepath'
+        '--print',
+        'after_move:filepath',
       ]
 
       logger.debug(`yt-dlp command: yt-dlp ${ytDlpArgs.join(' ')}`)
 
       const ytDlp = spawn('yt-dlp', ytDlpArgs)
-      
+
       let stdout = ''
       let stderr = ''
-      
-      ytDlp.stdout.on('data', (data) => {
+
+      ytDlp.stdout.on('data', data => {
         stdout += data.toString()
       })
-      
-      ytDlp.stderr.on('data', (data) => {
+
+      ytDlp.stderr.on('data', data => {
         stderr += data.toString()
       })
 
-      ytDlp.on('close', (code) => {
+      ytDlp.on('close', code => {
         if (code === 0) {
           const lines = stdout.trim().split('\n')
           const filename = lines[lines.length - 1].trim()
-          
+
           if (filename && filename.length > 0 && !filename.startsWith('ERROR')) {
             logger.info(`yt-dlp downloaded video to: ${filename}`)
             resolve(filename)
@@ -1309,7 +1324,7 @@ Please provide:
           logger.error(`yt-dlp failed with code ${code}`)
           logger.error(`stderr: ${stderr}`)
           logger.error(`stdout: ${stdout}`)
-          
+
           if (stderr.includes('Requested format is not available')) {
             logger.info('Retrying with more permissive format selection...')
             this.downloadVideoWithYtDlpFallback(videoUrl, outputTemplate)
@@ -1321,7 +1336,7 @@ Please provide:
         }
       })
 
-      ytDlp.on('error', (error) => {
+      ytDlp.on('error', error => {
         logger.error(`yt-dlp spawn error: ${error.message}`)
         reject(error)
       })
@@ -1331,41 +1346,46 @@ Please provide:
   async downloadVideoWithYtDlpFallback(videoUrl, outputTemplate) {
     return new Promise((resolve, reject) => {
       logger.info(`Using yt-dlp fallback method for: ${videoUrl}`)
-      
+
       const ytDlpArgs = [
         videoUrl,
-        '-o', outputTemplate,
+        '-o',
+        outputTemplate,
         '--no-playlist',
-        '--format', 'best/bestvideo+bestaudio/worst',
-        '--max-filesize', '50M',
-        '--merge-output-format', 'mp4',
+        '--format',
+        'best/bestvideo+bestaudio/worst',
+        '--max-filesize',
+        '50M',
+        '--merge-output-format',
+        'mp4',
         '--no-check-certificate',
         '--ignore-errors',
         '--no-warnings',
         '--quiet',
-        '--print', 'after_move:filepath'
+        '--print',
+        'after_move:filepath',
       ]
 
       logger.debug(`yt-dlp fallback command: yt-dlp ${ytDlpArgs.join(' ')}`)
 
       const ytDlp = spawn('yt-dlp', ytDlpArgs)
-      
+
       let stdout = ''
       let stderr = ''
-      
-      ytDlp.stdout.on('data', (data) => {
+
+      ytDlp.stdout.on('data', data => {
         stdout += data.toString()
       })
-      
-      ytDlp.stderr.on('data', (data) => {
+
+      ytDlp.stderr.on('data', data => {
         stderr += data.toString()
       })
 
-      ytDlp.on('close', (code) => {
+      ytDlp.on('close', code => {
         if (code === 0) {
           const lines = stdout.trim().split('\n')
           const filename = lines[lines.length - 1].trim()
-          
+
           if (filename && filename.length > 0 && !filename.startsWith('ERROR')) {
             logger.info(`yt-dlp fallback downloaded video to: ${filename}`)
             resolve(filename)
@@ -1379,7 +1399,7 @@ Please provide:
         }
       })
 
-      ytDlp.on('error', (error) => {
+      ytDlp.on('error', error => {
         logger.error(`yt-dlp fallback spawn error: ${error.message}`)
         reject(error)
       })
@@ -1389,22 +1409,26 @@ Please provide:
   async extractVideoFrames(videoPath, framesDir, videoId, maxFrames = 10) {
     return new Promise((resolve, reject) => {
       const framePattern = path.join(framesDir, `${videoId}_frame_%03d.jpg`)
-      
+
       const ffmpeg = spawn('ffmpeg', [
-        '-i', videoPath,
-        '-vf', `fps=1/2,scale=640:480`,
-        '-frames:v', maxFrames.toString(),
-        '-q:v', '2',
+        '-i',
+        videoPath,
+        '-vf',
+        `fps=1/2,scale=640:480`,
+        '-frames:v',
+        maxFrames.toString(),
+        '-q:v',
+        '2',
         framePattern,
-        '-y'
+        '-y',
       ])
 
       let stderr = ''
-      ffmpeg.stderr.on('data', (data) => {
+      ffmpeg.stderr.on('data', data => {
         stderr += data.toString()
       })
 
-      ffmpeg.on('close', async (code) => {
+      ffmpeg.on('close', async code => {
         if (code !== 0) {
           logger.error(`ffmpeg failed with code ${code}: ${stderr}`)
           resolve([])
@@ -1427,7 +1451,7 @@ Please provide:
         }
       })
 
-      ffmpeg.on('error', (error) => {
+      ffmpeg.on('error', error => {
         logger.error(`ffmpeg spawn error: ${error.message}`)
         resolve([])
       })
@@ -1448,12 +1472,12 @@ Please provide:
             .resize(512, 384, { fit: 'inside' })
             .jpeg({ quality: 80 })
             .toBuffer()
-          
+
           const base64Image = resizedBuffer.toString('base64')
           frameImages.push({
             type: 'image',
             image: base64Image,
-            mimeType: 'image/jpeg'
+            mimeType: 'image/jpeg',
           })
         } catch (error) {
           logger.error(`Error processing frame ${framePaths[i]}: ${error.message}`)
@@ -1473,9 +1497,9 @@ Please provide:
           content: postContext.content || '',
           author: postContext.author || 'Unknown',
           score: postContext.score || 0,
-          flair: postContext.flair || 'None'
+          flair: postContext.flair || 'None',
         },
-        comments: postContext.comments || []
+        comments: postContext.comments || [],
       }
 
       // Build additional context from comments
@@ -1484,9 +1508,12 @@ Please provide:
         const topComments = contextInfo.comments
           .filter(c => c.content && c.content.trim())
           .slice(0, 5) // Top 5 comments for context
-          .map(c => `- ${c.author} (${c.score} points): ${c.content.substring(0, 200)}${c.content.length > 200 ? '...' : ''}`)
+          .map(
+            c =>
+              `- ${c.author} (${c.score} points): ${c.content.substring(0, 200)}${c.content.length > 200 ? '...' : ''}`
+          )
           .join('\n')
-        
+
         if (topComments) {
           commentsContext = `\n\nTop comments from users:\n${topComments}`
         }
@@ -1495,14 +1522,28 @@ Please provide:
       // Define Zod schema for structured output
       const videoAnalysisSchema = z.object({
         description: z.string().describe('Detailed description of what happens in the video'),
-        educational_content: z.string().describe('Educational, informative, or learning-relevant information present'),
-        visible_text: z.string().describe('Any text, captions, or written content visible in the frames'),
+        educational_content: z
+          .string()
+          .describe('Educational, informative, or learning-relevant information present'),
+        visible_text: z
+          .string()
+          .describe('Any text, captions, or written content visible in the frames'),
         key_topics: z.array(z.string()).describe('Main themes, subjects, or topics covered'),
-        student_relevance: z.number().min(1).max(10).describe('Rating from 1-10 of relevance for students'),
-        content_type: z.string().describe('Category of the video (lecture, tutorial, demonstration, discussion, entertainment, etc.)'),
+        student_relevance: z
+          .number()
+          .min(1)
+          .max(10)
+          .describe('Rating from 1-10 of relevance for students'),
+        content_type: z
+          .string()
+          .describe(
+            'Category of the video (lecture, tutorial, demonstration, discussion, entertainment, etc.)'
+          ),
         summary: z.string().describe('Brief 2-3 sentence summary of the video content'),
-        context_alignment: z.string().describe('How well the video content matches the post title and comments context'),
-        frame_count: z.number().describe('Number of frames analyzed')
+        context_alignment: z
+          .string()
+          .describe('How well the video content matches the post title and comments context'),
+        frame_count: z.number().describe('Number of frames analyzed'),
       })
 
       const prompt = `Analyze this video from Reddit post in r/${contextInfo.post.subreddit}.
@@ -1533,11 +1574,8 @@ Based on the post context, comments, and video frames, please analyze the video 
       const messages = [
         {
           role: 'user',
-          content: [
-            { type: 'text', text: prompt },
-            ...frameImages
-          ]
-        }
+          content: [{ type: 'text', text: prompt }, ...frameImages],
+        },
       ]
 
       const { object: analysis } = await generateObject({
@@ -1553,11 +1591,11 @@ Based on the post context, comments, and video frames, please analyze the video 
 
       logger.info(`Video analysis completed: ${analysis.description?.substring(0, 100)}...`)
       logger.debug('Video analysis result:', JSON.stringify(analysis, null, 2))
-      
+
       return analysis
     } catch (error) {
       logger.error('Error analyzing video frames:', error.message)
-      
+
       // Return a fallback object with the correct schema structure
       return {
         description: 'Failed to analyze video content',
@@ -1568,7 +1606,7 @@ Based on the post context, comments, and video frames, please analyze the video 
         content_type: 'unknown',
         summary: 'Video analysis failed due to processing error',
         context_alignment: 'Unable to determine alignment',
-        frame_count: frameImages.length
+        frame_count: frameImages.length,
       }
     }
   }
@@ -1577,7 +1615,7 @@ Based on the post context, comments, and video frames, please analyze the video 
     try {
       // Remove video file
       await fs.unlink(videoPath).catch(() => {})
-      
+
       // Remove frame files
       const files = await fs.readdir(framesDir).catch(() => [])
       for (const file of files) {

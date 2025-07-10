@@ -1333,16 +1333,20 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       description:
         "get mess menu for VIT hostels (both men's and ladies' hostels). Use this when users ask about mess menu, today's food, what's for lunch/dinner/breakfast/snacks, tomorrow's menu, etc. Covers special mess, veg mess, and non-veg mess for both hostels. IMPORTANT: Do NOT ask for hostelType and messType if you are already aware of the user's preference through memory, populate them from memory.",
       parameters: z.object({
-        hostelType: z.preprocess((val) => {
-          if (typeof val === 'string') {
-            const cleaned = val.toLowerCase().replace(/[’']/g, '');
-            if (cleaned === 'mens' || cleaned === 'ladies') return cleaned;
-          }
-          return val;
-        }, z.enum(['mens', 'ladies']))
-        .describe(
-          "REQUIRED: type of hostel: mens (men's hostel) or ladies (ladies' hostel). Must be specified by user."
-        ),
+        hostelType: z
+          .preprocess(
+            val => {
+              if (typeof val === 'string') {
+                const cleaned = val.toLowerCase().replace(/[’']/g, '')
+                if (cleaned === 'mens' || cleaned === 'ladies') return cleaned
+              }
+              return val
+            },
+            z.enum(['mens', 'ladies'])
+          )
+          .describe(
+            "REQUIRED: type of hostel: mens (men's hostel) or ladies (ladies' hostel). Must be specified by user."
+          ),
         messType: z
           .enum(['special', 'veg', 'nonveg'])
           .describe(

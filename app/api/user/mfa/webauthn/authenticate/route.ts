@@ -10,13 +10,7 @@ import {
   type AuthenticatorTransport,
 } from '@simplewebauthn/server'
 
-const VALID_TRANSPORTS: AuthenticatorTransport[] = [
-  'usb',
-  'nfc',
-  'ble',
-  'hybrid',
-  'internal',
-]
+const VALID_TRANSPORTS: AuthenticatorTransport[] = ['usb', 'nfc', 'ble', 'hybrid', 'internal']
 
 export async function POST(request: NextRequest) {
   try {
@@ -68,10 +62,7 @@ async function generateAuthOptions(userEmail: string) {
   })
 
   if (!user || !user.mfaEnabled || user.mfaMethod !== 'security_key') {
-    return NextResponse.json(
-      { error: 'WebAuthn not enabled for this user' },
-      { status: 400 }
-    )
+    return NextResponse.json({ error: 'WebAuthn not enabled for this user' }, { status: 400 })
   }
 
   // Generate authentication options
@@ -82,7 +73,7 @@ async function generateAuthOptions(userEmail: string) {
         : 'localhost',
     timeout: 120000,
     userVerification: 'preferred',
-    allowCredentials: user.webAuthnCredentials.map((cred) => ({
+    allowCredentials: user.webAuthnCredentials.map(cred => ({
       id: cred.credentialId,
       type: 'public-key' as const,
       transports: cred.transports.filter((t): t is AuthenticatorTransport =>
@@ -116,9 +107,9 @@ async function verifyAuthCredential(credential: any, userEmail: string, request:
         select: {
           id: true,
           credentialId: true,
-          publicKey: true,    // Buffer | Uint8Array
+          publicKey: true, // Buffer | Uint8Array
           counter: true,
-          transports: true,   // string[]
+          transports: true, // string[]
         },
       },
     },
@@ -137,7 +128,7 @@ async function verifyAuthCredential(credential: any, userEmail: string, request:
     )
   }
 
-  const stored = user.webAuthnCredentials.find((c) => c.credentialId === credential.id)
+  const stored = user.webAuthnCredentials.find(c => c.credentialId === credential.id)
   if (!stored) {
     await logSecurityEvent(
       user.id,
@@ -156,9 +147,7 @@ async function verifyAuthCredential(credential: any, userEmail: string, request:
     ? stored.publicKey
     : Buffer.from(stored.publicKey)
 
-  const prevCounter = typeof stored.counter === 'bigint'
-    ? Number(stored.counter)
-    : stored.counter
+  const prevCounter = typeof stored.counter === 'bigint' ? Number(stored.counter) : stored.counter
 
   const formattedResponse = {
     id: credential.id,
@@ -174,13 +163,10 @@ async function verifyAuthCredential(credential: any, userEmail: string, request:
   }
 
   // Filter transports down to the spec-defined set
-  const filteredTransports: AuthenticatorTransport[] =
-    stored.transports.filter((t): t is AuthenticatorTransport =>
-      VALID_TRANSPORTS.includes(t as AuthenticatorTransport)
-    )
-  const transportsToUse = filteredTransports.length
-    ? filteredTransports
-    : VALID_TRANSPORTS
+  const filteredTransports: AuthenticatorTransport[] = stored.transports.filter(
+    (t): t is AuthenticatorTransport => VALID_TRANSPORTS.includes(t as AuthenticatorTransport)
+  )
+  const transportsToUse = filteredTransports.length ? filteredTransports : VALID_TRANSPORTS
 
   const verificationOpts: VerifyAuthenticationResponseOpts = {
     response: formattedResponse,
@@ -189,10 +175,7 @@ async function verifyAuthCredential(credential: any, userEmail: string, request:
       process.env.NODE_ENV === 'production'
         ? process.env.WEBAUTHN_ORIGIN!
         : 'http://localhost:3000',
-    expectedRPID:
-      process.env.NODE_ENV === 'production'
-        ? process.env.WEBAUTHN_RP_ID!
-        : 'localhost',
+    expectedRPID: process.env.NODE_ENV === 'production' ? process.env.WEBAUTHN_RP_ID! : 'localhost',
     credential: {
       id: stored.credentialId,
       publicKey: credentialPublicKey,

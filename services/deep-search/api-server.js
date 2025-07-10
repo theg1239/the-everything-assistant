@@ -61,18 +61,22 @@ app.post('/api/search', async (req, res) => {
         created: r.created_utc,
         is_video: r.is_video,
         post_type: r.post_type,
-        video: r.video ? {
-          url: r.video.url,
-          analysis: r.video.analysis ? {
-            description: r.video.analysis.description,
-            educational_content: r.video.analysis.educational_content,
-            student_relevance: r.video.analysis.student_relevance,
-            content_type: r.video.analysis.content_type,
-            summary: r.video.analysis.summary,
-            context_alignment: r.video.analysis.context_alignment
-          } : null
-        } : null,
-        images: r.images
+        video: r.video
+          ? {
+              url: r.video.url,
+              analysis: r.video.analysis
+                ? {
+                    description: r.video.analysis.description,
+                    educational_content: r.video.analysis.educational_content,
+                    student_relevance: r.video.analysis.student_relevance,
+                    content_type: r.video.analysis.content_type,
+                    summary: r.video.analysis.summary,
+                    context_alignment: r.video.analysis.context_alignment,
+                  }
+                : null,
+            }
+          : null,
+        images: r.images,
       })),
       totalResults: searchResults.length,
       query,
@@ -238,7 +242,7 @@ app.post('/api/search/videos', async (req, res) => {
     }
 
     console.log(`Video search request: "${query}"`)
-    
+
     const videosQuery = `
       SELECT 
         'post' AS type, reddit_id, subreddit, title, content, author,
@@ -258,7 +262,7 @@ app.post('/api/search/videos', async (req, res) => {
     const result = await knowledgeBase.pool.query(videosQuery, [
       `[${queryEmbedding.join(',')}]`,
       1 - knowledgeBase.similarityThreshold,
-      limit
+      limit,
     ])
 
     res.json({
@@ -276,21 +280,25 @@ app.post('/api/search/videos', async (req, res) => {
         created: r.created_utc,
         is_video: r.is_video,
         post_type: r.post_type,
-        video: r.video ? {
-          url: r.video.url,
-          poster: r.video.poster,
-          analysis: r.video.analysis ? {
-            description: r.video.analysis.description,
-            educational_content: r.video.analysis.educational_content,
-            visible_text: r.video.analysis.visible_text,
-            key_topics: r.video.analysis.key_topics,
-            student_relevance: r.video.analysis.student_relevance,
-            content_type: r.video.analysis.content_type,
-            summary: r.video.analysis.summary,
-            context_alignment: r.video.analysis.context_alignment,
-            frames_analyzed: r.video.analysis.frames_analyzed
-          } : null
-        } : null
+        video: r.video
+          ? {
+              url: r.video.url,
+              poster: r.video.poster,
+              analysis: r.video.analysis
+                ? {
+                    description: r.video.analysis.description,
+                    educational_content: r.video.analysis.educational_content,
+                    visible_text: r.video.analysis.visible_text,
+                    key_topics: r.video.analysis.key_topics,
+                    student_relevance: r.video.analysis.student_relevance,
+                    content_type: r.video.analysis.content_type,
+                    summary: r.video.analysis.summary,
+                    context_alignment: r.video.analysis.context_alignment,
+                    frames_analyzed: r.video.analysis.frames_analyzed,
+                  }
+                : null,
+            }
+          : null,
       })),
       totalResults: result.rows.length,
       query,

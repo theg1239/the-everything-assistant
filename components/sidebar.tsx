@@ -92,16 +92,65 @@ export const Sidebar = memo(
     const [scrollPosition, setScrollPosition] = useState(0)
     const [settingsOpen, setSettingsOpen] = useState(false)
     const [mounted, setMounted] = useState(false)
-    const [touchStartY, setTouchStartY] = useState(0)
-    const [touchStartScrollTop, setTouchStartScrollTop] = useState(0)
-    const [isDragging, setIsDragging] = useState(false)
+  const [touchStartY, setTouchStartY] = useState(0)
+  const [touchStartScrollTop, setTouchStartScrollTop] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
+  
+  // Swipe gesture state for opening sidebar
+  const [swipeStartX, setSwipeStartX] = useState(0)
+  const [swipeStartY, setSwipeStartY] = useState(0)
+  const [isSwipeGesture, setIsSwipeGesture] = useState(false)
+  const [showSwipeHint, setShowSwipeHint] = useState(false)
     const router = useRouter()
     const pathname = usePathname()
     const { data: session } = useSession()
 
-    useEffect(() => {
-      setMounted(true)
-    }, [])
+  useEffect(() => {
+    setMounted(true)
+    
+    const handleGlobalTouchStart = (e: TouchEvent) => {
+      const touch = e.touches[0]
+      setSwipeStartX(touch.clientX)
+      setSwipeStartY(touch.clientY)
+      
+      if (touch.clientX < 20 && !isOpen) {
+        setIsSwipeGesture(true)
+        setShowSwipeHint(true)
+      }
+    }
+    
+    const handleGlobalTouchMove = (e: TouchEvent) => {
+      if (!isSwipeGesture) return
+      
+      const touch = e.touches[0]
+      const deltaX = touch.clientX - swipeStartX
+      const deltaY = Math.abs(touch.clientY - swipeStartY)
+      
+      if (deltaX > 50 && deltaX > deltaY * 2) {
+        setIsSwipeGesture(false)
+        setShowSwipeHint(false)
+        onToggle()
+      } else if (deltaY > 50 || deltaX < -10) {
+        setIsSwipeGesture(false)
+        setShowSwipeHint(false)
+      }
+    }
+    
+    const handleGlobalTouchEnd = () => {
+      setIsSwipeGesture(false)
+      setShowSwipeHint(false)
+    }
+    
+    document.addEventListener('touchstart', handleGlobalTouchStart, { passive: true })
+    document.addEventListener('touchmove', handleGlobalTouchMove, { passive: true })
+    document.addEventListener('touchend', handleGlobalTouchEnd, { passive: true })
+    
+    return () => {
+      document.removeEventListener('touchstart', handleGlobalTouchStart)
+      document.removeEventListener('touchmove', handleGlobalTouchMove)
+      document.removeEventListener('touchend', handleGlobalTouchEnd)
+    }
+  }, [swipeStartX, swipeStartY, isSwipeGesture, isOpen, onToggle, showSwipeHint])
 
     const redactName = useCallback((name: string) => {
       if (!name) return 'User'
@@ -330,18 +379,37 @@ export const Sidebar = memo(
       [router]
     )
 
-    // Optimize overlay click handler
-    const handleOverlayClick = useCallback(
-      (e: React.MouseEvent | React.TouchEvent) => {
-        if (e.target === e.currentTarget) {
-          onToggle()
-        }
-      },
-      [onToggle]
-    )
+  // Optimize overlay click handler with proper event handling
+  const handleOverlayClick = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      
+      if (e.target === e.currentTarget) {
+        onToggle()
+      }
+    },
+    [onToggle]
+  )
 
-    // Create the sidebar content with optimized styles
-    const sidebarContent = (
+  // Create the sidebar content with optimized styles
+  const sidebarContent = (
+    <>
+      {/* Swipe hint indicator */}
+      <AnimatePresence>
+        {showSwipeHint && !isOpen && (
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="fixed left-0 top-1/2 z-30 -translate-y-1/2 w-1 h-16 bg-primary/60 rounded-r-full md:hidden"
+            style={{
+              pointerEvents: 'none',
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       <AnimatePresence mode="sync">
         {isOpen && (
           <>
@@ -353,10 +421,11 @@ export const Sidebar = memo(
               exit="closed"
               className="fixed inset-0 bg-black/50 z-40 md:hidden"
               onClick={handleOverlayClick}
-              onTouchStart={handleOverlayClick}
+              onTouchEnd={handleOverlayClick}
               style={{
                 pointerEvents: 'auto',
                 willChange: 'opacity',
+                touchAction: 'none', // Prevent default touch actions
               }}
             />
 
@@ -369,12 +438,15 @@ export const Sidebar = memo(
               className="fixed left-0 top-0 z-50 h-full w-[320px] bg-background/95 border-r border-border/50 flex flex-col shadow-2xl"
               onMouseEnter={() => setHovering(true)}
               onMouseLeave={() => setHovering(false)}
+              onClick={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
               style={{
                 pointerEvents: 'auto',
                 willChange: 'transform',
                 backfaceVisibility: 'hidden',
                 WebkitBackfaceVisibility: 'hidden',
                 transform: 'translate3d(0, 0, 0)',
+                touchAction: 'pan-y',
               }}
             >
               {/* Header */}
@@ -570,7 +642,8 @@ export const Sidebar = memo(
           </>
         )}
       </AnimatePresence>
-    )
+    </>
+  )
 
     return (
       <>

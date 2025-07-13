@@ -71,7 +71,6 @@ export const Sidebar = memo(
     const { isOpen, onToggle } = props as { isOpen: boolean; onToggle: () => void }
     const { isInitialized, chats, setChats, chatsLoaded, setChatsLoaded } = useSidebar()
 
-    // Use a ref to track if we've ever loaded chats to prevent loading animation on remounts
     const hasLoadedOnceRef = useRef(chatsLoaded)
     useEffect(() => {
       if (chatsLoaded) {
@@ -79,9 +78,7 @@ export const Sidebar = memo(
       }
     }, [chatsLoaded])
 
-    // Use the global chat state instead of local state
     const [loading, setLoading] = useState(() => {
-      // Only show loading if we've never loaded chats before
       return !hasLoadedOnceRef.current
     })
     const [loadingMore, setLoadingMore] = useState(false)
@@ -159,7 +156,6 @@ export const Sidebar = memo(
       return parts.slice(0, 3).join(' ')
     }, [])
 
-    // Memoize user info to prevent unnecessary re-renders
     const userInfo = useMemo(
       () => ({
         name: redactName(session?.user?.name || 'User'),
@@ -173,7 +169,6 @@ export const Sidebar = memo(
       async (reset: boolean = false, forceLoading: boolean = false) => {
         try {
           if (reset) {
-            // Only show loading animation if we've never loaded chats or explicitly forced
             if (!hasLoadedOnceRef.current || forceLoading) {
               setLoading(true)
             }
@@ -216,9 +211,8 @@ export const Sidebar = memo(
     )
 
     useEffect(() => {
-      // Only fetch chats if they haven't been loaded yet
       if (!chatsLoaded) {
-        fetchChats(true) // Reset and fetch initial chats
+        fetchChats(true)
       }
     }, [chatsLoaded, fetchChats])
 
@@ -259,8 +253,8 @@ export const Sidebar = memo(
     }, [setChats])
 
     useEffect(() => {
-      const handleChatsDeleted = () => fetchChats(true, true) // Force loading for explicit user actions
-      const handleChatsArchived = () => fetchChats(true, true) // Force loading for explicit user actions
+      const handleChatsDeleted = () => fetchChats(true, true)
+      const handleChatsArchived = () => fetchChats(true, true)
 
       window.addEventListener('chatsDeleted', handleChatsDeleted)
       window.addEventListener('chatsArchived', handleChatsArchived)
@@ -365,21 +359,16 @@ export const Sidebar = memo(
       ])
       setSelectedChatId(tempId)
       router.push('/')
-      // Don't auto-close sidebar on mobile to avoid unnecessary re-renders
-      // Users can manually close it if needed
     }, [router, setChats])
 
     const handleChatClick = useCallback(
       (chatId: string) => {
         setSelectedChatId(chatId)
         router.replace(`/chat/${chatId}`)
-        // Don't auto-close sidebar on mobile to avoid unnecessary re-renders
-        // Users can manually close it if needed
       },
       [router]
     )
 
-  // Optimize overlay click handler with proper event handling
   const handleOverlayClick = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
       e.preventDefault()
@@ -392,10 +381,8 @@ export const Sidebar = memo(
     [onToggle]
   )
 
-  // Create the sidebar content with optimized styles
   const sidebarContent = (
     <>
-      {/* Swipe hint indicator */}
       <AnimatePresence>
         {showSwipeHint && !isOpen && (
           <motion.div
@@ -425,7 +412,7 @@ export const Sidebar = memo(
               style={{
                 pointerEvents: 'auto',
                 willChange: 'opacity',
-                touchAction: 'none', // Prevent default touch actions
+                touchAction: 'none',
               }}
             />
 
@@ -661,7 +648,6 @@ export const Sidebar = memo(
     )
   },
   (prevProps, nextProps) => {
-    // Only re-render if isOpen changes - ignore all other props
     return prevProps.isOpen === nextProps.isOpen && prevProps.onToggle === nextProps.onToggle
   }
 )

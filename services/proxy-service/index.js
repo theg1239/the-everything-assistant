@@ -2192,7 +2192,7 @@ async function serveDownloadedFiles(downloadPath, downloadInfo) {
         )
         let downloadUrl
         if (process.env.NODE_ENV === 'production') {
-          downloadUrl = `https://the-everything-assistant.onrender.com/download/${fileId}`
+          downloadUrl = `https://assistant.nptelprep.in/download/${fileId}`
           console.log(`Production mode detected - using Render domain for file: ${filename}`)
         } else {
           const host = process.env.PROXY_HOST || 'localhost'

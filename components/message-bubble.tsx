@@ -37,15 +37,26 @@ const PureMessageBubble = ({
         .filter((part: any) => part.type === 'tool-invocation')
         .map((part: any) => part.toolInvocation)
     }
-    return (message as any).toolInvocations || []
-  }, [message.parts, (message as any).toolInvocations])
+    
+    const directToolInvocations = (message as any).toolInvocations
+    if (Array.isArray(directToolInvocations)) {
+      return directToolInvocations
+    }
+    
+    const toolCalls = (message as any).toolCalls
+    if (Array.isArray(toolCalls)) {
+      return toolCalls
+    }
+    
+    return []
+  }, [message.parts, (message as any).toolInvocations, (message as any).toolCalls])
 
   const visibleToolCalls = useMemo(() => {
-    return (
-      toolInvocations?.filter(
-        (t: any) => t.toolName !== 'knowledgeBase' && t.toolName !== 'saveMemory'
-      ) || []
-    )
+    const filtered = toolInvocations?.filter(
+      (t: any) => t.toolName !== 'knowledgeBase' && t.toolName !== 'saveMemory'
+    ) || []
+    
+    return filtered
   }, [toolInvocations])
 
   const hasContent = useMemo(() => {
@@ -131,7 +142,7 @@ const PureMessageBubble = ({
             ) : null}
 
             {/* Message actions */}
-            {!isUser && chatId && hasContent && (
+            {!isUser && chatId && (hasContent || hasVisibleToolCalls) && (
               <MessageActions
                 messageId={message.id}
                 chatId={chatId}

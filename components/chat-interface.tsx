@@ -957,7 +957,10 @@ const PureChatInterface = memo(
                         (!msg.content || (msg.content as string).trim() === '') &&
                         msg.toolInvocations?.length > 0
                       ) {
-                        return false
+                        const hasVisibleToolCalls = msg.toolInvocations.some(
+                          (t: any) => t.toolName !== 'knowledgeBase' && t.toolName !== 'saveMemory'
+                        )
+                        return hasVisibleToolCalls
                       }
                     }
                     return true

@@ -145,16 +145,99 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
     switch (command) {
       case 'attendance':
         // Debug logs - remove in production if unnecessary
-        if (process.env.NODE_ENV !== 'production') {
-          // eslint-disable-next-line no-console
-          //console.log('[VTOP] raw attendance content', content)
-        }
+        // if (process.env.NODE_ENV !== 'production') {
+        //   // eslint-disable-next-line no-console
+        //   console.log('[VTOP] raw attendance content', content)
+        //   console.log('[VTOP] raw attendance rawOutput', rawOutput)
+        //   console.log('[VTOP] full vtopData', vtopData)
+        // }
+        
+        let attendanceData = [];
+        
         if (Array.isArray(content) && content.length > 0) {
-          const validSubjects = content.filter((subject: any) => {
-            if (process.env.NODE_ENV !== 'production') {
-              // eslint-disable-next-line no-console
-              //console.log('[VTOP] evaluating subject', subject)
-            }
+          const firstItem = content[0];
+          if (firstItem && firstItem.SUBJECT && firstItem.SUBJECT.trim() !== '') {
+            attendanceData = content;
+          }
+        }
+        
+        if (attendanceData.length === 0 && rawOutput && typeof rawOutput === 'string') {
+          try {
+            const lines = rawOutput.split('\n').filter(line => line.trim());
+            
+            const dataLines = lines.filter(line => 
+              line.includes('│') && 
+              !line.includes('INDEX') && 
+              !line.includes('──────') &&
+              line.trim() !== '' &&
+              /^\s*\d+\s*│/.test(line)
+            );
+            
+            //console.log('[VTOP] Found', dataLines.length, 'data lines to parse from rawOutput');
+            
+            attendanceData = dataLines.map(line => {
+              const allColumns = line.split('│').map(col => col.trim());
+              
+              if (allColumns.length >= 7) {
+                const result = {
+                  INDEX: allColumns[0] || '',
+                  SUBJECT: allColumns[1] || '',
+                  TYPE: allColumns[2] || '', 
+                  'FACULTY NAME': allColumns[3] || '',
+                  'CLASSES ATTENDED': allColumns[4] || '',
+                  PERCENTAGE: (allColumns[5] || '').replace('%', ''),
+                  '75% ALERT': allColumns[6] || ''
+                };
+                
+                return result;
+              } else {
+                //console.log('[VTOP] Insufficient columns:', allColumns.length, 'for line:', line);
+                return null;
+              }
+            }).filter(Boolean);
+          } catch (error) {
+            //console.error('Error parsing attendance data from rawOutput:', error);
+            attendanceData = [];
+          }
+        }
+        
+        if (!Array.isArray(attendanceData) || attendanceData.length === 0) {
+          //console.log('[VTOP] Parsing failed, checking for formatted content:', vtopData.formatted_content);
+          
+          if (vtopData.formatted_content) {
+            return (
+              <div className="space-y-3">
+                <div className="p-3 bg-muted/50 rounded-md overflow-x-auto">
+                  <div
+                    className="text-sm text-muted-foreground prose prose-sm max-w-none"
+                    dangerouslySetInnerHTML={{ __html: vtopData.formatted_content }}
+                  />
+                </div>
+              </div>
+            )
+          }
+          
+          if (data && typeof data === 'string') {
+            return (
+              <div className="space-y-3">
+                <div className="p-3 bg-muted/50 rounded-md overflow-x-auto">
+                  <pre className="text-xs text-muted-foreground whitespace-pre-wrap">
+                    {data}
+                  </pre>
+                </div>
+              </div>
+            )
+          }
+          
+          return (
+            <div className="text-muted-foreground text-sm">No attendance data available.</div>
+          )
+        }
+        
+        if (Array.isArray(attendanceData) && attendanceData.length > 0) {
+          //console.log('[VTOP] Successfully parsed', attendanceData.length, 'attendance records');
+          
+          const validSubjects = attendanceData.filter((subject: any) => {
             const subjectName = subject.SUBJECT || subject.subject || subject.name || ''
             const percentage = parseFloat(
               subject.PERCENTAGE || subject.percentage || subject.attendance || '0'
@@ -163,16 +246,14 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
               subject['CLASSES ATTENDED'] || subject.attended || subject.classesAttended || '0'
             const total = subject['TOTAL CLASSES'] || subject.total || subject.totalClasses || '0'
 
-            return (
+            // More lenient validation - just check if subject name exists and isn't a placeholder
+            const isValid = (
               subjectName &&
-              !subjectName.match(/^Subject \d+$/i) &&
               subjectName.trim() !== '' &&
-              !(
-                percentage === 0 &&
-                (attended === '0' || attended === 'N/A') &&
-                (total === '0' || total === 'N/A')
-              )
-            )
+              !subjectName.match(/^Subject \d+$/i)
+            );
+            
+            return isValid;
           })
 
           if (process.env.NODE_ENV !== 'production') {
@@ -381,6 +462,37 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
             </div>
           )
         }
+        
+        // Fallback: show formatted content if available
+        if (vtopData.formatted_content) {
+          return (
+            <div className="space-y-3">
+              <div className="p-3 bg-muted/50 rounded-md overflow-x-auto">
+                <div
+                  className="text-sm text-muted-foreground prose prose-sm max-w-none"
+                  dangerouslySetInnerHTML={{ __html: vtopData.formatted_content }}
+                />
+              </div>
+            </div>
+          )
+        }
+        
+        // Final fallback: show raw data
+        if (data && typeof data === 'string') {
+          return (
+            <div className="space-y-3">
+              <div className="p-3 bg-muted/50 rounded-md overflow-x-auto">
+                <pre className="text-xs text-muted-foreground whitespace-pre-wrap">
+                  {data}
+                </pre>
+              </div>
+            </div>
+          )
+        }
+        
+        return (
+          <div className="text-muted-foreground text-sm">No attendance data available.</div>
+        )
         break
 
       case 'marks':

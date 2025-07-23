@@ -31,7 +31,6 @@ const PureMessageBubble = ({
 }: MessageBubbleProps) => {
   const isUser = message.role === 'user'
 
-  // Memoize tool invocations to prevent unnecessary recalculations
   const toolInvocations = useMemo(() => {
     if (message.parts) {
       return message.parts

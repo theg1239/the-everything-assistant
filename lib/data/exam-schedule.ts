@@ -36,6 +36,12 @@ Final Assessment Test (FAT) - Theory:
 - Venue: Exam halls (to be announced by CoE)
 - Last instructional day for theory: November 14, 2025
 
+For weekend intra semester:
+- Mid Terms: 2025-09-20 to 2025-09-21
+- Final assessment test for Lab courses: 2025-11-15
+- Last instructional day  for theory courses: 2025-11-16
+- Final assessment test for theory courses: 2025-11-17 to 2025-12-04
+
 Important Deadlines:
 - Course withdrawal option: September 8-10, 2025
 - Assignment and project report uploads: November 14, 2025 (Friday)

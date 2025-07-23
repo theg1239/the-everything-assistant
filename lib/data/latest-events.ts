@@ -7,40 +7,27 @@ import { ContextData } from './index'
 export const latestEvents: ContextData = {
   section: 'latest-events',
   title: 'Latest Events & Campus Updates',
-  lastUpdated: '2025-06-28',
+  lastUpdated: '2025-07-23',
   priority: 'medium',
   content: `
 TRENDING NOW AT VIT:
 
 Academic Events:
-- Course Allocation Week: Schools have allocated courses (June 9-20, 2025)
-- Registration Prep: Students preparing for course registration on June 28, 2025
-- Academic Counseling: Available for course selection guidance
-- VTOP Updates: Regular notifications being sent for allocation status
+- Academic prep for CAT-1 ongoing
 
 Upcoming Cultural Events:
 - Gravitas'25 Planning: VIT's annual tech fest scheduled for September 26-28, 2025
 - Independence Day Celebration: Special programs planned for August 15, 2025
-- Freshers' Welcome: Planning underway for new Fall 2025 batch
+- Freshers' Welcome: AARAMBH cultural fest ongoing
 
 Placement & Career Events:
-- Summer Placement Results: Companies still conducting final rounds
-- Pre-placement Talks: Planning for Fall 2025 campus recruitment
-- Internship Opportunities: Summer 2025 internships in progress
+- Pre-placement Talks: Ongoing
+- Internship Opportunities: Ongoing off campus/on campus
 - Industry Mentorship Programs: Applications opening for new academic year
 
-Research & Innovation:
-- Research Project Submissions: Summer project presentations ongoing
-- Innovation Labs: New equipment installations in progress
-- Conference Participation: Students presenting at international conferences
-- Patent Applications: Several student innovations under review
-
 Campus Life Updates:
-- Hostel Facilities: Summer maintenance and upgrades in progress
-- Transportation: Campus shuttle services running on summer schedule
-
-Recent Announcements:
-- Fee Structure 2025-26: Fee details available on VTOP, last day without fine was June 25, 2025
+- Freshers are here and campus is VERY crowded
+- New shop in front of F block men's hostel, they have a bring your own chips bag thing 
 
 Special Initiatives:
 - Green Campus Drive: Tree plantation and sustainability initiatives
@@ -49,8 +36,8 @@ Special Initiatives:
 - Alumni Connect: Enhanced alumni networking programs launching
 
 This Week's Highlights:
-- Monday-Friday (June 9-20): Course allocation by Schools
-- Weekend (June 28): Course registration (FFCS)
+- AARAMBH cultural fest
+- Weekend semester course registration: 25th July 2025, 11am to 6pm
 
 Where to Get Updates:
 - VTOP Portal: VTOP Spotlight board
@@ -65,9 +52,9 @@ Action Items for Students:
   metadata: {
     trendingEvent: 'Course Allocation Week',
     nextBigEvent: "Gravitas'25",
-    urgentDeadline: 'Course Registration - June 28, 2025',
-    campusLife: 'Summer Session Active',
-    lastMajorAnnouncement: 'Fall 2025-26 Academic Calendar Released',
+    urgentDeadline: 'Weekend Semester Course Registration - July 25, 2025',
+    campusLife: 'Fall Semester ongoinge',
+    lastMajorAnnouncement: 'CAT-1 Soon',
     updateFrequency: 'Weekly',
   },
 }

@@ -1,72 +1,409 @@
-import { ContextData } from './index'
+import { ContextData } from './index';
 
-/**
- * Academic Calendar for VIT Vellore
- * Contains semester dates, exam periods, and important academic milestones
- */
 export const academicCalendar: ContextData = {
   section: 'academic-calendar',
   title: 'Academic Calendar Fall Semester 2025-26',
-  lastUpdated: '2025-06-28',
+  lastUpdated: '2025-07-23',
   priority: 'high',
   content: `
 Fall Semester 2025-26 Academic Calendar
 *(Applicable to students of all programmes except MBA)*
 
 Course Registration & Setup:
-- June 4, 2025 (Wednesday): Course wish list registration by students
-- June 9-20, 2025 (Monday to Friday): Course allocation and scheduling by Schools
-- June 28, 2025 (Saturday): Course registration by students
-- July 9, 2025 (Wednesday): Commencement of Fall Semester 2025-26
-- July 9-11, 2025 (Wednesday to Friday): Course add/drop option to students
-- July 20, 2025 (Sunday): Last date for payment of re-registration fees (if applicable, for students with backlogs)
 
 Holidays & Breaks:
-- August 15, 2025 (Friday): Independence Day (Holiday)
-- August 27, 2025 (Wednesday): Vinayaka Chathurthi (Holiday)
-- September 5, 2025 (Friday): Meeladun-Nabi (No Instructional Day)
-- September 26-28, 2025 (Friday to Sunday): Gravitas'25
-- October 1, 2025 (Wednesday): Ayutha Pooja (Holiday)
-- October 2, 2025 (Thursday): Gandhi Jayanthi (Holiday)
-- October 18-26, 2025 (Saturday to Sunday): Deepavali (Holiday)
+- Friday, August 15, 2025: Holiday - General (Semester) (Semester)
+- Friday, August 15, 2025: Holiday - General (Flexible) (Flexible)
+- Friday, August 15, 2025: Holiday - General Freshers
+- Friday, August 15, 2025: Holiday - General Freshers (Flexible) (Flexible)
+- Friday, August 15, 2025: Holiday - General (Inline) (Inline)
+- Friday, August 15, 2025: Holiday - MBA General Freshers
+- Friday, August 15, 2025: Holiday - PG Freshers
+- Friday, August 15, 2025: Holiday - Research
+- Friday, August 15, 2025: Holiday - Research (Spl.) (Spl.)
+- Friday, August 15, 2025: Holiday - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Friday, August 15, 2025: Holiday - UG Freshers (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Friday, August 15, 2025: Holiday - UG Seniors
+- Friday, August 15, 2025: Holiday - UG Seniors (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Wednesday, August 27, 2025: Holiday - General (Semester) (Semester)
+- Wednesday, August 27, 2025: Holiday - General (Flexible) (Flexible)
+- Wednesday, August 27, 2025: Holiday - General Freshers
+- Wednesday, August 27, 2025: Holiday - General Freshers (Flexible) (Flexible)
+- Wednesday, August 27, 2025: Holiday - General (Inline) (Inline)
+- Wednesday, August 27, 2025: Holiday - MBA General Freshers
+- Wednesday, August 27, 2025: Holiday - PG Freshers
+- Wednesday, August 27, 2025: Holiday - Research
+- Wednesday, August 27, 2025: Holiday - Research (Spl.) (Spl.)
+- Wednesday, August 27, 2025: Holiday - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Wednesday, August 27, 2025: Holiday - UG Freshers (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Wednesday, August 27, 2025: Holiday - UG Seniors
+- Wednesday, August 27, 2025: Holiday - UG Seniors (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Friday, September 5, 2025: No Instructional Day - General (Semester) (Semester)
+- Friday, September 5, 2025: No Instructional Day - General (Flexible) (Flexible)
+- Friday, September 5, 2025: No Instructional Day - General Freshers
+- Friday, September 5, 2025: No Instructional Day - General Freshers (Flexible) (Flexible)
+- Friday, September 5, 2025: No Instructional Day - General (Inline) (Inline)
+- Friday, September 5, 2025: No Instructional Day - MBA General Freshers
+- Friday, September 5, 2025: No Instructional Day - PG Freshers
+- Friday, September 5, 2025: No Instructional Day - Research
+- Friday, September 5, 2025: No Instructional Day - Research (Spl.) (Spl.)
+- Friday, September 5, 2025: No Instructional Day - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Friday, September 5, 2025: No Instructional Day - UG Freshers (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Friday, September 5, 2025: No Instructional Day - UG Seniors
+- Friday, September 5, 2025: No Instructional Day - UG Seniors (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Friday, September 26, 2025: No Instructional Day - General (Semester) (Semester)
+- Friday, September 26, 2025: (Gravitas '25) (Gravitas '25)
+- Friday, September 26, 2025: No Instructional Day - General (Flexible) (Flexible)
+- Friday, September 26, 2025: No Instructional Day - General Freshers
+- Friday, September 26, 2025: No Instructional Day - General Freshers (Flexible) (Flexible)
+- Friday, September 26, 2025: No Instructional Day - General (Inline) (Inline)
+- Friday, September 26, 2025: No Instructional Day - MBA General Freshers
+- Friday, September 26, 2025: No Instructional Day - PG Freshers
+- Friday, September 26, 2025: No Instructional Day - Research
+- Friday, September 26, 2025: No Instructional Day - Research (Spl.) (Spl.)
+- Friday, September 26, 2025: No Instructional Day - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Friday, September 26, 2025: No Instructional Day - UG Freshers (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Friday, September 26, 2025: No Instructional Day - UG Seniors
+- Friday, September 26, 2025: No Instructional Day - UG Seniors (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Saturday, September 27, 2025: No Instructional Day - General (Semester) (Semester)
+- Saturday, September 27, 2025: (Gravitas '25) (Gravitas '25)
+- Saturday, September 27, 2025: No Instructional Day - General (Flexible) (Flexible)
+- Saturday, September 27, 2025: No Instructional Day - General Freshers
+- Saturday, September 27, 2025: No Instructional Day - General Freshers (Flexible) (Flexible)
+- Saturday, September 27, 2025: No Instructional Day - General (Inline) (Inline)
+- Saturday, September 27, 2025: No Instructional Day - MBA General Freshers
+- Saturday, September 27, 2025: No Instructional Day - PG Freshers
+- Saturday, September 27, 2025: No Instructional Day - Research
+- Saturday, September 27, 2025: No Instructional Day - Research (Spl.) (Spl.)
+- Saturday, September 27, 2025: No Instructional Day - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Saturday, September 27, 2025: No Instructional Day - UG Freshers (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Saturday, September 27, 2025: No Instructional Day - UG Seniors
+- Saturday, September 27, 2025: No Instructional Day - UG Seniors (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Sunday, September 28, 2025: No Instructional Day - General (Semester) (Semester)
+- Sunday, September 28, 2025: (Gravitas '25) (Gravitas '25)
+- Sunday, September 28, 2025: No Instructional Day - General (Flexible) (Flexible)
+- Sunday, September 28, 2025: No Instructional Day - General Freshers
+- Sunday, September 28, 2025: No Instructional Day - General Freshers (Flexible) (Flexible)
+- Sunday, September 28, 2025: No Instructional Day - General (Inline) (Inline)
+- Sunday, September 28, 2025: No Instructional Day - MBA General Freshers
+- Sunday, September 28, 2025: No Instructional Day - PG Freshers
+- Sunday, September 28, 2025: No Instructional Day - Research
+- Sunday, September 28, 2025: No Instructional Day - Research (Spl.) (Spl.)
+- Sunday, September 28, 2025: No Instructional Day - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Sunday, September 28, 2025: Holiday - UG Freshers (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Sunday, September 28, 2025: No Instructional Day - UG Seniors
+- Sunday, September 28, 2025: Holiday - UG Seniors (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Wednesday, October 1, 2025: Holiday - General (Semester) (Semester)
+- Wednesday, October 1, 2025: Holiday - General (Flexible) (Flexible)
+- Wednesday, October 1, 2025: Holiday - General Freshers
+- Wednesday, October 1, 2025: Holiday - General Freshers (Flexible) (Flexible)
+- Wednesday, October 1, 2025: Holiday - General (Inline) (Inline)
+- Wednesday, October 1, 2025: Holiday - MBA General Freshers
+- Wednesday, October 1, 2025: Holiday - PG Freshers
+- Wednesday, October 1, 2025: Holiday - Research
+- Wednesday, October 1, 2025: Holiday - Research (Spl.) (Spl.)
+- Wednesday, October 1, 2025: Holiday - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Wednesday, October 1, 2025: Holiday - UG Freshers (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Wednesday, October 1, 2025: Holiday - UG Seniors
+- Wednesday, October 1, 2025: Holiday - UG Seniors (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Thursday, October 2, 2025: Holiday - General (Semester) (Semester)
+- Thursday, October 2, 2025: Holiday - General (Flexible) (Flexible)
+- Thursday, October 2, 2025: Holiday - General Freshers
+- Thursday, October 2, 2025: Holiday - General Freshers (Flexible) (Flexible)
+- Thursday, October 2, 2025: Holiday - General (Inline) (Inline)
+- Thursday, October 2, 2025: Holiday - MBA General Freshers
+- Thursday, October 2, 2025: Holiday - PG Freshers
+- Thursday, October 2, 2025: Holiday - Research
+- Thursday, October 2, 2025: Holiday - Research (Spl.) (Spl.)
+- Thursday, October 2, 2025: Holiday - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Thursday, October 2, 2025: Holiday - UG Freshers (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Thursday, October 2, 2025: Holiday - UG Seniors
+- Thursday, October 2, 2025: Holiday - UG Seniors (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Saturday, October 18, 2025: Holiday - General (Semester) (Semester)
+- Saturday, October 18, 2025: Holiday - General (Flexible) (Flexible)
+- Saturday, October 18, 2025: Holiday - General Freshers
+- Saturday, October 18, 2025: Holiday - General Freshers (Flexible) (Flexible)
+- Saturday, October 18, 2025: Holiday - General (Inline) (Inline)
+- Saturday, October 18, 2025: Holiday - MBA General Freshers
+- Saturday, October 18, 2025: Holiday - PG Freshers
+- Saturday, October 18, 2025: Holiday - Research
+- Saturday, October 18, 2025: Holiday - Research (Spl.) (Spl.)
+- Saturday, October 18, 2025: Holiday - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Saturday, October 18, 2025: Holiday - UG Freshers (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Saturday, October 18, 2025: Holiday - UG Seniors
+- Saturday, October 18, 2025: Holiday - UG Seniors (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Sunday, October 19, 2025: Holiday - General (Semester) (Semester)
+- Sunday, October 19, 2025: Holiday - General (Flexible) (Flexible)
+- Sunday, October 19, 2025: Holiday - General Freshers
+- Sunday, October 19, 2025: Holiday - c:\Users\Ishaan\Downloads\working-saturdays.tsGeneral Freshers (Flexible) (Flexible)
+- Sunday, October 19, 2025: Holiday - General (Inline) (Inline)
+- Sunday, October 19, 2025: Holiday - MBA General Freshers
+- Sunday, October 19, 2025: Holiday - PG Freshers
+- Sunday, October 19, 2025: Holiday - Research
+- Sunday, October 19, 2025: Holiday - Research (Spl.) (Spl.)
+- Sunday, October 19, 2025: Holiday - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Sunday, October 19, 2025: Holiday - UG Freshers (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Sunday, October 19, 2025: Holiday - UG Seniors
+- Sunday, October 19, 2025: Holiday - UG Seniors (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Monday, October 20, 2025: No Instructional Day - General (Semester) (Semester)
+- Monday, October 20, 2025: No Instructional Day - General (Flexible) (Flexible)
+- Monday, October 20, 2025: No Instructional Day - General Freshers
+- Monday, October 20, 2025: No Instructional Day - General Freshers (Flexible) (Flexible)
+- Monday, October 20, 2025: No Instructional Day - General (Inline) (Inline)
+- Monday, October 20, 2025: No Instructional Day - MBA General Freshers
+- Monday, October 20, 2025: No Instructional Day - PG Freshers
+- Monday, October 20, 2025: No Instructional Day - Research
+- Monday, October 20, 2025: No Instructional Day - Research (Spl.) (Spl.)
+- Monday, October 20, 2025: No Instructional Day - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Monday, October 20, 2025: No Instructional Day - UG Freshers (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Monday, October 20, 2025: No Instructional Day - UG Seniors
+- Monday, October 20, 2025: No Instructional Day - UG Seniors (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Tuesday, October 21, 2025: No Instructional Day - General (Semester) (Semester)
+- Tuesday, October 21, 2025: No Instructional Day - General (Flexible) (Flexible)
+- Tuesday, October 21, 2025: No Instructional Day - General Freshers
+- Tuesday, October 21, 2025: No Instructional Day - General Freshers (Flexible) (Flexible)
+- Tuesday, October 21, 2025: No Instructional Day - General (Inline) (Inline)
+- Tuesday, October 21, 2025: No Instructional Day - MBA General Freshers
+- Tuesday, October 21, 2025: No Instructional Day - PG Freshers
+- Tuesday, October 21, 2025: No Instructional Day - Research
+- Tuesday, October 21, 2025: No Instructional Day - Research (Spl.) (Spl.)
+- Tuesday, October 21, 2025: No Instructional Day - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Tuesday, October 21, 2025: No Instructional Day - UG Freshers (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Tuesday, October 21, 2025: No Instructional Day - UG Seniors
+- Tuesday, October 21, 2025: No Instructional Day - UG Seniors (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Wednesday, October 22, 2025: No Instructional Day - General (Semester) (Semester)
+- Wednesday, October 22, 2025: No Instructional Day - General (Flexible) (Flexible)
+- Wednesday, October 22, 2025: No Instructional Day - General Freshers
+- Wednesday, October 22, 2025: No Instructional Day - General Freshers (Flexible) (Flexible)
+- Wednesday, October 22, 2025: No Instructional Day - General (Inline) (Inline)
+- Wednesday, October 22, 2025: No Instructional Day - MBA General Freshers
+- Wednesday, October 22, 2025: No Instructional Day - PG Freshers
+- Wednesday, October 22, 2025: No Instructional Day - Research
+- Wednesday, October 22, 2025: No Instructional Day - Research (Spl.) (Spl.)
+- Wednesday, October 22, 2025: No Instructional Day - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Wednesday, October 22, 2025: No Instructional Day - UG Freshers (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Wednesday, October 22, 2025: No Instructional Day - UG Seniors
+- Wednesday, October 22, 2025: No Instructional Day - UG Seniors (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Thursday, October 23, 2025: No Instructional Day - General (Semester) (Semester)
+- Thursday, October 23, 2025: No Instructional Day - General (Flexible) (Flexible)
+- Thursday, October 23, 2025: No Instructional Day - General Freshers
+- Thursday, October 23, 2025: No Instructional Day - General Freshers (Flexible) (Flexible)
+- Thursday, October 23, 2025: No Instructional Day - General (Inline) (Inline)
+- Thursday, October 23, 2025: No Instructional Day - MBA General Freshers
+- Thursday, October 23, 2025: No Instructional Day - PG Freshers
+- Thursday, October 23, 2025: No Instructional Day - Research
+- Thursday, October 23, 2025: No Instructional Day - Research (Spl.) (Spl.)
+- Thursday, October 23, 2025: No Instructional Day - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Thursday, October 23, 2025: No Instructional Day - UG Freshers (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Thursday, October 23, 2025: No Instructional Day - UG Seniors
+- Thursday, October 23, 2025: No Instructional Day - UG Seniors (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Friday, October 24, 2025: No Instructional Day - General (Semester) (Semester)
+- Friday, October 24, 2025: No Instructional Day - General (Flexible) (Flexible)
+- Friday, October 24, 2025: No Instructional Day - General Freshers
+- Friday, October 24, 2025: No Instructional Day - General Freshers (Flexible) (Flexible)
+- Friday, October 24, 2025: No Instructional Day - General (Inline) (Inline)
+- Friday, October 24, 2025: No Instructional Day - MBA General Freshers
+- Friday, October 24, 2025: No Instructional Day - PG Freshers
+- Friday, October 24, 2025: No Instructional Day - Research
+- Friday, October 24, 2025: No Instructional Day - Research (Spl.) (Spl.)
+- Friday, October 24, 2025: No Instructional Day - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Friday, October 24, 2025: No Instructional Day - UG Freshers (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Friday, October 24, 2025: No Instructional Day - UG Seniors
+- Friday, October 24, 2025: No Instructional Day - UG Seniors (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Saturday, October 25, 2025: Holiday - General (Semester) (Semester)
+- Saturday, October 25, 2025: Holiday - General (Flexible) (Flexible)
+- Saturday, October 25, 2025: Holiday - General Freshers
+- Saturday, October 25, 2025: Holiday - General Freshers (Flexible) (Flexible)
+- Saturday, October 25, 2025: Holiday - General (Inline) (Inline)
+- Saturday, October 25, 2025: Holiday - MBA General Freshers
+- Saturday, October 25, 2025: Holiday - PG Freshers
+- Saturday, October 25, 2025: Holiday - Research
+- Saturday, October 25, 2025: Holiday - Research (Spl.) (Spl.)
+- Saturday, October 25, 2025: Holiday - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Saturday, October 25, 2025: Holiday - UG Freshers (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Saturday, October 25, 2025: Holiday - UG Seniors
+- Saturday, October 25, 2025: Holiday - UG Seniors (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Sunday, October 26, 2025: Holiday - General (Semester) (Semester)
+- Sunday, October 26, 2025: Holiday - General (Flexible) (Flexible)
+- Sunday, October 26, 2025: Holiday - General Freshers
+- Sunday, October 26, 2025: Holiday - General Freshers (Flexible) (Flexible)
+- Sunday, October 26, 2025: Holiday - General (Inline) (Inline)
+- Sunday, October 26, 2025: Holiday - MBA General Freshers
+- Sunday, October 26, 2025: Holiday - PG Freshers
+- Sunday, October 26, 2025: Holiday - Research
+- Sunday, October 26, 2025: Holiday - Research (Spl.) (Spl.)
+- Sunday, October 26, 2025: Holiday - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Sunday, October 26, 2025: Holiday - UG Freshers (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
+- Sunday, October 26, 2025: Holiday - UG Seniors
+- Sunday, October 26, 2025: Holiday - UG Seniors (4 Years Spl. - Flexible 2) (4 Years Spl. - Flexible 2)
 
 Assessment Schedule:
-- August 17, 2025 (Sunday) to August 23, 2025 (Saturday): CAT1 schedule
-- September 8-10, 2025 (Monday to Wednesday): Course withdraw option for students
-- October 5, 2025 (Sunday) to October 11, 2025 (Saturday): CAT2 schedule
+- Sunday, August 17, 2025: CAT - I - General (Semester) (Semester)
+- Sunday, August 17, 2025: CAT - I - General (Flexible) (Flexible)
+- Sunday, August 17, 2025: CAT - I - General Freshers
+- Sunday, August 17, 2025: CAT - I - General Freshers (Flexible) (Flexible)
+- Sunday, August 17, 2025: CAT - I - General (Inline) (Inline)
+- Sunday, August 17, 2025: CAT - I - MBA General Freshers
+- Sunday, August 17, 2025: CAT - I - PG Freshers
+- Sunday, August 17, 2025: CAT - I - Research
+- Sunday, August 17, 2025: CAT - I - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Sunday, August 17, 2025: CAT - I - UG Seniors
+- Monday, August 18, 2025: CAT - I - General (Semester) (Semester)
+- Monday, August 18, 2025: CAT - I - General (Flexible) (Flexible)
+- Monday, August 18, 2025: CAT - I - General Freshers
+- Monday, August 18, 2025: CAT - I - General Freshers (Flexible) (Flexible)
+- Monday, August 18, 2025: CAT - I - General (Inline) (Inline)
+- Monday, August 18, 2025: CAT - I - MBA General Freshers
+- Monday, August 18, 2025: CAT - I - PG Freshers
+- Monday, August 18, 2025: CAT - I - Research
+- Monday, August 18, 2025: CAT - I - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Monday, August 18, 2025: CAT - I - UG Seniors
+- Tuesday, August 19, 2025: CAT - I - General (Semester) (Semester)
+- Tuesday, August 19, 2025: CAT - I - General (Flexible) (Flexible)
+- Tuesday, August 19, 2025: CAT - I - General Freshers
+- Tuesday, August 19, 2025: CAT - I - General Freshers (Flexible) (Flexible)
+- Tuesday, August 19, 2025: CAT - I - General (Inline) (Inline)
+- Tuesday, August 19, 2025: CAT - I - MBA General Freshers
+- Tuesday, August 19, 2025: CAT - I - PG Freshers
+- Tuesday, August 19, 2025: CAT - I - Research
+- Tuesday, August 19, 2025: CAT - I - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Tuesday, August 19, 2025: CAT - I - UG Seniors
+- Wednesday, August 20, 2025: CAT - I - General (Semester) (Semester)
+- Wednesday, August 20, 2025: CAT - I - General (Flexible) (Flexible)
+- Wednesday, August 20, 2025: CAT - I - General Freshers
+- Wednesday, August 20, 2025: CAT - I - General Freshers (Flexible) (Flexible)
+- Wednesday, August 20, 2025: CAT - I - General (Inline) (Inline)
+- Wednesday, August 20, 2025: CAT - I - MBA General Freshers
+- Wednesday, August 20, 2025: CAT - I - PG Freshers
+- Wednesday, August 20, 2025: CAT - I - Research
+- Wednesday, August 20, 2025: CAT - I - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Wednesday, August 20, 2025: CAT - I - UG Seniors
+- Thursday, August 21, 2025: CAT - I - General (Semester) (Semester)
+- Thursday, August 21, 2025: CAT - I - General (Flexible) (Flexible)
+- Thursday, August 21, 2025: CAT - I - General Freshers
+- Thursday, August 21, 2025: CAT - I - General Freshers (Flexible) (Flexible)
+- Thursday, August 21, 2025: CAT - I - General (Inline) (Inline)
+- Thursday, August 21, 2025: CAT - I - MBA General Freshers
+- Thursday, August 21, 2025: CAT - I - PG Freshers
+- Thursday, August 21, 2025: CAT - I - Research
+- Thursday, August 21, 2025: CAT - I - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Thursday, August 21, 2025: CAT - I - UG Seniors
+- Friday, August 22, 2025: CAT - I - General (Semester) (Semester)
+- Friday, August 22, 2025: CAT - I - General (Flexible) (Flexible)
+- Friday, August 22, 2025: CAT - I - General Freshers
+- Friday, August 22, 2025: CAT - I - General Freshers (Flexible) (Flexible)
+- Friday, August 22, 2025: CAT - I - General (Inline) (Inline)
+- Friday, August 22, 2025: CAT - I - MBA General Freshers
+- Friday, August 22, 2025: CAT - I - PG Freshers
+- Friday, August 22, 2025: CAT - I - Research
+- Friday, August 22, 2025: CAT - I - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Friday, August 22, 2025: CAT - I - UG Seniors
+- Saturday, August 23, 2025: CAT - I - General (Semester) (Semester)
+- Saturday, August 23, 2025: CAT - I - General (Flexible) (Flexible)
+- Saturday, August 23, 2025: CAT - I - General Freshers
+- Saturday, August 23, 2025: CAT - I - General Freshers (Flexible) (Flexible)
+- Saturday, August 23, 2025: CAT - I - General (Inline) (Inline)
+- Saturday, August 23, 2025: CAT - I - MBA General Freshers
+- Saturday, August 23, 2025: CAT - I - PG Freshers
+- Saturday, August 23, 2025: CAT - I - Research
+- Saturday, August 23, 2025: CAT - I - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Saturday, August 23, 2025: CAT - I - UG Seniors
+- Sunday, October 5, 2025: CAT - II - General (Semester) (Semester)
+- Sunday, October 5, 2025: CAT - II - General (Flexible) (Flexible)
+- Sunday, October 5, 2025: CAT - II - General Freshers
+- Sunday, October 5, 2025: CAT - II - General Freshers (Flexible) (Flexible)
+- Sunday, October 5, 2025: CAT - II - General (Inline) (Inline)
+- Sunday, October 5, 2025: CAT - II - MBA General Freshers
+- Sunday, October 5, 2025: CAT - II - PG Freshers
+- Sunday, October 5, 2025: CAT - II - Research
+- Sunday, October 5, 2025: CAT - II - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Sunday, October 5, 2025: CAT - II - UG Seniors
+- Monday, October 6, 2025: CAT - II - General (Semester) (Semester)
+- Monday, October 6, 2025: CAT - II - General (Flexible) (Flexible)
+- Monday, October 6, 2025: CAT - II - General Freshers
+- Monday, October 6, 2025: CAT - II - General Freshers (Flexible) (Flexible)
+- Monday, October 6, 2025: CAT - II - General (Inline) (Inline)
+- Monday, October 6, 2025: CAT - II - MBA General Freshers
+- Monday, October 6, 2025: CAT - II - PG Freshers
+- Monday, October 6, 2025: CAT - II - Research
+- Monday, October 6, 2025: CAT - II - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Monday, October 6, 2025: CAT - II - UG Seniors
+- Tuesday, October 7, 2025: CAT - II - General (Semester) (Semester)
+- Tuesday, October 7, 2025: CAT - II - General (Flexible) (Flexible)
+- Tuesday, October 7, 2025: CAT - II - General Freshers
+- Tuesday, October 7, 2025: CAT - II - General Freshers (Flexible) (Flexible)
+- Tuesday, October 7, 2025: CAT - II - General (Inline) (Inline)
+- Tuesday, October 7, 2025: CAT - II - MBA General Freshers
+- Tuesday, October 7, 2025: CAT - II - PG Freshers
+- Tuesday, October 7, 2025: CAT - II - Research
+- Tuesday, October 7, 2025: CAT - II - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Tuesday, October 7, 2025: CAT - II - UG Seniors
+- Wednesday, October 8, 2025: CAT - II - General (Semester) (Semester)
+- Wednesday, October 8, 2025: CAT - II - General (Flexible) (Flexible)
+- Wednesday, October 8, 2025: CAT - II - General Freshers
+- Wednesday, October 8, 2025: CAT - II - General Freshers (Flexible) (Flexible)
+- Wednesday, October 8, 2025: CAT - II - General (Inline) (Inline)
+- Wednesday, October 8, 2025: CAT - II - MBA General Freshers
+- Wednesday, October 8, 2025: CAT - II - PG Freshers
+- Wednesday, October 8, 2025: CAT - II - Research
+- Wednesday, October 8, 2025: CAT - II - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Wednesday, October 8, 2025: CAT - II - UG Seniors
+- Thursday, October 9, 2025: CAT - II - General (Semester) (Semester)
+- Thursday, October 9, 2025: CAT - II - General (Flexible) (Flexible)
+- Thursday, October 9, 2025: CAT - II - General Freshers
+- Thursday, October 9, 2025: CAT - II - General Freshers (Flexible) (Flexible)
+- Thursday, October 9, 2025: CAT - II - General (Inline) (Inline)
+- Thursday, October 9, 2025: CAT - II - MBA General Freshers
+- Thursday, October 9, 2025: CAT - II - PG Freshers
+- Thursday, October 9, 2025: CAT - II - Research
+- Thursday, October 9, 2025: CAT - II - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Thursday, October 9, 2025: CAT - II - UG Seniors
+- Friday, October 10, 2025: CAT - II - General (Semester) (Semester)
+- Friday, October 10, 2025: CAT - II - General (Flexible) (Flexible)
+- Friday, October 10, 2025: CAT - II - General Freshers
+- Friday, October 10, 2025: CAT - II - General Freshers (Flexible) (Flexible)
+- Friday, October 10, 2025: CAT - II - General (Inline) (Inline)
+- Friday, October 10, 2025: CAT - II - MBA General Freshers
+- Friday, October 10, 2025: CAT - II - PG Freshers
+- Friday, October 10, 2025: CAT - II - Research
+- Friday, October 10, 2025: CAT - II - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Friday, October 10, 2025: CAT - II - UG Seniors
+- Saturday, October 11, 2025: CAT - II - General (Semester) (Semester)
+- Saturday, October 11, 2025: CAT - II - General (Flexible) (Flexible)
+- Saturday, October 11, 2025: CAT - II - General Freshers
+- Saturday, October 11, 2025: CAT - II - General Freshers (Flexible) (Flexible)
+- Saturday, October 11, 2025: CAT - II - General (Inline) (Inline)
+- Saturday, October 11, 2025: CAT - II - MBA General Freshers
+- Saturday, October 11, 2025: CAT - II - PG Freshers
+- Saturday, October 11, 2025: CAT - II - Research
+- Saturday, October 11, 2025: CAT - II - UG Freshers (3 Years Spl.) (3 Years Spl.)
+- Saturday, October 11, 2025: CAT - II - UG Seniors
 
 Final Examinations:
-- November 7, 2025 (Friday): Last instructional day for laboratory classes
-- November 10-14, 2025 (Monday to Friday): Final Assessment Test (FAT) for laboratory courses/components
-- November 14, 2025 (Friday): Last instructional day for theory classes
-- November 17, 2025 - December 4, 2025 (Monday to Thursday): Commencement of Final Assessment Test (FAT) for theory courses
-
-Winter Semester 2025-2026:
-- December 5, 2025 (Friday): Commencement of Winter Semester 2025-2026 (Tentative)
-- December 21, 2025 - January 4, 2026 (Sunday to Sunday): Winter Vacation for students (Tentative)
-
-Important Notes:
-- Students must participate in course wish list registration (mandatory) to be eligible for Course Registration
-- Minimum 100% attendance required; however, relaxation on minimum attendance given for genuine reasons
-- Minimum 75% attendance mandatory for appearing in examinations (CAT and FAT), exception for 9 CGPA+
-- Last date for assignment and project report uploads: November 14, 2025 (Friday)
-- FAT schedule will be announced by CoE at appropriate time
-- Academic calendar on VTOP Login to be referred for Saturday instructional days conversion
-
-*Contact Information:
-- Academic Office: academics@vit.ac.in
-- Dean Academics: M. Anthony Xavior PhD
-- For queries: Check VTOP portal for updates and notifications
+- Friday, November 7, 2025: (Friday Day Order, Last Instructional Day for Lab.) (Friday Day Order, Last Instructional Day for Lab.)
+- Friday, November 7, 2025: (Last Instructional Day for Laboratory Classes) (Last Instructional Day for Laboratory Classes)
+- Friday, November 7, 2025: (Last instructional day for Laboratory Classes) (Last instructional day for Laboratory Classes)
+- Friday, November 7, 2025: (Last instructional day for laboratory classes) (Last instructional day for laboratory classes)
+- Saturday, November 8, 2025: (Friday Order, Last instructional day for Lab) (Friday Order, Last instructional day for Lab)
+- Saturday, November 8, 2025: (Friday order, Last instructional day for Lab) (Friday order, Last instructional day for Lab)
+- Sunday, November 9, 2025: (Last Instructional day for Laboratory Courses) (Last Instructional day for Laboratory Courses)
+- Monday, November 10, 2025: (Commencement of FAT for Lab Courses / Components) (Commencement of FAT for Lab Courses / Components)
+- Monday, November 10, 2025: (Commencement of FAT for Lab courses / components) (Commencement of FAT for Lab courses / components)
+- Friday, November 14, 2025: (Last Instructional Day for Theory Classes) (Last Instructional Day for Theory Classes)
+- Friday, November 14, 2025: (Last instructional day for theory Classes) (Last instructional day for theory Classes)
+- Friday, November 14, 2025: (Last instructional day for Theory Classes) (Last instructional day for Theory Classes)
+- Friday, November 14, 2025: (Last instructional day for theory classes) (Last instructional day for theory classes)
+- Saturday, November 15, 2025: (Lab FAT. Last Instructional day for theory) (Lab FAT. Last Instructional day for theory)
 `,
   metadata: {
-    currentSemester: 'Fall 2025-26',
-    nextImportantDate: '2025-08-17',
-    academicYear: '2025-26',
-    semesterStart: '2025-07-09',
-    semesterEnd: '2025-12-04',
-    cat1Period: 'August 17-23, 2025',
-    cat2Period: 'October 5-11, 2025',
-    fatPeriod: 'November 17 - December 4, 2025',
-    deanAcademics: 'M. Anthony Xavior PhD',
-  },
-}
+  "currentSemester": "Fall 2025-26",
+  "nextImportantDate": "2025-07-24",
+  "academicYear": "2025-26",
+  "semesterStart": "2025-07-08",
+  "semesterEnd": "2025-11-14",
+  "cat1Period": "TBD",
+  "cat2Period": "TBD",
+  "fatPeriod": "November 10-15, 2025",
+  "deanAcademics": "M. Anthony Xavior PhD"
+},
+};

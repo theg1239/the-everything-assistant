@@ -142,7 +142,7 @@ function getStaticFollowUpSuggestions(assistantMessage: string): string[] {
   const message = assistantMessage.toLowerCase()
 
   const currentSemesterSuggestions = [
-    'when is course registration?',
+    'when is the next semester registration?',
     'show me fall semester exam dates',
     'what classes start in july?',
   ]
@@ -239,7 +239,7 @@ function getStaticFollowUpSuggestions(assistantMessage: string): string[] {
 
   return [
     'show my vtop attendance',
-    'when is course registration?',
+    'when is the next semester FFCS?',
     'check fall semester exam dates',
   ]
 }

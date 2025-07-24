@@ -312,7 +312,6 @@ export async function getMessages(chatId: string): Promise<Message[]> {
     })
     return messages.map(msg => {
       let toolInvocations = msg.tool_invocations ?? undefined
-      // Sanitize tool invocations when retrieving to handle any existing unsanitized data
       if (toolInvocations && Array.isArray(toolInvocations)) {
         toolInvocations = sanitizeToolInvocations(toolInvocations)
       }
@@ -337,7 +336,6 @@ export async function saveMessage(
   let safeToolInvocations = undefined
   if (toolInvocations) {
     try {
-      // Sanitize tool invocations to remove sensitive data before storage
       const sanitized = sanitizeToolInvocations(
         Array.isArray(toolInvocations) ? toolInvocations : [toolInvocations]
       )
@@ -367,7 +365,6 @@ export async function saveMessage(
   return { ...message, toolInvocations: message.tool_invocations } as Message
 }
 
-// Optimized canvas document queries
 export async function getCanvasDocuments(chatId: string): Promise<CanvasDocument[]> {
   try {
     const documents = await prisma.canvasDocument.findMany({
@@ -657,7 +654,6 @@ export async function getRecentMessagesForUser(
 
   return messages.map(msg => {
     let toolInvocations = msg.tool_invocations ?? undefined
-    // Sanitize tool invocations when retrieving to handle any existing unsanitized data
     if (toolInvocations && Array.isArray(toolInvocations)) {
       toolInvocations = sanitizeToolInvocations(toolInvocations)
     }

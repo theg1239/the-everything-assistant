@@ -704,9 +704,6 @@ CRITICAL TOOL CONTINUATION RULES:
             stepIndex,
           })
 
-          // Don't save intermediate steps - we'll save everything in onFinish
-          // This prevents creating separate messages for each tool invocation
-
           const knowledgeBaseCalls =
             toolCalls?.filter((tc: any) => tc.toolName === 'knowledgeBase') || []
           if (knowledgeBaseCalls.length > 0) {

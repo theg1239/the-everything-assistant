@@ -161,6 +161,10 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
           nightslip: 'Night Slip',
           'course-page': 'Course Page',
           da: 'Digital Assignment',
+          timetable: 'Timetable',
+          attendance: 'Attendance',
+          grades: 'Grades',
+          profile: 'Profile',
         }
         return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ')
       }
@@ -265,6 +269,10 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
           nightslip: 'Night Slip',
           'course-page': 'Course Page',
           da: 'Digital Assignment',
+          timetable: 'Timetable',
+          attendance: 'Attendance',
+          grades: 'Grades',
+          profile: 'Profile',
         }
         return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ')
       }
@@ -1019,10 +1027,13 @@ const PureToolCallDisplay = ({
 
   const filteredToolCalls = (() => {
     const map = new Map<string, any>()
+    const hasVTOPCreds = hasVTOPCredentials()
+    
     for (const tc of toolCalls) {
       if (
         tc.toolName === 'knowledgeBase' ||
         tc.toolName === 'saveMemory' ||
+        (tc.toolName === 'queryVTOP' && hasVTOPCreds) ||
         (tc.result && tc.result.hidden)
       ) {
         continue
@@ -1038,19 +1049,19 @@ const PureToolCallDisplay = ({
 
   const enrichedToolCalls = filteredToolCalls.map(tool => {
     if (tool.toolName === 'queryVTOP' && tool.toolCallId) {
+      if (tool.result && (tool.result.data || tool.result.output || tool.result.success !== undefined)) {
+        return {
+          ...tool,
+          state: tool.result.success !== false ? 'result' : 'error',
+        }
+      }
+      
       const contextResult = getToolResult(tool.toolCallId)
       if (contextResult && contextResult.result) {
         return {
           ...tool,
           result: contextResult.result,
           state: 'result',
-        }
-      }
-      if (tool.result && !contextResult) {
-        return {
-          ...tool,
-          result: undefined,
-          state: 'call',
         }
       }
     }
@@ -1128,14 +1139,15 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
   const isMobile = useMediaQuery('(max-width: 768px)')
   const { getToolResult, version } = useVTOP()
 
-  // Auto-retry logic removed to prevent infinite loops
-
   const filteredToolCalls = (() => {
     const map = new Map<string, any>()
+    const hasVTOPCreds = hasVTOPCredentials()
+    
     for (const tc of toolCalls) {
       if (
         tc.toolName === 'knowledgeBase' ||
         tc.toolName === 'saveMemory' ||
+        (tc.toolName === 'queryVTOP' && hasVTOPCreds) ||
         (tc.result && tc.result.hidden)
       ) {
         continue
@@ -1151,6 +1163,13 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
 
   const enrichedToolCalls = filteredToolCalls.map(tool => {
     if (tool.toolName === 'queryVTOP' && tool.toolCallId) {
+      if (tool.result && (tool.result.data || tool.result.output || tool.result.success !== undefined)) {
+        return {
+          ...tool,
+          state: tool.result.success !== false ? 'result' : 'error',
+        }
+      }
+      
       const contextResult = getToolResult(tool.toolCallId)
       if (contextResult && contextResult.result) {
         return {
@@ -1159,10 +1178,10 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
           state: 'result',
         }
       }
-      if (tool.result && !contextResult) {
+      
+      if (tool.state === 'call' || (!tool.result && tool.state !== 'result')) {
         return {
           ...tool,
-          result: undefined,
           state: 'call',
         }
       }
@@ -1171,6 +1190,10 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
   })
 
   const allCompleted = enrichedToolCalls.every(toolCall => {
+    if (toolCall.state === 'call') {
+      return false
+    }
+
     if (!toolCall.result) {
       return false
     }

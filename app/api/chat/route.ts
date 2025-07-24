@@ -305,6 +305,9 @@ export async function POST(req: Request) {
       }
     }
 
+    let directToolCallResult: any = null
+    let directToolCallExecuted = false
+
     if (directToolCall) {
       const tools = createVITTools(session.user.id)
       const tool = tools[directToolCall.toolName as keyof typeof tools]
@@ -352,41 +355,40 @@ export async function POST(req: Request) {
                 structured_data: (parsedData as any).structured_data,
                 summary: (parsedData as any).summary,
               })
-              const assistantResponse =
-                (result as any).formatted_content ||
-                (result as any).summary ||
-                `Successfully retrieved your ${command} data from VTOP.`
 
-              const toolInvocation = {
+              directToolCallResult = {
                 toolCallId: directToolCall.toolCallId || Date.now().toString(),
                 toolName: directToolCall.toolName,
                 args: directToolCall.args,
                 result: result,
                 state: 'result',
               }
-
-              await saveMessage(
-                chat.id,
-                'assistant',
-                assistantResponse,
-                [toolInvocation],
-                Date.now().toString()
-              )
+              directToolCallExecuted = true
             } catch (parseError) {
               console.error('Failed to parse VTOP data:', parseError)
+              directToolCallResult = {
+                toolCallId: directToolCall.toolCallId || Date.now().toString(),
+                toolName: directToolCall.toolName,
+                args: directToolCall.args,
+                result: result,
+                state: 'result',
+              }
+              directToolCallExecuted = true
             }
-            return new Response(JSON.stringify({ success: true, result }), {
-              headers: { 'Content-Type': 'application/json' },
-            })
+          } else {
+            // For non-VTOP tools, store the result for streaming
+            directToolCallResult = {
+              toolCallId: directToolCall.toolCallId || Date.now().toString(),
+              toolName: directToolCall.toolName,
+              args: directToolCall.args,
+              result: result,
+              state: 'result',
+            }
+            directToolCallExecuted = true
           }
-
-          return new Response(JSON.stringify({ success: true, result }), {
-            headers: { 'Content-Type': 'application/json' },
-          })
         } catch (error: any) {
           console.error('Direct tool call failed:', error)
-
-          const failedInvocation = {
+          directToolCallResult = {
             toolCallId: directToolCall.toolCallId || Date.now().toString(),
             toolName: directToolCall.toolName,
             args: directToolCall.args,
@@ -397,32 +399,11 @@ export async function POST(req: Request) {
             },
             state: 'error',
           }
-
-          try {
-            await saveMessage(
-              chat.id,
-              'assistant',
-              `Failed to execute ${directToolCall.toolName}: ${error.message || 'Unknown error'}`,
-              [failedInvocation],
-              Date.now().toString()
-            )
-            console.log('Failed tool invocation saved to database')
-          } catch (saveError) {
-            console.error('Failed to save failed tool invocation:', saveError)
-          }
-
-          return new Response(
-            JSON.stringify({
-              success: false,
-              error: error.message || 'Tool execution failed',
-            }),
-            { status: 500, headers: { 'Content-Type': 'application/json' } }
-          )
+          directToolCallExecuted = true
         }
       } else {
         console.error('Direct tool call - tool not found:', directToolCall.toolName)
-
-        const notFoundInvocation = {
+        directToolCallResult = {
           toolCallId: directToolCall.toolCallId || Date.now().toString(),
           toolName: directToolCall.toolName,
           args: directToolCall.args,
@@ -433,24 +414,7 @@ export async function POST(req: Request) {
           },
           state: 'error',
         }
-
-        try {
-          await saveMessage(
-            chat.id,
-            'assistant',
-            `Tool "${directToolCall.toolName}" not found`,
-            [notFoundInvocation],
-            Date.now().toString()
-          )
-          console.log('Tool not found invocation saved to database')
-        } catch (saveError) {
-          console.error('Failed to save tool not found invocation:', saveError)
-        }
-
-        return new Response(JSON.stringify({ success: false, error: 'Tool not found' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
-        })
+        directToolCallExecuted = true
       }
     }
 
@@ -604,6 +568,100 @@ CRITICAL TOOL CONTINUATION RULES:
       return message
     })
 
+    if (directToolCallResult && directToolCallExecuted) {
+      const lastUserMessage = enhancedMessages[enhancedMessages.length - 1]
+      if (lastUserMessage && lastUserMessage.role === 'user') {
+        let toolContext = ''
+        
+        if (directToolCallResult.toolName === 'queryVTOP' && directToolCallResult.result?.success) {
+          const command = directToolCallResult.result.command || directToolCallResult.args?.command || 'data'
+          let dataContext = ''
+
+          if (directToolCallResult.result.formatted_content) {
+            dataContext = directToolCallResult.result.formatted_content
+          } else if (directToolCallResult.result.summary) {
+            dataContext = directToolCallResult.result.summary
+          } else if (directToolCallResult.result.data || directToolCallResult.result.output) {
+            const rawData = directToolCallResult.result.data || directToolCallResult.result.output
+            if (typeof rawData === 'string') {
+              dataContext = rawData.substring(0, 500) + (rawData.length > 500 ? '...' : '')
+            } else if (Array.isArray(rawData)) {
+              dataContext = `Retrieved ${rawData.length} items for ${command}`
+            } else {
+              dataContext = `Retrieved ${command} data from VTOP`
+            }
+          }
+          
+          if (dataContext) {
+            toolContext = `\n\n[VTOP ${command.toUpperCase()} DATA CONTEXT]:\n${dataContext}`
+            toolContext += `\n\n[IMPORTANT]: VTOP ${command} data was successfully retrieved above. Use this data to answer the user's question about ${command}.`
+          }
+        }
+
+        if (toolContext) {
+          enhancedMessages[enhancedMessages.length - 1] = {
+            ...lastUserMessage,
+            content: (lastUserMessage.content || '') + toolContext,
+          }
+        }
+      }
+    }
+
+    if (directToolCallResult && directToolCallExecuted && directToolCallResult.result?.formatted_content) {
+      const responseText = directToolCallResult.result.formatted_content || 
+                          directToolCallResult.result.summary ||
+                          `Here's your ${directToolCallResult.args?.command || 'data'} from VTOP.`
+
+      const mockResult = {
+        text: responseText,
+        response: { id: `direct-${Date.now()}` },
+        toolResults: [directToolCallResult],
+        steps: [{
+          toolResults: [directToolCallResult]
+        }]
+      }
+
+      const safeInvocations = sanitizeToolInvocations([{
+        toolCallId: directToolCallResult.toolCallId,
+        toolName: directToolCallResult.toolName,
+        args: directToolCallResult.args,
+        result: directToolCallResult.result,
+        state: directToolCallResult.state,
+      }])
+
+      try {
+        await saveMessage(
+          chat.id,
+          'assistant',
+          responseText,
+          safeInvocations,
+          mockResult.response.id
+        )
+        console.log('Direct tool call message saved with tool invocation')
+      } catch (error) {
+        console.error('Failed to save direct tool call message:', error)
+      }
+
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(`9:{"toolCallId":"${directToolCallResult.toolCallId}","toolName":"${directToolCallResult.toolName}","args":${JSON.stringify(directToolCallResult.args)}}\n`))
+          controller.enqueue(encoder.encode(`a:{"toolCallId":"${directToolCallResult.toolCallId}","result":${JSON.stringify(directToolCallResult.result)}}\n`))
+          controller.enqueue(encoder.encode(`0:"${responseText.replace(/"/g, '\\"')}"\n`))
+          controller.enqueue(encoder.encode(`e:{"finishReason":"stop","usage":{"promptTokens":100,"completionTokens":50},"isContinued":false}\n`))
+          controller.close()
+        }
+      })
+
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'X-Chat-Id': chat.id,
+          'X-Chat-Path': chat.path,
+        },
+      })
+    }
+
     const resultStream = await rateLimitedAI.google.streamText(
       {
         model: await rateLimitedAI.google.model(),
@@ -675,7 +733,16 @@ CRITICAL TOOL CONTINUATION RULES:
               index === array.findIndex(r => r.toolCallId === result.toolCallId)
           )
 
-          console.log(`Collected ${uniqueToolResults.length} unique tool results from all steps`)
+          if (directToolCallResult) {
+            const existingIndex = uniqueToolResults.findIndex(r => r.toolCallId === directToolCallResult.toolCallId)
+            if (existingIndex === -1) {
+              uniqueToolResults.push(directToolCallResult)
+            } else {
+              uniqueToolResults[existingIndex] = directToolCallResult
+            }
+          }
+
+          console.log(`Collected ${uniqueToolResults.length} unique tool results from all steps${directToolCallResult ? ' (including direct tool call)' : ''}`)
 
           for (const tr of uniqueToolResults) {
             if (

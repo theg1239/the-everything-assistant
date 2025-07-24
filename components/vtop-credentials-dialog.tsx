@@ -152,7 +152,7 @@ export function VTOPCredentialsDialog({
               <input
                 id="username"
                 type="text"
-                placeholder="not your reg number"
+                placeholder="enter your VTOP username"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 required

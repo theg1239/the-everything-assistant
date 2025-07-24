@@ -4,11 +4,10 @@ import { motion } from 'framer-motion'
 import type { Message } from 'ai'
 import { cn } from '@/lib/utils'
 import ReactMarkdown from 'react-markdown'
+import { OptimizedMarkdown } from './optimized-markdown'
 import { ToolCallDisplay } from './tool-call-display'
 import { MessageActions } from './message-actions'
 import { memo, useMemo } from 'react'
-import rehypeRaw from 'rehype-raw'
-import remarkGfm from 'remark-gfm'
 
 interface MessageBubbleProps {
   message: Message
@@ -118,27 +117,10 @@ const PureMessageBubble = ({
             {isUser ? (
               <p className="text-base leading-relaxed">{message.content}</p>
             ) : hasContent ? (
-              <div className="text-base leading-relaxed prose prose-sm max-w-none dark:prose-invert">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeRaw]}
-                  components={{
-                    pre: ({ children }) => (
-                      <pre className="overflow-auto bg-muted p-4 rounded-lg border">{children}</pre>
-                    ),
-                    code: ({ children, className }) => {
-                      const isInline = !className
-                      return isInline ? (
-                        <code className="bg-muted px-1 py-0.5 rounded text-sm">{children}</code>
-                      ) : (
-                        <code className={className}>{children}</code>
-                      )
-                    },
-                  }}
-                >
-                  {message.content as string}
-                </ReactMarkdown>
-              </div>
+              <OptimizedMarkdown
+                id={message.id}
+                content={message.content as string}
+              />
             ) : null}
 
             {/* Message actions */}

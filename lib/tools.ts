@@ -15,6 +15,7 @@ import {
 import { getCourseData, School } from './ffcs-tool'
 import { createKnowledgeTools } from './knowledge-tools'
 import { createMemoryTool } from './memory/memory-tools'
+import { hasVTOPCredentials, getFormattedVTOPCredentials } from './server-vtop-credentials'
 
 async function searchRedditKnowledge(query: string, limit: number = 10) {
   try {
@@ -1457,7 +1458,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           .number()
           .optional()
           .describe(
-            'Semester number (1-8) for commands like marks, grades, attendance, timetable, exams, calendar. If not specified, user will be prompted to select from available semesters.'
+            'Semester number (1-8) for commands like marks, grades, attendance, exams, calendar. Not needed for timetable (always use latest, specify latest always). If not specified, user will be prompted to select from available semesters.'
           ),
         semesterQuery: z
           .string()
@@ -1531,12 +1532,28 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       ) => {
         try {
           if (!username || !password) {
-            return {
-              success: false,
-              error: 'VTOP credentials required',
-              requiresCredentials: true,
-              command,
-              message: 'Please provide your VTOP username and password to access VTOP data.',
+            if (await hasVTOPCredentials()) {
+              const savedCreds = await getFormattedVTOPCredentials()
+              if (savedCreds) {
+                username = savedCreds.username
+                password = savedCreds.encryptedPassword
+              } else {
+                return {
+                  success: false,
+                  error: 'VTOP credentials required',
+                  requiresCredentials: true,
+                  command,
+                  message: 'Please provide your VTOP username and password to access VTOP data.',
+                }
+              }
+            } else {
+              return {
+                success: false,
+                error: 'VTOP credentials required',
+                requiresCredentials: true,
+                command,
+                message: 'Please provide your VTOP username and password to access VTOP data.',
+              }
             }
           }
 
@@ -1567,6 +1584,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           if (fuzzyIndex !== undefined) flags.fuzzyIndex = fuzzyIndex
           if (courseQuery) flags.course = courseQuery
           if (debug) flags.debug = debug
+
+          if (command === 'timetable') {
+            flags.semesterQuery = 'latest'
+          }
 
           const PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001'
 

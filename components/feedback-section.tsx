@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useMemo, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -29,6 +29,7 @@ export function FeedbackSection() {
   const [feedbackTitle, setFeedbackTitle] = useState('')
   const [feedbackBody, setFeedbackBody] = useState('')
   const [newChunks, setNewChunks] = useState<string[]>([])
+  const [allChunksText, setAllChunksText] = useState('')
 
   const handleFetchAndSetView = async () => {
     setIsLoading(true)
@@ -40,6 +41,11 @@ export function FeedbackSection() {
       }
       const data = await response.json()
       setKnowledgeChunks(data)
+      // Initialize the combined text when chunks are loaded
+      const combinedText = data
+        .map((chunk: KnowledgeChunk) => chunk.chunk.trim())
+        .join('\n\n---\n\n')
+      setAllChunksText(combinedText)
       setView('contribute')
     } catch (err: any) {
       setError(err.message)
@@ -52,6 +58,32 @@ export function FeedbackSection() {
   const handleChunkChange = (id: number, content: string) => {
     setEditedChunks(prev => ({ ...prev, [id]: content }))
   }
+
+  // Debounced function to update edited chunks from combined text
+  const updateEditedChunksFromText = useCallback((text: string) => {
+    const chunks = text.split(/\n\s*---\s*\n/).map(chunk => chunk.trim()).filter(chunk => chunk.length > 0)
+    
+    const newEditedChunks: Record<number, string> = {}
+    knowledgeChunks.forEach((originalChunk, index) => {
+      if (chunks[index] !== undefined && chunks[index] !== originalChunk.chunk.trim()) {
+        newEditedChunks[originalChunk.id] = chunks[index]
+      }
+    })
+    
+    setEditedChunks(newEditedChunks)
+  }, [knowledgeChunks])
+
+  const handleAllChunksChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newText = e.target.value
+    setAllChunksText(newText)
+    
+    // Use a timeout to debounce the parsing and state update
+    const timeoutId = setTimeout(() => {
+      updateEditedChunksFromText(newText)
+    }, 300) // 300ms debounce
+    
+    return () => clearTimeout(timeoutId)
+  }, [updateEditedChunksFromText])
 
   const handleAddChunk = () => {
     setNewChunks(prev => [...prev, ''])
@@ -253,24 +285,18 @@ export function FeedbackSection() {
               {knowledgeChunks.length > 0 && (
                 <div className="space-y-4">
                   <h4 className="font-medium text-base sm:text-lg">edit existing knowledge</h4>
-                  <div className="grid gap-4">
-                    {knowledgeChunks.map((chunk, index) => (
-                      <div
-                        key={chunk.id}
-                        className="space-y-3 p-4 border border-border rounded-lg bg-background/30"
-                      >
-                        <Label htmlFor={`chunk-${chunk.id}`} className="text-sm font-medium block">
-                          knowledge #{index + 1}
-                        </Label>
-                        <Textarea
-                          id={`chunk-${chunk.id}`}
-                          value={editedChunks[chunk.id] ?? chunk.chunk}
-                          onChange={e => handleChunkChange(chunk.id, e.target.value)}
-                          rows={6}
-                          className="text-sm bg-background/50 min-h-[150px] resize-y"
-                        />
-                      </div>
-                    ))}
+                  <div className="space-y-3 p-4 border border-border rounded-lg bg-background/30">
+                    <Label htmlFor="all-chunks" className="text-sm font-medium block">
+                      knowledge base
+                    </Label>
+                    <Textarea
+                      id="all-chunks"
+                      value={allChunksText}
+                      onChange={handleAllChunksChange}
+                      rows={20}
+                      className="text-sm bg-background/50 min-h-[400px] resize-y font-mono"
+                      placeholder="Edit all knowledge chunks here..."
+                    />
                   </div>
                 </div>
               )}

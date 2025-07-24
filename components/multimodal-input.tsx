@@ -227,10 +227,10 @@ const PureMultimodalInput = ({
                             className="size-9 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 shadow-sm"
                           >
                             <ArrowUpIcon size={16} />
-                            <span className="sr-only">Send message</span>
+                            <span className="sr-only">send message</span>
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>Send message</TooltipContent>
+                        <TooltipContent>send message</TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
                   </motion.div>

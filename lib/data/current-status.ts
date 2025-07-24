@@ -36,10 +36,7 @@ Upcoming Events:
 - Vinayaka Chathurthi: August 27, 2025 (Holiday)
 
 For Students:
-- Check VTOP portal regularly for course allocation updates
-- Prepare for course registration on June 28, 2025
-- Ensure all pending fees are cleared before registration
-- Academic counseling available for course selection queries
+- Start preparing for CAT-1
 
 Stay Updated:
 - VTOP Portal: For all academic updates and notifications

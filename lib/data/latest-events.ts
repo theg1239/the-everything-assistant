@@ -44,16 +44,13 @@ Where to Get Updates:
 - Your personal vitstudent.ac.in email address
 
 Action Items for Students:
-- Keep checking VTOP for course allocation updates
-- Prepare course preferences for registration by June 28
-- Clear any pending dues before registration
-- Update contact information on VTOP portal
+- Start preparing for CAT-1
 `,
   metadata: {
-    trendingEvent: 'Course Allocation Week',
+    trendingEvent: 'CAT-1 Preparation',
     nextBigEvent: "Gravitas'25",
     urgentDeadline: 'Weekend Semester Course Registration - July 25, 2025',
-    campusLife: 'Fall Semester ongoinge',
+    campusLife: 'Fall Semester ongoing',
     lastMajorAnnouncement: 'CAT-1 Soon',
     updateFrequency: 'Weekly',
   },

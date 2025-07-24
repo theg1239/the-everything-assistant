@@ -3,59 +3,92 @@ import { ContextData } from './index'
 export const currentStatus: ContextData = {
   section: 'current-status',
   title: 'Current Semester Status & Latest Updates',
-  lastUpdated: '2025-07-23',
+  lastUpdated: '2025-07-24',
   priority: 'high',
   content: `
-CURRENT SEMESTER STATUS:
-- Active Period: Fall Semester 2025-26
-- Current Semester: Fall Semester 2025-26
-- Current Phase: Preparation for CAT-1
-- Freshers are here and campus is VERY crowded
+# CURRENT SEMESTER STATUS
+**Active Period:** Fall Semester 2025-26
+**Current Phase:** Regular Classes & CAT-1 Preparation
+**Campus Status:** Very crowded with freshers
 
-WHAT'S HAPPENING RIGHT NOW (July 23, 2025):
-- Weekend semester course registration is on 25th July 2025, 11am to 6pm
-- AARAMB cultural fest is ongoing
+## IMMEDIATE PRIORITIES (July 24, 2025)
+1. **Weekend Semester Registration** - TOMORROW (July 25, 2025) 11am-6pm
+2. **CAT-1 Preparation** - Exam starts August 17, 2025 (3 weeks away)
+3. **AARAMB Cultural Fest** - Currently ongoing
 
-NEXT IMPORTANT DATES:
-- CAT-1 on August 17-23, 2025
+## CRITICAL UPCOMING DATES
+| Date | Event | Importance |
+|------|-------|------------|
+| July 25, 2025 | Weekend semester course registration (11am-6pm) | HIGH - Last chance |
+| August 15, 2025 | Independence Day Holiday | Academic break |
+| August 17-23, 2025 | CAT-1 Examinations | CRITICAL - 75% attendance required |
+| August 27, 2025 | Vinayaka Chathurthi Holiday | Academic break |
+| September 26-28, 2025 | Gravitas'25 Cultural Fest | Major campus event |
+| November 14, 2025 | Assignment submission deadline | CRITICAL |
+| December 21, 2025 - January 4, 2026 | Winter Vacation (tentative) | Semester break |
 
-LATEST EVENTS & ANNOUNCEMENTS:
+## ACADEMIC REQUIREMENTS & DEADLINES
+### Attendance
+- **Minimum Required:** 75% for exam eligibility
+- **Recommended:** 100% attendance
+- **Current Focus:** Maintain attendance for CAT-1 eligibility
 
-Academic Updates:
-- Fall Semester 2025-26 academic calendar released (VIT/VLR/Acad/2025/007 dated 06-03-2025)
-- Academic calendar on VTOP Login to be referred for Saturday instructional days
-
-Important Notices:
-- All programmes except MBA follow the published calendar
-- Minimum 75% attendance mandatory for exam eligibility
-- Winter vacation tentatively scheduled: December 21, 2025 - January 4, 2026
-
-Upcoming Events:
-- Gravitas'25: September 26-28, 2025 (VIT's annual cultural fest)
-- Independence Day: August 15, 2025 (Holiday)
-- Vinayaka Chathurthi: August 27, 2025 (Holiday)
-
-For Students:
-- Start preparing for CAT-1
-
-Stay Updated:
-- VTOP Portal: For all academic updates and notifications
-- Official VIT email
-
-Important Reminders:
-- Course registration is time-sensitive - don't miss June 28, 2025
-- 100% attendance preferred; minimum 75% mandatory
+### Assignments & Coursework
 - Last date for assignment uploads: November 14, 2025
-- FAT schedule will be announced by Controller of Examinations at appropriate time
+- FAT schedule: To be announced by Controller of Examinations
+- All programs except MBA follow published calendar
+
+## CURRENT EVENTS & ACTIVITIES
+### Academic
+- Regular classes in progress
+- CAT-1 preparation phase
+- Academic calendar reference: VTOP Portal for Saturday instructional days
+
+### Cultural & Campus Life
+- AARAMB cultural fest ongoing
+- Campus very crowded with new freshers
+- Preparation for Gravitas'25 (September)
+
+## OFFICIAL COMMUNICATION CHANNELS
+- **VTOP Portal:** Primary source for academic updates and notifications
+- **Official VIT Email:** Important announcements
+- **Academic Calendar:** VIT/VLR/Acad/2025/007 dated 06-03-2025
+
+## STUDENT ACTION ITEMS
+1. **URGENT:** Register for weekend semester courses (July 25, 11am-6pm)
+2. **PREPARE:** Start intensive CAT-1 preparation
+3. **MAINTAIN:** Keep attendance above 75%
+4. **MONITOR:** Check VTOP regularly for updates
+5. **PLAN:** Prepare assignment submissions well before November 14
+
+## SEMESTER OVERVIEW
+- **Start Date:** July 9, 2025
+- **Current Week:** Week 3 of semester
+- **Next Major Milestone:** CAT-1 (August 17-23)
+- **Semester Type:** Fall Semester 2025-26
+- **Academic Year:** 2025-26
 `,
   metadata: {
-    currentDate: '2025-07-23',
+    currentDate: '2025-07-24',
     activeSemester: 'Fall 2025-26',
-    semesterPhase: 'Regular classes',
-    nextMajorDate: '2025-08-17',
-    nextMajorEvent: 'CAT-1 Examination',
+    semesterPhase: 'Regular classes - CAT-1 preparation',
+    nextCriticalDate: '2025-07-25',
+    nextCriticalEvent: 'Weekend semester course registration',
+    nextExamDate: '2025-08-17',
+    nextExamEvent: 'CAT-1 Examination',
     classesStartDate: '2025-07-09',
+    semesterWeek: 3,
     upcomingFest: "Gravitas'25 (Sep 26-28, 2025)",
     academicYear: '2025-26',
+    attendanceRequirement: '75%',
+    assignmentDeadline: '2025-11-14',
+    campusStatus: 'Very crowded with freshers',
+    currentEvents: ['AARAMB cultural fest', 'Weekend semester registration', 'CAT-1 preparation'],
+    criticalReminders: [
+      'Weekend semester registration: July 25, 11am-6pm',
+      'CAT-1 starts in 3 weeks',
+      'Maintain 75% attendance',
+      'Assignment deadline: November 14'
+    ]
   },
 }

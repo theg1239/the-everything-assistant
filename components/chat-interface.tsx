@@ -31,6 +31,7 @@ import { useThrottle } from '@/hooks/use-debounce'
 import { useAutoResume } from '@/hooks/use-auto-resume'
 import { useSidebar } from '@/contexts/sidebar-context'
 import { StreamingErrorDisplay } from '@/components/streaming-error-display'
+import { DynamicLoadingIndicator } from '@/components/dynamic-loading-indicator'
 
 const useViewportHeight = () => {
   const mainRef = useRef<HTMLDivElement>(null)
@@ -833,26 +834,11 @@ const PureChatInterface = memo(
 
                 <RateLimitErrorDisplay />
 
-                {isLoading && input.trim() !== '' && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex items-center justify-center space-x-3 text-muted-foreground py-4"
-                  >
-                    <div className="flex space-x-1">
-                      <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
-                      <div
-                        className="w-2 h-2 bg-primary rounded-full animate-pulse"
-                        style={{ animationDelay: '0.2s' }}
-                      ></div>
-                      <div
-                        className="w-2 h-2 bg-primary rounded-full animate-pulse"
-                        style={{ animationDelay: '0.4s' }}
-                      ></div>
-                    </div>
-                    <span className="text-sm">thinking...</span>
-                  </motion.div>
-                )}
+                <DynamicLoadingIndicator 
+                  messages={messages}
+                  isLoading={isLoading && input.trim() !== ''}
+                  showForFirstMessage={true}
+                />
 
                 <SuggestedQuestions
                   isFirstMessage={true}
@@ -997,52 +983,36 @@ const PureChatInterface = memo(
                   maximizedItem={maximizedArtifact}
                   setMaximizedItem={setMaximizedArtifact}
                 />
-                {isLoading &&
-                  messages.length > 0 &&
-                  (() => {
-                    const last = messages[messages.length - 1]
+                <DynamicLoadingIndicator 
+                  messages={messages}
+                  isLoading={isLoading &&
+                    messages.length > 0 &&
+                    (() => {
+                      const last = messages[messages.length - 1]
 
-                    if (last.role === 'user') return true
+                      if (last.role === 'user') return true
 
-                    if (last.role === 'assistant') {
-                      if (
-                        last.toolInvocations?.some(
-                          (t: any) => t.toolName === 'knowledgeBase' && t.state !== 'result'
-                        )
-                      ) {
-                        return true
+                      if (last.role === 'assistant') {
+                        if (
+                          last.toolInvocations?.some(
+                            (t: any) => t.toolName === 'knowledgeBase' && t.state !== 'result'
+                          )
+                        ) {
+                          return true
+                        }
+
+                        if (
+                          (!last.content || (last.content as string).trim() === '') &&
+                          last.toolInvocations &&
+                          last.toolInvocations.length > 0
+                        ) {
+                          return true
+                        }
                       }
 
-                      if (
-                        (!last.content || (last.content as string).trim() === '') &&
-                        last.toolInvocations &&
-                        last.toolInvocations.length > 0
-                      ) {
-                        return true
-                      }
-                    }
-
-                    return false
-                  })() && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="flex items-center justify-center space-x-3 text-muted-foreground py-4"
-                    >
-                      <div className="flex space-x-1">
-                        <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
-                        <div
-                          className="w-2 h-2 bg-primary rounded-full animate-pulse"
-                          style={{ animationDelay: '0.2s' }}
-                        ></div>
-                        <div
-                          className="w-2 h-2 bg-primary rounded-full animate-pulse"
-                          style={{ animationDelay: '0.4s' }}
-                        ></div>
-                      </div>
-                      <span className="text-sm">thinking...</span>
-                    </motion.div>
-                  )}
+                      return false
+                    })()}
+                />
                 <div
                   ref={messagesEndRef}
                   className={isLoading ? 'h-20' : 'h-0'}

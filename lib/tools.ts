@@ -1530,13 +1530,28 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
         },
         context
       ) => {
-        try {
-          if (!username || !password) {
-            if (await hasVTOPCredentials()) {
-              const savedCreds = await getFormattedVTOPCredentials()
-              if (savedCreds) {
-                username = savedCreds.username
-                password = savedCreds.encryptedPassword
+        const MAX_RETRIES = 3;
+        let attempt = 0;
+        let lastError: any = null;
+        while (attempt < MAX_RETRIES) {
+          try {
+            let user = username;
+            let pass = password;
+            if (!user || !pass) {
+              if (await hasVTOPCredentials()) {
+                const savedCreds = await getFormattedVTOPCredentials();
+                if (savedCreds) {
+                  user = savedCreds.username;
+                  pass = savedCreds.encryptedPassword;
+                } else {
+                  return {
+                    success: false,
+                    error: 'VTOP credentials required',
+                    requiresCredentials: true,
+                    command,
+                    message: 'Please provide your VTOP username and password to access VTOP data.',
+                  };
+                }
               } else {
                 return {
                   success: false,
@@ -1544,112 +1559,138 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                   requiresCredentials: true,
                   command,
                   message: 'Please provide your VTOP username and password to access VTOP data.',
-                }
+                };
               }
+            }
+
+            if (command === 'course-page') {
+              return await handleIntelligentCoursePage({
+                username: user,
+                password: pass,
+                semesterQuery,
+                courseQuery,
+                facultyQuery,
+                materialQuery,
+                interactiveStep,
+                semester,
+                course,
+                faculty,
+                fuzzyIndex,
+                messages: context?.messages || [],
+              });
+            }
+
+            const flags: Record<string, any> = {};
+            if (semester !== undefined) flags.semester = semester;
+            if (semesterQuery) flags.semesterQuery = semesterQuery;
+            if (course !== undefined) flags.course = course;
+            if (faculty !== undefined) flags.faculty = faculty;
+            if (classGroup !== undefined) flags.classGroup = classGroup;
+            if (fuzzyIndex !== undefined) flags.fuzzyIndex = fuzzyIndex;
+            if (courseQuery) flags.course = courseQuery;
+            if (debug) flags.debug = debug;
+            if (command === 'timetable') {
+              flags.semesterQuery = 'latest';
+            }
+
+            const PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001';
+            let requestBody: any = {
+              command,
+              username: user,
+              flags,
+            };
+            if (pass.includes(':::')) {
+              const [encryptedPassword, sessionKey] = pass.split(':::');
+              requestBody.encryptedPassword = encryptedPassword;
+              requestBody.sessionKey = sessionKey;
             } else {
-              return {
-                success: false,
-                error: 'VTOP credentials required',
-                requiresCredentials: true,
-                command,
-                message: 'Please provide your VTOP username and password to access VTOP data.',
+              requestBody.password = pass;
+            }
+
+            const response = await fetch(`${PROXY_URL}/vtop`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(requestBody),
+            });
+
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}));
+              const errorMsg = typeof errorData === 'object' && 'error' in errorData && typeof errorData.error === 'string' ? errorData.error.toLowerCase() : '';
+              // Only break retry loop for invalid credentials
+              if (
+                errorMsg.includes('invalid username') ||
+                errorMsg.includes('invalid loginid') ||
+                errorMsg.includes('invalid password')
+              ) {
+                return {
+                  success: false,
+                  error: `VTOP request failed: ${response.status}`,
+                  message: errorData.error || `Failed to execute ${command} command`,
+                  details: errorData,
+                };
               }
+              lastError = {
+                success: false,
+                error: `VTOP request failed: ${response.status}`,
+                message: errorData.error || `Failed to execute ${command} command`,
+                details: errorData,
+              };
+              attempt++;
+              continue;
             }
-          }
 
-          if (command === 'course-page') {
-            return await handleIntelligentCoursePage({
-              username,
-              password,
-              semesterQuery,
-              courseQuery,
-              facultyQuery,
-              materialQuery,
-              interactiveStep,
-              semester,
-              course,
-              faculty,
-              fuzzyIndex,
-              messages: context?.messages || [],
-            })
-          }
-
-          const flags: Record<string, any> = {}
-
-          if (semester !== undefined) flags.semester = semester
-          if (semesterQuery) flags.semesterQuery = semesterQuery
-          if (course !== undefined) flags.course = course
-          if (faculty !== undefined) flags.faculty = faculty
-          if (classGroup !== undefined) flags.classGroup = classGroup
-          if (fuzzyIndex !== undefined) flags.fuzzyIndex = fuzzyIndex
-          if (courseQuery) flags.course = courseQuery
-          if (debug) flags.debug = debug
-
-          if (command === 'timetable') {
-            flags.semesterQuery = 'latest'
-          }
-
-          const PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001'
-
-          let requestBody: any = {
-            command,
-            username,
-            flags,
-          }
-
-          if (password.includes(':::')) {
-            const [encryptedPassword, sessionKey] = password.split(':::')
-            requestBody.encryptedPassword = encryptedPassword
-            requestBody.sessionKey = sessionKey
-          } else {
-            requestBody.password = password
-          }
-
-          const response = await fetch(`${PROXY_URL}/vtop`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(requestBody),
-          })
-
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}))
-            return {
+            const result = await response.json();
+            if (result.success) {
+              return {
+                success: true,
+                command,
+                data: result.data || result.output,
+                message: `Successfully retrieved ${command} data from VTOP`,
+                raw: result.raw || false,
+              };
+            } else {
+              const errorMsg = typeof result === 'object' && 'error' in result && typeof result.error === 'string' ? result.error.toLowerCase() : '';
+              if (
+                errorMsg.includes('invalid username') ||
+                errorMsg.includes('invalid loginid') ||
+                errorMsg.includes('invalid password')
+              ) {
+                return {
+                  success: false,
+                  error: result.error || 'Unknown error',
+                  message: `Failed to retrieve ${command} data from VTOP`,
+                  command,
+                };
+              }
+              lastError = {
+                success: false,
+                error: result.error || 'Unknown error',
+                message: `Failed to retrieve ${command} data from VTOP`,
+                command,
+              };
+              attempt++;
+              continue;
+            }
+          } catch (error: any) {
+            lastError = {
               success: false,
-              error: `VTOP request failed: ${response.status}`,
-              message: errorData.error || `Failed to execute ${command} command`,
-              details: errorData,
-            }
-          }
-
-          const result = await response.json()
-
-          if (result.success) {
-            return {
-              success: true,
-              command,
-              data: result.data || result.output,
-              message: `Successfully retrieved ${command} data from VTOP`,
-              raw: result.raw || false,
-            }
-          } else {
-            return {
-              success: false,
-              error: result.error || 'Unknown error',
-              message: `Failed to retrieve ${command} data from VTOP`,
-              command,
-            }
-          }
-        } catch (error: any) {
-          return {
-            success: false,
-            error: error.message || 'Network error',
-            message:
-              'Unable to connect to VTOP proxy service. Please ensure the service is running.',
-            suggestion: 'The VTOP proxy service may be offline. Please try again later.',
+              error: error.message || 'Network error',
+              message:
+                'Unable to connect to VTOP proxy service. Please ensure the service is running.',
+              suggestion: 'The VTOP proxy service may be offline. Please try again later.',
+            };
+            attempt++;
+            continue;
           }
         }
+        // If all retries failed, return last error
+        return lastError || {
+          success: false,
+          error: 'Unknown error after retries',
+          message: 'Failed to retrieve VTOP data after multiple attempts.',
+        };
       },
     }),
 

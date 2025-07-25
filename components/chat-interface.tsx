@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect, memo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useChat, type Message as AIMessage } from '@ai-sdk/react'
-import type { ToolInvocation } from '@ai-sdk/ui-utils'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useMemory } from '@/contexts/memory-context'
@@ -249,7 +248,7 @@ const PureChatInterface = memo(
     } = useChat({
       api: '/api/chat',
       initialMessages: initialMessages,
-      // experimental_throttle: 25,
+      experimental_throttle: 25,
       body: {
         ...(optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : {}),
         ...(selectedTool ? { preferredTool: selectedTool } : {}),
@@ -367,11 +366,11 @@ const PureChatInterface = memo(
 
     useEffect(() => {
       if (isLoading) {
-        setAutoScrollEnabled(isAtBottom)
+        setAutoScrollEnabled(false)
       } else {
         setAutoScrollEnabled(true)
       }
-    }, [isLoading, isAtBottom])
+    }, [isLoading])
 
     useEffect(() => {
       if (initialMessages.length > 0 && showFullChat) {

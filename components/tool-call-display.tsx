@@ -1028,12 +1028,22 @@ const PureToolCallDisplay = ({
   const filteredToolCalls = (() => {
     const map = new Map<string, any>()
     const hasVTOPCreds = hasVTOPCredentials()
-    
+
+    const visibleVTOPCommands = ['attendance', 'timetable']
+
     for (const tc of toolCalls) {
+      const isVisibleVTOPCommand = tc.toolName === 'queryVTOP' && 
+        (tc.args?.command && visibleVTOPCommands.includes(tc.args.command) ||
+         tc.function?.arguments?.command && visibleVTOPCommands.includes(tc.function.arguments.command) ||
+         (typeof tc.function?.arguments === 'string' && 
+          visibleVTOPCommands.includes(JSON.parse(tc.function.arguments || '{}')?.command)) ||
+         tc.result?.command && visibleVTOPCommands.includes(tc.result.command))
+
       if (
         tc.toolName === 'knowledgeBase' ||
         tc.toolName === 'saveMemory' ||
         (tc.toolName === 'queryVTOP' && hasVTOPCreds) ||
+        (tc.toolName === 'queryVTOP' && !isVisibleVTOPCommand) ||
         (tc.result && tc.result.hidden)
       ) {
         continue
@@ -1142,12 +1152,22 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
   const filteredToolCalls = (() => {
     const map = new Map<string, any>()
     const hasVTOPCreds = hasVTOPCredentials()
-    
+
+    const visibleVTOPCommands = ['attendance', 'timetable']
+
     for (const tc of toolCalls) {
+      const isVisibleVTOPCommand = tc.toolName === 'queryVTOP' && 
+        (tc.args?.command && visibleVTOPCommands.includes(tc.args.command) ||
+         tc.function?.arguments?.command && visibleVTOPCommands.includes(tc.function.arguments.command) ||
+         (typeof tc.function?.arguments === 'string' && 
+          visibleVTOPCommands.includes(JSON.parse(tc.function.arguments || '{}')?.command)) ||
+         tc.result?.command && visibleVTOPCommands.includes(tc.result.command))
+
       if (
         tc.toolName === 'knowledgeBase' ||
         tc.toolName === 'saveMemory' ||
         (tc.toolName === 'queryVTOP' && hasVTOPCreds) ||
+        (tc.toolName === 'queryVTOP' && !isVisibleVTOPCommand) ||
         (tc.result && tc.result.hidden)
       ) {
         continue

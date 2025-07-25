@@ -72,7 +72,7 @@
     "marked": "^16.1.1",
     "meshline": "^3.3.1",
     "nanoid": "latest",
-    "next": "^15.3.4",
+    "next": "^15.4.4",
     "next-auth": "^4.24.11",
     "next-themes": "latest",
     "nodemailer": "^7.0.3",

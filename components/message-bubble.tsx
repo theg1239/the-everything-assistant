@@ -12,6 +12,7 @@ import { memo, useMemo } from 'react'
 interface MessageBubbleProps {
   message: Message
   chatId?: string
+  isLoading?: boolean
   onCreateCanvas?: (content: string) => void
   onLoginClick?: () => void
   onPlacementSearch?: (company: string) => void
@@ -22,6 +23,7 @@ interface MessageBubbleProps {
 const PureMessageBubble = ({
   message,
   chatId,
+  isLoading,
   onCreateCanvas,
   onLoginClick,
   onPlacementSearch,
@@ -124,7 +126,7 @@ const PureMessageBubble = ({
             ) : null}
 
             {/* Message actions */}
-            {!isUser && chatId && (hasContent || hasVisibleToolCalls) && (
+            {!isUser && !isLoading && chatId && (hasContent || hasVisibleToolCalls) && (
               <MessageActions
                 messageId={message.id}
                 chatId={chatId}

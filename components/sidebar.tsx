@@ -422,7 +422,7 @@ export const Sidebar = memo(
               initial="closed"
               animate="open"
               exit="closed"
-              className="fixed left-0 top-0 z-50 h-full w-[320px] bg-background/95 border-r border-border/50 flex flex-col shadow-2xl"
+              className="fixed left-0 top-0 z-50 h-full w-[320px] bg-background/80 backdrop-blur-sm border-r border-border/30 flex flex-col shadow-2xl"
               onMouseEnter={() => setHovering(true)}
               onMouseLeave={() => setHovering(false)}
               onClick={(e) => e.stopPropagation()}
@@ -437,7 +437,7 @@ export const Sidebar = memo(
               }}
             >
               {/* Header */}
-              <div className="p-4 border-b border-border flex items-center justify-between bg-background/98">
+              <div className="p-4 border-b border-border flex items-center justify-between bg-transparent">
                 <div className="flex items-center space-x-2">
                   {loading ? (
                     <div className="h-7 w-32 bg-muted/60 rounded animate-pulse"></div>
@@ -459,7 +459,7 @@ export const Sidebar = memo(
               </div>
 
               {/* New Chat Button */}
-              <div className="p-4 border-b border-border bg-background/98">
+              <div className="p-4 border-b border-border bg-transparent">
                 {loading ? (
                   <div className="h-10 bg-muted/60 rounded-lg animate-pulse"></div>
                 ) : (
@@ -567,7 +567,7 @@ export const Sidebar = memo(
               </div>
 
               {/* User Section */}
-              <div className="p-4 border-t border-border bg-background/98">
+              <div className="p-4 border-t border-border bg-transparent">
                 {loading ? (
                   <div className="animate-pulse">
                     <div className="flex items-center space-x-3 mb-3">

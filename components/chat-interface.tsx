@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils'
 import { useThrottle } from '@/hooks/use-debounce'
 import { useAutoResume } from '@/hooks/use-auto-resume'
 import { useSidebar } from '@/contexts/sidebar-context'
+import { StreamingErrorDisplay } from '@/components/streaming-error-display'
 
 const useViewportHeight = () => {
   const mainRef = useRef<HTMLDivElement>(null)
@@ -314,11 +315,22 @@ const PureChatInterface = memo(
         }
       },
       onError: err => {
+        const errorMessage = err.message || err.toString()
+        const hasResponseBody = typeof err === 'object' && err !== null && 'responseBody' in err
+        const responseBody = hasResponseBody ? (err as any).responseBody : ''
+
+        const isGeminiStreamingError =
+          errorMessage.includes('contents.parts must not be empty') ||
+          errorMessage.includes('INVALID_ARGUMENT') ||
+          errorMessage.includes('GenerateContentRequest.contents') ||
+          errorMessage.includes('streamGenerateContent') ||
+          (typeof responseBody === 'string' && responseBody.includes('contents.parts must not be empty'))
+
         const isRateLimit = checkForRateLimitError(err)
-        if (!isRateLimit) {
+        if (!isRateLimit && !isGeminiStreamingError) {
           toast.error('Something went wrong. Please try again.')
-          // setErrorMessage('Unable to connect. Please check your connection and try again.')
         }
+        // Do NOT show toast for Gemini streaming errors!
       },
     })
 
@@ -446,11 +458,30 @@ const PureChatInterface = memo(
 
     useEffect(() => {
       if (error) {
-        const isRateLimit = checkForRateLimitError(error)
+        const errorMessage = error.message || error.toString()
+        const hasResponseBody = typeof error === 'object' && error !== null && 'responseBody' in error
+        const responseBody = hasResponseBody ? (error as any).responseBody : ''
 
-        if (!isRateLimit) {
-          // setErrorMessage('Unable to connect. Please check your connection and try again.')
+        const isGeminiStreamingError =
+          errorMessage.includes('contents.parts must not be empty') ||
+          errorMessage.includes('INVALID_ARGUMENT') ||
+          errorMessage.includes('GenerateContentRequest') ||
+          (typeof responseBody === 'string' && responseBody.includes('contents.parts must not be empty'))
+
+        if (isGeminiStreamingError) {
+          setErrorMessage('An error occurred. Please start a new chat.')
+          setMessages(prev =>
+            prev.map((msg, idx) =>
+              idx === prev.length - 1 && msg.role === 'assistant'
+                ? { ...msg, content: '', error: 'streaming_error' }
+                : msg
+            )
+          )
+          return
         }
+
+        const isRateLimit = checkForRateLimitError(error)
+        if (isRateLimit) return
       }
     }, [error, checkForRateLimitError])
 
@@ -797,13 +828,7 @@ const PureChatInterface = memo(
                 </motion.div>
 
                 {errorMessage && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl p-4 text-center max-w-md"
-                  >
-                    {errorMessage}
-                  </motion.div>
+                  <StreamingErrorDisplay message={errorMessage} />
                 )}
 
                 <RateLimitErrorDisplay />
@@ -965,6 +990,7 @@ const PureChatInterface = memo(
                     return true
                   })}
                   chatId={optimisticChatId}
+                  isLoading={isLoading}
                   onCreateCanvas={createCanvasFromMessage}
                   onLoginClick={handleLoginClick}
                   onPlacementSearch={handlePlacementSearch}

@@ -36,8 +36,8 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
     if (
       errorMessage.includes('429') ||
       errorMessage.toLowerCase().includes('rate limit') ||
-      errorMessage.toLowerCase().includes('too many requests') ||
-      errorMessage.toLowerCase().includes('an error occurred')
+      errorMessage.toLowerCase().includes('too many requests')
+      // REMOVED: || errorMessage.toLowerCase().includes('an error occurred')
     ) {
       //console.log('Rate limit error detected!')
 

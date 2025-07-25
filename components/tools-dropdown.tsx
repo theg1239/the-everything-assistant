@@ -80,27 +80,21 @@ export function ToolsDropdown({ onToolSelect, selectedTool }: ToolsDropdownProps
     if (isOpen && buttonRef.current && mounted) {
       const buttonRect = buttonRef.current.getBoundingClientRect()
 
-      // Position dropdown above and to the left of the button
-      const dropdownHeight = 180 // Approximate height for the dropdown
+      const dropdownHeight = 180
       const dropdownWidth = 240
 
-      // Position above the button with some gap
-      let top = buttonRect.top - dropdownHeight - 8 // 8px gap above button
+      let top = buttonRect.top - dropdownHeight - 8
 
-      // Position to the left (right-align dropdown to button's right edge)
       let left = buttonRect.right - dropdownWidth
 
-      // If dropdown would go off screen at the top, position it below instead
       if (top < 8) {
-        top = buttonRect.bottom + 8 // 8px gap below button
+        top = buttonRect.bottom + 8
       }
 
-      // Ensure dropdown doesn't go off screen horizontally to the left
       if (left < 8) {
         left = 8
       }
 
-      // Ensure dropdown doesn't go off screen horizontally to the right
       if (left + dropdownWidth > window.innerWidth - 8) {
         left = window.innerWidth - dropdownWidth - 8
       }
@@ -132,11 +126,18 @@ export function ToolsDropdown({ onToolSelect, selectedTool }: ToolsDropdownProps
                   'text-blue-500 hover:text-blue-600 bg-blue-50/50 dark:bg-blue-950/20'
               )}
             >
-              <Wrench className="w-4 h-4" />
-              {selectedTool && (
-                <span className="ml-1 text-xs font-medium hidden sm:inline">
-                  {selectedToolData?.name || 'Tool'}
-                </span>
+              {selectedTool ? (
+                <>
+                  <Wrench className="w-4 h-4" />
+                  <span className="ml-1 text-xs font-medium hidden sm:inline">
+                    {selectedToolData?.name || 'Tool'}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-xs font-medium hidden sm:inline mr-1">Tools</span>
+                  <Wrench className="w-4 h-4" />
+                </>
               )}
             </Button>
           </TooltipTrigger>

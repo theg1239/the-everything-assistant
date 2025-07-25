@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo, useEffect, useState } from 'react'
+import React, { memo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Loader2,
@@ -12,7 +12,6 @@ import {
   GraduationCap,
   TrendingUp,
   UtensilsCrossed,
-  Shield,
   MapPin,
   Search,
 } from 'lucide-react'
@@ -20,10 +19,10 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ArtifactDisplay, type ArtifactDisplayProps } from './artifact-display'
+import { ArtifactDisplay } from './artifact-display'
 import { useVTOP } from '../contexts/vtop-context'
 import { useMediaQuery } from '@/hooks/use-media-query'
-import { hasVTOPCredentials, getFormattedVTOPCredentials } from '@/lib/vtop-credentials'
+import { hasVTOPCredentials } from '@/lib/vtop-credentials'
 
 interface ToolCallDisplayProps {
   toolCalls: any[]

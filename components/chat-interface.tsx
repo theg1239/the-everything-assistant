@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect, memo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { useChat, type Message as AIMessage } from '@ai-sdk/react'
+import { useChat, type UIMessage as AIMessage } from '@ai-sdk/react'
+import { DefaultChatTransport } from 'ai'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useMemory } from '@/contexts/memory-context'
@@ -28,7 +29,6 @@ import { toast } from 'sonner'
 import ScrollToTopButton from '@/components/scroll-to-top-button'
 import { cn } from '@/lib/utils'
 import { useThrottle } from '@/hooks/use-debounce'
-import { useAutoResume } from '@/hooks/use-auto-resume'
 import { useSidebar } from '@/contexts/sidebar-context'
 
 const useViewportHeight = () => {
@@ -84,6 +84,7 @@ const useViewportHeight = () => {
 import { MemoryWithId } from '@/hooks/use-memories'
 
 interface Message extends AIMessage {
+  createdAt?: string | Date
   metadata?: Record<string, any> & {
     memory?: boolean
     importance?: number
@@ -94,7 +95,9 @@ interface Message extends AIMessage {
 function memoryToMessage(memory: MemoryWithId): Message {
   return {
     id: memory.id,
-    content: memory.content,
+    parts: [
+      { type: 'text', text: memory.content },
+    ],
     role: 'system',
     createdAt: memory.createdAt,
     metadata: {
@@ -210,7 +213,7 @@ const PureChatInterface = memo(
       }
     }, [session?.user?.email])
 
-    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault()
       if (!input.trim()) return
 
@@ -224,111 +227,38 @@ const PureChatInterface = memo(
 
         setErrorMessage(null)
         clearRateLimitError()
-        originalHandleSubmit(e)
+        sendMessage(
+          { text: input },
+          {
+            body: {
+              ...(optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : {}),
+              ...(selectedTool ? { preferredTool: selectedTool } : {}),
+            },
+          }
+        )
+        setInput('')
       } catch (error) {
         console.error('Error submitting message:', error)
         setErrorMessage('Failed to send message. Please try again.')
       }
     }
 
+    const [input, setInput] = useState('')
     const {
       messages = [],
-      input,
-      handleInputChange,
-      handleSubmit: originalHandleSubmit,
-      isLoading,
-      error,
-      append,
-      reload,
+      sendMessage,
+      regenerate,
+      status,
+      addToolResult,
       stop,
-      setMessages,
-      setInput,
-      experimental_resume,
-      data,
     } = useChat({
-      api: '/api/chat',
-      initialMessages: initialMessages,
-      experimental_throttle: 25,
-      body: {
-        ...(optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : {}),
-        ...(selectedTool ? { preferredTool: selectedTool } : {}),
-      },
-      onResponse: res => {
-        if (!showFullChat) setShowFullChat(true)
-        setErrorMessage(null)
-        clearRateLimitError()
-        const newId = res.headers.get('X-Chat-Id')
-        const newPath = res.headers.get('X-Chat-Path')
-        if (newId && !chatId && !chatCreatedEventDispatched) {
-          setOptimisticChatId(newId)
-          currentChatIdRef.current = newId
-          setChatCreatedEventDispatched(true)
-          const chatPath = `/chat/${newId}`
-          router.push(chatPath)
-          window.history.replaceState({}, '', chatPath)
-          window.dispatchEvent(
-            new CustomEvent('newChatCreated', {
-              detail: {
-                id: newId,
-                title: extractTitleFromContent(messages[0]?.content || 'New Chat'),
-                path: chatPath,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-              },
-            })
-          )
-        }
-      },
-      onFinish: message => {
-        const currentChatId = currentChatIdRef.current
-        if (message.role === 'assistant' && message.content) {
-          setLastAssistantMessage(message.content)
-          if (userPreferences.followUpSuggestions !== false) {
-            setShowFollowUpSuggestions(true)
-          }
-        }
-        if (currentChatId && isFirstMessageInNewChat) {
-          setIsFirstMessageInNewChat(false)
-          const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
-            try {
-              const response = await fetch(`/api/chats/${currentChatId}`)
-              if (response.ok) {
-                const chatData = await response.json()
-                if (chatData.title && chatData.title !== 'New Chat') {
-                  window.dispatchEvent(
-                    new CustomEvent('chatTitleUpdated', {
-                      detail: { chatId: currentChatId, title: chatData.title },
-                    })
-                  )
-                } else if (attempt < maxAttempts) {
-                  setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
-                }
-              }
-            } catch (error) {
-              if (attempt < maxAttempts) {
-                setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
-              }
-            }
-          }
-          setTimeout(() => checkTitleUpdate(), 3000)
-        }
-      },
-      onError: err => {
-        const isRateLimit = checkForRateLimitError(err)
-        if (!isRateLimit) {
-          toast.error('Something went wrong. Please try again.')
-          // setErrorMessage('Unable to connect. Please check your connection and try again.')
-        }
-      },
+      transport: new DefaultChatTransport({ api: '/api/chat' }),
+      messages: initialMessages,
     })
 
-    useAutoResume({
-      autoResume: autoResume ?? true,
-      initialMessages,
-      experimental_resume,
-      data,
-      setMessages,
-    })
+    const isLoading = status === 'streaming'
+    const error = undefined as any
+    const setMessages = (_: any) => {}
 
     const scrollToBottom = useCallback(() => {
       if (!messagesEndRef.current) return
@@ -454,36 +384,6 @@ const PureChatInterface = memo(
       }
     }, [error, checkForRateLimitError])
 
-    const handleFormSubmit = useCallback(
-      (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault()
-        if (!input.trim()) return
-
-        setShowFollowUpSuggestions(false)
-        setLastUserMessage(input.trim())
-
-        if (!showFullChat) {
-          setShowFullChat(true)
-          setIsFirstMessageInNewChat(true)
-        }
-        setErrorMessage(null)
-        clearRateLimitError()
-        setHasUserInitiatedConversation(true)
-
-        originalHandleSubmit(e)
-      },
-      [
-        input,
-        showFullChat,
-        clearRateLimitError,
-        originalHandleSubmit,
-        setShowFollowUpSuggestions,
-        setLastUserMessage,
-        setErrorMessage,
-        setHasUserInitiatedConversation,
-      ]
-    )
-
     const handleSuggestedQuestion = useCallback(
       async (question: string) => {
         setInput('')
@@ -498,20 +398,26 @@ const PureChatInterface = memo(
         clearRateLimitError()
         setHasUserInitiatedConversation(true)
 
-        await append({
-          role: 'user',
-          content: question,
-        })
+        await sendMessage(
+          { text: question },
+          {
+            body:
+              {
+                ...(optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : {}),
+              },
+          }
+        )
       },
       [
         showFullChat,
         clearRateLimitError,
-        setInput,
-        append,
         setShowFollowUpSuggestions,
         setLastUserMessage,
         setErrorMessage,
         setHasUserInitiatedConversation,
+        optimisticChatId,
+        chatId,
+        sendMessage,
       ]
     )
 
@@ -556,10 +462,10 @@ const PureChatInterface = memo(
     }
 
     const handlePlacementSearch = (company: string) => {
-      append({
-        role: 'user',
-        content: `Get placement information for ${company}`,
-      })
+      sendMessage(
+        { text: `Get placement information for ${company}` },
+        { body: { ...(optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : {}) } }
+      )
     }
 
     const handleVTOPCredentials = async (
@@ -747,7 +653,7 @@ const PureChatInterface = memo(
 
     useEffect(() => {
       if (messages && messages.length > 0) {
-        const lastMessage = messages[messages.length - 1]
+        const lastMessage = messages[messages.length - 1] as any
         if (lastMessage && lastMessage.toolInvocations) {
           for (const tool of lastMessage.toolInvocations) {
             if (tool.toolName === 'queryVTOP' && tool.state === 'result' && tool.toolCallId) {
@@ -765,7 +671,9 @@ const PureChatInterface = memo(
     if (!showFullChat) {
       return (
         <VTOPToolHandler
-          toolInvocations={messages[messages.length - 1]?.toolInvocations}
+          toolParts={messages[messages.length - 1]?.parts?.filter((p: any) => 
+            p.type === 'tool-call' || p.type === 'tool-result' || p.type.startsWith('tool-')
+          )}
           onCredentialsSubmit={handleVTOPCredentials}
         >
           <UpsellBanner />
@@ -842,7 +750,9 @@ const PureChatInterface = memo(
     }
     return (
       <VTOPToolHandler
-        toolInvocations={messages[messages.length - 1]?.toolInvocations}
+        toolParts={messages[messages.length - 1]?.parts?.filter((p: any) => 
+          p.type === 'tool-call' || p.type === 'tool-result' || p.type.startsWith('tool-')
+        )}
         onCredentialsSubmit={handleVTOPCredentials}
       >
         <UpsellBanner />
@@ -938,32 +848,7 @@ const PureChatInterface = memo(
                 )}
                 <RateLimitErrorDisplay />{' '}
                 <VirtualizedMessages
-                  messages={messages.filter((msg: any) => {
-                    if (msg.role === 'assistant') {
-                      if (
-                        (!msg.content || (msg.content as string).trim() === '') &&
-                        msg.toolInvocations?.some((t: any) => t.toolName === 'knowledgeBase')
-                      ) {
-                        return msg.toolInvocations.some(
-                          (t: any) =>
-                            t.toolName === 'knowledgeBase' &&
-                            t.state === 'result' &&
-                            t.result?.chunks
-                        )
-                      }
-
-                      if (
-                        (!msg.content || (msg.content as string).trim() === '') &&
-                        msg.toolInvocations?.length > 0
-                      ) {
-                        const hasVisibleToolCalls = msg.toolInvocations.some(
-                          (t: any) => t.toolName !== 'knowledgeBase' && t.toolName !== 'saveMemory'
-                        )
-                        return hasVisibleToolCalls
-                      }
-                    }
-                    return true
-                  })}
+                  messages={messages}
                   chatId={optimisticChatId}
                   onCreateCanvas={createCanvasFromMessage}
                   onLoginClick={handleLoginClick}
@@ -971,33 +856,7 @@ const PureChatInterface = memo(
                   maximizedItem={maximizedArtifact}
                   setMaximizedItem={setMaximizedArtifact}
                 />
-                {isLoading &&
-                  messages.length > 0 &&
-                  (() => {
-                    const last = messages[messages.length - 1]
-
-                    if (last.role === 'user') return true
-
-                    if (last.role === 'assistant') {
-                      if (
-                        last.toolInvocations?.some(
-                          (t: any) => t.toolName === 'knowledgeBase' && t.state !== 'result'
-                        )
-                      ) {
-                        return true
-                      }
-
-                      if (
-                        (!last.content || (last.content as string).trim() === '') &&
-                        last.toolInvocations &&
-                        last.toolInvocations.length > 0
-                      ) {
-                        return true
-                      }
-                    }
-
-                    return false
-                  })() && (
+                {isLoading && (
                     <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}

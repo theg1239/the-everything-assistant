@@ -6,7 +6,7 @@ import { hasVTOPCredentials, getFormattedVTOPCredentials } from '@/lib/vtop-cred
 
 interface VTOPToolHandlerProps {
   children: React.ReactNode
-  toolInvocations?: any[]
+  toolParts?: any[]
   onCredentialsSubmit?: (
     credentials: { username: string; encryptedPassword: string },
     originalToolCall: any
@@ -15,7 +15,7 @@ interface VTOPToolHandlerProps {
 
 export function VTOPToolHandler({
   children,
-  toolInvocations,
+  toolParts,
   onCredentialsSubmit,
 }: VTOPToolHandlerProps) {
   const [showCredentialsDialog, setShowCredentialsDialog] = useState(false)
@@ -30,7 +30,7 @@ export function VTOPToolHandler({
         if (savedCredentials && onCredentialsSubmit) {
           let vtopToolCall = null
           if (triggerToolCallId) {
-            vtopToolCall = toolInvocations?.find(tool => tool.toolCallId === triggerToolCallId)
+            vtopToolCall = toolParts?.find(tool => tool.toolCallId === triggerToolCallId)
           }
 
           if (!vtopToolCall) {
@@ -50,11 +50,11 @@ export function VTOPToolHandler({
       let vtopToolCall = null
 
       if (triggerToolCallId) {
-        vtopToolCall = toolInvocations?.find(tool => tool.toolCallId === triggerToolCallId)
+        vtopToolCall = toolParts?.find(tool => tool.toolCallId === triggerToolCallId)
       }
 
       if (!vtopToolCall) {
-        vtopToolCall = toolInvocations?.find(
+        vtopToolCall = toolParts?.find(
           tool =>
             tool.toolName === 'queryVTOP' &&
             tool.result &&
@@ -94,14 +94,14 @@ export function VTOPToolHandler({
     return () => {
       window.removeEventListener('vtopLoginTrigger', handleVTOPLoginTrigger as EventListener)
     }
-  }, [toolInvocations, onCredentialsSubmit])
+  }, [toolParts, onCredentialsSubmit])
   useEffect(() => {
-    if (toolInvocations) {
+    if (toolParts) {
       // disable automatic credential detection - we now rely on manual button clicks
       // this was causing automatic dialog opening when we want users to click the login button
       // Keep this code commented for reference but don't auto-trigger
       /*
-      const vtopToolCall = toolInvocations.find(
+      const vtopToolCall = toolParts.find(
         (tool) => 
           tool.toolName === 'queryVTOP' && 
           tool.result && 
@@ -119,7 +119,7 @@ export function VTOPToolHandler({
       }
       */
     }
-  }, [toolInvocations, showCredentialsDialog])
+  }, [toolParts, showCredentialsDialog])
 
   const handleCredentialsSubmit = (credentials: {
     username: string

@@ -700,10 +700,10 @@ export function createVITTools(userId: string) {
   return {
     ...createKnowledgeTools(),
     ...createMemoryTool(userId),
-    findPastPapers: tool({
+    findPastPapers: tool<any, any>({
       description:
         "find past examination papers for VIT courses from real repositories. You can use course names or codes. You don' need the user to specify the year, when no year is specified, the tool will search for all available years.",
-      parameters: z.object({
+      inputSchema: z.object({
         courseCode: z
           .string()
           .optional()
@@ -813,10 +813,10 @@ export function createVITTools(userId: string) {
       },
     }),
 
-    ffcs_planner: tool({
+    ffcs_planner: tool<any, any>({
       description:
         'Launch the FFCS (Fully Flexible Credit System) course planner. Use this tool to help the user plan their courses for the upcoming semester. This tool provides an interactive UI for searching, selecting, and visualizing a timetable.',
-      parameters: z.object({}),
+      inputSchema: z.object({}),
       execute: async () => {
         return {
           status: 'requires_user_interface',
@@ -825,10 +825,10 @@ export function createVITTools(userId: string) {
       },
     }),
 
-    getCourseInfo: tool({
+    getCourseInfo: tool<any, any>({
       description:
         'Get information about courses from the FFCS dataset (supports all schools: SMEC, SCORE, SCOPE, SBST, SCE, SCHEME, SELECT, SENSE). Returns faculty names, slots, venue, etc.',
-      parameters: z.object({
+      inputSchema: z.object({
         school: z
           .enum(['smec', 'score', 'scope', 'sbst', 'sce', 'scheme', 'select', 'sense'])
           .describe(
@@ -900,11 +900,11 @@ export function createVITTools(userId: string) {
       },
     }),
 
-    getFacultyInfo: tool({
+    getFacultyInfo: tool<any, any>({
       description: `Get current faculty information from a local JSON file (public/faculty.json). NEVER return all faculty members at once—ALWAYS require at least a department or faculty name filter. If no filter is provided, ask the user to specify a department or faculty name. Returns school, department, and faculty info. Do NOT provide a full list of all faculty.
 
 For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'CIVIL') and full or partial department names (e.g., 'computer science', 'school of mechanical engineering', 'information technology', 'civil engineering'). The search is robust to acronyms, full names, and partial matches in either direction.`,
-      parameters: z.object({
+      inputSchema: z.object({
         department: z
           .string()
           .optional()
@@ -1284,10 +1284,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       },
     }),
 
-    getPlacementInfo: tool({
+    getPlacementInfo: tool<any, any>({
       description:
         'Get latest placement statistics and company information. Use this for any questions about placements, highest packages, company offers, salary stats, or recruitment.',
-      parameters: z.object({
+      inputSchema: z.object({
         year: z.string().optional().describe('Academic year, e.g., 2024-25'),
         companyFilter: z
           .string()
@@ -1313,7 +1313,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             formatted_content: string
             summary: string
           }
-          const parsed = (await parsePlacementData(raw, '', undefined)) as ParsedPlacementData
+          const parsed = (await parsePlacementData(raw, '', undefined)) as unknown as ParsedPlacementData
           return {
             ...raw,
             campus,
@@ -1330,10 +1330,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       },
     }),
 
-    getMessMenu: tool({
+    getMessMenu: tool<any, any>({
       description:
         "get mess menu for VIT hostels (both men's and ladies' hostels). Use this when users ask about mess menu, today's food, what's for lunch/dinner/breakfast/snacks, tomorrow's menu, etc. Covers special mess, veg mess, and non-veg mess for both hostels. IMPORTANT: Do NOT ask for hostelType and messType if you are already aware of the user's preference through memory, populate them from memory.",
-      parameters: z.object({
+      inputSchema: z.object({
         hostelType: z
           .preprocess(
             val => {
@@ -1413,10 +1413,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       },
     }),
 
-    queryVTOP: tool({
+    queryVTOP: tool<any, any>({
       description:
         "Access VTOP (VIT's official portal) to get PERSONAL student data that requires login authentication. Use ONLY for individual student information like personal grades, attendance, timetable, marks, hostel info, library dues, exam schedules, digital assignments, and course materials. DO NOT use for general VIT information already available in knowledge base (like admission requirements, grading system explanation, campus facilities, exam patterns, etc.). This tool automatically handles credential authentication and interactive command prompts through intelligent defaults. For course materials, it supports smart natural language queries like 'anuj kumar's fluid mechanics notes' or 'week 5 assignments'. Use this tool ONLY when users request their PERSONAL VTOP data - credentials will be prompted securely.",
-      parameters: z.object({
+      inputSchema: z.object({
         command: z
           .enum([
             // 'profile',
@@ -1653,10 +1653,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       },
     }),
 
-    searchRedditKnowledge: tool({
+    searchRedditKnowledge: tool<any, any>({
       description:
         'Search the Reddit knowledge base for student and academic information from various educational subreddits. This provides AI-powered responses based on community-validated information from students about studying, courses, exams, college life, and academic advice.',
-      parameters: z.object({
+      inputSchema: z.object({
         query: z
           .string()
           .describe(
@@ -1695,10 +1695,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       },
     }),
 
-    searchRedditWithContext: tool({
+    searchRedditWithContext: tool<any, any>({
       description:
         'Search Reddit with enhanced capabilities to handle trending topics and broader queries about current events, popular discussions, and more. This combines trending topic retrieval with the knowledge base search for comprehensive results.',
-      parameters: z.object({
+      inputSchema: z.object({
         query: z
           .string()
           .describe(
@@ -1735,10 +1735,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       },
     }),
 
-    getRedditOverview: tool({
+    getRedditOverview: tool<any, any>({
       description:
         'Get an overview of Reddit activity and trending topics. This provides insights into popular discussions, recent trends, and overall Reddit activity related to VIT and other educational topics.',
-      parameters: z.object({}),
+      inputSchema: z.object({}),
       execute: async () => {
         try {
           const overview = await getRedditOverview()
@@ -1764,11 +1764,11 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       },
     }),
 
-    getCampusInfo: tool({
+    getCampusInfo: tool<any, any>({
       description: `Get information about VIT-Vellore campus blocks (SJT, TT, SMV, MB, etc.).  
   Use it to answer: “where is TT?”, “what is GDN used for?”, “which departments sit in Gandhi Block?”.  
   The tool returns a concise description, typical usage, and a quick location cue.`,
-      parameters: z.object({
+      inputSchema: z.object({
         block: z.string().describe('Block / building code: e.g. SJT, TT, SMV, MB'),
       }),
       execute: async ({ block }) => {

@@ -1,4 +1,4 @@
-import { smoothStream } from 'ai'
+import { smoothStream, createUIMessageStream, createUIMessageStreamResponse } from 'ai'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { createVITTools } from '@/lib/tools'
 import { VIT_SYSTEM_PROMPT } from '@/lib/prompts'
@@ -40,13 +40,13 @@ Examples:
 - "What are my exam schedules?" → "Exam Schedule Query"
 
 Respond with ONLY the title, nothing else.`,
-        maxTokens: 50,
+        maxOutputTokens: 50,
       },
       userId
     )
 
     const result = (await Promise.race([modelPromise, timeoutPromise])) as any
-    const generatedTitle = result.text
+    const generatedTitle = result.text.text
     const cleanTitle = generatedTitle.trim().replace(/^["']|["']$/g, '')
 
     if (cleanTitle && cleanTitle.length <= 60 && cleanTitle.length >= 3) {
@@ -280,7 +280,11 @@ export async function POST(req: Request) {
     if (!session?.user?.id) {
       return new Response('Unauthorized', { status: 401 })
     }
-    const { messages, id: chatId, directToolCall, preferredTool } = await req.json()
+    const json = await req.json()
+    const messages = Array.isArray(json) ? json : json.messages || []
+    const chatId = Array.isArray(json) ? undefined : json.id
+    const directToolCall = Array.isArray(json) ? undefined : json.directToolCall
+    const preferredTool = Array.isArray(json) ? undefined : json.preferredTool
 
     let chat = chatId ? await getChat(chatId, session.user.id) : null
     if (!chat) {
@@ -322,7 +326,7 @@ export async function POST(req: Request) {
           directToolCall.args.includeCourses = true
         }
         try {
-          const result = await tool.execute(directToolCall.args, {
+          const result: any = await tool.execute(directToolCall.args, {
             toolCallId: directToolCall.toolCallId || Date.now().toString(),
             messages: messages || [],
           })
@@ -429,7 +433,13 @@ export async function POST(req: Request) {
 
     const userMessage = messages[messages.length - 1]
     if (userMessage.role === 'user') {
-      await saveMessage(chat.id, 'user', userMessage.content, undefined, userMessage.id)
+      const textContent = Array.isArray((userMessage as any).parts)
+        ? (userMessage as any).parts
+            .filter((p: any) => p.type === 'text' && typeof p.text === 'string')
+            .map((p: any) => p.text)
+            .join('')
+        : ''
+      await saveMessage(chat.id, 'user', textContent, undefined, userMessage.id)
     }
 
     const memorySettings = await memoryService.getUserMemorySettings(session.user.id)
@@ -662,37 +672,52 @@ CRITICAL TOOL CONTINUATION RULES:
       })
     }
 
-    const resultStream = await rateLimitedAI.google.streamText(
-      {
-        model: await rateLimitedAI.google.model(),
-        messages: [{ role: 'system', content: combinedSystemPrompt }, ...enhancedMessages],
-        tools,
-        temperature: 0.7,
-        maxTokens: 4096,
-        experimental_transform: smoothStream({ chunking: 'word' }),
-        maxSteps: 5,
-        experimental_continueSteps: true,
-        onError: async (error: any) => {
-          console.error('Streaming error occurred:', error)
+    const modelMessages = [
+      { role: 'system', content: combinedSystemPrompt },
+      ...(enhancedMessages ?? []).map((msg: any) => ({
+        role: msg.role,
+        content: Array.isArray(msg.parts)
+          ? msg.parts
+              .filter((p: any) => p.type === 'text' && typeof p.text === 'string')
+              .map((p: any) => p.text)
+              .join('')
+          : msg.content || '',
+      })),
+    ]
 
-          try {
-            await saveMessage(
-              chat.id,
-              'assistant',
-              `I encountered an error while processing your request: ${error.message || 'Unknown streaming error'}`,
-              [],
-              `error-${Date.now()}`
-            )
-            console.log('Streaming error saved to database')
-          } catch (saveError) {
-            console.error('Failed to save streaming error:', saveError)
-          }
-        },
-        onStepFinish: async ({
-          text,
-          toolCalls,
-          toolResults,
-          finishReason,
+    const stream = createUIMessageStream({
+      execute: async ({ writer }) => {
+        const resultStream = await rateLimitedAI.google.streamText(
+          {
+            model: await rateLimitedAI.google.model(),
+            messages: modelMessages,
+            tools,
+            temperature: 0.7,
+            maxOutputTokens: 4096,
+            experimental_transform: smoothStream({ chunking: 'word' }),
+            maxSteps: 5,
+            experimental_continueSteps: true,
+            onError: async (error: any) => {
+              console.error('Streaming error occurred:', error)
+
+              try {
+                await saveMessage(
+                  chat.id,
+                  'assistant',
+                  `I encountered an error while processing your request: ${error.message || 'Unknown streaming error'}`,
+                  [],
+                  `error-${Date.now()}`
+                )
+                console.log('Streaming error saved to database')
+              } catch (saveError) {
+                console.error('Failed to save streaming error:', saveError)
+              }
+            },
+            onStepFinish: async ({
+              text,
+              toolCalls,
+              toolResults,
+              finishReason,
           usage,
           stepIndex,
         }: any) => {
@@ -786,18 +811,32 @@ CRITICAL TOOL CONTINUATION RULES:
           const safeInvocations = sanitizeToolInvocations(allInvocations)
 
           try {
+            const finalText =
+              typeof (result as any).text === 'string'
+                ? (result as any).text
+                : (result as any).text?.text ?? ''
             await saveMessage(
               chat.id,
               'assistant',
-              result.text,
+              finalText,
               safeInvocations,
-              result.response.id
+              (result as any).response.id
             )
             console.log(`Final message saved with ${safeInvocations.length} tool invocations`)
           } catch (error) {
             console.error('Failed to save final message:', error)
             try {
-              await saveMessage(chat.id, 'assistant', result.text, [], result.response.id)
+              const finalText =
+                typeof (result as any).text === 'string'
+                  ? (result as any).text
+                  : (result as any).text?.text ?? ''
+              await saveMessage(
+                chat.id,
+                'assistant',
+                finalText,
+                [],
+                (result as any).response.id
+              )
               console.log('Final message saved without tool invocations (fallback)')
             } catch (fallbackError) {
               console.error(
@@ -811,7 +850,12 @@ CRITICAL TOOL CONTINUATION RULES:
       session.user.id
     )
 
-    return resultStream.toDataStreamResponse({
+        writer.merge(resultStream.toUIMessageStream())
+      }
+    })
+
+    return createUIMessageStreamResponse({ 
+      stream,
       headers: {
         'X-Chat-Id': chat.id,
         'X-Chat-Path': chat.path,

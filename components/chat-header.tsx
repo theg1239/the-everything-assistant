@@ -138,10 +138,33 @@ const PureChatHeader = () => {
   }, [])
 
   useEffect(() => {
-    setGreeting(getTimeOfDayGreeting())
+    const cached = localStorage.getItem('chatHeaderGreeting')
+    const cachedTime = localStorage.getItem('chatHeaderGreetingTime')
+    const now = new Date()
+    let greetingToUse = ''
+    let shouldUpdate = true
+    if (cached && cachedTime) {
+      const cachedDate = new Date(Number(cachedTime))
+      const hour = now.getHours()
+      const cachedHour = cachedDate.getHours()
+      const cachedDay = cachedDate.getDate()
+      if (hour === cachedHour && cachedDay === now.getDate()) {
+        greetingToUse = cached
+        shouldUpdate = false
+      }
+    }
+    if (shouldUpdate) {
+      greetingToUse = getTimeOfDayGreeting()
+      localStorage.setItem('chatHeaderGreeting', greetingToUse)
+      localStorage.setItem('chatHeaderGreetingTime', String(now.getTime()))
+    }
+    setGreeting(greetingToUse)
 
     const interval = setInterval(() => {
-      setGreeting(getTimeOfDayGreeting())
+      const newGreeting = getTimeOfDayGreeting()
+      localStorage.setItem('chatHeaderGreeting', newGreeting)
+      localStorage.setItem('chatHeaderGreetingTime', String(new Date().getTime()))
+      setGreeting(newGreeting)
     }, 60000)
 
     return () => clearInterval(interval)

@@ -733,7 +733,7 @@ const PureChatInterface = memo(
         }
       } catch (error) {
         console.error('Error executing VTOP tool:', error)
-        toast.error('An error occurred while retrieving VTOP data.')
+        // toast.error('An error occurred while retrieving VTOP data.')
       }
     }
 

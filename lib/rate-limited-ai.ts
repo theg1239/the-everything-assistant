@@ -287,7 +287,7 @@ export async function getEmbeddingModel(provider: Provider, modelName: string) {
 
 export const rateLimitedAI = {
   google: {
-    model: (n = 'gemini-2.5-flash') => getModel('google', n),
+    model: (n = 'gemini-2.5-flash-lite') => getModel('google', n),
     embedding: (n = 'text-embedding-004') => getEmbeddingModel('google', n),
     streamText: (o: any, u?: string) => getRateLimitedAI('google').streamText(o, u),
     generateText: (o: any, u?: string) => getRateLimitedAI('google').generateText(o, u),

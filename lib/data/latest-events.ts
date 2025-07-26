@@ -36,7 +36,7 @@ Special Initiatives:
 - Alumni Connect: Enhanced alumni networking programs launching
 
 This Week's Highlights:
-- AARAMBH cultural fest
+- Cultural fest ongoing
 - Weekend semester course registration: 25th July 2025, 11am to 6pm
 
 Where to Get Updates:

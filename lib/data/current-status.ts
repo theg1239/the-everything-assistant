@@ -3,23 +3,20 @@ import { ContextData } from './index'
 export const currentStatus: ContextData = {
   section: 'current-status',
   title: 'Current Semester Status & Latest Updates',
-  lastUpdated: '2025-07-24',
+  lastUpdated: '2025-07-26',
   priority: 'high',
   content: `
 # CURRENT SEMESTER STATUS
-**Active Period:** Fall Semester 2025-26
-**Current Phase:** Regular Classes & CAT-1 Preparation
-**Campus Status:** Very crowded with freshers
+Active Period: Fall Semester 2025-26
+Current Phase: Regular Classes & CAT-1 Preparation
+Campus Status: Very crowded with freshers
 
 ## IMMEDIATE PRIORITIES (July 24, 2025)
-1. **Weekend Semester Registration** - TOMORROW (July 25, 2025) 11am-6pm
-2. **CAT-1 Preparation** - Exam starts August 17, 2025 (3 weeks away)
-3. **AARAMB Cultural Fest** - Currently ongoing
+2. CAT-1 Preparation - Exam starts August 17, 2025 (3 weeks away)
 
 ## CRITICAL UPCOMING DATES
 | Date | Event | Importance |
 |------|-------|------------|
-| July 25, 2025 | Weekend semester course registration (11am-6pm) | HIGH - Last chance |
 | August 15, 2025 | Independence Day Holiday | Academic break |
 | August 17-23, 2025 | CAT-1 Examinations | CRITICAL - 75% attendance required |
 | August 27, 2025 | Vinayaka Chathurthi Holiday | Academic break |
@@ -29,9 +26,9 @@ export const currentStatus: ContextData = {
 
 ## ACADEMIC REQUIREMENTS & DEADLINES
 ### Attendance
-- **Minimum Required:** 75% for exam eligibility
-- **Recommended:** 100% attendance
-- **Current Focus:** Maintain attendance for CAT-1 eligibility
+- Minimum Required: 75% for exam eligibility
+- Recommended: 100% attendance
+- Current Focus: Maintain attendance for CAT-1 eligibility
 
 ### Assignments & Coursework
 - Last date for assignment uploads: November 14, 2025
@@ -50,23 +47,22 @@ export const currentStatus: ContextData = {
 - Preparation for Gravitas'25 (September)
 
 ## OFFICIAL COMMUNICATION CHANNELS
-- **VTOP Portal:** Primary source for academic updates and notifications
-- **Official VIT Email:** Important announcements
-- **Academic Calendar:** VIT/VLR/Acad/2025/007 dated 06-03-2025
+- VTOP Portal: Primary source for academic updates and notifications
+- Official VIT Email: Important announcements
+- Academic Calendar: VIT/VLR/Acad/2025/007 dated 06-03-2025
 
 ## STUDENT ACTION ITEMS
-1. **URGENT:** Register for weekend semester courses (July 25, 11am-6pm)
-2. **PREPARE:** Start intensive CAT-1 preparation
-3. **MAINTAIN:** Keep attendance above 75%
-4. **MONITOR:** Check VTOP regularly for updates
-5. **PLAN:** Prepare assignment submissions well before November 14
+1. PREPARE: Start intensive CAT-1 preparation
+2. MAINTAIN: Keep attendance above 75%
+3. MONITOR: Check VTOP regularly for updates
+4. PLAN: Prepare assignment submissions well before November 14
 
 ## SEMESTER OVERVIEW
-- **Start Date:** July 9, 2025
-- **Current Week:** Week 3 of semester
-- **Next Major Milestone:** CAT-1 (August 17-23)
-- **Semester Type:** Fall Semester 2025-26
-- **Academic Year:** 2025-26
+- Started Date: July 9, 2025
+- Current Week: Week 4 of semester
+- Next Major Milestone: CAT-1 (August 17-23)
+- Semester Type: Fall Semester 2025-26
+- Academic Year: 2025-26
 `,
   metadata: {
     currentDate: '2025-07-24',

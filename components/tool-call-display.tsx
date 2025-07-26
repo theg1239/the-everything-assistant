@@ -876,9 +876,11 @@ const ToolCallResultsSummary = ({
 
     const vtopCredentialTools = enrichedToolCalls.filter(
       tool =>
-        tool.toolName === 'queryVTOP' && tool.result && tool.result.requiresCredentials === true
+        tool.toolName === 'queryVTOP' &&
+        tool.result &&
+        (tool.result.requiresCredentials === true ||
+          (tool.result.error && tool.result.error.includes('VTOP credentials required')))
     )
-
     if (vtopCredentialTools.length > 0) {
       const tool = vtopCredentialTools[0]
       const command =
@@ -889,7 +891,6 @@ const ToolCallResultsSummary = ({
           ? JSON.parse(tool.function.arguments)?.command
           : null) ||
         'data'
-
       const formatCommandName = (cmd: string) => {
         const commandMap: { [key: string]: string } = {
           'class-message': 'Class Message',
@@ -902,7 +903,7 @@ const ToolCallResultsSummary = ({
         }
         return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ')
       }
-
+      // Always show the Authentication Required UI in the tool call display
       return (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3">
           <Card className="w-full overflow-hidden border-blue-500/20 bg-blue-500/5">
@@ -942,7 +943,6 @@ const ToolCallResultsSummary = ({
         </motion.div>
       )
     }
-
     return (
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3">
         <Card className="w-full border-orange-500/20 bg-orange-500/5">
@@ -1029,7 +1029,7 @@ const PureToolCallDisplay = ({
     const map = new Map<string, any>()
     const hasVTOPCreds = hasVTOPCredentials()
 
-    const visibleVTOPCommands = ['attendance', 'timetable']
+    const visibleVTOPCommands = ['attendance', 'timetable', 'leave']
 
     for (const tc of toolCalls) {
       const isVisibleVTOPCommand = tc.toolName === 'queryVTOP' && 
@@ -1057,7 +1057,22 @@ const PureToolCallDisplay = ({
     return Array.from(map.values())
   })()
 
+  const [retryToolCallId, setRetryToolCallId] = useState<string | null>(null)
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (e.detail && e.detail.toolCallId) {
+        setRetryToolCallId(e.detail.toolCallId)
+      }
+    }
+    window.addEventListener('vtopCredentialsSubmitted', handler)
+    return () => window.removeEventListener('vtopCredentialsSubmitted', handler)
+  }, [])
+
   const enrichedToolCalls = filteredToolCalls.map(tool => {
+    if (retryToolCallId && tool.toolCallId === retryToolCallId && tool.toolName === 'queryVTOP') {
+      setTimeout(() => setRetryToolCallId(null), 100)
+      return { ...tool, result: undefined, state: 'call' }
+    }
     if (tool.toolName === 'queryVTOP' && tool.toolCallId) {
       if (tool.result && (tool.result.data || tool.result.output || tool.result.success !== undefined)) {
         return {
@@ -1065,7 +1080,6 @@ const PureToolCallDisplay = ({
           state: tool.result.success !== false ? 'result' : 'error',
         }
       }
-      
       const contextResult = getToolResult(tool.toolCallId)
       if (contextResult && contextResult.result) {
         return {
@@ -1122,9 +1136,8 @@ const PureToolCallDisplay = ({
     return hasValidResult
   })
 
-  if (!allCompleted && enrichedToolCalls.length > 0) {
-    return <ToolCallLoadingState toolCalls={enrichedToolCalls} />
-  }
+  // Do not render ToolCallLoadingState here
+  // ...existing code...
 
   if (enrichedToolCalls.length === 0) return null
 
@@ -1257,9 +1270,8 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
     return hasValidResult
   })
 
-  if (!allCompleted && enrichedToolCalls.length > 0) {
-    return <ToolCallLoadingState toolCalls={enrichedToolCalls} />
-  }
+  // Do not render ToolCallLoadingState here
+  // ...existing code...
 
   if (enrichedToolCalls.length === 0) return null
 

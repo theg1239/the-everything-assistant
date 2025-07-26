@@ -21,6 +21,7 @@ export function VTOPToolHandler({
   const [showCredentialsDialog, setShowCredentialsDialog] = useState(false)
   const [pendingToolCall, setPendingToolCall] = useState<any>(null)
   const [command, setCommand] = useState('')
+  const [dismissedToolCallIds, setDismissedToolCallIds] = useState<Set<string>>(new Set())
   useEffect(() => {
     const handleVTOPLoginTrigger = (event: CustomEvent) => {
       const { command: triggerCommand, toolCallId: triggerToolCallId } = event.detail
@@ -96,28 +97,21 @@ export function VTOPToolHandler({
     }
   }, [toolInvocations, onCredentialsSubmit])
   useEffect(() => {
-    if (toolInvocations) {
-      // disable automatic credential detection - we now rely on manual button clicks
-      // this was causing automatic dialog opening when we want users to click the login button
-      // Keep this code commented for reference but don't auto-trigger
-      /*
+    if (toolInvocations && !showCredentialsDialog) {
       const vtopToolCall = toolInvocations.find(
         (tool) => 
           tool.toolName === 'queryVTOP' && 
           tool.result && 
-          tool.result.requiresCredentials === true &&
-          !processedToolCalls.has(tool.toolCallId) &&
-          !tool.result.data &&
-          !tool.result.output
+          (tool.result.requiresCredentials === true ||
+            (tool.result.error && tool.result.error.includes('VTOP credentials required')))
+          && !tool.result.data && !tool.result.output &&
+          !dismissedToolCallIds.has(tool.toolCallId)
       )
-      
-      if (vtopToolCall && !showCredentialsDialog) {
+      if (vtopToolCall) {
         setPendingToolCall(vtopToolCall)
         setCommand(vtopToolCall.result.command || vtopToolCall.args?.command || 'VTOP command')
         setShowCredentialsDialog(true)
-        setProcessedToolCalls(prev => new Set([...prev, vtopToolCall.toolCallId]))
       }
-      */
     }
   }, [toolInvocations, showCredentialsDialog])
 
@@ -133,6 +127,13 @@ export function VTOPToolHandler({
   }
 
   const handleCredentialsClose = () => {
+    if (pendingToolCall && pendingToolCall.toolCallId) {
+      setDismissedToolCallIds(prev => {
+        const next = new Set(prev)
+        next.add(pendingToolCall.toolCallId)
+        return next
+      })
+    }
     setShowCredentialsDialog(false)
     setPendingToolCall(null)
   }

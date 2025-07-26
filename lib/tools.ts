@@ -1618,7 +1618,6 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             if (!response.ok) {
               const errorData = await response.json().catch(() => ({}));
               const errorMsg = typeof errorData === 'object' && 'error' in errorData && typeof errorData.error === 'string' ? errorData.error.toLowerCase() : '';
-              // Only break retry loop for invalid credentials
               if (
                 errorMsg.includes('invalid username') ||
                 errorMsg.includes('invalid loginid') ||
@@ -1647,7 +1646,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 success: true,
                 command,
                 data: result.data || result.output,
-                message: `Successfully retrieved ${command} data from VTOP`,
+                message: `Successfully retrieved ${command} data from VTOP.`,
                 raw: result.raw || false,
               };
             } else {
@@ -1660,14 +1659,14 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 return {
                   success: false,
                   error: result.error || 'Unknown error',
-                  message: `Failed to retrieve ${command} data from VTOP`,
+                  message: `Failed to retrieve ${command} data from VTOP. Reload.`,
                   command,
                 };
               }
               lastError = {
                 success: false,
                 error: result.error || 'Unknown error',
-                message: `Failed to retrieve ${command} data from VTOP`,
+                message: `Failed to retrieve ${command} data from VTOP. Reload.`,
                 command,
               };
               attempt++;

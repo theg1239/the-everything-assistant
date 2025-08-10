@@ -183,7 +183,7 @@ cat 1:
 - duration: 1.5 hours
 - format: descriptive
 - weightage: 15% of total marks
-- syllabus: first 40% of course content
+- syllabus: around the first 40% 
 - question pattern: 5 questions + sub questions, 10 marks each (max marks: 50)
 
 cat 2:

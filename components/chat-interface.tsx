@@ -118,6 +118,7 @@ const PureChatInterface = memo(
     const [showFullChat, setShowFullChat] = useState(initialMessages.length > 0)
     const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebar()
     const [canvasOpen, setCanvasOpen] = useState(false)
+  const [vtopLoading, setVtopLoading] = useState(false)
     const [canvasContent, setCanvasContent] = useState<string>('')
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [hasUserInitiatedConversation, setHasUserInitiatedConversation] = useState(false)
@@ -599,9 +600,11 @@ const PureChatInterface = memo(
       originalToolCall: any
     ) => {
       try {
+        setVtopLoading(true)
         const command = originalToolCall?.args?.command || originalToolCall?.result?.command
         if (!command) {
           console.error('No command found in original tool call')
+          setVtopLoading(false)
           return
         }
         const toolCallId = originalToolCall.toolCallId || Date.now().toString()
@@ -628,9 +631,47 @@ const PureChatInterface = memo(
           return message
         })
 
-        setMessages([...updatedMessagesForLoading])
+        // Ensure there's a trailing assistant message with the pending VTOP tool call
+        setMessages(prev => {
+          const base = [...updatedMessagesForLoading]
+          if (base.length === 0) return base
+          const last = base[base.length - 1]
+          const toolInvocationPayload = {
+            toolCallId: toolCallId,
+            toolName: 'queryVTOP',
+            args: { command, username: credentials.username },
+            state: 'call',
+            result: undefined,
+          }
+          if (last.role === 'assistant') {
+            const exists = last.toolInvocations?.some((t: any) => t.toolCallId === toolCallId)
+            if (!exists) {
+              base[base.length - 1] = {
+                ...last,
+                toolInvocations: [...(last.toolInvocations || []), toolInvocationPayload],
+              }
+            } else {
+              // make sure its state is call
+              base[base.length - 1] = {
+                ...last,
+                toolInvocations: last.toolInvocations.map((t: any) =>
+                  t.toolCallId === toolCallId ? { ...t, state: 'call', result: undefined } : t
+                ),
+              }
+            }
+          } else {
+            // Append a new assistant shell to surface loading state
+            base.push({
+              id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+              role: 'assistant',
+              content: '',
+              toolInvocations: [toolInvocationPayload],
+            })
+          }
+          return base
+        })
 
-        const response = await fetch('/api/chat', {
+  const response = await fetch('/api/chat', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -806,6 +847,7 @@ function parseVTOPResponse(raw: string) {
             console.error('VTOP parse error. Raw response begins with:', responseText.slice(0, 180))
             console.error(err)
             toast.error('Error processing VTOP response. Please try again.')
+            setVtopLoading(false)
             return
           }
           
@@ -947,14 +989,17 @@ function parseVTOPResponse(raw: string) {
               toast.error('Invalid VTOP credentials. Please check your username and password.')
             }
           }
+          setVtopLoading(false)
         } else {
           const errorText = await response.text()
           console.error('VTOP API Error:', response.status, errorText)
           toast.error('Failed to retrieve VTOP data. Please try again.')
+          setVtopLoading(false)
         }
       } catch (error) {
         console.error('Error executing VTOP tool:', error)
         toast.error('An error occurred while retrieving VTOP data. Please try again.')
+        setVtopLoading(false)
       }
     }
 
@@ -1057,7 +1102,7 @@ function parseVTOPResponse(raw: string) {
 
                 <DynamicLoadingIndicator 
                   messages={messages}
-                  isLoading={isLoading && input.trim() !== ''}
+                  isLoading={(isLoading && input.trim() !== '') || vtopLoading}
                   showForFirstMessage={true}
                 />
 
@@ -1206,33 +1251,29 @@ function parseVTOPResponse(raw: string) {
                 />
                 <DynamicLoadingIndicator 
                   messages={messages}
-                  isLoading={isLoading &&
-                    messages.length > 0 &&
-                    (() => {
-                      const last = messages[messages.length - 1]
-
-                      if (last.role === 'user') return true
-
-                      if (last.role === 'assistant') {
-                        if (
-                          last.toolInvocations?.some(
-                            (t: any) => t.toolName === 'knowledgeBase' && t.state !== 'result'
-                          )
-                        ) {
-                          return true
+                  isLoading={(
+                    vtopLoading || (
+                      isLoading &&
+                      messages.length > 0 &&
+                      (() => {
+                        const last = messages[messages.length - 1]
+                        if (last.role === 'user') return true
+                        if (last.role === 'assistant') {
+                          if (
+                            last.toolInvocations?.some(
+                              (t: any) => t.toolName === 'knowledgeBase' && t.state !== 'result'
+                            )
+                          ) return true
+                          if (
+                            (!last.content || (last.content as string).trim() === '') &&
+                            last.toolInvocations &&
+                            last.toolInvocations.length > 0
+                          ) return true
                         }
-
-                        if (
-                          (!last.content || (last.content as string).trim() === '') &&
-                          last.toolInvocations &&
-                          last.toolInvocations.length > 0
-                        ) {
-                          return true
-                        }
-                      }
-
-                      return false
-                    })()}
+                        return false
+                      })()
+                    )
+                  )}
                 />
                 <div
                   ref={messagesEndRef}

@@ -1458,7 +1458,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           .number()
           .optional()
           .describe(
-            'Semester number (1-8) for commands like marks, grades, attendance, exams, calendar. Not needed for timetable (always use latest, specify latest always). If not specified, user will be prompted to select from available semesters.'
+            'Semester number (1-8) for commands like marks, grades, calendar. Not needed for timetable, attendance (always use latest, specify latest always). If not specified, user will be prompted to select from available semesters.'
           ),
         semesterQuery: z
           .string()

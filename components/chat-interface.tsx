@@ -652,7 +652,163 @@ const PureChatInterface = memo(
         })
 
         if (response.ok) {
-          const result = await response.json()
+          const responseText = await response.text()
+
+function parseVTOPResponse(raw: string) {
+  if (!raw || typeof raw !== 'string') {
+    throw new Error('Empty response');
+  }
+
+  const trimmed = raw.trim();
+
+  // Fast path: entire body is a single JSON doc
+  if (/^[\[{]/.test(trimmed)) {
+    try {
+      return JSON.parse(trimmed);
+    } catch (e: any) {
+      // keep going; might be framed
+    }
+  }
+
+  // Tokenize into frames. A frame looks like: "<prefix>:<payload...>"
+  // Payload can span multiple lines until the next "<prefix>:"
+  const lines = raw.replace(/\r/g, '').split('\n');
+  const frameHeader = /^([a-z0-9]):(.*)$/i;
+
+  type Frame = { prefix: string; payload: string };
+  const frames: Frame[] = [];
+
+  let current: Frame | null = null;
+
+  const flush = () => {
+    if (current) {
+      // trim only trailing newlines; keep inner newlines
+      current.payload = current.payload.replace(/\n$/, '');
+      frames.push(current);
+      current = null;
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const line = rawLine; // keep exact spacing; payload might be HTML
+    const m = line.match(frameHeader);
+
+    if (m) {
+      // New frame starts; flush the previous one
+      flush();
+      current = { prefix: m[1], payload: m[2] ?? '' };
+      if (i < lines.length - 1) current.payload += '\n'; // preserve newline after first line
+    } else {
+      // Continuation of current frame’s payload (if any)
+      if (current) {
+        current.payload += line + (i < lines.length - 1 ? '\n' : '');
+      } else {
+        // Orphan line — ignore; not part of a frame
+      }
+    }
+  }
+  flush();
+
+  // Helpers
+  const safeParseJSON = (s: string) => {
+    const t = s.trim();
+    // If payload contains multiple JSON docs concatenated, try to take the largest {...} or [...]
+    if (!/^[\[{]/.test(t)) throw new Error('Not JSON');
+    try {
+      return JSON.parse(t);
+    } catch (_) {
+      // Try to extract the outermost JSON block
+      const firstBrace = t.indexOf('{');
+      const lastBrace = t.lastIndexOf('}');
+      const firstBracket = t.indexOf('[');
+      const lastBracket = t.lastIndexOf(']');
+      const sliceObject =
+        firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace
+          ? t.slice(firstBrace, lastBrace + 1)
+          : null;
+      const sliceArray =
+        firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket
+          ? t.slice(firstBracket, lastBracket + 1)
+          : null;
+      const candidate = sliceObject ?? sliceArray;
+      if (!candidate) throw new Error('JSON extract failed');
+      return JSON.parse(candidate);
+    }
+  };
+
+  const decodePossibleJSONString = (s: string) => {
+    const t = s.trim();
+    // If it looks like a *single-line* quoted JSON string, try JSON.parse
+    if (t.startsWith('"') && t.endsWith('"') && !t.includes('\n')) {
+      try {
+        return JSON.parse(t); // unescapes \n, \", etc.
+      } catch {
+        // fall through to raw
+      }
+    }
+    // Otherwise treat as raw text. If it’s multi-line and starts/ends with a bare quote, strip it.
+    if (t.startsWith('"') && t.endsWith('"')) {
+      return t.slice(1, -1);
+    }
+    return s;
+  };
+
+  // Collect frames
+  const toolFrames: any[] = [];
+  const textChunks: string[] = [];
+
+  for (const f of frames) {
+    const payload = f.payload ?? '';
+
+    if (f.prefix === 'a' || f.prefix === '9' || f.prefix === 'e') {
+      // JSON-ish frames
+      // Some backends sometimes include leading noise; be forgiving
+      const trimmedPayload = payload.trim();
+      try {
+        const parsed = safeParseJSON(trimmedPayload);
+        if (f.prefix === 'a') toolFrames.push(parsed);
+        // we rarely need '9' or 'e' here, but keeping parity with your original logic
+      } catch {
+        // ignore unparseable diagnostic lines (e.g., "still")
+      }
+    } else if (f.prefix === '0') {
+      // Text frame: keep all lines; do not JSON.parse unless it's clearly a single-line JSON string
+      textChunks.push(decodePossibleJSONString(payload));
+    } else {
+      // Unknown prefix; ignore
+    }
+  }
+
+  // Prefer the last a: frame that has a "result"
+  const chosen =
+    [...toolFrames].reverse().find((x) => x && typeof x === 'object' && 'result' in x) ??
+    [...toolFrames].reverse().find((x) => x); // fallback to any 'a' frame
+
+  if (chosen && chosen.result !== undefined) {
+    return { result: chosen.result };
+  }
+  if (chosen) {
+    return { result: chosen }; // sometimes the object itself is the result
+  }
+  if (textChunks.length) {
+    return { result: { success: true, output: textChunks.join('\n') } };
+  }
+
+  // Nothing usable found
+  throw new Error('No parsable tool frames found in streaming response');
+}
+
+          let result: any
+          try {
+            result = parseVTOPResponse(responseText)
+          } catch (err) {
+            console.error('VTOP parse error. Raw response begins with:', responseText.slice(0, 180))
+            console.error(err)
+            toast.error('Error processing VTOP response. Please try again.')
+            return
+          }
+          
           if (toolCallId) {
             updateToolResult(toolCallId, command, result.result)
           }
@@ -698,6 +854,69 @@ const PureChatInterface = memo(
           })
           setMessages([...updatedMessages])
 
+          // Inject formatted/summary content into the assistant message if absent so UI reflects parsed result promptly
+          try {
+            const formattedContent =
+              (result.result && (result.result.formatted_content || result.result.summary)) || ''
+            if (formattedContent) {
+              setMessages(prev => {
+                const idx = prev.findIndex(
+                  m =>
+                    m.role === 'assistant' &&
+                    m.toolInvocations?.some((t: any) => t.toolCallId === toolCallId)
+                )
+                if (idx !== -1) {
+                  const clone = [...prev]
+                  const target = clone[idx]
+                  if (!target.content || (target.content as string).trim() === '') {
+                    clone[idx] = { ...target, content: formattedContent }
+                  } else if (!target.content.includes(formattedContent.slice(0, 30))) {
+                    // Append if it's distinct (rudimentary duplicate guard)
+                    clone[idx] = {
+                      ...target,
+                      content: `${target.content}\n\n${formattedContent}`.trim(),
+                    }
+                  }
+                  return clone
+                }
+                // If no existing assistant container, create one
+                const newAssistantMsg = {
+                  id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                  role: 'assistant',
+                  content: formattedContent,
+                  toolInvocations: [
+                    {
+                      toolCallId: toolCallId,
+                      toolName: 'queryVTOP',
+                      args: { command },
+                      result: result.result,
+                      state: 'result',
+                    },
+                  ],
+                } as any
+                return [...prev, newAssistantMsg]
+              })
+              // Track last assistant message text for follow-up suggestions
+              try {
+                setLastAssistantMessage(
+                  formattedContent.length > 400
+                    ? formattedContent.slice(0, 400)
+                    : formattedContent
+                )
+              } catch {}
+            }
+            if (!showFullChat) setShowFullChat(true)
+            // Attempt scroll to bottom shortly after DOM updates
+            setTimeout(() => {
+              try {
+                const container = contentRef.current?.parentElement
+                if (container) container.scrollTop = container.scrollHeight
+              } catch {}
+            }, 50)
+          } catch (uiUpdateErr) {
+            console.warn('Non-fatal UI update issue after VTOP parse:', uiUpdateErr)
+          }
+
           if (
             result.result &&
             result.result.success !== false &&
@@ -729,11 +948,13 @@ const PureChatInterface = memo(
             }
           }
         } else {
+          const errorText = await response.text()
+          console.error('VTOP API Error:', response.status, errorText)
           toast.error('Failed to retrieve VTOP data. Please try again.')
         }
       } catch (error) {
         console.error('Error executing VTOP tool:', error)
-        // toast.error('An error occurred while retrieving VTOP data.')
+        toast.error('An error occurred while retrieving VTOP data. Please try again.')
       }
     }
 

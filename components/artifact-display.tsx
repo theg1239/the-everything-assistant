@@ -843,9 +843,14 @@ const PaperCard = ({
   return (
     <Card className="w-full hover:shadow-md transition-all duration-200 border-border bg-card group flex flex-col h-full">
       <CardHeader className="pb-3 flex-shrink-0">
-        <CardTitle className="text-sm font-medium line-clamp-3 text-card-foreground group-hover:text-primary transition-colors leading-snug">
-          {paper.title}
-        </CardTitle>
+        <div className="flex items-start justify-between gap-2">
+          <CardTitle className="text-sm font-medium line-clamp-3 text-card-foreground group-hover:text-primary transition-colors leading-snug">
+            {paper.title}
+          </CardTitle>
+          {paper.rank && (
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 shrink-0">#{paper.rank}</Badge>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="pt-0 space-y-3 flex-1 flex flex-col">
         <div className="space-y-2 text-xs text-muted-foreground flex-1">
@@ -881,12 +886,45 @@ const PaperCard = ({
               <span>{paper.year || paper.publishedYear}</span>
             </div>
           )}
+          {typeof paper.score === 'number' && (
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-3 w-3 shrink-0" />
+              <span>Relevance: {(paper.score * 100).toFixed(1)}%</span>
+            </div>
+          )}
+          {(typeof paper.chunkScore === 'number' || typeof paper.questionScore === 'number') && (
+            <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground/80">
+              {typeof paper.chunkScore === 'number' && (
+                <span>Chunk {(paper.chunkScore * 100).toFixed(0)}%</span>
+              )}
+              {typeof paper.questionScore === 'number' && (
+                <span>Q {(paper.questionScore * 100).toFixed(0)}%</span>
+              )}
+            </div>
+          )}
+          {Array.isArray(paper.matchedQuestions) && paper.matchedQuestions.length > 0 && (
+            <div className="mt-1 space-y-1">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70">Matched Questions</div>
+              <ul className="list-disc pl-4 space-y-0.5">
+                {paper.matchedQuestions.slice(0, expanded ? 6 : 3).map((mq: string, i: number) => (
+                  <li key={i} className="text-[11px] leading-snug line-clamp-2" title={mq}>{mq}</li>
+                ))}
+              </ul>
+              {paper.matchedQuestions.length > 3 && !expanded && (
+                <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]" onClick={() => setExpanded(true)}>Show Matches</Button>
+              )}
+            </div>
+          )}
         </div>
 
         {(paper.examType || paper.category) && (
           <Badge variant="secondary" className="text-xs w-fit">
             {paper.examType || paper.category}
           </Badge>
+        )}
+
+        {paper.indexId && (
+          <div className="text-[10px] text-muted-foreground/70">Index: {paper.indexId}</div>
         )}
 
         <div className="flex-shrink-0 pt-1">

@@ -1113,7 +1113,7 @@ function parseVTOPResponse(raw: string) {
 
                 <DynamicLoadingIndicator 
                   messages={messages}
-                  isLoading={(isLoading && input.trim() !== '') || vtopLoading}
+                  isLoading={isLoading || vtopLoading}
                   showForFirstMessage={true}
                 />
 
@@ -1291,29 +1291,7 @@ function parseVTOPResponse(raw: string) {
                 />
                 <DynamicLoadingIndicator 
                   messages={messages}
-                  isLoading={(
-                    vtopLoading || (
-                      isLoading &&
-                      messages.length > 0 &&
-                      (() => {
-                        const last = messages[messages.length - 1]
-                        if (last.role === 'user') return true
-                        if (last.role === 'assistant') {
-                          if (
-                            last.toolInvocations?.some(
-                              (t: any) => t.toolName === 'knowledgeBase' && t.state !== 'result'
-                            )
-                          ) return true
-                          if (
-                            (!last.content || (last.content as string).trim() === '') &&
-                            last.toolInvocations &&
-                            last.toolInvocations.length > 0
-                          ) return true
-                        }
-                        return false
-                      })()
-                    )
-                  )}
+                  isLoading={isLoading || vtopLoading}
                 />
                 <div
                   ref={messagesEndRef}

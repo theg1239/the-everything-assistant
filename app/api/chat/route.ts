@@ -1,4 +1,6 @@
 import { smoothStream } from 'ai'
+
+export const runtime = 'nodejs'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { createVITTools } from '@/lib/tools'
 import { VIT_SYSTEM_PROMPT } from '@/lib/prompts'

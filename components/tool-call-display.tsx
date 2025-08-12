@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ArtifactDisplay, type ArtifactDisplayProps } from './artifact-display'
+import { PaperSearchProgress } from './paper-search-progress'
 import { useVTOP } from '../contexts/vtop-context'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { hasVTOPCredentials, getFormattedVTOPCredentials } from '@/lib/vtop-credentials'
@@ -306,6 +307,25 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         link: paper.link || paper.url || paper.pdfUrl || paper.downloadUrl,
       })),
       source: 'internal, papers.codechef & vitpapervault',
+    }
+  }
+
+  if (result.rankedPapers && Array.isArray(result.rankedPapers) && result.rankedPapers.length > 0) {
+    return {
+      type: 'papers' as const,
+      title: `${result.rankedPapers.length} Ranked Past Papers` + (result.courseCode ? ` (${result.courseCode})` : ''),
+      icon: <GraduationCap className="h-5 w-5 text-indigo-400" />,
+      data: result.rankedPapers.map((p: any, i: number) => ({
+        ...p,
+        rank: i + 1,
+        link: p.url,
+        matchedQuestions: p.matchedQuestions || [],
+        score: p.score,
+        indexId: result.indexId,
+        courseCode: result.courseCode,
+  runId: result.runId || result.run_id,
+      })),
+      source: 'smartPaperSearch',
     }
   }
 
@@ -974,6 +994,11 @@ const ToolCallResultsSummary = ({
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
           >
+            {artifact.type === 'papers' && Array.isArray(artifact.data) && artifact.data[0]?.runId && (
+              <div className="mb-3">
+                <PaperSearchProgress runId={artifact.data[0].runId} />
+              </div>
+            )}
             {artifact.type === 'placements' && onPlacementSearch && (
               <div className="mb-4 flex items-center gap-2 px-1">
                 <Input

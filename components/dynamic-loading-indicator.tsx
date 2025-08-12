@@ -28,9 +28,9 @@ interface ToolInfo {
   retryMessage?: string
   retryDescription?: string
 }
+import React from 'react'
 
 const TOOL_CONFIGS: Record<string, ToolInfo> = {
-  // General thinking/processing
   thinking: {
     name: 'thinking',
     icon: Brain,
@@ -38,7 +38,6 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
     description: 'Processing your request'
   },
   
-  // VTOP related tools
   queryVTOP: {
     name: 'VTOP',
     icon: GraduationCap,
@@ -48,7 +47,6 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
     retryDescription: 'Retrying connection to VTOP'
   },
   
-  // Knowledge and search tools
   knowledgeBase: {
     name: 'Knowledge Base',
     icon: Database,
@@ -84,12 +82,18 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
     description: 'Searching the internet'
   },
   
-  // Academic tools
   findPastPapers: {
     name: 'Past Papers',
     icon: FileText,
     message: 'finding past papers...',
     description: 'Searching exam paper archives'
+  },
+
+  smartPaperSearch: {
+    name: 'Smart Paper Search',
+    icon: GraduationCap,
+    message: 'searching papers semantically...',
+    description: 'Finding relevant papers by content'
   },
   
   getCourseInfo: {
@@ -113,7 +117,6 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
     description: 'Retrieving faculty details'
   },
   
-  // Campus services
   getPlacementInfo: {
     name: 'Placement Info',
     icon: GraduationCap,
@@ -135,7 +138,6 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
     description: 'Retrieving campus details'
   },
   
-  // Code and development tools
   executeCode: {
     name: 'Code Execution',
     icon: Code,
@@ -243,7 +245,193 @@ export function DynamicLoadingIndicator({
   showForFirstMessage = false,
   className = ""
 }: DynamicLoadingIndicatorProps) {
-  if (!isLoading) return null
+  const [paperStatus, setPaperStatus] = React.useState<{
+    runId: string
+    lastStep?: string
+    steps: { step: string; detail?: any; ts: number }[]
+  } | null>(null)
+  const activeRunRef = React.useRef<string | null>(null)
+
+  React.useEffect(() => {
+    let runId: string | undefined
+    let foundActiveCall = false
+    
+    const assistantMessages = [...messages].filter(m => m.role === 'assistant')
+    const recentMessages = assistantMessages.slice(-2)
+    
+    for (const message of recentMessages.reverse()) {
+      if (message.toolInvocations) {
+        for (const inv of message.toolInvocations) {
+          if (inv.toolName === 'smartPaperSearch') {
+            // Check if this is an active call (no result yet)
+            if (inv.state === 'call' && !inv.result) {
+              foundActiveCall = true
+              console.log(`[DLI] Found active smartPaperSearch call:`, inv)
+              
+              // Generate the same runId that the backend will generate
+              const args = inv.args as any
+              if (args?.course && args?.question) {
+                const params = `${args.course}-${args.question}`.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+                runId = `smartpaper_${params}`.slice(0, 60)
+                console.log(`[DLI] Generated deterministic runId for active call: ${runId}`)
+              } else {
+                runId = `smartpaper_${Math.random().toString(36).slice(2,10)}`
+                console.log(`[DLI] Generated fallback runId for active call: ${runId}`)
+              }
+              break
+            }
+            
+            if (inv.result) {
+              const result = inv.result as any
+              if (result.runId && typeof result.runId === 'string') {
+                runId = result.runId
+                console.log(`[DLI] Found completed smartPaperSearch with runId: ${runId}`)
+                break
+              }
+            }
+          }
+        }
+        if (runId) break
+      }
+    }
+    
+    if (runId) {
+      if (activeRunRef.current === runId && paperStatus && paperStatus.steps.length > 0) {
+        return
+      }
+      console.log(`[DLI] Setting up progress tracking for runId: ${runId}`)
+      setPaperStatus(prev => (prev && prev.runId === runId ? prev : { runId, steps: [] }))
+      activeRunRef.current = runId
+
+      // Subscribe to SSE events
+      const source = new EventSource(`/api/paper-progress/${runId}`)
+      
+      source.onopen = () => {
+        console.log(`[DLI] Connected to SSE for runId: ${runId}`)
+      }
+      
+      source.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          console.log(`[DLI] Received SSE event:`, data)
+          
+          if (data.step && data.step !== 'connected') {
+            setPaperStatus(prev => {
+              if (!prev || prev.runId !== runId) {
+                return { runId, steps: [data], lastStep: data.step }
+              }
+              
+              const existingIndex = prev.steps.findIndex(s => s.step === data.step)
+              const newSteps = [...prev.steps]
+              
+              if (existingIndex >= 0) {
+                newSteps[existingIndex] = data
+              } else {
+                newSteps.push(data)
+              }
+              
+              return { ...prev, steps: newSteps, lastStep: data.step }
+            })
+          }
+        } catch (e) {
+          console.error('[DLI] Error parsing SSE event:', e)
+        }
+      }
+      
+      source.onerror = (error) => {
+        console.error('[DLI] SSE connection error:', error)
+        source.close()
+      }
+      
+      const handleGlobalProgress = (event: CustomEvent) => {
+        const data = event.detail
+        if (data.runId === runId && data.step) {
+          console.log(`[DLI] Received global progress for ${runId}:`, data)
+          setPaperStatus(prev => {
+            if (!prev || prev.runId !== runId) {
+              return { runId, steps: [data], lastStep: data.step }
+            }
+            
+            const existingIndex = prev.steps.findIndex(s => s.step === data.step)
+            const newSteps = [...prev.steps]
+            
+            if (existingIndex >= 0) {
+              newSteps[existingIndex] = data
+            } else {
+              newSteps.push(data)
+            }
+            
+            return { ...prev, steps: newSteps, lastStep: data.step }
+          })
+        }
+      }
+      
+      window.addEventListener('paper-progress' as any, handleGlobalProgress)
+      
+      const cleanup = () => {
+        source.close()
+        window.removeEventListener('paper-progress' as any, handleGlobalProgress)
+        console.log(`[DLI] Cleaned up progress tracking for runId: ${runId}`)
+      }
+      
+      setTimeout(cleanup, 30000)
+      
+      return cleanup
+    } else if (!foundActiveCall) {
+  setPaperStatus(null)
+  activeRunRef.current = null
+    }
+    
+    return undefined
+  }, [messages])
+
+  const isDoneStep = paperStatus?.lastStep === 'done'
+  const [hideAfterDone, setHideAfterDone] = React.useState(false)
+  const [hideAfterNoProgress, setHideAfterNoProgress] = React.useState(false)
+  
+  React.useEffect(() => {
+    if (isDoneStep) {
+      const t = setTimeout(() => setHideAfterDone(true), 800)
+      return () => clearTimeout(t)
+    } else if (hideAfterDone) {
+      setHideAfterDone(false)
+    }
+  }, [isDoneStep])
+
+  React.useEffect(() => {
+    if (!isLoading && paperStatus && paperStatus.steps.length === 0) {
+      const t = setTimeout(() => setHideAfterNoProgress(true), 1000)
+      return () => clearTimeout(t)
+    } else if (hideAfterNoProgress) {
+      setHideAfterNoProgress(false)
+    }
+  }, [isLoading, paperStatus])
+
+  if (!isLoading && !paperStatus) return null
+  if (hideAfterDone || hideAfterNoProgress) return null
+
+  const labelMap: Record<string,string> = {
+    start: 'Starting smart paper search...',
+    resolveCourse: 'Identifying course code...',
+    fetchedMetadata: 'Found candidate papers...',
+    selectedSubset: 'Picking the most relevant papers...',
+    processPaperStart: 'Analyzing paper...',
+    paperDownloadFailed: 'Could not download a paper (skipped)',
+    duplicateContent: 'Skipping duplicate content...',
+    paperTextInsufficient: 'Paper text too small (skipped)',
+    extractedQuestions: 'Extracting possible questions...',
+    chunked: 'Breaking content into chunks...',
+    chunkEmbeddings: 'Creating vector embeddings...',
+    questionEmbeddings: 'Embedding your question...',
+    questionEmbeddingsFailed: 'Question embedding failed (retrying)...',
+    questionEmbedded: 'Preparing similarity search...',
+    indexBuilt: 'Index ready for search...',
+    rankingComplete: 'Ranking most relevant papers...',
+    ranking: 'Ranking papers...',
+    done: 'All set — results ready.'
+  }
+
+  const currentPaperLabel = paperStatus?.lastStep ? (labelMap[paperStatus.lastStep] || paperStatus.lastStep) : null
 
   const getCurrentToolInfo = (): ToolInfo => {
     if (messages.length === 0) {
@@ -294,6 +482,7 @@ export function DynamicLoadingIndicator({
     const priorities: Record<string, number> = {
       'queryVTOP': 10,
       'knowledgeBase': 9,
+      'smartPaperSearch': 8,
       'findPastPapers': 8,
       'getCourseInfo': 7,
       'getFacultyInfo': 7,
@@ -308,10 +497,22 @@ export function DynamicLoadingIndicator({
   }
 
   const toolInfo = getCurrentToolInfo()
+  
+  const isSmartPaperSearch = toolInfo.name === 'Smart Paper Search' || 
+    (messages.length > 0 && 
+     messages[messages.length - 1]?.role === 'assistant' && 
+     messages[messages.length - 1]?.toolInvocations?.some((inv: any) => inv.toolName === 'smartPaperSearch'))
+  
+  let primaryMessage = toolInfo.message
+  if (currentPaperLabel) {
+    primaryMessage = currentPaperLabel
+  } else if (isSmartPaperSearch) {
+    primaryMessage = 'searching papers semantically...'
+  }
   const getDotColor = (toolName: string) => {
     if (toolName === 'VTOP') return 'bg-blue-500'
     if (toolName.includes('Reddit')) return 'bg-orange-500'
-    if (['Knowledge Base', 'Past Papers', 'Course Info'].includes(toolName)) return 'bg-green-500'
+    if (['Knowledge Base', 'Past Papers', 'Course Info', 'Smart Paper Search'].includes(toolName)) return 'bg-green-500'
     if (['Faculty Info', 'Placement Info'].includes(toolName)) return 'bg-purple-500'
     if (toolName === 'Memory') return 'bg-yellow-500'
     return 'bg-primary'
@@ -338,8 +539,12 @@ export function DynamicLoadingIndicator({
           ></div>
         </div>
         <div className="flex flex-col">
-          <span className="text-sm font-medium">{toolInfo.message}</span>
-          {/* <span className="text-xs opacity-70">{toolInfo.description}</span> */}
+          <span className="text-sm font-medium">{primaryMessage}</span>
+          {paperStatus && (
+            <span className="text-[10px] text-muted-foreground mt-0.5">
+              RunId: {paperStatus.runId.slice(-6)} | Steps: {paperStatus.steps.length} | Last: {paperStatus.lastStep || 'none'}
+            </span>
+          )}
         </div>
       </div>
     </motion.div>
@@ -362,6 +567,7 @@ export function getCurrentActiveTool(messages: any[]): string | null {
       const priorities: Record<string, number> = {
         'queryVTOP': 10,
         'knowledgeBase': 9,
+        'smartPaperSearch': 8,
         'findPastPapers': 8,
         'getCourseInfo': 7,
         'getFacultyInfo': 7,

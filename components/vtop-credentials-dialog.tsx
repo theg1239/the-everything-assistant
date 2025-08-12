@@ -74,7 +74,6 @@ export function VTOPCredentialsDialog({
         saveCredentials()
       }
 
-      // Always link credentials on first login
       try {
         saveVTOPCredentials(username.trim(), password.trim())
         toast.success('VTOP credentials linked successfully!')

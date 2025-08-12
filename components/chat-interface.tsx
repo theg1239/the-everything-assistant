@@ -148,6 +148,17 @@ const PureChatInterface = memo(
 
     const mainRef = useViewportHeight()
 
+  const [vtopDisclaimer, setVtopDisclaimer] = useState<{ toolCallId: string; command: string; message: string } | null>(null)
+    useEffect(() => {
+      const onDisclaimer = (e: any) => {
+        const d = e?.detail
+        if (!d) return
+        setVtopDisclaimer({ toolCallId: d.toolCallId, command: d.command, message: d.message })
+      }
+      window.addEventListener('vtopCredentialsDisclaimer', onDisclaimer as EventListener)
+      return () => window.removeEventListener('vtopCredentialsDisclaimer', onDisclaimer as EventListener)
+    }, [])
+
     useEffect(() => {
       let timeoutId: NodeJS.Timeout
       const checkMobile = () => {
@@ -1214,6 +1225,35 @@ function parseVTOPResponse(raw: string) {
                   </motion.div>
                 )}
                 <RateLimitErrorDisplay />{' '}
+                {vtopDisclaimer && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-lg border border-border/50 bg-muted/10 px-3 py-2 text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center gap-2"
+                  >
+                    <div className="flex-1">
+                      <span className="font-medium text-foreground/80">Heads up:</span> {vtopDisclaimer.message}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => {
+                          window.dispatchEvent(new CustomEvent('vtopOpenCredentials', { detail: { toolCallId: vtopDisclaimer.toolCallId } }))
+                        }}
+                      >
+                        provide credentials
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setVtopDisclaimer(null)}
+                      >
+                        dismiss
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
                 <VirtualizedMessages
                   messages={messages.filter((msg: any) => {
                     if (msg.role === 'assistant') {

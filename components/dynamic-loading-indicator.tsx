@@ -268,7 +268,6 @@ export function DynamicLoadingIndicator({
               foundActiveCall = true
               console.log(`[DLI] Found active smartPaperSearch call:`, inv)
               
-              // Generate the same runId that the backend will generate
               const args = inv.args as any
               if (args?.course && args?.question) {
                 const params = `${args.course}-${args.question}`.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
@@ -303,7 +302,6 @@ export function DynamicLoadingIndicator({
       setPaperStatus(prev => (prev && prev.runId === runId ? prev : { runId, steps: [] }))
       activeRunRef.current = runId
 
-      // Subscribe to SSE events
       const source = new EventSource(`/api/paper-progress/${runId}`)
       
       source.onopen = () => {
@@ -540,11 +538,11 @@ export function DynamicLoadingIndicator({
         </div>
         <div className="flex flex-col">
           <span className="text-sm font-medium">{primaryMessage}</span>
-          {paperStatus && (
+          {/* {paperStatus && (
             <span className="text-[10px] text-muted-foreground mt-0.5">
               RunId: {paperStatus.runId.slice(-6)} | Steps: {paperStatus.steps.length} | Last: {paperStatus.lastStep || 'none'}
             </span>
-          )}
+          )} */}
         </div>
       </div>
     </motion.div>

@@ -5,6 +5,10 @@ const withPWA = require('@ducanh2912/next-pwa').default({
   dest: 'public',
   register: true,
   skipWaiting: true,
+  disable: process.env.NO_PWA === '1',
+  runtimeCaching: [],
+  buildExcludes: [/middleware-manifest\.json$/],
+  sw: 'sw.js',
 })
 
 const nextConfig: NextConfig = {

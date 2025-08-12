@@ -892,13 +892,20 @@ const PaperCard = ({
               <span>Relevance: {(paper.score * 100).toFixed(1)}%</span>
             </div>
           )}
-          {(typeof paper.chunkScore === 'number' || typeof paper.questionScore === 'number') && (
+          {(typeof paper.displayContentPct === 'number' || typeof paper.displayQuestionPct === 'number') && (
             <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground/80">
-              {typeof paper.chunkScore === 'number' && (
-                <span>Chunk {(paper.chunkScore * 100).toFixed(0)}%</span>
+              {typeof paper.displayContentPct === 'number' && (
+                <span title={`Content similarity (raw ${(paper._rawChunkScore*100).toFixed(1)}%)`}>
+                  Content {paper.displayContentPct}%
+                </span>
               )}
-              {typeof paper.questionScore === 'number' && (
-                <span>Q {(paper.questionScore * 100).toFixed(0)}%</span>
+              {paper.hasQuestionSignal && typeof paper.displayQuestionPct === 'number' && (
+                <span title={`Question embedding match (raw ${(paper._rawQuestionScore*100).toFixed(1)}%)`}>
+                  Question {paper.displayQuestionPct}%
+                </span>
+              )}
+              {!paper.hasQuestionSignal && typeof paper.displayQuestionPct === 'undefined' && (
+                <span title="No question-level signals extracted">Question —</span>
               )}
             </div>
           )}
@@ -2457,8 +2464,42 @@ const PureArtifactDisplay = ({
 
     const items: any[] =
       isFacultyType && facultyList ? facultyList : Array.isArray(data) ? data : [data]
-    const itemCount = items.length
-    const displayItems = showAllItems || !isMobile || isFullscreen ? items : items.slice(0, 3)
+
+    // Derive per-paper relative metrics to avoid identical displayed percentages when raw scores are very close.
+    let processedItems = items
+    if (type === 'papers' && items.length) {
+      const chunkScores = items.map(p => (typeof p.chunkScore === 'number' ? p.chunkScore : 0))
+      const questionScores = items.map(p => (typeof p.questionScore === 'number' ? p.questionScore : 0))
+      const maxChunk = Math.max(...chunkScores)
+      const minChunk = Math.min(...chunkScores)
+      const maxQ = Math.max(...questionScores)
+      const minQ = Math.min(...questionScores)
+      const spreadChunk = maxChunk - minChunk
+      const spreadQ = maxQ - minQ
+      const allQZero = maxQ === 0
+      processedItems = items.map((p, i) => {
+        const rawChunk = chunkScores[i]
+        const rawQ = questionScores[i]
+        let relChunk = spreadChunk < 0.005 ? (maxChunk ? rawChunk / (maxChunk || 1) : 0) : (rawChunk - minChunk) / (spreadChunk || 1)
+        relChunk = Math.min(1, Math.max(0, relChunk ** 0.85))
+        let relQ = 0
+        if (!allQZero) {
+          relQ = spreadQ < 0.005 ? (maxQ ? rawQ / (maxQ || 1) : 0) : (rawQ - minQ) / (spreadQ || 1)
+          relQ = Math.min(1, Math.max(0, relQ ** 0.85))
+        }
+        return {
+          ...p,
+          _rawChunkScore: rawChunk,
+          _rawQuestionScore: rawQ,
+          displayContentPct: Math.round(relChunk * 100),
+          displayQuestionPct: allQZero ? undefined : Math.round(relQ * 100),
+          hasQuestionSignal: !allQZero && rawQ > 0.0005,
+        }
+      })
+    }
+
+    const itemCount = processedItems.length
+    const displayItems = showAllItems || !isMobile || isFullscreen ? processedItems : processedItems.slice(0, 3)
     const hasMoreItems = isMobile && items.length > 3 && !showAllItems && !isFullscreen
 
     return (

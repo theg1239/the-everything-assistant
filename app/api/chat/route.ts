@@ -664,10 +664,74 @@ CRITICAL TOOL CONTINUATION RULES:
       })
     }
 
+    // --- ATTACHMENT (PDF / IMAGE) HANDLING FOR GOOGLE PROVIDER ---
+    // Detect attachments (PDFs/images) and transform messages into multimodal parts when needed.
+    const attachmentAware = enhancedMessages.some(
+      (m: any) => Array.isArray(m.attachments) && m.attachments.some((a: any) => a?.contentType?.startsWith('application/pdf') || a?.contentType?.startsWith('image/'))
+    )
+
+    let modelName = 'gemini-2.5-flash-lite'
+    const hasPdf = attachmentAware && enhancedMessages.some((m: any) => m.attachments?.some((a: any) => a?.contentType === 'application/pdf'))
+    if (hasPdf) {
+      // Choose a model variant with better file (PDF) reasoning capability.
+      modelName = 'gemini-2.0-flash'
+    }
+
+    // Build final messages; if no attachments, preserve original behavior for efficiency.
+    let finalMessages: any[] = [{ role: 'system', content: combinedSystemPrompt }]
+    if (!attachmentAware) {
+      finalMessages.push(...enhancedMessages)
+    } else {
+      for (const m of enhancedMessages) {
+        if (!m.attachments || m.attachments.length === 0) {
+          finalMessages.push({ role: m.role, content: m.content })
+          continue
+        }
+        const parts: any[] = []
+        if (m.content) {
+          parts.push({ type: 'input_text', text: m.content })
+        }
+        for (const att of m.attachments) {
+          if (!att?.contentType) continue
+          if (
+            att.contentType.startsWith('application/pdf') ||
+            att.contentType.startsWith('image/')
+          ) {
+            try {
+              // Fetch file bytes (public or signed URL expected). Limit size to 25MB to stay within Gemini constraints.
+              const res = await fetch(att.url)
+              if (!res.ok) throw new Error(`fetch ${res.status}`)
+              const ab = await res.arrayBuffer()
+              const sizeMB = ab.byteLength / (1024 * 1024)
+              if (sizeMB > 25) {
+                parts.push({
+                  type: 'input_text',
+                  text: `Attachment '${att.name || 'file'}' skipped: size ${sizeMB.toFixed(1)}MB exceeds 25MB limit.`,
+                })
+                continue
+              }
+              parts.push({
+                type: 'file',
+                data: Buffer.from(ab),
+                mimeType: att.contentType,
+                name: att.name || (att.contentType.startsWith('image/') ? 'image' : 'document') + '-' + Date.now(),
+              })
+            } catch (e: any) {
+              parts.push({
+                type: 'input_text',
+                text: `Failed to load attachment '${att.name || 'file'}': ${e.message}`,
+              })
+            }
+          }
+        }
+        finalMessages.push({ role: m.role, content: parts })
+      }
+    }
+
     const resultStream = await rateLimitedAI.google.streamText(
       {
-        model: await rateLimitedAI.google.model(),
-        messages: [{ role: 'system', content: combinedSystemPrompt }, ...enhancedMessages],
+        model: await rateLimitedAI.google.model(modelName),
+        messages: finalMessages,
         tools,
         temperature: 0.7,
         maxTokens: 4096,
@@ -692,7 +756,7 @@ CRITICAL TOOL CONTINUATION RULES:
         },
         onStepFinish: async ({
           text,
-          toolCalls,
+            toolCalls,
           toolResults,
           finishReason,
           usage,

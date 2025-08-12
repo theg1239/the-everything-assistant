@@ -14,6 +14,12 @@ import {
 	getCoursePapers,
 } from '../papers-db'
 
+import { paperProgress } from '../progress/paper-progress'
+import puppeteer from 'puppeteer-core'
+import chromium from '@sparticuz/chromium'
+import { existsSync } from 'fs'
+import { PDFDocument } from 'pdf-lib'
+
 async function computeHash(buf: Buffer | Uint8Array): Promise<string> {
 	try {
 		const data = buf instanceof Buffer ? buf : Buffer.from(buf)
@@ -28,7 +34,278 @@ async function computeHash(buf: Buffer | Uint8Array): Promise<string> {
 		return Math.random().toString(36).slice(2)
 	}
 }
-import { paperProgress } from '../progress/paper-progress'
+
+interface Logger {
+	(msg: string, data?: any): void
+	getLogs(): string[]
+}
+
+async function fetchAllPapers(courseCode: string, examType?: string, year?: string, log?: Logger) {
+	log?.('Fetching papers from all sources', { courseCode, examType, year })
+	const started = Date.now()
+	const results = await Promise.allSettled([
+		scrapePapersService(courseCode, examType, year),
+		scrapePapersCodeChef(courseCode, examType, year),
+		scrapeVITPaperVault(courseCode, examType, year),
+	])
+	const papers: RawPaperMeta[] = []
+	results.forEach((r, idx) => {
+		if (r.status === 'fulfilled' && r.value.success) {
+			log?.('Source success', { sourceIndex: idx, count: r.value.papers.length })
+			papers.push(...r.value.papers)
+		} else {
+			log?.('Source failure', { sourceIndex: idx, error: r })
+		}
+	})
+
+	const extractDriveId = (url?: string) => {
+		if (!url) return null
+		const m = url.match(/https?:\/\/drive\.google\.com\/file\/d\/([^/]+)\//)
+		return m ? m[1] : null
+	}
+	const normalizeUrl = (url?: string) => {
+		if (!url) return ''
+		try {
+			const u = new URL(url)
+			u.search = ''
+			return u.toString().replace(/\/view$/, '')
+		} catch {
+			return url
+		}
+	}
+	const normalizeTitle = (t?: string) =>
+		(t || '')
+			.toLowerCase()
+			.replace(/\s+/g, ' ')
+			.replace(/\([^)]*\)/g, '')
+			.replace(/cat[- ]?\d/gi, m => m.toUpperCase())
+			.trim()
+
+	function jaccardTokens(a: string, b: string) {
+		const toks = (s: string) => Array.from(new Set(s.split(/[^a-z0-9]+/).filter(Boolean)))
+		const A = toks(a)
+		const B = toks(b)
+		if (!A.length || !B.length) return 0
+		let inter = 0
+		for (const t of A) if (B.includes(t)) inter++
+		return inter / (new Set([...A, ...B]).size || 1)
+	}
+
+	interface Annotated extends RawPaperMeta {
+		_normUrl: string
+		_driveId: string | null
+		_normTitle: string
+	}
+	const annotated: Annotated[] = papers.map(p => ({
+		...p,
+		_normUrl: normalizeUrl(p.url),
+		_driveId: extractDriveId(p.url),
+		_normTitle: normalizeTitle(p.title),
+	}))
+
+	const byKey: Annotated[] = []
+	const urlSeen = new Set<string>()
+	const driveSeen = new Set<string>()
+	for (const p of annotated) {
+		if (p._driveId) {
+			if (driveSeen.has(p._driveId)) continue
+			driveSeen.add(p._driveId)
+		} else {
+			if (urlSeen.has(p._normUrl)) continue
+			urlSeen.add(p._normUrl)
+		}
+		byKey.push(p)
+	}
+
+	const final: Annotated[] = []
+	for (const p of byKey) {
+		const dup = final.find(f =>
+			f.examType === p.examType &&
+			f.year === p.year &&
+			jaccardTokens(f._normTitle, p._normTitle) >= 0.88
+		)
+		if (dup) continue
+		final.push(p)
+	}
+
+	log?.('Fetched & deduped papers', {
+		totalRaw: papers.length,
+		stage1_keys: byKey.length,
+		totalDeduped: final.length,
+		ms: Date.now() - started,
+	})
+	return final.map(({ _normUrl, _driveId, _normTitle, ...rest }) => rest)
+}
+
+function toDirectDrive(url: string): string {
+	const m = url.match(/https:\/\/drive\.google\.com\/file\/d\/([^/]+)\//)
+	if (m) return `https://drive.google.com/uc?export=download&id=${m[1]}`
+	return url
+}
+
+interface DriveFallbackResult { pdf: Buffer | null; images: Buffer[] }
+
+async function driveHeadlessFallback(url: string, log?: Logger, runId?: string): Promise<DriveFallbackResult> {
+	let browser: any
+	try {
+		log?.('Drive fallback launching headless browser', { url })
+		if (runId) logEmit(runId, 'driveFallbackStart', { url })
+		let launchError: any = null
+		const launchPrimary = async () => {
+			return puppeteer.launch({
+				args: chromium.args,
+				defaultViewport: { width: 1280, height: 1600 },
+				executablePath: await chromium.executablePath(),
+				headless: chromium.headless,
+			})
+		}
+		try {
+			browser = await launchPrimary()
+		} catch (err: any) {
+			launchError = err
+			log?.('Primary headless launch failed', { error: err?.message })
+			if (process.env.NODE_ENV === 'development') {
+				if (runId) logEmit(runId, 'driveFallbackDevRetry', { reason: err?.message })
+				// Attempt local Chrome/Edge detection
+				const override = process.env.LOCAL_CHROME_PATH && existsSync(process.env.LOCAL_CHROME_PATH) ? process.env.LOCAL_CHROME_PATH : null
+				const candidatePaths = (
+					override ? [override] : [
+						'C:/Program Files/Google/Chrome/Application/chrome.exe',
+						'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+						'C:/Program Files/Google/Chrome Beta/Application/chrome.exe',
+						'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
+						'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+					]
+				).filter(p => existsSync(p))
+				let launched = false
+				for (const exe of candidatePaths) {
+					try {
+						log?.('Attempting dev local browser launch', { exe })
+						browser = await puppeteer.launch({
+							executablePath: exe,
+							defaultViewport: { width: 1280, height: 1600 },
+							args: ['--no-sandbox', '--disable-gpu', '--headless=new'],
+							headless: true,
+						})
+						launched = true
+						if (runId) logEmit(runId, 'driveFallbackDevRetrySuccess', { exe })
+						break
+					} catch (e: any) {
+						log?.('Dev local browser launch failed', { exe, error: e?.message })
+					}
+				}
+				if (!launched) {
+					log?.('No local Chrome/Edge executable succeeded for dev retry')
+					if (runId) logEmit(runId, 'driveFallbackDevRetryFailed', { candidates: candidatePaths.length, originalError: err?.message })
+					// Will drop to outer catch below
+					throw err
+				}
+			}
+		}
+		const page = await browser.newPage()
+		await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36')
+
+		let viewerUrl = url
+		const fileIdMatch = url.match(/drive\.google\.com\/(?:file\/d\/|uc\?export=download&id=)([^&/]+)/)
+		if (fileIdMatch) {
+			viewerUrl = `https://drive.google.com/file/d/${fileIdMatch[1]}/view`
+		}
+		await page.goto(viewerUrl, { waitUntil: 'networkidle2', timeout: 30000 })
+
+		async function autoScroll() {
+			await page.evaluate(async () => {
+				const delay = (ms: number) => new Promise(res => setTimeout(res, ms))
+				let lastHeight = 0
+				let stableIterations = 0
+				for (let i = 0; i < 40; i++) {
+					window.scrollBy(0, window.innerHeight * 0.85)
+					await delay(400)
+					const newHeight = document.documentElement.scrollHeight
+					if (newHeight === lastHeight) stableIterations++
+					else stableIterations = 0
+					lastHeight = newHeight
+					if (stableIterations >= 3) break
+				}
+			})
+		}
+		await autoScroll()
+
+		const pageInfos = await page.evaluate(() => {
+			const items: { index: number; x: number; y: number; width: number; height: number }[] = []
+			const candidates = Array.from(document.querySelectorAll('img')) as HTMLImageElement[]
+			let idx = 0
+			for (const img of candidates) {
+				const rect = img.getBoundingClientRect()
+				if (rect.width > 300 && rect.height > 300) {
+					items.push({ index: idx++, x: rect.x, y: rect.y + window.scrollY, width: rect.width, height: rect.height })
+				}
+			}
+			return items
+		})
+
+		if (!pageInfos.length) {
+			log?.('Drive fallback: no large images found')
+			if (runId) logEmit(runId, 'driveFallbackNoPages', { url })
+			return { pdf: null, images: [] }
+		}
+		if (runId) logEmit(runId, 'driveFallbackPagesDetected', { pages: pageInfos.length })
+
+		const screenshots: Buffer[] = []
+		for (const info of pageInfos.slice(0, 200)) { // cap pages
+			const clip = { x: info.x, y: info.y, width: info.width, height: info.height }
+			try {
+				const buf = await page.screenshot({ type: 'png', clip }) as Buffer
+				screenshots.push(buf)
+			} catch (e: any) {
+				log?.('Drive fallback page screenshot failed', { page: info.index, error: e?.message })
+			}
+		}
+		if (!screenshots.length) {
+			if (runId) logEmit(runId, 'driveFallbackScreenshotsFailed', {})
+			return { pdf: null, images: [] }
+		}
+
+		const pdfDoc = await PDFDocument.create()
+		for (const imgBuf of screenshots) {
+			try {
+				const img = await pdfDoc.embedPng(imgBuf)
+				const page = pdfDoc.addPage([img.width, img.height])
+				page.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height })
+			} catch (e: any) {
+				log?.('Failed to embed image into PDF', { error: e?.message })
+			}
+		}
+		const pdfBytes = await pdfDoc.save()
+		const out = Buffer.from(pdfBytes)
+		log?.('Drive fallback PDF assembled', { pages: screenshots.length, bytes: out.length })
+		if (runId) logEmit(runId, 'driveFallbackSuccess', { pages: screenshots.length, bytes: out.length })
+		return { pdf: out, images: screenshots }
+	} catch (e: any) {
+		log?.('Drive fallback error', { error: e?.message })
+		if (runId) logEmit(runId, 'driveFallbackError', { error: e?.message })
+		if (process.env.NODE_ENV === 'development') {
+			// As last resort open external browser so dev can manually verify
+			try {
+				const fileIdMatch = url.match(/drive\.google\.com\/(?:file\/d\/|uc\?export=download&id=)([^&/]+)/)
+				const viewerUrl = fileIdMatch ? `https://drive.google.com/file/d/${fileIdMatch[1]}/view` : url
+				const platform = process.platform
+				let cmd: string
+				if (platform === 'win32') cmd = `start "" "${viewerUrl}"`
+				else if (platform === 'darwin') cmd = `open "${viewerUrl}"`
+				else cmd = `xdg-open "${viewerUrl}"`
+				const { exec } = await import('child_process')
+				exec(cmd, err => { if (err) log?.('Dev browser open failed', { error: err.message }) })
+				log?.('Dev fallback opened external browser (final)', { viewerUrl })
+				if (runId) logEmit(runId, 'driveFallbackDevOpen', { url: viewerUrl })
+			} catch (devErr: any) {
+				log?.('Dev fallback open failed', { error: devErr?.message })
+			}
+		}
+		return { pdf: null, images: [] }
+	} finally {
+		try { await browser?.close() } catch {}
+	}
+}
 
 function logEmit(runId: string, step: string, detail?: any) {
 	try {
@@ -66,6 +343,10 @@ interface IndexedPaper extends RawPaperMeta {
 	extractedQuestions: string[]
 	chunks: PaperChunk[]
 	questionEmbeddings?: number[][]
+	/** size in bytes of original PDF (if stored) */
+	pdfSize?: number
+	/** optional in-memory PDF buffer (dev / if enabled) */
+	pdfBuffer?: Buffer
 }
 
 interface PaperIndexMeta {
@@ -135,111 +416,8 @@ async function resolveCourseCode(input: string, log?: Logger): Promise<string | 
 	return null
 }
 
-async function fetchAllPapers(courseCode: string, examType?: string, year?: string, log?: Logger) {
-	log?.('Fetching papers from all sources', { courseCode, examType, year })
-	const started = Date.now()
-	const results = await Promise.allSettled([
-		scrapePapersService(courseCode, examType, year),
-		scrapePapersCodeChef(courseCode, examType, year),
-		scrapeVITPaperVault(courseCode, examType, year),
-	])
-	const papers: RawPaperMeta[] = []
-	results.forEach((r, idx) => {
-		if (r.status === 'fulfilled' && r.value.success) {
-			log?.('Source success', { sourceIndex: idx, count: r.value.papers.length })
-			papers.push(...r.value.papers)
-		} else {
-			log?.('Source failure', { sourceIndex: idx, error: r })
-		}
-	})
 
-	const extractDriveId = (url?: string) => {
-		if (!url) return null
-		const m = url.match(/https?:\/\/drive\.google\.com\/file\/d\/([^/]+)\//)
-		return m ? m[1] : null
-	}
-	const normalizeUrl = (url?: string) => {
-		if (!url) return ''
-		try {
-			const u = new URL(url)
-			u.search = ''
-			return u.toString().replace(/\/view$/, '')
-		} catch {
-			return url
-		}
-	}
-	const normalizeTitle = (t?: string) =>
-		(t || '')
-			.toLowerCase()
-			.replace(/\s+/g, ' ')
-			.replace(/\([^)]*\)/g, '') // remove parenthetical date parts
-			.replace(/cat[- ]?\d/gi, m => m.toUpperCase())
-			.trim()
-
-	function jaccardTokens(a: string, b: string) {
-		const toks = (s: string) => Array.from(new Set(s.split(/[^a-z0-9]+/).filter(Boolean)))
-		const A = toks(a)
-		const B = toks(b)
-		if (!A.length || !B.length) return 0
-		let inter = 0
-		for (const t of A) if (B.includes(t)) inter++
-		return inter / (new Set([...A, ...B]).size || 1)
-	}
-
-	interface Annotated extends RawPaperMeta {
-		_normUrl: string
-		_driveId: string | null
-		_normTitle: string
-	}
-	const annotated: Annotated[] = papers.map(p => ({
-		...p,
-		_normUrl: normalizeUrl(p.url),
-		_driveId: extractDriveId(p.url),
-		_normTitle: normalizeTitle(p.title),
-	}))
-
-	const byKey: Annotated[] = []
-	const urlSeen = new Set<string>()
-	const driveSeen = new Set<string>()
-	for (const p of annotated) {
-		if (p._driveId) {
-			if (driveSeen.has(p._driveId)) continue
-			driveSeen.add(p._driveId)
-		} else {
-			if (urlSeen.has(p._normUrl)) continue
-			urlSeen.add(p._normUrl)
-		}
-		byKey.push(p)
-	}
-
-	// Title similarity clustering (Jaccard) within same examType & year (if provided)
-	const final: Annotated[] = []
-	for (const p of byKey) {
-		const dup = final.find(f =>
-			f.examType === p.examType &&
-			f.year === p.year &&
-			jaccardTokens(f._normTitle, p._normTitle) >= 0.88
-		)
-		if (dup) continue
-		final.push(p)
-	}
-
-	log?.('Fetched & deduped papers', {
-		totalRaw: papers.length,
-		stage1_keys: byKey.length,
-		totalDeduped: final.length,
-		ms: Date.now() - started,
-	})
-	return final.map(({ _normUrl, _driveId, _normTitle, ...rest }) => rest)
-}
-
-function toDirectDrive(url: string): string {
-	const m = url.match(/https:\/\/drive\.google\.com\/file\/d\/([^/]+)\//)
-	if (m) return `https://drive.google.com/uc?export=download&id=${m[1]}`
-	return url
-}
-
-async function downloadPdf(url: string, log?: Logger): Promise<Buffer | null> {
+async function downloadPdf(url: string, log?: Logger, runId?: string): Promise<{ pdf: Buffer | null; images?: Buffer[] }> {
 	try {
 		const transformed = toDirectDrive(url)
 		if (transformed !== url) log?.('Transformed Google Drive URL', { original: url, transformed })
@@ -249,38 +427,87 @@ async function downloadPdf(url: string, log?: Logger): Promise<Buffer | null> {
 		})
 		if (!resp.ok) {
 			log?.('PDF download failed', { url: transformed, status: resp.status })
-			return null
+		} else {
+			const ctype = resp.headers.get('content-type') || ''
+			const arr = await resp.arrayBuffer()
+			if (ctype.includes('pdf') && arr.byteLength > 8000) {
+				log?.('PDF downloaded', { url: transformed, bytes: arr.byteLength })
+				return { pdf: Buffer.from(arr) }
+			}
+			log?.('Non-PDF or tiny response, will attempt Drive fallback', { ctype, bytes: arr.byteLength })
 		}
-		const arr = await resp.arrayBuffer()
-		log?.('PDF downloaded', { url: transformed, bytes: arr.byteLength })
-		return Buffer.from(arr)
+		if (/drive\.google\.com/.test(url)) {
+			return await driveHeadlessFallback(url, log, runId)
+		}
+		return { pdf: null }
 	} catch (e: any) {
 		log?.('PDF download exception', { url, error: e?.message })
-		return null
+		if (/drive\.google\.com/.test(url)) {
+			return await driveHeadlessFallback(url, log, runId)
+		}
+		return { pdf: null }
 	}
 }
 
-async function extractTextFromPdf(pdfData: Buffer, log?: Logger): Promise<string> {
-	try {
-		const pdfParse = await import('pdf-parse') as any
-		const res = await pdfParse.default(pdfData)
-		if (res && res.text) {
-			log?.('pdf-parse extraction success', { chars: res.text.length, pages: res.numpages })
-			return res.text
-		}
-	} catch (err) {
-		log?.('pdf-parse failed, falling back to Gemini OCR', { error: (err as any)?.message })
+function pickGeminiModel(opts: { pdf?: boolean; ocr?: boolean; fast?: boolean } = {}) {
+	// Central place to tune model choices.
+	if (opts.ocr || opts.pdf) return 'gemini-2.5-flash'
+	if (opts.fast) return 'gemini-2.5-flash'
+	return 'gemini-2.5-flash'
+}
+
+async function extractTextFromPdf(pdfData: Buffer, log?: Logger, runId?: string, pageImages?: Buffer[]): Promise<string> {
+	if (runId) logEmit(runId, 'ocrExtractStart', {})
+
+	// 1. Try native parsing ONLY if we appear to have a real PDF (avoid empty placeholder buffers triggering library internals)
+	if (pdfData && pdfData.length > 1500) {
 		try {
-			const base64 = pdfData.toString('base64').slice(0, 200_000)
-			const gen = await rateLimitedAI.google.generateText({
-				model: { modelId: 'gemini-2.0-flash-lite-preview-02-05' },
-				prompt: `You are an OCR assistant. The following is base64 of a PDF (possibly truncated). Attempt to extract as much readable question paper text as possible. Return plain text without commentary.\n\nBASE64:\n${base64}`,
+			const pdfParse = await import('pdf-parse') as any
+			if (runId) logEmit(runId, 'ocrParseStart', { bytes: pdfData.length })
+			const res = await pdfParse.default(pdfData)
+			if (res && res.text) {
+				log?.('pdf-parse extraction success', { chars: res.text.length, pages: res.numpages })
+				if (runId) logEmit(runId, 'ocrParseSuccess', { chars: res.text.length, pages: res.numpages })
+				if (runId) logEmit(runId, 'ocrExtractComplete', { method: 'pdf-parse' })
+				return res.text
+			}
+			log?.('pdf-parse produced empty text, falling back to OCR')
+		} catch (err: any) {
+			log?.('pdf-parse failed, falling back to Gemini OCR', { error: err?.message })
+			if (runId) logEmit(runId, 'ocrParseFailed', { error: err?.message })
+		}
+	} else {
+		if (runId) logEmit(runId, 'ocrParseSkipped', { reason: 'pdf-too-small', bytes: pdfData ? pdfData.length : 0 })
+		log?.('Skipping pdf-parse (buffer too small)', { bytes: pdfData ? pdfData.length : 0 })
+	}
+
+	if (pageImages && pageImages.length) {
+		try {
+			if (runId) logEmit(runId, 'ocrImageFallbackStart', { pages: pageImages.length })
+			const modelId = pickGeminiModel({ pdf: true, ocr: true })
+			const limited = pageImages.slice(0, 12) // cap pages to avoid oversized prompt; future: batch
+			// Gemini multimodal expects parts with either type:'text' or type:'image' and image as string/bytes. Use base64.
+			const contentParts: any[] = []
+			contentParts.push({
+				type: 'text',
+				text: 'You will receive exam paper page images. Perform OCR and return ONLY the readable question text. Preserve numbering (1, 1(a), (i), etc.). Separate distinct questions with a blank line. No extra commentary.'
 			})
-			const txt = (gen as any).text || ''
-			log?.('Gemini OCR extraction result', { chars: txt.length })
+			for (const img of limited) {
+				const b64 = img.toString('base64')
+				contentParts.push({ type: 'image', image: b64, mimeType: 'image/png' })
+			}
+			const ocrRes: any = await rateLimitedAI.google.generateText({
+				model: { modelId },
+				messages: [ { role: 'user', content: contentParts } ],
+			})
+			const txt = (ocrRes && (ocrRes.text || (ocrRes as any).outputText)) || ''
+			log?.('Gemini OCR (image) extraction result', { chars: txt.length, model: modelId, pagesUsed: limited.length })
+			if (runId) logEmit(runId, 'ocrOcrFallbackSuccess', { chars: txt.length, model: modelId, pages: limited.length })
+			if (runId) logEmit(runId, 'ocrExtractComplete', { method: 'gemini-image-ocr' })
 			return txt
-		} catch {
-			return ''
+		} catch (e: any) {
+			log?.('Gemini OCR image fallback failed', { error: e?.message })
+			if (runId) logEmit(runId, 'ocrFailed', { error: e?.message })
 		}
 	}
 	return ''
@@ -340,6 +567,7 @@ export async function indexPastPapers(options: {
 }) {
 	const log = createLogger(options.debug || process.env.PAPER_AGENT_DEBUG === 'true')
 	const useDB = !!process.env.DATABASE_URL2
+	const storePdf = process.env.PAPER_AGENT_STORE_PDF === '1' || process.env.NODE_ENV === 'development'
 	if (useDB) {
 		try { await ensurePaperSchema() } catch (e: any) { log('DB schema ensure failed (continuing in-memory)', { error: e?.message }) }
 	}
@@ -368,24 +596,29 @@ export async function indexPastPapers(options: {
 	for (const p of selected) {
 		if (options.runId) logEmit(options.runId, 'processPaperStart', { title: p.title, url: p.url })
 		log('Processing paper', { title: p.title, url: p.url })
-		const pdf = await downloadPdf(p.url, log)
-		if (!pdf) {
+		const download = await downloadPdf(p.url, log, options.runId)
+		if (!download.pdf && !(download.images && download.images.length)) {
 			log('Skipping paper due to download failure', { url: p.url })
 			if (options.runId) logEmit(options.runId, 'paperDownloadFailed', { url: p.url })
 			continue
 		}
+		if (download.pdf && options.runId) logEmit(options.runId, 'paperDownloadSuccess', { url: p.url, bytes: download.pdf.length })
 		try {
-			const h = await computeHash(pdf)
+			if (download.pdf) {
+				const h = await computeHash(download.pdf)
 			if (contentHashes.has(h)) {
 				log('Skipping paper due to duplicate content hash', { title: p.title })
 				if (options.runId) logEmit(options.runId, 'duplicateContent', { title: p.title })
 				continue
 			}
-			contentHashes.add(h)
+				contentHashes.add(h)
+			}
 		} catch (e: any) {
 			log('Hash computation failed (continuing)', { error: e?.message })
 		}
-		const text = await extractTextFromPdf(pdf, log)
+		const text = download.pdf
+			? await extractTextFromPdf(download.pdf, log, options.runId, download.images)
+			: await extractTextFromPdf(Buffer.alloc(0), log, options.runId, download.images)
 		if (!text || text.length < 50) {
 			log('Skipping paper due to insufficient text', { chars: text.length })
 			if (options.runId) logEmit(options.runId, 'paperTextInsufficient', { title: p.title })
@@ -448,6 +681,8 @@ export async function indexPastPapers(options: {
 			extractedQuestions: questions,
 			chunks,
 			questionEmbeddings,
+			pdfSize: download.pdf ? download.pdf.length : undefined,
+			pdfBuffer: storePdf && download.pdf ? download.pdf : undefined,
 		})
 	}
 
@@ -507,7 +742,7 @@ export async function askIndexedPaperQuestion(indexId: string, question: string,
 		.join('\n\n---\n\n')
 	const prompt = `You are a precise assistant answering questions about VIT past exam papers.\nQuestion: ${question}\nUse ONLY the provided context. Quote specific question numbers or lines if relevant. If unknown, say you cannot find it.\nContext:\n${context}`
 	const answer = await rateLimitedAI.google.generateText({
-		model: { modelId: 'gemini-2.0-flash-lite-preview-02-05' },
+		model: { modelId: pickGeminiModel({ fast: true }) },
 		prompt,
 	})
 	log('Answer generated')

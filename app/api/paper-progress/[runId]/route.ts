@@ -1,22 +1,32 @@
 import { NextRequest } from 'next/server'
-import { paperProgress, PaperProgressEvent } from '@/lib/progress/paper-progress'
+import { paperProgress, type PaperProgressEvent } from '@/lib/progress/paper-progress'
 
 export const runtime = 'nodejs'
 
-export async function GET(req: NextRequest, ctx: { params: { runId: string } } | { params: Promise<{ runId: string }> }) {
-  const rawParams: any = (ctx as any).params
-  const resolved = typeof rawParams?.then === 'function' ? await rawParams : rawParams
-  const { runId } = resolved || {}
+type Params = { runId: string }
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<Params> } 
+) {
+  const { runId } = await params
+
   const encoder = new TextEncoder()
-  const stream = new ReadableStream({
+
+  const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       const send = (evt: PaperProgressEvent) => {
         if (evt.runId !== runId) return
         console.log('[paper-progress SSE] dispatching', evt.runId, evt.step)
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(evt)}\n\n`))
       }
+
       paperProgress.on('progress', send)
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ runId, step: 'connected', ts: Date.now() })}\n\n`))
+
+      controller.enqueue(
+        encoder.encode(`data: ${JSON.stringify({ runId, step: 'connected', ts: Date.now() })}\n\n`)
+      )
+
       try {
         const buffered = paperProgress.getBuffered(runId)
         if (buffered.length) {
@@ -27,23 +37,29 @@ export async function GET(req: NextRequest, ctx: { params: { runId: string } } |
         } else {
           console.log('[paper-progress SSE] no buffered events to flush', runId)
         }
-      } catch (e) {
-        console.log('[paper-progress SSE] buffer flush error', (e as any)?.message)
+      } catch (e: any) {
+        console.log('[paper-progress SSE] buffer flush error', e?.message)
       }
+
       const heartbeat = setInterval(() => {
-        controller.enqueue(encoder.encode(`: ping\n`))
-      }, 15000)
+        controller.enqueue(encoder.encode(`: ping\n\n`))
+      }, 15_000)
+
       const close = () => {
         paperProgress.off('progress', send)
         clearInterval(heartbeat)
-        try { controller.close() } catch {}
+        try {
+          controller.close()
+        } catch {}
       }
-      ;(req.signal as any).addEventListener('abort', close)
+
+      req.signal.addEventListener('abort', close)
     },
   })
+
   return new Response(stream, {
     headers: {
-      'Content-Type': 'text/event-stream',
+      'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',

@@ -145,64 +145,66 @@ function toDirectDrive(url: string): string {
 
 interface DriveFallbackResult { pdf: Buffer | null; images: Buffer[] }
 
-async function driveHeadlessFallback(url: string, log?: Logger, runId?: string): Promise<DriveFallbackResult> {
-	let browser: any
-	try {
-		log?.('Drive fallback launching headless browser', { url })
-		if (runId) logEmit(runId, 'driveFallbackStart', { url })
-		let launchError: any = null
-		const launchPrimary = async () => {
-			return puppeteer.launch({
-				args: chromium.args,
-				defaultViewport: { width: 1280, height: 1600 },
-				executablePath: await chromium.executablePath(),
-				headless: chromium.headless,
-			})
-		}
-		try {
-			browser = await launchPrimary()
-		} catch (err: any) {
-			launchError = err
-			log?.('Primary headless launch failed', { error: err?.message })
-			if (process.env.NODE_ENV === 'development') {
-				if (runId) logEmit(runId, 'driveFallbackDevRetry', { reason: err?.message })
-				// Attempt local Chrome/Edge detection
-				const override = process.env.LOCAL_CHROME_PATH && existsSync(process.env.LOCAL_CHROME_PATH) ? process.env.LOCAL_CHROME_PATH : null
-				const candidatePaths = (
-					override ? [override] : [
-						'C:/Program Files/Google/Chrome/Application/chrome.exe',
-						'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
-						'C:/Program Files/Google/Chrome Beta/Application/chrome.exe',
-						'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
-						'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
-					]
-				).filter(p => existsSync(p))
-				let launched = false
-				for (const exe of candidatePaths) {
-					try {
-						log?.('Attempting dev local browser launch', { exe })
-						browser = await puppeteer.launch({
-							executablePath: exe,
-							defaultViewport: { width: 1280, height: 1600 },
-							args: ['--no-sandbox', '--disable-gpu', '--headless=new'],
-							headless: true,
-						})
-						launched = true
-						if (runId) logEmit(runId, 'driveFallbackDevRetrySuccess', { exe })
-						break
-					} catch (e: any) {
-						log?.('Dev local browser launch failed', { exe, error: e?.message })
-					}
-				}
-				if (!launched) {
-					log?.('No local Chrome/Edge executable succeeded for dev retry')
-					if (runId) logEmit(runId, 'driveFallbackDevRetryFailed', { candidates: candidatePaths.length, originalError: err?.message })
-					// Will drop to outer catch below
-					throw err
-				}
+// Shared browser instance for paper processing session
+// This browser is reused across multiple Google Drive URLs within a single indexing session
+// and is automatically cleaned up when the session completes
+let sharedBrowser: any = null
+let sharedBrowserUsageCount = 0
+const MAX_SHARED_BROWSER_USAGE = 10
+
+async function getOrCreateSharedBrowser(log?: Logger): Promise<any> {
+	if (!sharedBrowser || sharedBrowserUsageCount >= MAX_SHARED_BROWSER_USAGE) {
+		// Clean up existing browser if it exists
+		if (sharedBrowser) {
+			try {
+				await sharedBrowser.close()
+				log?.('Closed previous shared browser instance')
+			} catch (e) {
+				log?.('Error closing previous browser (continuing)', { error: (e as Error)?.message })
 			}
 		}
-		const page = await browser.newPage()
+		
+		// Create new shared browser instance
+		log?.('Creating new shared browser instance')
+		sharedBrowser = await puppeteer.launch({
+			args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+			defaultViewport: chromium.defaultViewport,
+			executablePath: await chromium.executablePath(),
+			headless: chromium.headless,
+		})
+		sharedBrowserUsageCount = 0
+	}
+	sharedBrowserUsageCount++
+	return sharedBrowser
+}
+
+async function cleanupSharedBrowser(log?: Logger): Promise<void> {
+	if (sharedBrowser) {
+		try {
+			await sharedBrowser.close()
+			log?.('Shared browser cleaned up successfully')
+		} catch (e) {
+			log?.('Error during shared browser cleanup', { error: (e as Error)?.message })
+		} finally {
+			sharedBrowser = null
+			sharedBrowserUsageCount = 0
+		}
+	}
+}
+
+async function driveHeadlessFallback(url: string, log?: Logger, runId?: string): Promise<DriveFallbackResult> {
+	let browser: any
+	let page: any
+	try {
+		log?.('Drive fallback using shared browser', { url })
+		if (runId) logEmit(runId, 'driveFallbackStart', { url })
+		
+		// Add a small delay to prevent resource exhaustion
+		await new Promise(resolve => setTimeout(resolve, 1000))
+		
+		// Use shared browser instance
+		browser = await getOrCreateSharedBrowser(log)
+		page = await browser.newPage()
 		await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36')
 
 		let viewerUrl = url
@@ -303,7 +305,14 @@ async function driveHeadlessFallback(url: string, log?: Logger, runId?: string):
 		}
 		return { pdf: null, images: [] }
 	} finally {
-		try { await browser?.close() } catch {}
+		// Only close the page, not the shared browser
+		if (page) {
+			try { 
+				await page.close() 
+			} catch (e) {
+				log?.('Page cleanup error (ignoring)', { error: (e as Error)?.message })
+			}
+		}
 	}
 }
 
@@ -437,13 +446,25 @@ async function downloadPdf(url: string, log?: Logger, runId?: string): Promise<{
 			log?.('Non-PDF or tiny response, will attempt Drive fallback', { ctype, bytes: arr.byteLength })
 		}
 		if (/drive\.google\.com/.test(url)) {
-			return await driveHeadlessFallback(url, log, runId)
+			try {
+				return await driveHeadlessFallback(url, log, runId)
+			} catch (fallbackError: any) {
+				log?.('Drive fallback failed completely', { url, error: fallbackError?.message })
+				if (runId) logEmit(runId, 'driveFallbackFailed', { url, error: fallbackError?.message })
+				return { pdf: null, images: [] }
+			}
 		}
 		return { pdf: null }
 	} catch (e: any) {
 		log?.('PDF download exception', { url, error: e?.message })
 		if (/drive\.google\.com/.test(url)) {
-			return await driveHeadlessFallback(url, log, runId)
+			try {
+				return await driveHeadlessFallback(url, log, runId)
+			} catch (fallbackError: any) {
+				log?.('Drive fallback failed completely after exception', { url, error: fallbackError?.message })
+				if (runId) logEmit(runId, 'driveFallbackFailed', { url, error: fallbackError?.message })
+				return { pdf: null, images: [] }
+			}
 		}
 		return { pdf: null }
 	}
@@ -574,6 +595,8 @@ export async function indexPastPapers(options: {
 	const courseCode = await resolveCourseCode(options.course, log)
 	if (options.runId) logEmit(options.runId, 'resolveCourse', { input: options.course, courseCode })
 	if (!courseCode) {
+		// Clean up shared browser instance on error
+		await cleanupSharedBrowser(log)
 		return {
 			success: false,
 			error: 'Could not resolve course code',
@@ -587,8 +610,11 @@ export async function indexPastPapers(options: {
 	const selected = all.slice(0, options.maxPapers || 8)
 	if (options.runId) logEmit(options.runId, 'selectedSubset', { selected: selected.length })
 	log('Selected subset for processing', { selected: selected.length })
-	if (selected.length === 0)
+	if (selected.length === 0) {
+		// Clean up shared browser instance on error
+		await cleanupSharedBrowser(log)
 		return { success: false, error: 'No papers found to index', logs: log.getLogs() }
+	}
 
 	const indexed: IndexedPaper[] = []
 	const persistedPaperIds: string[] = []
@@ -686,8 +712,11 @@ export async function indexPastPapers(options: {
 		})
 	}
 
-	if (indexed.length === 0)
+	if (indexed.length === 0) {
+		// Clean up shared browser instance on error
+		await cleanupSharedBrowser(log)
 		return { success: false, error: 'Failed to process any papers', logs: log.getLogs() }
+	}
 
 	const indexId = generateId('ppidx')
 	const chunkCount = indexed.reduce((s, p) => s + p.chunks.length, 0)
@@ -703,6 +732,9 @@ export async function indexPastPapers(options: {
 	})
 	log('Index stored', { indexId, papers: indexed.length, chunkCount })
 	if (options.runId) logEmit(options.runId, 'indexBuilt', { indexId, papers: indexed.length, chunks: chunkCount })
+
+	// Clean up shared browser instance at end of indexing session
+	await cleanupSharedBrowser(log)
 
 	return {
 		success: true,

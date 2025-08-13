@@ -317,7 +317,7 @@ async function tryBrowserScraping(
   let browser
   try {
     browser = await puppeteer.launch({
-      args: chromium.args,
+      args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
       defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
@@ -425,40 +425,43 @@ async function tryBrowserScraping(
       year
     )
 
-    const papersWithFinalUrls = await Promise.all(
-      papers.map(async paper => {
-        if (paper.url.includes('.pdf') || paper.url.includes('cloudinary.com')) {
-          return paper
-        }
+    const papersWithFinalUrls: Paper[] = []
+    
+    // Process papers sequentially to prevent browser resource exhaustion
+    for (const paper of papers) {
+      if (paper.url.includes('.pdf') || paper.url.includes('cloudinary.com')) {
+        papersWithFinalUrls.push(paper)
+        continue
+      }
 
-        try {
-          const finalUrlPromise = extractFinalUrlFromPaperPage(paper.url)
-          const timeoutPromise = new Promise<string | null>((_, reject) =>
-            setTimeout(() => reject(new Error('Timeout')), 15000)
-          )
+      try {
+        const finalUrlPromise = extractFinalUrlFromPaperPage(paper.url)
+        const timeoutPromise = new Promise<string | null>((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout')), 15000)
+        )
 
-          const finalUrl = await Promise.race([finalUrlPromise, timeoutPromise])
+        const finalUrl = await Promise.race([finalUrlPromise, timeoutPromise])
 
-          if (finalUrl && finalUrl.includes('cloudinary.com')) {
-            try {
-              const response = await fetch(finalUrl, { method: 'HEAD' })
-              if (response.ok) {
-                return {
-                  ...paper,
-                  url: finalUrl, // Use the Cloudinary PDF URL instead of the paper page URL
-                }
-              }
-            } catch (validationError) {
-              console.warn(`Final URL validation failed for ${paper.title}:`, validationError)
+        if (finalUrl && finalUrl.includes('cloudinary.com')) {
+          try {
+            const response = await fetch(finalUrl, { method: 'HEAD' })
+            if (response.ok) {
+              papersWithFinalUrls.push({
+                ...paper,
+                url: finalUrl, // Use the Cloudinary PDF URL instead of the paper page URL
+              })
+              continue
             }
+          } catch (validationError) {
+            console.warn(`Final URL validation failed for ${paper.title}:`, validationError)
           }
-        } catch (error) {
-          console.warn(`Failed to extract finalUrl for ${paper.title}:`, error)
         }
+      } catch (error) {
+        console.warn(`Failed to extract finalUrl for ${paper.title}:`, error)
+      }
 
-        return paper
-      })
-    )
+      papersWithFinalUrls.push(paper)
+    }
 
     const deduplicatedPapers = deduplicatePapers(papersWithFinalUrls as Paper[])
 
@@ -478,7 +481,11 @@ async function tryBrowserScraping(
     }
   } finally {
     if (browser) {
-      await browser.close()
+      try {
+        await browser.close()
+      } catch (closeError) {
+        console.warn('Browser cleanup error in tryBrowserScraping:', closeError)
+      }
     }
   }
 }
@@ -486,8 +493,11 @@ async function tryBrowserScraping(
 async function extractFinalUrlFromPaperPage(paperPageUrl: string): Promise<string | null> {
   let browser
   try {
+    // Add small delay to prevent resource exhaustion
+    await new Promise(resolve => setTimeout(resolve, 500))
+    
     browser = await puppeteer.launch({
-      args: chromium.args,
+      args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
       defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
@@ -568,7 +578,11 @@ async function extractFinalUrlFromPaperPage(paperPageUrl: string): Promise<strin
     return null
   } finally {
     if (browser) {
-      await browser.close()
+      try {
+        await browser.close()
+      } catch (closeError) {
+        console.warn(`Browser cleanup error for ${paperPageUrl}:`, closeError)
+      }
     }
   }
 }

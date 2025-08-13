@@ -200,7 +200,7 @@ async function driveHeadlessFallback(url: string, log?: Logger, runId?: string):
 		if (runId) logEmit(runId, 'driveFallbackStart', { url })
 		
 		// Add a small delay to prevent resource exhaustion
-		await new Promise(resolve => setTimeout(resolve, 1000))
+		await new Promise(resolve => setTimeout(resolve, 500)) // Reduced from 1000ms
 		
 		// Use shared browser instance
 		browser = await getOrCreateSharedBrowser(log)
@@ -212,21 +212,22 @@ async function driveHeadlessFallback(url: string, log?: Logger, runId?: string):
 		if (fileIdMatch) {
 			viewerUrl = `https://drive.google.com/file/d/${fileIdMatch[1]}/view`
 		}
-		await page.goto(viewerUrl, { waitUntil: 'networkidle2', timeout: 30000 })
+		await page.goto(viewerUrl, { waitUntil: 'domcontentloaded', timeout: 15000 }) // Faster loading
 
 		async function autoScroll() {
 			await page.evaluate(async () => {
 				const delay = (ms: number) => new Promise(res => setTimeout(res, ms))
 				let lastHeight = 0
 				let stableIterations = 0
-				for (let i = 0; i < 40; i++) {
+				// Reduced scroll iterations for speed
+				for (let i = 0; i < 20; i++) {
 					window.scrollBy(0, window.innerHeight * 0.85)
-					await delay(400)
+					await delay(200) // Faster scrolling
 					const newHeight = document.documentElement.scrollHeight
 					if (newHeight === lastHeight) stableIterations++
 					else stableIterations = 0
 					lastHeight = newHeight
-					if (stableIterations >= 3) break
+					if (stableIterations >= 2) break // Less strict stability check
 				}
 			})
 		}
@@ -253,7 +254,9 @@ async function driveHeadlessFallback(url: string, log?: Logger, runId?: string):
 		if (runId) logEmit(runId, 'driveFallbackPagesDetected', { pages: pageInfos.length })
 
 		const screenshots: Buffer[] = []
-		for (const info of pageInfos.slice(0, 200)) { // cap pages
+		// Limit to first 10 pages for speed (was 200)
+		const pagesToProcess = pageInfos.slice(0, 10)
+		for (const info of pagesToProcess) {
 			const clip = { x: info.x, y: info.y, width: info.width, height: info.height }
 			try {
 				const buf = await page.screenshot({ type: 'png', clip }) as Buffer
@@ -432,7 +435,7 @@ async function downloadPdf(url: string, log?: Logger, runId?: string): Promise<{
 		if (transformed !== url) log?.('Transformed Google Drive URL', { original: url, transformed })
 		const resp = await fetch(transformed, {
 			headers: { Accept: 'application/pdf' },
-			signal: AbortSignal.timeout(20000),
+			signal: AbortSignal.timeout(10000), // Reduced from 20000 to 10000
 		})
 		if (!resp.ok) {
 			log?.('PDF download failed', { url: transformed, status: resp.status })
@@ -506,7 +509,7 @@ async function extractTextFromPdf(pdfData: Buffer, log?: Logger, runId?: string,
 		try {
 			if (runId) logEmit(runId, 'ocrImageFallbackStart', { pages: pageImages.length })
 			const modelId = pickGeminiModel({ pdf: true, ocr: true })
-			const limited = pageImages.slice(0, 12) // cap pages to avoid oversized prompt; future: batch
+			const limited = pageImages.slice(0, 5) // Reduced from 12 to 5 for speed
 			// Gemini multimodal expects parts with either type:'text' or type:'image' and image as string/bytes. Use base64.
 			const contentParts: any[] = []
 			contentParts.push({
@@ -607,8 +610,11 @@ export async function indexPastPapers(options: {
 	const all = await fetchAllPapers(courseCode, options.examType, options.year, log)
 	if (options.runId) logEmit(options.runId, 'fetchedMetadata', { count: all.length })
 	log('Total papers after fetch', { count: all.length })
-	const selected = all.slice(0, options.maxPapers || 8)
-	if (options.runId) logEmit(options.runId, 'selectedSubset', { selected: selected.length })
+	
+	// Reduce number of papers for Vercel timeout constraints
+	const maxPapers = Math.min(options.maxPapers || 4, 4) // Cap at 4 papers max for Vercel
+	const selected = all.slice(0, maxPapers)
+	if (options.runId) logEmit(options.runId, 'selectedSubset', { selected: selected.length, maxAllowed: maxPapers })
 	log('Selected subset for processing', { selected: selected.length })
 	if (selected.length === 0) {
 		// Clean up shared browser instance on error
@@ -619,10 +625,53 @@ export async function indexPastPapers(options: {
 	const indexed: IndexedPaper[] = []
 	const persistedPaperIds: string[] = []
 	const contentHashes = new Set<string>()
+	const startTime = Date.now()
+	const MAX_PROCESSING_TIME = 45000 // 45 seconds to leave buffer for Vercel
+	let attemptedPapers = 0
+	
 	for (const p of selected) {
+		attemptedPapers++
+		
+		// Check if we're approaching timeout
+		if (Date.now() - startTime > MAX_PROCESSING_TIME) {
+			log('Approaching timeout limit, stopping paper processing', { 
+				processed: indexed.length, 
+				remaining: selected.length - attemptedPapers,
+				timeElapsed: Date.now() - startTime 
+			})
+			if (options.runId) logEmit(options.runId, 'timeoutApproaching', { 
+				processed: indexed.length,
+				timeElapsed: Date.now() - startTime
+			})
+			break
+		}
+		
+		// Early bailout if we haven't successfully processed any papers after 3 attempts
+		if (attemptedPapers > 3 && indexed.length === 0) {
+			log('No papers successfully processed after 3 attempts, bailing out early')
+			if (options.runId) logEmit(options.runId, 'earlyBailout', { attempted: attemptedPapers })
+			break
+		}
+		
 		if (options.runId) logEmit(options.runId, 'processPaperStart', { title: p.title, url: p.url })
 		log('Processing paper', { title: p.title, url: p.url })
-		const download = await downloadPdf(p.url, log, options.runId)
+		
+		// Add per-paper timeout to prevent hanging
+		const paperStartTime = Date.now()
+		const PAPER_TIMEOUT = 15000 // 15 seconds per paper max
+		
+		let download: { pdf: Buffer | null; images?: Buffer[] }
+		try {
+			const downloadPromise = downloadPdf(p.url, log, options.runId)
+			const timeoutPromise = new Promise<{ pdf: Buffer | null; images?: Buffer[] }>((_, reject) => 
+				setTimeout(() => reject(new Error(`Paper processing timeout after ${PAPER_TIMEOUT}ms`)), PAPER_TIMEOUT)
+			)
+			download = await Promise.race([downloadPromise, timeoutPromise])
+		} catch (timeoutError: any) {
+			log('Paper processing timeout, skipping', { url: p.url, error: timeoutError.message })
+			if (options.runId) logEmit(options.runId, 'paperTimeout', { url: p.url })
+			continue
+		}
 		if (!download.pdf && !(download.images && download.images.length)) {
 			log('Skipping paper due to download failure', { url: p.url })
 			if (options.runId) logEmit(options.runId, 'paperDownloadFailed', { url: p.url })
@@ -815,7 +864,7 @@ export async function smartPaperSearchByQuestion(opts: {
 		course: opts.course,
 		examType: opts.examType,
 		year: opts.year,
-		maxPapers: opts.maxPapers || 6,
+		maxPapers: opts.maxPapers || 3, // Reduced from 6 to 3 for Vercel timeout
 		questionFocus: opts.question,
 		debug: opts.debug,
 		runId: opts.runId,

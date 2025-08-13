@@ -330,9 +330,9 @@ async function tryBrowserScraping(
 
     const fullCourseName = findFullCourseName(courseCode)
     const searchUrl = `https://papers.codechefvit.com/catalogue?subject=${encodeURIComponent(fullCourseName)}`
-    await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 15000 })
+    await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 10000 }) // Faster loading
 
-    await new Promise(res => setTimeout(res, 3000))
+    await new Promise(res => setTimeout(res, 1500)) // Reduced wait time
 
     const papers = await page.evaluate(
       (courseCode, examType, year) => {
@@ -437,7 +437,7 @@ async function tryBrowserScraping(
       try {
         const finalUrlPromise = extractFinalUrlFromPaperPage(paper.url)
         const timeoutPromise = new Promise<string | null>((_, reject) =>
-          setTimeout(() => reject(new Error('Timeout')), 15000)
+          setTimeout(() => reject(new Error('Timeout')), 8000) // Reduced from 15000 to 8000
         )
 
         const finalUrl = await Promise.race([finalUrlPromise, timeoutPromise])
@@ -494,7 +494,7 @@ async function extractFinalUrlFromPaperPage(paperPageUrl: string): Promise<strin
   let browser
   try {
     // Add small delay to prevent resource exhaustion
-    await new Promise(resolve => setTimeout(resolve, 500))
+    await new Promise(resolve => setTimeout(resolve, 200)) // Reduced from 500ms
     
     browser = await puppeteer.launch({
       args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
@@ -508,9 +508,9 @@ async function extractFinalUrlFromPaperPage(paperPageUrl: string): Promise<strin
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     )
 
-    await page.goto(paperPageUrl, { waitUntil: 'networkidle2', timeout: 8000 })
+    await page.goto(paperPageUrl, { waitUntil: 'domcontentloaded', timeout: 6000 }) // Reduced timeout
 
-    await new Promise(res => setTimeout(res, 1000))
+    await new Promise(res => setTimeout(res, 500)) // Reduced wait
 
     const finalUrl = await page.evaluate(() => {
       const cloudinaryLinks = Array.from(document.querySelectorAll('a[href*="cloudinary.com"]'))

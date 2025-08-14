@@ -594,7 +594,7 @@ export async function indexPastPapers(options: {
 		try { await ensurePaperSchema() } catch (e: any) { log('DB schema ensure failed (continuing in-memory)', { error: e?.message }) }
 	}
 	const courseCode = await resolveCourseCode(options.course, log)
-	if (options.runId) logEmit(options.runId, `🎯 Searching for ${courseCode || options.course} papers`, { input: options.course, courseCode })
+	if (options.runId) logEmit(options.runId, `Searching for ${courseCode || options.course} papers`, { input: options.course, courseCode })
 	if (!courseCode) {
 		// Clean up shared browser instance on error
 		await cleanupSharedBrowser(log)

@@ -892,7 +892,7 @@ const PaperCard = ({
               <span>Relevance: {(paper.score * 100).toFixed(1)}%</span>
             </div>
           )}
-          {(typeof paper.displayContentPct === 'number' || typeof paper.displayQuestionPct === 'number') && (
+          {/* {(typeof paper.displayContentPct === 'number' || typeof paper.displayQuestionPct === 'number') && (
             <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground/80">
               {typeof paper.displayContentPct === 'number' && (
                 <span title={`Content similarity (raw ${(paper._rawChunkScore*100).toFixed(1)}%)`}>
@@ -908,7 +908,7 @@ const PaperCard = ({
                 <span title="No question-level signals extracted">Question —</span>
               )}
             </div>
-          )}
+          )} */}
           {Array.isArray(paper.matchedQuestions) && paper.matchedQuestions.length > 0 && (
             <div className="mt-1 space-y-1">
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70">Matched Questions</div>

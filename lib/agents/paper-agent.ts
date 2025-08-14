@@ -7,6 +7,13 @@ import rateLimitedAI from '../rate-limited-ai'
 import {
 	ensurePaperSchema,
 	insertPaper,
+	findPaperByUrl,
+	loadChunksAndQuestions,
+	createIndexRecord,
+	linkIndexPapers,
+	getIndexMetaById,
+	getIndexPaperIds,
+	getPapersByIds,
 	upsertChunks,
 	upsertQuestionEmbeddings,
 	semanticRankQuestion,
@@ -17,7 +24,7 @@ import {
 import { paperProgress } from '../progress/paper-progress'
 import puppeteer from 'puppeteer-core'
 import chromium from '@sparticuz/chromium'
-import { existsSync } from 'fs'
+// Note: avoid direct fs reads for PDF parsing paths on Windows
 import { PDFDocument } from 'pdf-lib'
 
 async function computeHash(buf: Buffer | Uint8Array): Promise<string> {
@@ -192,6 +199,103 @@ async function cleanupSharedBrowser(log?: Logger): Promise<void> {
 	}
 }
 
+// Generic headless PDF viewer fallback for direct PDF URLs (e.g., Cloudinary)
+async function genericHeadlessPdfToImages(url: string, log?: Logger, runId?: string): Promise<DriveFallbackResult> {
+    let browser: any
+    let page: any
+    try {
+        log?.('Generic PDF headless capture start', { url })
+        if (runId) logEmit(runId, 'driveFallbackStart', { url })
+
+        await new Promise(r => setTimeout(r, 300))
+
+        browser = await getOrCreateSharedBrowser(log)
+        page = await browser.newPage()
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36')
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 })
+
+        // Scroll to render all pages in pdf.js style viewers
+        await page.evaluate(async () => {
+            const delay = (ms: number) => new Promise(res => setTimeout(res, ms))
+            let lastHeight = 0
+            let stableIterations = 0
+            for (let i = 0; i < 30; i++) {
+                window.scrollBy(0, window.innerHeight * 0.85)
+                await delay(200)
+                const newHeight = document.documentElement.scrollHeight
+                if (newHeight === lastHeight) stableIterations++
+                else stableIterations = 0
+                lastHeight = newHeight
+                if (stableIterations >= 2) break
+            }
+        })
+
+        // Collect large portrait-like canvases or images (pdf.js uses canvas)
+        const pageInfos = await page.evaluate(() => {
+            const items: { x: number; y: number; width: number; height: number; aspect: number; tag: string }[] = []
+            const els = Array.from(document.querySelectorAll('canvas, img')) as (HTMLCanvasElement | HTMLImageElement)[]
+            for (const el of els) {
+                const r = el.getBoundingClientRect()
+                const aspect = r.height / Math.max(1, r.width)
+                if (r.width > 380 && r.height > 480 && aspect > 1.0) {
+                    items.push({ x: r.x, y: r.y + window.scrollY, width: r.width, height: r.height, aspect, tag: el.tagName.toLowerCase() })
+                }
+            }
+            items.sort((a, b) => a.y - b.y)
+            return items
+        })
+
+        if (!pageInfos.length) {
+            log?.('Generic headless: no suitable canvases/images found')
+            if (runId) logEmit(runId, 'driveFallbackScreenshotsFailed', { url })
+            return { pdf: null, images: [] }
+        }
+        if (runId) logEmit(runId, 'driveFallbackPagesDetected', { pages: pageInfos.length })
+
+        const screenshots: Buffer[] = []
+        const seenSizes = new Set<string>()
+        for (const info of pageInfos) {
+            const key = `${Math.round(info.width/10)}x${Math.round(info.height/10)}`
+            if (seenSizes.has(key)) continue
+            seenSizes.add(key)
+            try {
+                const buf = await page.screenshot({ type: 'png', clip: { x: info.x, y: info.y, width: info.width, height: info.height } }) as Buffer
+                screenshots.push(buf)
+                if (screenshots.length >= 10) break
+            } catch (e: any) {
+                log?.('Generic headless screenshot failed', { error: e?.message })
+            }
+        }
+
+        if (!screenshots.length) {
+            if (runId) logEmit(runId, 'driveFallbackScreenshotsFailed', { url })
+            return { pdf: null, images: [] }
+        }
+
+        const pdfDoc = await PDFDocument.create()
+        for (const imgBuf of screenshots) {
+            try {
+                const img = await pdfDoc.embedPng(imgBuf)
+                const pg = pdfDoc.addPage([img.width, img.height])
+                pg.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height })
+            } catch (e: any) {
+                log?.('Generic headless: embed image failed', { error: e?.message })
+            }
+        }
+        const pdfBytes = await pdfDoc.save()
+        const out = Buffer.from(pdfBytes)
+        log?.('Generic headless PDF assembled', { pages: screenshots.length, bytes: out.length })
+        if (runId) logEmit(runId, 'driveFallbackSuccess', { pages: screenshots.length, bytes: out.length })
+        return { pdf: out, images: screenshots }
+    } catch (e: any) {
+        log?.('Generic headless fallback error', { error: e?.message })
+        if (runId) logEmit(runId, 'driveFallbackDevRetryFailed', { error: e?.message })
+        return { pdf: null, images: [] }
+    } finally {
+        if (page) { try { await page.close() } catch {} }
+    }
+}
+
 async function driveHeadlessFallback(url: string, log?: Logger, runId?: string): Promise<DriveFallbackResult> {
 	let browser: any
 	let page: any
@@ -232,15 +336,19 @@ async function driveHeadlessFallback(url: string, log?: Logger, runId?: string):
 		await autoScroll()
 
 		const pageInfos = await page.evaluate(() => {
-			const items: { index: number; x: number; y: number; width: number; height: number }[] = []
+			const items: { index: number; x: number; y: number; width: number; height: number; aspect: number }[] = []
 			const candidates = Array.from(document.querySelectorAll('img')) as HTMLImageElement[]
 			let idx = 0
 			for (const img of candidates) {
 				const rect = img.getBoundingClientRect()
-				if (rect.width > 300 && rect.height > 300) {
-					items.push({ index: idx++, x: rect.x, y: rect.y + window.scrollY, width: rect.width, height: rect.height })
+				const aspect = rect.height / Math.max(1, rect.width)
+				// Heuristics: prefer portrait-like large pages (likely full page scans)
+				if (rect.width > 380 && rect.height > 480 && aspect > 1.0) {
+					items.push({ index: idx++, x: rect.x, y: rect.y + window.scrollY, width: rect.width, height: rect.height, aspect })
 				}
 			}
+			// sort by vertical position (page order)
+			items.sort((a, b) => a.y - b.y)
 			return items
 		})
 
@@ -251,9 +359,18 @@ async function driveHeadlessFallback(url: string, log?: Logger, runId?: string):
 		}
 		if (runId) logEmit(runId, `Found ${pageInfos.length} pages to scan`, { pages: pageInfos.length })
 
-		const screenshots: Buffer[] = []
-		// Limit to first 10 pages for speed (was 200)
-		const pagesToProcess = pageInfos.slice(0, 10)
+			const screenshots: Buffer[] = []
+			// Prefer likely question pages: top by order, portrait-ish, dedupe by size
+			const chosen: typeof pageInfos = []
+			const seenSizes = new Set<string>()
+			for (const info of pageInfos) {
+				const key = `${Math.round(info.width/10)}x${Math.round(info.height/10)}`
+				if (seenSizes.has(key)) continue
+				seenSizes.add(key)
+				chosen.push(info)
+				if (chosen.length >= 10) break // cap pages for speed
+			}
+			const pagesToProcess = chosen
 		for (const info of pagesToProcess) {
 			const clip = { x: info.x, y: info.y, width: info.width, height: info.height }
 			try {
@@ -428,28 +545,41 @@ async function resolveCourseCode(input: string, log?: Logger): Promise<string | 
 
 
 async function downloadPdf(url: string, log?: Logger, runId?: string): Promise<{ pdf: Buffer | null; images?: Buffer[] }> {
-	try {
-		const transformed = toDirectDrive(url)
-		if (transformed !== url) log?.('Transformed Google Drive URL', { original: url, transformed })
-		const resp = await fetch(transformed, {
-			headers: { Accept: 'application/pdf' },
-			signal: AbortSignal.timeout(10000), // Reduced from 20000 to 10000
-		})
-		if (!resp.ok) {
-			log?.('PDF download failed', { url: transformed, status: resp.status })
-		} else {
-			const ctype = resp.headers.get('content-type') || ''
-			const arr = await resp.arrayBuffer()
-			if (ctype.includes('pdf') && arr.byteLength > 8000) {
-				log?.('PDF downloaded', { url: transformed, bytes: arr.byteLength })
-				return { pdf: Buffer.from(arr) }
-			}
-			log?.('Non-PDF or tiny response, will attempt Drive fallback', { ctype, bytes: arr.byteLength })
-		}
-		if (/drive\.google\.com/.test(url)) {
-			try {
-				return await driveHeadlessFallback(url, log, runId)
-			} catch (fallbackError: any) {
+        try {
+            const transformed = toDirectDrive(url)
+            if (transformed !== url) log?.('Transformed Google Drive URL', { original: url, transformed })
+            const resp = await fetch(transformed, {
+                headers: { Accept: 'application/pdf' },
+                signal: AbortSignal.timeout(10000), // Reduced from 20000 to 10000
+            })
+            if (!resp.ok) {
+                log?.('PDF download failed', { url: transformed, status: resp.status })
+            } else {
+                const ctype = resp.headers.get('content-type') || ''
+                const arr = await resp.arrayBuffer()
+                if (ctype.includes('pdf') && arr.byteLength > 8000) {
+                    log?.('PDF downloaded', { url: transformed, bytes: arr.byteLength })
+                    // Prefer OCR flow for Cloudinary direct PDFs (from CodeChef)
+                    const isCloudinary = /res\.cloudinary\.com|cloudinary/i.test(transformed)
+                    if (isCloudinary) {
+                        log?.('Cloudinary PDF detected; capturing pages for OCR')
+                        try {
+                            const pages = await genericHeadlessPdfToImages(transformed, log, runId)
+                            if ((pages.images || []).length) {
+                                return { pdf: Buffer.from(arr), images: pages.images }
+                            }
+                        } catch (e: any) {
+                            log?.('Cloudinary OCR capture failed; returning raw PDF', { error: e?.message })
+                        }
+                    }
+                    return { pdf: Buffer.from(arr) }
+                }
+                log?.('Non-PDF or tiny response, will attempt Drive fallback', { ctype, bytes: arr.byteLength })
+            }
+            if (/drive\.google\.com/.test(url)) {
+                try {
+                    return await driveHeadlessFallback(url, log, runId)
+                } catch (fallbackError: any) {
 				log?.('Drive fallback failed completely', { url, error: fallbackError?.message })
 				if (runId) logEmit(runId, 'Unable to access document', { url, error: fallbackError?.message })
 				return { pdf: null, images: [] }
@@ -479,29 +609,49 @@ function pickGeminiModel(opts: { pdf?: boolean; ocr?: boolean; fast?: boolean } 
 }
 
 async function extractTextFromPdf(pdfData: Buffer, log?: Logger, runId?: string, pageImages?: Buffer[]): Promise<string> {
-	if (runId) logEmit(runId, 'Extracting text from document', {})
+    if (runId) logEmit(runId, 'Extracting text from document', {})
 
-	// 1. Try native parsing ONLY if we appear to have a real PDF (avoid empty placeholder buffers triggering library internals)
-	if (pdfData && pdfData.length > 1500) {
-		try {
-			const pdfParse = await import('pdf-parse') as any
-			if (runId) logEmit(runId, 'Reading document structure', { bytes: pdfData.length })
-			const res = await pdfParse.default(pdfData)
-			if (res && res.text) {
-				log?.('pdf-parse extraction success', { chars: res.text.length, pages: res.numpages })
-				if (runId) logEmit(runId, `Successfully read ${res.numpages} pages`, { chars: res.text.length, pages: res.numpages })
-				if (runId) logEmit(runId, 'Document processing complete', { method: 'pdf-parse' })
-				return res.text
-			}
-			log?.('pdf-parse produced empty text, falling back to OCR')
-		} catch (err: any) {
-			log?.('pdf-parse failed, falling back to Gemini OCR', { error: err?.message })
-			if (runId) logEmit(runId, 'Switching to advanced text recognition', { error: err?.message })
-		}
-	} else {
-		if (runId) logEmit(runId, 'Using advanced text recognition mode', { reason: 'pdf-too-small', bytes: pdfData ? pdfData.length : 0 })
-		log?.('Skipping pdf-parse (buffer too small)', { bytes: pdfData ? pdfData.length : 0 })
-	}
+    // 1) Prefer native parsing if we have a real PDF AND the environment allows it
+    const hasPdfBytes = !!pdfData && pdfData.length > 1500
+    const enablePdfParseEnv = (process.env.PAPER_AGENT_ENABLE_PDF_PARSE || '').trim() === '1'
+    const isWindows = process.platform === 'win32'
+    // By default, skip pdf-parse on Windows to avoid ENOENT issues seen with certain setups.
+    const shouldUsePdfParse = hasPdfBytes && (enablePdfParseEnv || !isWindows)
+
+    if (shouldUsePdfParse) {
+        try {
+            if (runId) logEmit(runId, 'Reading document structure', { bytes: pdfData.length, method: 'pdf-parse' })
+            const pdfParse = await import('pdf-parse') as any
+            // Defensive: ensure we always pass a Buffer, never a file path
+            let res: any = null
+            try {
+                res = await pdfParse.default(Buffer.isBuffer(pdfData) ? pdfData : Buffer.from(pdfData))
+            } catch (err: any) {
+                const msg = String(err?.message || '')
+                // Swallow common ENOENT from pdf.js test fixture paths and fall back to OCR
+                if (msg.includes('ENOENT') && (msg.includes('test/data') || msg.match(/05-versions-space\.pdf/i))) {
+                    log?.('pdf-parse ENOENT (fixture path) — falling back to OCR', { error: msg })
+                } else {
+                    log?.('pdf-parse threw error (buffer vs file path?)', { error: msg })
+                }
+                throw err
+            }
+            if (res && res.text) {
+                log?.('pdf-parse extraction success', { chars: res.text.length, pages: res.numpages })
+                if (runId) logEmit(runId, `Successfully read ${res.numpages} pages`, { chars: res.text.length, pages: res.numpages })
+                if (runId) logEmit(runId, 'Document processing complete', { method: 'pdf-parse' })
+                return res.text
+            }
+            log?.('pdf-parse produced empty text, falling back to OCR')
+        } catch (err: any) {
+            log?.('pdf-parse failed, falling back to Gemini OCR', { error: err?.message })
+            if (runId) logEmit(runId, 'Switching to advanced text recognition', { error: err?.message })
+        }
+    } else {
+        const reason = !hasPdfBytes ? 'pdf-too-small' : isWindows ? 'windows-default-ocr' : 'disabled-by-env'
+        if (runId) logEmit(runId, 'Using advanced text recognition mode', { reason, bytes: pdfData ? pdfData.length : 0 })
+        log?.('Skipping pdf-parse', { reason, bytes: pdfData ? pdfData.length : 0 })
+    }
 
 	if (pageImages && pageImages.length) {
 		try {
@@ -535,17 +685,40 @@ async function extractTextFromPdf(pdfData: Buffer, log?: Logger, runId?: string,
 	return ''
 }
 
-function splitIntoChunks(text: string, targetSize = 1200, overlap = 100): string[] {
-	const clean = text.replace(/\r/g, '')
-	if (clean.length <= targetSize) return [clean]
-	const chunks: string[] = []
-	let i = 0
-	while (i < clean.length) {
-		const slice = clean.slice(i, i + targetSize)
-		chunks.push(slice.trim())
-		i += targetSize - overlap
-	}
-	return chunks.filter(c => c.length > 20)
+function splitIntoChunks(text: string, targetSize = 1000, overlapPct = 0.25): string[] {
+    const clean = text.replace(/\r/g, '').trim()
+    if (clean.length <= targetSize) return [clean]
+    // Sentence/paragraph aware splitting for better semantic retrieval
+    const paras = clean.split(/\n{2,}/)
+    const sentences: string[] = []
+    for (const p of paras) {
+        // Keep numbering markers tight with following sentence
+        const parts = p
+          .split(/(?<=[\.!?]|\)|\:)(?:\s+|$)/)
+          .map(s => s.trim())
+          .filter(Boolean)
+        sentences.push(...parts)
+    }
+    const chunks: string[] = []
+    let buf: string[] = []
+    let size = 0
+    const target = Math.max(400, targetSize)
+    for (const s of sentences) {
+        const add = (buf.length ? ' ' : '') + s
+        if (size + add.length > target && buf.length) {
+            chunks.push(buf.join(' ').trim())
+            // overlap: keep last N chars from previous chunk
+            const prev = chunks[chunks.length - 1]
+            const overlap = Math.floor(target * overlapPct)
+            const tail = prev.slice(Math.max(0, prev.length - overlap))
+            buf = tail ? [tail] : []
+            size = tail.length
+        }
+        buf.push(s)
+        size += add.length
+    }
+    if (buf.length) chunks.push(buf.join(' ').trim())
+    return chunks.filter(c => c.length > 40)
 }
 
 function extractQuestions(text: string, log?: Logger): string[] {
@@ -626,33 +799,72 @@ export async function indexPastPapers(options: {
 	const startTime = Date.now()
 	const MAX_PROCESSING_TIME = 45000 // 45 seconds to leave buffer for Vercel
 	let attemptedPapers = 0
-	
-	for (const p of selected) {
+	let stopAll = false
+
+	const processOne = async (p: RawPaperMeta) => {
+		if (stopAll) return
 		attemptedPapers++
 		
 		// Check if we're approaching timeout
-		if (Date.now() - startTime > MAX_PROCESSING_TIME) {
-			log('Approaching timeout limit, stopping paper processing', { 
-				processed: indexed.length, 
-				remaining: selected.length - attemptedPapers,
-				timeElapsed: Date.now() - startTime 
-			})
-			if (options.runId) logEmit(options.runId, 'Optimizing for speed - wrapping up processing', { 
-				processed: indexed.length,
-				timeElapsed: Date.now() - startTime
-			})
-			break
-		}
+            if (Date.now() - startTime > MAX_PROCESSING_TIME) {
+                log('Approaching timeout limit, stopping paper processing', { 
+                    processed: indexed.length, 
+                    remaining: selected.length - attemptedPapers,
+                    timeElapsed: Date.now() - startTime 
+                })
+                if (options.runId) logEmit(options.runId, 'Optimizing for speed - wrapping up processing', { 
+                    processed: indexed.length,
+                    timeElapsed: Date.now() - startTime
+                })
+                stopAll = true
+                return
+            }
 		
 		// Early bailout if we haven't successfully processed any papers after 3 attempts
 		if (attemptedPapers > 3 && indexed.length === 0) {
 			log('No papers successfully processed after 3 attempts, bailing out early')
 			if (options.runId) logEmit(options.runId, 'Having trouble accessing papers - may need to try different sources', { attempted: attemptedPapers })
-			break
+			stopAll = true
+			return
 		}
 		
 		if (options.runId) logEmit(options.runId, `Processing: ${p.title}`, { title: p.title, url: p.url })
 		log('Processing paper', { title: p.title, url: p.url })
+
+		// Fast path: if paper already exists in DB, reuse chunks and question embeddings
+		if (useDB) {
+			try {
+				const existing = await findPaperByUrl(p.url)
+				if (existing) {
+					if (options.runId) logEmit(options.runId, 'Using cached paper from database', { title: p.title })
+					log('Reusing existing paper from DB, skipping re-download', { title: p.title })
+					const loaded = await loadChunksAndQuestions([existing.id])
+					const chunks: PaperChunk[] = (loaded.chunks || [])
+						.sort((a: any, b: any) => a.chunk_index - b.chunk_index)
+						.map((c: any) => ({
+							chunkId: generateId('chunk'),
+							paperId: p.url,
+							text: c.text,
+							embedding: c.embedding || [],
+						}))
+					const questionEmbeddings: number[][] | undefined = (loaded.questions || [])
+						.sort((a: any, b: any) => a.question_index - b.question_index)
+						.map((q: any) => q.embedding || [])
+					persistedPaperIds.push(existing.id)
+                        indexed.push({
+                            id: existing.id,
+                            ...p,
+                            text: chunks.map(c => c.text).join('\n\n'),
+                            extractedQuestions: (existing.extracted_questions as any) || [],
+                            chunks,
+                            questionEmbeddings,
+                        })
+                        return
+                    }
+			} catch (reuseErr: any) {
+				log('DB reuse check failed (continuing with fresh processing)', { error: reuseErr?.message })
+			}
+		}
 		
 		// Add per-paper timeout to prevent hanging
 		const paperStartTime = Date.now()
@@ -668,23 +880,25 @@ export async function indexPastPapers(options: {
 		} catch (timeoutError: any) {
 			log('Paper processing timeout, skipping', { url: p.url, error: timeoutError.message })
 			if (options.runId) logEmit(options.runId, '⏱Taking too long, moving to next paper', { url: p.url })
-			continue
+			return
 		}
 		if (!download.pdf && !(download.images && download.images.length)) {
 			log('Skipping paper due to download failure', { url: p.url })
 			if (options.runId) logEmit(options.runId, 'Unable to download this paper', { url: p.url })
-			continue
+			return
 		}
 		if (download.pdf && options.runId) logEmit(options.runId, `Downloaded paper (${Math.round(download.pdf.length/1024)}KB)`, { url: p.url, bytes: download.pdf.length })
+		let contentHashRef: string | undefined
 		try {
 			if (download.pdf) {
 				const h = await computeHash(download.pdf)
-			if (contentHashes.has(h)) {
-				log('Skipping paper due to duplicate content hash', { title: p.title })
-				if (options.runId) logEmit(options.runId, 'Skipping duplicate paper', { title: p.title })
-				continue
-			}
+                if (contentHashes.has(h)) {
+                    log('Skipping paper due to duplicate content hash', { title: p.title })
+                    if (options.runId) logEmit(options.runId, 'Skipping duplicate paper', { title: p.title })
+                    return
+                }
 				contentHashes.add(h)
+				contentHashRef = h
 			}
 		} catch (e: any) {
 			log('Hash computation failed (continuing)', { error: e?.message })
@@ -695,7 +909,7 @@ export async function indexPastPapers(options: {
 		if (!text || text.length < 50) {
 			log('Skipping paper due to insufficient text', { chars: text.length })
 			if (options.runId) logEmit(options.runId, 'Paper appears empty or unreadable', { title: p.title })
-			continue
+			return
 		}
 		const questions = extractQuestions(text, log)
 		if (options.runId) logEmit(options.runId, `Found ${questions.length} practice questions`, { title: p.title, questions: questions.length })
@@ -731,7 +945,7 @@ export async function indexPastPapers(options: {
 				title: p.title,
 				source: p.source,
 				url: p.url,
-				contentHash: undefined,
+				contentHash: contentHashRef,
 				extractedQuestions: questions,
 			})
 			: generateId('paper')
@@ -759,13 +973,48 @@ export async function indexPastPapers(options: {
 		})
 	}
 
+	// Concurrency: process with a small pool
+	const CONCURRENCY = Math.min(2, selected.length)
+	let idx = 0
+	const workers = Array.from({ length: CONCURRENCY }, async () => {
+		while (!stopAll && idx < selected.length) {
+			if (Date.now() - startTime > MAX_PROCESSING_TIME) {
+				log('Approaching timeout limit, stopping paper processing', {
+					processed: indexed.length,
+					remaining: selected.length - attemptedPapers,
+					timeElapsed: Date.now() - startTime,
+				})
+				if (options.runId) logEmit(options.runId, 'Optimizing for speed - wrapping up processing', {
+					processed: indexed.length,
+					timeElapsed: Date.now() - startTime,
+				})
+				stopAll = true
+				break
+			}
+			const p = selected[idx++]
+			await processOne(p)
+		}
+	})
+	await Promise.all(workers)
+
 	if (indexed.length === 0) {
 		// Clean up shared browser instance on error
 		await cleanupSharedBrowser(log)
 		return { success: false, error: 'Failed to process any papers', logs: log.getLogs() }
 	}
 
-	const indexId = generateId('ppidx')
+	// Persist index in DB when available for fast rehydration
+	let indexId = generateId('ppidx')
+	if (useDB) {
+		try {
+			const dbIndexId = await createIndexRecord(courseCode, options.examType, options.year)
+			if (persistedPaperIds.length) await linkIndexPapers(dbIndexId, persistedPaperIds)
+			indexId = dbIndexId
+			log('Index persisted to DB', { indexId, papers: persistedPaperIds.length })
+		} catch (e: any) {
+			log('Failed to persist index to DB (continuing)', { error: e?.message })
+		}
+	}
 	const chunkCount = indexed.reduce((s, p) => s + p.chunks.length, 0)
 	paperIndexes.set(indexId, {
 		id: indexId,
@@ -781,24 +1030,89 @@ export async function indexPastPapers(options: {
 	if (options.runId) logEmit(options.runId, `Successfully indexed ${indexed.length} papers with ${chunkCount} searchable sections!`, { indexId, papers: indexed.length, chunks: chunkCount })
 
 	// Clean up shared browser instance at end of indexing session
-	await cleanupSharedBrowser(log)
+    await cleanupSharedBrowser(log)
+    // Emit a final cleanup event for progress listeners
+    if (options.runId) logEmit(options.runId, 'done', { status: 'complete', indexId, papers: indexed.length })
 
-	return {
-		success: true,
-		indexId,
-		courseCode,
-		papersIndexed: indexed.length,
-		chunkCount,
-		sampleQuestions: indexed.flatMap(p => p.extractedQuestions.slice(0, 3)).slice(0, 10),
-		runId: options.runId,
-		logs: log.getLogs(),
-	}
+    return {
+        success: true,
+        indexId,
+        courseCode,
+        papersIndexed: indexed.length,
+        chunkCount,
+        sampleQuestions: indexed.flatMap(p => p.extractedQuestions.slice(0, 3)).slice(0, 10),
+        runId: options.runId,
+        logs: log.getLogs(),
+    }
 }
 
 export async function askIndexedPaperQuestion(indexId: string, question: string, debug?: boolean, runId?: string) {
-	const log = createLogger(debug || process.env.PAPER_AGENT_DEBUG === 'true')
-	const index = paperIndexes.get(indexId)
-	if (!index) return { success: false, error: 'Index not found or expired', logs: log.getLogs() }
+    const log = createLogger(debug || process.env.PAPER_AGENT_DEBUG === 'true')
+    let index = paperIndexes.get(indexId)
+    if (!index) {
+        const useDB = !!process.env.DATABASE_URL2
+        if (useDB) {
+            try {
+                const meta = await getIndexMetaById(indexId)
+                if (meta) {
+                    const paperIds = await getIndexPaperIds(indexId)
+                    const papers = await getPapersByIds(paperIds)
+                    const loaded = await loadChunksAndQuestions(paperIds)
+                    const chunksByPaper = new Map<string, any[]>(paperIds.map(id => [id, []]))
+                    for (const c of loaded.chunks as any[]) {
+                        const arr = chunksByPaper.get(c.paper_id)!
+                        arr.push(c)
+                    }
+                    const qByPaper = new Map<string, any[]>(paperIds.map(id => [id, []]))
+                    for (const q of loaded.questions as any[]) {
+                        const arr = qByPaper.get(q.paper_id)!
+                        arr.push(q)
+                    }
+                    const rebuilt: IndexedPaper[] = papers.map(p => {
+                        const chs = (chunksByPaper.get(p.id) || [])
+                          .sort((a: any, b: any) => a.chunk_index - b.chunk_index)
+                          .map((c: any) => ({
+                            chunkId: generateId('chunk'),
+                            paperId: p.url || p.id,
+                            text: c.text,
+                            embedding: c.embedding || [],
+                          }))
+                        const qes = (qByPaper.get(p.id) || [])
+                          .sort((a: any, b: any) => a.question_index - b.question_index)
+                          .map((q: any) => q.embedding || [])
+                        return {
+                            id: p.id,
+                            title: p.title,
+                            url: p.url || '',
+                            source: '',
+                            metadata: '',
+                            examType: p.exam_type || '',
+                            year: p.year || '',
+                            text: chs.map(c => c.text).join('\n\n'),
+                            extractedQuestions: (p.extracted_questions as any) || [],
+                            chunks: chs,
+                            questionEmbeddings: qes.length ? qes : undefined,
+                        }
+                    })
+                    index = {
+                        id: indexId,
+                        createdAt: new Date(meta.created_at).getTime(),
+                        courseCode: meta.course_code,
+                        examType: meta.exam_type || undefined,
+                        year: meta.year || undefined,
+                        questionFocus: undefined,
+                        papers: rebuilt,
+                        chunkCount: rebuilt.reduce((s, p) => s + p.chunks.length, 0),
+                    }
+                    paperIndexes.set(indexId, index)
+                    log('Rehydrated index from DB', { indexId, papers: index.papers.length })
+                }
+            } catch (e: any) {
+                log('Failed to rehydrate index from DB', { error: e?.message })
+            }
+        }
+    }
+    if (!index) return { success: false, error: 'Index not found or expired', logs: log.getLogs() }
 	log('Starting Q&A', { indexId, questionLen: question.length })
 	const embedRes: any = await rateLimitedAI.google.embed({ value: question })
 	const qEmb = embedRes.embedding || embedRes.embeddings?.[0]
@@ -867,7 +1181,10 @@ export async function smartPaperSearchByQuestion(opts: {
 		debug: opts.debug,
 		runId: opts.runId,
 	})
-	if (!indexResult.success) return { ...indexResult, runId: opts.runId, logs: (indexResult as any).logs }
+	if (!indexResult.success) {
+        if (opts.runId) logEmit(opts.runId, 'done', { status: 'failed' })
+        return { ...indexResult, runId: opts.runId, logs: (indexResult as any).logs }
+    }
 	const useDB = !!process.env.DATABASE_URL2
 	let index = paperIndexes.get(indexResult.indexId!)!
 	const embedRes: any = await rateLimitedAI.google.embed({ value: opts.question })
@@ -982,23 +1299,25 @@ export async function smartPaperSearchByQuestion(opts: {
 		logEmit(opts.runId, 'Found the most relevant papers for you!', { papers: paperScores.length })
 		logEmit(opts.runId, 'Search complete', {})
 	}
-	return {
-		success: true,
-		indexId: index.id,
-		courseCode: index.courseCode,
-		rankedPapers: paperScores.slice(0, 10).map(p => ({
-			title: p.paper.title,
-			url: p.paper.url,
-			year: p.paper.year,
-			examType: p.paper.examType,
-			score: Number(p.score.toFixed(3)),
-			chunkScore: Number(p.chunkScore.toFixed(3)),
-			questionScore: Number(p.questionScore.toFixed(3)),
-			matchedQuestions: p.matchedQuestions,
-		})),
-		runId: opts.runId,
-		logs: [...(indexResult as any).logs, ...log.getLogs()],
-	}
+    // Emit a final cleanup event for progress listeners
+    if (opts.runId) logEmit(opts.runId, 'done', { status: 'complete', indexId: index.id, papers: paperScores.length })
+    return {
+        success: true,
+        indexId: index.id,
+        courseCode: index.courseCode,
+        rankedPapers: paperScores.slice(0, 10).map(p => ({
+            title: p.paper.title,
+            url: p.paper.url,
+            year: p.paper.year,
+            examType: p.paper.examType,
+            score: Number(p.score.toFixed(3)),
+            chunkScore: Number(p.chunkScore.toFixed(3)),
+            questionScore: Number(p.questionScore.toFixed(3)),
+            matchedQuestions: p.matchedQuestions,
+        })),
+        runId: opts.runId,
+        logs: [...(indexResult as any).logs, ...log.getLogs()],
+    }
 }
 
 export function getPaperIndexMeta(indexId: string) {

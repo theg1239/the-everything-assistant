@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, memo, useCallback } from 'react'
+import { useState, useRef, useEffect, memo, useCallback } from 'react' 
 import { createPortal } from 'react-dom'
 import { useChat, type Message as AIMessage } from '@ai-sdk/react'
 import { useRouter } from 'next/navigation'
@@ -8,7 +8,7 @@ import { useSession } from 'next-auth/react'
 import { useMemory } from '@/contexts/memory-context'
 import { VirtualizedMessages } from '@/components/virtualized-messages'
 import { motion } from 'framer-motion'
-import { FileText, Plus, ChevronDown } from 'lucide-react'
+import { FileText, Plus, ChevronDown, GraduationCap } from 'lucide-react'
 import { HamburgerButton } from '@/components/hamburger-button'
 import { Button } from '@/components/ui/button'
 import { SuggestedQuestions } from '@/components/suggested-questions'
@@ -356,9 +356,10 @@ const PureChatInterface = memo(
     })
 
     const scrollToBottom = useCallback(() => {
+      const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
       if (!messagesEndRef.current) return
       const container = contentRef.current?.parentElement
-      const scrollBehavior: ScrollBehavior = isLoading ? 'auto' : 'smooth'
+      const scrollBehavior: ScrollBehavior = isLoading || prefersReducedMotion ? 'auto' : 'smooth'
       if (container && isMobile) {
         container.scrollTo({ top: container.scrollHeight, behavior: scrollBehavior })
       } else {
@@ -409,7 +410,35 @@ const PureChatInterface = memo(
       }
     }, [initialMessages.length, showFullChat])
 
-    const throttledScrollToBottom = useThrottle(scrollToBottom, 50)
+  const throttledScrollToBottom = useThrottle(scrollToBottom, 50)
+
+  useEffect(() => {
+      // Global keyboard shortcuts: focus composer with '/', blur with Escape
+      const handleGlobalKeyDown = (e: KeyboardEvent) => {
+        const target = e.target as HTMLElement | null
+        const isTypingField = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+
+        // Focus chat input with '/'
+        if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+          if (!isTypingField) {
+            e.preventDefault()
+            const textarea = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message input"]')
+            textarea?.focus()
+          }
+        }
+
+        // Blur input on Escape
+        if (e.key === 'Escape') {
+          const active = document.activeElement as HTMLElement | null
+          if (active && active.tagName === 'TEXTAREA') {
+            ;(active as HTMLTextAreaElement).blur()
+          }
+        }
+      }
+
+      document.addEventListener('keydown', handleGlobalKeyDown)
+      return () => document.removeEventListener('keydown', handleGlobalKeyDown)
+    }, [])
 
     useEffect(() => {
       if (isInitialRender) {
@@ -1225,35 +1254,67 @@ function parseVTOPResponse(raw: string) {
                   </motion.div>
                 )}
                 <RateLimitErrorDisplay />{' '}
-                {vtopDisclaimer && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="rounded-lg border border-border/50 bg-muted/10 px-3 py-2 text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center gap-2"
-                  >
-                    <div className="flex-1">
-                      <span className="font-medium text-foreground/80">Heads up:</span> {vtopDisclaimer.message}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          window.dispatchEvent(new CustomEvent('vtopOpenCredentials', { detail: { toolCallId: vtopDisclaimer.toolCallId } }))
-                        }}
+                {/* {vtopDisclaimer && (
+                  (() => {
+                    const formatCommandName = (cmd: string) => {
+                      const map: Record<string, string> = {
+                        'class-message': 'Class Message',
+                        'exam-schedule': 'Exam Schedule',
+                        'library-dues': 'Library Dues',
+                        'leave-status': 'Leave Status',
+                        nightslip: 'Night Slip',
+                        da: 'Digital Assignment',
+                        'course-page': 'Course Page',
+                        attendance: 'Attendance',
+                        timetable: 'Timetable',
+                        grades: 'Grades',
+                        profile: 'Profile',
+                      }
+                      return map[cmd] || (cmd ? cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ') : 'VTOP data')
+                    }
+                    const prettyCmd = formatCommandName(vtopDisclaimer.command)
+                    return (
+                      <motion.div
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="rounded-xl border border-blue-500/30 bg-blue-500/5 px-4 py-3 text-sm flex flex-col sm:flex-row sm:items-center gap-3"
                       >
-                        provide credentials
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setVtopDisclaimer(null)}
-                      >
-                        dismiss
-                      </Button>
-                    </div>
-                  </motion.div>
-                )}
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                          <div className="mt-0.5">
+                            <GraduationCap className="h-5 w-5 text-blue-500" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-foreground truncate">Authentication Required</div>
+                            <div className="text-xs text-muted-foreground mt-1 truncate">
+                              Please log in to VTOP to access your {prettyCmd} data.
+                            </div>
+                            <div className="text-[11px] text-muted-foreground/80 mt-2">
+                              Privacy notice: Your credentials are encrypted and stored locally in your browser. They are used only to log into VTOP to fetch your data.
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              window.dispatchEvent(
+                                new CustomEvent('vtopLoginTrigger', {
+                                  detail: { command: vtopDisclaimer.command, toolCallId: vtopDisclaimer.toolCallId },
+                                })
+                              )
+                            }}
+                            className="bg-blue-500 hover:bg-blue-600 text-white"
+                          >
+                            Login
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setVtopDisclaimer(null)}>
+                            Dismiss
+                          </Button>
+                        </div>
+                      </motion.div>
+                    )
+                  })()
+                )} */}
                 <VirtualizedMessages
                   messages={messages.filter((msg: any) => {
                     if (msg.role === 'assistant') {
@@ -1357,12 +1418,14 @@ function parseVTOPResponse(raw: string) {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
               className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-40"
+              style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
             >
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={scrollToBottom}
                 className="h-10 w-10 rounded-full bg-background/80 hover:bg-background/90 border-0 shadow-sm backdrop-blur-sm"
+                aria-label="Scroll to latest message"
               >
                 <ChevronDown className="h-5 w-5 text-foreground/70" />
               </Button>

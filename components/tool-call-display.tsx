@@ -936,7 +936,7 @@ const ToolCallResultsSummary = ({
       // Always show the Authentication Required UI in the tool call display
       return (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3">
-          <Card className="w-full overflow-hidden border-blue-500/20 bg-blue-500/5">
+          <Card className="w-full overflow-hidden border-blue-500/30 bg-blue-500/5">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center space-x-3">
                 <div className="relative">
@@ -946,14 +946,17 @@ const ToolCallResultsSummary = ({
                   <div className="text-sm font-medium text-foreground truncate">
                     Authentication Required
                   </div>
-                  <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                    Please log in to VTOP to access your {formatCommandName(command)} data
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Please log in to VTOP to access your {formatCommandName(command)} data.
+                  </div>
+                  <div className="text-[11px] text-muted-foreground/80 mt-2">
+                    Privacy notice: Your credentials are encrypted and stored locally in your browser. They are used only to log into VTOP to fetch your data.
                   </div>
                 </div>
                 {onLoginClick && (
                   <Button
                     onClick={() => {
-                      const triggerEvent = new CustomEvent('vtopLoginTrigger', {
+                      const triggerEvent = new CustomEvent('vtopOpenCredentials', {
                         detail: {
                           command,
                           toolCallId: tool.toolCallId,
@@ -1021,7 +1024,7 @@ const ToolCallResultsSummary = ({
           }
           return (
             <motion.div key="vtop-auth-required" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3">
-              <Card className="w-full overflow-hidden border-blue-500/20 bg-blue-500/5">
+              <Card className="w-full overflow-hidden border-blue-500/30 bg-blue-500/5">
                 <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center space-x-3">
                     <div className="relative">
@@ -1031,14 +1034,17 @@ const ToolCallResultsSummary = ({
                       <div className="text-sm font-medium text-foreground truncate">
                         Authentication Required
                       </div>
-                      <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                        Please log in to VTOP to access your {formatCommandName(command)} data
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Please log in to VTOP to access your {formatCommandName(command)} data.
+                      </div>
+                      <div className="text-[11px] text-muted-foreground/80 mt-2">
+                        Privacy notice: Your credentials are encrypted and stored locally in your browser. They are used only to log into VTOP to fetch your data.
                       </div>
                     </div>
                     {onLoginClick && (
                       <Button
                         onClick={() => {
-                          const triggerEvent = new CustomEvent('vtopLoginTrigger', {
+                          const triggerEvent = new CustomEvent('vtopOpenCredentials', {
                             detail: {
                               command,
                               toolCallId: tool.toolCallId,

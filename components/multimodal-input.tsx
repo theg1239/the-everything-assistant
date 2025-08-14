@@ -115,6 +115,7 @@ const PureMultimodalInput = ({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if ((e as any).isComposing || (e as any).keyCode === 229) return
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
         if (input.trim() && !isLoading) {
@@ -141,15 +142,15 @@ const PureMultimodalInput = ({
   )
 
   const characterCount = input.length
-  const showCharacterCount = maxLength && characterCount > 0
-  const isNearLimit = maxLength && characterCount > maxLength * 0.8
+  const showCharacterCount = Boolean(maxLength) && characterCount > 0
+  const isNearLimit = Boolean(maxLength) && maxLength ? characterCount > maxLength * 0.8 : false
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       className={cn('relative w-full flex justify-center', className)}
     >
-      <form onSubmit={onSubmit} className="relative max-w-3xl w-full px-4">
+      <form onSubmit={onSubmit} className="relative max-w-3xl w-full px-4" aria-label="Chat composer">
         <div
           className={cn(
             'relative flex flex-col w-full rounded-2xl bg-transparent backdrop-blur-md overflow-hidden transition-all duration-200 border border-white/10',
@@ -177,6 +178,7 @@ const PureMultimodalInput = ({
               style={{ height: '60px' }}
               maxLength={maxLength}
               aria-label="Message input"
+              aria-describedby={showCharacterCount && maxLength ? 'composer-charcount' : undefined}
             />
 
             <div className="flex items-end gap-2 p-2">
@@ -199,7 +201,8 @@ const PureMultimodalInput = ({
                             type="button"
                             size="sm"
                             onClick={stop}
-                            className="size-9 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm"
+                            className="size-10 sm:size-9 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm"
+                            aria-label="Stop generating"
                           >
                             <StopCircleIcon size={16} />
                             <span className="sr-only">stop generating</span>
@@ -224,7 +227,8 @@ const PureMultimodalInput = ({
                             type="submit"
                             size="sm"
                             disabled={!input.trim() || isLoading}
-                            className="size-9 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 shadow-sm"
+                            className="size-10 sm:size-9 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 shadow-sm"
+                            aria-label="Send message"
                           >
                             <ArrowUpIcon size={16} />
                             <span className="sr-only">send message</span>
@@ -238,7 +242,25 @@ const PureMultimodalInput = ({
               </AnimatePresence>
             </div>
           </div>
+          {/* Footer: shortcuts + character count */}
+          <div className="flex items-center justify-between px-3 pb-2">
+            <p className="hidden sm:block text-[10px] text-muted-foreground">
+              Enter to send • Shift+Enter for newline • / to focus
+            </p>
+            <div
+              className={cn(
+                'ml-auto text-[10px] tabular-nums',
+                isNearLimit ? 'text-amber-500' : 'text-muted-foreground'
+              )}
+              aria-live="polite"
+              id="composer-charcount"
+            >
+              {showCharacterCount && maxLength ? `${characterCount} / ${maxLength}` : null}
+            </div>
+          </div>
         </div>
+        {/* Safe-area spacer for iOS home indicator */}
+        <div className="h-0" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} aria-hidden />
       </form>
     </motion.div>
   )

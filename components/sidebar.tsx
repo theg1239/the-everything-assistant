@@ -476,7 +476,7 @@ export const Sidebar = memo(
               {/* Chat List */}
               <div className="flex-1 min-h-0 flex flex-col">
                 <div
-                  className="p-4 overflow-auto"
+                  className="p-4 overflow-auto flex-1 min-h-0"
                   onScroll={handleScroll}
                   onTouchStart={handleTouchStart}
                   onTouchMove={handleTouchMove}
@@ -484,7 +484,7 @@ export const Sidebar = memo(
                   style={{
                     WebkitOverflowScrolling: 'touch',
                     overscrollBehavior: 'contain',
-                    height: 'calc(100vh - 200px)',
+                    // Let flexbox control height to avoid viewport math issues
                     transform: 'translate3d(0, 0, 0)',
                     willChange: 'scroll-position',
                   }}
@@ -527,12 +527,21 @@ export const Sidebar = memo(
                           <div
                             key={`chat-${chat.id}`}
                             className={cn(
-                              'group relative flex items-center p-3 rounded-lg cursor-pointer transition-colors duration-150',
+                              'group relative flex items-center p-3 rounded-lg cursor-pointer transition-colors duration-150 min-h-12',
                               selectedChatId === chat.id || pathname === `/chat/${chat.id}`
                                 ? 'bg-muted text-foreground shadow-sm'
                                 : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
                             )}
                             onClick={() => handleChatClick(chat.id)}
+                            role="button"
+                            tabIndex={0}
+                            aria-current={selectedChatId === chat.id || pathname === `/chat/${chat.id}` ? 'page' : undefined}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault()
+                                handleChatClick(chat.id)
+                              }
+                            }}
                           >
                             <MessageSquare className="h-4 w-4 mr-3 flex-shrink-0" />
                             <div className="flex-1 min-w-0">
@@ -567,7 +576,10 @@ export const Sidebar = memo(
               </div>
 
               {/* User Section */}
-              <div className="p-4 border-t border-border bg-transparent">
+              <div
+                className="p-4 border-t border-border bg-transparent"
+                style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+              >
                 {loading ? (
                   <div className="animate-pulse">
                     <div className="flex items-center space-x-3 mb-3">
@@ -608,6 +620,7 @@ export const Sidebar = memo(
                         size="sm"
                         className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors duration-150"
                         onClick={() => setSettingsOpen(true)}
+                        aria-label="Open settings"
                       >
                         <Settings className="h-4 w-4 mr-2" />
                         settings
@@ -617,6 +630,7 @@ export const Sidebar = memo(
                         size="sm"
                         className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors duration-150"
                         onClick={() => signOut()}
+                        aria-label="Sign out"
                       >
                         <LogOut className="h-4 w-4 mr-2" />
                         sign out

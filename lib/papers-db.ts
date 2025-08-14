@@ -218,6 +218,34 @@ export async function semanticRankQuestion(courseCode: string, qEmbedding: numbe
   return r.rows
 }
 
+export async function getIndexMetaById(indexId: string) {
+  const db = getPool()
+  const r = await db.query(
+    `SELECT id, course_code, exam_type, year, created_at FROM paper_indexes WHERE id=$1`,
+    [indexId]
+  )
+  return r.rows[0] as { id: string; course_code: string; exam_type: string | null; year: string | null; created_at: string } | undefined
+}
+
+export async function getIndexPaperIds(indexId: string) {
+  const db = getPool()
+  const r = await db.query(
+    `SELECT paper_id FROM paper_index_papers WHERE index_id=$1`,
+    [indexId]
+  )
+  return r.rows.map(row => row.paper_id as string)
+}
+
+export async function getPapersByIds(ids: string[]) {
+  if (!ids.length) return []
+  const db = getPool()
+  const r = await db.query(
+    `SELECT id, course_code, exam_type, year, title, url, extracted_questions, content_hash FROM past_papers WHERE id = ANY($1::uuid[])`,
+    [ids]
+  )
+  return r.rows as DBPaperMeta[]
+}
+
 export async function questionEmbeddingScores(courseCode: string, qEmbedding: number[], examType?: string, year?: string) {
   const db = getPool()
   const r = await db.query(

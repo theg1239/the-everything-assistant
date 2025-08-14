@@ -24,7 +24,7 @@ import { ArtifactDisplay, type ArtifactDisplayProps } from './artifact-display'
 import { PaperSearchProgress } from './paper-search-progress'
 import { useVTOP } from '../contexts/vtop-context'
 import { useMediaQuery } from '@/hooks/use-media-query'
-import { hasVTOPCredentials, getFormattedVTOPCredentials } from '@/lib/vtop-credentials'
+// Removed credential-based visibility helpers to always show VTOP tool calls
 
 interface ToolCallDisplayProps {
   toolCalls: any[]
@@ -190,23 +190,10 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
       }
     }
 
+    // When credentials are required, do not return an artifact here.
+    // This allows the Authentication Required UI to render instead.
     if (result.requiresCredentials === true) {
-      // Still show the artifact to make all VTOP tool calls visible
-      return {
-        type: 'vtop-data' as const,
-        title: `VTOP ${String(result.command || 'data')
-          .replace(/-/g, ' ')
-          .replace(/\b\w/g, (ch: string) => ch.toUpperCase())} Data`,
-        icon: <GraduationCap className="h-5 w-5 text-blue-500" />,
-        data: {
-          command: result.command || 'data',
-          requiresCredentials: true,
-          success: false,
-          error: 'VTOP credentials required',
-          rawOutput: result.output || result.data,
-        },
-        source: 'VTOP Portal',
-      }
+      return null
     }
 
     if (result.success === false || result.error) {
@@ -266,8 +253,10 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         errorMessage.includes('authentication') ||
         errorMessage.includes('Login failed or session could not be established')
 
-      // Do not hide VTOP artifacts: always show, even for auth/credential errors
-      // Also do not suppress generic 500/request failed: surface as visible error artifact
+      // For credential-required cases, suppress artifact so Auth UI can show
+      if (isCredentialError) {
+        return null
+      }
 
       const formatCommandName = (cmd: string) => {
         const commandMap: { [key: string]: string } = {
@@ -817,6 +806,15 @@ const ToolCallResultsSummary = ({
     return false
   })
 
+  // Detect VTOP credential requirement regardless of artifacts presence
+  const vtopCredentialTools = enrichedToolCalls.filter(
+    tool =>
+      tool.toolName === 'queryVTOP' &&
+      tool.result &&
+      (tool.result.requiresCredentials === true ||
+        (typeof tool.result.error === 'string' && tool.result.error.includes('VTOP credentials required')))
+  )
+
   if (artifacts.length === 0 && completedTools.length > 0) {
     if (failedTools.length > 0) {
       const firstFailedTool = failedTools[0]
@@ -913,13 +911,6 @@ const ToolCallResultsSummary = ({
       )
     }
 
-    const vtopCredentialTools = enrichedToolCalls.filter(
-      tool =>
-        tool.toolName === 'queryVTOP' &&
-        tool.result &&
-        (tool.result.requiresCredentials === true ||
-          (tool.result.error && tool.result.error.includes('VTOP credentials required')))
-    )
     if (vtopCredentialTools.length > 0) {
       const tool = vtopCredentialTools[0]
       const command =
@@ -1005,6 +996,69 @@ const ToolCallResultsSummary = ({
 
   return (
     <div className="mt-4 space-y-4">
+      {vtopCredentialTools.length > 0 && (
+        (() => {
+          const tool = vtopCredentialTools[0]
+          const command =
+            tool.result.command ||
+            tool.args?.command ||
+            tool.function?.arguments?.command ||
+            (typeof tool.function?.arguments === 'string'
+              ? JSON.parse(tool.function.arguments || '{}')?.command
+              : null) ||
+            'data'
+          const formatCommandName = (cmd: string) => {
+            const commandMap: { [key: string]: string } = {
+              'class-message': 'Class Message',
+              'exam-schedule': 'Exam Schedule',
+              'library-dues': 'Library Dues',
+              'leave-status': 'Leave Status',
+              nightslip: 'Night Slip',
+              da: 'Digital Assignment',
+              'course-page': 'Course Page',
+            }
+            return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ')
+          }
+          return (
+            <motion.div key="vtop-auth-required" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3">
+              <Card className="w-full overflow-hidden border-blue-500/20 bg-blue-500/5">
+                <CardContent className="p-3 sm:p-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="relative">
+                      <GraduationCap className="h-5 w-5 text-blue-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-foreground truncate">
+                        Authentication Required
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                        Please log in to VTOP to access your {formatCommandName(command)} data
+                      </div>
+                    </div>
+                    {onLoginClick && (
+                      <Button
+                        onClick={() => {
+                          const triggerEvent = new CustomEvent('vtopLoginTrigger', {
+                            detail: {
+                              command,
+                              toolCallId: tool.toolCallId,
+                            },
+                          })
+                          window.dispatchEvent(triggerEvent)
+                        }}
+                        className="bg-blue-500 hover:bg-blue-600 text-white whitespace-nowrap"
+                        size="sm"
+                      >
+                        Login
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )
+        })()
+      )}
       <AnimatePresence>
         {artifacts.map((artifact, index) => (
           <motion.div
@@ -1071,23 +1125,10 @@ const PureToolCallDisplay = ({
 
   const filteredToolCalls = (() => {
     const map = new Map<string, any>()
-    const hasVTOPCreds = hasVTOPCredentials()
-
-    const visibleVTOPCommands = ['attendance', 'timetable', 'leave']
-
     for (const tc of toolCalls) {
-      const isVisibleVTOPCommand = tc.toolName === 'queryVTOP' && 
-        (tc.args?.command && visibleVTOPCommands.includes(tc.args.command) ||
-         tc.function?.arguments?.command && visibleVTOPCommands.includes(tc.function.arguments.command) ||
-         (typeof tc.function?.arguments === 'string' && 
-          visibleVTOPCommands.includes(JSON.parse(tc.function.arguments || '{}')?.command)) ||
-         tc.result?.command && visibleVTOPCommands.includes(tc.result.command))
-
       if (
         tc.toolName === 'knowledgeBase' ||
         tc.toolName === 'saveMemory' ||
-        (tc.toolName === 'queryVTOP' && hasVTOPCreds) ||
-        (tc.toolName === 'queryVTOP' && !isVisibleVTOPCommand) ||
         (tc.result && tc.result.hidden)
       ) {
         continue
@@ -1208,23 +1249,10 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
 
   const filteredToolCalls = (() => {
     const map = new Map<string, any>()
-    const hasVTOPCreds = hasVTOPCredentials()
-
-    const visibleVTOPCommands = ['attendance', 'timetable']
-
     for (const tc of toolCalls) {
-      const isVisibleVTOPCommand = tc.toolName === 'queryVTOP' && 
-        (tc.args?.command && visibleVTOPCommands.includes(tc.args.command) ||
-         tc.function?.arguments?.command && visibleVTOPCommands.includes(tc.function.arguments.command) ||
-         (typeof tc.function?.arguments === 'string' && 
-          visibleVTOPCommands.includes(JSON.parse(tc.function.arguments || '{}')?.command)) ||
-         tc.result?.command && visibleVTOPCommands.includes(tc.result.command))
-
       if (
         tc.toolName === 'knowledgeBase' ||
         tc.toolName === 'saveMemory' ||
-        (tc.toolName === 'queryVTOP' && hasVTOPCreds) ||
-        (tc.toolName === 'queryVTOP' && !isVisibleVTOPCommand) ||
         (tc.result && tc.result.hidden)
       ) {
         continue

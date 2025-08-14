@@ -26,16 +26,22 @@ export default async function ChatPage({ params }: ChatPageProps) {
 
   const messages = await getMessages(id)
   return (
-    <ChatInterface
-      initialMessages={messages.map(msg => ({
-        id: msg.id,
-        role: msg.role,
-        content: msg.content,
-        toolInvocations: msg.toolInvocations,
-        createdAt: msg.created_at,
-      }))}
-      chatId={id}
-      autoResume={true}
-    />
+    <main id="main-content" className="flex min-h-screen flex-col bg-transparent">
+      <div className="flex flex-1 overflow-hidden">
+        <div className="relative flex flex-1 flex-col overflow-hidden">
+          <ChatInterface
+            initialMessages={messages.map(msg => ({
+              id: msg.id,
+              role: msg.role,
+              content: msg.content,
+              toolInvocations: msg.toolInvocations,
+              createdAt: msg.created_at,
+            }))}
+            chatId={id}
+            autoResume={true}
+          />
+        </div>
+      </div>
+    </main>
   )
 }

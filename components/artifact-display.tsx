@@ -92,9 +92,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [expandedSubject, setExpandedSubject] = useState<number | null>(null)
 
-  if (vtopData.requiresCredentials === true) {
-    return null
-  }
+  // Always show VTOP artifacts, even if credentials are required
   if (success === false || error) {
     let errorMessage = error || message || ''
 
@@ -124,9 +122,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
       errorMessage.includes('session could not be established') ||
       errorMessage.includes('incorrect username/password')
 
-    if (isCredentialError || isAuthError) {
-      return null
-    }
+    // Keep visible: show error UI below instead of hiding
   }
 
   const formatCommandName = (cmd: string) => {
@@ -657,17 +653,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
         }
       }
 
-      const isCredentialError =
-        errorMessage.includes('VTOP credentials required') || errorMessage.includes('credentials')
-      const isAuthError =
-        errorMessage.includes('Invalid LoginId/Password') ||
-        errorMessage.includes('Login failed') ||
-        errorMessage.includes('session could not be established') ||
-        errorMessage.includes('incorrect username/password')
-
-      if (isCredentialError || isAuthError || vtopData.requiresCredentials === true) {
-        return null
-      }
+      // Always show VTOP artifacts, even when credentials/auth errors occur
 
       return (
         <div className="space-y-3">
@@ -677,6 +663,9 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
               <h4 className="text-sm font-medium text-destructive">Error Retrieving Data</h4>
             </div>
             <p className="text-sm text-destructive font-medium">{errorMessage}</p>
+            {vtopData.requiresCredentials && (
+              <p className="text-xs text-muted-foreground mt-2">Credentials required to view this data.</p>
+            )}
             {rawOutput && typeof rawOutput === 'string' && rawOutput !== errorMessage && (
               <details className="mt-3">
                 <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">

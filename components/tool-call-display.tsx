@@ -191,9 +191,22 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     }
 
     if (result.requiresCredentials === true) {
-      // Removed automatic login trigger to prevent repeated /chat calls.
-      // Require manual login via the credentials dialog instead.
-      return null
+      // Still show the artifact to make all VTOP tool calls visible
+      return {
+        type: 'vtop-data' as const,
+        title: `VTOP ${String(result.command || 'data')
+          .replace(/-/g, ' ')
+          .replace(/\b\w/g, (ch: string) => ch.toUpperCase())} Data`,
+        icon: <GraduationCap className="h-5 w-5 text-blue-500" />,
+        data: {
+          command: result.command || 'data',
+          requiresCredentials: true,
+          success: false,
+          error: 'VTOP credentials required',
+          rawOutput: result.output || result.data,
+        },
+        source: 'VTOP Portal',
+      }
     }
 
     if (result.success === false || result.error) {
@@ -253,13 +266,8 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         errorMessage.includes('authentication') ||
         errorMessage.includes('Login failed or session could not be established')
 
-      if (isCredentialError || isAuthError) {
-        return null
-      }
-
-      if (errorMessage === '500' || errorMessage.toLowerCase().includes('request failed')) {
-        return null
-      }
+      // Do not hide VTOP artifacts: always show, even for auth/credential errors
+      // Also do not suppress generic 500/request failed: surface as visible error artifact
 
       const formatCommandName = (cmd: string) => {
         const commandMap: { [key: string]: string } = {

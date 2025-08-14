@@ -300,12 +300,23 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
   if (result.papers && result.papers.length > 0) {
     return {
       type: 'papers' as const,
-      title: `${result.papers.length} Past Papers`,
+      title: `${result.papers.length} Past Papers${result.courseCode ? ` (${result.courseCode})` : ''}`,
       icon: <GraduationCap className="h-5 w-5 text-blue-400" />,
-      data: result.papers.map((paper: any) => ({
-        ...paper,
-        link: paper.link || paper.url || paper.pdfUrl || paper.downloadUrl,
-      })),
+      data: result.papers.map((paper: any) => {
+        const link = paper.link || paper.url || paper.pdfUrl || paper.downloadUrl || paper.final_url
+        const examType = paper.examType || paper.exam || paper.paperType
+        const year = paper.year || paper.academicYear
+        const slot = paper.slot
+        const source = paper.source
+        return {
+          ...paper,
+          link,
+          examType,
+          year,
+          slot,
+          source,
+        }
+      }),
       source: 'Papers Archive',
     }
   }

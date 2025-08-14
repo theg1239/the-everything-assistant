@@ -854,6 +854,26 @@ const PaperCard = ({
       </CardHeader>
       <CardContent className="pt-0 space-y-3 flex-1 flex flex-col">
         <div className="space-y-2 text-xs text-muted-foreground flex-1">
+          {(paper.examType || paper.year || paper.slot) && (
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground/80">
+              {paper.examType && (
+                <Badge variant="secondary" className="text-[10px] h-5 px-2">
+                  {paper.examType}
+                </Badge>
+              )}
+              {paper.year && (
+                <span className="inline-flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  {paper.year}
+                </span>
+              )}
+              {paper.slot && (
+                <span className="inline-flex items-center gap-1">
+                  <Badge variant="outline" className="text-[10px] h-5 px-2">Slot {paper.slot}</Badge>
+                </span>
+              )}
+            </div>
+          )}
           {paper.authors && (
             <div className="flex items-start gap-2">
               <Users className="h-3 w-3 shrink-0 mt-0.5" />
@@ -872,18 +892,12 @@ const PaperCard = ({
               )}
             </div>
           )}
-          {(paper.journal || paper.venue || paper.conference) && (
+          {(paper.journal || paper.venue || paper.conference || paper.metadata) && (
             <div className="flex items-start gap-2">
               <FileSearch className="h-3 w-3 shrink-0 mt-0.5" />
               <span className={isMobile && !expanded ? 'line-clamp-1' : 'line-clamp-2'}>
-                {paper.journal || paper.venue || paper.conference}
+                {paper.journal || paper.venue || paper.conference || paper.metadata}
               </span>
-            </div>
-          )}
-          {(paper.year || paper.publishedYear) && (
-            <div className="flex items-center gap-2">
-              <Calendar className="h-3 w-3 shrink-0" />
-              <span>{paper.year || paper.publishedYear}</span>
             </div>
           )}
           {typeof paper.score === 'number' && (
@@ -924,14 +938,11 @@ const PaperCard = ({
           )}
         </div>
 
-        {(paper.examType || paper.category) && (
-          <Badge variant="secondary" className="text-xs w-fit">
-            {paper.examType || paper.category}
-          </Badge>
-        )}
-
         {paper.indexId && (
           <div className="text-[10px] text-muted-foreground/70">Index: {paper.indexId}</div>
+        )}
+        {paper.source && (
+          <div className="text-[10px] text-muted-foreground/70">Source: {paper.source}</div>
         )}
 
         <div className="flex-shrink-0 pt-1">
@@ -2358,6 +2369,10 @@ const PureArtifactDisplay = ({
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [isPdfLoading, setIsPdfLoading] = useState(false)
   const [pdfTitle, setPdfTitle] = useState<string>('')
+  // Papers-specific UI state
+  const [paperSort, setPaperSort] = useState<string>('year_desc')
+  const [paperExamFilter, setPaperExamFilter] = useState<string>('all')
+  const [paperYearFilter, setPaperYearFilter] = useState<string>('all')
   const contentRef = useRef<HTMLDivElement>(null)
 
   const toggleExpand = () => setIsExpanded(!isExpanded)
@@ -2498,12 +2513,107 @@ const PureArtifactDisplay = ({
       })
     }
 
+    // Papers: apply filtering and sorting
+    if (type === 'papers') {
+      const normalizeExam = (e?: string) =>
+        (e || '')
+          .toString()
+          .trim()
+          .toUpperCase()
+          .replace(/[\s-]+/g, '') // Treat CAT1 and CAT-1 as same
+      const extractYearNum = (y?: string) => {
+        if (!y) return -Infinity
+        const m = String(y).match(/(20\d{2})/g)
+        if (!m || m.length === 0) return -Infinity
+        return Math.max(...m.map(s => parseInt(s, 10)))
+      }
+      // Filter
+      processedItems = processedItems.filter(p => {
+        const okExam =
+          paperExamFilter === 'all' || normalizeExam(p.examType || p.category) === normalizeExam(paperExamFilter)
+        const okYear = paperYearFilter === 'all' || String(p.year || '').includes(paperYearFilter)
+        return okExam && okYear
+      })
+      // Sort
+      const examOrder: Record<string, number> = { FAT: 1, CAT2: 2, CAT1: 3, QUIZ: 4 }
+      processedItems = [...processedItems].sort((a, b) => {
+        switch (paperSort) {
+          case 'relevance': {
+            const ar = typeof a.rank === 'number' ? a.rank : Infinity
+            const br = typeof b.rank === 'number' ? b.rank : Infinity
+            if (ar !== br) return ar - br
+            const as = typeof a.score === 'number' ? a.score : -Infinity
+            const bs = typeof b.score === 'number' ? b.score : -Infinity
+            return bs - as
+          }
+          case 'year_desc':
+            return extractYearNum(b.year) - extractYearNum(a.year)
+          case 'year_asc':
+            return extractYearNum(a.year) - extractYearNum(b.year)
+          case 'exam': {
+            const ae = examOrder[normalizeExam(a.examType)] || 99
+            const be = examOrder[normalizeExam(b.examType)] || 99
+            if (ae !== be) return ae - be
+            return (a.examType || '').localeCompare(b.examType || '')
+          }
+          case 'slot':
+            return (a.slot || '').localeCompare(b.slot || '')
+          case 'source':
+            return (a.source || '').localeCompare(b.source || '')
+          case 'title':
+            return (a.title || '').localeCompare(b.title || '')
+          default:
+            return 0
+        }
+      })
+    }
+
     const itemCount = processedItems.length
     const displayItems = showAllItems || !isMobile || isFullscreen ? processedItems : processedItems.slice(0, 3)
     const hasMoreItems = isMobile && items.length > 3 && !showAllItems && !isFullscreen
 
     return (
       <>
+        {type === 'papers' && (
+          <div className="flex flex-wrap items-center gap-2 gap-y-2 mb-2 w-full">
+            <div className="text-xs text-muted-foreground mr-2">Sort:</div>
+            <select
+              value={paperSort}
+              onChange={e => setPaperSort(e.target.value)}
+              className="text-xs bg-muted/50 border border-border rounded px-2 py-1 w-full sm:w-auto min-w-[150px]"
+            >
+              <option value="year_desc">Year (newest)</option>
+              <option value="year_asc">Year (oldest)</option>
+              <option value="relevance">Relevance</option>
+              <option value="exam">Exam Type</option>
+              <option value="slot">Slot</option>
+              <option value="source">Source</option>
+              <option value="title">Title</option>
+            </select>
+            <div className="text-xs text-muted-foreground ml-3">Filter:</div>
+            <select
+              value={paperExamFilter}
+              onChange={e => setPaperExamFilter(e.target.value)}
+              className="text-xs bg-muted/50 border border-border rounded px-2 py-1 w-full sm:w-auto min-w-[140px]"
+            >
+              <option value="all">All Exams</option>
+              <option value="CAT-1">CAT-1</option>
+              <option value="CAT-2">CAT-2</option>
+              <option value="FAT">FAT</option>
+              <option value="Quiz">Quiz</option>
+            </select>
+            <select
+              value={paperYearFilter}
+              onChange={e => setPaperYearFilter(e.target.value)}
+              className="text-xs bg-muted/50 border border-border rounded px-2 py-1 w-full sm:w-auto min-w-[130px]"
+            >
+              <option value="all">All Years</option>
+              {Array.from(new Set((Array.isArray(items) ? items : []).map((p: any) => p.year).filter(Boolean))).map((y: any) => (
+                <option key={String(y)} value={String(y)}>{String(y)}</option>
+              ))}
+            </select>
+          </div>
+        )}
         {' '}
         <div
           className={cn(

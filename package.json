@@ -82,6 +82,7 @@
     "path": "latest",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^1.1.1",
+    "pdfjs-dist": "^3.4.120",
     "pg": "^8.16.2",
     "postprocessing": "^6.37.4",
     "puppeteer-core": "latest",

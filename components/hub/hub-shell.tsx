@@ -3,17 +3,18 @@
 import { useMemo, useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { GraduationCap, FileSearch, UtensilsCrossed, Briefcase, Users, Home } from 'lucide-react'
+import { GraduationCap, FileSearch, UtensilsCrossed, Briefcase, Users, Home, Flame } from 'lucide-react'
 import VTOPPanel from './panels/vtop-panel'
 import PastPapersPanel from './panels/past-papers-panel'
 import MessMenuPanel from './panels/mess-menu-panel'
 import PlacementPanel from './panels/placement-panel'
 import FacultyPanel from './panels/faculty-panel'
+import RedditPanel from './panels/reddit-panel'
 import { hasVTOPCredentials } from '@/lib/vtop-credentials'
 import QuickActions from './quick-actions'
 import ResultViewer from './result-viewer'
 
-type Page = 'home' | 'vtop' | 'papers' | 'mess' | 'placements' | 'faculty'
+type Page = 'home' | 'vtop' | 'papers' | 'mess' | 'placements' | 'faculty' | 'reddit'
 
 export default function HubShell() {
   const [page, setPage] = useState<Page>('home')
@@ -25,10 +26,32 @@ export default function HubShell() {
   const [viewerLoading, setViewerLoading] = useState<boolean>(false)
   const [viewerStop, setViewerStop] = useState<(() => void) | undefined>(undefined)
 
-  // Keyboard shortcuts: 1=home, 2=vtop, 3=papers, 4=mess, 5=placements, 6=faculty
+  // Keyboard shortcuts: 1=home, 2=vtop, 3=papers, 4=mess, 5=placements, 6=faculty, 7=reddit
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.altKey || e.metaKey || e.ctrlKey) return
+      const target = e.target as HTMLElement | null
+      const activeEl = (typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null)
+      const isTypingContext = (el: HTMLElement | null) => {
+        if (!el) return false
+        if (el instanceof HTMLTextAreaElement) return true
+        if (el instanceof HTMLInputElement) {
+          if (el.readOnly || el.disabled) return false
+          const t = (el.type || '').toLowerCase()
+          const typingTypes = new Set([
+            'text','search','url','tel','email','password','number','date','time','datetime-local','month','week'
+          ])
+          return typingTypes.has(t)
+        }
+        if (el.isContentEditable) return true
+        const role = el.getAttribute('role')?.toLowerCase()
+        if (role === 'textbox' || role === 'combobox' || role === 'searchbox' || role === 'spinbutton') return true
+        return !!el.closest('input:not([disabled]):not([readonly]), textarea:not([disabled]):not([readonly]), select, [contenteditable=""], [contenteditable="true"], [role="textbox"], [role="combobox"], [role="searchbox"], [role="spinbutton"]')
+      }
+      const path: any[] = (e as any).composedPath?.() || []
+      const pathHasTyping = path.some(el => el instanceof HTMLElement && isTypingContext(el))
+      const activeIsBody = !activeEl || activeEl === document.body
+      if (isTypingContext(target) || isTypingContext(activeEl) || pathHasTyping || !activeIsBody) return
       const map: Record<string, Page> = {
         '1': 'home',
         '2': 'vtop',
@@ -36,6 +59,7 @@ export default function HubShell() {
         '4': 'mess',
         '5': 'placements',
         '6': 'faculty',
+        '7': 'reddit',
       }
       const next = map[e.key]
       if (next) {
@@ -59,6 +83,8 @@ export default function HubShell() {
         return 'placements'
       case 'faculty':
         return 'faculty'
+      case 'reddit':
+        return 'reddit'
       default:
         return 'home'
     }
@@ -76,6 +102,8 @@ export default function HubShell() {
         return <PlacementPanel />
       case 'faculty':
         return <FacultyPanel />
+      case 'reddit':
+        return <RedditPanel />
       default:
         return null
     }
@@ -88,7 +116,7 @@ export default function HubShell() {
           <div className="flex items-center justify-between gap-2">
             <div className="px-1 text-sm sm:text-base font-semibold tracking-wide">{title}</div>
             <div className="hidden md:flex items-center text-[11px] text-muted-foreground">
-              press 1-6 to switch
+              press 1-7 to switch
             </div>
             <div className="md:hidden">
               <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setPage('home')} aria-label="Go to home">
@@ -98,13 +126,14 @@ export default function HubShell() {
           </div>
           <div className="mt-3 overflow-x-auto no-scrollbar [-ms-overflow-style:none] [scrollbar-width:none] hidden md:block">
             <div className="flex gap-1.5">
-              {([
+              {([ 
                 { id: 'home', label: 'home', icon: <Home className="h-3.5 w-3.5" /> },
                 { id: 'vtop', label: 'vtop', icon: <GraduationCap className="h-3.5 w-3.5" /> },
                 { id: 'papers', label: 'past papers', icon: <FileSearch className="h-3.5 w-3.5" /> },
                 { id: 'mess', label: 'mess menu', icon: <UtensilsCrossed className="h-3.5 w-3.5" /> },
                 { id: 'placements', label: 'placements', icon: <Briefcase className="h-3.5 w-3.5" /> },
                 { id: 'faculty', label: 'faculty', icon: <Users className="h-3.5 w-3.5" /> },
+                { id: 'reddit', label: 'reddit', icon: <Flame className="h-3.5 w-3.5" /> },
               ] as { id: Page; label: string; icon: React.ReactNode }[]).map(tab => (
                 <button
                   key={tab.id}
@@ -182,6 +211,12 @@ export default function HubShell() {
                 description="search faculty and their courses"
                 icon={<Users className="h-5 w-5" />}
                 onClick={() => setPage('faculty')}
+              />
+              <HubTile
+                title="reddit knowledge"
+                description="search community insights and trending topics"
+                icon={<Flame className="h-5 w-5" />}
+                onClick={() => setPage('reddit')}
               />
             </div>
           ) : (

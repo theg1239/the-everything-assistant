@@ -1135,11 +1135,13 @@ function parseVTOPResponse(raw: string) {
                 />{' '}
               </motion.div>
 
-              <div className="w-full max-w-3xl flex justify-center -mt-3">
+              <div className="w-full max-w-5xl flex justify-center -mt-3">
+
                 <button
                   onClick={() => setHubOpen(true)}
                   aria-label="Open hub"
                   className="hub-gradient-btn"
+                  style={{ minWidth: '320px', paddingLeft: '32px', paddingRight: '32px' }}
                 >
                   <span className="hub-gradient-inner">
                     <GraduationCap className="h-4 w-4 mr-2" />

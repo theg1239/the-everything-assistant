@@ -41,6 +41,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { ResponsiveCard } from '@/components/responsive-card'
@@ -2566,41 +2567,44 @@ const PureArtifactDisplay = ({
         {type === 'papers' && (
           <div className="flex flex-wrap items-center gap-2 gap-y-2 mb-2 w-full">
             <div className="text-xs text-muted-foreground mr-2">Sort:</div>
-            <select
-              value={paperSort}
-              onChange={e => setPaperSort(e.target.value)}
-              className="text-xs bg-muted/50 border border-border rounded px-2 py-1 w-full sm:w-auto min-w-[150px]"
-            >
-              <option value="year_desc">Year (newest)</option>
-              <option value="year_asc">Year (oldest)</option>
-              <option value="relevance">Relevance</option>
-              <option value="exam">Exam Type</option>
-              <option value="slot">Slot</option>
-              <option value="source">Source</option>
-              <option value="title">Title</option>
-            </select>
+            <Select value={paperSort} onValueChange={setPaperSort}>
+              <SelectTrigger className="h-7 text-xs w-full sm:w-auto min-w-[150px]">
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="year_desc">Year (newest)</SelectItem>
+                <SelectItem value="year_asc">Year (oldest)</SelectItem>
+                <SelectItem value="relevance">Relevance</SelectItem>
+                <SelectItem value="exam">Exam Type</SelectItem>
+                <SelectItem value="slot">Slot</SelectItem>
+                <SelectItem value="source">Source</SelectItem>
+                <SelectItem value="title">Title</SelectItem>
+              </SelectContent>
+            </Select>
             <div className="text-xs text-muted-foreground ml-3">Filter:</div>
-            <select
-              value={paperExamFilter}
-              onChange={e => setPaperExamFilter(e.target.value)}
-              className="text-xs bg-muted/50 border border-border rounded px-2 py-1 w-full sm:w-auto min-w-[140px]"
-            >
-              <option value="all">All Exams</option>
-              <option value="CAT-1">CAT-1</option>
-              <option value="CAT-2">CAT-2</option>
-              <option value="FAT">FAT</option>
-              <option value="Quiz">Quiz</option>
-            </select>
-            <select
-              value={paperYearFilter}
-              onChange={e => setPaperYearFilter(e.target.value)}
-              className="text-xs bg-muted/50 border border-border rounded px-2 py-1 w-full sm:w-auto min-w-[130px]"
-            >
-              <option value="all">All Years</option>
-              {Array.from(new Set((Array.isArray(items) ? items : []).map((p: any) => p.year).filter(Boolean))).map((y: any) => (
-                <option key={String(y)} value={String(y)}>{String(y)}</option>
-              ))}
-            </select>
+            <Select value={paperExamFilter} onValueChange={setPaperExamFilter}>
+              <SelectTrigger className="h-7 text-xs w-full sm:w-auto min-w-[140px]">
+                <SelectValue placeholder="All exams" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Exams</SelectItem>
+                <SelectItem value="CAT-1">CAT-1</SelectItem>
+                <SelectItem value="CAT-2">CAT-2</SelectItem>
+                <SelectItem value="FAT">FAT</SelectItem>
+                <SelectItem value="Quiz">Quiz</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={paperYearFilter} onValueChange={setPaperYearFilter}>
+              <SelectTrigger className="h-7 text-xs w-full sm:w-auto min-w-[130px]">
+                <SelectValue placeholder="All years" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Years</SelectItem>
+                {Array.from(new Set((Array.isArray(items) ? items : []).map((p: any) => p.year).filter(Boolean))).map((y: any) => (
+                  <SelectItem key={String(y)} value={String(y)}>{String(y)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
         {' '}

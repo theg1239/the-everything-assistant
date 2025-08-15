@@ -253,6 +253,13 @@ export function DynamicLoadingIndicator({
   const activeRunRef = React.useRef<string | null>(null)
 
   React.useEffect(() => {
+    const last = messages[messages.length - 1]
+    if (last?.role === 'user') {
+      setPaperStatus(null)
+      activeRunRef.current = null
+      return
+    }
+
     let runId: string | undefined
     let foundActiveCall = false
     
@@ -278,15 +285,6 @@ export function DynamicLoadingIndicator({
                 console.log(`[DLI] Generated fallback runId for active call: ${runId}`)
               }
               break
-            }
-            
-            if (inv.result) {
-              const result = inv.result as any
-              if (result.runId && typeof result.runId === 'string') {
-                runId = result.runId
-                console.log(`[DLI] Found completed smartPaperSearch with runId: ${runId}`)
-                break
-              }
             }
           }
         }

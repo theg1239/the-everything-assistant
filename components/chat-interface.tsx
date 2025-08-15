@@ -119,7 +119,6 @@ const PureChatInterface = memo(
     const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebar()
     const [hubOpen, setHubOpen] = useState(false)
   const [vtopLoading, setVtopLoading] = useState(false)
-    const [canvasContent, setCanvasContent] = useState<string>('')
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [hasUserInitiatedConversation, setHasUserInitiatedConversation] = useState(false)
     const [isInitialRender, setIsInitialRender] = useState(true)
@@ -613,11 +612,7 @@ const PureChatInterface = memo(
       }
     }
 
-    const openCanvas = () => {
-      setHubOpen(true)
-    }
     const createCanvasFromMessage = (content: string) => {
-      setCanvasContent(content)
       setHubOpen(true)
     }
 
@@ -1100,43 +1095,133 @@ function parseVTOPResponse(raw: string) {
       }
     }, [messages, updateToolResult])
 
-    if (!showFullChat) {
-      return (
-        <VTOPToolHandler
-          toolInvocations={messages[messages.length - 1]?.toolInvocations}
-          onCredentialsSubmit={handleVTOPCredentials}
-        >
-          <UpsellBanner />
-          <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
-          <div className="flex flex-col h-[100dvh] bg-transparent text-foreground relative overflow-hidden mobile-viewport-fix">
-            <div className="relative z-10 flex flex-col h-full">
-              <header className="flex-shrink-0 sticky top-0 z-40">
-                <div className="flex h-14 items-center px-4 gap-2">
-                  <HamburgerButton onClick={toggleSidebar} className="md:hidden" />
-                </div>
-              </header>
-              <div className="flex-1 flex flex-col items-center justify-center px-4 space-y-8 overflow-y-auto overflow-fix pt-6 md:pt-0">
-                <ChatHeader />
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
-                  className="w-full max-w-3xl"
-                >
-                  <MultimodalInput
-                    input={input}
-                    setInput={setInput}
-                    handleSubmit={handleFormSubmit}
-                    isLoading={isLoading}
-                    onToolSelect={handleToolSelection}
-                    selectedTool={selectedTool}
-                    placeholder="ask anything..."
-                  />{' '}
-                </motion.div>
+  if (!showFullChat) {
+    return (
+      <VTOPToolHandler
+        toolInvocations={messages[messages.length - 1]?.toolInvocations}
+        onCredentialsSubmit={handleVTOPCredentials}
+      >
+        <UpsellBanner />
+        <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
+        <Hub
+          isOpen={hubOpen}
+          onClose={() => {
+            setHubOpen(false)
+          }}
+        />
+        <div className="flex flex-col h-[100dvh] bg-transparent text-foreground relative overflow-hidden mobile-viewport-fix">
+          <div className="relative z-10 flex flex-col h-full">
+            <header className="flex-shrink-0 sticky top-0 z-40">
+              <div className="flex h-14 items-center px-4 gap-2">
+                <HamburgerButton onClick={toggleSidebar} className="md:hidden" />
+              </div>
+            </header>
+            <div className="flex-1 flex flex-col items-center justify-center px-4 space-y-8 overflow-y-auto overflow-fix pt-6 md:pt-0">
+              <ChatHeader />
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
+                className="w-full max-w-3xl"
+              >
+                <MultimodalInput
+                  input={input}
+                  setInput={setInput}
+                  handleSubmit={handleFormSubmit}
+                  isLoading={isLoading}
+                  onToolSelect={handleToolSelection}
+                  selectedTool={selectedTool}
+                  placeholder="ask anything..."
+                />{' '}
+              </motion.div>
 
-                {errorMessage && (
-                  <StreamingErrorDisplay message={errorMessage} />
-                )}
+              <div className="w-full max-w-3xl flex justify-center -mt-3">
+                <button
+                  onClick={() => setHubOpen(true)}
+                  aria-label="Open hub"
+                  className="hub-gradient-btn"
+                >
+                  <span className="hub-gradient-inner">
+                    <GraduationCap className="h-4 w-4 mr-2" />
+                    <span>hub</span>
+                  </span>
+                </button>
+
+                <style jsx>{`
+                  .hub-gradient-btn {
+                    position: relative;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    height: 40px;
+                    padding: 0 14px;
+                    border-radius: 9999px;
+                    border: 1px solid rgba(255,255,255,0.08);
+                    cursor: pointer;
+                    color: var(--card-foreground);
+                    background: linear-gradient(90deg,
+                      rgba(110,231,249,0.25) 0%,
+                      rgba(167,139,250,0.25) 25%,
+                      rgba(244,114,182,0.25) 50%,
+                      rgba(245,158,11,0.25) 75%,
+                      rgba(110,231,249,0.25) 100%
+                    );
+                    backdrop-filter: blur(8px);
+                    -webkit-backdrop-filter: blur(8px);
+                    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+                    transition: transform 160ms ease, box-shadow 200ms ease, border-color 200ms ease;
+                    overflow: hidden;
+                  }
+                  .hub-gradient-btn::before {
+                    content: '';
+                    position: absolute;
+                    inset: -2px;
+                    border-radius: inherit;
+                    background: linear-gradient(90deg, #6EE7F9, #A78BFA, #F472B6, #F59E0B, #6EE7F9);
+                    background-size: 200% 200%;
+                    filter: blur(10px);
+                    opacity: 0.45;
+                    z-index: 0;
+                    animation: hub-shine 5s linear infinite;
+                  }
+                  .hub-gradient-btn:hover {
+                    transform: translateY(-1px) scale(1.02);
+                    box-shadow: 0 8px 22px rgba(0,0,0,0.35);
+                    border-color: rgba(255,255,255,0.12);
+                  }
+                  .hub-gradient-inner {
+                    position: relative;
+                    z-index: 1;
+                    display: inline-flex;
+                    align-items: center;
+                    font-size: 0.9rem;
+                    line-height: 1;
+                    font-weight: 500;
+                    color: hsl(var(--foreground));
+                  }
+                  .hub-gradient-inner :global(svg) {
+                    color: hsl(var(--foreground));
+                  }
+                  .hub-gradient-btn::after {
+                    content: '';
+                    position: absolute;
+                    inset: 0;
+                    border-radius: inherit;
+                    background: radial-gradient(120% 120% at 50% 100%, rgba(255,255,255,0.06) 0%, transparent 55%);
+                    z-index: 1;
+                    pointer-events: none;
+                  }
+                  @keyframes hub-shine {
+                    0% { background-position: 0% 50%; }
+                    50% { background-position: 100% 50%; }
+                    100% { background-position: 0% 50%; }
+                  }
+                `}</style>
+              </div>
+
+              {errorMessage && (
+                <StreamingErrorDisplay message={errorMessage} />
+              )}
 
                 <RateLimitErrorDisplay />
 
@@ -1168,7 +1253,6 @@ function parseVTOPResponse(raw: string) {
           isOpen={hubOpen}
           onClose={() => {
             setHubOpen(false)
-            setCanvasContent('')
           }}
         />{' '}
         <div
@@ -1210,15 +1294,12 @@ function parseVTOPResponse(raw: string) {
                     router.push('/')
                   }
                 }}
-                className="h-9"
+                className="h-9 ml-auto"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 new chat
               </Button>
-              <Button variant="ghost" onClick={openCanvas} className="ml-auto h-9">
-                <FileText className="h-4 w-4 mr-2" />
-                hub
-              </Button>
+
             </div>
           </header>{' '}
           <div className="flex-1 relative overflow-hidden">

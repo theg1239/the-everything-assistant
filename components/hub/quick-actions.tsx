@@ -6,6 +6,7 @@ import { hasVTOPCredentials } from '@/lib/vtop-credentials'
 import { experimental_useObject as useObject } from '@ai-sdk/react'
 import { vtopResultSchema } from '@/app/api/hub/vtop/schema'
 import { useHubTool } from './use-hub-tool'
+import { CalendarClock, ClipboardCheck, UtensilsCrossed, FileSearch, Briefcase, Loader2 } from 'lucide-react'
 
 interface QuickActionsProps {
   onShowResult: (title: string, result: any) => void
@@ -53,26 +54,50 @@ export default function QuickActions({ onShowResult, onShowStream, goTo }: Quick
   }
 
   return (
-    <div className="flex items-center gap-2 overflow-auto no-scrollbar">
-      <ActionButton label="my attendance" onClick={runAttendance} loading={attendance.isLoading} disabled={!linked} />
-      <ActionButton label="my timetable" onClick={runTimetable} loading={timetable.isLoading} disabled={!linked} />
-      <ActionButton label="today's mess" onClick={() => goTo('mess')} />
-      <ActionButton label="find past papers" onClick={() => goTo('papers')} />
-      <ActionButton label="placements" onClick={runPlacements} loading={placements.loading} />
+    <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2 sm:overflow-x-auto no-scrollbar">
+      <ActionButton
+        label={linked ? 'my attendance' : 'link vtop to use'}
+        icon={<ClipboardCheck className="h-3.5 w-3.5" />}
+        onClick={runAttendance}
+        loading={attendance.isLoading}
+        ariaLabel={linked ? 'Fetch my attendance' : 'Link VTOP to use attendance'}
+      />
+      <ActionButton
+        label={linked ? 'my timetable' : 'link vtop to use'}
+        icon={<CalendarClock className="h-3.5 w-3.5" />}
+        onClick={runTimetable}
+        loading={timetable.isLoading}
+        ariaLabel={linked ? 'Fetch my timetable' : 'Link VTOP to use timetable'}
+      />
+      <ActionButton label="today's mess" icon={<UtensilsCrossed className="h-3.5 w-3.5" />} onClick={() => goTo('mess')} ariaLabel="Open today's mess menu" />
+      <ActionButton label="find past papers" icon={<FileSearch className="h-3.5 w-3.5" />} onClick={() => goTo('papers')} ariaLabel="Find past papers" />
+      <ActionButton label="placements" icon={<Briefcase className="h-3.5 w-3.5" />} onClick={runPlacements} loading={placements.loading} ariaLabel="View placements overview" />
     </div>
   )
 }
 
-function ActionButton({ label, onClick, loading, disabled }: { label: string; onClick: () => void; loading?: boolean; disabled?: boolean }) {
+function ActionButton({ label, icon, onClick, loading, disabled, ariaLabel }: { label: string; icon?: React.ReactNode; onClick: () => void; loading?: boolean; disabled?: boolean; ariaLabel?: string }) {
   return (
     <Button
       size="sm"
       variant="secondary"
-      disabled={disabled || loading}
+      disabled={disabled}
       onClick={onClick}
-      className="rounded-full px-3 whitespace-nowrap"
+      aria-busy={loading || undefined}
+      aria-label={ariaLabel || label}
+      className="rounded-full px-3 whitespace-nowrap w-full sm:w-auto justify-center"
     >
-      {loading ? 'running…' : label}
+      {loading ? (
+        <>
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <span>running…</span>
+        </>
+      ) : (
+        <>
+          {icon}
+          <span>{label}</span>
+        </>
+      )}
     </Button>
   )
 }

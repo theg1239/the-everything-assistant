@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { ThumbsUp, ThumbsDown, Copy, FileText } from 'lucide-react'
+import { ThumbsUp, ThumbsDown, Copy, GraduationCap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface MessageActionsProps {
@@ -97,7 +97,7 @@ export function MessageActions({
         onClick={createCanvasDocument}
         className="h-8 w-8 p-0 text-slate-400 hover:text-purple-400"
       >
-        <FileText className="h-3 w-3" />
+        <GraduationCap className="h-3 w-3" />
       </Button>
 
       {copied && <span className="text-xs text-green-400">copied!</span>}

@@ -1,9 +1,9 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { GraduationCap, FileSearch, UtensilsCrossed, Briefcase, Users, ArrowLeft } from 'lucide-react'
+import { GraduationCap, FileSearch, UtensilsCrossed, Briefcase, Users, Home } from 'lucide-react'
 import VTOPPanel from './panels/vtop-panel'
 import PastPapersPanel from './panels/past-papers-panel'
 import MessMenuPanel from './panels/mess-menu-panel'
@@ -25,6 +25,28 @@ export default function HubShell() {
   const [viewerLoading, setViewerLoading] = useState<boolean>(false)
   const [viewerStop, setViewerStop] = useState<(() => void) | undefined>(undefined)
 
+  // Keyboard shortcuts: 1=home, 2=vtop, 3=papers, 4=mess, 5=placements, 6=faculty
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.altKey || e.metaKey || e.ctrlKey) return
+      const map: Record<string, Page> = {
+        '1': 'home',
+        '2': 'vtop',
+        '3': 'papers',
+        '4': 'mess',
+        '5': 'placements',
+        '6': 'faculty',
+      }
+      const next = map[e.key]
+      if (next) {
+        e.preventDefault()
+        setPage(next)
+      }
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [])
+
   const title = useMemo(() => {
     switch (page) {
       case 'vtop':
@@ -38,7 +60,7 @@ export default function HubShell() {
       case 'faculty':
         return 'faculty'
       default:
-        return 'main hub'
+        return 'home'
     }
   }, [page])
 
@@ -63,13 +85,43 @@ export default function HubShell() {
     <div className="h-full flex flex-col">
       <div className="p-3 sm:p-4 border-b border-border/60 bg-card/60 sticky top-0">
         <div className="max-w-6xl mx-auto">
-          <div className="flex items-center gap-2">
-            {page !== 'home' && (
-              <Button variant="ghost" size="sm" onClick={() => setPage('home')} className="h-8 w-8 p-0">
-                <ArrowLeft className="h-4 w-4" />
+          <div className="flex items-center justify-between gap-2">
+            <div className="px-1 text-sm sm:text-base font-semibold tracking-wide">{title}</div>
+            <div className="hidden md:flex items-center text-[11px] text-muted-foreground">
+              press 1-6 to switch
+            </div>
+            <div className="md:hidden">
+              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setPage('home')} aria-label="Go to home">
+                <Home className="h-3.5 w-3.5" />
               </Button>
-            )}
-            <div className="text-sm sm:text-base font-semibold">{title}</div>
+            </div>
+          </div>
+          {/* Tabs (hidden on mobile; shortcuts aren't useful there) */}
+          <div className="mt-3 overflow-x-auto no-scrollbar [-ms-overflow-style:none] [scrollbar-width:none] hidden md:block">
+            <div className="flex gap-1.5">
+              {([
+                { id: 'home', label: 'home', icon: <Home className="h-3.5 w-3.5" /> },
+                { id: 'vtop', label: 'vtop', icon: <GraduationCap className="h-3.5 w-3.5" /> },
+                { id: 'papers', label: 'past papers', icon: <FileSearch className="h-3.5 w-3.5" /> },
+                { id: 'mess', label: 'mess menu', icon: <UtensilsCrossed className="h-3.5 w-3.5" /> },
+                { id: 'placements', label: 'placements', icon: <Briefcase className="h-3.5 w-3.5" /> },
+                { id: 'faculty', label: 'faculty', icon: <Users className="h-3.5 w-3.5" /> },
+              ] as { id: Page; label: string; icon: React.ReactNode }[]).map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setPage(tab.id)}
+                  aria-pressed={page === tab.id}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-all ${
+                    page === tab.id
+                      ? 'bg-primary/10 border-primary/30 text-primary'
+                      : 'bg-transparent border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  {tab.icon}
+                  <span className="whitespace-nowrap">{tab.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
           {page === 'home' && (
             <div className="mt-3">
@@ -161,19 +213,21 @@ function HubTile({ title, description, icon, onClick, disabled, cta }: {
   cta?: string
 }) {
   return (
-    <Card className={`transition-colors border-0 ${disabled ? 'opacity-75' : 'hover:bg-muted/50'}`}>
+    <Card className={`group transition-all border border-border/60 ${disabled ? 'opacity-70' : 'hover:border-primary/40 hover:shadow-lg hover:shadow-black/10'}`}>
       <button onClick={onClick} disabled={disabled} className="w-full text-left">
         <CardContent className="p-4">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-md bg-muted/70 flex items-center justify-center">
+            <div className="h-9 w-9 rounded-md bg-gradient-to-br from-primary/20 to-transparent flex items-center justify-center ring-1 ring-border/50">
               {icon}
             </div>
             <div className="flex-1">
-              <div className="text-sm font-medium">{title}</div>
+              <div className="text-sm font-medium tracking-wide">{title}</div>
               <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{description}</div>
             </div>
             <div>
-              <span className="text-xs text-blue-400">{cta || 'open'}</span>
+              <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full border border-border/60 text-foreground/80 group-hover:border-primary/40 group-hover:text-primary/90 transition-colors">
+                {cta || 'open'}
+              </span>
             </div>
           </div>
         </CardContent>

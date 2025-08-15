@@ -96,7 +96,6 @@ export default function HubShell() {
               </Button>
             </div>
           </div>
-          {/* Tabs (hidden on mobile; shortcuts aren't useful there) */}
           <div className="mt-3 overflow-x-auto no-scrollbar [-ms-overflow-style:none] [scrollbar-width:none] hidden md:block">
             <div className="flex gap-1.5">
               {([

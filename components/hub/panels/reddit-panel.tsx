@@ -31,7 +31,7 @@ export default function RedditPanel() {
     "what's happening on reddit",
     'placements discussions at vit',
     'hostel facilities complaints',
-    'course advice BCSE2001',
+    'tips for freshers',
     'exam prep tips',
     'clubs and events',
   ]

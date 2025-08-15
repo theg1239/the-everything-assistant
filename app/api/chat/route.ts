@@ -1,6 +1,4 @@
 import { smoothStream } from 'ai'
-
-export const runtime = 'nodejs'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { createVITTools } from '@/lib/tools'
 import { VIT_SYSTEM_PROMPT } from '@/lib/prompts'
@@ -664,20 +662,16 @@ CRITICAL TOOL CONTINUATION RULES:
       })
     }
 
-    // --- ATTACHMENT (PDF / IMAGE) HANDLING FOR GOOGLE PROVIDER ---
-    // Detect attachments (PDFs/images) and transform messages into multimodal parts when needed.
     const attachmentAware = enhancedMessages.some(
       (m: any) => Array.isArray(m.attachments) && m.attachments.some((a: any) => a?.contentType?.startsWith('application/pdf') || a?.contentType?.startsWith('image/'))
     )
 
-    let modelName = 'gemini-2.5-flash-lite'
+    let modelName = 'gemini-2.5-flash'
     const hasPdf = attachmentAware && enhancedMessages.some((m: any) => m.attachments?.some((a: any) => a?.contentType === 'application/pdf'))
     if (hasPdf) {
-      // Choose a model variant with better file (PDF) reasoning capability.
-      modelName = 'gemini-2.0-flash'
+      modelName = 'gemini-2.5-flash'
     }
 
-    // Build final messages; if no attachments, preserve original behavior for efficiency.
     let finalMessages: any[] = [{ role: 'system', content: combinedSystemPrompt }]
     if (!attachmentAware) {
       finalMessages.push(...enhancedMessages)
@@ -698,7 +692,6 @@ CRITICAL TOOL CONTINUATION RULES:
             att.contentType.startsWith('image/')
           ) {
             try {
-              // Fetch file bytes (public or signed URL expected). Limit size to 25MB to stay within Gemini constraints.
               const res = await fetch(att.url)
               if (!res.ok) throw new Error(`fetch ${res.status}`)
               const ab = await res.arrayBuffer()

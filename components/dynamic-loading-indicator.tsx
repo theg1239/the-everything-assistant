@@ -437,30 +437,33 @@ export function DynamicLoadingIndicator({
     }
 
     const lastMessage = messages[messages.length - 1]
-    
+
+    if (lastMessage?.role === 'assistant' && lastMessage.streaming) {
+      return TOOL_CONFIGS.streaming
+    }
+
     if (lastMessage?.role === 'user') {
       return TOOL_CONFIGS.thinking
     }
-    
     if (lastMessage?.role === 'assistant' && lastMessage.toolInvocations) {
       const activeTools = lastMessage.toolInvocations.filter((tool: any) => {
         return tool.state === 'call' || tool.state !== 'result' || !tool.result
       })
-      
+
       activeTools.sort((a: any, b: any) => {
         const aPriority = getPriority(a.toolName)
         const bPriority = getPriority(b.toolName)
-        
+
         if (aPriority !== bPriority) return bPriority - aPriority
         if (a.state === 'call' && b.state !== 'call') return -1
         if (b.state === 'call' && a.state !== 'call') return 1
         return 0
       })
-      
+
       if (activeTools.length > 0 && activeTools[0].toolName) {
         return TOOL_CONFIGS[activeTools[0].toolName] || TOOL_CONFIGS.default
       }
-      
+
       if (lastMessage.toolInvocations.length > 0) {
         const latestTool = lastMessage.toolInvocations[lastMessage.toolInvocations.length - 1]
         if (latestTool.toolName) {
@@ -468,11 +471,11 @@ export function DynamicLoadingIndicator({
         }
       }
     }
-    
+
     if (showForFirstMessage && messages.length === 1) {
       return TOOL_CONFIGS.thinking
     }
-    
+
     return TOOL_CONFIGS.thinking
   }
 

@@ -31,26 +31,26 @@ export default function FacultyPanel() {
   return (
     <Card className="border-0 shadow-none bg-transparent">
       <CardHeader>
-        <CardTitle>Faculty Directory</CardTitle>
+        <CardTitle>faculty directory</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <Label htmlFor="department">Department</Label>
+            <Label htmlFor="department">department</Label>
             <Input id="department" value={department} onChange={e => setDepartment(e.target.value)} placeholder="e.g. CSE, SMEC" />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="facultyName">Faculty Name</Label>
+            <Label htmlFor="facultyName">faculty Name</Label>
             <Input id="facultyName" value={facultyName} onChange={e => setFacultyName(e.target.value)} placeholder="Optional" />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="courseQuery">Course Filter</Label>
+            <Label htmlFor="courseQuery">course filter</Label>
             <Input id="courseQuery" value={courseQuery} onChange={e => setCourseQuery(e.target.value)} placeholder="Optional" />
           </div>
           <div className="flex items-center space-x-2 pt-4">
             <Switch id="includeCourses" checked={includeCourses} onCheckedChange={setIncludeCourses} />
             <Label htmlFor="includeCourses" className="text-sm text-muted-foreground">
-              Include courses taught by faculty
+              include courses taught by faculty
             </Label>
           </div>
         </div>
@@ -58,12 +58,12 @@ export default function FacultyPanel() {
         <div className="flex flex-col sm:flex-row gap-2">
           <Button disabled={loading} onClick={onRun} className="sm:w-auto w-full">
             <Search className="mr-2 h-4 w-4" />
-            {loading ? 'Searching...' : 'Search'}
+            {loading ? 'searching...' : 'search'}
           </Button>
           {(error || result) && (
             <Button variant="ghost" onClick={reset} className="sm:w-auto w-full">
               <X className="mr-2 h-4 w-4" />
-              Clear
+              clear
             </Button>
           )}
         </div>
@@ -88,7 +88,7 @@ export default function FacultyPanel() {
                   <CardFooter className="flex-col items-start gap-2 pt-4">
                     <div className="text-xs text-muted-foreground font-medium flex items-center">
                       <BookOpen className="mr-2 h-4 w-4" />
-                      Courses Taught
+                      courses taught
                     </div>
                     <ul className="text-xs text-muted-foreground list-disc pl-5 space-y-1">
                       {f.courses.map((c: any, idx: number) => (

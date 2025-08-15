@@ -15,7 +15,7 @@ import { SuggestedQuestions } from '@/components/suggested-questions'
 import { FollowUpSuggestions } from '@/components/follow-up-suggestions'
 import { ChatHeader } from '@/components/chat-header'
 import { MultimodalInput } from '@/components/multimodal-input'
-import { Canvas } from '@/components/canvas'
+import Hub from '@/components/hub/hub'
 import { extractTitleFromContent } from '@/lib/utils'
 import UpsellBanner from '@/components/upsell-banner'
 import { VTOPToolHandler } from '@/components/vtop-tool-handler'
@@ -117,7 +117,7 @@ const PureChatInterface = memo(
   ({ initialMessages = [], chatId, autoResume = false }: ChatInterfaceProps) => {
     const [showFullChat, setShowFullChat] = useState(initialMessages.length > 0)
     const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebar()
-    const [canvasOpen, setCanvasOpen] = useState(false)
+    const [hubOpen, setHubOpen] = useState(false)
   const [vtopLoading, setVtopLoading] = useState(false)
     const [canvasContent, setCanvasContent] = useState<string>('')
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -614,11 +614,11 @@ const PureChatInterface = memo(
     }
 
     const openCanvas = () => {
-      setCanvasOpen(true)
+      setHubOpen(true)
     }
     const createCanvasFromMessage = (content: string) => {
       setCanvasContent(content)
-      setCanvasOpen(true)
+      setHubOpen(true)
     }
 
     const handleLoginClick = () => {
@@ -1164,22 +1164,12 @@ function parseVTOPResponse(raw: string) {
       >
         <UpsellBanner />
         <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
-        <Canvas
-          isOpen={canvasOpen}
+        <Hub
+          isOpen={hubOpen}
           onClose={() => {
-            setCanvasOpen(false)
+            setHubOpen(false)
             setCanvasContent('')
           }}
-          chatId={optimisticChatId}
-          initialDocument={
-            canvasContent
-              ? {
-                  title: 'New Document',
-                  content: canvasContent,
-                  type: 'document',
-                }
-              : undefined
-          }
         />{' '}
         <div
           ref={mainRef}
@@ -1227,7 +1217,7 @@ function parseVTOPResponse(raw: string) {
               </Button>
               <Button variant="ghost" onClick={openCanvas} className="ml-auto h-9">
                 <FileText className="h-4 w-4 mr-2" />
-                canvas
+                hub
               </Button>
             </div>
           </header>{' '}

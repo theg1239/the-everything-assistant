@@ -831,6 +831,20 @@ function calculateFuzzyMatchScore(query, description) {
 }
 
 async function executeInteractiveCoursePageWorkflow(username, password, step, flags, sessionData) {
+  // Ensure default behavior matches the updated binary: default to latest semester
+  try {
+    const needsSemester = ['semester', 'course', 'faculty', 'materials', 'download'].includes(step)
+    if (needsSemester) {
+      const hasExplicitSemester = flags && (typeof flags.semester === 'number' || (typeof flags.semester === 'string' && flags.semester.trim() !== ''))
+      const hasSemesterQuery = flags && typeof flags.semesterQuery === 'string' && flags.semesterQuery.trim() !== ''
+      if (!hasExplicitSemester && !hasSemesterQuery) {
+        flags = { ...(flags || {}), semesterQuery: 'latest' }
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[course-page] Defaulting semesterQuery to "latest"')
+        }
+      }
+    }
+  } catch {}
   if (sessionData && typeof sessionData === 'string') {
     try {
       const parsedSession = JSON.parse(sessionData)
@@ -2207,16 +2221,7 @@ async function serveDownloadedFiles(downloadPath, downloadInfo) {
           },
           2 * 60 * 60 * 1000
         )
-        let downloadUrl
-        if (process.env.NODE_ENV === 'production') {
-          downloadUrl = `https://assistant.nptelprep.in/download/${fileId}`
-          console.log(`Production mode detected - using Render domain for file: ${filename}`)
-        } else {
-          const host = process.env.PROXY_HOST || 'localhost'
-          const port = process.env.PORT || 3001
-          downloadUrl = `http://${host}:${port}/download/${fileId}`
-          console.log(`Development mode detected - using localhost for file: ${filename}`)
-        }
+        const downloadUrl = `https://assistant.nptelprep.in/download/${fileId}`
 
         servedFiles.push({
           name: filename,

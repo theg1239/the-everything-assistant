@@ -50,6 +50,7 @@ export default function VTOPPanel() {
   const [linked, setLinked] = useState<boolean>(hasVTOPCredentials())
   const [localError, setLocalError] = useState<string | null>(null)
   const [display, setDisplay] = useState<any>(null)
+  const [cache, setCache] = useState<Record<string, any>>({})
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [mobileView, setMobileView] = useState<'select' | 'result'>('select')
@@ -102,8 +103,20 @@ export default function VTOPPanel() {
   }, [objectError])
 
   useEffect(() => {
-    if (object) setDisplay(object)
+    if (object && command) {
+      setDisplay(object)
+      setCache(prev => ({ ...prev, [command]: object }))
+    }
   }, [object])
+
+  useEffect(() => {
+    // when selecting a new command, show its cached result if present; otherwise clear display
+    if (command) {
+      setDisplay(cache[command] ?? null)
+    } else {
+      setDisplay(null)
+    }
+  }, [command])
 
   const selectedCommand = VTOP_COMMANDS.find(cmd => cmd.id === command)
 
@@ -422,19 +435,18 @@ export default function VTOPPanel() {
                         onClick={() => {
                           if (!isDisabled) {
                             setCommand(cmd.id)
-                            if (display) setMobileView('result')
+                            // if we have cached result for this cmd, auto-switch to result view; else keep selection view
+                            if (cache[cmd.id]) setMobileView('result')
                           }
                         }}
                         disabled={isDisabled}
-                        className={`
-                          w-full p-4 text-left rounded-lg transition-all duration-200 border
+                        className={`w-full p-4 text-left rounded-lg transition-all duration-200 border
                           ${isSelected 
-                            ? 'bg-slate-900 text-white border-slate-900' 
+                            ? 'bg-primary text-primary-foreground border-transparent' 
                             : isDisabled
-                              ? 'bg-slate-50 text-slate-400 border-slate-200/50 cursor-not-allowed'
-                              : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                          }
-                        `}
+                              ? 'bg-muted/40 text-muted-foreground border-border/50 cursor-not-allowed'
+                              : 'bg-card/70 text-foreground border-border/50 hover:bg-card/80'
+                          }`}
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1 min-w-0">
@@ -458,7 +470,7 @@ export default function VTOPPanel() {
 
               {/* Mobile Action Bar */}
               {command && (
-                <div className="flex-shrink-0 p-4 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm border-t border-slate-200/50 dark:border-slate-700/50">
+                <div className="flex-shrink-0 p-4 bg-card/60 backdrop-blur-sm border-t border-border/50">
                   <div className="space-y-3">
                     {command === 'course-page' && (
                       <div className="grid grid-cols-2 gap-2">
@@ -498,7 +510,7 @@ export default function VTOPPanel() {
                         <Button 
                           onClick={runQuery}
                           disabled={!canRun}
-                          className="h-8 px-4 text-xs bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900"
+                          className="h-8 px-4 text-xs"
                         >
                           {isLoading ? 'running...' : 'execute'}
                         </Button>
@@ -517,12 +529,12 @@ export default function VTOPPanel() {
           )}
 
           {mobileView === 'result' && (
-            <div className="h-full p-4">
-              <div className="h-full bg-white/80 dark:bg-slate-800/30 rounded-lg border border-slate-200/50 dark:border-slate-600/30 overflow-hidden backdrop-blur-sm">
+              <div className="h-full p-4">
+              <div className="h-full bg-card/60 rounded-lg ring-1 ring-border/20 overflow-hidden backdrop-blur-sm">
                 {!display && !isLoading && (
                   <div className="h-full flex items-center justify-center">
                     <div className="text-center space-y-3">
-                      <div className="w-12 h-12 rounded-full bg-slate-900 dark:bg-slate-100 flex items-center justify-center mx-auto text-white dark:text-slate-900 text-sm font-medium">
+                      <div className="w-12 h-12 rounded-full bg-slate-900 dark:bg-slate-900 flex items-center justify-center mx-auto text-white dark:text-slate-900 text-sm font-medium">
                         {selectedCommand?.label.charAt(0).toUpperCase()}
                       </div>
                       <div className="text-sm text-slate-600 dark:text-slate-400">ready to execute {selectedCommand?.label}</div>

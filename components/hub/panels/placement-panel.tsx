@@ -5,85 +5,88 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Switch } from '@/components/ui/switch'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useHubTool } from '../use-hub-tool'
-
-function Select({ value, onChange, children, className }: any) {
-  return (
-    <select
-      value={value}
-      onChange={e => onChange?.(e.target.value)}
-      className={`bg-muted/30 border-0 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-border/60 ${className || ''}`}
-    >
-      {children}
-    </select>
-  )
-}
+import { Briefcase, Search, X } from 'lucide-react'
 
 export default function PlacementPanel() {
   const { run, loading, error, result, reset } = useHubTool<any>('getPlacementInfo')
   const [year, setYear] = useState('')
   const [companyFilter, setCompanyFilter] = useState('')
-  const [campus, setCampus] = useState('')
+  const [campus, setCampus] = useState('any')
   const [combineWitch, setCombineWitch] = useState(false)
 
   const onRun = async () => {
-    await run({ year: year || undefined, companyFilter: companyFilter || undefined, combineWitch, campus: campus || undefined })
+    await run({ year: year || undefined, companyFilter: companyFilter || undefined, combineWitch, campus: campus === 'any' ? undefined : campus })
   }
 
   return (
-    <Card className="border-0">
+    <Card className="border-0 shadow-none bg-transparent">
       <CardHeader>
-        <CardTitle>placements</CardTitle>
+        <CardTitle className="flex items-center gap-2"><Briefcase className="h-5 w-5" /> placements</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <div className="space-y-1">
-            <Label>year (e.g. 2024-25)</Label>
-            <Input value={year} onChange={e => setYear(e.target.value)} placeholder="optional" />
+      <CardContent className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="year">year</Label>
+            <Input id="year" value={year} onChange={e => setYear(e.target.value)} placeholder="e.g. 2024-25" />
           </div>
-          <div className="space-y-1">
-            <Label>company filter</Label>
-            <Input value={companyFilter} onChange={e => setCompanyFilter(e.target.value)} placeholder="optional" />
+          <div className="space-y-1.5">
+            <Label htmlFor="companyFilter">company filter</Label>
+            <Input id="companyFilter" value={companyFilter} onChange={e => setCompanyFilter(e.target.value)} placeholder="optional" />
           </div>
-          <div className="space-y-1">
-            <Label>campus</Label>
-            <Select value={campus} onChange={setCampus}>
-              <option value="">any</option>
-              <option value="Vellore">Vellore</option>
-              <option value="Chennai">Chennai</option>
-              <option value="Amaravati">Amaravati</option>
-              <option value="Bhopal">Bhopal</option>
+          <div className="space-y-1.5">
+            <Label htmlFor="campus">campus</Label>
+            <Select value={campus} onValueChange={setCampus}>
+              <SelectTrigger id="campus">
+                <SelectValue placeholder="any" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">any</SelectItem>
+                <SelectItem value="Vellore">vellore</SelectItem>
+                <SelectItem value="Chennai">chennai</SelectItem>
+                <SelectItem value="Amaravati">amaravati</SelectItem>
+                <SelectItem value="Bhopal">bhopal</SelectItem>
+              </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1">
-            <Label className="block">include WITCH offers</Label>
-            <div className="flex items-center gap-2 text-sm">
-              <input id="witch" type="checkbox" checked={combineWitch} onChange={e => setCombineWitch(e.target.checked)} />
-              <label htmlFor="witch" className="text-sm text-muted-foreground">combine TCS/Cognizant etc.</label>
-            </div>
+          <div className="flex items-center space-x-2 pt-4">
+            <Switch id="witch" checked={combineWitch} onCheckedChange={setCombineWitch} />
+            <Label htmlFor="witch" className="text-sm text-muted-foreground">
+              combine witch offers
+            </Label>
           </div>
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2">
-          <Button onClick={onRun} disabled={loading} className="sm:w-auto w-full">{loading ? 'loading…' : 'fetch'}</Button>
-          {error && <Button variant="ghost" onClick={reset} className="sm:w-auto w-full">clear</Button>}
+          <Button onClick={onRun} disabled={loading} className="sm:w-auto w-full">
+            <Search className="mr-2 h-4 w-4" />
+            {loading ? 'loading...' : 'fetch'}
+          </Button>
+          {(error || result) && (
+            <Button variant="ghost" onClick={reset} className="sm:w-auto w-full">
+              <X className="mr-2 h-4 w-4" />
+              clear
+            </Button>
+          )}
         </div>
 
-        {error && <div className="text-sm text-destructive">{error}</div>}
+        {error && <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">{error}</div>}
 
         {result && (
-          <div className="mt-2 rounded-md p-0 overflow-hidden bg-muted/5 ring-1 ring-border/10">
-            <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border/60">
-              result
-            </div>
-            <div className="p-3">
+          <Card className="mt-4 bg-muted/20 border-border/30">
+            <CardHeader>
+              <CardTitle className="text-base">placement results</CardTitle>
+            </CardHeader>
+            <CardContent>
               {result?.formatted_content ? (
-                <div className="prose prose-slate dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: result.formatted_content }} />
+                <div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: result.formatted_content }} />
               ) : (
-                <pre className="text-xs overflow-auto max-h-96">{JSON.stringify(result, null, 2)}</pre>
+                <pre className="text-xs overflow-auto max-h-96 bg-background/50 p-3 rounded-md">{JSON.stringify(result, null, 2)}</pre>
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         )}
       </CardContent>
     </Card>

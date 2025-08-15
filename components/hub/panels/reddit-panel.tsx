@@ -66,16 +66,17 @@ export default function RedditPanel() {
             <Input
               value={query}
               onChange={e => setQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') onSearch() }}
               placeholder={placeholders[mode]}
               className="h-9 text-sm"
             />
-            <Button onClick={onSearch} disabled={loading} className="h-9">
+            <Button onClick={onSearch} disabled={loading} className="h-9 w-full md:w-auto">
               <Search className="h-4 w-4 mr-1" /> {loading ? 'searching...' : 'search'}
             </Button>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full md:w-auto">
             <Select value={mode} onValueChange={(v: Mode) => setMode(v)}>
-              <SelectTrigger className="h-9 w-40">
+              <SelectTrigger className="h-9 w-full md:w-44">
                 <SelectValue placeholder="mode" />
               </SelectTrigger>
               <SelectContent>
@@ -84,7 +85,7 @@ export default function RedditPanel() {
               </SelectContent>
             </Select>
             {(error || result) && (
-              <Button variant="ghost" onClick={clear} className="h-9">
+              <Button variant="ghost" onClick={clear} className="h-9 w-full md:w-auto">
                 <X className="h-4 w-4 mr-1" /> clear
               </Button>
             )}
@@ -129,7 +130,7 @@ export default function RedditPanel() {
                     <div key={idx} className="p-3 rounded-md border border-border/40 bg-card/40">
                       <div className="flex items-start gap-2">
                         <Sparkles className="h-4 w-4 mt-0.5 text-amber-500" />
-                        <div className="text-sm">{typeof t === 'string' ? t : (t?.title || JSON.stringify(t))}</div>
+                        <div className="text-sm break-words">{typeof t === 'string' ? t : (t?.title || JSON.stringify(t))}</div>
                       </div>
                     </div>
                   ))}
@@ -139,7 +140,7 @@ export default function RedditPanel() {
 
             {(result.response || result.message) && (
               <div className="p-4 rounded-md border border-border/40 bg-card/40">
-                <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
+                <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap break-words">
                   {result.response || result.message}
                 </div>
               </div>
@@ -155,7 +156,7 @@ export default function RedditPanel() {
                       href={s?.url || s?.link || '#'}
                       target="_blank"
                       rel="noreferrer"
-                      className="block p-3 rounded-md border border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-colors text-sm"
+                      className="block p-3 rounded-md border border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-colors text-sm break-words"
                     >
                       {s?.title || s?.url || s?.link || 'source'}
                     </a>
@@ -177,4 +178,3 @@ export default function RedditPanel() {
     </Card>
   )
 }
-

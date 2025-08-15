@@ -1135,19 +1135,25 @@ function parseVTOPResponse(raw: string) {
                 />{' '}
               </motion.div>
 
-              <div className="w-full max-w-5xl flex justify-center -mt-3">
 
-                <button
-                  onClick={() => setHubOpen(true)}
-                  aria-label="Open hub"
-                  className="hub-gradient-btn"
-                  style={{ minWidth: '320px', paddingLeft: '32px', paddingRight: '32px' }}
+              <div className="w-full max-w-5xl flex justify-center -mt-3">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
                 >
-                  <span className="hub-gradient-inner">
-                    <GraduationCap className="h-4 w-4 mr-2" />
-                    <span>hub</span>
-                  </span>
-                </button>
+                  <button
+                    onClick={() => setHubOpen(true)}
+                    aria-label="Open hub"
+                    className="hub-gradient-btn"
+                    style={{ minWidth: '320px', paddingLeft: '32px', paddingRight: '32px' }}
+                  >
+                    <span className="hub-gradient-inner">
+                      <GraduationCap className="h-4 w-4 mr-2" />
+                      <span>hub</span>
+                    </span>
+                  </button>
+                </motion.div>
 
                 <style jsx>{`
                   .hub-gradient-btn {

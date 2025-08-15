@@ -95,12 +95,12 @@ Output exactly 3 questions, one per line, without numbering or bullet points.`
     // console.log('Calling AI model with prompt length:', prompt.length)
     const result = await rateLimitedAI.google.generateText(
       {
-        model: await rateLimitedAI.google.model(),
+        model: await rateLimitedAI.google.model('gemini-2.5-flash-lite'),
         prompt,
         maxTokens: 150,
         temperature: 0.7,
       },
-      userId
+      userId  
     )
 
     // console.log('AI model raw response:', result.text)

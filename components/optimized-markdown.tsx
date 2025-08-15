@@ -2,16 +2,28 @@
 
 import { marked } from 'marked'
 import { memo, useMemo } from 'react'
+import DOMPurify from 'isomorphic-dompurify'
 
 const renderer = new marked.Renderer()
 
-renderer.code = ({ text, lang, escaped }) => {
+function escapeHtml(s: string) {
+  return (s || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+renderer.code = ({ text, lang }) => {
   const language = lang || ''
-  return `<pre class="overflow-auto bg-muted p-4 rounded-lg border"><code class="language-${language}">${text}</code></pre>`
+  const safe = escapeHtml(text as string)
+  return `<pre class="overflow-auto bg-muted p-4 rounded-lg border"><code class="language-${language}">${safe}</code></pre>`
 }
 
 renderer.codespan = ({ text }) => {
-  return `<code class="bg-muted px-1 py-0.5 rounded text-sm">${text}</code>`
+  const safe = escapeHtml(text as string)
+  return `<code class="bg-muted px-1 py-0.5 rounded text-sm">${safe}</code>`
 }
 
 marked.setOptions({
@@ -44,12 +56,16 @@ export const MarkdownBlock = memo(
       return null
     }
 
+    const rawHtml = marked.parse(blockContent, { async: false }) as string
+    const sanitized = DOMPurify.sanitize(rawHtml, {
+      FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'link'],
+      FORBID_ATTR: ['onerror', 'onload', 'onclick', 'style'],
+      ADD_ATTR: ['target', 'rel'],
+    })
     return (
-      <div 
+      <div
         className="markdown-block"
-        dangerouslySetInnerHTML={{ 
-          __html: marked.parse(blockContent, { async: false }) as string 
-        }} 
+        dangerouslySetInnerHTML={{ __html: sanitized }}
       />
     )
   }

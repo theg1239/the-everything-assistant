@@ -5,6 +5,7 @@ const fs = require('fs')
 const { v4: uuidv4 } = require('uuid')
 const CryptoJS = require('crypto-js')
 const helmet = require('helmet')
+const rateLimit = require('express-rate-limit')
 require('dotenv').config()
 
 const app = express()
@@ -16,6 +17,14 @@ app.use(
 )
 
 app.use(express.json({ limit: '10mb' }))
+
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: parseInt(process.env.GLOBAL_RATE_LIMIT || '120'),
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+app.use(globalLimiter)
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
@@ -32,6 +41,14 @@ app.use((req, res, next) => {
     return res.sendStatus(200)
   }
   next()
+})
+
+const vtopLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: parseInt(process.env.VTOP_RATE_LIMIT || '30'),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests' },
 })
 
 app.use((req, res, next) => {
@@ -2317,7 +2334,7 @@ function getNextStep(currentStep) {
   return stepFlow[currentStep] || 'complete'
 }
 
-app.post('/vtop', async (req, res) => {
+app.post('/vtop', vtopLimiter, async (req, res) => {
   const { command, username, password, encryptedPassword, sessionKey, flags } = req.body
 
   if (!command || !username) {
@@ -2379,8 +2396,6 @@ app.post('/vtop', async (req, res) => {
       flagsForCLI.classGroup = 1
     }
 
-    // Note: We intentionally do NOT set a default semester
-    // The CLI will prompt interactively and we'll handle it in executeInteractiveCommand
   }
 
   if (process.env.NODE_ENV !== 'production') {
@@ -2397,7 +2412,7 @@ app.post('/vtop', async (req, res) => {
   }
 })
 
-app.post('/vtop-interactive', async (req, res) => {
+app.post('/vtop-interactive', vtopLimiter, async (req, res) => {
   const { command, step, username, password, encryptedPassword, sessionKey, flags, sessionData } =
     req.body
 
@@ -2448,7 +2463,7 @@ app.post('/vtop-interactive', async (req, res) => {
   }
 })
 
-app.post('/vtop-interactive-continue', async (req, res) => {
+app.post('/vtop-interactive-continue', vtopLimiter, async (req, res) => {
   const { sessionData, selection, step } = req.body
 
   if (!sessionData || !selection || !step) {

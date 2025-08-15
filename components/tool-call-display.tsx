@@ -1227,9 +1227,6 @@ const PureToolCallDisplay = ({
     return hasValidResult
   })
 
-  // Do not render ToolCallLoadingState here
-  // ...existing code...
-
   if (enrichedToolCalls.length === 0) return null
 
   return (
@@ -1347,9 +1344,6 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
 
     return hasValidResult
   })
-
-  // Do not render ToolCallLoadingState here
-  // ...existing code...
 
   if (enrichedToolCalls.length === 0) return null
 

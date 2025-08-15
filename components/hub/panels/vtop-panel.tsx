@@ -15,18 +15,15 @@ const VTOP_COMMANDS = [
   { id: 'marks', label: 'marks', category: 'academic', requiresCreds: true, description: 'exam and assignment marks' },
   { id: 'grades', label: 'grades', category: 'academic', requiresCreds: true, description: 'final course grades' },
   { id: 'cgpa', label: 'cgpa', category: 'academic', requiresCreds: true, description: 'cumulative grade point average' },
-  { id: 'exam-schedule', label: 'exam schedule', category: 'academic', requiresCreds: true, description: 'upcoming examination dates' },
   { id: 'exams', label: 'exams', category: 'academic', requiresCreds: true, description: 'exam timetable and details' },
-  { id: 'syllabus', label: 'syllabus', category: 'academic', requiresCreds: false, description: 'course curriculum and topics' },
-  { id: 'course-page', label: 'course page', category: 'academic', requiresCreds: false, description: 'search course materials and info' },
+  { id: 'syllabus', label: 'syllabus', category: 'academic', requiresCreds: true, description: 'course curriculum and topics' },
+  { id: 'course-page', label: 'course page', category: 'academic', requiresCreds: true, description: 'search course materials and info' },
   { id: 'receipts', label: 'fee receipts', category: 'finance', requiresCreds: true, description: 'payment history and receipts' },
   { id: 'hostel', label: 'hostel info', category: 'services', requiresCreds: true, description: 'hostel details' },
   { id: 'library-dues', label: 'library dues', category: 'services', requiresCreds: true, description: 'outstanding library dues' },
   { id: 'nightslip', label: 'night slip', category: 'services', requiresCreds: true, description: 'hostel night out permissions' },
-  { id: 'leave', label: 'apply leave', category: 'services', requiresCreds: true, description: 'submit leave applications' },
   { id: 'leave-status', label: 'leave status', category: 'services', requiresCreds: true, description: 'track leave requests' },
   { id: 'class-message', label: 'class messages', category: 'communication', requiresCreds: true, description: 'class messages' },
-  { id: 'msg', label: 'messages', category: 'communication', requiresCreds: true, description: 'general portal messages' },
   { id: 'da', label: 'digital assignments', category: 'academic', requiresCreds: true, description: 'assignment deadlines' },
   { id: 'facility', label: 'facilities', category: 'services', requiresCreds: true, description: 'campus facility bookings' },
 ]
@@ -121,37 +118,20 @@ export default function VTOPPanel() {
 
   const canRun = useMemo(() => {
     if (!command || isLoading) return false
-    const selectedCommand = VTOP_COMMANDS.find(cmd => cmd.id === command)
-    if (!selectedCommand) return false
-    return !selectedCommand.requiresCreds || linked
-  }, [command, isLoading, linked])
+    return Boolean(VTOP_COMMANDS.find(cmd => cmd.id === command))
+  }, [command, isLoading])
 
   const runQuery = async () => {
+    const selected = VTOP_COMMANDS.find(c => c.id === command)
+    if (selected?.requiresCreds && !linked) {
+      setShowCreds(true)
+      return
+    }
     const extras: any = {}
-    // Common optional params
-    if (extra.semesterQuery) extras.semesterQuery = extra.semesterQuery
+    // Minimal params only
     if (extra.semester) {
       const n = Number(extra.semester)
       if (!Number.isNaN(n)) extras.semester = n
-    }
-    if (extra.debug === 'on') extras.debug = true
-
-    // Course/faculty selection numbers
-    if (extra.course) {
-      const n = Number(extra.course)
-      if (!Number.isNaN(n)) extras.course = n
-    }
-    if (extra.faculty) {
-      const n = Number(extra.faculty)
-      if (!Number.isNaN(n)) extras.faculty = n
-    }
-    if (extra.classGroup) {
-      const n = Number(extra.classGroup)
-      if (!Number.isNaN(n)) extras.classGroup = n
-    }
-    if (extra.fuzzyIndex) {
-      const n = Number(extra.fuzzyIndex)
-      if (!Number.isNaN(n)) extras.fuzzyIndex = n
     }
 
     // Command-specific text queries
@@ -159,10 +139,9 @@ export default function VTOPPanel() {
       if (extra.courseQuery) extras.courseQuery = extra.courseQuery
       if (extra.facultyQuery) extras.facultyQuery = extra.facultyQuery
       if (extra.materialQuery) extras.materialQuery = extra.materialQuery
-      if (extra.interactiveStep && extra.interactiveStep !== 'auto') extras.interactiveStep = extra.interactiveStep
     } else if (command === 'syllabus') {
       if (extra.courseQuery) extras.courseQuery = extra.courseQuery
-    } else if (command === 'marks' || command === 'grades' || command === 'attendance' || command === 'receipts' || command === 'exam-schedule' || command === 'exams') {
+    } else if (command === 'marks' || command === 'grades') {
       // already passed semester/semesterQuery if present
     }
     setLocalError(null)
@@ -342,115 +321,82 @@ export default function VTOPPanel() {
             )}
 
             {command && (
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                {/* semester controls for commands that support it */}
-                {(command === 'marks' || command === 'grades' || command === 'attendance' || command === 'receipts' || command === 'exam-schedule' || command === 'exams' || command === 'course-page') && (
-                  <Input
-                    value={extra.semester || ''}
-                    onChange={e => setExtra(prev => ({ ...prev, semester: e.target.value }))}
-                    placeholder="semester (1-8)"
-                    className="h-7 text-xs bg-background/70 border-border/50 focus:border-border shadow-sm"
-                    inputMode="numeric"
-                  />
-                )}
-                {(command === 'marks' || command === 'grades' || command === 'attendance' || command === 'receipts' || command === 'exam-schedule' || command === 'exams' || command === 'course-page') && (
-                  <Input
-                    value={extra.semesterQuery || ''}
-                    onChange={e => setExtra(prev => ({ ...prev, semesterQuery: e.target.value }))}
-                    placeholder="semester query (e.g., latest)"
-                    className="h-7 text-xs bg-background/70 border-border/50 focus:border-border shadow-sm"
-                  />
+              <div className="mt-3 space-y-2">
+                {(command === 'marks' || command === 'grades') && (
+                  <div className="flex items-center gap-2">
+                    <div className="text-xs text-muted-foreground w-24">semester</div>
+                    <Select
+                      value={extra.semester || (undefined as any)}
+                      onValueChange={(v) => setExtra(prev => ({ ...prev, semester: v }))}
+                    >
+                      <SelectTrigger className="h-7 px-2 text-xs bg-background/70 border-border/50 w-44">
+                        <SelectValue placeholder="choose semester" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 10 }, (_, i) => String(i + 1)).map(n => (
+                          <SelectItem key={n} value={n}>Semester {n}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
 
-                {/* syllabus */}
                 {command === 'syllabus' && (
-                  <Input
-                    value={extra.courseQuery || ''}
-                    onChange={e => setExtra(prev => ({ ...prev, courseQuery: e.target.value }))}
-                    placeholder="course (e.g., fluid mechanics)"
-                    className="h-7 text-xs bg-background/70 border-border/50 focus:border-border shadow-sm"
-                  />
-                )}
-
-                {/* course-page smart search inputs */}
-                {command === 'course-page' && (
-                  <>
+                  <div className="flex items-center gap-2">
+                    <div className="text-xs text-muted-foreground w-24">course</div>
                     <Input
                       value={extra.courseQuery || ''}
                       onChange={e => setExtra(prev => ({ ...prev, courseQuery: e.target.value }))}
-                      placeholder="course (e.g., data structures)"
-                      className="h-7 text-xs bg-background/70 border-border/50 focus:border-border shadow-sm"
+                      placeholder="e.g., fluid mechanics"
+                      className="h-7 text-xs bg-background/70 border-border/50 focus:border-border shadow-sm flex-1"
                     />
-                    <Input
-                      value={extra.facultyQuery || ''}
-                      onChange={e => setExtra(prev => ({ ...prev, facultyQuery: e.target.value }))}
-                      placeholder="faculty (optional)"
-                      className="h-7 text-xs bg-background/70 border-border/50 focus:border-border shadow-sm"
-                    />
-                    <Input
-                      value={extra.materialQuery || ''}
-                      onChange={e => setExtra(prev => ({ ...prev, materialQuery: e.target.value }))}
-                      placeholder="materials (e.g., week 5 notes)"
-                      className="h-7 text-xs bg-background/70 border-border/50 focus:border-border shadow-sm"
-                    />
-                    <Select value={extra.interactiveStep || 'auto'} onValueChange={v => setExtra(prev => ({ ...prev, interactiveStep: v }))}>
-                      <SelectTrigger className="h-7 px-2 text-xs bg-background/70 border-border/50">
-                        <SelectValue placeholder="interactive step (auto)" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="auto">auto</SelectItem>
-                        <SelectItem value="semester">semester</SelectItem>
-                        <SelectItem value="course">course</SelectItem>
-                        <SelectItem value="faculty">faculty</SelectItem>
-                        <SelectItem value="materials">materials</SelectItem>
-                        <SelectItem value="smart-search">smart-search</SelectItem>
-                        <SelectItem value="download">download</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      value={extra.course || ''}
-                      onChange={e => setExtra(prev => ({ ...prev, course: e.target.value }))}
-                      placeholder="course # (optional)"
-                      className="h-7 text-xs bg-background/70 border-border/50 focus:border-border shadow-sm"
-                      inputMode="numeric"
-                    />
-                    <Input
-                      value={extra.faculty || ''}
-                      onChange={e => setExtra(prev => ({ ...prev, faculty: e.target.value }))}
-                      placeholder="faculty # (optional)"
-                      className="h-7 text-xs bg-background/70 border-border/50 focus:border-border shadow-sm"
-                      inputMode="numeric"
-                    />
-                    <Input
-                      value={extra.fuzzyIndex || ''}
-                      onChange={e => setExtra(prev => ({ ...prev, fuzzyIndex: e.target.value }))}
-                      placeholder="fuzzy index (optional)"
-                      className="h-7 text-xs bg-background/70 border-border/50 focus:border-border shadow-sm"
-                      inputMode="numeric"
-                    />
-                  </>
+                  </div>
                 )}
 
-                {/* calendar class group if needed in future */}
-                {(command === 'calendar') && (
-                  <Input
-                    value={extra.classGroup || ''}
-                    onChange={e => setExtra(prev => ({ ...prev, classGroup: e.target.value }))}
-                    placeholder="class group #"
-                    className="h-7 text-xs bg-background/70 border-border/50 focus:border-border shadow-sm"
-                    inputMode="numeric"
-                  />
+                {command === 'course-page' && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs text-muted-foreground w-24">course</div>
+                      <Input
+                        value={extra.courseQuery || ''}
+                        onChange={e => setExtra(prev => ({ ...prev, courseQuery: e.target.value }))}
+                        placeholder="e.g., data structures"
+                        className="h-7 text-xs bg-background/70 border-border/50 focus:border-border shadow-sm flex-1"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs text-muted-foreground w-24">materials</div>
+                      <Input
+                        value={extra.materialQuery || ''}
+                        onChange={e => setExtra(prev => ({ ...prev, materialQuery: e.target.value }))}
+                        placeholder="e.g., week 5 notes, assignments"
+                        className="h-7 text-xs bg-background/70 border-border/50 focus:border-border shadow-sm flex-1"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs text-muted-foreground w-24">faculty</div>
+                      <Input
+                        value={extra.facultyQuery || ''}
+                        onChange={e => setExtra(prev => ({ ...prev, facultyQuery: e.target.value }))}
+                        placeholder="optional"
+                        className="h-7 text-xs bg-background/70 border-border/50 focus:border-border shadow-sm flex-1"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 pl-24 -mt-1">
+                      {['notes','assignments','announcements','week 1','week 2','week 5','all'].map(tag => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => setExtra(prev => ({ ...prev, materialQuery: (prev.materialQuery ? `${prev.materialQuery}, ` : '') + tag }))}
+                          className="text-[11px] px-2 py-0.5 rounded-full border border-border/50 text-muted-foreground hover:text-foreground hover:border-border transition-colors"
+                        >
+                          {tag}
+                        </button>
+                      ))}
+                    </div>
+                    
+                  </div>
                 )}
-
-                {/* <Select value={extra.debug || 'off'} onValueChange={v => setExtra(prev => ({ ...prev, debug: v }))}>
-                  <SelectTrigger className="h-7 px-2 text-xs bg-background/70 border-border/50">
-                    <SelectValue placeholder="debug: off" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="off">debug: off</SelectItem>
-                    <SelectItem value="on">debug: on</SelectItem>
-                  </SelectContent>
-                </Select> */}
               </div>
             )}
           </div>
@@ -614,21 +560,13 @@ export default function VTOPPanel() {
                   <div className="space-y-3">
                     {/* parameter controls (mobile) */}
                     <div className="grid grid-cols-2 gap-2">
-                      {(command === 'marks' || command === 'grades' || command === 'attendance' || command === 'receipts' || command === 'exam-schedule' || command === 'exams' || command === 'course-page') && (
+                      {(command === 'marks' || command === 'grades') && (
                         <Input
                           value={extra.semester || ''}
                           onChange={e => setExtra(prev => ({ ...prev, semester: e.target.value }))}
-                          placeholder="semester (1-8)"
+                          placeholder="semester (1-10)"
                           className="h-8 text-xs border-border/50 shadow-sm"
                           inputMode="numeric"
-                        />
-                      )}
-                      {(command === 'marks' || command === 'grades' || command === 'attendance' || command === 'receipts' || command === 'exam-schedule' || command === 'exams' || command === 'course-page') && (
-                        <Input
-                          value={extra.semesterQuery || ''}
-                          onChange={e => setExtra(prev => ({ ...prev, semesterQuery: e.target.value }))}
-                          placeholder="semester query (latest)"
-                          className="h-8 text-xs border-border/50 shadow-sm"
                         />
                       )}
                       {command === 'syllabus' && (
@@ -648,63 +586,19 @@ export default function VTOPPanel() {
                             className="h-8 text-xs border-border/50 shadow-sm"
                           />
                           <Input
-                            value={extra.facultyQuery || ''}
-                            onChange={e => setExtra(prev => ({ ...prev, facultyQuery: e.target.value }))}
-                            placeholder="faculty (optional)"
-                            className="h-8 text-xs border-border/50 shadow-sm"
-                          />
-                          <Input
                             value={extra.materialQuery || ''}
                             onChange={e => setExtra(prev => ({ ...prev, materialQuery: e.target.value }))}
                             placeholder="materials (e.g., week 5)"
                             className="h-8 text-xs border-border/50 shadow-sm"
                           />
-                          <Select value={extra.interactiveStep || 'auto'} onValueChange={v => setExtra(prev => ({ ...prev, interactiveStep: v }))}>
-                            <SelectTrigger className="h-8 px-2 text-xs">
-                              <SelectValue placeholder="interactive step (auto)" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="auto">auto</SelectItem>
-                              <SelectItem value="semester">semester</SelectItem>
-                              <SelectItem value="course">course</SelectItem>
-                              <SelectItem value="faculty">faculty</SelectItem>
-                              <SelectItem value="materials">materials</SelectItem>
-                              <SelectItem value="smart-search">smart-search</SelectItem>
-                              <SelectItem value="download">download</SelectItem>
-                            </SelectContent>
-                          </Select>
                           <Input
-                            value={extra.course || ''}
-                            onChange={e => setExtra(prev => ({ ...prev, course: e.target.value }))}
-                            placeholder="course # (opt)"
+                            value={extra.facultyQuery || ''}
+                            onChange={e => setExtra(prev => ({ ...prev, facultyQuery: e.target.value }))}
+                            placeholder="faculty (optional)"
                             className="h-8 text-xs border-border/50 shadow-sm"
-                            inputMode="numeric"
-                          />
-                          <Input
-                            value={extra.faculty || ''}
-                            onChange={e => setExtra(prev => ({ ...prev, faculty: e.target.value }))}
-                            placeholder="faculty # (opt)"
-                            className="h-8 text-xs border-border/50 shadow-sm"
-                            inputMode="numeric"
-                          />
-                          <Input
-                            value={extra.fuzzyIndex || ''}
-                            onChange={e => setExtra(prev => ({ ...prev, fuzzyIndex: e.target.value }))}
-                            placeholder="fuzzy index (opt)"
-                            className="h-8 text-xs border-border/50 shadow-sm"
-                            inputMode="numeric"
                           />
                         </>
                       )}
-                      {/* <Select value={extra.debug || 'off'} onValueChange={v => setExtra(prev => ({ ...prev, debug: v }))}>
-                        <SelectTrigger className="h-8 px-2 text-xs">
-                          <SelectValue placeholder="debug: off" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="off">debug: off</SelectItem>
-                          <SelectItem value="on">debug: on</SelectItem>
-                        </SelectContent>
-                      </Select> */}
                     </div>
 
                     <div className="flex items-center justify-between">

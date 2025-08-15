@@ -1897,58 +1897,66 @@ function parseFacultyOptions(output) {
     return options
   }
 
-  let startParsingIndex = -1
+  let startParsingIndex = -1;
+  // Find the header row for faculty (not course codes)
   for (let i = 0; i < lines.length; i++) {
     if (
-      lines[i].includes('INDEX │') &&
-      (lines[i].includes('NAME') || lines[i].includes('FACULTY'))
+      lines[i].includes('INDEX │ FACULTY') ||
+      (lines[i].includes('INDEX │') && lines[i].toLowerCase().includes('faculty'))
     ) {
-      startParsingIndex = i
-      break
+      startParsingIndex = i;
+      break;
     }
   }
 
   if (startParsingIndex === -1) {
+    // Fallback: look for the prompt line
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].includes('Enter a search term or number for Faculty')) {
-        startParsingIndex = i
-        break
+        startParsingIndex = i;
+        break;
       }
     }
   }
 
   if (startParsingIndex === -1) {
-    return options
+    return options;
   }
 
+  // Only parse lines that look like faculty names, not course codes
   for (let i = startParsingIndex + 1; i < lines.length; i++) {
-    const line = lines[i]
-
+    const line = lines[i];
     if (line.includes('─') || line.trim() === '') {
-      continue
+      continue;
     }
-
-    const tableMatch = line.match(/^\s*(\d+)\s*│\s*(.+?)\s*│/)
-    if (tableMatch) {
-      const description = tableMatch[2].trim()
-
-      options.push({
-        number: parseInt(tableMatch[1]),
-        description: description,
-        text: line.trim(),
-      })
-      continue
+    // Stop parsing if we hit another table or unrelated prompt
+    if (line.includes('INDEX │ COURSE') || line.includes('Choose a Course') || line.includes('Enter a search term or number for Course')) {
+      break;
     }
-
-    const simpleMatch = line.match(/^\s*(\d+)\.\s*(.+)$/)
+    // Faculty table: "  1 │ RACHNA BHATIA"
+    const facultyMatch = line.match(/^\s*(\d+)\s*│\s*([A-Z .'-]+)$/i);
+    if (facultyMatch) {
+      const description = facultyMatch[2].trim();
+      // Ignore lines that look like course codes (e.g., BMAT201L)
+      if (!/^[A-Z]{4}\d{3}[A-Z]?$/.test(description)) {
+        options.push({
+          number: parseInt(facultyMatch[1]),
+          description: description,
+          text: line.trim(),
+        });
+      }
+      continue;
+    }
+    const simpleMatch = line.match(/^\s*(\d+)\.\s*([A-Z .'-]+)$/i);
     if (simpleMatch) {
-      const description = simpleMatch[2].trim()
-
-      options.push({
-        number: parseInt(simpleMatch[1]),
-        description: description,
-        text: line.trim(),
-      })
+      const description = simpleMatch[2].trim();
+      if (!/^[A-Z]{4}\d{3}[A-Z]?$/.test(description)) {
+        options.push({
+          number: parseInt(simpleMatch[1]),
+          description: description,
+          text: line.trim(),
+        });
+      }
     }
   }
 

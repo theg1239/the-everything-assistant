@@ -25,7 +25,8 @@
     "test:performance:benchmark": "tsx scripts/test-performance.ts benchmark",
     "test:performance:stress": "tsx scripts/test-performance.ts stress",
     "test:performance:report": "tsx scripts/test-performance.ts report",
-    "test:performance:seed": "tsx scripts/test-performance.ts seed"
+    "test:performance:seed": "tsx scripts/test-performance.ts seed",
+    "papers:index": "tsx lib/agents/paper-agent.ts"
   },
   "dependencies": {
     "@ai-sdk/cerebras": "^0.2.15",

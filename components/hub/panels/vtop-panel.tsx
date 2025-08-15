@@ -17,7 +17,7 @@ const VTOP_COMMANDS = [
   { id: 'cgpa', label: 'cgpa', category: 'academic', requiresCreds: true, description: 'cumulative grade point average' },
   { id: 'exams', label: 'exams', category: 'academic', requiresCreds: true, description: 'exam timetable and details' },
   // { id: 'syllabus', label: 'syllabus', category: 'academic', requiresCreds: true, description: 'course curriculum and topics' },
-  // { id: 'course-page', label: 'course page', category: 'academic', requiresCreds: true, description: 'search course materials and info' },
+  { id: 'course-page', label: 'course page', category: 'academic', requiresCreds: true, description: 'search course materials and info' },
   { id: 'receipts', label: 'fee receipts', category: 'finance', requiresCreds: true, description: 'payment history and receipts' },
   { id: 'hostel', label: 'hostel info', category: 'services', requiresCreds: true, description: 'hostel details' },
   { id: 'library-dues', label: 'library dues', category: 'services', requiresCreds: true, description: 'outstanding library dues' },

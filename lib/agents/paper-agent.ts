@@ -741,6 +741,7 @@ export async function indexPastPapers(options: {
   questionFocus?: string
   debug?: boolean
   runId?: string
+  maxProcessingMs?: number
 }) {
   const log = createLogger(options.debug || process.env.PAPER_AGENT_DEBUG === 'true')
   const useDB = !!process.env.DATABASE_URL2
@@ -763,7 +764,7 @@ export async function indexPastPapers(options: {
   if (options.runId) logEmit(options.runId, `Found ${all.length} papers across all sources`, { count: all.length })
   log('Total papers after fetch', { count: all.length })
 
-  const maxPapers = Math.min(options.maxPapers || 4, 4)
+  const maxPapers = options.maxPapers ?? 4
   const selected = all.slice(0, maxPapers)
   if (options.runId) logEmit(options.runId, `Processing ${selected.length} papers for optimal speed`, { selected: selected.length, maxAllowed: maxPapers })
   log('Selected subset for processing', { selected: selected.length })
@@ -776,7 +777,7 @@ export async function indexPastPapers(options: {
   const persistedPaperIds: string[] = []
   const contentHashes = new Set<string>()
   const startTime = Date.now()
-  const MAX_PROCESSING_TIME = 45000
+  const MAX_PROCESSING_TIME = options.maxProcessingMs ?? 45000
   let attemptedPapers = 0
   let stopAll = false
 
@@ -1348,3 +1349,87 @@ export function _debug_listPaperIndexes() {
     createdAt: p.createdAt,
   }))
 }
+
+// --- CLI entrypoint (standalone usage) ---
+// Allows running this file directly: `tsx lib/agents/paper-agent.ts --course CSE1001 --all`
+const __maybeCli = (async () => {
+  try {
+    // Only run when executed directly, not when imported (robust under tsx + Windows)
+    let isMain = false
+    try {
+      const { fileURLToPath } = await import('url')
+      if (typeof import.meta === 'object' && (import.meta as any)?.url) {
+        const thisFile = fileURLToPath((import.meta as any).url).replace(/\\/g, '/').toLowerCase()
+        const argvNorm = (process.argv || []).map(a => (a || '').replace(/\\/g, '/').toLowerCase())
+        // tsx keeps the target file path in argv; detect presence
+        if (argvNorm.some(a => a.endsWith('/lib/agents/paper-agent.ts'))) {
+          isMain = true
+        }
+        // Fallback: tsx may pass absolute path to this file at argv[2]
+        if (!isMain && argvNorm.includes(thisFile)) isMain = true
+      }
+    } catch {}
+    if (!isMain) return
+
+    // Load env if present
+    try { (await import('dotenv')).config() } catch {}
+
+    // Prefer system browser for local runs
+    process.env.PAPER_AGENT_USE_SYSTEM_BROWSER = process.env.PAPER_AGENT_USE_SYSTEM_BROWSER || '1'
+
+    const args = process.argv.slice(2)
+    const opts: any = {}
+    const positionals: string[] = []
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i]
+      const next = () => args[++i]
+      switch (a) {
+        case '-c':
+        case '--course': opts.course = next(); break
+        case '-e':
+        case '--examType': opts.examType = next(); break
+        case '-y':
+        case '--year': opts.year = next(); break
+        case '--max': opts.maxPapers = Number(next()); break
+        case '--all': opts.maxPapers = Number.MAX_SAFE_INTEGER; break
+        case '--max-ms': opts.maxProcessingMs = Number(next()); break
+        case '--debug': opts.debug = true; process.env.PAPER_AGENT_DEBUG = 'true'; break
+        case '--store-pdf': process.env.PAPER_AGENT_STORE_PDF = '1'; break
+        case '-h':
+        case '--help':
+          console.log(`\nUsage: tsx lib/agents/paper-agent.ts --course <code|name> [options]\n\nOptions:\n  -c, --course <code|name>   Course code or name (required)\n  -e, --examType <type>      Filter by exam type (CAT1,CAT2,FAT,...)\n  -y, --year <year>          Filter by year (e.g., 2023)\n      --all                  Process all discovered papers\n      --max <n>              Limit number of papers to process\n      --max-ms <ms>          Increase overall processing time budget\n      --store-pdf            Keep downloaded PDFs in memory (dev aid)\n      --debug                Verbose logging\n  -h, --help                 Show this help\n`)
+          process.exit(0)
+        default:
+          if (a.startsWith('-')) {
+            // ignore unknown flag
+          } else {
+            positionals.push(a)
+          }
+      }
+    }
+
+    if (!opts.course && positionals.length > 0) {
+      opts.course = positionals[0]
+    }
+
+    if (!opts.course) {
+      console.error('Error: --course is required. Use -h for help.')
+      process.exit(1)
+    }
+
+    opts.runId = opts.runId || `${Date.now()}`
+
+    console.log(`[paper-agent] starting standalone indexing for course="${opts.course}"`)
+    const res: any = await indexPastPapers(opts)
+    if (!res?.success) {
+      console.error(`[paper-agent] indexing failed: ${res?.error || 'unknown error'}`)
+      if (res?.logs?.length) console.error(res.logs.join('\n'))
+      process.exit(2)
+    }
+    console.log(`[paper-agent] indexed ${res?.papers || res?.chunkCount ? `${res?.papers ?? '?'} papers` : 'papers'} | indexId=${res.indexId}`)
+    if (res?.logs?.length) {
+      console.log('\n[paper-agent] log summary:')
+      for (const line of res.logs.slice(-50)) console.log(line)
+    }
+  } catch {}
+})()

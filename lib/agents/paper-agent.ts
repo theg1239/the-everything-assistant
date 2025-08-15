@@ -331,19 +331,25 @@ async function genericHeadlessPdfToImages(url: string, log?: Logger, runId?: str
       return { pdf: null, images: [] }
     }
 
-    const pdfDoc = await PDFDocument.create()
-    for (const imgBuf of screenshots) {
-      try {
-        const img = await pdfDoc.embedPng(imgBuf)
-        const pg = pdfDoc.addPage([img.width, img.height])
-        pg.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height })
-      } catch {}
+    try {
+      const pdfDoc = await PDFDocument.create()
+      for (const imgBuf of screenshots) {
+        try {
+          const img = await pdfDoc.embedPng(imgBuf)
+          const pg = pdfDoc.addPage([img.width, img.height])
+          pg.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height })
+        } catch {}
+      }
+      const pdfBytes = await pdfDoc.save()
+      const out = Buffer.from(pdfBytes)
+      log?.('Generic headless PDF assembled', { pages: screenshots.length, bytes: out.length })
+      if (runId) logEmit(runId, 'driveFallbackSuccess', { pages: screenshots.length, bytes: out.length })
+      return { pdf: out, images: screenshots }
+    } catch (e: any) {
+      log?.('Generic headless: PDF assembly failed (continuing with images only)', { error: e?.message, pages: screenshots.length })
+      if (runId) logEmit(runId, 'driveFallbackSuccess', { pages: screenshots.length, note: 'images-only' })
+      return { pdf: null, images: screenshots }
     }
-    const pdfBytes = await pdfDoc.save()
-    const out = Buffer.from(pdfBytes)
-    log?.('Generic headless PDF assembled', { pages: screenshots.length, bytes: out.length })
-    if (runId) logEmit(runId, 'driveFallbackSuccess', { pages: screenshots.length, bytes: out.length })
-    return { pdf: out, images: screenshots }
   } catch (e: any) {
     log?.('Generic headless fallback error', { error: e?.message })
     if (runId) logEmit(runId, 'driveFallbackDevRetryFailed', { error: e?.message })
@@ -429,19 +435,25 @@ async function driveHeadlessFallback(url: string, log?: Logger, runId?: string):
       return { pdf: null, images: [] }
     }
 
-    const pdfDoc = await PDFDocument.create()
-    for (const imgBuf of screenshots) {
-      try {
-        const img = await pdfDoc.embedPng(imgBuf)
-        const page = pdfDoc.addPage([img.width, img.height])
-        page.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height })
-      } catch {}
+    try {
+      const pdfDoc = await PDFDocument.create()
+      for (const imgBuf of screenshots) {
+        try {
+          const img = await pdfDoc.embedPng(imgBuf)
+          const page = pdfDoc.addPage([img.width, img.height])
+          page.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height })
+        } catch {}
+      }
+      const pdfBytes = await pdfDoc.save()
+      const out = Buffer.from(pdfBytes)
+      log?.('Drive fallback PDF assembled', { pages: screenshots.length, bytes: out.length })
+      if (runId) logEmit(runId, `Successfully processed ${screenshots.length} pages`, { pages: screenshots.length, bytes: out.length })
+      return { pdf: out, images: screenshots }
+    } catch (e: any) {
+      log?.('Drive fallback: PDF assembly failed (continuing with images only)', { error: e?.message, pages: screenshots.length })
+      if (runId) logEmit(runId, `Successfully processed ${screenshots.length} pages`, { pages: screenshots.length, note: 'images-only' })
+      return { pdf: null, images: screenshots }
     }
-    const pdfBytes = await pdfDoc.save()
-    const out = Buffer.from(pdfBytes)
-    log?.('Drive fallback PDF assembled', { pages: screenshots.length, bytes: out.length })
-    if (runId) logEmit(runId, `Successfully processed ${screenshots.length} pages`, { pages: screenshots.length, bytes: out.length })
-    return { pdf: out, images: screenshots }
   } catch (e: any) {
     log?.('Drive fallback error', { error: e?.message })
     if (runId) logEmit(runId, 'Document processing failed', { error: e?.message })
@@ -635,8 +647,37 @@ async function extractTextFromPdf(pdfData: Buffer, log?: Logger, runId?: string,
       }
       log?.('pdf-parse produced empty text, falling back to OCR')
     } catch (err: any) {
-      log?.('pdf-parse failed, falling back to Gemini OCR', { error: err?.message })
-      if (runId) logEmit(runId, 'Switching to advanced text recognition', { error: err?.message })
+      log?.('pdf-parse failed, attempting pdfjs-dist extraction before OCR', { error: err?.message })
+      if (runId) logEmit(runId, 'Switching extraction strategy', { error: err?.message })
+      // Fallback 1: Use pdfjs-dist to extract text in Node (avoids OCR + browser)
+      try {
+        // Use pdfjs-dist (ESM) to extract text directly from PDF bytes in Node
+        const pdfjs: any = await import('pdfjs-dist')
+        const getDocument = (pdfjs as any).getDocument || (pdfjs as any).default?.getDocument
+        if (!getDocument) throw new Error('pdfjs-dist getDocument not available')
+        const task = getDocument({ data: new Uint8Array(pdfData), isEvalSupported: false, disableFontFace: true })
+        const doc = await task.promise
+        const maxPages = Math.min(doc.numPages || 0, 25)
+        let out: string[] = []
+        for (let p = 1; p <= maxPages; p++) {
+          const page = await doc.getPage(p)
+          const tc = await page.getTextContent()
+          const text = (tc.items || []).map((it: any) => (it.str || '')).join(' ')
+          if (text && text.trim().length > 0) out.push(text)
+        }
+        const combined = out.join('\n').replace(/\s+/g, ' ').trim()
+        if (combined.length > 100) {
+          log?.('pdfjs-dist extraction success', { pages: maxPages, chars: combined.length })
+          if (runId) logEmit(runId, `Successfully read ${maxPages} pages`, { chars: combined.length, method: 'pdfjs-dist' })
+          if (runId) logEmit(runId, 'Document processing complete', { method: 'pdfjs-dist' })
+          return combined
+        }
+        log?.('pdfjs-dist produced little text, will try OCR next', { chars: combined.length })
+      } catch (e: any) {
+        log?.('pdfjs-dist extraction failed', { error: e?.message })
+      }
+      // Fallback 2: OCR below
+      if (runId) logEmit(runId, 'Switching to advanced text recognition', { note: 'pdfjs-dist fallback did not yield enough text' })
     }
   }
 
@@ -742,6 +783,7 @@ export async function indexPastPapers(options: {
   debug?: boolean
   runId?: string
   maxProcessingMs?: number
+  headlessOnly?: boolean
 }) {
   const log = createLogger(options.debug || process.env.PAPER_AGENT_DEBUG === 'true')
   const useDB = !!process.env.DATABASE_URL2
@@ -840,6 +882,104 @@ export async function indexPastPapers(options: {
         }
       } catch (reuseErr: any) {
         log('DB reuse check failed (continuing with fresh processing)', { error: reuseErr?.message })
+      }
+    }
+
+    // Headless-only path: capture screenshots via browser and OCR them, skipping direct PDF parsing.
+    if (options.headlessOnly) {
+      try {
+        const cap = await driveHeadlessFallback(p.url, log, options.runId)
+        if (!cap?.images?.length) {
+          log('Headless capture produced no images', { url: p.url })
+          if (options.runId) logEmit(options.runId, 'Unable to access document', { url: p.url })
+          return
+        }
+        let contentHashRef: string | undefined
+        if (cap.pdf) {
+          try {
+            const h = await computeHash(cap.pdf)
+            if (contentHashes.has(h)) return
+            contentHashes.add(h)
+            contentHashRef = h
+          } catch {}
+        }
+        const text = await extractTextFromPdf(Buffer.alloc(0), log, options.runId, cap.images)
+        if (!text || text.length < 50) {
+          log('Skipping paper due to insufficient text post-OCR', { chars: text?.length || 0 })
+          if (options.runId) logEmit(options.runId, 'Paper appears empty or unreadable', { title: p.title })
+          return
+        }
+
+        const questions = extractQuestions(text, log)
+        if (options.runId) logEmit(options.runId, `Found ${questions.length} practice questions`, { title: p.title, questions: questions.length })
+        const chunksRaw = splitIntoChunks(text)
+        log('Chunking complete', { chunks: chunksRaw.length })
+        if (options.runId) logEmit(options.runId, `Split into ${chunksRaw.length} searchable sections`, { title: p.title, chunks: chunksRaw.length })
+
+        const embeddingResult: any = await rateLimitedAI.google.embed({ values: chunksRaw })
+        log('Embedding complete', { embeddings: embeddingResult.embeddings?.length })
+        if (options.runId) logEmit(options.runId, 'Processing content with AI', { title: p.title })
+
+        let questionEmbeddings: number[][] | undefined
+        if (questions.length) {
+          try {
+            const qeRes: any = await rateLimitedAI.google.embed({ values: questions })
+            questionEmbeddings = qeRes.embeddings || []
+            log('Question embeddings complete', { count: (questionEmbeddings || []).length })
+            if (options.runId) logEmit(options.runId, `Indexed ${(questionEmbeddings || []).length} questions for smart search`, { title: p.title, count: (questionEmbeddings || []).length })
+          } catch (e: any) {
+            log('Question embeddings failed', { error: e?.message })
+            if (options.runId) logEmit(options.runId, 'Question indexing incomplete', { title: p.title })
+          }
+        }
+
+        const chunks: PaperChunk[] = chunksRaw.map((t, i) => ({
+          chunkId: generateId('chunk'),
+          paperId: p.url,
+          text: t,
+          embedding: embeddingResult.embeddings[i] || [],
+        }))
+
+        const paperId = useDB
+          ? await insertPaper({
+              courseCode,
+              examType: p.examType,
+              year: p.year,
+              title: p.title,
+              source: p.source,
+              url: p.url,
+              contentHash: contentHashRef,
+              extractedQuestions: questions,
+            })
+          : generateId('paper')
+
+        if (useDB) {
+          await upsertChunks(
+            paperId,
+            chunks.map((c, i) => ({ index: i, text: c.text, embedding: c.embedding }))
+          )
+          if (questionEmbeddings?.length)
+            await upsertQuestionEmbeddings(
+              paperId,
+              questionEmbeddings.map((qe, i) => ({ index: i, question: questions[i], embedding: qe }))
+            )
+          persistedPaperIds.push(paperId)
+        }
+
+        indexed.push({
+          id: paperId,
+          ...p,
+          text,
+          extractedQuestions: questions,
+          chunks,
+          questionEmbeddings,
+          pdfSize: cap.pdf ? cap.pdf.length : undefined,
+          pdfBuffer: storePdf && cap.pdf ? cap.pdf : undefined,
+        })
+        return
+      } catch (e: any) {
+        log('Headless-only path failed', { error: e?.message })
+        return
       }
     }
 
@@ -1393,11 +1533,13 @@ const __maybeCli = (async () => {
         case '--max': opts.maxPapers = Number(next()); break
         case '--all': opts.maxPapers = Number.MAX_SAFE_INTEGER; break
         case '--max-ms': opts.maxProcessingMs = Number(next()); break
+        case '--headless-only': opts.headlessOnly = true; break
+        case '--no-headless-only': opts.headlessOnly = false; break
         case '--debug': opts.debug = true; process.env.PAPER_AGENT_DEBUG = 'true'; break
         case '--store-pdf': process.env.PAPER_AGENT_STORE_PDF = '1'; break
         case '-h':
         case '--help':
-          console.log(`\nUsage: tsx lib/agents/paper-agent.ts --course <code|name> [options]\n\nOptions:\n  -c, --course <code|name>   Course code or name (required)\n  -e, --examType <type>      Filter by exam type (CAT1,CAT2,FAT,...)\n  -y, --year <year>          Filter by year (e.g., 2023)\n      --all                  Process all discovered papers\n      --max <n>              Limit number of papers to process\n      --max-ms <ms>          Increase overall processing time budget\n      --store-pdf            Keep downloaded PDFs in memory (dev aid)\n      --debug                Verbose logging\n  -h, --help                 Show this help\n`)
+          console.log(`\nUsage: tsx lib/agents/paper-agent.ts --course <code|name> [options]\n\nOptions:\n  -c, --course <code|name>   Course code or name (required)\n  -e, --examType <type>      Filter by exam type (CAT1,CAT2,FAT,...)\n  -y, --year <year>          Filter by year (e.g., 2023)\n      --all                  Process all discovered papers\n      --max <n>              Limit number of papers to process\n      --max-ms <ms>          Increase overall processing time budget\n      --headless-only        Use browser screenshots + OCR only (default)\n      --no-headless-only     Allow direct PDF parsing\n      --store-pdf            Keep downloaded PDFs in memory (dev aid)\n      --debug                Verbose logging\n  -h, --help                 Show this help\n`)
           process.exit(0)
         default:
           if (a.startsWith('-')) {
@@ -1408,9 +1550,14 @@ const __maybeCli = (async () => {
       }
     }
 
+    
+
     if (!opts.course && positionals.length > 0) {
       opts.course = positionals[0]
     }
+
+    // Default to headless-only for CLI runs unless explicitly disabled
+    if (opts.headlessOnly === undefined) opts.headlessOnly = true
 
     if (!opts.course) {
       console.error('Error: --course is required. Use -h for help.')

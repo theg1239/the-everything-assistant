@@ -69,6 +69,7 @@
     "dotenv": "^16.6.0",
     "framer-motion": "latest",
     "isomorphic-dompurify": "^2.26.0",
+    "katex": "^0.16.22",
     "langchain": "^0.3.29",
     "lucide-react": "latest",
     "marked": "^16.1.1",

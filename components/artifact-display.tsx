@@ -48,6 +48,9 @@ import { ResponsiveCard } from '@/components/responsive-card'
 import FFCSArtifact from './artifacts/ffcs-artifact'
 import FfcsCourseSearchResult from './artifacts/get-course-info-artifact'
 import { ResponsiveTable } from '@/components/responsive-table'
+import { Copy } from 'lucide-react'
+import PapersIndexArtifact from './artifacts/papers-index-artifact'
+import PapersQAArtifact from './artifacts/papers-qa-artifact'
 
 interface ArtifactDisplayProps {
   title: string
@@ -60,15 +63,18 @@ interface ArtifactDisplayProps {
     | 'placements'
     | 'mess-menu'
     | 'vtop-data'
-    | 'general'
     | 'interactive-course-page'
     | 'reddit-knowledge'
-    | 'reddit-overview'
-    | 'error'
-    | 'campus-info'
-    | 'getPlacementInfo'
-    | 'ffcs-planner'
-    | 'course-info'
+  | 'reddit-overview'
+  | 'error'
+  | 'campus-info'
+  | 'getPlacementInfo'
+  | 'ffcs-planner'
+  | 'course-info'
+  | 'papers-index'
+  | 'papers-qa'
+  | 'general'
+  | 'general'
   className?: string
   onLoginClick?: () => void
   maximizedItem?: any
@@ -2615,6 +2621,9 @@ const PureArtifactDisplay = ({
               type === 'vtop-data' ||
               type === 'reddit-knowledge' ||
               type === 'reddit-overview' ||
+              type === 'papers-index' ||
+              type === 'papers-qa' ||
+              type === 'general' ||
               type === 'error' ||
               type === 'campus-info' ||
               type === 'faculty'
@@ -2660,6 +2669,12 @@ const PureArtifactDisplay = ({
                 return <CampusInfoCard key={index} info={item} />
               case 'placements':
                 return <PlacementInfoCard key={index} data={item} />
+              case 'papers-index':
+                return <PapersIndexArtifact key={index} data={item} />
+              case 'papers-qa':
+                return <PapersQAArtifact key={index} data={item} />
+              case 'general':
+                return <GeneralCard key={index} data={item} />
               default:
                 return (
                   <Card key={index} className="hover:shadow-md transition-shadow">
@@ -2872,6 +2887,70 @@ const PureArtifactDisplay = ({
         )}
       </AnimatePresence>
     </motion.div>
+  )
+}
+
+function GeneralCard({ data }: { data: any }) {
+  const hasIndex = typeof data?.indexId === 'string' || typeof data?.indexId === 'number'
+  const hasAnswer = typeof data?.answer === 'string' && data.answer.trim().length > 0
+  const hasSources = Array.isArray(data?.sources) && data.sources.length > 0
+
+  const copy = async (text?: string) => {
+    if (!text) return
+    try { await navigator.clipboard.writeText(String(text)) } catch {}
+  }
+
+  return (
+    <Card className="hover:shadow-md transition-shadow">
+      <CardContent className="p-4 space-y-3">
+        {data?.message && (
+          <div className="text-sm text-foreground/90 whitespace-pre-wrap break-words">{data.message}</div>
+        )}
+
+        {hasIndex && (
+          <div className="flex items-center gap-2 text-sm">
+            <span className="px-2 py-1 rounded bg-muted border border-border/50 font-mono break-all">
+              {String(data.indexId)}
+            </span>
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => copy(data.indexId)}>
+              <Copy className="h-3.5 w-3.5 mr-1" /> copy indexId
+            </Button>
+          </div>
+        )}
+
+        {(data?.course || data?.examType || data?.year || data?.totalIndexed) && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-muted-foreground">
+            {data.course && (<div><span className="font-medium text-foreground/80">course:</span> {data.course}</div>)}
+            {data.examType && (<div><span className="font-medium text-foreground/80">exam:</span> {data.examType}</div>)}
+            {data.year && (<div><span className="font-medium text-foreground/80">year:</span> {data.year}</div>)}
+            {typeof data.totalIndexed !== 'undefined' && (<div><span className="font-medium text-foreground/80">indexed:</span> {data.totalIndexed}</div>)}
+          </div>
+        )}
+
+        {hasAnswer && (
+          <div className="p-3 rounded border border-border/40 bg-card/40">
+            <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">{data.answer}</div>
+          </div>
+        )}
+
+        {hasSources && (
+          <div>
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">sources</div>
+            <div className="space-y-1">
+              {data.sources.map((s: any, idx: number) => (
+                <a key={idx} href={s?.url || s?.link || '#'} target="_blank" rel="noreferrer" className="block p-2 rounded border border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-colors text-xs break-words">
+                  {s?.title || s?.url || s?.link || 'source'}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!hasIndex && !hasAnswer && !hasSources && (
+          <pre className="text-xs text-muted-foreground whitespace-pre-wrap overflow-x-auto">{JSON.stringify(data, null, 2)}</pre>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

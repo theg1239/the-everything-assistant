@@ -337,6 +337,62 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     }
   }
 
+  if (toolName === 'indexPastPapers') {
+    if (result && result.success) {
+      return {
+        type: 'papers-index' as const,
+        title: `Past Papers Indexed${result.indexId ? ` (index ${String(result.indexId).slice(0, 8)}…)` : ''}`,
+        icon: <GraduationCap className="h-5 w-5 text-indigo-500" />,
+        data: {
+          message: result.message || 'Index created successfully',
+          indexId: result.indexId,
+          course: result.course,
+          examType: result.examType,
+          year: result.year,
+          totalIndexed: result.totalIndexed || result.total || result.count,
+          stats: result.stats || undefined,
+        },
+        source: 'paper-index',
+      }
+    } else {
+      return {
+        type: 'error' as const,
+        title: 'Indexing Failed',
+        icon: <AlertCircle className="h-5 w-5 text-red-400" />,
+        data: { success: false, error: result?.error || result?.message || 'Unable to index papers' },
+        source: 'paper-index',
+      }
+    }
+  }
+
+  // Past paper Q&A: render answer with metadata
+  if (toolName === 'askPaperQuestion') {
+    if (result && result.success) {
+      return {
+        type: 'papers-qa' as const,
+        title: 'Past Papers Answer',
+        icon: <GraduationCap className="h-5 w-5 text-indigo-500" />,
+        data: {
+          answer: result.answer || result.response || result.summary || result.message,
+          sources: result.sources || result.citations || [],
+          indexMeta: result.indexMeta || undefined,
+          indexId: result.indexId || (result.indexMeta && result.indexMeta.id) || undefined,
+          question: result.question || undefined,
+          debug: result.debug || undefined,
+        },
+        source: 'paper-index-qa',
+      }
+    } else {
+      return {
+        type: 'error' as const,
+        title: 'Paper Q&A Failed',
+        icon: <AlertCircle className="h-5 w-5 text-red-400" />,
+        data: { success: false, error: result?.error || result?.message || 'Unable to answer question' },
+        source: 'paper-index-qa',
+      }
+    }
+  }
+
   if (result.data && result.data.todayMenu && result.data.messType) {
     return {
       type: 'mess-menu' as const,

@@ -1653,18 +1653,24 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           interactiveState: 'waiting_for_input',
         })
       } else if (code === 0) {
+        // Always check for download path in stdout, even if step is not 'materials'
+        const downloadPathMatch = stdout.match(/Download path:\s*(.*)/i);
+        const hasDownloadPath = !!(downloadPathMatch && downloadPathMatch[1]);
         const shouldParseDownloadInfo =
           step === 'materials' ||
           stdout.includes('Downloaded') ||
           stdout.includes('Downloading') ||
           stdout.includes('files downloaded') ||
-          stdout.includes('download complete')
+          stdout.includes('download complete') ||
+          hasDownloadPath;
 
         if (process.env.NODE_ENV !== 'production') {
-          console.log(`shouldParseDownloadInfo: ${shouldParseDownloadInfo} (step: ${step})`)
+          console.log(`shouldParseDownloadInfo: ${shouldParseDownloadInfo} (step: ${step})`);
+          if (hasDownloadPath) console.log('Detected download path:', downloadPathMatch[1]);
         }
 
-        const downloadInfo = shouldParseDownloadInfo
+        // If download path found, inject into downloadInfo
+        let downloadInfo = shouldParseDownloadInfo
           ? parseDownloadInfo(stdout)
           : {
               filesDownloaded: 0,
@@ -1672,13 +1678,16 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
               downloadPath: null,
               files: [],
               errors: [],
-            }
+            };
+        if (hasDownloadPath && !downloadInfo.downloadPath) {
+          downloadInfo.downloadPath = downloadPathMatch[1].trim();
+        }
 
         const servedFiles = shouldParseDownloadInfo
           ? await serveDownloadedFiles(downloadInfo.downloadPath, downloadInfo)
-          : []
+          : [];
 
-        const cleanedOutput = cleanCliOutput(stdout, servedFiles.length > 0)
+        const cleanedOutput = cleanCliOutput(stdout, servedFiles.length > 0);
 
         const sessionInfo = {
           currentStep: step,
@@ -1687,13 +1696,13 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           completed: true,
           downloadInfo: downloadInfo,
           timestamp: Date.now(),
-        }
+        };
 
-        let completionMessage = 'Course page workflow completed successfully'
+        let completionMessage = 'Course page workflow completed successfully';
         if (downloadInfo.filesDownloaded > 0) {
-          completionMessage = `Successfully downloaded ${downloadInfo.filesDownloaded} course materials`
+          completionMessage = `Successfully downloaded ${downloadInfo.filesDownloaded} course materials`;
           if (servedFiles.length > 0) {
-            completionMessage += ` and made them available for download`
+            completionMessage += ` and made them available for download`;
           }
         }
         const responseDownloadInfo = {
@@ -1702,9 +1711,9 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           servedFiles: servedFiles,
           files: downloadInfo.files,
           errors: downloadInfo.errors,
-        }
+        };
 
-        isResolved = true
+        isResolved = true;
         resolve({
           success: true,
           step: step,
@@ -1715,22 +1724,17 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           sessionData: JSON.stringify(sessionInfo),
           interactiveState: 'completed',
           raw: false,
-        })
+        });
         if (process.env.NODE_ENV !== 'production' && shouldParseDownloadInfo) {
-          console.log('Final response structure:')
-          console.log('- downloadInfo.filesDownloaded:', downloadInfo.filesDownloaded)
-          console.log('- downloadInfo.totalFiles:', downloadInfo.totalFiles)
-          console.log(
-            '- responseDownloadInfo.downloadPath:',
-            responseDownloadInfo.downloadPath || 'EXCLUDED'
-          )
-          console.log('- downloadPath included in response:', !!responseDownloadInfo.downloadPath)
-          console.log('- servedFiles.length:', servedFiles.length)
+          console.log('Final response structure:');
+          console.log('- downloadInfo.filesDownloaded:', downloadInfo.filesDownloaded);
+          console.log('- downloadInfo.totalFiles:', downloadInfo.totalFiles);
+          console.log('- responseDownloadInfo.downloadPath:', responseDownloadInfo.downloadPath || 'EXCLUDED');
+          console.log('- downloadPath included in response:', !!responseDownloadInfo.downloadPath);
+          console.log('- servedFiles.length:', servedFiles.length);
           if (servedFiles.length > 0) {
-            console.log('- First served file:', servedFiles[0])
-            console.log(
-              'Local downloadPath successfully excluded from response (served files available)'
-            )
+            console.log('- First served file:', servedFiles[0]);
+            console.log('Local downloadPath successfully excluded from response (served files available)');
           }
         }
       } else {

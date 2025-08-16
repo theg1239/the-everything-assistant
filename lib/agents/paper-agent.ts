@@ -336,7 +336,7 @@ async function genericHeadlessPdfToImages(url: string, log?: Logger, runId?: str
   let page: any
   try {
     log?.('Generic PDF headless capture start', { url })
-    if (runId) logEmit(runId, 'driveFallbackStart', { url })
+    if (runId) logEmit(runId, 'trying with agent', { url })
 
     await new Promise(r => setTimeout(r, 300))
 

@@ -3,7 +3,7 @@ import { ContextData } from './index';
 export const academicCalendar: ContextData = {
   section: 'academic-calendar',
   title: 'Academic Calendar Fall Semester 2025-26',
-  lastUpdated: '2025-07-23',
+  lastUpdated: '2025-08-16',
   priority: 'high',
   content: `
 Fall Semester 2025-26 Academic Calendar

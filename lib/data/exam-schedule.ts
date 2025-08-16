@@ -3,7 +3,7 @@ import { ContextData } from './index'
 export const examSchedule: ContextData = {
   section: 'exam-schedule',
   title: 'Exam Schedule & Information Fall 2025-26',
-  lastUpdated: '2025-07-26',
+  lastUpdated: '2025-08-16',
   priority: 'high',
   content: `
 Fall Semester 2025-26 Exam Schedule:

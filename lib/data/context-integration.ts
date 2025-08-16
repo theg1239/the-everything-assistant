@@ -25,7 +25,7 @@ export function getContextForAIPrompt(
     priorityFilter?: ('high' | 'medium' | 'low')[]
   } = {}
 ): string {
-  const { includeAll = false, maxLength = 5000, priorityFilter } = options
+  const { includeAll = false, maxLength = 100000, priorityFilter } = options
 
   let contextData = includeAll ? getAllContextData() : getHighPriorityContextData()
   if (priorityFilter && Array.isArray(priorityFilter)) {

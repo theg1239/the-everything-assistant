@@ -7,7 +7,7 @@ import { ContextData } from './index'
 export const holidays: ContextData = {
   section: 'holidays',
   title: 'Holiday Calendar 2025-26',
-  lastUpdated: '2025-07-26',
+  lastUpdated: '2025-08-16',
   priority: 'medium',
   content: `
 Official Holidays and Breaks for Academic Year 2025-26 (VIT Vellore):

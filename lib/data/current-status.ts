@@ -3,22 +3,22 @@ import { ContextData } from './index'
 export const currentStatus: ContextData = {
   section: 'current-status',
   title: 'Current Semester Status & Latest Updates',
-  lastUpdated: '2025-07-26',
+  lastUpdated: '2025-08-16',
   priority: 'high',
   content: `
 # CURRENT SEMESTER STATUS
 Active Period: Fall Semester 2025-26
-Current Phase: Regular Classes & CAT-1 Preparation
-Campus Status: Very crowded with freshers
+Current Phase: CAT-1 Examinations Ongoing
+Campus Status: Busy with examination schedules
 
-## IMMEDIATE PRIORITIES (July 24, 2025)
-2. CAT-1 Preparation - Exam starts August 17, 2025 (3 weeks away)
+## IMMEDIATE PRIORITIES (Aug 16, 2025)
+1. CAT-1 Examinations — August 17-23, 2025
+2. Check VTOP for hall ticket, seating, timings
 
 ## CRITICAL UPCOMING DATES
 | Date | Event | Importance |
 |------|-------|------------|
-| August 15, 2025 | Independence Day Holiday | Academic break |
-| August 17-23, 2025 | CAT-1 Examinations | CRITICAL - 75% attendance required |
+| August 17-23, 2025 | CAT-1 Examinations (ongoing) | CRITICAL |
 | August 27, 2025 | Vinayaka Chathurthi Holiday | Academic break |
 | September 26-28, 2025 | Gravitas'25 Cultural Fest | Major campus event |
 | November 14, 2025 | Assignment submission deadline | CRITICAL |
@@ -37,14 +37,11 @@ Campus Status: Very crowded with freshers
 
 ## CURRENT EVENTS & ACTIVITIES
 ### Academic
-- Regular classes in progress
-- CAT-1 preparation phase
+- CAT-1 examinations in progress (Aug 17-23)
 - Academic calendar reference: VTOP Portal for Saturday instructional days
 
-### Cultural & Campus Life
-- AARAMB cultural fest ongoing
-- Campus very crowded with new freshers
-- Preparation for Gravitas'25 (September)
+### Campus Life
+- Campus movement adjusted due to exam schedules
 
 ## OFFICIAL COMMUNICATION CHANNELS
 - VTOP Portal: Primary source for academic updates and notifications
@@ -52,37 +49,36 @@ Campus Status: Very crowded with freshers
 - Academic Calendar: VIT/VLR/Acad/2025/007 dated 06-03-2025
 
 ## STUDENT ACTION ITEMS
-1. PREPARE: Start intensive CAT-1 preparation
-2. MAINTAIN: Keep attendance above 75%
-3. MONITOR: Check VTOP regularly for updates
-4. PLAN: Prepare assignment submissions well before November 14
+1. VERIFY: Check debar status, room, and timing on VTOP
+2. ARRIVE: Be at the venue at least 30 minutes early
+3. COMPLY: Carry valid ID and follow exam rules
+4. MAINTAIN: Keep attendance above 75% post exams
 
 ## SEMESTER OVERVIEW
 - Started Date: July 9, 2025
-- Current Week: Week 4 of semester
-- Next Major Milestone: CAT-1 (August 17-23)
+- Current Week: Week 6 of semester
+- Next Major Milestone: CAT-1 (August 17-23) — ongoing
 - Semester Type: Fall Semester 2025-26
 - Academic Year: 2025-26
 `,
   metadata: {
-    currentDate: '2025-07-24',
+    currentDate: '2025-08-16',
     activeSemester: 'Fall 2025-26',
-    semesterPhase: 'Regular classes - CAT-1 preparation',
-    nextCriticalDate: '2025-07-25',
-    nextCriticalEvent: 'Weekend semester course registration',
+    semesterPhase: 'CAT-1 Examinations Ongoing',
+    nextCriticalDate: '2025-08-17',
+    nextCriticalEvent: 'CAT-1 Examinations (Aug 17-23, 2025)',
     nextExamDate: '2025-08-17',
-    nextExamEvent: 'CAT-1 Examination',
+    nextExamEvent: 'CAT-1 Examinations',
     classesStartDate: '2025-07-09',
-    semesterWeek: 3,
-    upcomingFest: "Gravitas'25 (Sep 26-28, 2025)",
+    semesterWeek: 6,
     academicYear: '2025-26',
     attendanceRequirement: '75%',
     assignmentDeadline: '2025-11-14',
-    campusStatus: 'Very crowded with freshers',
-    currentEvents: ['AARAMB cultural fest', 'Weekend semester registration', 'CAT-1 preparation'],
+    campusStatus: 'Exam schedules active across campus',
+    currentEvents: ['CAT-1 examinations'],
     criticalReminders: [
-      'Weekend semester registration: July 25, 11am-6pm',
-      'CAT-1 starts in 3 weeks',
+      'Carry hall ticket and ID card',
+      'Arrive 30 minutes early',
       'Maintain 75% attendance',
       'Assignment deadline: November 14'
     ]

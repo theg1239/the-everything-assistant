@@ -7,18 +7,17 @@ import { ContextData } from './index'
 export const latestEvents: ContextData = {
   section: 'latest-events',
   title: 'Latest Events & Campus Updates',
-  lastUpdated: '2025-07-23',
+  lastUpdated: '2025-08-16',
   priority: 'medium',
   content: `
 TRENDING NOW AT VIT:
 
 Academic Events:
-- Academic prep for CAT-1 ongoing
+- CAT-1 examinations ongoing (Aug 17-23, 2025)
 
-Upcoming Cultural Events:
-- Gravitas'25 Planning: VIT's annual tech fest scheduled for September 26-28, 2025
-- Independence Day Celebration: Special programs planned for August 15, 2025
-- Freshers' Welcome: AARAMBH cultural fest ongoing
+Upcoming Events:
+- Vinayaka Chathurthi: Holiday on August 27, 2025
+- Gravitas'25: Tech fest planning continues for September 26-28, 2025
 
 Placement & Career Events:
 - Pre-placement Talks: Ongoing
@@ -26,8 +25,7 @@ Placement & Career Events:
 - Industry Mentorship Programs: Applications opening for new academic year
 
 Campus Life Updates:
-- Freshers are here and campus is VERY crowded
-- New shop in front of F block men's hostel, they have a bring your own chips bag thing 
+- Campus movement adjusted due to exam schedules
 
 Special Initiatives:
 - Green Campus Drive: Tree plantation and sustainability initiatives
@@ -36,22 +34,22 @@ Special Initiatives:
 - Alumni Connect: Enhanced alumni networking programs launching
 
 This Week's Highlights:
-- Cultural fest ongoing
-- Weekend semester course registration: 25th July 2025, 11am to 6pm
+- CAT-1 examinations in progress (Aug 17-23)
+- Hall tickets and seating published on VTOP
 
 Where to Get Updates:
 - VTOP Portal: VTOP Spotlight board
 - Your personal vitstudent.ac.in email address
 
 Action Items for Students:
-- Start preparing for CAT-1
+- Verify exam schedule, carry hall ticket and ID
 `,
   metadata: {
-    trendingEvent: 'CAT-1 Preparation',
-    nextBigEvent: "Gravitas'25",
-    urgentDeadline: 'Weekend Semester Course Registration - July 25, 2025',
-    campusLife: 'Fall Semester ongoing',
-    lastMajorAnnouncement: 'CAT-1 Soon',
+    trendingEvent: 'CAT-1 Examinations',
+    nextBigEvent: 'Vinayaka Chathurthi (Aug 27, 2025)',
+    urgentDeadline: 'CAT-1 Ends - Aug 23, 2025',
+    campusLife: 'CAT-1 Week',
+    lastMajorAnnouncement: 'CAT-1 timetable/hall tickets on VTOP',
     updateFrequency: 'Weekly',
   },
 }

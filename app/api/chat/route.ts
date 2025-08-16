@@ -1,4 +1,11 @@
-import { smoothStream, createUIMessageStream, createUIMessageStreamResponse } from 'ai'
+'use server'
+
+import { z } from 'zod'
+import {
+  convertToModelMessages,
+  type UIMessage as SDKUIMessage,
+  type ModelMessage as SDKModelMessage,
+} from 'ai'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { createVITTools } from '@/lib/tools'
 import { VIT_SYSTEM_PROMPT } from '@/lib/prompts'
@@ -8,8 +15,107 @@ import { getChat, createChat, saveMessage, updateChat } from '@/lib/db'
 import { memoryService } from '@/lib/memory/memory-service'
 import { generateChatPath, extractTitleFromContent } from '@/lib/utils'
 import { sanitizeToolInvocations } from '@/lib/sanitize-tools'
-import { z } from 'zod'
 
+/** ---- local UI-shape used by your client payload ---- */
+type UIMsg = {
+  id?: string
+  role: 'system' | 'user' | 'assistant' | 'tool'
+  content?: string
+  parts?: Array<{ type: string; text?: string }>
+  attachments?: Array<{ url: string; contentType: string; name?: string }>
+  toolInvocations?: any[]
+  toolCalls?: any[]
+}
+
+/** ---- helpers (UI → text) ---- */
+const getTextFromUIMsg = (m: UIMsg): string => {
+  if (Array.isArray(m.parts) && m.parts.length) {
+    return m.parts
+      .filter((p) => p?.type === 'text' && typeof p.text === 'string')
+      .map((p) => p.text as string)
+      .join('\n')
+  }
+  if (typeof m.content === 'string') return m.content
+  return ''
+}
+
+/** Normalize UIMsg[] to SDK UIMessage[] for conversion (ensure id:string) */
+const normalizeToUI = (msgs: UIMsg[]): SDKUIMessage[] =>
+  msgs
+    .filter((m) => m.role !== 'tool') // UIMessage doesn't carry 'tool' role for conversion
+    .map((m, idx) => {
+      const id = m.id ?? `ui-${idx}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const parts =
+        Array.isArray(m.parts) && m.parts.length
+          ? m.parts
+              .filter((p) => p?.type === 'text' && typeof p.text === 'string')
+              .map((p) => ({ type: 'text', text: String(p.text) }) as const)
+          : typeof m.content === 'string' && m.content.trim()
+          ? ([{ type: 'text', text: m.content }] as const)
+          : ([] as const)
+      return {
+        id,
+        role: (m.role as SDKUIMessage['role']) || 'user',
+        parts: parts as unknown as SDKUIMessage['parts'],
+      }
+    })
+
+/** Build a human-readable context string from tool results and stitch into assistant text */
+const toolContextFromAssistant = (msg: UIMsg): string => {
+  if (!msg?.toolInvocations || !Array.isArray(msg.toolInvocations)) return ''
+  let toolContext = ''
+
+  for (const toolCall of msg.toolInvocations) {
+    if (!toolCall?.result) continue
+
+    if (toolCall.toolName === 'knowledgeBase' && toolCall.result.success && toolCall.result.chunks) {
+      const knowledgeContext = toolCall.result.chunks
+        .map((c: any) => (c.content || '').trim())
+        .filter(Boolean)
+        .join('\n\n')
+        .slice(0, 6000)
+
+      if (knowledgeContext) {
+        toolContext += `\n\n[KNOWLEDGE BASE CONTEXT]:\n${knowledgeContext}`
+        toolContext += `\n\n[IMPORTANT]: Use the above knowledge base information to answer the user's question. Format your response naturally with proper markdown formatting, bullet points, and lowercase text (except for proper nouns and course codes).`
+      }
+    } else if (toolCall.toolName === 'queryVTOP' && toolCall.result.success) {
+      const command = toolCall.result.command || toolCall.args?.command || 'data'
+      let dataContext = ''
+
+      if (toolCall.result.formatted_content) {
+        dataContext = toolCall.result.formatted_content
+      } else if (toolCall.result.summary) {
+        dataContext = toolCall.result.summary
+      } else if (toolCall.result.data || toolCall.result.output) {
+        const rawData = toolCall.result.data || toolCall.result.output
+        if (typeof rawData === 'string') {
+          dataContext = rawData.substring(0, 500) + (rawData.length > 500 ? '...' : '')
+        } else if (Array.isArray(rawData)) {
+          dataContext = `Retrieved ${rawData.length} items for ${command}`
+        } else {
+          dataContext = `Retrieved ${command} data from VTOP`
+        }
+      }
+      if (dataContext) {
+        toolContext += `\n\n[VTOP ${String(command).toUpperCase()} DATA CONTEXT]:\n${dataContext}`
+        toolContext += `\n\n[IMPORTANT]: VTOP ${command} data was successfully retrieved above. Use this data to answer any follow-up questions about ${command}.`
+      }
+    } else if (toolCall.result.papers?.length > 0) {
+      toolContext += `\n\n[PAPERS DATA CONTEXT]:\nFound ${toolCall.result.papers.length} past papers`
+    } else if (toolCall.result.faculty?.length > 0) {
+      toolContext += `\n\n[FACULTY DATA CONTEXT]:\nFound ${toolCall.result.faculty.length} faculty members`
+    } else if (toolCall.result.companies?.length > 0) {
+      toolContext += `\n\n[COMPANIES DATA CONTEXT]:\nFound ${toolCall.result.companies.length} companies`
+    } else if (toolCall.result.data?.todayMenu) {
+      toolContext += `\n\n[MESS MENU DATA CONTEXT]:\nRetrieved mess menu for ${toolCall.result.data.messType}`
+    }
+  }
+
+  return toolContext
+}
+
+/** ---- title generation ---- */
 async function generateChatTitle(userMessage: string, userId?: string): Promise<string> {
   try {
     const cleanMessage = userMessage.trim().toLowerCase()
@@ -18,7 +124,7 @@ async function generateChatTitle(userMessage: string, userId?: string): Promise<
     }
 
     const timeoutPromise = new Promise(
-      (_, reject) => setTimeout(() => reject(new Error('Title generation timeout')), 5000) // Reduced from 10s to 5s for faster TTFT
+      (_, reject) => setTimeout(() => reject(new Error('Title generation timeout')), 5000)
     )
 
     const modelPromise = rateLimitedAI.groq.generateText(
@@ -55,14 +161,12 @@ Respond with ONLY the title, nothing else.`,
 
     return extractTitleFromContent(userMessage)
   } catch (error) {
-    console.error(
-      'Title generation failed:',
-      error instanceof Error ? error.message : String(error)
-    )
+    console.error('Title generation failed:', error instanceof Error ? error.message : String(error))
     return extractTitleFromContent(userMessage)
   }
 }
 
+/** ---- VTOP data parsing ---- */
 async function parseVTOPData(
   rawData: any,
   command: string,
@@ -280,35 +384,37 @@ export async function POST(req: Request) {
     if (!session?.user?.id) {
       return new Response('Unauthorized', { status: 401 })
     }
+
     const json = await req.json()
-    const messages = Array.isArray(json) ? json : json.messages || []
+    const messages: UIMsg[] = Array.isArray(json) ? json : json.messages || []
     const chatId = Array.isArray(json) ? undefined : json.id
     const directToolCall = Array.isArray(json) ? undefined : json.directToolCall
     const preferredTool = Array.isArray(json) ? undefined : json.preferredTool
 
     let chat = chatId ? await getChat(chatId, session.user.id) : null
     if (!chat) {
-      const tempTitle = extractTitleFromContent(messages[0]?.content || 'New Chat')
+      const firstText = messages[0] ? getTextFromUIMsg(messages[0]) : ''
+      const tempTitle = extractTitleFromContent(firstText || 'New Chat')
       const path = generateChatPath()
       chat = await createChat(session.user.id, tempTitle, path)
 
-      const userMessage = messages[0]?.content || ''
-      if (userMessage.trim()) {
+      if (firstText.trim()) {
         setTimeout(() => {
-          generateChatTitle(userMessage, session.user.id)
-            .then(async properTitle => {
+          generateChatTitle(firstText, session.user.id)
+            .then(async (properTitle) => {
               if (properTitle !== tempTitle) {
                 await updateChat(chat!.id, properTitle)
                 console.log('Chat title updated successfully:', properTitle)
               }
             })
-            .catch(error => {
+            .catch((error) => {
               console.error('Failed to update chat title:', error)
             })
         }, 2000)
       }
     }
 
+    /** ---------- optional direct tool call short-circuit ---------- */
     let directToolCallResult: any = null
     let directToolCallExecuted = false
 
@@ -325,10 +431,16 @@ export async function POST(req: Request) {
         ) {
           directToolCall.args.includeCourses = true
         }
+
+        // convert UI messages to ModelMessage[] for ToolCallOptions
+        const toolMsgModels: SDKModelMessage[] = convertToModelMessages(
+          normalizeToUI(messages).filter((m) => m.role !== 'system')
+        )
+
         try {
           const result: any = await tool.execute(directToolCall.args, {
             toolCallId: directToolCall.toolCallId || Date.now().toString(),
-            messages: messages || [],
+            messages: toolMsgModels, // ✅ satisfies ToolCallOptions.messages
           })
 
           if (
@@ -339,16 +451,15 @@ export async function POST(req: Request) {
             (result as any).data
           ) {
             try {
-              const command = (
-                'command' in result ? result.command : directToolCall.args?.command
-              ) as string
+              const command =
+                ('command' in result ? result.command : directToolCall.args?.command) as string
 
               const userContext =
                 messages && messages.length > 0
                   ? messages
                       .filter((m: any) => m.role === 'user')
                       .slice(-3)
-                      .map((m: any) => m.content)
+                      .map((m: any) => getTextFromUIMsg(m))
                       .join(' | ')
                   : ''
               const parsedData = await parseVTOPData(result, command, userContext, session.user.id)
@@ -380,7 +491,6 @@ export async function POST(req: Request) {
               directToolCallExecuted = true
             }
           } else {
-            // For non-VTOP tools, store the result for streaming
             directToolCallResult = {
               toolCallId: directToolCall.toolCallId || Date.now().toString(),
               toolName: directToolCall.toolName,
@@ -422,39 +532,26 @@ export async function POST(req: Request) {
       }
     }
 
-    if (!process.env.GROQ_API_KEY) {
-      return new Response(
-        JSON.stringify({
-          error: 'API key not configured. Please add GROQ_API_KEY to your environment variables.',
-        }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
-      )
+    /** ---------- persist last user msg ---------- */
+    const lastMsg = messages[messages.length - 1]
+    if (lastMsg?.role === 'user') {
+      const textContent = getTextFromUIMsg(lastMsg)
+      await saveMessage(chat!.id, 'user', textContent, undefined, lastMsg.id)
     }
 
-    const userMessage = messages[messages.length - 1]
-    if (userMessage.role === 'user') {
-      const textContent = Array.isArray((userMessage as any).parts)
-        ? (userMessage as any).parts
-            .filter((p: any) => p.type === 'text' && typeof p.text === 'string')
-            .map((p: any) => p.text)
-            .join('')
-        : ''
-      await saveMessage(chat.id, 'user', textContent, undefined, userMessage.id)
-    }
-
+    /** ---------- memory + tool preference banners in system ---------- */
     const memorySettings = await memoryService.getUserMemorySettings(session.user.id)
     const isMemoryEnabled = memorySettings?.isEnabled ?? true
 
-    let memoryContext = ''
-    if (isMemoryEnabled && userMessage.role === 'user') {
+    let memoryContextSnippet = ''
+    if (isMemoryEnabled && lastMsg?.role === 'user') {
       try {
         const memories = await memoryService.getUserMemories(session.user.id, { pageSize: 100 })
-
         if (memories.length > 0) {
-          memoryContext = `
-<memories>
-  <context>Saved information from previous conversations:</context>
-  <memory_list>
+          memoryContextSnippet = `
+<memory_context>
+  <instructions>Use the following information to provide more personalized and relevant responses.</instructions>
+  <memories>
 ${memories
   .map(
     (m: { content: string; updatedAt: string | number | Date }) =>
@@ -464,13 +561,11 @@ ${memories
     </memory>`
   )
   .join('\n')}
-  </memory_list>
-</memories>`
+  </memories>
+</memory_context>`
         }
-      } catch (error) {}
+      } catch {}
     }
-
-    const tools = createVITTools(session.user.id)
 
     const toolPreferenceGuidance = preferredTool
       ? `
@@ -485,14 +580,8 @@ IMPORTANT: The user has specifically selected the "${preferredTool}" tool. When 
 If the user's query is relevant to the selected tool "${preferredTool}", use it even if other tools might also be applicable.`
       : ''
 
-    const memoryGuidance =
-      memoryContext && isMemoryEnabled
-        ? `\n\n<memory_context>\n  <instructions>Use the following information to provide more personalized and relevant responses.</instructions>\n  ${memoryContext}\n</memory_context>`
-        : ''
-
     const combinedSystemPrompt = `${VIT_SYSTEM_PROMPT}  
-
-${toolPreferenceGuidance}${memoryGuidance}
+${toolPreferenceGuidance}${memoryContextSnippet}
 
 CRITICAL TOOL CONTINUATION RULES:
 - YOU MUST NEVER STOP AFTER CALLING A TOOL
@@ -503,121 +592,99 @@ CRITICAL TOOL CONTINUATION RULES:
 - The conversation flow is: [user question] → [tool call] → [YOUR RESPONSE USING TOOL RESULTS]
 - NEVER end the conversation at a tool call - always synthesize and respond`
 
-    // console.log('Memory stuff:', memoryGuidance)
-
-    const enhancedMessages = messages.map((message: any, index: number) => {
-      if (message.role === 'user' && index === messages.length - 1) {
-        return message
+    /** ---------- construct ModelMessage[] for AI SDK v5 ---------- */
+    // First, stitch tool context into assistant text where relevant:
+    const augmented = messages.map((m) => {
+      if (m.role !== 'assistant') return m
+      const ctx = toolContextFromAssistant(m)
+      if (!ctx) return m
+      const baseText = getTextFromUIMsg(m)
+      return {
+        ...m,
+        parts: [{ type: 'text', text: (baseText || '') + ctx }],
+        content: undefined, // prefer parts in UI -> conversion path
       }
-
-      if (
-        message.role === 'assistant' &&
-        message.toolInvocations &&
-        message.toolInvocations.length > 0
-      ) {
-        let toolContext = ''
-
-        for (const toolCall of message.toolInvocations) {
-          if (toolCall.result) {
-            if (
-              toolCall.toolName === 'knowledgeBase' &&
-              toolCall.result.success &&
-              toolCall.result.chunks
-            ) {
-              const knowledgeContext = toolCall.result.chunks
-                .map((c: any) => (c.content || '').trim())
-                .filter(Boolean)
-                .join('\n\n')
-                .slice(0, 6000)
-
-              if (knowledgeContext) {
-                toolContext += `\n\n[KNOWLEDGE BASE CONTEXT]:\n${knowledgeContext}`
-                toolContext += `\n\n[IMPORTANT]: Use the above knowledge base information to answer the user's question. Format your response naturally with proper markdown formatting, bullet points, and lowercase text (except for proper nouns and course codes).`
-              }
-            } else if (toolCall.toolName === 'queryVTOP' && toolCall.result.success) {
-              const command = toolCall.result.command || toolCall.args?.command || 'data'
-              let dataContext = ''
-
-              if (toolCall.result.formatted_content) {
-                dataContext = toolCall.result.formatted_content
-              } else if (toolCall.result.summary) {
-                dataContext = toolCall.result.summary
-              } else if (toolCall.result.data || toolCall.result.output) {
-                const rawData = toolCall.result.data || toolCall.result.output
-                if (typeof rawData === 'string') {
-                  dataContext = rawData.substring(0, 500) + (rawData.length > 500 ? '...' : '')
-                } else if (Array.isArray(rawData)) {
-                  dataContext = `Retrieved ${rawData.length} items for ${command}`
-                } else {
-                  dataContext = `Retrieved ${command} data from VTOP`
-                }
-              }
-              if (dataContext) {
-                toolContext += `\n\n[VTOP ${command.toUpperCase()} DATA CONTEXT]:\n${dataContext}`
-                toolContext += `\n\n[IMPORTANT]: VTOP ${command} data was successfully retrieved above. Use this data to answer any follow-up questions about ${command}.`
-              }
-            } else if (toolCall.result.papers && toolCall.result.papers.length > 0) {
-              toolContext += `\n\n[PAPERS DATA CONTEXT]:\nFound ${toolCall.result.papers.length} past papers`
-            } else if (toolCall.result.faculty && toolCall.result.faculty.length > 0) {
-              toolContext += `\n\n[FACULTY DATA CONTEXT]:\nFound ${toolCall.result.faculty.length} faculty members`
-            } else if (toolCall.result.companies && toolCall.result.companies.length > 0) {
-              toolContext += `\n\n[COMPANIES DATA CONTEXT]:\nFound ${toolCall.result.companies.length} companies`
-            } else if (toolCall.result.data && toolCall.result.data.todayMenu) {
-              toolContext += `\n\n[MESS MENU DATA CONTEXT]:\nRetrieved mess menu for ${toolCall.result.data.messType}`
-            }
-          }
-        }
-
-        if (toolContext) {
-          return {
-            ...message,
-            content: (message.content || '') + toolContext,
-          }
-        }
-      }
-      return message
     })
 
-    if (directToolCallResult && directToolCallExecuted) {
-      const lastUserMessage = enhancedMessages[enhancedMessages.length - 1]
-      if (lastUserMessage && lastUserMessage.role === 'user') {
-        let toolContext = ''
+    const attachmentAware = augmented.some(
+      (m: any) =>
+        Array.isArray(m.attachments) &&
+        m.attachments.some(
+          (a: any) =>
+            a?.contentType?.startsWith('application/pdf') || a?.contentType?.startsWith('image/')
+        )
+    )
 
-        if (directToolCallResult.toolName === 'queryVTOP' && directToolCallResult.result?.success) {
-          const command =
-            directToolCallResult.result.command || directToolCallResult.args?.command || 'data'
-          let dataContext = ''
+    const modelMessages: SDKModelMessage[] = []
 
-          if (directToolCallResult.result.formatted_content) {
-            dataContext = directToolCallResult.result.formatted_content
-          } else if (directToolCallResult.result.summary) {
-            dataContext = directToolCallResult.result.summary
-          } else if (directToolCallResult.result.data || directToolCallResult.result.output) {
-            const rawData = directToolCallResult.result.data || directToolCallResult.result.output
-            if (typeof rawData === 'string') {
-              dataContext = rawData.substring(0, 500) + (rawData.length > 500 ? '...' : '')
-            } else if (Array.isArray(rawData)) {
-              dataContext = `Retrieved ${rawData.length} items for ${command}`
-            } else {
-              dataContext = `Retrieved ${command} data from VTOP`
+    modelMessages.push({
+      role: 'system',
+      content: combinedSystemPrompt,
+    })
+
+    if (!attachmentAware) {
+      const uiMsgs: SDKUIMessage[] = normalizeToUI(
+        augmented.filter((m) => m.role !== 'system')
+      )
+      const coreMsgs = convertToModelMessages(uiMsgs)
+      modelMessages.push(...coreMsgs)
+    } else {
+      for (const m of augmented) {
+        if (m.role === 'system') continue
+        const role = (m.role as 'user' | 'assistant') || 'user'
+
+        const text = getTextFromUIMsg(m)
+        const attachments = m.attachments || []
+
+        if (!attachments.length) {
+          modelMessages.push({ role, content: text })
+          continue
+        }
+
+        let content: string | Array<any> = text
+        for (const att of attachments) {
+          if (!att?.contentType) continue
+          if (att.contentType.startsWith('application/pdf')) {
+            try {
+              const res = await fetch(att.url)
+              if (!res.ok) throw new Error(`fetch ${res.status}`)
+              const ab = await res.arrayBuffer()
+              const sizeMB = ab.byteLength / (1024 * 1024)
+              if (sizeMB > 25) {
+                content = (Array.isArray(content) ? content : [{ type: 'text', text: content }])
+                  .concat({ type: 'text', text: `Attachment '${att.name || 'file'}' skipped: size ${sizeMB.toFixed(1)}MB exceeds 25MB limit.` })
+                continue
+              }
+              content = (Array.isArray(content) ? content : [{ type: 'text', text: content }])
+                .concat({ type: 'file', file: Buffer.from(ab), mediaType: att.contentType })
+            } catch (e: any) {
+              content = (Array.isArray(content) ? content : [{ type: 'text', text: content }])
+                .concat({ type: 'text', text: `Failed to load attachment '${att.name || 'file'}': ${e.message}` })
+            }
+          } else if (att.contentType.startsWith('image/')) {
+            try {
+              const res = await fetch(att.url)
+              if (!res.ok) throw new Error(`fetch ${res.status}`)
+              const ab = await res.arrayBuffer()
+              const sizeMB = ab.byteLength / (1024 * 1024)
+              if (sizeMB > 25) {
+                content = (Array.isArray(content) ? content : [{ type: 'text', text: content }])
+                  .concat({ type: 'text', text: `Attachment '${att.name || 'file'}' skipped: size ${sizeMB.toFixed(1)}MB exceeds 25MB limit.` })
+                continue
+              }
+              content = (Array.isArray(content) ? content : [{ type: 'text', text: content }])
+                .concat({ type: 'image', image: Buffer.from(ab), mediaType: att.contentType })
+            } catch (e: any) {
+              content = (Array.isArray(content) ? content : [{ type: 'text', text: content }])
+                .concat({ type: 'text', text: `Failed to load attachment '${att.name || 'file'}': ${e.message}` })
             }
           }
-
-          if (dataContext) {
-            toolContext = `\n\n[VTOP ${command.toUpperCase()} DATA CONTEXT]:\n${dataContext}`
-            toolContext += `\n\n[IMPORTANT]: VTOP ${command} data was successfully retrieved above. Use this data to answer the user's question about ${command}.`
-          }
         }
-
-        if (toolContext) {
-          enhancedMessages[enhancedMessages.length - 1] = {
-            ...lastUserMessage,
-            content: (lastUserMessage.content || '') + toolContext,
-          }
-        }
+        modelMessages.push({ role, content })
       }
     }
 
+    /** ---------- direct tool call immediate response path ---------- */
     if (
       directToolCallResult &&
       directToolCallExecuted &&
@@ -627,17 +694,6 @@ CRITICAL TOOL CONTINUATION RULES:
         directToolCallResult.result.formatted_content ||
         directToolCallResult.result.summary ||
         `Here's your ${directToolCallResult.args?.command || 'data'} from VTOP.`
-
-      const mockResult = {
-        text: responseText,
-        response: { id: `direct-${Date.now()}` },
-        toolResults: [directToolCallResult],
-        steps: [
-          {
-            toolResults: [directToolCallResult],
-          },
-        ],
-      }
 
       const safeInvocations = sanitizeToolInvocations([
         {
@@ -651,28 +707,33 @@ CRITICAL TOOL CONTINUATION RULES:
 
       try {
         await saveMessage(
-          chat.id,
+          chat!.id,
           'assistant',
           responseText,
           safeInvocations,
-          mockResult.response.id
+          `direct-${Date.now()}`
         )
         console.log('Direct tool call message saved with tool invocation')
       } catch (error) {
         console.error('Failed to save direct tool call message:', error)
       }
 
+      // Maintain backward-compatible streaming frames for your client parser
       const encoder = new TextEncoder()
       const stream = new ReadableStream({
         start(controller) {
           controller.enqueue(
             encoder.encode(
-              `9:{"toolCallId":"${directToolCallResult.toolCallId}","toolName":"${directToolCallResult.toolName}","args":${JSON.stringify(directToolCallResult.args)}}\n`
+              `9:{"toolCallId":"${directToolCallResult.toolCallId}","toolName":"${directToolCallResult.toolName}","args":${JSON.stringify(
+                directToolCallResult.args
+              )}}\n`
             )
           )
           controller.enqueue(
             encoder.encode(
-              `a:{"toolCallId":"${directToolCallResult.toolCallId}","result":${JSON.stringify(directToolCallResult.result)}}\n`
+              `a:{"toolCallId":"${directToolCallResult.toolCallId}","result":${JSON.stringify(
+                directToolCallResult.result
+              )}}\n`
             )
           )
           controller.enqueue(encoder.encode(`0:"${responseText.replace(/"/g, '\\"')}"\n`))
@@ -688,307 +749,41 @@ CRITICAL TOOL CONTINUATION RULES:
       return new Response(stream, {
         headers: {
           'Content-Type': 'text/plain; charset=utf-8',
-          'X-Chat-Id': chat.id,
-          'X-Chat-Path': chat.path,
+          'X-Chat-Id': chat!.id,
+          'X-Chat-Path': chat!.path,
         },
       })
     }
 
-    const attachmentAware = enhancedMessages.some(
-      (m: any) =>
-        Array.isArray(m.attachments) &&
-        m.attachments.some(
-          (a: any) =>
-            a?.contentType?.startsWith('application/pdf') || a?.contentType?.startsWith('image/')
-        )
-    )
-
-    let modelName = 'gemini-2.5-flash'
-    const hasPdf =
-      attachmentAware &&
-      enhancedMessages.some((m: any) =>
-        m.attachments?.some((a: any) => a?.contentType === 'application/pdf')
+    /** ---------- stream from Google via rate-limiter wrapper ---------- */
+    const tools = createVITTools(session.user.id)
+    // Ensure only ModelMessage[] is passed
+    let safeModelMessages = modelMessages
+    if (
+      !Array.isArray(modelMessages) ||
+      modelMessages.some(
+        (msg) => !msg.role || typeof msg.content === 'undefined'
       )
-    if (hasPdf) {
-      modelName = 'gemini-2.5-flash'
-    }
-
-    let finalMessages: any[] = [{ role: 'system', content: combinedSystemPrompt }]
-    if (!attachmentAware) {
-      finalMessages.push(...enhancedMessages)
-    } else {
-      for (const m of enhancedMessages) {
-        if (!m.attachments || m.attachments.length === 0) {
-          finalMessages.push({ role: m.role, content: m.content })
-          continue
-        }
-        const parts: any[] = []
-        if (m.content) {
-          parts.push({ type: 'input_text', text: m.content })
-        }
-        for (const att of m.attachments) {
-          if (!att?.contentType) continue
-          if (
-            att.contentType.startsWith('application/pdf') ||
-            att.contentType.startsWith('image/')
-          ) {
-            try {
-              const res = await fetch(att.url)
-              if (!res.ok) throw new Error(`fetch ${res.status}`)
-              const ab = await res.arrayBuffer()
-              const sizeMB = ab.byteLength / (1024 * 1024)
-              if (sizeMB > 25) {
-                parts.push({
-                  type: 'input_text',
-                  text: `Attachment '${att.name || 'file'}' skipped: size ${sizeMB.toFixed(1)}MB exceeds 25MB limit.`,
-                })
-                continue
-              }
-              parts.push({
-                type: 'file',
-                data: Buffer.from(ab),
-                mimeType: att.contentType,
-                name:
-                  att.name ||
-                  (att.contentType.startsWith('image/') ? 'image' : 'document') + '-' + Date.now(),
-              })
-            } catch (e: any) {
-              parts.push({
-                type: 'input_text',
-                text: `Failed to load attachment '${att.name || 'file'}': ${e.message}`,
-              })
-            }
-          }
-        }
-        finalMessages.push({ role: m.role, content: parts })
+    ) {
+      // Fallback: convert any UIMessage[] to ModelMessage[]
+      try {
+        // @ts-ignore
+        safeModelMessages = convertToModelMessages(modelMessages)
+      } catch (e) {
+        console.error('Failed to convert messages to ModelMessage[]:', e)
+        throw new Error('Invalid message format for Google API')
       }
     }
-
-    let savedFinalStepUsage = false
-
-    const resultStream = await rateLimitedAI.google.streamText(
-      {
-        model: await rateLimitedAI.google.model(modelName),
-        messages: finalMessages,
-        tools,
-        temperature: 0.7,
-        maxTokens: 4096,
-        experimental_transform: smoothStream({ chunking: 'word' }),
-        maxSteps: 5,
-        experimental_continueSteps: true,
-        onError: async (error: any) => {
-          console.error('Streaming error occurred:', error)
-              try {
-                await saveMessage(
-                  chat.id,
-                  'assistant',
-                  `I encountered an error while processing your request: ${error.message || 'Unknown streaming error'}`,
-                  [],
-                  `error-${Date.now()}`
-                )
-                console.log('Streaming error saved to database')
-              } catch (saveError) {
-                console.error('Failed to save streaming error:', saveError)
-              }
-            },
-            onStepFinish: async ({
-              text,
-              toolCalls,
-              toolResults,
-              finishReason,
-          usage,
-          stepIndex,
-        }: any) => {
-          console.log(`Step finished:`, {
-            model: modelName,
-            hasText: !!text,
-            toolCallsCount: toolCalls?.length || 0,
-            toolResultsCount: toolResults?.length || 0,
-            finishReason,
-            stepIndex,
-            usage,
-          })
-
-          try {
-            if (usage && typeof usage === 'object') {
-              const { saveTokenUsage } = await import('@/lib/db')
-              await saveTokenUsage({
-                userId: session.user.id,
-                chatId: chat.id,
-                model: modelName,
-                stepIndex: typeof stepIndex === 'number' ? stepIndex : null,
-                promptTokens: usage.promptTokens || 0,
-                completionTokens: usage.completionTokens || 0,
-                totalTokens:
-                  usage.totalTokens || (usage.promptTokens || 0) + (usage.completionTokens || 0),
-                meta: { finishReason },
-              })
-              if (finishReason === 'stop') {
-                savedFinalStepUsage = true
-              }
-            }
-          } catch (e) {
-            console.warn('Failed to persist step usage:', e)
-          }
-
-          const knowledgeBaseCalls =
-            toolCalls?.filter((tc: any) => tc.toolName === 'knowledgeBase') || []
-          if (knowledgeBaseCalls.length > 0) {
-            console.log('Knowledge base tool called, model should continue automatically...')
-          }
-        },
-        onFinish: async (result: any) => {
-          console.log('Stream finished, processing final result...')
-
-          const allToolResults: any[] = []
-
-          const finalToolResults = (result as any).toolResults ?? result.toolCalls ?? []
-          allToolResults.push(...finalToolResults)
-
-          if ((result as any).steps) {
-            for (const step of (result as any).steps) {
-              const stepToolResults = step.toolResults ?? step.toolCalls ?? []
-              allToolResults.push(...stepToolResults)
-            }
-          }
-
-          const uniqueToolResults = allToolResults.filter(
-            (result, index, array) =>
-              index === array.findIndex(r => r.toolCallId === result.toolCallId)
-          )
-
-          if (directToolCallResult) {
-            const existingIndex = uniqueToolResults.findIndex(
-              r => r.toolCallId === directToolCallResult.toolCallId
-            )
-            if (existingIndex === -1) {
-              uniqueToolResults.push(directToolCallResult)
-            } else {
-              uniqueToolResults[existingIndex] = directToolCallResult
-            }
-          }
-
-          console.log(
-            `Collected ${uniqueToolResults.length} unique tool results from all steps${directToolCallResult ? ' (including direct tool call)' : ''}`
-          )
-
-          for (const tr of uniqueToolResults) {
-            if (
-              tr.toolName === 'queryVTOP' &&
-              tr.result?.success &&
-              tr.result.data &&
-              !tr.result.parsedData
-            ) {
-              try {
-                const userContext =
-                  messages && messages.length > 0
-                    ? messages
-                        .filter((m: any) => m.role === 'user')
-                        .slice(-3)
-                        .map((m: any) => m.content)
-                        .join(' | ')
-                    : ''
-                const parsed = await parseVTOPData(
-                  tr.result,
-                  tr.args.command,
-                  userContext,
-                  session.user.id
-                )
-                Object.assign(tr.result, {
-                  parsedData: parsed,
-                  formatted_content: (parsed as any).formatted_content,
-                  structured_data: (parsed as any).structured_data,
-                  summary: (parsed as any).summary,
-                })
-              } catch (e) {
-                console.error('Failed to parse VTOP data in final result:', e)
-              }
-            }
-          }
-
-          const allInvocations = uniqueToolResults.map((tr: any) => ({
-            toolCallId: tr.toolCallId || `${tr.toolName}-${Date.now()}`,
-            toolName: tr.toolName,
-            args: tr.args || {},
-            result: tr.result || null,
-            state: tr.result ? (tr.result.success !== false ? 'result' : 'error') : 'error',
-          }))
-
-          const safeInvocations = sanitizeToolInvocations(allInvocations)
-
-          try {
-            const finalText =
-              typeof (result as any).text === 'string'
-                ? (result as any).text
-                : (result as any).text?.text ?? ''
-            await saveMessage(
-              chat.id,
-              'assistant',
-              finalText,
-              safeInvocations,
-              (result as any).response.id
-            )
-            console.log(`Final message saved with ${safeInvocations.length} tool invocations`)
-          } catch (error) {
-            console.error('Failed to save final message:', error)
-            try {
-              const finalText =
-                typeof (result as any).text === 'string'
-                  ? (result as any).text
-                  : (result as any).text?.text ?? ''
-              await saveMessage(
-                chat.id,
-                'assistant',
-                finalText,
-                [],
-                (result as any).response.id
-              )
-              console.log('Final message saved without tool invocations (fallback)')
-            } catch (fallbackError) {
-              console.error(
-                'Failed to save final message even without tool invocations:',
-                fallbackError
-              )
-            }
-          }
-
-          // Persist aggregate usage if available on final result
-          try {
-            const finalUsage = (result as any)?.usage
-            if (!savedFinalStepUsage && finalUsage && typeof finalUsage === 'object') {
-              const { saveTokenUsage } = await import('@/lib/db')
-              await saveTokenUsage({
-                userId: session.user.id,
-                chatId: chat.id,
-                model: modelName,
-                stepIndex: null,
-                promptTokens: finalUsage.promptTokens || 0,
-                completionTokens: finalUsage.completionTokens || 0,
-                totalTokens:
-                  finalUsage.totalTokens ||
-                  (finalUsage.promptTokens || 0) + (finalUsage.completionTokens || 0),
-                meta: { type: 'final' },
-              })
-            }
-          } catch (e) {
-            console.warn('Failed to persist final usage:', e)
-          }
-        },
-      },
-      session.user.id
-    )
-
-        writer.merge(resultStream.toUIMessageStream())
-      }
+    const result = await rateLimitedAI.google.streamText({
+      model: await rateLimitedAI.google.model('gemini-2.5-flash'),
+      messages: safeModelMessages, // always ModelMessage[]
+      tools,
+      temperature: 0.7,
+      maxTokens: 4096,
+      maxSteps: 5,
     })
 
-    return createUIMessageStreamResponse({ 
-      stream,
-      headers: {
-        'X-Chat-Id': chat.id,
-        'X-Chat-Path': chat.path,
-      },
-    })
+    return result.toUIMessageStreamResponse()
   } catch (error: any) {
     console.error('Chat API error:', error)
 
@@ -1003,7 +798,7 @@ CRITICAL TOOL CONTINUATION RULES:
       )
     }
 
-    if (error.message?.toLowerCase().includes('rate limit')) {
+    if (String(error.message || '').toLowerCase().includes('rate limit')) {
       return new Response(
         JSON.stringify({
           error: 'RATE_LIMIT_EXCEEDED',

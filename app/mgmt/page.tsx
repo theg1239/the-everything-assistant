@@ -474,7 +474,6 @@ export default function ManagementPage() {
           </motion.div>
         </div>
       </header>
-
       {/* Content */}
       <div className="flex-1 overflow-hidden" data-allow-touch-scroll>
         <div
@@ -1370,7 +1369,6 @@ export default function ManagementPage() {
           </div>
         </div>
       </div>
-
       {/* Preview Modals */}
       <BroadcastDialog
         isOpen={showPreview}
@@ -1392,7 +1390,6 @@ export default function ManagementPage() {
                 ],
         }}
       />
-
       <BroadcastDialog
         isOpen={showEditPreview}
         onClose={() => setShowEditPreview(false)}
@@ -1414,5 +1411,5 @@ export default function ManagementPage() {
         }}
       />
     </div>
-  )
+  );
 }

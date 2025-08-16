@@ -33,7 +33,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json(settings)
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify(error.errors), { status: 400 })
+      return new NextResponse(JSON.stringify(error.issues), { status: 400 })
     }
     console.error('Failed to update memory settings:', error)
     return new NextResponse('Internal server error', { status: 500 })

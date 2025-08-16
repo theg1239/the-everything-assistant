@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect, memo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { useChat, type UIMessage as AIMessage } from '@ai-sdk/react'
+import { useChat } from '@ai-sdk/react'
+import type { UIMessage as AIMessage } from 'ai'
 import { DefaultChatTransport } from 'ai'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
@@ -97,9 +98,7 @@ interface Message extends AIMessage {
 function memoryToMessage(memory: MemoryWithId): Message {
   return {
     id: memory.id,
-    parts: [
-      { type: 'text', text: memory.content },
-    ],
+    parts: [{ type: 'text', text: memory.content }],
     role: 'system',
     createdAt: memory.createdAt,
     metadata: {
@@ -115,6 +114,15 @@ interface ChatInterfaceProps {
   chatId?: string
   autoResume?: boolean
 }
+
+// helpers for v5 parts-based messages
+const getTextFromMessage = (m: { parts?: Array<{ type: string; text?: string }> } | undefined) =>
+  m?.parts?.filter(p => p.type === 'text').map(p => p.text || '').join(' ') || ''
+
+const makeClientId = () =>
+  (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`)
 
 const PureChatInterface = memo(
   ({ initialMessages = [], chatId, autoResume = false }: ChatInterfaceProps) => {
@@ -231,6 +239,33 @@ const PureChatInterface = memo(
       }
     }, [session?.user?.email])
 
+    const ensureClientChatId = (titleSeed?: string) => {
+      if (!optimisticChatId && !chatId) {
+        const newId = makeClientId()
+        setOptimisticChatId(newId)
+        currentChatIdRef.current = newId
+        if (!chatCreatedEventDispatched) {
+          setChatCreatedEventDispatched(true)
+          const chatPath = `/chat/${newId}`
+          router.push(chatPath)
+          window.history.replaceState({}, '', chatPath)
+          window.dispatchEvent(
+            new CustomEvent('newChatCreated', {
+              detail: {
+                id: newId,
+                title: extractTitleFromContent(titleSeed || 'New Chat'),
+                path: chatPath,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              },
+            })
+          )
+        }
+        return newId
+      }
+      return optimisticChatId || chatId!
+    }
+
     const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault()
       if (!input.trim()) return
@@ -243,13 +278,16 @@ const PureChatInterface = memo(
           setShowFullChat(true)
         }
 
+        // v5: no onResponse; generate client id before first message
+        const id = ensureClientChatId(input)
+
         setErrorMessage(null)
         clearRateLimitError()
         sendMessage(
           { text: input },
           {
             body: {
-              ...(optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : {}),
+              ...(id ? { id } : {}),
               ...(selectedTool ? { preferredTool: selectedTool } : {}),
             },
           }
@@ -262,106 +300,85 @@ const PureChatInterface = memo(
     }
 
     const [input, setInput] = useState('')
-    const {
-      messages = [],
-      sendMessage,
-      regenerate,
-      status,
-      addToolResult,
-      stop,
-    } = useChat({
-      api: '/api/chat',
-      initialMessages: initialMessages,
-      experimental_throttle: 25,
-      body: {
-        ...(optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : {}),
-        ...(selectedTool ? { preferredTool: selectedTool } : {}),
-      },
-      onResponse: res => {
-        if (!showFullChat) setShowFullChat(true)
-        setErrorMessage(null)
-        clearRateLimitError()
-        const newId = res.headers.get('X-Chat-Id')
-        const newPath = res.headers.get('X-Chat-Path')
-        if (newId && !chatId && !chatCreatedEventDispatched) {
-          setOptimisticChatId(newId)
-          currentChatIdRef.current = newId
-          setChatCreatedEventDispatched(true)
-          const chatPath = `/chat/${newId}`
-          router.push(chatPath)
-          window.history.replaceState({}, '', chatPath)
-          window.dispatchEvent(
-            new CustomEvent('newChatCreated', {
-              detail: {
-                id: newId,
-                title: extractTitleFromContent(messages[0]?.content || 'New Chat'),
-                path: chatPath,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-              },
-            })
-          )
-        }
-      },
-      onFinish: message => {
-        const currentChatId = currentChatIdRef.current
-        if (message.role === 'assistant' && message.content) {
-          setLastAssistantMessage(message.content)
-          if (userPreferences.followUpSuggestions !== false) {
-            setShowFollowUpSuggestions(true)
-          }
-        }
-        if (currentChatId && isFirstMessageInNewChat) {
-          setIsFirstMessageInNewChat(false)
-          const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
-            try {
-              const response = await fetch(`/api/chats/${currentChatId}`)
-              if (response.ok) {
-                const chatData = await response.json()
-                if (chatData.title && chatData.title !== 'New Chat') {
-                  window.dispatchEvent(
-                    new CustomEvent('chatTitleUpdated', {
-                      detail: { chatId: currentChatId, title: chatData.title },
-                    })
-                  )
-                } else if (attempt < maxAttempts) {
-                  setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
-                }
-              }
-            } catch (error) {
-              if (attempt < maxAttempts) {
-                setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
-              }
+
+const {
+  messages = [],
+  sendMessage,
+  regenerate,
+  status,
+  addToolResult,
+  stop,
+  setMessages,
+  error,
+} = useChat({
+  // v5 transport & initial messages
+  transport: new DefaultChatTransport({
+    api: '/api/chat',
+  }),
+  messages: initialMessages,
+  experimental_throttle: 25,
+
+  // v5: onFinish receives a single options object { message }
+  onFinish: ({ message }: { message: AIMessage }) => {
+    const currentChatId = currentChatIdRef.current;
+
+    // update last assistant text
+    const asstText = getTextFromMessage(message as any);
+    if ((message as any).role === 'assistant' && asstText) {
+      setLastAssistantMessage(asstText);
+      if (userPreferences.followUpSuggestions !== false) {
+        setShowFollowUpSuggestions(true);
+      }
+    }
+
+    if (currentChatId && isFirstMessageInNewChat) {
+      setIsFirstMessageInNewChat(false);
+      const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
+        try {
+          const response = await fetch(`/api/chats/${currentChatId}`);
+          if (response.ok) {
+            const chatData = await response.json();
+            if (chatData.title && chatData.title !== 'New Chat') {
+              window.dispatchEvent(
+                new CustomEvent('chatTitleUpdated', {
+                  detail: { chatId: currentChatId, title: chatData.title },
+                })
+              );
+            } else if (attempt < maxAttempts) {
+              setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000);
             }
           }
-          setTimeout(() => checkTitleUpdate(), 3000)
+        } catch {
+          if (attempt < maxAttempts) {
+            setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000);
+          }
         }
-      },
-      onError: err => {
-        const errorMessage = err.message || err.toString()
-        const hasResponseBody = typeof err === 'object' && err !== null && 'responseBody' in err
-        const responseBody = hasResponseBody ? (err as any).responseBody : ''
+      };
+      setTimeout(() => checkTitleUpdate(), 3000);
+    }
+  },
 
-        const isGeminiStreamingError =
-          errorMessage.includes('contents.parts must not be empty') ||
-          errorMessage.includes('INVALID_ARGUMENT') ||
-          errorMessage.includes('GenerateContentRequest.contents') ||
-          errorMessage.includes('streamGenerateContent') ||
-          (typeof responseBody === 'string' &&
-            responseBody.includes('contents.parts must not be empty'))
+  onError: (err: any) => {
+    const errorMessage = err.message || err.toString();
+    const hasResponseBody = typeof err === 'object' && err !== null && 'responseBody' in err;
+    const responseBody = hasResponseBody ? (err as any).responseBody : '';
 
-        const isRateLimit = checkForRateLimitError(err)
-        if (!isRateLimit && !isGeminiStreamingError) {
-          toast.error('Something went wrong. Please try again.')
-        }
-        // Do NOT show toast for Gemini streaming errors!
-      },
-    })
+    const isGeminiStreamingError =
+      errorMessage.includes('contents.parts must not be empty') ||
+      errorMessage.includes('INVALID_ARGUMENT') ||
+      errorMessage.includes('GenerateContentRequest.contents') ||
+      errorMessage.includes('streamGenerateContent') ||
+      (typeof responseBody === 'string' && responseBody.includes('contents.parts must not be empty'));
+
+    const isRateLimit = checkForRateLimitError(err);
+    if (!isRateLimit && !isGeminiStreamingError) {
+      toast.error('Something went wrong. Please try again.');
+    }
+    // Do NOT show toast for Gemini streaming errors!
+  },
+});
 
     const isLoading = status === 'streaming'
-    const error = undefined as any
-    const setMessages = (_: any) => {}
-
     const scrollToBottom = useCallback(() => {
       const prefersReducedMotion =
         typeof window !== 'undefined' &&
@@ -514,9 +531,9 @@ const PureChatInterface = memo(
 
     useEffect(() => {
       if (error) {
-        const errorMessage = error.message || error.toString()
+        const errorMessage = (error as any).message || error.toString()
         const hasResponseBody =
-          typeof error === 'object' && error !== null && 'responseBody' in error
+          typeof error === 'object' && error !== null && 'responseBody' in (error as any)
         const responseBody = hasResponseBody ? (error as any).responseBody : ''
 
         const isGeminiStreamingError =
@@ -529,19 +546,19 @@ const PureChatInterface = memo(
         if (isGeminiStreamingError) {
           setErrorMessage('An error occurred. Please start a new chat.')
           setMessages(prev =>
-            prev.map((msg, idx) =>
+            prev.map((msg: any, idx: number) =>
               idx === prev.length - 1 && msg.role === 'assistant'
-                ? { ...msg, content: '', error: 'streaming_error' }
+                ? { ...msg, parts: [], error: 'streaming_error' }
                 : msg
             )
           )
           return
         }
 
-        const isRateLimit = checkForRateLimitError(error)
+        const isRateLimit = checkForRateLimitError(error as any)
         if (isRateLimit) return
       }
-    }, [error, checkForRateLimitError])
+    }, [error, checkForRateLimitError, setMessages])
 
     const handleSuggestedQuestion = useCallback(
       async (question: string) => {
@@ -553,6 +570,9 @@ const PureChatInterface = memo(
           setShowFullChat(true)
           setIsFirstMessageInNewChat(true)
         }
+        // Ensure we have a client chat id in v5
+        const id = ensureClientChatId(question)
+
         setErrorMessage(null)
         clearRateLimitError()
         setHasUserInitiatedConversation(true)
@@ -560,10 +580,9 @@ const PureChatInterface = memo(
         await sendMessage(
           { text: question },
           {
-            body:
-              {
-                ...(optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : {}),
-              },
+            body: {
+              ...(id ? { id } : {}),
+            },
           }
         )
       },
@@ -617,9 +636,10 @@ const PureChatInterface = memo(
     }
 
     const handlePlacementSearch = (company: string) => {
+      const id = ensureClientChatId(`Get placement information for ${company}`)
       sendMessage(
         { text: `Get placement information for ${company}` },
-        { body: { ...(optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : {}) } }
+        { body: { ...(id ? { id } : {}) } }
       )
     }
 
@@ -636,7 +656,7 @@ const PureChatInterface = memo(
           return
         }
         const toolCallId = originalToolCall.toolCallId || Date.now().toString()
-        clearToolResult(toolCallId)
+        clearToolResult(toolCallId || '')
 
         const updatedMessagesForLoading = messages.map((message: any) => {
           if (message.toolInvocations) {
@@ -660,7 +680,7 @@ const PureChatInterface = memo(
         })
 
         // Ensure there's a trailing assistant message with the pending VTOP tool call
-        setMessages(prev => {
+        setMessages((prev: any[]) => {
           const base = [...updatedMessagesForLoading]
           if (base.length === 0) return base
           const last = base[base.length - 1]
@@ -692,12 +712,14 @@ const PureChatInterface = memo(
             base.push({
               id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
               role: 'assistant',
-              content: '',
+              parts: [],
               toolInvocations: [toolInvocationPayload],
             })
           }
           return base
         })
+
+        const id = ensureClientChatId()
 
         const response = await fetch('/api/chat', {
           method: 'POST',
@@ -716,7 +738,7 @@ const PureChatInterface = memo(
               },
               toolCallId: toolCallId,
             },
-            id: chatId || optimisticChatId,
+            id: chatId || optimisticChatId || id,
           }),
         })
 
@@ -895,8 +917,10 @@ const PureChatInterface = memo(
                 return toolInvocation
               })
 
+              // v5: also try to update parts for tool-* / tool-call / tool-result
               const updatedParts = message.parts
                 ? message.parts.map((part: any) => {
+                    // legacy shape
                     if (
                       part.type === 'tool-invocation' &&
                       part.toolInvocation?.toolCallId === toolCallId
@@ -909,6 +933,17 @@ const PureChatInterface = memo(
                           state: 'result',
                         },
                       }
+                    }
+                    // v5 generic tool-call/result
+                    if (part.type === 'tool-call' && part.toolCallId === toolCallId) {
+                      return { ...part, state: 'result', output: result.result }
+                    }
+                    if (part.type === 'tool-result' && part.toolCallId === toolCallId) {
+                      return { ...part, result: result.result }
+                    }
+                    // v5 typed tool part: tool-queryVTOP
+                    if (part.type?.startsWith?.('tool-') && part.toolCallId === toolCallId) {
+                      return { ...part, state: 'result', output: result.result }
                     }
                     return part
                   })
@@ -929,7 +964,7 @@ const PureChatInterface = memo(
             const formattedContent =
               (result.result && (result.result.formatted_content || result.result.summary)) || ''
             if (formattedContent) {
-              setMessages(prev => {
+              setMessages((prev: any[]) => {
                 const idx = prev.findIndex(
                   m =>
                     m.role === 'assistant' &&
@@ -938,13 +973,19 @@ const PureChatInterface = memo(
                 if (idx !== -1) {
                   const clone = [...prev]
                   const target = clone[idx]
-                  if (!target.content || (target.content as string).trim() === '') {
-                    clone[idx] = { ...target, content: formattedContent }
-                  } else if (!target.content.includes(formattedContent.slice(0, 30))) {
-                    // Append if it's distinct (rudimentary duplicate guard)
+                  const targetText = getTextFromMessage(target)
+                  if (!targetText || targetText.trim() === '') {
                     clone[idx] = {
                       ...target,
-                      content: `${target.content}\n\n${formattedContent}`.trim(),
+                      parts: [{ type: 'text', text: formattedContent }],
+                    }
+                  } else if (!targetText.includes(formattedContent.slice(0, 30))) {
+                    clone[idx] = {
+                      ...target,
+                      parts: [
+                        ...(target.parts || []),
+                        { type: 'text', text: `\n\n${formattedContent}`.trim() },
+                      ],
                     }
                   }
                   return clone
@@ -953,7 +994,7 @@ const PureChatInterface = memo(
                 const newAssistantMsg = {
                   id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
                   role: 'assistant',
-                  content: formattedContent,
+                  parts: [{ type: 'text', text: formattedContent }],
                   toolInvocations: [
                     {
                       toolCallId: toolCallId,
@@ -990,10 +1031,11 @@ const PureChatInterface = memo(
             result.result.success !== false &&
             (result.result.data || result.result.output)
           ) {
-            if (chatId) {
+            const id = currentChatIdRef.current
+            if (id) {
               setTimeout(async () => {
                 try {
-                  const refreshResponse = await fetch(`/api/chats/${chatId}`)
+                  const refreshResponse = await fetch(`/api/chats/${id}`)
                   if (refreshResponse.ok) {
                     const chatData = await refreshResponse.json()
                     if (chatData.messages) {
@@ -1089,8 +1131,8 @@ const PureChatInterface = memo(
     if (!showFullChat) {
       return (
         <VTOPToolHandler
-          toolParts={messages[messages.length - 1]?.parts?.filter((p: any) => 
-            p.type === 'tool-call' || p.type === 'tool-result' || p.type.startsWith('tool-')
+          toolParts={messages[messages.length - 1]?.parts?.filter(
+            (p: any) => p.type === 'tool-call' || p.type === 'tool-result' || p.type.startsWith('tool-')
           )}
           onCredentialsSubmit={handleVTOPCredentials}
         >
@@ -1263,8 +1305,8 @@ const PureChatInterface = memo(
     }
     return (
       <VTOPToolHandler
-        toolParts={messages[messages.length - 1]?.parts?.filter((p: any) => 
-          p.type === 'tool-call' || p.type === 'tool-result' || p.type.startsWith('tool-')
+        toolParts={messages[messages.length - 1]?.parts?.filter(
+          (p: any) => p.type === 'tool-call' || p.type === 'tool-result' || p.type.startsWith('tool-')
         )}
         onCredentialsSubmit={handleVTOPCredentials}
       >
@@ -1417,11 +1459,7 @@ const PureChatInterface = memo(
                   setMaximizedItem={setMaximizedArtifact}
                 />
                 <DynamicLoadingIndicator messages={messages} isLoading={isLoading || vtopLoading} />
-                <div
-                  ref={messagesEndRef}
-                  className={isLoading ? 'h-20' : 'h-0'}
-                  aria-hidden="true"
-                />
+                <div ref={messagesEndRef} className={isLoading ? 'h-20' : 'h-0'} aria-hidden="true" />
               </div>
             </div>
           </div>
@@ -1505,11 +1543,7 @@ export const ChatInterface = memo(
     return (
       <RateLimitProvider>
         <VTOPProvider>
-          <PureChatInterface
-            initialMessages={initialMessages}
-            chatId={chatId}
-            autoResume={autoResume}
-          />
+          <PureChatInterface initialMessages={initialMessages} chatId={chatId} autoResume={autoResume} />
         </VTOPProvider>
       </RateLimitProvider>
     )

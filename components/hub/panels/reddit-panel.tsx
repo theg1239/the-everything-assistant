@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useState } from 'react'
+import { OptimizedMarkdown } from '@/components/optimized-markdown'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -140,9 +141,7 @@ export default function RedditPanel() {
 
             {(result.response || result.message) && (
               <div className="p-4 rounded-md border border-border/40 bg-card/40">
-                <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap break-words">
-                  {result.response || result.message}
-                </div>
+                <OptimizedMarkdown id="reddit-result" content={result.response || result.message} />
               </div>
             )}
 

@@ -493,7 +493,7 @@ CRITICAL TOOL CONTINUATION RULES:
 - The conversation flow is: [user question] → [tool call] → [YOUR RESPONSE USING TOOL RESULTS]
 - NEVER end the conversation at a tool call - always synthesize and respond`
 
-    console.log('Memory stuff:', memoryGuidance)
+    // console.log('Memory stuff:', memoryGuidance)
 
     const enhancedMessages = messages.map((message: any, index: number) => {
       if (message.role === 'user' && index === messages.length - 1) {
@@ -755,12 +755,13 @@ CRITICAL TOOL CONTINUATION RULES:
           usage,
           stepIndex,
         }: any) => {
-          console.log(`Step ${stepIndex} finished:`, {
+          console.log(`Step finished:`, {
             hasText: !!text,
             toolCallsCount: toolCalls?.length || 0,
             toolResultsCount: toolResults?.length || 0,
             finishReason,
             stepIndex,
+            usage
           })
 
           const knowledgeBaseCalls =

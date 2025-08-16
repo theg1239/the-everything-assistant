@@ -23,7 +23,7 @@ export function getAllContextData(): ContextData[] {
     latestEvents,
     holidays,
   ].filter(Boolean)
-  console.log('[getAllContextData] Loaded sections:', allData.map(d => d.section))
+  // console.log('[getAllContextData] Loaded sections:', allData.map(d => d.section))
   return allData
 }
 

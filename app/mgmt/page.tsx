@@ -150,6 +150,7 @@ export default function ManagementPage() {
   const [showPreview, setShowPreview] = useState(false)
   const [showEditPreview, setShowEditPreview] = useState(false)
   const [usage, setUsage] = useState<{ recent: UsageLog[]; summary: any } | null>(null)
+  const [usageOpen, setUsageOpen] = useState(true)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -216,6 +217,14 @@ export default function ManagementPage() {
       fetchPastBroadcasts()
     }
   }, [status, router, fetchData, fetchPastBroadcasts])
+
+  // Default collapse heavy tables on mobile
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isMobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches
+      setUsageOpen(!isMobile)
+    }
+  }, [])
 
   useEffect(() => {
     if (!autoRefresh) return
@@ -463,49 +472,63 @@ export default function ManagementPage() {
                   transition={{ delay: 0.05 }}
                 >
                   <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
                         <Activity className="w-5 h-5" /> token usage (last 24h)
                       </div>
-                      {usage?.summary && (
-                        <div className="text-sm text-muted-foreground">
-                          total: {usage.summary.totalTokens.toLocaleString()} tokens · {usage.summary.count} events
-                        </div>
-                      )}
+                      <div className="flex items-center gap-3">
+                        {usage?.summary && (
+                          <div className="text-xs md:text-sm text-muted-foreground">
+                            total: {usage.summary.totalTokens?.toLocaleString?.() || 0} tokens · {usage.summary.count || 0} events
+                          </div>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setUsageOpen(v => !v)}
+                          aria-expanded={usageOpen}
+                          aria-controls="usage-table"
+                        >
+                          {usageOpen ? 'hide' : 'show'}
+                        </Button>
+                      </div>
                     </div>
-                    <div className="overflow-x-auto rounded-md border border-border/20">
-                      <table className="min-w-full text-sm">
-                        <thead className="bg-black/30">
-                          <tr>
-                            <th className="text-left px-3 py-2">time</th>
-                            <th className="text-left px-3 py-2">model</th>
-                            <th className="text-right px-3 py-2">prompt</th>
-                            <th className="text-right px-3 py-2">completion</th>
-                            <th className="text-right px-3 py-2">total</th>
-                            <th className="text-right px-3 py-2">step</th>
-                            <th className="text-left px-3 py-2">chat</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {usage?.recent?.map((u) => (
-                            <tr key={u.id} className="border-t border-border/10">
-                              <td className="px-3 py-2 text-muted-foreground">{new Date(u.createdAt).toLocaleTimeString()}</td>
-                              <td className="px-3 py-2">{u.model || '-'}</td>
-                              <td className="px-3 py-2 text-right">{u.promptTokens.toLocaleString()}</td>
-                              <td className="px-3 py-2 text-right">{u.completionTokens.toLocaleString()}</td>
-                              <td className="px-3 py-2 text-right font-medium">{u.totalTokens.toLocaleString()}</td>
-                              <td className="px-3 py-2 text-right">{u.stepIndex ?? '-'}</td>
-                              <td className="px-3 py-2 text-muted-foreground break-all">{u.chatId?.slice(0, 8) || '-'}</td>
-                            </tr>
-                          ))}
-                          {(!usage || usage.recent.length === 0) && (
+                    {usageOpen && (
+                      <div id="usage-table" className="overflow-x-auto rounded-md border border-border/20" style={{ WebkitOverflowScrolling: 'touch' }}>
+                        <table className="min-w-full text-xs sm:text-sm">
+                          <thead className="bg-black/30">
                             <tr>
-                              <td colSpan={7} className="px-3 py-4 text-center text-muted-foreground">no usage records</td>
+                              <th className="text-left px-3 py-2">time</th>
+                              <th className="text-left px-3 py-2">model</th>
+                              <th className="text-right px-3 py-2">prompt</th>
+                              <th className="text-right px-3 py-2">completion</th>
+                              <th className="text-right px-3 py-2">total</th>
+                              <th className="text-right px-3 py-2">step</th>
+                              <th className="text-left px-3 py-2">chat</th>
                             </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                          </thead>
+                          <tbody>
+                            {usage?.recent?.map((u) => (
+                              <tr key={u.id} className="border-t border-border/10">
+                                <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{new Date(u.createdAt).toLocaleTimeString()}</td>
+                                <td className="px-3 py-2 whitespace-nowrap">{u.model || '-'}</td>
+                                <td className="px-3 py-2 text-right whitespace-nowrap">{u.promptTokens.toLocaleString()}</td>
+                                <td className="px-3 py-2 text-right whitespace-nowrap">{u.completionTokens.toLocaleString()}</td>
+                                <td className="px-3 py-2 text-right font-medium whitespace-nowrap">{u.totalTokens.toLocaleString()}</td>
+                                <td className="px-3 py-2 text-right whitespace-nowrap">{u.stepIndex ?? '-'}</td>
+                                <td className="px-3 py-2 text-muted-foreground break-all">{u.chatId?.slice(0, 8) || '-'}</td>
+                              </tr>
+                            ))}
+                            {(!usage || usage.recent.length === 0) && (
+                              <tr>
+                                <td colSpan={7} className="px-3 py-4 text-center text-muted-foreground">no usage records</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 </motion.div>
                 {/* System Health */}

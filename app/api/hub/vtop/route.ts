@@ -44,6 +44,7 @@ export async function POST(req: Request) {
         '- formatted_content as valid HTML (semantic headings, lists, tables if appropriate)',
         '- structured_data as normalized JSON for downstream use',
         '- If there are links provided such as download links, include them in the formatted content, you can present the link directly in ( <link> )',
+        '- Do not omit any data, like faculty names or courses as they are important',
         'Do not include any credentials or sensitive data.',
         'Here is the raw JSON to transform:',
         '```json',

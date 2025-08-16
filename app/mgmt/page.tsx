@@ -29,6 +29,7 @@ import {
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -155,6 +156,41 @@ export default function ManagementPage() {
     summaryAllTime?: any
   } | null>(null)
   const [usageOpen, setUsageOpen] = useState(true)
+  const [viewerOpen, setViewerOpen] = useState(false)
+  const [viewerLoading, setViewerLoading] = useState(false)
+  const [viewerError, setViewerError] = useState<string | null>(null)
+  const [viewerData, setViewerData] = useState<
+    | {
+        chatId: string
+        user: { id: string; name: string | null; email: string | null } | null
+        messages: { id: string; role: 'user' | 'assistant'; content: string; createdAt: string }[]
+      }
+    | null
+  >(null)
+
+  const openMessagesViewer = useCallback(async (chatId: string) => {
+    if (!chatId) return
+    try {
+      setViewerError(null)
+      setViewerLoading(true)
+      setViewerOpen(true)
+      const res = await fetch(`/api/chat-messages/${chatId}`)
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || 'Failed to fetch messages')
+      }
+      const data = (await res.json()) as {
+        chatId: string
+        user: { id: string; name: string | null; email: string | null } | null
+        messages: { id: string; role: 'user' | 'assistant'; content: string; createdAt: string }[]
+      }
+      setViewerData(data)
+    } catch (e: any) {
+      setViewerError(e?.message || 'Failed to fetch messages')
+    } finally {
+      setViewerLoading(false)
+    }
+  }, [])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -552,7 +588,20 @@ export default function ManagementPage() {
                                   {u.stepIndex ?? '-'}
                                 </td>
                                 <td className="px-3 py-2 text-muted-foreground break-all">
-                                  {u.chatId?.slice(0, 8) || '-'}
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono">{u.chatId?.slice(0, 8) || '-'}</span>
+                                    {u.chatId && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
+                                        title="View messages"
+                                        onClick={() => openMessagesViewer(u.chatId!)}
+                                      >
+                                        <Eye className="w-4 h-4" />
+                                      </Button>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             ))}
@@ -572,6 +621,51 @@ export default function ManagementPage() {
                     )}
                   </div>
                 </motion.div>
+                {/* Messages Viewer */}
+                <Dialog open={viewerOpen} onOpenChange={setViewerOpen}>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>Chat messages</DialogTitle>
+                      <DialogDescription>
+                        {viewerData?.chatId ? `Chat ID: ${viewerData.chatId}` : '—'}
+                        {viewerData?.user && (
+                          <span className="block mt-1">User: {viewerData.user.name || viewerData.user.email || 'Unknown'}</span>
+                        )}
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3 max-h-[60vh] overflow-auto pr-1">
+                      {viewerLoading && (
+                        <div className="text-muted-foreground text-sm">loading messages…</div>
+                      )}
+                      {viewerError && (
+                        <div className="text-destructive text-sm">{viewerError}</div>
+                      )}
+                      {!viewerLoading && !viewerError && viewerData?.messages?.length === 0 && (
+                        <div className="text-muted-foreground text-sm">no messages</div>
+                      )}
+                      {!viewerLoading && !viewerError && viewerData?.messages?.map(m => (
+                        <div key={m.id} className="rounded-md border border-border/30 p-3 bg-black/20">
+                          <div className="flex items-center justify-between mb-1">
+                            <span
+                              className={cn(
+                                'text-xs font-medium px-2 py-0.5 rounded-full',
+                                m.role === 'user' ? 'bg-blue-500/20 text-blue-200' : 'bg-green-500/20 text-green-200'
+                              )}
+                            >
+                              {m.role}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {new Date(m.createdAt).toLocaleString?.() || ''}
+                            </span>
+                          </div>
+                          <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                            {m.content}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </DialogContent>
+                </Dialog>
                 {/* System Health */}
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}

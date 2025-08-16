@@ -791,6 +791,7 @@ CRITICAL TOOL CONTINUATION RULES:
           stepIndex,
         }: any) => {
           console.log(`Step finished:`, {
+            model: modelName,
             hasText: !!text,
             toolCallsCount: toolCalls?.length || 0,
             toolResultsCount: toolResults?.length || 0,
@@ -813,7 +814,6 @@ CRITICAL TOOL CONTINUATION RULES:
                   usage.totalTokens || (usage.promptTokens || 0) + (usage.completionTokens || 0),
                 meta: { finishReason },
               })
-              // Mark if we already saved a final step usage to avoid saving again in onFinish
               if (finishReason === 'stop') {
                 savedFinalStepUsage = true
               }

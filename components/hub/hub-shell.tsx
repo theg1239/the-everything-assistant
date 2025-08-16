@@ -11,10 +11,8 @@ import {
   Users,
   Home,
   Flame,
-  Search,
 } from 'lucide-react'
-import { Input } from '@/components/ui/input'
-import { useRef } from 'react'
+ 
 import VTOPPanel from './panels/vtop-panel'
 import PastPapersPanel from './panels/past-papers-panel'
 import MessMenuPanel from './panels/mess-menu-panel'
@@ -30,8 +28,6 @@ type Page = 'home' | 'vtop' | 'papers' | 'mess' | 'placements' | 'faculty' | 're
 export default function HubShell() {
   const [page, setPage] = useState<Page>('home')
   const [linked] = useState<boolean>(hasVTOPCredentials())
-  const [query, setQuery] = useState('')
-  const searchRef = useRef<HTMLInputElement | null>(null)
   const [viewerOpen, setViewerOpen] = useState(false)
   const [viewerTitle, setViewerTitle] = useState<string>('result')
   const [viewerData, setViewerData] = useState<any>(null)
@@ -94,12 +90,6 @@ export default function HubShell() {
         '5': 'placements',
         '6': 'faculty',
         '7': 'reddit',
-      }
-      if (e.key === 'g') {
-        // Quick focus search
-        e.preventDefault()
-        searchRef.current?.focus()
-        return
       }
       const next = map[e.key]
       if (next) {
@@ -227,43 +217,6 @@ export default function HubShell() {
                 </div>
               </div>
 
-              {/* Search tools */}
-              <div className="mt-3">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    ref={searchRef}
-                    value={query}
-                    onChange={e => setQuery(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        const q = query.toLowerCase().trim()
-                        if (!q) return
-                        if (
-                          q.includes('vtop') ||
-                          q.includes('attendance') ||
-                          q.includes('timetable')
-                        )
-                          setPage('vtop')
-                        else if (q.includes('paper') || q.includes('past')) setPage('papers')
-                        else if (q.includes('mess') || q.includes('menu')) setPage('mess')
-                        else if (q.includes('place')) setPage('placements')
-                        else if (q.includes('faculty') || q.includes('prof')) setPage('faculty')
-                        else if (q.includes('reddit') || q.includes('trend')) setPage('reddit')
-                        else setPage('home')
-                      }
-                    }}
-                    placeholder="search tools: vtop, papers, mess, placements, faculty, reddit"
-                    className="pl-9 text-sm"
-                    aria-label="search tools"
-                  />
-                </div>
-                <div className="mt-1 text-[11px] text-muted-foreground">
-                  press g to focus search · enter to jump
-                </div>
-              </div>
-
-              {/* Quick actions wrapper */}
               <Card className="mt-3 border border-border/60 bg-card/70">
                 <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between mb-2">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -199,6 +199,10 @@ export default function VTOPPanel() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [mobileView, setMobileView] = useState<'select' | 'result'>('select')
+  const mobileOptionsRef = useRef<HTMLDivElement | null>(null)
+
+  const commandHasOptions = (id?: string) =>
+    id === 'marks' || id === 'grades' || id === 'syllabus' || id === 'course-page'
 
   const filteredCommands = useMemo(() => {
     let filtered = VTOP_COMMANDS
@@ -649,12 +653,19 @@ export default function VTOPPanel() {
                     return (
                       <button
                         key={cmd.id}
-                        onClick={() => {
-                          if (!isDisabled) {
-                            setCommand(cmd.id)
-                            if (cache[cmd.id]) setMobileView('result')
-                          }
-                        }}
+                    onClick={() => {
+                      if (!isDisabled) {
+                        setCommand(cmd.id)
+                        if (cache[cmd.id]) setMobileView('result')
+                        // On mobile, when a cmd with options is selected, reveal options without manual scrolling
+                        if (commandHasOptions(cmd.id)) {
+                          // wait for render
+                          setTimeout(() => {
+                            mobileOptionsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+                          }, 0)
+                        }
+                      }
+                    }}
                         onDoubleClick={() => {
                           if (!isDisabled) {
                             runQuery(cmd.id)
@@ -704,7 +715,10 @@ export default function VTOPPanel() {
               </div>
 
               {command && (
-                <div className="flex-shrink-0 p-4 bg-card/50 backdrop-blur-sm border-t border-border/40 shadow-sm">
+                <div
+                  ref={mobileOptionsRef}
+                  className="flex-shrink-0 p-4 bg-card/50 backdrop-blur-sm border-t border-border/40 shadow-sm"
+                >
                   <div className="space-y-3">
                     {/* parameter controls (mobile) */}
                     <div className="grid grid-cols-2 gap-2">

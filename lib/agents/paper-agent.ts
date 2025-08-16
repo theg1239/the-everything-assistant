@@ -479,15 +479,18 @@ async function driveHeadlessFallback(url: string, log?: Logger, runId?: string):
 }
 
 function logEmit(runId: string, step: string, detail?: any) {
+  const hasSpace = /\s/.test(step)
+  const isCamelLike = /^[a-z][a-z0-9]*(?:[A-Z][a-z0-9]*)+$/.test(step)
+  const normalizedStep = hasSpace ? step.toLowerCase() : (isCamelLike ? step : step.toLowerCase())
   try {
-    console.log(`[paperProgressEmit] runId=${runId} step=${step} detail=${detail ? JSON.stringify(detail) : '{}'}`)
+    console.log(`[paperProgressEmit] runId=${runId} step=${normalizedStep} detail=${detail ? JSON.stringify(detail) : '{}'}`)
   } catch {
-    console.log(`[paperProgressEmit] runId=${runId} step=${step} detail=[unserializable]`)
+    console.log(`[paperProgressEmit] runId=${runId} step=${normalizedStep} detail=[unserializable]`)
   }
   try {
-    paperProgress.emitStep(runId, step, detail)
+    paperProgress.emitStep(runId, normalizedStep, detail)
   } catch (e) {
-    console.error(`[paperProgressEmit][ERROR] runId=${runId} step=${step}`, e)
+    console.error(`[paperProgressEmit][ERROR] runId=${runId} step=${normalizedStep}`, e)
   }
 }
 

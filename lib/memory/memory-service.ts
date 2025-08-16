@@ -13,7 +13,7 @@ export const memorySchema = z.object({
 
 export const memorySettingsSchema = z.object({
   isEnabled: z.boolean().optional(),
-  maxTokens: z.number().min(100).max(10000).optional(),
+  maxOutputTokens: z.number().min(100).max(10000).optional(),
   autoSave: z.boolean().optional(),
   autoSaveFilter: z.enum(['low', 'medium', 'high']).optional(),
 })
@@ -33,7 +33,7 @@ export interface MemorySettings {
   id: string
   userId: string
   isEnabled: boolean
-  maxTokens: number
+  maxOutputTokens: number
   autoSave: boolean
   autoSaveFilter: string
   createdAt: Date
@@ -146,7 +146,7 @@ export class MemoryService {
         create: {
           userId,
           isEnabled: true,
-          maxTokens: this.MAX_MEMORY_TOKENS,
+          maxOutputTokens: this.MAX_MEMORY_TOKENS,
           autoSave: true,
           autoSaveFilter: 'medium',
         },

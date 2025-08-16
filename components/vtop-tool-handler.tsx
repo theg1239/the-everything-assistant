@@ -6,7 +6,7 @@ import { hasVTOPCredentials, getFormattedVTOPCredentials } from '@/lib/vtop-cred
 
 interface VTOPToolHandlerProps {
   children: React.ReactNode
-  toolParts?: any[]
+  toolInvocations?: any[]
   onCredentialsSubmit?: (
     credentials: { username: string; encryptedPassword: string },
     originalToolCall: any
@@ -15,12 +15,31 @@ interface VTOPToolHandlerProps {
 
 export function VTOPToolHandler({
   children,
-  toolParts,
+  toolInvocations,
   onCredentialsSubmit,
 }: VTOPToolHandlerProps) {
   const [showCredentialsDialog, setShowCredentialsDialog] = useState(false)
   const [pendingToolCall, setPendingToolCall] = useState<any>(null)
   const [command, setCommand] = useState('')
+  const [dismissedToolCallIds, setDismissedToolCallIds] = useState<Set<string>>(new Set())
+  const [disclaimerShownIds] = useState<Set<string>>(new Set())
+
+  const dispatchDisclaimer = (toolCall: any, cmd: string) => {
+    const id = toolCall?.toolCallId || `queryVTOP-${cmd}`
+    if (disclaimerShownIds.has(id)) return
+    disclaimerShownIds.add(id)
+    try {
+      const event = new CustomEvent('vtopCredentialsDisclaimer', {
+        detail: {
+          toolCallId: id,
+          command: cmd,
+          message:
+            'To fetch your VTOP data, the assistant needs your VTOP credentials. Your credentials are stored locally and are optional; you can provide them so the assistant can answer your queries.',
+        },
+      })
+      window.dispatchEvent(event)
+    } catch {}
+  }
   useEffect(() => {
     const handleVTOPLoginTrigger = (event: CustomEvent) => {
       const { command: triggerCommand, toolCallId: triggerToolCallId } = event.detail
@@ -30,7 +49,7 @@ export function VTOPToolHandler({
         if (savedCredentials && onCredentialsSubmit) {
           let vtopToolCall = null
           if (triggerToolCallId) {
-            vtopToolCall = toolParts?.find(tool => tool.toolCallId === triggerToolCallId)
+            vtopToolCall = toolInvocations?.find(tool => tool.toolCallId === triggerToolCallId)
           }
 
           if (!vtopToolCall) {
@@ -50,11 +69,11 @@ export function VTOPToolHandler({
       let vtopToolCall = null
 
       if (triggerToolCallId) {
-        vtopToolCall = toolParts?.find(tool => tool.toolCallId === triggerToolCallId)
+        vtopToolCall = toolInvocations?.find(tool => tool.toolCallId === triggerToolCallId)
       }
 
       if (!vtopToolCall) {
-        vtopToolCall = toolParts?.find(
+        vtopToolCall = toolInvocations?.find(
           tool =>
             tool.toolName === 'queryVTOP' &&
             tool.result &&
@@ -77,7 +96,14 @@ export function VTOPToolHandler({
             'attendance'
         )
         setPendingToolCall(vtopToolCall)
-        setShowCredentialsDialog(true)
+        // Show disclaimer on chat before opening dialog
+        dispatchDisclaimer(
+          vtopToolCall,
+          vtopToolCall.result.command ||
+            vtopToolCall.args?.command ||
+            triggerCommand ||
+            'attendance'
+        )
       } else {
         setCommand(triggerCommand || 'attendance')
         setPendingToolCall({
@@ -86,40 +112,55 @@ export function VTOPToolHandler({
           result: { requiresCredentials: true, command: triggerCommand || 'attendance' },
           toolCallId: triggerToolCallId || Date.now().toString(),
         })
-        setShowCredentialsDialog(true)
+        // Show disclaimer for synthetic call
+        const synthetic = {
+          toolCallId: triggerToolCallId || Date.now().toString(),
+          args: { command: triggerCommand || 'attendance' },
+          result: { requiresCredentials: true, command: triggerCommand || 'attendance' },
+        }
+        dispatchDisclaimer(synthetic, triggerCommand || 'attendance')
       }
     }
 
     window.addEventListener('vtopLoginTrigger', handleVTOPLoginTrigger as EventListener)
+    const handleOpenCredentials = (e: CustomEvent) => {
+      // Optionally ensure the pending tool call matches
+      const requestedId = e.detail?.toolCallId
+      if (requestedId && pendingToolCall && requestedId !== pendingToolCall.toolCallId) {
+        // If user explicitly opened a different tool call, attempt to locate it
+        if (toolInvocations) {
+          const match = toolInvocations.find(t => t.toolCallId === requestedId)
+          if (match) setPendingToolCall(match)
+        }
+      }
+      if (pendingToolCall) setShowCredentialsDialog(true)
+    }
+    window.addEventListener('vtopOpenCredentials', handleOpenCredentials as EventListener)
     return () => {
       window.removeEventListener('vtopLoginTrigger', handleVTOPLoginTrigger as EventListener)
+      window.removeEventListener('vtopOpenCredentials', handleOpenCredentials as EventListener)
     }
-  }, [toolParts, onCredentialsSubmit])
+  }, [toolInvocations, onCredentialsSubmit, pendingToolCall])
   useEffect(() => {
-    if (toolParts) {
-      // disable automatic credential detection - we now rely on manual button clicks
-      // this was causing automatic dialog opening when we want users to click the login button
-      // Keep this code commented for reference but don't auto-trigger
-      /*
-      const vtopToolCall = toolParts.find(
-        (tool) => 
-          tool.toolName === 'queryVTOP' && 
-          tool.result && 
-          tool.result.requiresCredentials === true &&
-          !processedToolCalls.has(tool.toolCallId) &&
+    if (toolInvocations && !showCredentialsDialog) {
+      const vtopToolCall = toolInvocations.find(
+        tool =>
+          tool.toolName === 'queryVTOP' &&
+          tool.result &&
+          (tool.result.requiresCredentials === true ||
+            (tool.result.error && tool.result.error.includes('VTOP credentials required'))) &&
           !tool.result.data &&
-          !tool.result.output
+          !tool.result.output &&
+          !dismissedToolCallIds.has(tool.toolCallId)
       )
-      
-      if (vtopToolCall && !showCredentialsDialog) {
+      if (vtopToolCall) {
         setPendingToolCall(vtopToolCall)
-        setCommand(vtopToolCall.result.command || vtopToolCall.args?.command || 'VTOP command')
-        setShowCredentialsDialog(true)
-        setProcessedToolCalls(prev => new Set([...prev, vtopToolCall.toolCallId]))
+        const cmd = vtopToolCall.result.command || vtopToolCall.args?.command || 'VTOP command'
+        setCommand(cmd)
+        dispatchDisclaimer(vtopToolCall, cmd)
       }
-      */
     }
-  }, [toolParts, showCredentialsDialog])
+  }, [toolInvocations, showCredentialsDialog])
 
   const handleCredentialsSubmit = (credentials: {
     username: string
@@ -133,6 +174,13 @@ export function VTOPToolHandler({
   }
 
   const handleCredentialsClose = () => {
+    if (pendingToolCall && pendingToolCall.toolCallId) {
+      setDismissedToolCallIds(prev => {
+        const next = new Set(prev)
+        next.add(pendingToolCall.toolCallId)
+        return next
+      })
+    }
     setShowCredentialsDialog(false)
     setPendingToolCall(null)
   }

@@ -15,6 +15,7 @@ export const authOptions: NextAuthOptions = {
           prompt: 'consent',
           access_type: 'offline',
           response_type: 'code',
+          hd: 'vitstudent.ac.in',
         },
       },
     }),

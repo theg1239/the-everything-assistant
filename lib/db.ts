@@ -45,6 +45,19 @@ export interface Vote {
   is_upvoted: boolean
 }
 
+export interface TokenUsageLog {
+  id: string
+  userId?: string | null
+  chatId?: string | null
+  model?: string | null
+  stepIndex?: number | null
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  meta?: any
+  createdAt: Date
+}
+
 export async function getUser(email: string): Promise<User | null> {
   try {
     const user = await prisma.user.findUnique({
@@ -251,6 +264,108 @@ export async function archiveAllChats(userId: string): Promise<number> {
     },
   })
   return result.count
+}
+
+// --- Token usage logging ---
+export async function saveTokenUsage(params: {
+  userId?: string | null
+  chatId?: string | null
+  model?: string | null
+  stepIndex?: number | null
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  meta?: any
+}): Promise<TokenUsageLog> {
+  const rec = await prisma.tokenUsage.create({
+    data: {
+      userId: params.userId || null,
+      chatId: params.chatId || null,
+      model: params.model || null,
+      stepIndex: params.stepIndex ?? null,
+      promptTokens: params.promptTokens,
+      completionTokens: params.completionTokens,
+      totalTokens: params.totalTokens,
+      meta: params.meta as any,
+    },
+  })
+  return rec as unknown as TokenUsageLog
+}
+
+export async function getRecentTokenUsage(limit: number = 50): Promise<TokenUsageLog[]> {
+  const rows = await prisma.tokenUsage.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: Math.max(1, Math.min(200, limit)),
+  })
+  return rows as unknown as TokenUsageLog[]
+}
+
+export async function getTokenUsageSummary(days: number = 1): Promise<{
+  from: string
+  to: string
+  totalPromptTokens: number
+  totalCompletionTokens: number
+  totalTokens: number
+  count: number
+}> {
+  const to = new Date()
+  const from = new Date()
+  from.setDate(to.getDate() - Math.max(0, days))
+  const rows = await prisma.tokenUsage.findMany({
+    where: { createdAt: { gte: from, lte: to } },
+    select: { promptTokens: true, completionTokens: true, totalTokens: true },
+  })
+  const summary = rows.reduce(
+    (acc, r) => {
+      acc.totalPromptTokens += r.promptTokens
+      acc.totalCompletionTokens += r.completionTokens
+      acc.totalTokens += r.totalTokens
+      acc.count++
+      return acc
+    },
+    { totalPromptTokens: 0, totalCompletionTokens: 0, totalTokens: 0, count: 0 }
+  )
+  return {
+    from: from.toISOString(),
+    to: to.toISOString(),
+    ...summary,
+  }
+}
+
+export async function getTokenUsageAllTimeSummary(): Promise<{
+  totalPromptTokens: number
+  totalCompletionTokens: number
+  totalTokens: number
+  count: number
+}> {
+  try {
+    const agg = await (prisma as any).tokenUsage.aggregate({
+      _sum: { promptTokens: true, completionTokens: true, totalTokens: true },
+      _count: { _all: true },
+    })
+    return {
+      totalPromptTokens: agg._sum?.promptTokens || 0,
+      totalCompletionTokens: agg._sum?.completionTokens || 0,
+      totalTokens: agg._sum?.totalTokens || 0,
+      count: agg._count?._all || 0,
+    }
+  } catch {
+    // Fallback if aggregate not supported
+    const rows = await prisma.tokenUsage.findMany({
+      select: { promptTokens: true, completionTokens: true, totalTokens: true },
+    })
+    const s = rows.reduce(
+      (acc, r) => {
+        acc.totalPromptTokens += r.promptTokens
+        acc.totalCompletionTokens += r.completionTokens
+        acc.totalTokens += r.totalTokens
+        acc.count++
+        return acc
+      },
+      { totalPromptTokens: 0, totalCompletionTokens: 0, totalTokens: 0, count: 0 }
+    )
+    return s
+  }
 }
 
 export async function getArchivedChats(

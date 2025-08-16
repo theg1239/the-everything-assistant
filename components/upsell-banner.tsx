@@ -72,9 +72,10 @@ const UpsellBanner: React.FC = () => {
             onClick={handleClose}
             variant="ghost"
             size="sm"
-            className="absolute right-2 top-2 rounded-full p-1 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white z-20"
+            className="absolute right-2 top-2 rounded-full p-1 bg-black/50 dark:bg-black/60 text-white hover:bg-black/70 border border-white/20 shadow-sm z-20"
+            aria-label="close"
           >
-            <X className="h-4 w-4" />
+            <X className="h-5 w-5" />
           </Button>
 
           {/* Artwork section for mobile */}
@@ -128,9 +129,10 @@ const UpsellBanner: React.FC = () => {
           onClick={handleClose}
           variant="ghost"
           size="sm"
-          className="absolute right-3 top-3 rounded-full p-1 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white z-20"
+          className="absolute right-3 top-3 rounded-full p-1 bg-black/50 dark:bg-black/60 text-white hover:bg-black/70 border border-white/20 shadow-sm z-20"
+          aria-label="close"
         >
-          <X className="h-4 w-4" />
+          <X className="h-5 w-5" />
         </Button>
 
         <div className="relative h-24 sm:h-32 overflow-hidden">

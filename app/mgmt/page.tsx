@@ -29,10 +29,23 @@ import {
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Plus, Send, Trash2 } from 'lucide-react'
+
+type UsageLog = {
+  id: string
+  userId?: string | null
+  chatId?: string | null
+  model?: string | null
+  stepIndex?: number | null
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  createdAt: string
+}
 import { BroadcastDialog } from '@/components/broadcast-dialog'
 
 interface RateLimitStatus {
@@ -137,14 +150,56 @@ export default function ManagementPage() {
   const [loadingBroadcasts, setLoadingBroadcasts] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [showEditPreview, setShowEditPreview] = useState(false)
+  const [usage, setUsage] = useState<{
+    recent: UsageLog[]
+    summary: any
+    summaryAllTime?: any
+  } | null>(null)
+  const [usageOpen, setUsageOpen] = useState(true)
+  const [viewerOpen, setViewerOpen] = useState(false)
+  const [viewerLoading, setViewerLoading] = useState(false)
+  const [viewerError, setViewerError] = useState<string | null>(null)
+  const [viewerData, setViewerData] = useState<
+    | {
+        chatId: string
+        user: { id: string; name: string | null; email: string | null } | null
+        messages: { id: string; role: 'user' | 'assistant'; content: string; createdAt: string }[]
+      }
+    | null
+  >(null)
+
+  const openMessagesViewer = useCallback(async (chatId: string) => {
+    if (!chatId) return
+    try {
+      setViewerError(null)
+      setViewerLoading(true)
+      setViewerOpen(true)
+      const res = await fetch(`/api/chat-messages/${chatId}`)
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || 'Failed to fetch messages')
+      }
+      const data = (await res.json()) as {
+        chatId: string
+        user: { id: string; name: string | null; email: string | null } | null
+        messages: { id: string; role: 'user' | 'assistant'; content: string; createdAt: string }[]
+      }
+      setViewerData(data)
+    } catch (e: any) {
+      setViewerError(e?.message || 'Failed to fetch messages')
+    } finally {
+      setViewerLoading(false)
+    }
+  }, [])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [rateLimitRes, statsRes] = await Promise.all([
+      const [rateLimitRes, statsRes, usageRes] = await Promise.all([
         fetch('/api/rate-limit-status'),
         fetch('/api/stats'),
+        fetch('/api/usage?limit=25&days=1'),
       ])
 
       if (!rateLimitRes.ok) {
@@ -155,12 +210,18 @@ export default function ManagementPage() {
         const json = await statsRes.json()
         throw new Error(json.error || 'Failed to fetch stats')
       }
+      if (!usageRes.ok) {
+        const json = await usageRes.json()
+        throw new Error(json.error || 'Failed to fetch usage')
+      }
 
       const rateLimitData = await rateLimitRes.json()
       const statsData = await statsRes.json()
+      const usageData = await usageRes.json()
 
       setData(rateLimitData)
       setStats(statsData)
+      setUsage(usageData)
       setLastUpdate(new Date())
     } catch (err: any) {
       setError(err.message || 'Failed to fetch data')
@@ -196,6 +257,14 @@ export default function ManagementPage() {
       fetchPastBroadcasts()
     }
   }, [status, router, fetchData, fetchPastBroadcasts])
+
+  // Default collapse heavy tables on mobile
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isMobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches
+      setUsageOpen(!isMobile)
+    }
+  }, [])
 
   useEffect(() => {
     if (!autoRefresh) return
@@ -348,7 +417,10 @@ export default function ManagementPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-transparent text-foreground overflow-hidden">
+    <div
+      className="flex flex-col h-screen bg-transparent text-foreground overflow-hidden"
+      data-allow-touch-scroll
+    >
       {/* Header */}
       <header className="flex-shrink-0 bg-black/20 backdrop-blur-sm border-b border-border/50">
         <div className="container mx-auto px-4 max-w-7xl">
@@ -404,8 +476,12 @@ export default function ManagementPage() {
       </header>
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden">
-        <div className="h-full overflow-y-auto">
+      <div className="flex-1 overflow-hidden" data-allow-touch-scroll>
+        <div
+          className="h-full overflow-y-auto"
+          data-allow-touch-scroll
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
           <div className="container mx-auto px-4 max-w-7xl py-6">
             {error && (
               <motion.div
@@ -436,6 +512,160 @@ export default function ManagementPage() {
 
             {data && (
               <div className="space-y-6">
+                {/* Token Usage */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.05 }}
+                >
+                  <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
+                        <Activity className="w-5 h-5" /> token usage (last 24h)
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex flex-col items-end gap-0.5">
+                          {usage?.summary && (
+                            <div className="text-xs md:text-sm text-muted-foreground">
+                              24h: {usage.summary.totalTokens?.toLocaleString?.() || 0} tokens ·{' '}
+                              {usage.summary.count || 0} events
+                            </div>
+                          )}
+                          {usage?.summaryAllTime && (
+                            <div className="text-[11px] md:text-xs text-muted-foreground/80">
+                              all time: {usage.summaryAllTime.totalTokens?.toLocaleString?.() || 0}{' '}
+                              tokens · {usage.summaryAllTime.count || 0} events
+                            </div>
+                          )}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setUsageOpen(v => !v)}
+                          aria-expanded={usageOpen}
+                          aria-controls="usage-table"
+                        >
+                          {usageOpen ? 'hide' : 'show'}
+                        </Button>
+                      </div>
+                    </div>
+                    {usageOpen && (
+                      <div
+                        id="usage-table"
+                        className="overflow-x-auto rounded-md border border-border/20"
+                        style={{ WebkitOverflowScrolling: 'touch' }}
+                      >
+                        <table className="min-w-full text-xs sm:text-sm">
+                          <thead className="bg-black/30">
+                            <tr>
+                              <th className="text-left px-3 py-2">time</th>
+                              <th className="text-left px-3 py-2">model</th>
+                              <th className="text-right px-3 py-2">prompt</th>
+                              <th className="text-right px-3 py-2">completion</th>
+                              <th className="text-right px-3 py-2">total</th>
+                              <th className="text-right px-3 py-2">step</th>
+                              <th className="text-left px-3 py-2">chat</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {usage?.recent?.map(u => (
+                              <tr key={u.id} className="border-t border-border/10">
+                                <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
+                                  {new Date(u.createdAt).toLocaleTimeString()}
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap">{u.model || '-'}</td>
+                                <td className="px-3 py-2 text-right whitespace-nowrap">
+                                  {u.promptTokens.toLocaleString()}
+                                </td>
+                                <td className="px-3 py-2 text-right whitespace-nowrap">
+                                  {u.completionTokens.toLocaleString()}
+                                </td>
+                                <td className="px-3 py-2 text-right font-medium whitespace-nowrap">
+                                  {u.totalTokens.toLocaleString()}
+                                </td>
+                                <td className="px-3 py-2 text-right whitespace-nowrap">
+                                  {u.stepIndex ?? '-'}
+                                </td>
+                                <td className="px-3 py-2 text-muted-foreground break-all">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono">{u.chatId?.slice(0, 8) || '-'}</span>
+                                    {u.chatId && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
+                                        title="View messages"
+                                        onClick={() => openMessagesViewer(u.chatId!)}
+                                      >
+                                        <Eye className="w-4 h-4" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                            {(!usage || usage.recent.length === 0) && (
+                              <tr>
+                                <td
+                                  colSpan={7}
+                                  className="px-3 py-4 text-center text-muted-foreground"
+                                >
+                                  no usage records
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+                {/* Messages Viewer */}
+                <Dialog open={viewerOpen} onOpenChange={setViewerOpen}>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>Chat messages</DialogTitle>
+                      <DialogDescription>
+                        {viewerData?.chatId ? `Chat ID: ${viewerData.chatId}` : '—'}
+                        {viewerData?.user && (
+                          <span className="block mt-1">User: {viewerData.user.name || viewerData.user.email || 'Unknown'}</span>
+                        )}
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3 max-h-[60vh] overflow-auto pr-1">
+                      {viewerLoading && (
+                        <div className="text-muted-foreground text-sm">loading messages…</div>
+                      )}
+                      {viewerError && (
+                        <div className="text-destructive text-sm">{viewerError}</div>
+                      )}
+                      {!viewerLoading && !viewerError && viewerData?.messages?.length === 0 && (
+                        <div className="text-muted-foreground text-sm">no messages</div>
+                      )}
+                      {!viewerLoading && !viewerError && viewerData?.messages?.map(m => (
+                        <div key={m.id} className="rounded-md border border-border/30 p-3 bg-black/20">
+                          <div className="flex items-center justify-between mb-1">
+                            <span
+                              className={cn(
+                                'text-xs font-medium px-2 py-0.5 rounded-full',
+                                m.role === 'user' ? 'bg-blue-500/20 text-blue-200' : 'bg-green-500/20 text-green-200'
+                              )}
+                            >
+                              {m.role}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {new Date(m.createdAt).toLocaleString?.() || ''}
+                            </span>
+                          </div>
+                          <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                            {m.content}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </DialogContent>
+                </Dialog>
                 {/* System Health */}
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}

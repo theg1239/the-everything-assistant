@@ -60,30 +60,39 @@ export function FeedbackSection() {
   }
 
   // Debounced function to update edited chunks from combined text
-  const updateEditedChunksFromText = useCallback((text: string) => {
-    const chunks = text.split(/\n\s*---\s*\n/).map(chunk => chunk.trim()).filter(chunk => chunk.length > 0)
-    
-    const newEditedChunks: Record<number, string> = {}
-    knowledgeChunks.forEach((originalChunk, index) => {
-      if (chunks[index] !== undefined && chunks[index] !== originalChunk.chunk.trim()) {
-        newEditedChunks[originalChunk.id] = chunks[index]
-      }
-    })
-    
-    setEditedChunks(newEditedChunks)
-  }, [knowledgeChunks])
+  const updateEditedChunksFromText = useCallback(
+    (text: string) => {
+      const chunks = text
+        .split(/\n\s*---\s*\n/)
+        .map(chunk => chunk.trim())
+        .filter(chunk => chunk.length > 0)
 
-  const handleAllChunksChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newText = e.target.value
-    setAllChunksText(newText)
-    
-    // Use a timeout to debounce the parsing and state update
-    const timeoutId = setTimeout(() => {
-      updateEditedChunksFromText(newText)
-    }, 300) // 300ms debounce
-    
-    return () => clearTimeout(timeoutId)
-  }, [updateEditedChunksFromText])
+      const newEditedChunks: Record<number, string> = {}
+      knowledgeChunks.forEach((originalChunk, index) => {
+        if (chunks[index] !== undefined && chunks[index] !== originalChunk.chunk.trim()) {
+          newEditedChunks[originalChunk.id] = chunks[index]
+        }
+      })
+
+      setEditedChunks(newEditedChunks)
+    },
+    [knowledgeChunks]
+  )
+
+  const handleAllChunksChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const newText = e.target.value
+      setAllChunksText(newText)
+
+      // Use a timeout to debounce the parsing and state update
+      const timeoutId = setTimeout(() => {
+        updateEditedChunksFromText(newText)
+      }, 300) // 300ms debounce
+
+      return () => clearTimeout(timeoutId)
+    },
+    [updateEditedChunksFromText]
+  )
 
   const handleAddChunk = () => {
     setNewChunks(prev => [...prev, ''])

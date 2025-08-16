@@ -16,6 +16,13 @@ import { getCourseData, School } from './ffcs-tool'
 import { createKnowledgeTools } from './knowledge-tools'
 import { createMemoryTool } from './memory/memory-tools'
 import { hasVTOPCredentials, getFormattedVTOPCredentials } from './server-vtop-credentials'
+import {
+  indexPastPapers,
+  askIndexedPaperQuestion,
+  smartPaperSearchByQuestion,
+  getPaperIndexMeta,
+} from './agents/paper-agent'
+import { analyzeQuestionFrequencies } from './agents/question-frequency-agent'
 
 async function searchRedditKnowledge(query: string, limit: number = 10) {
   try {
@@ -700,10 +707,10 @@ export function createVITTools(userId: string) {
   return {
     ...createKnowledgeTools(),
     ...createMemoryTool(userId),
-    findPastPapers: tool<any, any>({
+    findPastPapers: tool({
       description:
         "find past examination papers for VIT courses from real repositories. You can use course names or codes. You don' need the user to specify the year, when no year is specified, the tool will search for all available years.",
-      inputSchema: z.object({
+      parameters: z.object({
         courseCode: z
           .string()
           .optional()
@@ -813,10 +820,148 @@ export function createVITTools(userId: string) {
       },
     }),
 
-    ffcs_planner: tool<any, any>({
+    indexPastPapers: tool({
+      description:
+        'Download, OCR/extract, embed, and index past papers for a course so the user can ask detailed questions about them. Returns an indexId to use with askPaperQuestion.',
+      parameters: z.object({
+        course: z.string().describe('Course code or name'),
+        examType: z.string().optional(),
+        year: z.string().optional(),
+        maxPapers: z.number().int().min(1).max(12).optional(),
+        questionFocus: z
+          .string()
+          .optional()
+          .describe(
+            'Optional natural language focus (e.g. "recurrence relations") to bias relevance'
+          ),
+        debug: z.boolean().optional().describe('Enable verbose paper-agent logging'),
+      }),
+      execute: async ({ course, examType, year, maxPapers, questionFocus, debug }) => {
+        try {
+          const res = await indexPastPapers({
+            course,
+            examType,
+            year,
+            maxPapers,
+            questionFocus,
+            debug,
+          })
+          return res
+        } catch (e: any) {
+          return { success: false, error: e.message || 'Indexing failed' }
+        }
+      },
+    }),
+
+    askPaperQuestion: tool({
+      description:
+        'Ask a question about already indexed past papers. Requires indexId from indexPastPapers tool.',
+      parameters: z.object({
+        indexId: z.string().describe('Index ID returned by indexPastPapers'),
+        question: z.string().describe('User question'),
+        debug: z.boolean().optional().describe('Enable verbose logging'),
+      }),
+      execute: async ({ indexId, question, debug }) => {
+        try {
+          const meta = getPaperIndexMeta(indexId)
+          if (!meta) return { success: false, error: 'Index not found. Re-run indexPastPapers.' }
+          const ans = await askIndexedPaperQuestion(indexId, question, debug)
+          return { ...ans, indexMeta: meta }
+        } catch (e: any) {
+          return { success: false, error: e.message || 'Failed to answer question' }
+        }
+      },
+    }),
+
+    smartPaperSearch: tool({
+      description:
+        'Search for relevant past papers by providing a natural language question (semantic). Returns ranked papers and an indexId for deeper Q&A.',
+      parameters: z.object({
+        course: z.string().describe('Course code or name'),
+        question: z.string().describe('Question to find in past papers'),
+        examType: z.string().optional(),
+        year: z.string().optional(),
+        maxPapers: z.number().int().min(1).max(12).optional(),
+        debug: z.boolean().optional().describe('Enable verbose logging'),
+        runId: z
+          .string()
+          .optional()
+          .describe('Client-provided run/session id for streaming progress UI'),
+      }),
+      execute: async ({ course, question, examType, year, maxPapers, debug, runId }) => {
+        try {
+          if (!runId) {
+            const params = `${course}-${question}`.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+            runId = `smartpaper_${params}`.slice(0, 60)
+          }
+
+          console.log(
+            `[smartPaperSearch] Using runId: ${runId} for course: ${course}, question: ${question}`
+          )
+
+          // Always fire a start event to establish connection
+          try {
+            const { paperProgress } = await import('./progress/paper-progress')
+            paperProgress.emitStep(runId, 'start', { course, question })
+            console.log(`[smartPaperSearch] Emitted start event for runId: ${runId}`)
+          } catch (e) {
+            console.error(`[smartPaperSearch] Failed to emit start event:`, e)
+          }
+
+          const res = await smartPaperSearchByQuestion({
+            course,
+            question,
+            examType,
+            year,
+            maxPapers,
+            debug,
+            runId,
+          })
+          if (res && (res as any).rankedPapers && !(res as any).papers) {
+            return { ...(res as any), papers: (res as any).rankedPapers, runId }
+          }
+          return { ...res, runId }
+        } catch (e: any) {
+          console.error(`[smartPaperSearch] Error:`, e)
+          return { success: false, error: e.message || 'Smart search failed', runId }
+        }
+      },
+    }),
+
+    analyzeQuestionPatterns: tool({
+      description:
+        'Analyze past papers and report the most repeated or common question patterns for a course and exam type. Returns top repeated patterns with counts and sample questions.',
+      parameters: z.object({
+        course: z.string().describe('Course code or name (e.g., BMAT201L or "Complex Variables")'),
+        examType: z
+          .string()
+          .optional()
+          .describe(
+            'Exam type filter: CAT-1, CAT-2, FAT, Quiz (case-insensitive, hyphen optional).'
+          ),
+        topN: z
+          .number()
+          .int()
+          .min(3)
+          .max(50)
+          .optional()
+          .describe('How many top repeated patterns to return (default 12).'),
+        debug: z.boolean().optional(),
+      }),
+      execute: async ({ course, examType, topN, debug }) => {
+        try {
+          const res = await analyzeQuestionFrequencies({ course, examType, topN, debug })
+          return res
+        } catch (e: any) {
+          return { success: false, error: e?.message || 'Failed to analyze question patterns' }
+        }
+      },
+    }),
+
+    ffcs_planner: tool({
       description:
         'Launch the FFCS (Fully Flexible Credit System) course planner. Use this tool to help the user plan their courses for the upcoming semester. This tool provides an interactive UI for searching, selecting, and visualizing a timetable.',
-      inputSchema: z.object({}),
+      parameters: z.object({}),
       execute: async () => {
         return {
           status: 'requires_user_interface',
@@ -825,10 +970,10 @@ export function createVITTools(userId: string) {
       },
     }),
 
-    getCourseInfo: tool<any, any>({
+    getCourseInfo: tool({
       description:
         'Get information about courses from the FFCS dataset (supports all schools: SMEC, SCORE, SCOPE, SBST, SCE, SCHEME, SELECT, SENSE). Returns faculty names, slots, venue, etc.',
-      inputSchema: z.object({
+      parameters: z.object({
         school: z
           .enum(['smec', 'score', 'scope', 'sbst', 'sce', 'scheme', 'select', 'sense'])
           .describe(
@@ -900,11 +1045,11 @@ export function createVITTools(userId: string) {
       },
     }),
 
-    getFacultyInfo: tool<any, any>({
+    getFacultyInfo: tool({
       description: `Get current faculty information from a local JSON file (public/faculty.json). NEVER return all faculty members at once—ALWAYS require at least a department or faculty name filter. If no filter is provided, ask the user to specify a department or faculty name. Returns school, department, and faculty info. Do NOT provide a full list of all faculty.
 
 For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'CIVIL') and full or partial department names (e.g., 'computer science', 'school of mechanical engineering', 'information technology', 'civil engineering'). The search is robust to acronyms, full names, and partial matches in either direction.`,
-      inputSchema: z.object({
+      parameters: z.object({
         department: z
           .string()
           .optional()
@@ -1284,10 +1429,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       },
     }),
 
-    getPlacementInfo: tool<any, any>({
+    getPlacementInfo: tool({
       description:
         'Get latest placement statistics and company information. Use this for any questions about placements, highest packages, company offers, salary stats, or recruitment.',
-      inputSchema: z.object({
+      parameters: z.object({
         year: z.string().optional().describe('Academic year, e.g., 2024-25'),
         companyFilter: z
           .string()
@@ -1313,7 +1458,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             formatted_content: string
             summary: string
           }
-          const parsed = (await parsePlacementData(raw, '', undefined)) as unknown as ParsedPlacementData
+          const parsed = (await parsePlacementData(raw, '', undefined)) as ParsedPlacementData
           return {
             ...raw,
             campus,
@@ -1330,10 +1475,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       },
     }),
 
-    getMessMenu: tool<any, any>({
+    getMessMenu: tool({
       description:
         "get mess menu for VIT hostels (both men's and ladies' hostels). Use this when users ask about mess menu, today's food, what's for lunch/dinner/breakfast/snacks, tomorrow's menu, etc. Covers special mess, veg mess, and non-veg mess for both hostels. IMPORTANT: Do NOT ask for hostelType and messType if you are already aware of the user's preference through memory, populate them from memory.",
-      inputSchema: z.object({
+      parameters: z.object({
         hostelType: z
           .preprocess(
             val => {
@@ -1413,10 +1558,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       },
     }),
 
-    queryVTOP: tool<any, any>({
+    queryVTOP: tool({
       description:
         "Access VTOP (VIT's official portal) to get PERSONAL student data that requires login authentication. Use ONLY for individual student information like personal grades, attendance, timetable, marks, hostel info, library dues, exam schedules, digital assignments, and course materials. DO NOT use for general VIT information already available in knowledge base (like admission requirements, grading system explanation, campus facilities, exam patterns, etc.). This tool automatically handles credential authentication and interactive command prompts through intelligent defaults. For course materials, it supports smart natural language queries like 'anuj kumar's fluid mechanics notes' or 'week 5 assignments'. Use this tool ONLY when users request their PERSONAL VTOP data - credentials will be prompted securely.",
-      inputSchema: z.object({
+      parameters: z.object({
         command: z
           .enum([
             // 'profile',
@@ -1458,7 +1603,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           .number()
           .optional()
           .describe(
-            'Semester number (1-8) for commands like marks, grades, attendance, exams, calendar. Not needed for timetable (always use latest, specify latest always). If not specified, user will be prompted to select from available semesters.'
+            'Semester number (1-8) for commands like marks, grades, calendar. Not needed for timetable, attendance (always use latest, specify latest always). If not specified, user will be prompted to select from available semesters.'
           ),
         semesterQuery: z
           .string()
@@ -1530,13 +1675,28 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
         },
         context
       ) => {
-        try {
-          if (!username || !password) {
-            if (await hasVTOPCredentials()) {
-              const savedCreds = await getFormattedVTOPCredentials()
-              if (savedCreds) {
-                username = savedCreds.username
-                password = savedCreds.encryptedPassword
+        const MAX_RETRIES = 3
+        let attempt = 0
+        let lastError: any = null
+        while (attempt < MAX_RETRIES) {
+          try {
+            let user = username
+            let pass = password
+            if (!user || !pass) {
+              if (await hasVTOPCredentials()) {
+                const savedCreds = await getFormattedVTOPCredentials()
+                if (savedCreds) {
+                  user = savedCreds.username
+                  pass = savedCreds.encryptedPassword
+                } else {
+                  return {
+                    success: false,
+                    error: 'VTOP credentials required',
+                    requiresCredentials: true,
+                    command,
+                    message: 'Please provide your VTOP username and password to access VTOP data.',
+                  }
+                }
               } else {
                 return {
                   success: false,
@@ -1546,117 +1706,152 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                   message: 'Please provide your VTOP username and password to access VTOP data.',
                 }
               }
+            }
+
+            if (command === 'course-page') {
+              return await handleIntelligentCoursePage({
+                username: user,
+                password: pass,
+                semesterQuery,
+                courseQuery,
+                facultyQuery,
+                materialQuery,
+                interactiveStep,
+                semester,
+                course,
+                faculty,
+                fuzzyIndex,
+                messages: context?.messages || [],
+              })
+            }
+
+            const flags: Record<string, any> = {}
+            if (semester !== undefined) flags.semester = semester
+            if (semesterQuery) flags.semesterQuery = semesterQuery
+            if (course !== undefined) flags.course = course
+            if (faculty !== undefined) flags.faculty = faculty
+            if (classGroup !== undefined) flags.classGroup = classGroup
+            if (fuzzyIndex !== undefined) flags.fuzzyIndex = fuzzyIndex
+            if (courseQuery) flags.course = courseQuery
+            if (debug) flags.debug = debug
+            if (command === 'timetable') {
+              flags.semesterQuery = 'latest'
+            }
+
+            const PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001'
+            let requestBody: any = {
+              command,
+              username: user,
+              flags,
+            }
+            if (pass.includes(':::')) {
+              const [encryptedPassword, sessionKey] = pass.split(':::')
+              requestBody.encryptedPassword = encryptedPassword
+              requestBody.sessionKey = sessionKey
             } else {
-              return {
-                success: false,
-                error: 'VTOP credentials required',
-                requiresCredentials: true,
-                command,
-                message: 'Please provide your VTOP username and password to access VTOP data.',
-              }
+              requestBody.password = pass
             }
-          }
 
-          if (command === 'course-page') {
-            return await handleIntelligentCoursePage({
-              username,
-              password,
-              semesterQuery,
-              courseQuery,
-              facultyQuery,
-              materialQuery,
-              interactiveStep,
-              semester,
-              course,
-              faculty,
-              fuzzyIndex,
-              messages: context?.messages || [],
+            const response = await fetch(`${PROXY_URL}/vtop`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(requestBody),
             })
-          }
 
-          const flags: Record<string, any> = {}
+            if (!response.ok) {
+              const errorData = await response.json().catch(() => ({}))
+              const errorMsg =
+                typeof errorData === 'object' &&
+                'error' in errorData &&
+                typeof errorData.error === 'string'
+                  ? errorData.error.toLowerCase()
+                  : ''
+              if (
+                errorMsg.includes('invalid username') ||
+                errorMsg.includes('invalid loginid') ||
+                errorMsg.includes('invalid password')
+              ) {
+                return {
+                  success: false,
+                  error: `VTOP request failed: ${response.status}`,
+                  message: errorData.error || `Failed to execute ${command} command`,
+                  details: errorData,
+                }
+              }
+              lastError = {
+                success: false,
+                error: `VTOP request failed: ${response.status}`,
+                message: errorData.error || `Failed to execute ${command} command`,
+                details: errorData,
+              }
+              attempt++
+              continue
+            }
 
-          if (semester !== undefined) flags.semester = semester
-          if (semesterQuery) flags.semesterQuery = semesterQuery
-          if (course !== undefined) flags.course = course
-          if (faculty !== undefined) flags.faculty = faculty
-          if (classGroup !== undefined) flags.classGroup = classGroup
-          if (fuzzyIndex !== undefined) flags.fuzzyIndex = fuzzyIndex
-          if (courseQuery) flags.course = courseQuery
-          if (debug) flags.debug = debug
-
-          if (command === 'timetable') {
-            flags.semesterQuery = 'latest'
-          }
-
-          const PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001'
-
-          let requestBody: any = {
-            command,
-            username,
-            flags,
-          }
-
-          if (password.includes(':::')) {
-            const [encryptedPassword, sessionKey] = password.split(':::')
-            requestBody.encryptedPassword = encryptedPassword
-            requestBody.sessionKey = sessionKey
-          } else {
-            requestBody.password = password
-          }
-
-          const response = await fetch(`${PROXY_URL}/vtop`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(requestBody),
-          })
-
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}))
-            return {
+            const result = await response.json()
+            if (result.success) {
+              return {
+                success: true,
+                command,
+                data: result.data || result.output,
+                message: `Successfully retrieved ${command} data from VTOP.`,
+                raw: result.raw || false,
+              }
+            } else {
+              const errorMsg =
+                typeof result === 'object' && 'error' in result && typeof result.error === 'string'
+                  ? result.error.toLowerCase()
+                  : ''
+              if (
+                errorMsg.includes('invalid username') ||
+                errorMsg.includes('invalid loginid') ||
+                errorMsg.includes('invalid password')
+              ) {
+                return {
+                  success: false,
+                  error: result.error || 'Unknown error',
+                  message: `Failed to retrieve ${command} data from VTOP. Reload.`,
+                  command,
+                }
+              }
+              lastError = {
+                success: false,
+                error: result.error || 'Unknown error',
+                message: `Failed to retrieve ${command} data from VTOP. Reload.`,
+                command,
+              }
+              attempt++
+              continue
+            }
+          } catch (error: any) {
+            lastError = {
               success: false,
-              error: `VTOP request failed: ${response.status}`,
-              message: errorData.error || `Failed to execute ${command} command`,
-              details: errorData,
+              error: error.message || 'Network error',
+              message:
+                'Unable to connect to VTOP proxy service. Please ensure the service is running.',
+              suggestion: 'The VTOP proxy service may be offline. Please try again later.',
             }
-          }
-
-          const result = await response.json()
-
-          if (result.success) {
-            return {
-              success: true,
-              command,
-              data: result.data || result.output,
-              message: `Successfully retrieved ${command} data from VTOP`,
-              raw: result.raw || false,
-            }
-          } else {
-            return {
-              success: false,
-              error: result.error || 'Unknown error',
-              message: `Failed to retrieve ${command} data from VTOP`,
-              command,
-            }
-          }
-        } catch (error: any) {
-          return {
-            success: false,
-            error: error.message || 'Network error',
-            message:
-              'Unable to connect to VTOP proxy service. Please ensure the service is running.',
-            suggestion: 'The VTOP proxy service may be offline. Please try again later.',
+            attempt++
+            continue
           }
         }
+        // If all retries failed, return last error
+        return (
+          lastError || {
+            success: false,
+            error: 'Unknown error after retries',
+            message: 'Failed to retrieve VTOP data after multiple attempts.',
+          }
+        )
       },
     }),
 
-    searchRedditKnowledge: tool<any, any>({
+    searchRedditKnowledge: tool({
       description:
         'Search the Reddit knowledge base for student and academic information from various educational subreddits. This provides AI-powered responses based on community-validated information from students about studying, courses, exams, college life, and academic advice.',
-      inputSchema: z.object({
+      parameters: z.object({
         query: z
           .string()
           .describe(
@@ -1695,10 +1890,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       },
     }),
 
-    searchRedditWithContext: tool<any, any>({
+    searchRedditWithContext: tool({
       description:
         'Search Reddit with enhanced capabilities to handle trending topics and broader queries about current events, popular discussions, and more. This combines trending topic retrieval with the knowledge base search for comprehensive results.',
-      inputSchema: z.object({
+      parameters: z.object({
         query: z
           .string()
           .describe(
@@ -1735,10 +1930,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       },
     }),
 
-    getRedditOverview: tool<any, any>({
+    getRedditOverview: tool({
       description:
         'Get an overview of Reddit activity and trending topics. This provides insights into popular discussions, recent trends, and overall Reddit activity related to VIT and other educational topics.',
-      inputSchema: z.object({}),
+      parameters: z.object({}),
       execute: async () => {
         try {
           const overview = await getRedditOverview()
@@ -1764,11 +1959,11 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       },
     }),
 
-    getCampusInfo: tool<any, any>({
+    getCampusInfo: tool({
       description: `Get information about VIT-Vellore campus blocks (SJT, TT, SMV, MB, etc.).  
   Use it to answer: “where is TT?”, “what is GDN used for?”, “which departments sit in Gandhi Block?”.  
   The tool returns a concise description, typical usage, and a quick location cue.`,
-      inputSchema: z.object({
+      parameters: z.object({
         block: z.string().describe('Block / building code: e.g. SJT, TT, SMV, MB'),
       }),
       execute: async ({ block }) => {

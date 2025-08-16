@@ -2,6 +2,16 @@ import puppeteer from 'puppeteer-core'
 import chromium from '@sparticuz/chromium'
 import { findFullCourseName } from '../course-map'
 
+const DEBUG_PAPERS =
+  process.env.DEBUG_PAPERS_CODECHEF === '1' ||
+  process.env.DEBUG_PAPERS_CODECHEF === 'true' ||
+  process.env.DEBUG_SCRAPERS === '1' ||
+  process.env.DEBUG_SCRAPERS === 'true'
+
+function dbg(...args: any[]) {
+  if (DEBUG_PAPERS) console.log('[papers-codechef]', ...args)
+}
+
 interface Paper {
   title: string
   url: string
@@ -21,15 +31,19 @@ interface ApiPaper {
   link?: string
   paperUrl?: string
   finalUrl?: string
+  final_url?: string
   metadata?: string
   description?: string
   examType?: string
   exam?: string
+  paperType?: string
   year?: string
   academicYear?: string
   slot?: string
   semester?: string
   subject?: string
+  paperDate?: string
+  paper_link?: string
 }
 
 interface ScraperResult {
@@ -66,11 +80,19 @@ export async function scrapePapersCodeChef(
   year?: string
 ): Promise<ScraperResult> {
   try {
+    dbg('start', { courseCode, examType, year })
     const apiResult = await tryAPIApproach(courseCode, examType, year)
+    dbg('apiResult', {
+      success: apiResult.success,
+      count: apiResult.papers?.length || 0,
+      source: apiResult.source,
+      searchUrl: apiResult.searchUrl,
+      error: apiResult.error,
+    })
     if (apiResult.success && apiResult.papers.length > 0) {
       return apiResult
     }
-
+    dbg('falling back to browser scraping')
     return await tryBrowserScraping(courseCode, examType, year)
   } catch (error) {
     console.error('Error in scrapePapersCodeChef:', error)
@@ -91,9 +113,9 @@ async function tryAPIApproach(
 ): Promise<ScraperResult> {
   try {
     const fullCourseName = findFullCourseName(courseCode)
-
+    dbg('tryAPIApproach fullCourseName', { courseCode, fullCourseName })
     const searchUrl = `https://papers.codechefvit.com/api/papers?subject=${encodeURIComponent(fullCourseName)}`
-
+    dbg('fetch fullCourseName url', searchUrl)
     const response = await fetch(searchUrl, {
       headers: {
         accept: 'application/json, text/plain, */*',
@@ -113,11 +135,16 @@ async function tryAPIApproach(
     })
 
     if (response.ok) {
+      dbg('response ok for fullCourseName search')
       const data = await response.json()
 
       const papersArray = Array.isArray(data) ? data : data.papers || []
+      dbg('api returned items', papersArray.length)
 
       if (papersArray && papersArray.length > 0) {
+        let skippedNoFinalUrl = 0
+        let headFailCount = 0
+        let headOkCount = 0
         const validatedPapers = await Promise.all(
           papersArray.map(async (paper: ApiPaper) => {
             const title =
@@ -126,7 +153,8 @@ async function tryAPIApproach(
               paper.paperName ||
               `${paper.subject || courseCode} ${paper.exam || ''} ${paper.slot || ''} ${paper.year || ''} ${paper.semester || ''}`.trim()
 
-            let extractedExamType = paper.examType || paper.exam || examType || ''
+            let extractedExamType =
+              paper.examType || paper.exam || (paper as any).paperType || examType || ''
             if (!extractedExamType || extractedExamType === 'unknown') {
               const titleLower = title.toLowerCase()
               if (titleLower.includes('cat-1') || titleLower.includes('cat 1'))
@@ -144,23 +172,32 @@ async function tryAPIApproach(
               if (yearMatch) extractedYear = yearMatch[0]
             }
 
+            const finalUrlCandidate =
+              paper.finalUrl || (paper as any).final_url || paper.downloadUrl
             const paperUrl =
-              paper.finalUrl ||
+              finalUrlCandidate ||
+              paper.paperUrl ||
+              paper.url ||
+              paper.link ||
               (paper._id ? `https://papers.codechefvit.com/paper/${paper._id}` : '')
 
             let isValid = true
-            if (paper.finalUrl) {
+            if (finalUrlCandidate) {
               try {
-                const validateResponse = await fetch(paper.finalUrl, { method: 'HEAD' })
+                const validateResponse = await fetch(finalUrlCandidate, { method: 'HEAD' })
                 isValid = validateResponse.ok
+                if (isValid) headOkCount++
+                else headFailCount++
               } catch (error) {
                 console.warn(`Paper validation failed for ${title}:`, error)
                 isValid = false
+                headFailCount++
               }
             }
 
             // If finalUrl is not available or invalid, skip this paper
-            if (!paper.finalUrl || !isValid) {
+            if (!finalUrlCandidate || !isValid) {
+              if (!finalUrlCandidate) skippedNoFinalUrl++
               return null
             }
 
@@ -179,9 +216,20 @@ async function tryAPIApproach(
         )
 
         let papers = validatedPapers.filter(paper => paper !== null) as Paper[]
+        dbg('post-validate counts', {
+          totalIn: papersArray.length,
+          keptAfterValidate: papers.length,
+          skippedNoFinalUrl,
+          headOkCount,
+          headFailCount,
+        })
+        const beforeDedupe = papers.length
         papers = deduplicatePapers(papers)
+        if (beforeDedupe !== papers.length)
+          dbg('deduped', { before: beforeDedupe, after: papers.length })
 
         if (examType) {
+          const before = papers.length
           papers = papers.filter(paper => {
             const paperTitle = paper.title.toLowerCase()
             const paperMeta = paper.metadata.toLowerCase()
@@ -193,9 +241,11 @@ async function tryAPIApproach(
               (paper.examType && paper.examType.toLowerCase().includes(examTypeLower))
             )
           })
+          dbg('examType filter', { examType, before, after: papers.length })
         }
 
         if (year) {
+          const before = papers.length
           papers = papers.filter(paper => {
             const paperTitle = paper.title.toLowerCase()
             const paperMeta = paper.metadata.toLowerCase()
@@ -206,6 +256,7 @@ async function tryAPIApproach(
               (paper.year && paper.year.includes(year))
             )
           })
+          dbg('year filter', { year, before, after: papers.length })
         }
 
         return {
@@ -215,9 +266,19 @@ async function tryAPIApproach(
           searchUrl: searchUrl,
         }
       }
+    } else {
+      let text = ''
+      try {
+        text = await response.text()
+      } catch {}
+      dbg('response not ok for fullCourseName search', {
+        status: response.status,
+        bodySnippet: text?.slice(0, 200),
+      })
     }
 
     const codeOnlyUrl = `https://papers.codechefvit.com/api/papers?subject=${encodeURIComponent(courseCode)}`
+    dbg('fetch codeOnly url', codeOnlyUrl)
     const codeResponse = await fetch(codeOnlyUrl, {
       headers: {
         accept: 'application/json, text/plain, */*',
@@ -226,10 +287,14 @@ async function tryAPIApproach(
     })
 
     if (codeResponse.ok) {
+      dbg('response ok for codeOnly search')
       const codeData = await codeResponse.json()
       const papersArray = Array.isArray(codeData) ? codeData : codeData.papers || []
-
+      dbg('api returned items (codeOnly)', papersArray.length)
       if (papersArray && papersArray.length > 0) {
+        let skippedNoFinalUrl = 0
+        let headFailCount = 0
+        let headOkCount = 0
         const validatedPapers = await Promise.all(
           papersArray.map(async (paper: ApiPaper) => {
             const title =
@@ -238,7 +303,8 @@ async function tryAPIApproach(
               paper.paperName ||
               `${paper.subject || courseCode} ${paper.exam || ''} ${paper.slot || ''} ${paper.year || ''} ${paper.semester || ''}`.trim()
 
-            let extractedExamType = paper.examType || paper.exam || examType || ''
+            let extractedExamType =
+              paper.examType || paper.exam || (paper as any).paperType || examType || ''
             if (!extractedExamType) {
               const titleLower = title.toLowerCase()
               if (titleLower.includes('cat-1') || titleLower.includes('cat 1'))
@@ -256,23 +322,32 @@ async function tryAPIApproach(
               if (yearMatch) extractedYear = yearMatch[0]
             }
 
+            const finalUrlCandidate =
+              paper.finalUrl || (paper as any).final_url || paper.downloadUrl
             const paperUrl =
-              paper.finalUrl ||
+              finalUrlCandidate ||
+              paper.paperUrl ||
+              paper.url ||
+              paper.link ||
               (paper._id ? `https://papers.codechefvit.com/paper/${paper._id}` : '')
 
             let isValid = true
-            if (paper.finalUrl) {
+            if (finalUrlCandidate) {
               try {
-                const validateResponse = await fetch(paper.finalUrl, { method: 'HEAD' })
+                const validateResponse = await fetch(finalUrlCandidate, { method: 'HEAD' })
                 isValid = validateResponse.ok
+                if (isValid) headOkCount++
+                else headFailCount++
               } catch (error) {
                 console.warn(`Paper validation failed for ${title}:`, error)
                 isValid = false
+                headFailCount++
               }
             }
 
             // If finalUrl is not available or invalid, skip this paper
-            if (!paper.finalUrl || !isValid) {
+            if (!finalUrlCandidate || !isValid) {
+              if (!finalUrlCandidate) skippedNoFinalUrl++
               return null
             }
 
@@ -291,7 +366,17 @@ async function tryAPIApproach(
         )
 
         let papers = validatedPapers.filter(paper => paper !== null) as Paper[]
+        dbg('post-validate counts (codeOnly)', {
+          totalIn: papersArray.length,
+          keptAfterValidate: papers.length,
+          skippedNoFinalUrl,
+          headOkCount,
+          headFailCount,
+        })
+        const beforeDedupe = papers.length
         papers = deduplicatePapers(papers)
+        if (beforeDedupe !== papers.length)
+          dbg('deduped (codeOnly)', { before: beforeDedupe, after: papers.length })
 
         return {
           success: true,
@@ -300,6 +385,15 @@ async function tryAPIApproach(
           searchUrl: codeOnlyUrl,
         }
       }
+    } else {
+      let text = ''
+      try {
+        text = await codeResponse.text()
+      } catch {}
+      dbg('response not ok for codeOnly search', {
+        status: codeResponse.status,
+        bodySnippet: text?.slice(0, 200),
+      })
     }
 
     return { success: false, papers: [], source: 'papers.codechefvit.com' }
@@ -316,8 +410,9 @@ async function tryBrowserScraping(
 ): Promise<ScraperResult> {
   let browser
   try {
+    dbg('launching puppeteer for browser scraping')
     browser = await puppeteer.launch({
-      args: chromium.args,
+      args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
       defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
@@ -330,9 +425,10 @@ async function tryBrowserScraping(
 
     const fullCourseName = findFullCourseName(courseCode)
     const searchUrl = `https://papers.codechefvit.com/catalogue?subject=${encodeURIComponent(fullCourseName)}`
-    await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 15000 })
+    dbg('browser goto', { searchUrl, fullCourseName })
+    await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 10000 }) // Faster loading
 
-    await new Promise(res => setTimeout(res, 3000))
+    await new Promise(res => setTimeout(res, 1500)) // Reduced wait time
 
     const papers = await page.evaluate(
       (courseCode, examType, year) => {
@@ -425,42 +521,49 @@ async function tryBrowserScraping(
       year
     )
 
-    const papersWithFinalUrls = await Promise.all(
-      papers.map(async paper => {
-        if (paper.url.includes('.pdf') || paper.url.includes('cloudinary.com')) {
-          return paper
-        }
+    dbg('initial scraped paper cards', papers.length)
+    const papersWithFinalUrls: Paper[] = []
 
-        try {
-          const finalUrlPromise = extractFinalUrlFromPaperPage(paper.url)
-          const timeoutPromise = new Promise<string | null>((_, reject) =>
-            setTimeout(() => reject(new Error('Timeout')), 15000)
-          )
+    // Process papers sequentially to prevent browser resource exhaustion
+    for (const paper of papers) {
+      if (paper.url.includes('.pdf') || paper.url.includes('cloudinary.com')) {
+        papersWithFinalUrls.push(paper)
+        continue
+      }
 
-          const finalUrl = await Promise.race([finalUrlPromise, timeoutPromise])
+      try {
+        const finalUrlPromise = extractFinalUrlFromPaperPage(paper.url)
+        const timeoutPromise = new Promise<string | null>(
+          (_, reject) => setTimeout(() => reject(new Error('Timeout')), 8000) // Reduced from 15000 to 8000
+        )
 
-          if (finalUrl && finalUrl.includes('cloudinary.com')) {
-            try {
-              const response = await fetch(finalUrl, { method: 'HEAD' })
-              if (response.ok) {
-                return {
-                  ...paper,
-                  url: finalUrl, // Use the Cloudinary PDF URL instead of the paper page URL
-                }
-              }
-            } catch (validationError) {
-              console.warn(`Final URL validation failed for ${paper.title}:`, validationError)
+        const finalUrl = await Promise.race([finalUrlPromise, timeoutPromise])
+
+        if (finalUrl && finalUrl.includes('cloudinary.com')) {
+          try {
+            const response = await fetch(finalUrl, { method: 'HEAD' })
+            if (response.ok) {
+              papersWithFinalUrls.push({
+                ...paper,
+                url: finalUrl, // Use the Cloudinary PDF URL instead of the paper page URL
+              })
+              continue
             }
+          } catch (validationError) {
+            console.warn(`Final URL validation failed for ${paper.title}:`, validationError)
+            dbg('finalUrl HEAD failed (browser scraping)', { title: paper.title, finalUrl })
           }
-        } catch (error) {
-          console.warn(`Failed to extract finalUrl for ${paper.title}:`, error)
         }
+      } catch (error) {
+        console.warn(`Failed to extract finalUrl for ${paper.title}:`, error)
+        dbg('finalUrl extraction error or timeout', { title: paper.title, pageUrl: paper.url })
+      }
 
-        return paper
-      })
-    )
+      papersWithFinalUrls.push(paper)
+    }
 
     const deduplicatedPapers = deduplicatePapers(papersWithFinalUrls as Paper[])
+    dbg('browser scraping result count', deduplicatedPapers.length)
 
     return {
       success: true,
@@ -478,7 +581,11 @@ async function tryBrowserScraping(
     }
   } finally {
     if (browser) {
-      await browser.close()
+      try {
+        await browser.close()
+      } catch (closeError) {
+        console.warn('Browser cleanup error in tryBrowserScraping:', closeError)
+      }
     }
   }
 }
@@ -486,8 +593,11 @@ async function tryBrowserScraping(
 async function extractFinalUrlFromPaperPage(paperPageUrl: string): Promise<string | null> {
   let browser
   try {
+    // Add small delay to prevent resource exhaustion
+    await new Promise(resolve => setTimeout(resolve, 200)) // Reduced from 500ms
+
     browser = await puppeteer.launch({
-      args: chromium.args,
+      args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
       defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
@@ -498,9 +608,9 @@ async function extractFinalUrlFromPaperPage(paperPageUrl: string): Promise<strin
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     )
 
-    await page.goto(paperPageUrl, { waitUntil: 'networkidle2', timeout: 8000 })
+    await page.goto(paperPageUrl, { waitUntil: 'domcontentloaded', timeout: 6000 })
 
-    await new Promise(res => setTimeout(res, 1000))
+    await new Promise(res => setTimeout(res, 500))
 
     const finalUrl = await page.evaluate(() => {
       const cloudinaryLinks = Array.from(document.querySelectorAll('a[href*="cloudinary.com"]'))
@@ -568,7 +678,11 @@ async function extractFinalUrlFromPaperPage(paperPageUrl: string): Promise<strin
     return null
   } finally {
     if (browser) {
-      await browser.close()
+      try {
+        await browser.close()
+      } catch (closeError) {
+        console.warn(`Browser cleanup error for ${paperPageUrl}:`, closeError)
+      }
     }
   }
 }

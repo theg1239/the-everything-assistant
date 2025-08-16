@@ -7,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "cockroachdb"
   url      = env("DATABASE_URL")
 }
 
@@ -17,12 +17,12 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -160,7 +160,7 @@ model SecurityLog {
 }
 
 model Migration {
-  id          Int      @id @default(autoincrement())
+  id          Int      @id @default(sequence())
   name        String   @unique
   executed_at DateTime @default(now())
 
@@ -170,7 +170,7 @@ model Migration {
 model Memory {
   id          String   @id @default(cuid())
   userId      String
-  content     String   @db.Text
+  content     String
   tags        String[] @default([])
   importance  Int      @default(1) // 1-5 scale, 5 being most important
   lastUsedAt  DateTime @default(now())
@@ -234,4 +234,24 @@ model Broadcast {
   createdAt DateTime @default(now())
 
   @@map("broadcasts")
+}
+
+model TokenUsage {
+  id               String   @id @default(cuid())
+  userId           String?
+  chatId           String?
+  model            String?
+  stepIndex        Int?
+  promptTokens     Int
+  completionTokens Int
+  totalTokens      Int
+  meta             Json?
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("token_usage")
+}
+
+enum crdb_internal_region {
+  aws_ap_south_1 @map("aws-ap-south-1")
 }

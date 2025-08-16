@@ -5,6 +5,7 @@ const fs = require('fs')
 const { v4: uuidv4 } = require('uuid')
 const CryptoJS = require('crypto-js')
 const helmet = require('helmet')
+const rateLimit = require('express-rate-limit')
 require('dotenv').config()
 
 const app = express()
@@ -16,6 +17,14 @@ app.use(
 )
 
 app.use(express.json({ limit: '10mb' }))
+
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: parseInt(process.env.GLOBAL_RATE_LIMIT || '120'),
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+app.use(globalLimiter)
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
@@ -32,6 +41,14 @@ app.use((req, res, next) => {
     return res.sendStatus(200)
   }
   next()
+})
+
+const vtopLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: parseInt(process.env.VTOP_RATE_LIMIT || '30'),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests' },
 })
 
 app.use((req, res, next) => {
@@ -814,6 +831,24 @@ function calculateFuzzyMatchScore(query, description) {
 }
 
 async function executeInteractiveCoursePageWorkflow(username, password, step, flags, sessionData) {
+  // Ensure default behavior matches the updated binary: default to latest semester
+  try {
+    const needsSemester = ['semester', 'course', 'faculty', 'materials', 'download'].includes(step)
+    if (needsSemester) {
+      const hasExplicitSemester =
+        flags &&
+        (typeof flags.semester === 'number' ||
+          (typeof flags.semester === 'string' && flags.semester.trim() !== ''))
+      const hasSemesterQuery =
+        flags && typeof flags.semesterQuery === 'string' && flags.semesterQuery.trim() !== ''
+      if (!hasExplicitSemester && !hasSemesterQuery) {
+        flags = { ...(flags || {}), semesterQuery: 'latest' }
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('[course-page] Defaulting semesterQuery to "latest"')
+        }
+      }
+    }
+  } catch {}
   if (sessionData && typeof sessionData === 'string') {
     try {
       const parsedSession = JSON.parse(sessionData)
@@ -1622,18 +1657,24 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           interactiveState: 'waiting_for_input',
         })
       } else if (code === 0) {
+        // Always check for download path in stdout, even if step is not 'materials'
+        const downloadPathMatch = stdout.match(/Download path:\s*(.*)/i)
+        const hasDownloadPath = !!(downloadPathMatch && downloadPathMatch[1])
         const shouldParseDownloadInfo =
           step === 'materials' ||
           stdout.includes('Downloaded') ||
           stdout.includes('Downloading') ||
           stdout.includes('files downloaded') ||
-          stdout.includes('download complete')
+          stdout.includes('download complete') ||
+          hasDownloadPath
 
         if (process.env.NODE_ENV !== 'production') {
           console.log(`shouldParseDownloadInfo: ${shouldParseDownloadInfo} (step: ${step})`)
+          if (hasDownloadPath) console.log('Detected download path:', downloadPathMatch[1])
         }
 
-        const downloadInfo = shouldParseDownloadInfo
+        // If download path found, inject into downloadInfo
+        let downloadInfo = shouldParseDownloadInfo
           ? parseDownloadInfo(stdout)
           : {
               filesDownloaded: 0,
@@ -1642,6 +1683,9 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
               files: [],
               errors: [],
             }
+        if (hasDownloadPath && !downloadInfo.downloadPath) {
+          downloadInfo.downloadPath = downloadPathMatch[1].trim()
+        }
 
         const servedFiles = shouldParseDownloadInfo
           ? await serveDownloadedFiles(downloadInfo.downloadPath, downloadInfo)
@@ -1867,10 +1911,11 @@ function parseFacultyOptions(output) {
   }
 
   let startParsingIndex = -1
+  // Find the header row for faculty (not course codes)
   for (let i = 0; i < lines.length; i++) {
     if (
-      lines[i].includes('INDEX │') &&
-      (lines[i].includes('NAME') || lines[i].includes('FACULTY'))
+      lines[i].includes('INDEX │ FACULTY') ||
+      (lines[i].includes('INDEX │') && lines[i].toLowerCase().includes('faculty'))
     ) {
       startParsingIndex = i
       break
@@ -1878,6 +1923,7 @@ function parseFacultyOptions(output) {
   }
 
   if (startParsingIndex === -1) {
+    // Fallback: look for the prompt line
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].includes('Enter a search term or number for Faculty')) {
         startParsingIndex = i
@@ -1890,34 +1936,44 @@ function parseFacultyOptions(output) {
     return options
   }
 
+  // Only parse lines that look like faculty names, not course codes
   for (let i = startParsingIndex + 1; i < lines.length; i++) {
     const line = lines[i]
-
     if (line.includes('─') || line.trim() === '') {
       continue
     }
-
-    const tableMatch = line.match(/^\s*(\d+)\s*│\s*(.+?)\s*│/)
-    if (tableMatch) {
-      const description = tableMatch[2].trim()
-
-      options.push({
-        number: parseInt(tableMatch[1]),
-        description: description,
-        text: line.trim(),
-      })
+    // Stop parsing if we hit another table or unrelated prompt
+    if (
+      line.includes('INDEX │ COURSE') ||
+      line.includes('Choose a Course') ||
+      line.includes('Enter a search term or number for Course')
+    ) {
+      break
+    }
+    // Faculty table: "  1 │ RACHNA BHATIA"
+    const facultyMatch = line.match(/^\s*(\d+)\s*│\s*([A-Z .'-]+)$/i)
+    if (facultyMatch) {
+      const description = facultyMatch[2].trim()
+      // Ignore lines that look like course codes (e.g., BMAT201L)
+      if (!/^[A-Z]{4}\d{3}[A-Z]?$/.test(description)) {
+        options.push({
+          number: parseInt(facultyMatch[1]),
+          description: description,
+          text: line.trim(),
+        })
+      }
       continue
     }
-
-    const simpleMatch = line.match(/^\s*(\d+)\.\s*(.+)$/)
+    const simpleMatch = line.match(/^\s*(\d+)\.\s*([A-Z .'-]+)$/i)
     if (simpleMatch) {
       const description = simpleMatch[2].trim()
-
-      options.push({
-        number: parseInt(simpleMatch[1]),
-        description: description,
-        text: line.trim(),
-      })
+      if (!/^[A-Z]{4}\d{3}[A-Z]?$/.test(description)) {
+        options.push({
+          number: parseInt(simpleMatch[1]),
+          description: description,
+          text: line.trim(),
+        })
+      }
     }
   }
 
@@ -2190,16 +2246,7 @@ async function serveDownloadedFiles(downloadPath, downloadInfo) {
           },
           2 * 60 * 60 * 1000
         )
-        let downloadUrl
-        if (process.env.NODE_ENV === 'production') {
-          downloadUrl = `https://assistant.nptelprep.in/download/${fileId}`
-          console.log(`Production mode detected - using Render domain for file: ${filename}`)
-        } else {
-          const host = process.env.PROXY_HOST || 'localhost'
-          const port = process.env.PORT || 3001
-          downloadUrl = `http://${host}:${port}/download/${fileId}`
-          console.log(`Development mode detected - using localhost for file: ${filename}`)
-        }
+        const downloadUrl = `https://assistant.nptelprep.in/download/${fileId}`
 
         servedFiles.push({
           name: filename,
@@ -2317,7 +2364,7 @@ function getNextStep(currentStep) {
   return stepFlow[currentStep] || 'complete'
 }
 
-app.post('/vtop', async (req, res) => {
+app.post('/vtop', vtopLimiter, async (req, res) => {
   const { command, username, password, encryptedPassword, sessionKey, flags } = req.body
 
   if (!command || !username) {
@@ -2378,9 +2425,6 @@ app.post('/vtop', async (req, res) => {
     if (interactiveConfig.requiresClassGroup && !flagsForCLI.classGroup) {
       flagsForCLI.classGroup = 1
     }
-
-    // Note: We intentionally do NOT set a default semester
-    // The CLI will prompt interactively and we'll handle it in executeInteractiveCommand
   }
 
   if (process.env.NODE_ENV !== 'production') {
@@ -2397,7 +2441,7 @@ app.post('/vtop', async (req, res) => {
   }
 })
 
-app.post('/vtop-interactive', async (req, res) => {
+app.post('/vtop-interactive', vtopLimiter, async (req, res) => {
   const { command, step, username, password, encryptedPassword, sessionKey, flags, sessionData } =
     req.body
 
@@ -2448,7 +2492,7 @@ app.post('/vtop-interactive', async (req, res) => {
   }
 })
 
-app.post('/vtop-interactive-continue', async (req, res) => {
+app.post('/vtop-interactive-continue', vtopLimiter, async (req, res) => {
   const { sessionData, selection, step } = req.body
 
   if (!sessionData || !selection || !step) {

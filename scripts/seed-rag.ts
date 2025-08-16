@@ -110,7 +110,7 @@ async function main() {
   }
 
   const raw =
-    getContextForAIPrompt({ includeAll: true, maxLength: 20000 }) +
+    getContextForAIPrompt({ includeAll: true, maxLength: 100000 }) +
     '\n\n' +
     VIT_COMPREHENSIVE_KNOWLEDGE
 

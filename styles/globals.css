@@ -12,22 +12,6 @@
 }
 
 @layer base {
-  textarea {
-    border: none !important;
-    outline: none !important;
-    box-shadow: none !important;
-    ring: none !important;
-    ring-offset: none !important;
-  }
-
-  textarea:focus {
-    border: none !important;
-    outline: none !important;
-    box-shadow: none !important;
-    ring: none !important;
-    ring-offset: none !important;
-  }
-
   :root {
     --app-height: 100vh;
   }
@@ -146,55 +130,20 @@
     }
   }
 
-  input:focus,
-  input:focus-visible,
-  .focus\:ring-0:focus {
-    outline: none !important;
-    ring: none !important;
-    border: none !important;
-    box-shadow: none !important;
-    --tw-ring-shadow: none !important;
-    --tw-ring-offset-shadow: none !important;
+  /* Respect reduced motion preferences for scrolling */
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
   }
 
-  textarea,
-  textarea:focus,
-  textarea:focus-visible,
-  textarea:focus-within,
-  textarea:active,
-  textarea.textarea,
-  textarea.textarea:focus,
-  textarea.textarea:focus-visible,
-  textarea.textarea:focus-within,
-  textarea.textarea:active {
-    border: none !important;
-    outline: none !important;
-    box-shadow: none !important;
-    --tw-ring-width: 0 !important;
-    --tw-ring-offset-width: 0 !important;
-    --tw-ring-offset-width: 0 !important;
-    --tw-ring-offset-color: transparent !important;
-    --tw-ring-color: transparent !important;
-    --tw-ring-offset-shadow: 0 0 #0000 !important;
-    --tw-ring-shadow: 0 0 #0000 !important;
-  }
-
-  .focus\:border:focus,
-  .focus\:ring:focus,
-  .focus-visible\:border:focus-visible,
-  .focus-visible\:ring:focus-visible,
-  .focus-within\:border:focus-within,
-  .focus-within\:ring:focus-within {
-    border: none !important;
-    outline: none !important;
-    box-shadow: none !important;
-    --tw-ring-offset-width: 0 !important;
-    --tw-ring-color: transparent !important;
-    --tw-ring-shadow: none !important;
-  }
-
-  html {
-    scroll-behavior: smooth;
+  /* Minimize motion for users who prefer reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *:not([data-allow-motion]) {
+      animation: none !important;
+      transition: none !important;
+      scroll-behavior: auto !important;
+    }
   }
 
   ::-webkit-scrollbar {

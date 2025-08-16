@@ -1898,18 +1898,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
   }
   const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
     if (!isDragging) return
-
-    e.preventDefault()
-
-    const touch = e.touches[0]
-    const scrollContainer = e.currentTarget
-    const deltaY = touchStartY - touch.clientY
-    const newScrollTop = touchStartScrollTop + deltaY
-
-    scrollContainer.scrollTop = Math.max(
-      0,
-      Math.min(newScrollTop, scrollContainer.scrollHeight - scrollContainer.clientHeight)
-    )
+    // Allow native scrolling; avoid preventDefault.
   }
 
   const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -1958,7 +1947,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {' '}
-      <DialogContent className="max-w-5xl w-[95vw] h-[90vh] max-h-[800px] p-0 gap-0 bg-background border border-border overflow-hidden rounded-xl">
+      <DialogContent className="max-w-5xl w-[95vw] h-[calc(var(--vh,1vh)*90)] md:h-[90vh] max-h-[800px] p-0 gap-0 bg-background border border-border overflow-hidden rounded-xl">
         <div className="flex flex-col md:flex-row h-full rounded-xl overflow-hidden">
           <div className="block md:hidden border-b border-border bg-muted/20 p-4 flex-shrink-0">
             <DialogHeader>
@@ -1996,17 +1985,14 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
           </div>{' '}
           <div
             className="flex-1 min-h-0 overflow-y-auto rounded-br-xl md:rounded-tr-xl rounded-bl-xl md:rounded-bl-none"
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
+            data-allow-touch-scroll
             style={{
               overflow: 'auto',
               WebkitOverflowScrolling: 'touch',
               overscrollBehavior: 'contain',
               position: 'relative',
-              touchAction: 'none', // Prevent default touch behavior
+              touchAction: 'pan-y',
               transform: 'translate3d(0, 0, 0)',
-              userSelect: 'none', // Prevent text selection during drag
             }}
           >
             <div className="p-4 md:p-6">

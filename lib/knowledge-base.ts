@@ -181,15 +181,15 @@ there are three exams throughout a regular semester, two continuous assessment t
 cat 1:
 - timing: weeks 4-5 of semester
 - duration: 1.5 hours
-- format: multiple choice questions (mcq)
+- format: descriptive
 - weightage: 15% of total marks
-- syllabus: first 40% of course content
+- syllabus: around the first 40% 
 - question pattern: 5 questions + sub questions, 10 marks each (max marks: 50)
 
 cat 2:
 - timing: weeks 9-10 of semester  
 - duration: 1.5 hours
-- format: multiple choice questions (mcq)
+- format: descriptive (open book), you can bring handwritten notes and textbooks but not printouts of course page material (slides)
 - weightage: 15% of total marks
 - syllabus: next 40% of course content
 - question pattern: 5 questions + sub questions, 10 marks each (max marks: 50)s

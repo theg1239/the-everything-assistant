@@ -721,6 +721,8 @@ CRITICAL TOOL CONTINUATION RULES:
       }
     }
 
+    let savedFinalStepUsage = false
+
     const resultStream = await rateLimitedAI.google.streamText(
       {
         model: await rateLimitedAI.google.model(modelName),
@@ -777,6 +779,10 @@ CRITICAL TOOL CONTINUATION RULES:
                 totalTokens: usage.totalTokens || (usage.promptTokens || 0) + (usage.completionTokens || 0),
                 meta: { finishReason },
               })
+              // Mark if we already saved a final step usage to avoid saving again in onFinish
+              if (finishReason === 'stop') {
+                savedFinalStepUsage = true
+              }
             }
           } catch (e) {
             console.warn('Failed to persist step usage:', e)
@@ -888,7 +894,7 @@ CRITICAL TOOL CONTINUATION RULES:
           // Persist aggregate usage if available on final result
           try {
             const finalUsage = (result as any)?.usage
-            if (finalUsage && typeof finalUsage === 'object') {
+            if (!savedFinalStepUsage && finalUsage && typeof finalUsage === 'object') {
               const { saveTokenUsage } = await import('@/lib/db')
               await saveTokenUsage({
                 userId: session.user.id,

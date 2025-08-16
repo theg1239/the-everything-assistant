@@ -4,8 +4,14 @@ import { authOptions } from '@/lib/auth'
 import { getMessages } from '@/lib/db'
 import { prisma } from '@/lib/prisma'
 
-export async function GET(req: NextRequest, { params }: { params: { chatId: string } }) {
+export const runtime = 'nodejs'
+
+type ChatParams = Promise<{ chatId: string }>
+
+export async function GET(req: NextRequest, { params }: { params: ChatParams }) {
   try {
+    const { chatId } = await params
+
     const session = await getServerSession(authOptions)
 
     const adminEmail = process.env.RATE_LIMIT_ADMIN_EMAIL
@@ -17,17 +23,17 @@ export async function GET(req: NextRequest, { params }: { params: { chatId: stri
       return NextResponse.json({ error: 'Unauthorized access - admin only' }, { status: 403 })
     }
 
-    const chatId = params.chatId
     if (!chatId) {
       return NextResponse.json({ error: 'Missing chatId' }, { status: 400 })
     }
 
     const all = await getMessages(chatId)
+
     const chat = await prisma.chat.findUnique({
       where: { id: chatId },
       select: { id: true, user: { select: { id: true, name: true, email: true } } },
     })
-    // Only return user/assistant messages for this viewer
+
     const messages = all
       .filter(m => m.role === 'user' || m.role === 'assistant')
       .map(m => ({

@@ -301,6 +301,23 @@ function toCloudinaryPageImageUrls(pdfUrl: string, pages = 4): string[] | null {
   }
 }
 
+function toCloudinaryFetchPageImageUrls(pdfUrl: string, pages = 4): string[] | null {
+  try {
+    const m = pdfUrl.match(/^https?:\/\/res\.cloudinary\.com\/([^/]+)\//i)
+    if (!m) return null
+    const cloud = m[1]
+    const encoded = encodeURIComponent(pdfUrl)
+    const urls: string[] = []
+    for (let i = 1; i <= pages; i++) {
+      // Request Cloudinary to fetch the remote PDF and render page i as PNG
+      urls.push(`https://res.cloudinary.com/${cloud}/image/fetch/f_png,pg_${i}/${encoded}`)
+    }
+    return urls
+  } catch {
+    return null
+  }
+}
+
 async function fetchAsBuffer(url: string, timeoutMs = 10000, headers?: Record<string, string>): Promise<Buffer | null> {
   try {
     const resp = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) })
@@ -326,7 +343,12 @@ async function genericHeadlessPdfToImages(url: string, log?: Logger, runId?: str
     browser = await getOrCreateSharedBrowser(log)
     page = await browser.newPage()
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36')
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 })
+    let targetUrl = url
+    if (/\.pdf($|\?|#)/i.test(url) && !/drive\.google\.com/i.test(url)) {
+      // Use Google Docs viewer to render the PDF when direct view is not ideal
+      targetUrl = `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(url)}`
+    }
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 20000 })
 
     await page.evaluate(async () => {
       const delay = (ms: number) => new Promise(res => setTimeout(res, ms))
@@ -719,6 +741,11 @@ async function extractTextFromPdf(pdfData: Buffer, log?: Logger, runId?: string,
       if (runId) logEmit(runId, 'Switching extraction strategy', { error: err?.message })
       // Fallback 1: Use pdfjs-dist (legacy build) to extract text in Node (avoids OCR + browser)
       try {
+        // Provide minimal DOM polyfills to satisfy pdfjs-dist in Node
+        const g: any = globalThis as any
+        if (!g.DOMMatrix) g.DOMMatrix = class {} as any
+        if (!g.ImageData) g.ImageData = class {} as any
+        if (!g.Path2D) g.Path2D = class {} as any
         // Use pdfjs-dist legacy ESM build which is compatible with Node
         const pdfjs: any = await import('pdfjs-dist/legacy/build/pdf.mjs')
         const getDocument = (pdfjs as any).getDocument || (pdfjs as any).default?.getDocument
@@ -1120,11 +1147,20 @@ export async function indexPastPapers(options: {
         // Cloudinary-specific lightweight OCR: request page images directly via Cloudinary transformations
         try {
           log('Attempting cloudinary direct page images + OCR', { url: p.url })
-          const pageUrls = toCloudinaryPageImageUrls(p.url, 5) || []
           const images: Buffer[] = []
-          for (const u of pageUrls) {
-            const buf = await fetchAsBuffer(u, 8000, { Accept: 'image/png,image/*;q=0.8' })
-            if (buf) images.push(buf)
+          {
+            const pageUrls = toCloudinaryPageImageUrls(p.url, 5) || []
+            for (const u of pageUrls) {
+              const buf = await fetchAsBuffer(u, 8000, { Accept: 'image/png,image/*;q=0.8' })
+              if (buf) images.push(buf)
+            }
+          }
+          if (!images.length) {
+            const fetchUrls = toCloudinaryFetchPageImageUrls(p.url, 5) || []
+            for (const u of fetchUrls) {
+              const buf = await fetchAsBuffer(u, 10000, { Accept: 'image/png,image/*;q=0.8' })
+              if (buf) images.push(buf)
+            }
           }
           if (images.length) {
             const ocrText = await extractTextFromPdf(Buffer.alloc(0), log, options.runId, images)
@@ -1255,7 +1291,8 @@ export async function indexPastPapers(options: {
     })
   }
 
-  const CONCURRENCY = Math.min(2, selected.length)
+  // Limit concurrency to avoid multiple simultaneous headless/ocr fallbacks in serverless
+  const CONCURRENCY = Math.min(1, selected.length)
   let idx = 0
   const workers = Array.from({ length: CONCURRENCY }, async () => {
     while (!stopAll && idx < selected.length) {

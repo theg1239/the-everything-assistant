@@ -149,7 +149,7 @@ export default function ManagementPage() {
   const [loadingBroadcasts, setLoadingBroadcasts] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [showEditPreview, setShowEditPreview] = useState(false)
-  const [usage, setUsage] = useState<{ recent: UsageLog[]; summary: any } | null>(null)
+  const [usage, setUsage] = useState<{ recent: UsageLog[]; summary: any; summaryAllTime?: any } | null>(null)
   const [usageOpen, setUsageOpen] = useState(true)
 
   const fetchData = useCallback(async () => {
@@ -477,11 +477,18 @@ export default function ManagementPage() {
                         <Activity className="w-5 h-5" /> token usage (last 24h)
                       </div>
                       <div className="flex items-center gap-3">
-                        {usage?.summary && (
-                          <div className="text-xs md:text-sm text-muted-foreground">
-                            total: {usage.summary.totalTokens?.toLocaleString?.() || 0} tokens · {usage.summary.count || 0} events
-                          </div>
-                        )}
+                        <div className="flex flex-col items-end gap-0.5">
+                          {usage?.summary && (
+                            <div className="text-xs md:text-sm text-muted-foreground">
+                              24h: {usage.summary.totalTokens?.toLocaleString?.() || 0} tokens · {usage.summary.count || 0} events
+                            </div>
+                          )}
+                          {usage?.summaryAllTime && (
+                            <div className="text-[11px] md:text-xs text-muted-foreground/80">
+                              all time: {usage.summaryAllTime.totalTokens?.toLocaleString?.() || 0} tokens · {usage.summaryAllTime.count || 0} events
+                            </div>
+                          )}
+                        </div>
                         <Button
                           variant="outline"
                           size="sm"

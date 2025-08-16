@@ -332,6 +332,42 @@ export async function getTokenUsageSummary(days: number = 1): Promise<{
   }
 }
 
+export async function getTokenUsageAllTimeSummary(): Promise<{
+  totalPromptTokens: number
+  totalCompletionTokens: number
+  totalTokens: number
+  count: number
+}> {
+  try {
+    const agg = await (prisma as any).tokenUsage.aggregate({
+      _sum: { promptTokens: true, completionTokens: true, totalTokens: true },
+      _count: { _all: true },
+    })
+    return {
+      totalPromptTokens: agg._sum?.promptTokens || 0,
+      totalCompletionTokens: agg._sum?.completionTokens || 0,
+      totalTokens: agg._sum?.totalTokens || 0,
+      count: agg._count?._all || 0,
+    }
+  } catch {
+    // Fallback if aggregate not supported
+    const rows = await prisma.tokenUsage.findMany({
+      select: { promptTokens: true, completionTokens: true, totalTokens: true },
+    })
+    const s = rows.reduce(
+      (acc, r) => {
+        acc.totalPromptTokens += r.promptTokens
+        acc.totalCompletionTokens += r.completionTokens
+        acc.totalTokens += r.totalTokens
+        acc.count++
+        return acc
+      },
+      { totalPromptTokens: 0, totalCompletionTokens: 0, totalTokens: 0, count: 0 }
+    )
+    return s
+  }
+}
+
 export async function getArchivedChats(
   userId: string,
   limit: number = 15,

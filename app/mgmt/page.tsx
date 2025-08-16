@@ -33,6 +33,18 @@ import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Plus, Send, Trash2 } from 'lucide-react'
+
+type UsageLog = {
+  id: string
+  userId?: string | null
+  chatId?: string | null
+  model?: string | null
+  stepIndex?: number | null
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  createdAt: string
+}
 import { BroadcastDialog } from '@/components/broadcast-dialog'
 
 interface RateLimitStatus {
@@ -137,14 +149,16 @@ export default function ManagementPage() {
   const [loadingBroadcasts, setLoadingBroadcasts] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [showEditPreview, setShowEditPreview] = useState(false)
+  const [usage, setUsage] = useState<{ recent: UsageLog[]; summary: any } | null>(null)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [rateLimitRes, statsRes] = await Promise.all([
+      const [rateLimitRes, statsRes, usageRes] = await Promise.all([
         fetch('/api/rate-limit-status'),
         fetch('/api/stats'),
+        fetch('/api/usage?limit=25&days=1'),
       ])
 
       if (!rateLimitRes.ok) {
@@ -155,12 +169,18 @@ export default function ManagementPage() {
         const json = await statsRes.json()
         throw new Error(json.error || 'Failed to fetch stats')
       }
+      if (!usageRes.ok) {
+        const json = await usageRes.json()
+        throw new Error(json.error || 'Failed to fetch usage')
+      }
 
       const rateLimitData = await rateLimitRes.json()
       const statsData = await statsRes.json()
+      const usageData = await usageRes.json()
 
       setData(rateLimitData)
       setStats(statsData)
+      setUsage(usageData)
       setLastUpdate(new Date())
     } catch (err: any) {
       setError(err.message || 'Failed to fetch data')
@@ -348,7 +368,7 @@ export default function ManagementPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-transparent text-foreground overflow-hidden">
+    <div className="flex flex-col h-screen bg-transparent text-foreground overflow-hidden" data-allow-touch-scroll>
       {/* Header */}
       <header className="flex-shrink-0 bg-black/20 backdrop-blur-sm border-b border-border/50">
         <div className="container mx-auto px-4 max-w-7xl">
@@ -404,8 +424,8 @@ export default function ManagementPage() {
       </header>
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden">
-        <div className="h-full overflow-y-auto">
+      <div className="flex-1 overflow-hidden" data-allow-touch-scroll>
+        <div className="h-full overflow-y-auto" data-allow-touch-scroll style={{ WebkitOverflowScrolling: 'touch' }}>
           <div className="container mx-auto px-4 max-w-7xl py-6">
             {error && (
               <motion.div
@@ -436,6 +456,58 @@ export default function ManagementPage() {
 
             {data && (
               <div className="space-y-6">
+                {/* Token Usage */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.05 }}
+                >
+                  <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
+                        <Activity className="w-5 h-5" /> token usage (last 24h)
+                      </div>
+                      {usage?.summary && (
+                        <div className="text-sm text-muted-foreground">
+                          total: {usage.summary.totalTokens.toLocaleString()} tokens · {usage.summary.count} events
+                        </div>
+                      )}
+                    </div>
+                    <div className="overflow-x-auto rounded-md border border-border/20">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-black/30">
+                          <tr>
+                            <th className="text-left px-3 py-2">time</th>
+                            <th className="text-left px-3 py-2">model</th>
+                            <th className="text-right px-3 py-2">prompt</th>
+                            <th className="text-right px-3 py-2">completion</th>
+                            <th className="text-right px-3 py-2">total</th>
+                            <th className="text-right px-3 py-2">step</th>
+                            <th className="text-left px-3 py-2">chat</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {usage?.recent?.map((u) => (
+                            <tr key={u.id} className="border-t border-border/10">
+                              <td className="px-3 py-2 text-muted-foreground">{new Date(u.createdAt).toLocaleTimeString()}</td>
+                              <td className="px-3 py-2">{u.model || '-'}</td>
+                              <td className="px-3 py-2 text-right">{u.promptTokens.toLocaleString()}</td>
+                              <td className="px-3 py-2 text-right">{u.completionTokens.toLocaleString()}</td>
+                              <td className="px-3 py-2 text-right font-medium">{u.totalTokens.toLocaleString()}</td>
+                              <td className="px-3 py-2 text-right">{u.stepIndex ?? '-'}</td>
+                              <td className="px-3 py-2 text-muted-foreground break-all">{u.chatId?.slice(0, 8) || '-'}</td>
+                            </tr>
+                          ))}
+                          {(!usage || usage.recent.length === 0) && (
+                            <tr>
+                              <td colSpan={7} className="px-3 py-4 text-center text-muted-foreground">no usage records</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </motion.div>
                 {/* System Health */}
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}

@@ -236,6 +236,22 @@ model Broadcast {
   @@map("broadcasts")
 }
 
+model TokenUsage {
+  id               String   @id @default(cuid())
+  userId           String?
+  chatId           String?
+  model            String?
+  stepIndex        Int?
+  promptTokens     Int
+  completionTokens Int
+  totalTokens      Int
+  meta             Json?
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("token_usage")
+}
+
 enum crdb_internal_region {
   aws_ap_south_1 @map("aws-ap-south-1")
 }

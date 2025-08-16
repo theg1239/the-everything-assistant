@@ -764,6 +764,24 @@ CRITICAL TOOL CONTINUATION RULES:
             usage
           })
 
+          try {
+            if (usage && typeof usage === 'object') {
+              const { saveTokenUsage } = await import('@/lib/db')
+              await saveTokenUsage({
+                userId: session.user.id,
+                chatId: chat.id,
+                model: modelName,
+                stepIndex: typeof stepIndex === 'number' ? stepIndex : null,
+                promptTokens: usage.promptTokens || 0,
+                completionTokens: usage.completionTokens || 0,
+                totalTokens: usage.totalTokens || (usage.promptTokens || 0) + (usage.completionTokens || 0),
+                meta: { finishReason },
+              })
+            }
+          } catch (e) {
+            console.warn('Failed to persist step usage:', e)
+          }
+
           const knowledgeBaseCalls =
             toolCalls?.filter((tc: any) => tc.toolName === 'knowledgeBase') || []
           if (knowledgeBaseCalls.length > 0) {
@@ -865,6 +883,26 @@ CRITICAL TOOL CONTINUATION RULES:
                 fallbackError
               )
             }
+          }
+
+          // Persist aggregate usage if available on final result
+          try {
+            const finalUsage = (result as any)?.usage
+            if (finalUsage && typeof finalUsage === 'object') {
+              const { saveTokenUsage } = await import('@/lib/db')
+              await saveTokenUsage({
+                userId: session.user.id,
+                chatId: chat.id,
+                model: modelName,
+                stepIndex: null,
+                promptTokens: finalUsage.promptTokens || 0,
+                completionTokens: finalUsage.completionTokens || 0,
+                totalTokens: finalUsage.totalTokens || (finalUsage.promptTokens || 0) + (finalUsage.completionTokens || 0),
+                meta: { type: 'final' },
+              })
+            }
+          } catch (e) {
+            console.warn('Failed to persist final usage:', e)
           }
         },
       },

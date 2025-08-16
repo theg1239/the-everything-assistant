@@ -140,10 +140,11 @@ for (const m of models) {
 }
 
 function parseCsvFilename(fn) {
-  let m = fn.match(/^([A-Za-z0-9]+)__([A-Za-z0-9_]+)_(\d+)\.csv$/);
-  if (m) return { schema: m[1], table: "_" + m[2], part: +m[3] };
-  m = fn.match(/^([A-Za-z0-9]+)_([A-Za-z0-9_]+)_(\d+)\.csv$/);
+  // Support public.users.csv, public.users_1.csv, users.csv, users_1.csv
+  let m = fn.match(/^([A-Za-z0-9]+)\.([A-Za-z0-9_]+)_(\d+)\.csv$/);
   if (m) return { schema: m[1], table: m[2], part: +m[3] };
+  m = fn.match(/^([A-Za-z0-9]+)\.([A-Za-z0-9_]+)\.csv$/);
+  if (m) return { schema: m[1], table: m[2], part: 1 };
   m = fn.match(/^([A-Za-z0-9_]+)_(\d+)\.csv$/);
   if (m) return { schema: null, table: m[1], part: +m[2] };
   m = fn.match(/^([A-Za-z0-9_]+)\.csv$/);

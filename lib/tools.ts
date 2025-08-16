@@ -22,6 +22,7 @@ import {
   smartPaperSearchByQuestion,
   getPaperIndexMeta,
 } from './agents/paper-agent'
+import { analyzeQuestionFrequencies } from './agents/question-frequency-agent'
 
 async function searchRedditKnowledge(query: string, limit: number = 10) {
   try {
@@ -916,6 +917,34 @@ export function createVITTools(userId: string) {
         } catch (e: any) {
           console.error(`[smartPaperSearch] Error:`, e)
           return { success: false, error: e.message || 'Smart search failed', runId }
+        }
+      },
+    }),
+
+    analyzeQuestionPatterns: tool({
+      description:
+        'Analyze past papers and report the most repeated or common question patterns for a course and exam type. Returns top repeated patterns with counts and sample questions.',
+      parameters: z.object({
+        course: z.string().describe('Course code or name (e.g., BMAT201L or "Complex Variables")'),
+        examType: z
+          .string()
+          .optional()
+          .describe('Exam type filter: CAT-1, CAT-2, FAT, Quiz (case-insensitive, hyphen optional).'),
+        topN: z
+          .number()
+          .int()
+          .min(3)
+          .max(50)
+          .optional()
+          .describe('How many top repeated patterns to return (default 12).'),
+        debug: z.boolean().optional(),
+      }),
+      execute: async ({ course, examType, topN, debug }) => {
+        try {
+          const res = await analyzeQuestionFrequencies({ course, examType, topN, debug })
+          return res
+        } catch (e: any) {
+          return { success: false, error: e?.message || 'Failed to analyze question patterns' }
         }
       },
     }),

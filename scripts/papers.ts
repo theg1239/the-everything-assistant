@@ -20,9 +20,11 @@ import 'dotenv/config'
 import puppeteer, { type Browser, type Page } from 'puppeteer-core'
 import chromium from '@sparticuz/chromium'
 import { existsSync } from 'fs'
+import { promises as fsp } from 'fs'
 import { PDFDocument } from 'pdf-lib'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { execSync } from 'child_process'
 
 // --- Project-local modules (import the TS files directly) ---
 import { scrapePapersService } from '../lib/scrapers/papers-scraper'
@@ -146,6 +148,7 @@ async function computeHash(buf: Buffer | Uint8Array): Promise<string> {
 let sharedBrowser: Browser | null = null
 let sharedBrowserUsageCount = 0
 const MAX_SHARED_BROWSER_USAGE = 10
+let launchingBrowserPromise: Promise<Browser> | null = null
 
 // Puppeteer-compatible init script injector (Playwright-safe too)
 async function installPageHelperShims(page: Page) {
@@ -166,13 +169,18 @@ async function installPageHelperShims(page: Page) {
 }
 
 async function getOrCreateSharedBrowser(log?: Logger): Promise<Browser> {
-  if (!sharedBrowser || sharedBrowserUsageCount >= MAX_SHARED_BROWSER_USAGE) {
-    if (sharedBrowser) {
-      try { await sharedBrowser.close(); log?.('Closed previous shared browser instance') } catch (e: any) { log?.('Error closing previous browser (continuing)', { error: e?.message }) }
-    }
-    log?.('Creating new shared browser instance')
-    const preferSystem = process.env.PAPER_AGENT_USE_SYSTEM_BROWSER === '1' || process.env.NODE_ENV === 'development'
-    const explicitPath = process.env.PAPER_AGENT_BROWSER_PATH
+  if (sharedBrowser && sharedBrowserUsageCount < MAX_SHARED_BROWSER_USAGE) {
+    sharedBrowserUsageCount++
+    return sharedBrowser
+  }
+  if (!launchingBrowserPromise) {
+    launchingBrowserPromise = (async () => {
+      if (sharedBrowser) {
+        try { await sharedBrowser.close(); log?.('Closed previous shared browser instance') } catch (e: any) { log?.('Error closing previous browser (continuing)', { error: e?.message }) } finally { sharedBrowser = null }
+      }
+      log?.('Creating new shared browser instance')
+      const preferSystem = process.env.PAPER_AGENT_USE_SYSTEM_BROWSER === '1' || process.env.NODE_ENV === 'development'
+      const explicitPath = process.env.PAPER_AGENT_BROWSER_PATH
     const resolveSystemBrowserPath = (): string | null => {
       if (explicitPath && existsSync(explicitPath)) return explicitPath
       const plat = process.platform
@@ -188,7 +196,21 @@ async function getOrCreateSharedBrowser(log?: Logger): Promise<Browser> {
           `${pf}/Microsoft/Edge/Application/msedge.exe`,
           `${pf86}/Microsoft/Edge/Application/msedge.exe`,
           `${local}/Microsoft/Edge/Application/msedge.exe`,
+          `${pf}/BraveSoftware/Brave-Browser/Application/brave.exe`,
+          `${pf86}/BraveSoftware/Brave-Browser/Application/brave.exe`,
+          `${local}/BraveSoftware/Brave-Browser/Application/brave.exe`,
         )
+        const tryWhere = (cmd: string) => {
+          try {
+            const out = execSync(`where ${cmd}`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().split(/\r?\n/)[0]?.trim()
+            if (out && existsSync(out)) return out
+          } catch {}
+          return null
+        }
+        for (const cmd of ['chrome.exe', 'msedge.exe', 'brave.exe']) {
+          const p = tryWhere(cmd)
+          if (p) return p
+        }
       } else if (plat === 'darwin') {
         c.push(
           '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -204,31 +226,44 @@ async function getOrCreateSharedBrowser(log?: Logger): Promise<Browser> {
           '/usr/bin/microsoft-edge',
           '/usr/bin/brave-browser',
         )
+        const tryWhich = (cmd: string) => {
+          try {
+            const out = execSync(`which ${cmd}`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()
+            if (out && existsSync(out)) return out
+          } catch {}
+          return null
+        }
+        for (const cmd of ['google-chrome', 'chromium', 'microsoft-edge', 'brave-browser']) {
+          const p = tryWhich(cmd)
+          if (p) return p
+        }
       }
       for (const p of c) { try { if (existsSync(p)) return p } catch {} }
       return null
     }
-    const args = [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--headless=new']
-    const sysPath = (preferSystem && resolveSystemBrowserPath()) || undefined
-    if (sysPath) {
-      sharedBrowser = await puppeteer.launch({
-        args,
-        defaultViewport: { width: 1280, height: 1024 },
-        executablePath: sysPath,
-        headless: true,
-      })
-    } else {
-      sharedBrowser = await puppeteer.launch({
-        args,
-        defaultViewport: chromium.defaultViewport ?? { width: 1280, height: 1024 },
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-      })
-    }
-    sharedBrowserUsageCount = 0
+      const args = [
+        ...chromium.args,
+        '--no-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-zygote',
+        '--single-process',
+        '--headless=new',
+      ]
+      const sysPath = (preferSystem && resolveSystemBrowserPath()) || undefined
+      if (sysPath) {
+        sharedBrowser = await puppeteer.launch({ args, defaultViewport: { width: 1280, height: 1024 }, executablePath: sysPath, headless: true })
+      } else {
+        sharedBrowser = await puppeteer.launch({ args, defaultViewport: chromium.defaultViewport ?? { width: 1280, height: 1024 }, executablePath: await chromium.executablePath(), headless: chromium.headless })
+      }
+      sharedBrowserUsageCount = 0
+      return sharedBrowser
+    })().finally(() => { launchingBrowserPromise = null })
   }
+  const b = await launchingBrowserPromise
+  sharedBrowser = b
   sharedBrowserUsageCount++
-  return sharedBrowser
+  return b
 }
 async function cleanupSharedBrowser(log?: Logger): Promise<void> {
   if (sharedBrowser) {
@@ -245,6 +280,60 @@ function toDirectDrive(url: string): string {
 }
 
 type DriveFallbackResult = { pdf: Buffer | null; images: Buffer[] }
+
+function toCloudinaryPageImageUrls(pdfUrl: string, pages = 5): string[] | null {
+  try {
+    const m = pdfUrl.match(/^https?:\/\/res\.cloudinary\.com\/([^/]+)\/raw\/upload\/(.+)\.pdf(?:$|\?)/i)
+    if (!m) return null
+    const cloud = m[1]
+    const publicId = m[2]
+    const urls: string[] = []
+    for (let i = 1; i <= pages; i++) urls.push(`https://res.cloudinary.com/${cloud}/image/upload/pg_${i}/${publicId}.png`)
+    return urls
+  } catch { return null }
+}
+
+function toCloudinaryFetchPageImageUrls(pdfUrl: string, pages = 5): string[] | null {
+  try {
+    const m = pdfUrl.match(/^https?:\/\/res\.cloudinary\.com\/([^/]+)\//i)
+    if (!m) return null
+    const cloud = m[1]
+    const enc = encodeURIComponent(pdfUrl)
+    const urls: string[] = []
+    for (let i = 1; i <= pages; i++) urls.push(`https://res.cloudinary.com/${cloud}/image/fetch/f_png,pg_${i}/${enc}`)
+    return urls
+  } catch { return null }
+}
+
+async function fetchAsBuffer(url: string, timeoutMs = 10000, headers?: Record<string, string>): Promise<Buffer | null> {
+  try {
+    const resp = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) })
+    if (!resp.ok) return null
+    const ab = await resp.arrayBuffer()
+    if (!ab || ab.byteLength < 500) return null
+    return Buffer.from(ab)
+  } catch { return null }
+}
+
+function sanitizeFilename(name: string): string {
+  return name
+    .replace(/[^a-z0-9\-_.]+/gi, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 128)
+}
+
+async function saveBuffersAsPngs(buffers: Buffer[], dir: string, baseName: string) {
+  try {
+    await fsp.mkdir(dir, { recursive: true })
+    let idx = 1
+    for (const b of buffers) {
+      const file = path.join(dir, `${sanitizeFilename(baseName)}_${String(idx).padStart(2, '0')}.png`)
+      await fsp.writeFile(file, b)
+      idx++
+    }
+  } catch {}
+}
 
 async function driveHeadlessFallback(url: string, log?: Logger, runId?: string): Promise<DriveFallbackResult> {
   let browser: Browser | undefined, page: Page | undefined
@@ -349,7 +438,11 @@ async function genericHeadlessPdfToImages(url: string, log?: Logger, runId?: str
     page = await browser.newPage()
     await installPageHelperShims(page)
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36')
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 })
+    let targetUrl = url
+    if (/\.pdf($|\?|#)/i.test(url) && !/drive\.google\.com/i.test(url)) {
+      targetUrl = `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(url)}`
+    }
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 20000 })
     await page.evaluate(async () => {
       const delay = (ms: number) => new Promise(res => setTimeout(res, ms))
       let lastHeight = 0, stable = 0
@@ -499,7 +592,11 @@ async function extractTextFromPdf(pdfData: Buffer, log?: Logger, runId?: string,
       log?.('pdf-parse failed, attempting pdfjs-dist extraction before OCR', { error: err?.message })
       if (runId) logEmit(runId, 'Switching extraction strategy', { error: err?.message })
       try {
-        const pdfjs: any = await import('pdfjs-dist')
+        const g: any = globalThis as any
+        if (!g.DOMMatrix) g.DOMMatrix = class {} as any
+        if (!g.ImageData) g.ImageData = class {} as any
+        if (!g.Path2D) g.Path2D = class {} as any
+        const pdfjs: any = await import('pdfjs-dist/legacy/build/pdf.mjs')
         const getDocument = (pdfjs as any).getDocument || (pdfjs as any).default?.getDocument
         if (!getDocument) throw new Error('pdfjs-dist getDocument not available')
         const task = getDocument({ data: new Uint8Array(pdfData), isEvalSupported: false, disableFontFace: true })
@@ -692,6 +789,8 @@ export async function indexPastPapers(options: {
   runId?: string
   maxProcessingMs?: number
   headlessOnly?: boolean
+  paperConcurrency?: number
+  saveDir?: string
 }) {
   const log = createLogger(options.debug || process.env.PAPER_AGENT_DEBUG === 'true')
   const useDB = !!process.env.DATABASE_URL2
@@ -743,12 +842,7 @@ export async function indexPastPapers(options: {
       return
     }
 
-    if (attemptedPapers > 3 && indexed.length === 0) {
-      log('No papers successfully processed after 3 attempts, bailing out early')
-      if (options.runId) logEmit(options.runId, 'Having trouble accessing papers - may need to try different sources', { attempted: attemptedPapers })
-      stopAll = true
-      return
-    }
+    // Do not bail early; continue trying more papers in case some sources fail intermittently
 
     if (options.runId) logEmit(options.runId, `Processing: ${p.title}`, { title: p.title, url: p.url })
     log('Processing paper', { title: p.title, url: p.url })
@@ -803,6 +897,10 @@ export async function indexPastPapers(options: {
             contentHashes.add(h)
             contentHashRef = h
           } catch {}
+        }
+        if ((options as any).imagesDir) {
+          const dir = path.join(String((options as any).imagesDir), courseCode)
+          await saveBuffersAsPngs(cap.images, dir, p.title || 'page')
         }
         const text = await extractTextFromPdf(Buffer.alloc(0), log, options.runId, cap.images)
         if (!text || text.length < 50) {
@@ -909,6 +1007,20 @@ export async function indexPastPapers(options: {
       logEmit(options.runId, `Downloaded paper (${Math.round(download.pdf.length / 1024)}KB)`, { url: p.url, bytes: download.pdf.length })
     }
 
+    // Optionally persist PDFs locally for inspection
+    if (download.pdf && (options as any).saveDir) {
+      try {
+        const dir = String((options as any).saveDir)
+        await fsp.mkdir(dir, { recursive: true })
+        const name = sanitizeFilename(`${courseCode}_${p.year || 'na'}_${p.examType || 'na'}_${p.title || 'paper'}`)
+        const filePath = path.join(dir, `${name}.pdf`)
+        await fsp.writeFile(filePath, download.pdf)
+        log('Saved PDF to disk', { filePath, bytes: download.pdf.length })
+      } catch (e: any) {
+        log('Failed saving PDF (continuing)', { error: e?.message })
+      }
+    }
+
     let contentHashRef: string | undefined
     try {
       if (download.pdf) {
@@ -930,30 +1042,86 @@ export async function indexPastPapers(options: {
       : await extractTextFromPdf(Buffer.alloc(0), log, options.runId, download.images)
 
     if (!text || text.length < 50) {
-      log('Primary parse produced little text — attempting headless capture + OCR', { url: p.url })
-        // Only attempt headless fallback for Drive URLs and non-Cloudinary URLs
-        if (/cloudinary\.com/i.test(p.url)) {
-          log('Skipping headless fallback for Cloudinary URL', { url: p.url })
-        } else {
+      if (/drive\.google\.com/i.test(p.url)) {
+        log('Primary parse produced little text — attempting headless capture + OCR', { url: p.url })
+        try {
+          const cap = await driveHeadlessFallback(p.url, log, options.runId)
+          if (cap?.images?.length) {
+            if ((options as any).imagesDir) {
+              const dir = path.join(String((options as any).imagesDir), courseCode)
+              await saveBuffersAsPngs(cap.images, dir, p.title || 'page')
+            }
+            const ocrText = await extractTextFromPdf(Buffer.alloc(0), log, options.runId, cap.images)
+            if (ocrText && ocrText.length >= 50) {
+              text = ocrText
+              log('Fallback OCR succeeded', { chars: text.length })
+            } else {
+              log('Fallback OCR returned too little text', { chars: ocrText?.length || 0 })
+            }
+          } else {
+            log('Headless capture produced no images')
+          }
+        } catch (e: any) {
+          log('Headless capture/OCR fallback failed', { error: e?.message })
+        }
+      } else if (/res\.cloudinary\.com\/.*\.pdf/i.test(p.url)) {
+        // Cloudinary: try direct page images via transformations, then generic viewer screenshots
+        const imgs: Buffer[] = []
+        try {
+          const direct = toCloudinaryPageImageUrls(p.url, 8) || []
+          for (const u of direct) { const b = await fetchAsBuffer(u, 8000, { Accept: 'image/png' }); if (b) imgs.push(b) }
+          if (!imgs.length) {
+            const fetched = toCloudinaryFetchPageImageUrls(p.url, 8) || []
+            for (const u of fetched) { const b = await fetchAsBuffer(u, 12000, { Accept: 'image/png' }); if (b) imgs.push(b) }
+          }
+        } catch {}
+        if (imgs.length) {
+          if ((options as any).imagesDir) {
+            const dir = path.join(String((options as any).imagesDir), courseCode)
+            await saveBuffersAsPngs(imgs, dir, p.title || 'page')
+          }
+          const ocrText = await extractTextFromPdf(Buffer.alloc(0), log, options.runId, imgs)
+          if (ocrText && ocrText.length >= 50) {
+            text = ocrText
+            log('Cloudinary OCR succeeded', { chars: text.length, pages: imgs.length })
+          }
+        }
+        if (!text || text.length < 50) {
           try {
-            const cap = /drive\.google\.com/i.test(p.url)
-              ? await driveHeadlessFallback(p.url, log, options.runId)
-              : await genericHeadlessPdfToImages(p.url, log, options.runId)
+            const cap = await genericHeadlessPdfToImages(p.url, log, options.runId)
             if (cap?.images?.length) {
+              if ((options as any).imagesDir) {
+                const dir = path.join(String((options as any).imagesDir), courseCode)
+                await saveBuffersAsPngs(cap.images, dir, p.title || 'page')
+              }
               const ocrText = await extractTextFromPdf(Buffer.alloc(0), log, options.runId, cap.images)
               if (ocrText && ocrText.length >= 50) {
                 text = ocrText
-                log('Fallback OCR succeeded', { chars: text.length })
-              } else {
-                log('Fallback OCR returned too little text', { chars: ocrText?.length || 0 })
+                log('Generic fallback OCR succeeded', { chars: text.length })
               }
-            } else {
-              log('Headless capture produced no images')
             }
           } catch (e: any) {
-            log('Headless capture/OCR fallback failed', { error: e?.message })
+            log('Generic headless/OCR fallback failed', { error: e?.message })
           }
         }
+      } else {
+        try {
+          const cap = await genericHeadlessPdfToImages(p.url, log, options.runId)
+          if (cap?.images?.length) {
+            if ((options as any).imagesDir) {
+              const dir = path.join(String((options as any).imagesDir), courseCode)
+              await saveBuffersAsPngs(cap.images, dir, p.title || 'page')
+            }
+            const ocrText = await extractTextFromPdf(Buffer.alloc(0), log, options.runId, cap.images)
+            if (ocrText && ocrText.length >= 50) {
+              text = ocrText
+              log('Generic fallback OCR succeeded', { chars: text.length })
+            }
+          }
+        } catch (e: any) {
+          log('Generic headless/OCR fallback failed', { error: e?.message })
+        }
+      }
     }
 
     if (!text || text.length < 50) {
@@ -1030,7 +1198,8 @@ export async function indexPastPapers(options: {
     })
   }
 
-  const CONCURRENCY = Math.min(2, selected.length)
+  const DEFAULT_CONC = 6
+  const CONCURRENCY = Math.min(options.paperConcurrency ?? DEFAULT_CONC, selected.length)
   let idx = 0
   const workers = Array.from({ length: CONCURRENCY }, async () => {
     while (!stopAll && idx < selected.length) {
@@ -1205,6 +1374,11 @@ async function main() {
       case '-y':
       case '--year': opts.year = next(); break
       case '--max': opts.maxPapers = Number(next()); break
+      case '--concurrency': opts.concurrency = Number(next()); break
+      case '--paper-concurrency': opts.paperConcurrency = Number(next()); break
+      case '--courses-concurrency': opts.coursesConcurrency = Number(next()); break
+      case '--save-dir': opts.saveDir = next(); break
+      case '--images-dir': opts.imagesDir = next(); break
       case '--all': opts.maxPapers = Number.MAX_SAFE_INTEGER; break
       case '--max-ms': opts.maxProcessingMs = Number(next()); break
       case '--headless-only': opts.headlessOnly = true; break
@@ -1214,14 +1388,18 @@ async function main() {
       case '-h':
       case '--help':
         console.log(`
-Usage: tsx scripts/papers.ts --course <code|name> [options]
+Usage: tsx scripts/papers.ts [--course <code|name>] [options]
 
 Options:
-  -c, --course <code|name>   Course code or name (required)
+  -c, --course <code|name>   Course code or name (if omitted, fetches subject names from VIT Paper Vault and indexes them)
   -e, --examType <type>      Filter by exam type (CAT1,CAT2,FAT,...)
   -y, --year <year>          Filter by year (e.g., 2023)
       --all                  Process all discovered papers (default behavior)
       --max <n>              Limit number of papers to process
+      --paper-concurrency N  Max parallel papers per course (default 6)
+      --courses-concurrency N  Max parallel courses when no --course (default 2)
+      --save-dir <path>      Save downloaded PDFs to this folder
+      --images-dir <path>    Save OCR page images (PNGs) to this folder
       --max-ms <ms>          Increase overall processing time budget
       --headless-only        Use browser screenshots + OCR only (default)
       --no-headless-only     Allow direct PDF parsing as well
@@ -1243,11 +1421,97 @@ Options:
   }
 
   if (opts.maxPapers === undefined) opts.maxPapers = Number.MAX_SAFE_INTEGER
-  if (opts.headlessOnly === undefined) opts.headlessOnly = true
+  if (opts.headlessOnly === undefined) opts.headlessOnly = false
+  if (opts.paperConcurrency === undefined && opts.concurrency) opts.paperConcurrency = opts.concurrency
+  if (opts.coursesConcurrency === undefined && opts.concurrency) opts.coursesConcurrency = opts.concurrency
+  if (opts.paperConcurrency === undefined) opts.paperConcurrency = 6
+  if (opts.coursesConcurrency === undefined) opts.coursesConcurrency = 2
+
+  const resolveCourse = (input: string): string | null => {
+    if (!input) return null
+    const trimmed = input.trim()
+    const direct = trimmed.toUpperCase()
+    if (/^[A-Z]{4}\d{3}[A-Z]?$/.test(direct)) return direct
+    const mapped = getCourseCode(input)
+    if (mapped) return mapped
+    const matches = getAllCourseMatches(input)
+    if (matches.length > 0) return matches[0].code
+    return null
+  }
 
   if (!opts.course) {
-    console.error('Error: --course is required. Use -h for help.')
-    process.exit(1)
+    console.log('[papers.ts] No --course provided; fetching subjects from VIT Paper Vault…')
+    try {
+      const resp = await fetch('https://api.vitpapervault.in/api/paper/list', {
+        method: 'GET',
+        headers: { 'accept': 'application/json' },
+      })
+      if (!resp.ok) {
+        console.error(`[papers.ts] Failed to fetch list: HTTP ${resp.status}`)
+        process.exit(1)
+      }
+      const data: any = await resp.json()
+      const items: any[] = Array.isArray(data?.data) ? data.data : []
+      const subjects = Array.from(new Set(items.map(it => String(it?.subjectName || '').trim()).filter(Boolean)))
+      console.log(`[papers.ts] Retrieved ${subjects.length} unique subject name(s) from VIT Paper Vault`)
+      const codeSet = new Set<string>()
+      const subjectToCode = new Map<string, string | null>()
+      for (const s of subjects) {
+        const code = resolveCourse(s)
+        subjectToCode.set(s, code)
+        if (code) codeSet.add(code)
+      }
+      const codes = Array.from(codeSet)
+      if (!codes.length) {
+        console.error('[papers.ts] No subjects could be mapped to course codes. Aborting.')
+        process.exit(1)
+      }
+      console.log(`[papers.ts] Mapped ${codes.length} course code(s). Starting indexing with concurrency=${opts.coursesConcurrency}…`)
+
+      const results: { code: string; papers: number; chunks: number; ok: boolean }[] = []
+      let i = 0
+      const pool = Array.from({ length: Math.min(opts.coursesConcurrency, codes.length) }, async () => {
+        while (i < codes.length) {
+          const code = codes[i++]
+          const runId = `${Date.now()}_${code}`
+          const optsForCode = {
+            course: code,
+            examType: opts.examType,
+            year: opts.year,
+            maxPapers: opts.maxPapers,
+            questionFocus: undefined,
+            debug: opts.debug,
+            runId,
+            maxProcessingMs: opts.maxProcessingMs,
+            headlessOnly: opts.headlessOnly,
+            paperConcurrency: opts.paperConcurrency,
+            saveDir: opts.saveDir,
+          }
+          console.log(`[papers.ts] Indexing course=${code} (from subjects)…`)
+          try {
+            const res: any = await indexPastPapers(optsForCode)
+            if (!res?.success) {
+              console.error(`[papers.ts] Failed to index ${code}: ${res?.error || 'unknown error'}`)
+              results.push({ code, papers: 0, chunks: 0, ok: false })
+              continue
+            }
+            console.log(`[papers.ts] ✔ indexed ${res?.papersIndexed ?? 0} papers for ${code} | chunks=${res?.chunkCount ?? 0} | indexId=${res.indexId}`)
+            results.push({ code, papers: res?.papersIndexed ?? 0, chunks: res?.chunkCount ?? 0, ok: true })
+          } catch (e: any) {
+            console.error(`[papers.ts] Error indexing ${code}:`, e?.message || e)
+            results.push({ code, papers: 0, chunks: 0, ok: false })
+          }
+        }
+      })
+      await Promise.all(pool)
+      const totalIndexed = results.reduce((s, r) => s + r.papers, 0)
+      const totalChunks = results.reduce((s, r) => s + r.chunks, 0)
+      console.log(`[papers.ts] Completed. Total papers indexed=${totalIndexed}, total chunks=${totalChunks}. Success=${results.filter(r=>r.ok).length}/${results.length}`)
+      return
+    } catch (e: any) {
+      console.error('[papers.ts] Unexpected error fetching or indexing subjects:', e?.message || e)
+      process.exit(1)
+    }
   }
 
   opts.runId = opts.runId || `${Date.now()}`

@@ -73,6 +73,7 @@ interface ArtifactDisplayProps {
   | 'course-info'
   | 'papers-index'
   | 'papers-qa'
+  | 'question-patterns'
   | 'general'
   | 'general'
   className?: string
@@ -2623,6 +2624,7 @@ const PureArtifactDisplay = ({
               type === 'reddit-overview' ||
               type === 'papers-index' ||
               type === 'papers-qa' ||
+              type === 'question-patterns' ||
               type === 'general' ||
               type === 'error' ||
               type === 'campus-info' ||
@@ -2673,6 +2675,9 @@ const PureArtifactDisplay = ({
                 return <PapersIndexArtifact key={index} data={item} />
               case 'papers-qa':
                 return <PapersQAArtifact key={index} data={item} />
+              case 'question-patterns':
+                const QuestionPatternsArtifact = require('./artifacts/question-patterns-artifact').default
+                return <QuestionPatternsArtifact key={index} data={item} />
               case 'general':
                 return <GeneralCard key={index} data={item} />
               default:

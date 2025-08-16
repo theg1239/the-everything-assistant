@@ -365,6 +365,27 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     }
   }
 
+  // Question patterns analysis artifact
+  if (toolName === 'analyzeQuestionPatterns' || result.source === 'question-patterns') {
+    if (result && result.success) {
+      return {
+        type: 'question-patterns' as const,
+        title: `Most Repeated Question Patterns${result.courseCode ? ` (${result.courseCode}${result.examType ? ` • ${result.examType}` : ''})` : ''}`,
+        icon: <TrendingUp className="h-5 w-5 text-indigo-500" />,
+        data: result,
+        source: 'question-patterns',
+      }
+    } else {
+      return {
+        type: 'error' as const,
+        title: 'Question Pattern Analysis Failed',
+        icon: <AlertCircle className="h-5 w-5 text-red-400" />,
+        data: { success: false, error: result?.error || result?.message || 'Unable to analyze question patterns' },
+        source: 'question-patterns',
+      }
+    }
+  }
+
   // Past paper Q&A: render answer with metadata
   if (toolName === 'askPaperQuestion') {
     if (result && result.success) {

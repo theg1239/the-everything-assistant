@@ -1,6 +1,6 @@
 'use client'
 
-import React, { memo } from 'react'
+import React, { memo, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Loader2,
@@ -12,6 +12,7 @@ import {
   GraduationCap,
   TrendingUp,
   UtensilsCrossed,
+  Shield,
   MapPin,
   Search,
 } from 'lucide-react'
@@ -19,10 +20,11 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ArtifactDisplay } from './artifact-display'
+import { ArtifactDisplay, type ArtifactDisplayProps } from './artifact-display'
+import { PaperSearchProgress } from './paper-search-progress'
 import { useVTOP } from '../contexts/vtop-context'
 import { useMediaQuery } from '@/hooks/use-media-query'
-import { hasVTOPCredentials } from '@/lib/vtop-credentials'
+// Removed credential-based visibility helpers to always show VTOP tool calls
 
 interface ToolCallDisplayProps {
   toolCalls: any[]
@@ -188,9 +190,9 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
       }
     }
 
+    // When credentials are required, do not return an artifact here.
+    // This allows the Authentication Required UI to render instead.
     if (result.requiresCredentials === true) {
-      // Removed automatic login trigger to prevent repeated /chat calls.
-      // Require manual login via the credentials dialog instead.
       return null
     }
 
@@ -251,11 +253,8 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         errorMessage.includes('authentication') ||
         errorMessage.includes('Login failed or session could not be established')
 
-      if (isCredentialError || isAuthError) {
-        return null
-      }
-
-      if (errorMessage === '500' || errorMessage.toLowerCase().includes('request failed')) {
+      // For credential-required cases, suppress artifact so Auth UI can show
+      if (isCredentialError) {
         return null
       }
 
@@ -298,13 +297,131 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
   if (result.papers && result.papers.length > 0) {
     return {
       type: 'papers' as const,
-      title: `${result.papers.length} Past Papers`,
+      title: `${result.papers.length} Past Papers${result.courseCode ? ` (${result.courseCode})` : ''}`,
       icon: <GraduationCap className="h-5 w-5 text-blue-400" />,
-      data: result.papers.map((paper: any) => ({
-        ...paper,
-        link: paper.link || paper.url || paper.pdfUrl || paper.downloadUrl,
+      data: result.papers.map((paper: any) => {
+        const link = paper.link || paper.url || paper.pdfUrl || paper.downloadUrl || paper.final_url
+        const examType = paper.examType || paper.exam || paper.paperType
+        const year = paper.year || paper.academicYear
+        const slot = paper.slot
+        const source = paper.source
+        return {
+          ...paper,
+          link,
+          examType,
+          year,
+          slot,
+          source,
+        }
+      }),
+      source: 'Papers Archive',
+    }
+  }
+
+  if (result.rankedPapers && Array.isArray(result.rankedPapers) && result.rankedPapers.length > 0) {
+    return {
+      type: 'papers' as const,
+      title:
+        `${result.rankedPapers.length} Ranked Past Papers` +
+        (result.courseCode ? ` (${result.courseCode})` : ''),
+      icon: <GraduationCap className="h-5 w-5 text-indigo-400" />,
+      data: result.rankedPapers.map((p: any, i: number) => ({
+        ...p,
+        rank: i + 1,
+        link: p.url,
+        matchedQuestions: p.matchedQuestions || [],
+        score: p.score,
+        indexId: result.indexId,
+        courseCode: result.courseCode,
+        runId: result.runId || result.run_id,
       })),
-      source: 'internal, papers.codechef & vitpapervault',
+      source: 'smartPaperSearch',
+    }
+  }
+
+  if (toolName === 'indexPastPapers') {
+    if (result && result.success) {
+      return {
+        type: 'papers-index' as const,
+        title: `Past Papers Indexed${result.indexId ? ` (index ${String(result.indexId).slice(0, 8)}…)` : ''}`,
+        icon: <GraduationCap className="h-5 w-5 text-indigo-500" />,
+        data: {
+          message: result.message || 'Index created successfully',
+          indexId: result.indexId,
+          course: result.course,
+          examType: result.examType,
+          year: result.year,
+          totalIndexed: result.totalIndexed || result.total || result.count,
+          stats: result.stats || undefined,
+        },
+        source: 'paper-index',
+      }
+    } else {
+      return {
+        type: 'error' as const,
+        title: 'Indexing Failed',
+        icon: <AlertCircle className="h-5 w-5 text-red-400" />,
+        data: {
+          success: false,
+          error: result?.error || result?.message || 'Unable to index papers',
+        },
+        source: 'paper-index',
+      }
+    }
+  }
+
+  // Question patterns analysis artifact
+  if (toolName === 'analyzeQuestionPatterns' || result.source === 'question-patterns') {
+    if (result && result.success) {
+      return {
+        type: 'question-patterns' as const,
+        title: `Most Repeated Question Patterns${result.courseCode ? ` (${result.courseCode}${result.examType ? ` • ${result.examType}` : ''})` : ''}`,
+        icon: <TrendingUp className="h-5 w-5 text-indigo-500" />,
+        data: result,
+        source: 'question-patterns',
+      }
+    } else {
+      return {
+        type: 'error' as const,
+        title: 'Question Pattern Analysis Failed',
+        icon: <AlertCircle className="h-5 w-5 text-red-400" />,
+        data: {
+          success: false,
+          error: result?.error || result?.message || 'Unable to analyze question patterns',
+        },
+        source: 'question-patterns',
+      }
+    }
+  }
+
+  // Past paper Q&A: render answer with metadata
+  if (toolName === 'askPaperQuestion') {
+    if (result && result.success) {
+      return {
+        type: 'papers-qa' as const,
+        title: 'Past Papers Answer',
+        icon: <GraduationCap className="h-5 w-5 text-indigo-500" />,
+        data: {
+          answer: result.answer || result.response || result.summary || result.message,
+          sources: result.sources || result.citations || [],
+          indexMeta: result.indexMeta || undefined,
+          indexId: result.indexId || (result.indexMeta && result.indexMeta.id) || undefined,
+          question: result.question || undefined,
+          debug: result.debug || undefined,
+        },
+        source: 'paper-index-qa',
+      }
+    } else {
+      return {
+        type: 'error' as const,
+        title: 'Paper Q&A Failed',
+        icon: <AlertCircle className="h-5 w-5 text-red-400" />,
+        data: {
+          success: false,
+          error: result?.error || result?.message || 'Unable to answer question',
+        },
+        source: 'paper-index-qa',
+      }
     }
   }
 
@@ -777,6 +894,16 @@ const ToolCallResultsSummary = ({
     return false
   })
 
+  // Detect VTOP credential requirement regardless of artifacts presence
+  const vtopCredentialTools = enrichedToolCalls.filter(
+    tool =>
+      tool.toolName === 'queryVTOP' &&
+      tool.result &&
+      (tool.result.requiresCredentials === true ||
+        (typeof tool.result.error === 'string' &&
+          tool.result.error.includes('VTOP credentials required')))
+  )
+
   if (artifacts.length === 0 && completedTools.length > 0) {
     if (failedTools.length > 0) {
       const firstFailedTool = failedTools[0]
@@ -873,11 +1000,6 @@ const ToolCallResultsSummary = ({
       )
     }
 
-    const vtopCredentialTools = enrichedToolCalls.filter(
-      tool =>
-        tool.toolName === 'queryVTOP' && tool.result && tool.result.requiresCredentials === true
-    )
-
     if (vtopCredentialTools.length > 0) {
       const tool = vtopCredentialTools[0]
       const command =
@@ -888,7 +1010,6 @@ const ToolCallResultsSummary = ({
           ? JSON.parse(tool.function.arguments)?.command
           : null) ||
         'data'
-
       const formatCommandName = (cmd: string) => {
         const commandMap: { [key: string]: string } = {
           'class-message': 'Class Message',
@@ -901,10 +1022,10 @@ const ToolCallResultsSummary = ({
         }
         return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ')
       }
-
+      // Always show the Authentication Required UI in the tool call display
       return (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3">
-          <Card className="w-full overflow-hidden border-blue-500/20 bg-blue-500/5">
+          <Card className="w-full overflow-hidden border-blue-500/30 bg-blue-500/5">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center space-x-3">
                 <div className="relative">
@@ -914,14 +1035,18 @@ const ToolCallResultsSummary = ({
                   <div className="text-sm font-medium text-foreground truncate">
                     Authentication Required
                   </div>
-                  <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                    Please log in to VTOP to access your {formatCommandName(command)} data
+                  <div className="text-xs text-muted-foreground mt-1">
+                    Please log in to VTOP to access your {formatCommandName(command)} data.
+                  </div>
+                  <div className="text-[11px] text-muted-foreground/80 mt-2">
+                    Privacy notice: Your credentials are encrypted and stored locally in your
+                    browser. They are used only to log into VTOP to fetch your data.
                   </div>
                 </div>
                 {onLoginClick && (
                   <Button
                     onClick={() => {
-                      const triggerEvent = new CustomEvent('vtopLoginTrigger', {
+                      const triggerEvent = new CustomEvent('vtopOpenCredentials', {
                         detail: {
                           command,
                           toolCallId: tool.toolCallId,
@@ -941,7 +1066,6 @@ const ToolCallResultsSummary = ({
         </motion.div>
       )
     }
-
     return (
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3">
         <Card className="w-full border-orange-500/20 bg-orange-500/5">
@@ -965,6 +1089,77 @@ const ToolCallResultsSummary = ({
 
   return (
     <div className="mt-4 space-y-4">
+      {vtopCredentialTools.length > 0 &&
+        (() => {
+          const tool = vtopCredentialTools[0]
+          const command =
+            tool.result.command ||
+            tool.args?.command ||
+            tool.function?.arguments?.command ||
+            (typeof tool.function?.arguments === 'string'
+              ? JSON.parse(tool.function.arguments || '{}')?.command
+              : null) ||
+            'data'
+          const formatCommandName = (cmd: string) => {
+            const commandMap: { [key: string]: string } = {
+              'class-message': 'Class Message',
+              'exam-schedule': 'Exam Schedule',
+              'library-dues': 'Library Dues',
+              'leave-status': 'Leave Status',
+              nightslip: 'Night Slip',
+              da: 'Digital Assignment',
+              'course-page': 'Course Page',
+            }
+            return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ')
+          }
+          return (
+            <motion.div
+              key="vtop-auth-required"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-3"
+            >
+              <Card className="w-full overflow-hidden border-blue-500/30 bg-blue-500/5">
+                <CardContent className="p-3 sm:p-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="relative">
+                      <GraduationCap className="h-5 w-5 text-blue-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-foreground truncate">
+                        Authentication Required
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Please log in to VTOP to access your {formatCommandName(command)} data.
+                      </div>
+                      <div className="text-[11px] text-muted-foreground/80 mt-2">
+                        Privacy notice: Your credentials are encrypted and stored locally in your
+                        browser. They are used only to log into VTOP to fetch your data.
+                      </div>
+                    </div>
+                    {onLoginClick && (
+                      <Button
+                        onClick={() => {
+                          const triggerEvent = new CustomEvent('vtopOpenCredentials', {
+                            detail: {
+                              command,
+                              toolCallId: tool.toolCallId,
+                            },
+                          })
+                          window.dispatchEvent(triggerEvent)
+                        }}
+                        className="bg-blue-500 hover:bg-blue-600 text-white whitespace-nowrap"
+                        size="sm"
+                      >
+                        Login
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )
+        })()}
       <AnimatePresence>
         {artifacts.map((artifact, index) => (
           <motion.div
@@ -973,6 +1168,13 @@ const ToolCallResultsSummary = ({
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
           >
+            {artifact.type === 'papers' &&
+              Array.isArray(artifact.data) &&
+              artifact.data[0]?.runId && (
+                <div className="mb-3">
+                  <PaperSearchProgress runId={artifact.data[0].runId} />
+                </div>
+              )}
             {artifact.type === 'placements' && onPlacementSearch && (
               <div className="mb-4 flex items-center gap-2 px-1">
                 <Input
@@ -1026,23 +1228,10 @@ const PureToolCallDisplay = ({
 
   const filteredToolCalls = (() => {
     const map = new Map<string, any>()
-    const hasVTOPCreds = hasVTOPCredentials()
-
-    const visibleVTOPCommands = ['attendance', 'timetable']
-
     for (const tc of toolCalls) {
-      const isVisibleVTOPCommand = tc.toolName === 'queryVTOP' && 
-        (tc.args?.command && visibleVTOPCommands.includes(tc.args.command) ||
-         tc.function?.arguments?.command && visibleVTOPCommands.includes(tc.function.arguments.command) ||
-         (typeof tc.function?.arguments === 'string' && 
-          visibleVTOPCommands.includes(JSON.parse(tc.function.arguments || '{}')?.command)) ||
-         tc.result?.command && visibleVTOPCommands.includes(tc.result.command))
-
       if (
         tc.toolName === 'knowledgeBase' ||
         tc.toolName === 'saveMemory' ||
-        (tc.toolName === 'queryVTOP' && hasVTOPCreds) ||
-        (tc.toolName === 'queryVTOP' && !isVisibleVTOPCommand) ||
         (tc.result && tc.result.hidden)
       ) {
         continue
@@ -1056,15 +1245,32 @@ const PureToolCallDisplay = ({
     return Array.from(map.values())
   })()
 
+  const [retryToolCallId, setRetryToolCallId] = useState<string | null>(null)
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (e.detail && e.detail.toolCallId) {
+        setRetryToolCallId(e.detail.toolCallId)
+      }
+    }
+    window.addEventListener('vtopCredentialsSubmitted', handler)
+    return () => window.removeEventListener('vtopCredentialsSubmitted', handler)
+  }, [])
+
   const enrichedToolCalls = filteredToolCalls.map(tool => {
+    if (retryToolCallId && tool.toolCallId === retryToolCallId && tool.toolName === 'queryVTOP') {
+      setTimeout(() => setRetryToolCallId(null), 100)
+      return { ...tool, result: undefined, state: 'call' }
+    }
     if (tool.toolName === 'queryVTOP' && tool.toolCallId) {
-      if (tool.result && (tool.result.data || tool.result.output || tool.result.success !== undefined)) {
+      if (
+        tool.result &&
+        (tool.result.data || tool.result.output || tool.result.success !== undefined)
+      ) {
         return {
           ...tool,
           state: tool.result.success !== false ? 'result' : 'error',
         }
       }
-      
       const contextResult = getToolResult(tool.toolCallId)
       if (contextResult && contextResult.result) {
         return {
@@ -1121,10 +1327,6 @@ const PureToolCallDisplay = ({
     return hasValidResult
   })
 
-  if (!allCompleted && enrichedToolCalls.length > 0) {
-    return <ToolCallLoadingState toolCalls={enrichedToolCalls} />
-  }
-
   if (enrichedToolCalls.length === 0) return null
 
   return (
@@ -1150,23 +1352,10 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
 
   const filteredToolCalls = (() => {
     const map = new Map<string, any>()
-    const hasVTOPCreds = hasVTOPCredentials()
-
-    const visibleVTOPCommands = ['attendance', 'timetable']
-
     for (const tc of toolCalls) {
-      const isVisibleVTOPCommand = tc.toolName === 'queryVTOP' && 
-        (tc.args?.command && visibleVTOPCommands.includes(tc.args.command) ||
-         tc.function?.arguments?.command && visibleVTOPCommands.includes(tc.function.arguments.command) ||
-         (typeof tc.function?.arguments === 'string' && 
-          visibleVTOPCommands.includes(JSON.parse(tc.function.arguments || '{}')?.command)) ||
-         tc.result?.command && visibleVTOPCommands.includes(tc.result.command))
-
       if (
         tc.toolName === 'knowledgeBase' ||
         tc.toolName === 'saveMemory' ||
-        (tc.toolName === 'queryVTOP' && hasVTOPCreds) ||
-        (tc.toolName === 'queryVTOP' && !isVisibleVTOPCommand) ||
         (tc.result && tc.result.hidden)
       ) {
         continue
@@ -1182,13 +1371,16 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
 
   const enrichedToolCalls = filteredToolCalls.map(tool => {
     if (tool.toolName === 'queryVTOP' && tool.toolCallId) {
-      if (tool.result && (tool.result.data || tool.result.output || tool.result.success !== undefined)) {
+      if (
+        tool.result &&
+        (tool.result.data || tool.result.output || tool.result.success !== undefined)
+      ) {
         return {
           ...tool,
           state: tool.result.success !== false ? 'result' : 'error',
         }
       }
-      
+
       const contextResult = getToolResult(tool.toolCallId)
       if (contextResult && contextResult.result) {
         return {
@@ -1197,7 +1389,7 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
           state: 'result',
         }
       }
-      
+
       if (tool.state === 'call' || (!tool.result && tool.state !== 'result')) {
         return {
           ...tool,
@@ -1255,10 +1447,6 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
 
     return hasValidResult
   })
-
-  if (!allCompleted && enrichedToolCalls.length > 0) {
-    return <ToolCallLoadingState toolCalls={enrichedToolCalls} />
-  }
 
   if (enrichedToolCalls.length === 0) return null
 

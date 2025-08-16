@@ -41,12 +41,22 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { ResponsiveCard } from '@/components/responsive-card'
 import FFCSArtifact from './artifacts/ffcs-artifact'
 import FfcsCourseSearchResult from './artifacts/get-course-info-artifact'
 import { ResponsiveTable } from '@/components/responsive-table'
+import { Copy } from 'lucide-react'
+import PapersIndexArtifact from './artifacts/papers-index-artifact'
+import PapersQAArtifact from './artifacts/papers-qa-artifact'
 
 interface ArtifactDisplayProps {
   title: string
@@ -59,7 +69,6 @@ interface ArtifactDisplayProps {
     | 'placements'
     | 'mess-menu'
     | 'vtop-data'
-    | 'general'
     | 'interactive-course-page'
     | 'reddit-knowledge'
     | 'reddit-overview'
@@ -68,6 +77,11 @@ interface ArtifactDisplayProps {
     | 'getPlacementInfo'
     | 'ffcs-planner'
     | 'course-info'
+    | 'papers-index'
+    | 'papers-qa'
+    | 'question-patterns'
+    | 'general'
+    | 'general'
   className?: string
   onLoginClick?: () => void
   maximizedItem?: any
@@ -92,9 +106,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [expandedSubject, setExpandedSubject] = useState<number | null>(null)
 
-  if (vtopData.requiresCredentials === true) {
-    return null
-  }
+  // Always show VTOP artifacts, even if credentials are required
   if (success === false || error) {
     let errorMessage = error || message || ''
 
@@ -124,9 +136,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
       errorMessage.includes('session could not be established') ||
       errorMessage.includes('incorrect username/password')
 
-    if (isCredentialError || isAuthError) {
-      return null
-    }
+    // Keep visible: show error UI below instead of hiding
   }
 
   const formatCommandName = (cmd: string) => {
@@ -151,59 +161,62 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
         //   console.log('[VTOP] raw attendance rawOutput', rawOutput)
         //   console.log('[VTOP] full vtopData', vtopData)
         // }
-        
-        let attendanceData = [];
-        
+
+        let attendanceData = []
+
         if (Array.isArray(content) && content.length > 0) {
-          const firstItem = content[0];
+          const firstItem = content[0]
           if (firstItem && firstItem.SUBJECT && firstItem.SUBJECT.trim() !== '') {
-            attendanceData = content;
+            attendanceData = content
           }
         }
-        
+
         if (attendanceData.length === 0 && rawOutput && typeof rawOutput === 'string') {
           try {
-            const lines = rawOutput.split('\n').filter(line => line.trim());
-            
-            const dataLines = lines.filter(line => 
-              line.includes('│') && 
-              !line.includes('INDEX') && 
-              !line.includes('──────') &&
-              line.trim() !== '' &&
-              /^\s*\d+\s*│/.test(line)
-            );
-            
+            const lines = rawOutput.split('\n').filter(line => line.trim())
+
+            const dataLines = lines.filter(
+              line =>
+                line.includes('│') &&
+                !line.includes('INDEX') &&
+                !line.includes('──────') &&
+                line.trim() !== '' &&
+                /^\s*\d+\s*│/.test(line)
+            )
+
             //console.log('[VTOP] Found', dataLines.length, 'data lines to parse from rawOutput');
-            
-            attendanceData = dataLines.map(line => {
-              const allColumns = line.split('│').map(col => col.trim());
-              
-              if (allColumns.length >= 7) {
-                const result = {
-                  INDEX: allColumns[0] || '',
-                  SUBJECT: allColumns[1] || '',
-                  TYPE: allColumns[2] || '', 
-                  'FACULTY NAME': allColumns[3] || '',
-                  'CLASSES ATTENDED': allColumns[4] || '',
-                  PERCENTAGE: (allColumns[5] || '').replace('%', ''),
-                  '75% ALERT': allColumns[6] || ''
-                };
-                
-                return result;
-              } else {
-                //console.log('[VTOP] Insufficient columns:', allColumns.length, 'for line:', line);
-                return null;
-              }
-            }).filter(Boolean);
+
+            attendanceData = dataLines
+              .map(line => {
+                const allColumns = line.split('│').map(col => col.trim())
+
+                if (allColumns.length >= 7) {
+                  const result = {
+                    INDEX: allColumns[0] || '',
+                    SUBJECT: allColumns[1] || '',
+                    TYPE: allColumns[2] || '',
+                    'FACULTY NAME': allColumns[3] || '',
+                    'CLASSES ATTENDED': allColumns[4] || '',
+                    PERCENTAGE: (allColumns[5] || '').replace('%', ''),
+                    '75% ALERT': allColumns[6] || '',
+                  }
+
+                  return result
+                } else {
+                  //console.log('[VTOP] Insufficient columns:', allColumns.length, 'for line:', line);
+                  return null
+                }
+              })
+              .filter(Boolean)
           } catch (error) {
             //console.error('Error parsing attendance data from rawOutput:', error);
-            attendanceData = [];
+            attendanceData = []
           }
         }
-        
+
         if (!Array.isArray(attendanceData) || attendanceData.length === 0) {
           //console.log('[VTOP] Parsing failed, checking for formatted content:', vtopData.formatted_content);
-          
+
           if (vtopData.formatted_content) {
             return (
               <div className="space-y-3">
@@ -216,27 +229,23 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
               </div>
             )
           }
-          
+
           if (data && typeof data === 'string') {
             return (
               <div className="space-y-3">
                 <div className="p-3 bg-muted/50 rounded-md overflow-x-auto">
-                  <pre className="text-xs text-muted-foreground whitespace-pre-wrap">
-                    {data}
-                  </pre>
+                  <pre className="text-xs text-muted-foreground whitespace-pre-wrap">{data}</pre>
                 </div>
               </div>
             )
           }
-          
-          return (
-            <div className="text-muted-foreground text-sm">No attendance data available.</div>
-          )
+
+          return <div className="text-muted-foreground text-sm">No attendance data available.</div>
         }
-        
+
         if (Array.isArray(attendanceData) && attendanceData.length > 0) {
           //console.log('[VTOP] Successfully parsed', attendanceData.length, 'attendance records');
-          
+
           const validSubjects = attendanceData.filter((subject: any) => {
             const subjectName = subject.SUBJECT || subject.subject || subject.name || ''
             const percentage = parseFloat(
@@ -247,13 +256,10 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
             const total = subject['TOTAL CLASSES'] || subject.total || subject.totalClasses || '0'
 
             // More lenient validation - just check if subject name exists and isn't a placeholder
-            const isValid = (
-              subjectName &&
-              subjectName.trim() !== '' &&
-              !subjectName.match(/^Subject \d+$/i)
-            );
-            
-            return isValid;
+            const isValid =
+              subjectName && subjectName.trim() !== '' && !subjectName.match(/^Subject \d+$/i)
+
+            return isValid
           })
 
           if (process.env.NODE_ENV !== 'production') {
@@ -462,7 +468,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
             </div>
           )
         }
-        
+
         // Fallback: show formatted content if available
         if (vtopData.formatted_content) {
           return (
@@ -476,23 +482,19 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
             </div>
           )
         }
-        
+
         // Final fallback: show raw data
         if (data && typeof data === 'string') {
           return (
             <div className="space-y-3">
               <div className="p-3 bg-muted/50 rounded-md overflow-x-auto">
-                <pre className="text-xs text-muted-foreground whitespace-pre-wrap">
-                  {data}
-                </pre>
+                <pre className="text-xs text-muted-foreground whitespace-pre-wrap">{data}</pre>
               </div>
             </div>
           )
         }
-        
-        return (
-          <div className="text-muted-foreground text-sm">No attendance data available.</div>
-        )
+
+        return <div className="text-muted-foreground text-sm">No attendance data available.</div>
         break
 
       case 'marks':
@@ -657,17 +659,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
         }
       }
 
-      const isCredentialError =
-        errorMessage.includes('VTOP credentials required') || errorMessage.includes('credentials')
-      const isAuthError =
-        errorMessage.includes('Invalid LoginId/Password') ||
-        errorMessage.includes('Login failed') ||
-        errorMessage.includes('session could not be established') ||
-        errorMessage.includes('incorrect username/password')
-
-      if (isCredentialError || isAuthError || vtopData.requiresCredentials === true) {
-        return null
-      }
+      // Always show VTOP artifacts, even when credentials/auth errors occur
 
       return (
         <div className="space-y-3">
@@ -677,6 +669,11 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
               <h4 className="text-sm font-medium text-destructive">Error Retrieving Data</h4>
             </div>
             <p className="text-sm text-destructive font-medium">{errorMessage}</p>
+            {vtopData.requiresCredentials && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Credentials required to view this data.
+              </p>
+            )}
             {rawOutput && typeof rawOutput === 'string' && rawOutput !== errorMessage && (
               <details className="mt-3">
                 <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
@@ -843,12 +840,41 @@ const PaperCard = ({
   return (
     <Card className="w-full hover:shadow-md transition-all duration-200 border-border bg-card group flex flex-col h-full">
       <CardHeader className="pb-3 flex-shrink-0">
-        <CardTitle className="text-sm font-medium line-clamp-3 text-card-foreground group-hover:text-primary transition-colors leading-snug">
-          {paper.title}
-        </CardTitle>
+        <div className="flex items-start justify-between gap-2">
+          <CardTitle className="text-sm font-medium line-clamp-3 text-card-foreground group-hover:text-primary transition-colors leading-snug">
+            {paper.title}
+          </CardTitle>
+          {paper.rank && (
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 shrink-0">
+              #{paper.rank}
+            </Badge>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="pt-0 space-y-3 flex-1 flex flex-col">
         <div className="space-y-2 text-xs text-muted-foreground flex-1">
+          {(paper.examType || paper.year || paper.slot) && (
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground/80">
+              {paper.examType && (
+                <Badge variant="secondary" className="text-[10px] h-5 px-2">
+                  {paper.examType}
+                </Badge>
+              )}
+              {paper.year && (
+                <span className="inline-flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  {paper.year}
+                </span>
+              )}
+              {paper.slot && (
+                <span className="inline-flex items-center gap-1">
+                  <Badge variant="outline" className="text-[10px] h-5 px-2">
+                    Slot {paper.slot}
+                  </Badge>
+                </span>
+              )}
+            </div>
+          )}
           {paper.authors && (
             <div className="flex items-start gap-2">
               <Users className="h-3 w-3 shrink-0 mt-0.5" />
@@ -867,26 +893,68 @@ const PaperCard = ({
               )}
             </div>
           )}
-          {(paper.journal || paper.venue || paper.conference) && (
+          {(paper.journal || paper.venue || paper.conference || paper.metadata) && (
             <div className="flex items-start gap-2">
               <FileSearch className="h-3 w-3 shrink-0 mt-0.5" />
               <span className={isMobile && !expanded ? 'line-clamp-1' : 'line-clamp-2'}>
-                {paper.journal || paper.venue || paper.conference}
+                {paper.journal || paper.venue || paper.conference || paper.metadata}
               </span>
             </div>
           )}
-          {(paper.year || paper.publishedYear) && (
+          {typeof paper.score === 'number' && (
             <div className="flex items-center gap-2">
-              <Calendar className="h-3 w-3 shrink-0" />
-              <span>{paper.year || paper.publishedYear}</span>
+              <TrendingUp className="h-3 w-3 shrink-0" />
+              <span>Relevance: {(paper.score * 100).toFixed(1)}%</span>
+            </div>
+          )}
+          {/* {(typeof paper.displayContentPct === 'number' || typeof paper.displayQuestionPct === 'number') && (
+            <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground/80">
+              {typeof paper.displayContentPct === 'number' && (
+                <span title={`Content similarity (raw ${(paper._rawChunkScore*100).toFixed(1)}%)`}>
+                  Content {paper.displayContentPct}%
+                </span>
+              )}
+              {paper.hasQuestionSignal && typeof paper.displayQuestionPct === 'number' && (
+                <span title={`Question embedding match (raw ${(paper._rawQuestionScore*100).toFixed(1)}%)`}>
+                  Question {paper.displayQuestionPct}%
+                </span>
+              )}
+              {!paper.hasQuestionSignal && typeof paper.displayQuestionPct === 'undefined' && (
+                <span title="No question-level signals extracted">Question —</span>
+              )}
+            </div>
+          )} */}
+          {Array.isArray(paper.matchedQuestions) && paper.matchedQuestions.length > 0 && (
+            <div className="mt-1 space-y-1">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                Matched Questions
+              </div>
+              <ul className="list-disc pl-4 space-y-0.5">
+                {paper.matchedQuestions.slice(0, expanded ? 6 : 3).map((mq: string, i: number) => (
+                  <li key={i} className="text-[11px] leading-snug line-clamp-2" title={mq}>
+                    {mq}
+                  </li>
+                ))}
+              </ul>
+              {paper.matchedQuestions.length > 3 && !expanded && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[10px]"
+                  onClick={() => setExpanded(true)}
+                >
+                  Show Matches
+                </Button>
+              )}
             </div>
           )}
         </div>
 
-        {(paper.examType || paper.category) && (
-          <Badge variant="secondary" className="text-xs w-fit">
-            {paper.examType || paper.category}
-          </Badge>
+        {paper.indexId && (
+          <div className="text-[10px] text-muted-foreground/70">Index: {paper.indexId}</div>
+        )}
+        {paper.source && (
+          <div className="text-[10px] text-muted-foreground/70">Source: {paper.source}</div>
         )}
 
         <div className="flex-shrink-0 pt-1">
@@ -2313,6 +2381,10 @@ const PureArtifactDisplay = ({
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [isPdfLoading, setIsPdfLoading] = useState(false)
   const [pdfTitle, setPdfTitle] = useState<string>('')
+  // Papers-specific UI state
+  const [paperSort, setPaperSort] = useState<string>('year_desc')
+  const [paperExamFilter, setPaperExamFilter] = useState<string>('all')
+  const [paperYearFilter, setPaperYearFilter] = useState<string>('all')
   const contentRef = useRef<HTMLDivElement>(null)
 
   const toggleExpand = () => setIsExpanded(!isExpanded)
@@ -2419,13 +2491,159 @@ const PureArtifactDisplay = ({
 
     const items: any[] =
       isFacultyType && facultyList ? facultyList : Array.isArray(data) ? data : [data]
-    const itemCount = items.length
-    const displayItems = showAllItems || !isMobile || isFullscreen ? items : items.slice(0, 3)
+
+    // Derive per-paper relative metrics to avoid identical displayed percentages when raw scores are very close.
+    let processedItems = items
+    if (type === 'papers' && items.length) {
+      const chunkScores = items.map(p => (typeof p.chunkScore === 'number' ? p.chunkScore : 0))
+      const questionScores = items.map(p =>
+        typeof p.questionScore === 'number' ? p.questionScore : 0
+      )
+      const maxChunk = Math.max(...chunkScores)
+      const minChunk = Math.min(...chunkScores)
+      const maxQ = Math.max(...questionScores)
+      const minQ = Math.min(...questionScores)
+      const spreadChunk = maxChunk - minChunk
+      const spreadQ = maxQ - minQ
+      const allQZero = maxQ === 0
+      processedItems = items.map((p, i) => {
+        const rawChunk = chunkScores[i]
+        const rawQ = questionScores[i]
+        let relChunk =
+          spreadChunk < 0.005
+            ? maxChunk
+              ? rawChunk / (maxChunk || 1)
+              : 0
+            : (rawChunk - minChunk) / (spreadChunk || 1)
+        relChunk = Math.min(1, Math.max(0, relChunk ** 0.85))
+        let relQ = 0
+        if (!allQZero) {
+          relQ = spreadQ < 0.005 ? (maxQ ? rawQ / (maxQ || 1) : 0) : (rawQ - minQ) / (spreadQ || 1)
+          relQ = Math.min(1, Math.max(0, relQ ** 0.85))
+        }
+        return {
+          ...p,
+          _rawChunkScore: rawChunk,
+          _rawQuestionScore: rawQ,
+          displayContentPct: Math.round(relChunk * 100),
+          displayQuestionPct: allQZero ? undefined : Math.round(relQ * 100),
+          hasQuestionSignal: !allQZero && rawQ > 0.0005,
+        }
+      })
+    }
+
+    // Papers: apply filtering and sorting
+    if (type === 'papers') {
+      const normalizeExam = (e?: string) =>
+        (e || '')
+          .toString()
+          .trim()
+          .toUpperCase()
+          .replace(/[\s-]+/g, '') // Treat CAT1 and CAT-1 as same
+      const extractYearNum = (y?: string) => {
+        if (!y) return -Infinity
+        const m = String(y).match(/(20\d{2})/g)
+        if (!m || m.length === 0) return -Infinity
+        return Math.max(...m.map(s => parseInt(s, 10)))
+      }
+      // Filter
+      processedItems = processedItems.filter(p => {
+        const okExam =
+          paperExamFilter === 'all' ||
+          normalizeExam(p.examType || p.category) === normalizeExam(paperExamFilter)
+        const okYear = paperYearFilter === 'all' || String(p.year || '').includes(paperYearFilter)
+        return okExam && okYear
+      })
+      // Sort
+      const examOrder: Record<string, number> = { FAT: 1, CAT2: 2, CAT1: 3, QUIZ: 4 }
+      processedItems = [...processedItems].sort((a, b) => {
+        switch (paperSort) {
+          case 'relevance': {
+            const ar = typeof a.rank === 'number' ? a.rank : Infinity
+            const br = typeof b.rank === 'number' ? b.rank : Infinity
+            if (ar !== br) return ar - br
+            const as = typeof a.score === 'number' ? a.score : -Infinity
+            const bs = typeof b.score === 'number' ? b.score : -Infinity
+            return bs - as
+          }
+          case 'year_desc':
+            return extractYearNum(b.year) - extractYearNum(a.year)
+          case 'year_asc':
+            return extractYearNum(a.year) - extractYearNum(b.year)
+          case 'exam': {
+            const ae = examOrder[normalizeExam(a.examType)] || 99
+            const be = examOrder[normalizeExam(b.examType)] || 99
+            if (ae !== be) return ae - be
+            return (a.examType || '').localeCompare(b.examType || '')
+          }
+          case 'slot':
+            return (a.slot || '').localeCompare(b.slot || '')
+          case 'source':
+            return (a.source || '').localeCompare(b.source || '')
+          case 'title':
+            return (a.title || '').localeCompare(b.title || '')
+          default:
+            return 0
+        }
+      })
+    }
+
+    const itemCount = processedItems.length
+    const displayItems =
+      showAllItems || !isMobile || isFullscreen ? processedItems : processedItems.slice(0, 3)
     const hasMoreItems = isMobile && items.length > 3 && !showAllItems && !isFullscreen
 
     return (
       <>
-        {' '}
+        {type === 'papers' && (
+          <div className="flex flex-wrap items-center gap-2 gap-y-2 mb-2 w-full">
+            <div className="text-xs text-muted-foreground mr-2">Sort:</div>
+            <Select value={paperSort} onValueChange={setPaperSort}>
+              <SelectTrigger className="h-7 text-xs w-full sm:w-auto min-w-[150px]">
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="year_desc">Year (newest)</SelectItem>
+                <SelectItem value="year_asc">Year (oldest)</SelectItem>
+                <SelectItem value="relevance">Relevance</SelectItem>
+                <SelectItem value="exam">Exam Type</SelectItem>
+                <SelectItem value="slot">Slot</SelectItem>
+                <SelectItem value="source">Source</SelectItem>
+                <SelectItem value="title">Title</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="text-xs text-muted-foreground ml-3">Filter:</div>
+            <Select value={paperExamFilter} onValueChange={setPaperExamFilter}>
+              <SelectTrigger className="h-7 text-xs w-full sm:w-auto min-w-[140px]">
+                <SelectValue placeholder="All exams" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Exams</SelectItem>
+                <SelectItem value="CAT-1">CAT-1</SelectItem>
+                <SelectItem value="CAT-2">CAT-2</SelectItem>
+                <SelectItem value="FAT">FAT</SelectItem>
+                <SelectItem value="Quiz">Quiz</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={paperYearFilter} onValueChange={setPaperYearFilter}>
+              <SelectTrigger className="h-7 text-xs w-full sm:w-auto min-w-[130px]">
+                <SelectValue placeholder="All years" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Years</SelectItem>
+                {Array.from(
+                  new Set(
+                    (Array.isArray(items) ? items : []).map((p: any) => p.year).filter(Boolean)
+                  )
+                ).map((y: any) => (
+                  <SelectItem key={String(y)} value={String(y)}>
+                    {String(y)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}{' '}
         <div
           className={cn(
             'grid gap-3',
@@ -2433,6 +2651,10 @@ const PureArtifactDisplay = ({
               type === 'vtop-data' ||
               type === 'reddit-knowledge' ||
               type === 'reddit-overview' ||
+              type === 'papers-index' ||
+              type === 'papers-qa' ||
+              type === 'question-patterns' ||
+              type === 'general' ||
               type === 'error' ||
               type === 'campus-info' ||
               type === 'faculty'
@@ -2478,6 +2700,16 @@ const PureArtifactDisplay = ({
                 return <CampusInfoCard key={index} info={item} />
               case 'placements':
                 return <PlacementInfoCard key={index} data={item} />
+              case 'papers-index':
+                return <PapersIndexArtifact key={index} data={item} />
+              case 'papers-qa':
+                return <PapersQAArtifact key={index} data={item} />
+              case 'question-patterns':
+                const QuestionPatternsArtifact =
+                  require('./artifacts/question-patterns-artifact').default
+                return <QuestionPatternsArtifact key={index} data={item} />
+              case 'general':
+                return <GeneralCard key={index} data={item} />
               default:
                 return (
                   <Card key={index} className="hover:shadow-md transition-shadow">
@@ -2690,6 +2922,107 @@ const PureArtifactDisplay = ({
         )}
       </AnimatePresence>
     </motion.div>
+  )
+}
+
+function GeneralCard({ data }: { data: any }) {
+  const hasIndex = typeof data?.indexId === 'string' || typeof data?.indexId === 'number'
+  const hasAnswer = typeof data?.answer === 'string' && data.answer.trim().length > 0
+  const hasSources = Array.isArray(data?.sources) && data.sources.length > 0
+
+  const copy = async (text?: string) => {
+    if (!text) return
+    try {
+      await navigator.clipboard.writeText(String(text))
+    } catch {}
+  }
+
+  return (
+    <Card className="hover:shadow-md transition-shadow">
+      <CardContent className="p-4 space-y-3">
+        {data?.message && (
+          <div className="text-sm text-foreground/90 whitespace-pre-wrap break-words">
+            {data.message}
+          </div>
+        )}
+
+        {hasIndex && (
+          <div className="flex items-center gap-2 text-sm">
+            <span className="px-2 py-1 rounded bg-muted border border-border/50 font-mono break-all">
+              {String(data.indexId)}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => copy(data.indexId)}
+            >
+              <Copy className="h-3.5 w-3.5 mr-1" /> copy indexId
+            </Button>
+          </div>
+        )}
+
+        {(data?.course || data?.examType || data?.year || data?.totalIndexed) && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-muted-foreground">
+            {data.course && (
+              <div>
+                <span className="font-medium text-foreground/80">course:</span> {data.course}
+              </div>
+            )}
+            {data.examType && (
+              <div>
+                <span className="font-medium text-foreground/80">exam:</span> {data.examType}
+              </div>
+            )}
+            {data.year && (
+              <div>
+                <span className="font-medium text-foreground/80">year:</span> {data.year}
+              </div>
+            )}
+            {typeof data.totalIndexed !== 'undefined' && (
+              <div>
+                <span className="font-medium text-foreground/80">indexed:</span> {data.totalIndexed}
+              </div>
+            )}
+          </div>
+        )}
+
+        {hasAnswer && (
+          <div className="p-3 rounded border border-border/40 bg-card/40">
+            <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+              {data.answer}
+            </div>
+          </div>
+        )}
+
+        {hasSources && (
+          <div>
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">
+              sources
+            </div>
+            <div className="space-y-1">
+              {data.sources.map((s: any, idx: number) => (
+                <a
+                  key={idx}
+                  href={s?.url || s?.link || '#'}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block p-2 rounded border border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-colors text-xs break-words"
+                >
+                  {s?.title || s?.url || s?.link || 'source'}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!hasIndex && !hasAnswer && !hasSources && (
+          <pre className="text-xs text-muted-foreground whitespace-pre-wrap overflow-x-auto">
+            {JSON.stringify(data, null, 2)}
+          </pre>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

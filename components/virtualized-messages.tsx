@@ -5,6 +5,7 @@ import { MessageBubble } from '@/components/message-bubble'
 interface VirtualizedMessagesProps {
   messages: any[]
   chatId?: string
+  isLoading: boolean
   onCreateCanvas: (content: string) => void
   onLoginClick: () => void
   onPlacementSearch: (company: string) => void
@@ -16,6 +17,7 @@ export const VirtualizedMessages = memo(
   ({
     messages,
     chatId,
+    isLoading,
     onCreateCanvas,
     onLoginClick,
     onPlacementSearch,
@@ -31,6 +33,7 @@ export const VirtualizedMessages = memo(
             key={`${message.id}-${idx}`}
             message={message}
             chatId={chatId}
+            isLoading={isLoading && idx === visibleMessages.length - 1}
             onCreateCanvas={onCreateCanvas}
             onLoginClick={onLoginClick}
             onPlacementSearch={onPlacementSearch}

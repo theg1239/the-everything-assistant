@@ -246,6 +246,12 @@ export default async function RootLayout({
         `}</style>
       </head>
       <body className={`${inter.className}`}>
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-2 focus:rounded-md focus:bg-primary focus:text-primary-foreground"
+        >
+          Skip to main content
+        </a>
         <SessionProvider>
           <ThemeProvider
             attribute="class"

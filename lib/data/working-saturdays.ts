@@ -1,8 +1,8 @@
-import { ContextData } from './index';
+import { ContextData } from './index'
 export const workingSaturdays: ContextData = {
   section: 'working-saturdays',
   title: 'Working Saturdays Schedule',
-  lastUpdated: '2025-07-23',
+  lastUpdated: '2025-08-16',
   priority: 'high',
   content: `
 **Working Saturdays for Fall Semester 2025-26:**
@@ -92,7 +92,7 @@ export const workingSaturdays: ContextData = {
 - Mess, library, and transportation services operate on a normal weekday schedule.
 `,
   metadata: {
-  "nextWorkingSaturday": "2025-07-25",
-  "currentSemester": "Fall 2025-26"
-},
-};
+    nextWorkingSaturday: '2025-07-25',
+    currentSemester: 'Fall 2025-26',
+  },
+}

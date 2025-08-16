@@ -503,7 +503,7 @@ CRITICAL TOOL CONTINUATION RULES:
 - The conversation flow is: [user question] → [tool call] → [YOUR RESPONSE USING TOOL RESULTS]
 - NEVER end the conversation at a tool call - always synthesize and respond`
 
-    console.log('Memory stuff:', memoryGuidance)
+    // console.log('Memory stuff:', memoryGuidance)
 
     const enhancedMessages = messages.map((message: any, index: number) => {
       if (message.role === 'user' && index === messages.length - 1) {
@@ -582,9 +582,10 @@ CRITICAL TOOL CONTINUATION RULES:
       const lastUserMessage = enhancedMessages[enhancedMessages.length - 1]
       if (lastUserMessage && lastUserMessage.role === 'user') {
         let toolContext = ''
-        
+
         if (directToolCallResult.toolName === 'queryVTOP' && directToolCallResult.result?.success) {
-          const command = directToolCallResult.result.command || directToolCallResult.args?.command || 'data'
+          const command =
+            directToolCallResult.result.command || directToolCallResult.args?.command || 'data'
           let dataContext = ''
 
           if (directToolCallResult.result.formatted_content) {
@@ -601,7 +602,7 @@ CRITICAL TOOL CONTINUATION RULES:
               dataContext = `Retrieved ${command} data from VTOP`
             }
           }
-          
+
           if (dataContext) {
             toolContext = `\n\n[VTOP ${command.toUpperCase()} DATA CONTEXT]:\n${dataContext}`
             toolContext += `\n\n[IMPORTANT]: VTOP ${command} data was successfully retrieved above. Use this data to answer the user's question about ${command}.`
@@ -617,27 +618,36 @@ CRITICAL TOOL CONTINUATION RULES:
       }
     }
 
-    if (directToolCallResult && directToolCallExecuted && directToolCallResult.result?.formatted_content) {
-      const responseText = directToolCallResult.result.formatted_content || 
-                          directToolCallResult.result.summary ||
-                          `Here's your ${directToolCallResult.args?.command || 'data'} from VTOP.`
+    if (
+      directToolCallResult &&
+      directToolCallExecuted &&
+      directToolCallResult.result?.formatted_content
+    ) {
+      const responseText =
+        directToolCallResult.result.formatted_content ||
+        directToolCallResult.result.summary ||
+        `Here's your ${directToolCallResult.args?.command || 'data'} from VTOP.`
 
       const mockResult = {
         text: responseText,
         response: { id: `direct-${Date.now()}` },
         toolResults: [directToolCallResult],
-        steps: [{
-          toolResults: [directToolCallResult]
-        }]
+        steps: [
+          {
+            toolResults: [directToolCallResult],
+          },
+        ],
       }
 
-      const safeInvocations = sanitizeToolInvocations([{
-        toolCallId: directToolCallResult.toolCallId,
-        toolName: directToolCallResult.toolName,
-        args: directToolCallResult.args,
-        result: directToolCallResult.result,
-        state: directToolCallResult.state,
-      }])
+      const safeInvocations = sanitizeToolInvocations([
+        {
+          toolCallId: directToolCallResult.toolCallId,
+          toolName: directToolCallResult.toolName,
+          args: directToolCallResult.args,
+          result: directToolCallResult.result,
+          state: directToolCallResult.state,
+        },
+      ])
 
       try {
         await saveMessage(
@@ -655,12 +665,24 @@ CRITICAL TOOL CONTINUATION RULES:
       const encoder = new TextEncoder()
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode(`9:{"toolCallId":"${directToolCallResult.toolCallId}","toolName":"${directToolCallResult.toolName}","args":${JSON.stringify(directToolCallResult.args)}}\n`))
-          controller.enqueue(encoder.encode(`a:{"toolCallId":"${directToolCallResult.toolCallId}","result":${JSON.stringify(directToolCallResult.result)}}\n`))
+          controller.enqueue(
+            encoder.encode(
+              `9:{"toolCallId":"${directToolCallResult.toolCallId}","toolName":"${directToolCallResult.toolName}","args":${JSON.stringify(directToolCallResult.args)}}\n`
+            )
+          )
+          controller.enqueue(
+            encoder.encode(
+              `a:{"toolCallId":"${directToolCallResult.toolCallId}","result":${JSON.stringify(directToolCallResult.result)}}\n`
+            )
+          )
           controller.enqueue(encoder.encode(`0:"${responseText.replace(/"/g, '\\"')}"\n`))
-          controller.enqueue(encoder.encode(`e:{"finishReason":"stop","usage":{"promptTokens":100,"completionTokens":50},"isContinued":false}\n`))
+          controller.enqueue(
+            encoder.encode(
+              `e:{"finishReason":"stop","usage":{"promptTokens":100,"completionTokens":50},"isContinued":false}\n`
+            )
+          )
           controller.close()
-        }
+        },
       })
 
       return new Response(stream, {
@@ -672,34 +694,90 @@ CRITICAL TOOL CONTINUATION RULES:
       })
     }
 
-    const modelMessages = [
-      { role: 'system', content: combinedSystemPrompt },
-      ...(enhancedMessages ?? []).map((msg: any) => ({
-        role: msg.role,
-        content: Array.isArray(msg.parts)
-          ? msg.parts
-              .filter((p: any) => p.type === 'text' && typeof p.text === 'string')
-              .map((p: any) => p.text)
-              .join('')
-          : msg.content || '',
-      })),
-    ]
+    const attachmentAware = enhancedMessages.some(
+      (m: any) =>
+        Array.isArray(m.attachments) &&
+        m.attachments.some(
+          (a: any) =>
+            a?.contentType?.startsWith('application/pdf') || a?.contentType?.startsWith('image/')
+        )
+    )
 
-    const stream = createUIMessageStream({
-      execute: async ({ writer }) => {
-        const resultStream = await rateLimitedAI.google.streamText(
-          {
-            model: await rateLimitedAI.google.model(),
-            messages: modelMessages,
-            tools,
-            temperature: 0.7,
-            maxOutputTokens: 4096,
-            experimental_transform: smoothStream({ chunking: 'word' }),
-            maxSteps: 5,
-            experimental_continueSteps: true,
-            onError: async (error: any) => {
-              console.error('Streaming error occurred:', error)
+    let modelName = 'gemini-2.5-flash'
+    const hasPdf =
+      attachmentAware &&
+      enhancedMessages.some((m: any) =>
+        m.attachments?.some((a: any) => a?.contentType === 'application/pdf')
+      )
+    if (hasPdf) {
+      modelName = 'gemini-2.5-flash'
+    }
 
+    let finalMessages: any[] = [{ role: 'system', content: combinedSystemPrompt }]
+    if (!attachmentAware) {
+      finalMessages.push(...enhancedMessages)
+    } else {
+      for (const m of enhancedMessages) {
+        if (!m.attachments || m.attachments.length === 0) {
+          finalMessages.push({ role: m.role, content: m.content })
+          continue
+        }
+        const parts: any[] = []
+        if (m.content) {
+          parts.push({ type: 'input_text', text: m.content })
+        }
+        for (const att of m.attachments) {
+          if (!att?.contentType) continue
+          if (
+            att.contentType.startsWith('application/pdf') ||
+            att.contentType.startsWith('image/')
+          ) {
+            try {
+              const res = await fetch(att.url)
+              if (!res.ok) throw new Error(`fetch ${res.status}`)
+              const ab = await res.arrayBuffer()
+              const sizeMB = ab.byteLength / (1024 * 1024)
+              if (sizeMB > 25) {
+                parts.push({
+                  type: 'input_text',
+                  text: `Attachment '${att.name || 'file'}' skipped: size ${sizeMB.toFixed(1)}MB exceeds 25MB limit.`,
+                })
+                continue
+              }
+              parts.push({
+                type: 'file',
+                data: Buffer.from(ab),
+                mimeType: att.contentType,
+                name:
+                  att.name ||
+                  (att.contentType.startsWith('image/') ? 'image' : 'document') + '-' + Date.now(),
+              })
+            } catch (e: any) {
+              parts.push({
+                type: 'input_text',
+                text: `Failed to load attachment '${att.name || 'file'}': ${e.message}`,
+              })
+            }
+          }
+        }
+        finalMessages.push({ role: m.role, content: parts })
+      }
+    }
+
+    let savedFinalStepUsage = false
+
+    const resultStream = await rateLimitedAI.google.streamText(
+      {
+        model: await rateLimitedAI.google.model(modelName),
+        messages: finalMessages,
+        tools,
+        temperature: 0.7,
+        maxTokens: 4096,
+        experimental_transform: smoothStream({ chunking: 'word' }),
+        maxSteps: 5,
+        experimental_continueSteps: true,
+        onError: async (error: any) => {
+          console.error('Streaming error occurred:', error)
               try {
                 await saveMessage(
                   chat.id,
@@ -721,13 +799,37 @@ CRITICAL TOOL CONTINUATION RULES:
           usage,
           stepIndex,
         }: any) => {
-          console.log(`Step ${stepIndex} finished:`, {
+          console.log(`Step finished:`, {
+            model: modelName,
             hasText: !!text,
             toolCallsCount: toolCalls?.length || 0,
             toolResultsCount: toolResults?.length || 0,
             finishReason,
             stepIndex,
+            usage,
           })
+
+          try {
+            if (usage && typeof usage === 'object') {
+              const { saveTokenUsage } = await import('@/lib/db')
+              await saveTokenUsage({
+                userId: session.user.id,
+                chatId: chat.id,
+                model: modelName,
+                stepIndex: typeof stepIndex === 'number' ? stepIndex : null,
+                promptTokens: usage.promptTokens || 0,
+                completionTokens: usage.completionTokens || 0,
+                totalTokens:
+                  usage.totalTokens || (usage.promptTokens || 0) + (usage.completionTokens || 0),
+                meta: { finishReason },
+              })
+              if (finishReason === 'stop') {
+                savedFinalStepUsage = true
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to persist step usage:', e)
+          }
 
           const knowledgeBaseCalls =
             toolCalls?.filter((tc: any) => tc.toolName === 'knowledgeBase') || []
@@ -756,7 +858,9 @@ CRITICAL TOOL CONTINUATION RULES:
           )
 
           if (directToolCallResult) {
-            const existingIndex = uniqueToolResults.findIndex(r => r.toolCallId === directToolCallResult.toolCallId)
+            const existingIndex = uniqueToolResults.findIndex(
+              r => r.toolCallId === directToolCallResult.toolCallId
+            )
             if (existingIndex === -1) {
               uniqueToolResults.push(directToolCallResult)
             } else {
@@ -764,7 +868,9 @@ CRITICAL TOOL CONTINUATION RULES:
             }
           }
 
-          console.log(`Collected ${uniqueToolResults.length} unique tool results from all steps${directToolCallResult ? ' (including direct tool call)' : ''}`)
+          console.log(
+            `Collected ${uniqueToolResults.length} unique tool results from all steps${directToolCallResult ? ' (including direct tool call)' : ''}`
+          )
 
           for (const tr of uniqueToolResults) {
             if (
@@ -844,6 +950,28 @@ CRITICAL TOOL CONTINUATION RULES:
                 fallbackError
               )
             }
+          }
+
+          // Persist aggregate usage if available on final result
+          try {
+            const finalUsage = (result as any)?.usage
+            if (!savedFinalStepUsage && finalUsage && typeof finalUsage === 'object') {
+              const { saveTokenUsage } = await import('@/lib/db')
+              await saveTokenUsage({
+                userId: session.user.id,
+                chatId: chat.id,
+                model: modelName,
+                stepIndex: null,
+                promptTokens: finalUsage.promptTokens || 0,
+                completionTokens: finalUsage.completionTokens || 0,
+                totalTokens:
+                  finalUsage.totalTokens ||
+                  (finalUsage.promptTokens || 0) + (finalUsage.completionTokens || 0),
+                meta: { type: 'final' },
+              })
+            }
+          } catch (e) {
+            console.warn('Failed to persist final usage:', e)
           }
         },
       },

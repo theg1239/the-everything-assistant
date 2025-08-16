@@ -9,14 +9,14 @@ import { useSession } from 'next-auth/react'
 import { useMemory } from '@/contexts/memory-context'
 import { VirtualizedMessages } from '@/components/virtualized-messages'
 import { motion } from 'framer-motion'
-import { FileText, Plus, ChevronDown } from 'lucide-react'
+import { FileText, Plus, ChevronDown, GraduationCap } from 'lucide-react'
 import { HamburgerButton } from '@/components/hamburger-button'
 import { Button } from '@/components/ui/button'
 import { SuggestedQuestions } from '@/components/suggested-questions'
 import { FollowUpSuggestions } from '@/components/follow-up-suggestions'
 import { ChatHeader } from '@/components/chat-header'
 import { MultimodalInput } from '@/components/multimodal-input'
-import { Canvas } from '@/components/canvas'
+import Hub from '@/components/hub/hub'
 import { extractTitleFromContent } from '@/lib/utils'
 import UpsellBanner from '@/components/upsell-banner'
 import { VTOPToolHandler } from '@/components/vtop-tool-handler'
@@ -30,6 +30,8 @@ import ScrollToTopButton from '@/components/scroll-to-top-button'
 import { cn } from '@/lib/utils'
 import { useThrottle } from '@/hooks/use-debounce'
 import { useSidebar } from '@/contexts/sidebar-context'
+import { StreamingErrorDisplay } from '@/components/streaming-error-display'
+import { DynamicLoadingIndicator } from '@/components/dynamic-loading-indicator'
 
 const useViewportHeight = () => {
   const mainRef = useRef<HTMLDivElement>(null)
@@ -118,8 +120,8 @@ const PureChatInterface = memo(
   ({ initialMessages = [], chatId, autoResume = false }: ChatInterfaceProps) => {
     const [showFullChat, setShowFullChat] = useState(initialMessages.length > 0)
     const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebar()
-    const [canvasOpen, setCanvasOpen] = useState(false)
-    const [canvasContent, setCanvasContent] = useState<string>('')
+    const [hubOpen, setHubOpen] = useState(false)
+    const [vtopLoading, setVtopLoading] = useState(false)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [hasUserInitiatedConversation, setHasUserInitiatedConversation] = useState(false)
     const [isInitialRender, setIsInitialRender] = useState(true)
@@ -147,6 +149,22 @@ const PureChatInterface = memo(
     const { showOnboarding, closeOnboarding } = useOnboarding()
 
     const mainRef = useViewportHeight()
+
+    const [vtopDisclaimer, setVtopDisclaimer] = useState<{
+      toolCallId: string
+      command: string
+      message: string
+    } | null>(null)
+    useEffect(() => {
+      const onDisclaimer = (e: any) => {
+        const d = e?.detail
+        if (!d) return
+        setVtopDisclaimer({ toolCallId: d.toolCallId, command: d.command, message: d.message })
+      }
+      window.addEventListener('vtopCredentialsDisclaimer', onDisclaimer as EventListener)
+      return () =>
+        window.removeEventListener('vtopCredentialsDisclaimer', onDisclaimer as EventListener)
+    }, [])
 
     useEffect(() => {
       let timeoutId: NodeJS.Timeout
@@ -252,8 +270,92 @@ const PureChatInterface = memo(
       addToolResult,
       stop,
     } = useChat({
-      transport: new DefaultChatTransport({ api: '/api/chat' }),
-      messages: initialMessages,
+      api: '/api/chat',
+      initialMessages: initialMessages,
+      experimental_throttle: 25,
+      body: {
+        ...(optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : {}),
+        ...(selectedTool ? { preferredTool: selectedTool } : {}),
+      },
+      onResponse: res => {
+        if (!showFullChat) setShowFullChat(true)
+        setErrorMessage(null)
+        clearRateLimitError()
+        const newId = res.headers.get('X-Chat-Id')
+        const newPath = res.headers.get('X-Chat-Path')
+        if (newId && !chatId && !chatCreatedEventDispatched) {
+          setOptimisticChatId(newId)
+          currentChatIdRef.current = newId
+          setChatCreatedEventDispatched(true)
+          const chatPath = `/chat/${newId}`
+          router.push(chatPath)
+          window.history.replaceState({}, '', chatPath)
+          window.dispatchEvent(
+            new CustomEvent('newChatCreated', {
+              detail: {
+                id: newId,
+                title: extractTitleFromContent(messages[0]?.content || 'New Chat'),
+                path: chatPath,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              },
+            })
+          )
+        }
+      },
+      onFinish: message => {
+        const currentChatId = currentChatIdRef.current
+        if (message.role === 'assistant' && message.content) {
+          setLastAssistantMessage(message.content)
+          if (userPreferences.followUpSuggestions !== false) {
+            setShowFollowUpSuggestions(true)
+          }
+        }
+        if (currentChatId && isFirstMessageInNewChat) {
+          setIsFirstMessageInNewChat(false)
+          const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
+            try {
+              const response = await fetch(`/api/chats/${currentChatId}`)
+              if (response.ok) {
+                const chatData = await response.json()
+                if (chatData.title && chatData.title !== 'New Chat') {
+                  window.dispatchEvent(
+                    new CustomEvent('chatTitleUpdated', {
+                      detail: { chatId: currentChatId, title: chatData.title },
+                    })
+                  )
+                } else if (attempt < maxAttempts) {
+                  setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
+                }
+              }
+            } catch (error) {
+              if (attempt < maxAttempts) {
+                setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
+              }
+            }
+          }
+          setTimeout(() => checkTitleUpdate(), 3000)
+        }
+      },
+      onError: err => {
+        const errorMessage = err.message || err.toString()
+        const hasResponseBody = typeof err === 'object' && err !== null && 'responseBody' in err
+        const responseBody = hasResponseBody ? (err as any).responseBody : ''
+
+        const isGeminiStreamingError =
+          errorMessage.includes('contents.parts must not be empty') ||
+          errorMessage.includes('INVALID_ARGUMENT') ||
+          errorMessage.includes('GenerateContentRequest.contents') ||
+          errorMessage.includes('streamGenerateContent') ||
+          (typeof responseBody === 'string' &&
+            responseBody.includes('contents.parts must not be empty'))
+
+        const isRateLimit = checkForRateLimitError(err)
+        if (!isRateLimit && !isGeminiStreamingError) {
+          toast.error('Something went wrong. Please try again.')
+        }
+        // Do NOT show toast for Gemini streaming errors!
+      },
     })
 
     const isLoading = status === 'streaming'
@@ -261,9 +363,13 @@ const PureChatInterface = memo(
     const setMessages = (_: any) => {}
 
     const scrollToBottom = useCallback(() => {
+      const prefersReducedMotion =
+        typeof window !== 'undefined' &&
+        window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches
       if (!messagesEndRef.current) return
       const container = contentRef.current?.parentElement
-      const scrollBehavior: ScrollBehavior = isLoading ? 'auto' : 'smooth'
+      const scrollBehavior: ScrollBehavior = isLoading || prefersReducedMotion ? 'auto' : 'smooth'
       if (container && isMobile) {
         container.scrollTo({ top: container.scrollHeight, behavior: scrollBehavior })
       } else {
@@ -315,6 +421,38 @@ const PureChatInterface = memo(
     }, [initialMessages.length, showFullChat])
 
     const throttledScrollToBottom = useThrottle(scrollToBottom, 50)
+
+    useEffect(() => {
+      // Global keyboard shortcuts: focus composer with '/', blur with Escape
+      const handleGlobalKeyDown = (e: KeyboardEvent) => {
+        const target = e.target as HTMLElement | null
+        const isTypingField =
+          target &&
+          (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+
+        // Focus chat input with '/'
+        if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+          if (!isTypingField) {
+            e.preventDefault()
+            const textarea = document.querySelector<HTMLTextAreaElement>(
+              'textarea[aria-label="Message input"]'
+            )
+            textarea?.focus()
+          }
+        }
+
+        // Blur input on Escape
+        if (e.key === 'Escape') {
+          const active = document.activeElement as HTMLElement | null
+          if (active && active.tagName === 'TEXTAREA') {
+            ;(active as HTMLTextAreaElement).blur()
+          }
+        }
+      }
+
+      document.addEventListener('keydown', handleGlobalKeyDown)
+      return () => document.removeEventListener('keydown', handleGlobalKeyDown)
+    }, [])
 
     useEffect(() => {
       if (isInitialRender) {
@@ -376,11 +514,32 @@ const PureChatInterface = memo(
 
     useEffect(() => {
       if (error) {
-        const isRateLimit = checkForRateLimitError(error)
+        const errorMessage = error.message || error.toString()
+        const hasResponseBody =
+          typeof error === 'object' && error !== null && 'responseBody' in error
+        const responseBody = hasResponseBody ? (error as any).responseBody : ''
 
-        if (!isRateLimit) {
-          // setErrorMessage('Unable to connect. Please check your connection and try again.')
+        const isGeminiStreamingError =
+          errorMessage.includes('contents.parts must not be empty') ||
+          errorMessage.includes('INVALID_ARGUMENT') ||
+          errorMessage.includes('GenerateContentRequest') ||
+          (typeof responseBody === 'string' &&
+            responseBody.includes('contents.parts must not be empty'))
+
+        if (isGeminiStreamingError) {
+          setErrorMessage('An error occurred. Please start a new chat.')
+          setMessages(prev =>
+            prev.map((msg, idx) =>
+              idx === prev.length - 1 && msg.role === 'assistant'
+                ? { ...msg, content: '', error: 'streaming_error' }
+                : msg
+            )
+          )
+          return
         }
+
+        const isRateLimit = checkForRateLimitError(error)
+        if (isRateLimit) return
       }
     }, [error, checkForRateLimitError])
 
@@ -446,12 +605,8 @@ const PureChatInterface = memo(
       }
     }
 
-    const openCanvas = () => {
-      setCanvasOpen(true)
-    }
     const createCanvasFromMessage = (content: string) => {
-      setCanvasContent(content)
-      setCanvasOpen(true)
+      setHubOpen(true)
     }
 
     const handleLoginClick = () => {
@@ -473,9 +628,11 @@ const PureChatInterface = memo(
       originalToolCall: any
     ) => {
       try {
+        setVtopLoading(true)
         const command = originalToolCall?.args?.command || originalToolCall?.result?.command
         if (!command) {
           console.error('No command found in original tool call')
+          setVtopLoading(false)
           return
         }
         const toolCallId = originalToolCall.toolCallId || Date.now().toString()
@@ -502,7 +659,45 @@ const PureChatInterface = memo(
           return message
         })
 
-        setMessages([...updatedMessagesForLoading])
+        // Ensure there's a trailing assistant message with the pending VTOP tool call
+        setMessages(prev => {
+          const base = [...updatedMessagesForLoading]
+          if (base.length === 0) return base
+          const last = base[base.length - 1]
+          const toolInvocationPayload = {
+            toolCallId: toolCallId,
+            toolName: 'queryVTOP',
+            args: { command, username: credentials.username },
+            state: 'call',
+            result: undefined,
+          }
+          if (last.role === 'assistant') {
+            const exists = last.toolInvocations?.some((t: any) => t.toolCallId === toolCallId)
+            if (!exists) {
+              base[base.length - 1] = {
+                ...last,
+                toolInvocations: [...(last.toolInvocations || []), toolInvocationPayload],
+              }
+            } else {
+              // make sure its state is call
+              base[base.length - 1] = {
+                ...last,
+                toolInvocations: last.toolInvocations.map((t: any) =>
+                  t.toolCallId === toolCallId ? { ...t, state: 'call', result: undefined } : t
+                ),
+              }
+            }
+          } else {
+            // Append a new assistant shell to surface loading state
+            base.push({
+              id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+              role: 'assistant',
+              content: '',
+              toolInvocations: [toolInvocationPayload],
+            })
+          }
+          return base
+        })
 
         const response = await fetch('/api/chat', {
           method: 'POST',
@@ -526,7 +721,164 @@ const PureChatInterface = memo(
         })
 
         if (response.ok) {
-          const result = await response.json()
+          const responseText = await response.text()
+
+          function parseVTOPResponse(raw: string) {
+            if (!raw || typeof raw !== 'string') {
+              throw new Error('Empty response')
+            }
+
+            const trimmed = raw.trim()
+
+            // Fast path: entire body is a single JSON doc
+            if (/^[\[{]/.test(trimmed)) {
+              try {
+                return JSON.parse(trimmed)
+              } catch (e: any) {
+                // keep going; might be framed
+              }
+            }
+
+            // Tokenize into frames. A frame looks like: "<prefix>:<payload...>"
+            // Payload can span multiple lines until the next "<prefix>:"
+            const lines = raw.replace(/\r/g, '').split('\n')
+            const frameHeader = /^([a-z0-9]):(.*)$/i
+
+            type Frame = { prefix: string; payload: string }
+            const frames: Frame[] = []
+
+            let current: Frame | null = null
+
+            const flush = () => {
+              if (current) {
+                // trim only trailing newlines; keep inner newlines
+                current.payload = current.payload.replace(/\n$/, '')
+                frames.push(current)
+                current = null
+              }
+            }
+
+            for (let i = 0; i < lines.length; i++) {
+              const rawLine = lines[i]
+              const line = rawLine // keep exact spacing; payload might be HTML
+              const m = line.match(frameHeader)
+
+              if (m) {
+                // New frame starts; flush the previous one
+                flush()
+                current = { prefix: m[1], payload: m[2] ?? '' }
+                if (i < lines.length - 1) current.payload += '\n' // preserve newline after first line
+              } else {
+                // Continuation of current frame’s payload (if any)
+                if (current) {
+                  current.payload += line + (i < lines.length - 1 ? '\n' : '')
+                } else {
+                  // Orphan line — ignore; not part of a frame
+                }
+              }
+            }
+            flush()
+
+            // Helpers
+            const safeParseJSON = (s: string) => {
+              const t = s.trim()
+              // If payload contains multiple JSON docs concatenated, try to take the largest {...} or [...]
+              if (!/^[\[{]/.test(t)) throw new Error('Not JSON')
+              try {
+                return JSON.parse(t)
+              } catch (_) {
+                // Try to extract the outermost JSON block
+                const firstBrace = t.indexOf('{')
+                const lastBrace = t.lastIndexOf('}')
+                const firstBracket = t.indexOf('[')
+                const lastBracket = t.lastIndexOf(']')
+                const sliceObject =
+                  firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace
+                    ? t.slice(firstBrace, lastBrace + 1)
+                    : null
+                const sliceArray =
+                  firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket
+                    ? t.slice(firstBracket, lastBracket + 1)
+                    : null
+                const candidate = sliceObject ?? sliceArray
+                if (!candidate) throw new Error('JSON extract failed')
+                return JSON.parse(candidate)
+              }
+            }
+
+            const decodePossibleJSONString = (s: string) => {
+              const t = s.trim()
+              // If it looks like a *single-line* quoted JSON string, try JSON.parse
+              if (t.startsWith('"') && t.endsWith('"') && !t.includes('\n')) {
+                try {
+                  return JSON.parse(t) // unescapes \n, \", etc.
+                } catch {
+                  // fall through to raw
+                }
+              }
+              // Otherwise treat as raw text. If it’s multi-line and starts/ends with a bare quote, strip it.
+              if (t.startsWith('"') && t.endsWith('"')) {
+                return t.slice(1, -1)
+              }
+              return s
+            }
+
+            // Collect frames
+            const toolFrames: any[] = []
+            const textChunks: string[] = []
+
+            for (const f of frames) {
+              const payload = f.payload ?? ''
+
+              if (f.prefix === 'a' || f.prefix === '9' || f.prefix === 'e') {
+                // JSON-ish frames
+                // Some backends sometimes include leading noise; be forgiving
+                const trimmedPayload = payload.trim()
+                try {
+                  const parsed = safeParseJSON(trimmedPayload)
+                  if (f.prefix === 'a') toolFrames.push(parsed)
+                  // we rarely need '9' or 'e' here, but keeping parity with your original logic
+                } catch {
+                  // ignore unparseable diagnostic lines (e.g., "still")
+                }
+              } else if (f.prefix === '0') {
+                // Text frame: keep all lines; do not JSON.parse unless it's clearly a single-line JSON string
+                textChunks.push(decodePossibleJSONString(payload))
+              } else {
+                // Unknown prefix; ignore
+              }
+            }
+
+            // Prefer the last a: frame that has a "result"
+            const chosen =
+              [...toolFrames].reverse().find(x => x && typeof x === 'object' && 'result' in x) ??
+              [...toolFrames].reverse().find(x => x) // fallback to any 'a' frame
+
+            if (chosen && chosen.result !== undefined) {
+              return { result: chosen.result }
+            }
+            if (chosen) {
+              return { result: chosen } // sometimes the object itself is the result
+            }
+            if (textChunks.length) {
+              return { result: { success: true, output: textChunks.join('\n') } }
+            }
+
+            // Nothing usable found
+            throw new Error('No parsable tool frames found in streaming response')
+          }
+
+          let result: any
+          try {
+            result = parseVTOPResponse(responseText)
+          } catch (err) {
+            console.error('VTOP parse error. Raw response begins with:', responseText.slice(0, 180))
+            console.error(err)
+            toast.error('Error processing VTOP response. Please try again.')
+            setVtopLoading(false)
+            return
+          }
+
           if (toolCallId) {
             updateToolResult(toolCallId, command, result.result)
           }
@@ -572,6 +924,67 @@ const PureChatInterface = memo(
           })
           setMessages([...updatedMessages])
 
+          // Inject formatted/summary content into the assistant message if absent so UI reflects parsed result promptly
+          try {
+            const formattedContent =
+              (result.result && (result.result.formatted_content || result.result.summary)) || ''
+            if (formattedContent) {
+              setMessages(prev => {
+                const idx = prev.findIndex(
+                  m =>
+                    m.role === 'assistant' &&
+                    m.toolInvocations?.some((t: any) => t.toolCallId === toolCallId)
+                )
+                if (idx !== -1) {
+                  const clone = [...prev]
+                  const target = clone[idx]
+                  if (!target.content || (target.content as string).trim() === '') {
+                    clone[idx] = { ...target, content: formattedContent }
+                  } else if (!target.content.includes(formattedContent.slice(0, 30))) {
+                    // Append if it's distinct (rudimentary duplicate guard)
+                    clone[idx] = {
+                      ...target,
+                      content: `${target.content}\n\n${formattedContent}`.trim(),
+                    }
+                  }
+                  return clone
+                }
+                // If no existing assistant container, create one
+                const newAssistantMsg = {
+                  id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                  role: 'assistant',
+                  content: formattedContent,
+                  toolInvocations: [
+                    {
+                      toolCallId: toolCallId,
+                      toolName: 'queryVTOP',
+                      args: { command },
+                      result: result.result,
+                      state: 'result',
+                    },
+                  ],
+                } as any
+                return [...prev, newAssistantMsg]
+              })
+              // Track last assistant message text for follow-up suggestions
+              try {
+                setLastAssistantMessage(
+                  formattedContent.length > 400 ? formattedContent.slice(0, 400) : formattedContent
+                )
+              } catch {}
+            }
+            if (!showFullChat) setShowFullChat(true)
+            // Attempt scroll to bottom shortly after DOM updates
+            setTimeout(() => {
+              try {
+                const container = contentRef.current?.parentElement
+                if (container) container.scrollTop = container.scrollHeight
+              } catch {}
+            }, 50)
+          } catch (uiUpdateErr) {
+            console.warn('Non-fatal UI update issue after VTOP parse:', uiUpdateErr)
+          }
+
           if (
             result.result &&
             result.result.success !== false &&
@@ -602,12 +1015,17 @@ const PureChatInterface = memo(
               toast.error('Invalid VTOP credentials. Please check your username and password.')
             }
           }
+          setVtopLoading(false)
         } else {
+          const errorText = await response.text()
+          console.error('VTOP API Error:', response.status, errorText)
           toast.error('Failed to retrieve VTOP data. Please try again.')
+          setVtopLoading(false)
         }
       } catch (error) {
         console.error('Error executing VTOP tool:', error)
-        toast.error('An error occurred while retrieving VTOP data.')
+        toast.error('An error occurred while retrieving VTOP data. Please try again.')
+        setVtopLoading(false)
       }
     }
 
@@ -678,6 +1096,12 @@ const PureChatInterface = memo(
         >
           <UpsellBanner />
           <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
+          <Hub
+            isOpen={hubOpen}
+            onClose={() => {
+              setHubOpen(false)
+            }}
+          />
           <div className="flex flex-col h-[100dvh] bg-transparent text-foreground relative overflow-hidden mobile-viewport-fix">
             <div className="relative z-10 flex flex-col h-full">
               <header className="flex-shrink-0 sticky top-0 z-40">
@@ -704,38 +1128,127 @@ const PureChatInterface = memo(
                   />{' '}
                 </motion.div>
 
-                {errorMessage && (
+                <div className="w-full max-w-5xl flex justify-center -mt-3">
                   <motion.div
-                    initial={{ opacity: 0, y: 10 }}
+                    initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl p-4 text-center max-w-md"
+                    transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
                   >
-                    {errorMessage}
+                    <button
+                      onClick={() => setHubOpen(true)}
+                      aria-label="Open hub"
+                      className="hub-gradient-btn"
+                      style={{ minWidth: '320px', paddingLeft: '32px', paddingRight: '32px' }}
+                    >
+                      <span className="hub-gradient-inner">
+                        <GraduationCap className="h-4 w-4 mr-2" />
+                        <span>hub</span>
+                      </span>
+                    </button>
                   </motion.div>
-                )}
+
+                  <style jsx>{`
+                    .hub-gradient-btn {
+                      position: relative;
+                      display: inline-flex;
+                      align-items: center;
+                      justify-content: center;
+                      height: 40px;
+                      padding: 0 14px;
+                      border-radius: 9999px;
+                      border: 1px solid rgba(255, 255, 255, 0.08);
+                      cursor: pointer;
+                      color: var(--card-foreground);
+                      background: linear-gradient(
+                        90deg,
+                        rgba(110, 231, 249, 0.25) 0%,
+                        rgba(167, 139, 250, 0.25) 25%,
+                        rgba(244, 114, 182, 0.25) 50%,
+                        rgba(245, 158, 11, 0.25) 75%,
+                        rgba(110, 231, 249, 0.25) 100%
+                      );
+                      backdrop-filter: blur(8px);
+                      -webkit-backdrop-filter: blur(8px);
+                      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+                      transition:
+                        transform 160ms ease,
+                        box-shadow 200ms ease,
+                        border-color 200ms ease;
+                      overflow: hidden;
+                    }
+                    .hub-gradient-btn::before {
+                      content: '';
+                      position: absolute;
+                      inset: -2px;
+                      border-radius: inherit;
+                      background: linear-gradient(
+                        90deg,
+                        #6ee7f9,
+                        #a78bfa,
+                        #f472b6,
+                        #f59e0b,
+                        #6ee7f9
+                      );
+                      background-size: 200% 200%;
+                      filter: blur(10px);
+                      opacity: 0.45;
+                      z-index: 0;
+                      animation: hub-shine 5s linear infinite;
+                    }
+                    .hub-gradient-btn:hover {
+                      transform: translateY(-1px) scale(1.02);
+                      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+                      border-color: rgba(255, 255, 255, 0.12);
+                    }
+                    .hub-gradient-inner {
+                      position: relative;
+                      z-index: 1;
+                      display: inline-flex;
+                      align-items: center;
+                      font-size: 0.9rem;
+                      line-height: 1;
+                      font-weight: 500;
+                      color: hsl(var(--foreground));
+                    }
+                    .hub-gradient-inner :global(svg) {
+                      color: hsl(var(--foreground));
+                    }
+                    .hub-gradient-btn::after {
+                      content: '';
+                      position: absolute;
+                      inset: 0;
+                      border-radius: inherit;
+                      background: radial-gradient(
+                        120% 120% at 50% 100%,
+                        rgba(255, 255, 255, 0.06) 0%,
+                        transparent 55%
+                      );
+                      z-index: 1;
+                      pointer-events: none;
+                    }
+                    @keyframes hub-shine {
+                      0% {
+                        background-position: 0% 50%;
+                      }
+                      50% {
+                        background-position: 100% 50%;
+                      }
+                      100% {
+                        background-position: 0% 50%;
+                      }
+                    }
+                  `}</style>
+                </div>
+
+                {errorMessage && <StreamingErrorDisplay message={errorMessage} />}
 
                 <RateLimitErrorDisplay />
 
-                {isLoading && input.trim() !== '' && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex items-center justify-center space-x-3 text-muted-foreground py-4"
-                  >
-                    <div className="flex space-x-1">
-                      <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
-                      <div
-                        className="w-2 h-2 bg-primary rounded-full animate-pulse"
-                        style={{ animationDelay: '0.2s' }}
-                      ></div>
-                      <div
-                        className="w-2 h-2 bg-primary rounded-full animate-pulse"
-                        style={{ animationDelay: '0.4s' }}
-                      ></div>
-                    </div>
-                    <span className="text-sm">thinking...</span>
-                  </motion.div>
-                )}
+                <DynamicLoadingIndicator
+                  messages={messages}
+                  isLoading={isLoading || vtopLoading}
+                  showForFirstMessage={true}
+                />
 
                 <SuggestedQuestions
                   isFirstMessage={true}
@@ -757,22 +1270,11 @@ const PureChatInterface = memo(
       >
         <UpsellBanner />
         <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
-        <Canvas
-          isOpen={canvasOpen}
+        <Hub
+          isOpen={hubOpen}
           onClose={() => {
-            setCanvasOpen(false)
-            setCanvasContent('')
+            setHubOpen(false)
           }}
-          chatId={optimisticChatId}
-          initialDocument={
-            canvasContent
-              ? {
-                  title: 'New Document',
-                  content: canvasContent,
-                  type: 'document',
-                }
-              : undefined
-          }
         />{' '}
         <div
           ref={mainRef}
@@ -813,14 +1315,10 @@ const PureChatInterface = memo(
                     router.push('/')
                   }
                 }}
-                className="h-9"
+                className="h-9 ml-auto"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 new chat
-              </Button>
-              <Button variant="ghost" onClick={openCanvas} className="ml-auto h-9">
-                <FileText className="h-4 w-4 mr-2" />
-                canvas
               </Button>
             </div>
           </header>{' '}
@@ -847,35 +1345,78 @@ const PureChatInterface = memo(
                   </motion.div>
                 )}
                 <RateLimitErrorDisplay />{' '}
+                {/* {vtopDisclaimer && (
+                  (() => {
+                    const formatCommandName = (cmd: string) => {
+                      const map: Record<string, string> = {
+                        'class-message': 'Class Message',
+                        'exam-schedule': 'Exam Schedule',
+                        'library-dues': 'Library Dues',
+                        'leave-status': 'Leave Status',
+                        nightslip: 'Night Slip',
+                        da: 'Digital Assignment',
+                        'course-page': 'Course Page',
+                        attendance: 'Attendance',
+                        timetable: 'Timetable',
+                        grades: 'Grades',
+                        profile: 'Profile',
+                      }
+                      return map[cmd] || (cmd ? cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ') : 'VTOP data')
+                    }
+                    const prettyCmd = formatCommandName(vtopDisclaimer.command)
+                    return (
+                      <motion.div
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="rounded-xl border border-blue-500/30 bg-blue-500/5 px-4 py-3 text-sm flex flex-col sm:flex-row sm:items-center gap-3"
+                      >
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                          <div className="mt-0.5">
+                            <GraduationCap className="h-5 w-5 text-blue-500" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-foreground truncate">Authentication Required</div>
+                            <div className="text-xs text-muted-foreground mt-1 truncate">
+                              Please log in to VTOP to access your {prettyCmd} data.
+                            </div>
+                            <div className="text-[11px] text-muted-foreground/80 mt-2">
+                              Privacy notice: Your credentials are encrypted and stored locally in your browser. They are used only to log into VTOP to fetch your data.
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              window.dispatchEvent(
+                                new CustomEvent('vtopLoginTrigger', {
+                                  detail: { command: vtopDisclaimer.command, toolCallId: vtopDisclaimer.toolCallId },
+                                })
+                              )
+                            }}
+                            className="bg-blue-500 hover:bg-blue-600 text-white"
+                          >
+                            Login
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setVtopDisclaimer(null)}>
+                            Dismiss
+                          </Button>
+                        </div>
+                      </motion.div>
+                    )
+                  })()
+                )} */}
                 <VirtualizedMessages
                   messages={messages}
                   chatId={optimisticChatId}
+                  isLoading={isLoading}
                   onCreateCanvas={createCanvasFromMessage}
                   onLoginClick={handleLoginClick}
                   onPlacementSearch={handlePlacementSearch}
                   maximizedItem={maximizedArtifact}
                   setMaximizedItem={setMaximizedArtifact}
                 />
-                {isLoading && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="flex items-center justify-center space-x-3 text-muted-foreground py-4"
-                    >
-                      <div className="flex space-x-1">
-                        <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
-                        <div
-                          className="w-2 h-2 bg-primary rounded-full animate-pulse"
-                          style={{ animationDelay: '0.2s' }}
-                        ></div>
-                        <div
-                          className="w-2 h-2 bg-primary rounded-full animate-pulse"
-                          style={{ animationDelay: '0.4s' }}
-                        ></div>
-                      </div>
-                      <span className="text-sm">thinking...</span>
-                    </motion.div>
-                  )}
+                <DynamicLoadingIndicator messages={messages} isLoading={isLoading || vtopLoading} />
                 <div
                   ref={messagesEndRef}
                   className={isLoading ? 'h-20' : 'h-0'}
@@ -940,12 +1481,14 @@ const PureChatInterface = memo(
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
               className="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-40"
+              style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
             >
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={scrollToBottom}
                 className="h-10 w-10 rounded-full bg-background/80 hover:bg-background/90 border-0 shadow-sm backdrop-blur-sm"
+                aria-label="Scroll to latest message"
               >
                 <ChevronDown className="h-5 w-5 text-foreground/70" />
               </Button>

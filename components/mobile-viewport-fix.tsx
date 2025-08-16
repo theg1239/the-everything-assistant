@@ -57,7 +57,8 @@ export default function MobileViewportFix() {
 
     const preventOverscroll = (e: TouchEvent) => {
       const target = e.target as HTMLElement
-      if (!target?.closest('.chat-content')) {
+      const allowWithin = target?.closest('.chat-content, [data-allow-touch-scroll]')
+      if (!allowWithin) {
         e.preventDefault()
       }
     }

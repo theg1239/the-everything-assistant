@@ -1,6 +1,8 @@
 'use client'
 
 import { motion } from 'framer-motion'
+import Link from 'next/link'
+import { Button } from '@/components/ui/button'
 import Aurora from '@/components/backgrounds/aurora'
 
 export default function NotFound() {
@@ -25,6 +27,11 @@ export default function NotFound() {
             <p className="text-lg text-white/80 mb-8 leading-relaxed max-w-lg mx-auto">
               the page you're looking for has vanished into the void...
             </p>
+            <div className="flex justify-center">
+              <Button asChild variant="secondary" className="px-6">
+                <Link href="/">go back home</Link>
+              </Button>
+            </div>
           </motion.div>
         </motion.div>
       </div>

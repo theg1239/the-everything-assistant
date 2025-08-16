@@ -33,13 +33,11 @@ export function VTOPCredentialsDialog({
   const [showPassword, setShowPassword] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [rememberCredentials, setRememberCredentials] = useState(false)
-  const [linkCredentials, setLinkCredentials] = useState(false)
   const [mounted, setMounted] = useState(false)
 
   React.useEffect(() => {
     setMounted(true)
     loadSavedCredentials()
-    setLinkCredentials(!hasVTOPCredentials())
   }, [])
 
   const loadSavedCredentials = () => {
@@ -76,20 +74,18 @@ export function VTOPCredentialsDialog({
         saveCredentials()
       }
 
-      if (linkCredentials) {
-        try {
-          saveVTOPCredentials(username.trim(), password.trim())
-          toast.success('VTOP credentials linked successfully!')
+      try {
+        saveVTOPCredentials(username.trim(), password.trim())
+        toast.success('VTOP credentials linked successfully!')
 
-          window.dispatchEvent(
-            new CustomEvent('vtopCredentialsLinked', {
-              detail: { username: username.trim() },
-            })
-          )
-        } catch (error) {
-          console.error('Failed to link credentials:', error)
-          toast.error('Failed to link credentials, but login will proceed')
-        }
+        window.dispatchEvent(
+          new CustomEvent('vtopCredentialsLinked', {
+            detail: { username: username.trim() },
+          })
+        )
+      } catch (error) {
+        console.error('Failed to link credentials:', error)
+        toast.error('Failed to link credentials, but login will proceed')
       }
 
       const credentialsPayload = {
@@ -169,7 +165,7 @@ export function VTOPCredentialsDialog({
                 <input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter your VTOP password"
+                  placeholder="enter your VTOP password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   required
@@ -187,7 +183,7 @@ export function VTOPCredentialsDialog({
             </div>
 
             <div className="space-y-3">
-              <div className="flex items-center space-x-3">
+              {/* <div className="flex items-center space-x-3">
                 <input
                   type="checkbox"
                   id="remember"
@@ -198,42 +194,24 @@ export function VTOPCredentialsDialog({
                 <label htmlFor="remember" className="text-sm text-slate-300">
                   Remember username
                 </label>
-              </div>
+              </div> */}
 
-              <div className="flex items-center space-x-3">
-                <input
-                  type="checkbox"
-                  id="link-credentials"
-                  checked={linkCredentials}
-                  onChange={e => setLinkCredentials(e.target.checked)}
-                  className="rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 h-4 w-4"
-                />
-                <label
-                  htmlFor="link-credentials"
-                  className="text-sm text-slate-300 flex items-center"
-                >
-                  {/* <Link className="h-3 w-3 mr-1" /> */}
-                  Link for auto-login
-                </label>
-              </div>
+              {/* <div className="flex items-center space-x-3">
+              <span className="text-sm text-slate-300 flex items-center">
+                Credentials will be linked for auto-login
+              </span>
+            </div> */}
 
-              {linkCredentials && (
-                <p className="text-xs text-slate-400 ml-6">
-                  Your credentials will be encrypted and stored for automatic VTOP access
-                </p>
-              )}
+              {/* <p className="text-xs text-slate-400 ml-6">
+              Your credentials will be encrypted and stored for automatic VTOP access
+            </p> */}
             </div>
 
             <div className="bg-slate-800 p-3 rounded-xl border border-slate-600">
               <div className="flex items-start gap-2">
                 <Lock className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
                 <div className="text-xs text-slate-300">
-                  <p>
-                    Your password is encrypted and{' '}
-                    {linkCredentials
-                      ? 'stored in secure cookies. Linked credentials enable automatic VTOP access without re-entering credentials.'
-                      : 'never stored. Only your username can be remembered.'}
-                  </p>
+                  <p>Your password is always encrypted and stored in your browser locally.</p>
                 </div>
               </div>
             </div>

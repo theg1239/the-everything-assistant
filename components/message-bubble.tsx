@@ -1,16 +1,18 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import type { UIMessage } from 'ai'
+import type { Message } from 'ai'
 import { cn } from '@/lib/utils'
+import ReactMarkdown from 'react-markdown'
 import { OptimizedMarkdown } from './optimized-markdown'
 import { ToolCallDisplay } from './tool-call-display'
 import { MessageActions } from './message-actions'
 import { memo, useMemo } from 'react'
 
 interface MessageBubbleProps {
-  message: UIMessage
+  message: Message
   chatId?: string
+  isLoading?: boolean
   onCreateCanvas?: (content: string) => void
   onLoginClick?: () => void
   onPlacementSearch?: (company: string) => void
@@ -21,6 +23,7 @@ interface MessageBubbleProps {
 const PureMessageBubble = ({
   message,
   chatId,
+  isLoading,
   onCreateCanvas,
   onLoginClick,
   onPlacementSearch,
@@ -29,83 +32,38 @@ const PureMessageBubble = ({
 }: MessageBubbleProps) => {
   const isUser = message.role === 'user'
 
-  const textContent = useMemo(() => {
-    if (Array.isArray((message as any).parts)) {
-      const textFromParts = (message as any).parts
-        .filter((p: any) => p.type === 'text' && typeof p.text === 'string')
-        .map((p: any) => p.text)
-        .join('')
-      if (textFromParts.trim()) {
-        return textFromParts
-      }
-    }
-    
-    if (typeof (message as any).content === 'string') {
-      return (message as any).content
-    }
-    
-    if ((message as any).text && typeof (message as any).text === 'string') {
-      return (message as any).text
-    }
-    
-    return ''
-  }, [message.parts, (message as any).content, (message as any).text])
-
   const toolInvocations = useMemo(() => {
-    // AI SDK v5: Extract tool calls from parts array
-    if (Array.isArray(message.parts)) {
-      const toolParts = message.parts.filter((part: any) => {
-        return part.type.startsWith('tool-');
-      });
-      
-      if (toolParts.length > 0) {
-        return toolParts.map((part: any) => {
-          const toolName = part.type.replace('tool-', '');
-          if (part.state === 'input-available') {
-            return {
-              toolCallId: part.toolCallId,
-              toolName: toolName,
-              args: part.input,
-              state: 'call',
-            }
-          } else if (part.state === 'output-available') {
-            return {
-              toolCallId: part.toolCallId,
-              toolName: toolName,
-              result: part.output,
-              state: 'result',
-            }
-          }
-          return part;
-        })
-      }
+    if (message.parts) {
+      return message.parts
+        .filter((part: any) => part.type === 'tool-invocation')
+        .map((part: any) => part.toolInvocation)
     }
-    
-    // Fallback to legacy format
+
     const directToolInvocations = (message as any).toolInvocations
     if (Array.isArray(directToolInvocations)) {
       return directToolInvocations
     }
-    
+
     const toolCalls = (message as any).toolCalls
     if (Array.isArray(toolCalls)) {
       return toolCalls
     }
-    
+
     return []
   }, [message.parts, (message as any).toolInvocations, (message as any).toolCalls])
 
   const visibleToolCalls = useMemo(() => {
-    const filtered = toolInvocations?.filter(
-      (t: any) => t.toolName !== 'knowledgeBase' && t.toolName !== 'saveMemory'
-    ) || []
-    
+    const filtered =
+      toolInvocations?.filter(
+        (t: any) => t.toolName !== 'knowledgeBase' && t.toolName !== 'saveMemory'
+      ) || []
+
     return filtered
   }, [toolInvocations])
 
   const hasContent = useMemo(() => {
-    return textContent.trim() !== ''
-  }, [textContent])
+    return message.content && (message.content as string).trim() !== ''
+  }, [message.content])
 
   const hasVisibleToolCalls = useMemo(() => {
     return visibleToolCalls.length > 0
@@ -115,8 +73,10 @@ const PureMessageBubble = ({
     return toolInvocations?.some((t: any) => t.toolName === 'knowledgeBase' && t.state !== 'result')
   }, [toolInvocations])
 
-  if (!isUser && !hasContent && !hasVisibleToolCalls && !hasKnowledgeBaseInProgress) {
-    return null
+  if (!isUser && !hasContent) {
+    if (!hasVisibleToolCalls && !hasKnowledgeBaseInProgress) {
+      return null
+    }
   }
 
   return (
@@ -158,20 +118,17 @@ const PureMessageBubble = ({
             })}
           >
             {isUser ? (
-              <p className="text-base leading-relaxed">{textContent}</p>
-            ) : textContent.trim() ? (
-              <OptimizedMarkdown
-                id={message.id}
-                content={textContent}
-              />
+              <p className="text-base leading-relaxed">{message.content}</p>
+            ) : hasContent ? (
+              <OptimizedMarkdown id={message.id} content={message.content as string} />
             ) : null}
 
-            {/* Message actions - show for assistant messages with content */}
-            {!isUser && chatId && textContent.trim() && (
+            {/* Message actions */}
+            {!isUser && !isLoading && chatId && (hasContent || hasVisibleToolCalls) && (
               <MessageActions
                 messageId={message.id}
                 chatId={chatId}
-                content={textContent}
+                content={message.content}
                 onCreateCanvas={onCreateCanvas}
               />
             )}

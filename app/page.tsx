@@ -28,7 +28,7 @@ export default async function Home() {
   const latestBroadcast = await getLatestBroadcast()
 
   return (
-    <main className="flex min-h-screen flex-col bg-transparent">
+    <main id="main-content" className="flex min-h-screen flex-col bg-transparent">
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex flex-1 flex-col overflow-hidden">
           <ChatInterface autoResume={false} />

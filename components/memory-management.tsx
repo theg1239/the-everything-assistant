@@ -304,7 +304,7 @@ export function MemoryManagement() {
                 </p>
               </div>
 
-              <div className="grid gap-4 max-h-[60vh] overflow-y-auto pr-2">
+              <div className="grid gap-4 max-h-none md:max-h-[60vh] md:overflow-y-auto pr-2">
                 {filteredMemories.map(memory => (
                   <motion.div
                     key={memory.id}

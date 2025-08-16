@@ -37,6 +37,7 @@
     "@emotion/is-prop-valid": "^1.2.1",
     "@langchain/core": "^0.3.61",
     "@langchain/textsplitters": "^0.1.0",
+    "@napi-rs/canvas": "^0.1.77",
     "@next-auth/prisma-adapter": "^1.0.7",
     "@octokit/rest": "^22.0.0",
     "@octokit/types": "^14.1.0",

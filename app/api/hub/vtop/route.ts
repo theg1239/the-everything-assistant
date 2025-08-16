@@ -19,20 +19,17 @@ export async function POST(req: Request) {
   const extras = (body?.extras || {}) as Record<string, any>
 
   try {
-    // Execute VTOP tool first to fetch raw data quickly
     const tools = createVITTools(session.user.id)
     const vtop = (tools as any)['queryVTOP']
     if (!vtop || typeof vtop.execute !== 'function') {
       return new Response(JSON.stringify({ error: 'vtop tool not available' }), { status: 500 })
     }
 
-    // Prefer server-linked credentials
     const serverCreds = await getServerFormatted()
     const args: any = { command, ...(serverCreds ? { username: serverCreds.username, password: serverCreds.encryptedPassword } : {}), ...extras }
 
     const raw = await vtop.execute(args, { toolCallId: `vtop-${Date.now()}`, messages: [] })
 
-    // Stream parsed/pretty object via AI
     const result = streamObject({
       model: google('gemini-2.5-flash-lite'),
       schema: vtopResultSchema,
@@ -44,6 +41,7 @@ export async function POST(req: Request) {
         '- a concise summary',
         '- formatted_content as valid HTML (semantic headings, lists, tables if appropriate)',
         '- structured_data as normalized JSON for downstream use',
+        '- If there are links provided such as download links, include them in the formatted content, you can present the link directly in ( <link> )',
         'Do not include any credentials or sensitive data.',
         'Here is the raw JSON to transform:',
         '```json',

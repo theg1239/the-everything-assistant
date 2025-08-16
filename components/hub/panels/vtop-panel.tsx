@@ -362,7 +362,7 @@ export default function VTOPPanel() {
                         className="h-7 text-xs bg-background/70 border-border/50 focus:border-border shadow-sm flex-1"
                       />
                     </div>
-                    <div className="flex items-center gap-2">
+                    {/* <div className="flex items-center gap-2">
                       <div className="text-xs text-muted-foreground w-24">materials</div>
                       <Input
                         value={extra.materialQuery || ''}
@@ -370,7 +370,7 @@ export default function VTOPPanel() {
                         placeholder="e.g., week 5 notes, assignments"
                         className="h-7 text-xs bg-background/70 border-border/50 focus:border-border shadow-sm flex-1"
                       />
-                    </div>
+                    </div> */}
                     <div className="flex items-center gap-2">
                       <div className="text-xs text-muted-foreground w-24">faculty</div>
                       <Input
@@ -380,7 +380,7 @@ export default function VTOPPanel() {
                         className="h-7 text-xs bg-background/70 border-border/50 focus:border-border shadow-sm flex-1"
                       />
                     </div>
-                    <div className="flex items-center gap-2 pl-24 -mt-1">
+                    {/* <div className="flex items-center gap-2 pl-24 -mt-1">
                       {['notes','assignments','announcements','week 1','week 2','week 5','all'].map(tag => (
                         <button
                           key={tag}
@@ -391,7 +391,7 @@ export default function VTOPPanel() {
                           {tag}
                         </button>
                       ))}
-                    </div>
+                    </div> */}
                     
                   </div>
                 )}

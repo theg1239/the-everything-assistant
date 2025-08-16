@@ -6,12 +6,12 @@ import { hasVTOPCredentials } from '@/lib/vtop-credentials'
 import { experimental_useObject as useObject } from '@ai-sdk/react'
 import { vtopResultSchema } from '@/app/api/hub/vtop/schema'
 import { useHubTool } from './use-hub-tool'
-import { CalendarClock, ClipboardCheck, UtensilsCrossed, FileSearch, Briefcase, Loader2 } from 'lucide-react'
+import { CalendarClock, ClipboardCheck, UtensilsCrossed, FileSearch, Briefcase, Loader2, Users, Flame } from 'lucide-react'
 
 interface QuickActionsProps {
   onShowResult: (title: string, result: any) => void
   onShowStream?: (title: string, object: any, isLoading: boolean, stop: () => void) => void
-  goTo: (page: 'vtop' | 'papers' | 'mess' | 'placements' | 'faculty') => void
+  goTo: (page: 'vtop' | 'papers' | 'mess' | 'placements' | 'faculty' | 'reddit') => void
 }
 
 export default function QuickActions({ onShowResult, onShowStream, goTo }: QuickActionsProps) {
@@ -21,6 +21,7 @@ export default function QuickActions({ onShowResult, onShowStream, goTo }: Quick
   const placements = useHubTool<any>('getPlacementInfo')
   const [startedAttendance, setStartedAttendance] = useState(false)
   const [startedTimetable, setStartedTimetable] = useState(false)
+  const [actions, setActions] = useState<any[]>([])
 
   const runAttendance = async () => {
     if (!linked) return goTo('vtop')
@@ -53,25 +54,108 @@ export default function QuickActions({ onShowResult, onShowStream, goTo }: Quick
     onShowResult('placements overview', res)
   }
 
+  // Build and randomize actions on mount and when link state changes
+  useEffect(() => {
+    const candidates = [
+      linked
+        ? {
+            id: 'attendance',
+            label: 'my attendance',
+            icon: <ClipboardCheck className="h-3.5 w-3.5" />,
+            onClick: runAttendance,
+            loading: attendance.isLoading,
+            requiresLinked: true,
+          }
+        : null,
+      linked
+        ? {
+            id: 'timetable',
+            label: 'my timetable',
+            icon: <CalendarClock className="h-3.5 w-3.5" />,
+            onClick: runTimetable,
+            loading: timetable.isLoading,
+            requiresLinked: true,
+          }
+        : null,
+      {
+        id: 'mess',
+        label: "today's mess",
+        icon: <UtensilsCrossed className="h-3.5 w-3.5" />,
+        onClick: () => goTo('mess'),
+      },
+      {
+        id: 'papers',
+        label: 'find past papers',
+        icon: <FileSearch className="h-3.5 w-3.5" />,
+        onClick: () => goTo('papers'),
+      },
+      {
+        id: 'placements',
+        label: 'placements',
+        icon: <Briefcase className="h-3.5 w-3.5" />,
+        onClick: runPlacements,
+        loading: placements.loading,
+      },
+      {
+        id: 'faculty',
+        label: 'browse faculty',
+        icon: <Users className="h-3.5 w-3.5" />,
+        onClick: () => goTo('faculty'),
+      },
+      {
+        id: 'reddit',
+        label: 'reddit trends',
+        icon: <Flame className="h-3.5 w-3.5" />,
+        onClick: () => goTo('reddit'),
+      },
+    ].filter(Boolean) as any[]
+
+    // Shuffle
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      const tmp = candidates[i]
+      candidates[i] = candidates[j]
+      candidates[j] = tmp
+    }
+
+    // Ensure exactly 4 actions; if fewer than 4 (should not happen), fill with safe defaults
+    const safeDefaults = ['mess', 'papers', 'placements', 'faculty', 'reddit']
+    const chosen: any[] = []
+    const seen = new Set<string>()
+    for (const c of candidates) {
+      if (chosen.length >= 4) break
+      if (seen.has(c.id)) continue
+      seen.add(c.id)
+      chosen.push(c)
+    }
+    if (chosen.length < 4) {
+      for (const id of safeDefaults) {
+        if (chosen.length >= 4) break
+        if (seen.has(id)) continue
+        const fallback = candidates.find(c => c.id === id)
+        if (fallback) {
+          seen.add(id)
+          chosen.push(fallback)
+        }
+      }
+    }
+
+    setActions(chosen.slice(0, 4))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linked])
+
   return (
     <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2 sm:overflow-x-auto no-scrollbar">
-      <ActionButton
-        label={linked ? 'my attendance' : 'link vtop to use'}
-        icon={<ClipboardCheck className="h-3.5 w-3.5" />}
-        onClick={runAttendance}
-        loading={attendance.isLoading}
-        ariaLabel={linked ? 'Fetch my attendance' : 'Link VTOP to use attendance'}
-      />
-      <ActionButton
-        label={linked ? 'my timetable' : 'link vtop to use'}
-        icon={<CalendarClock className="h-3.5 w-3.5" />}
-        onClick={runTimetable}
-        loading={timetable.isLoading}
-        ariaLabel={linked ? 'Fetch my timetable' : 'Link VTOP to use timetable'}
-      />
-      <ActionButton label="today's mess" icon={<UtensilsCrossed className="h-3.5 w-3.5" />} onClick={() => goTo('mess')} ariaLabel="Open today's mess menu" />
-      <ActionButton label="find past papers" icon={<FileSearch className="h-3.5 w-3.5" />} onClick={() => goTo('papers')} ariaLabel="Find past papers" />
-      <ActionButton label="placements" icon={<Briefcase className="h-3.5 w-3.5" />} onClick={runPlacements} loading={placements.loading} ariaLabel="View placements overview" />
+      {actions.map(a => (
+        <ActionButton
+          key={a.id}
+          label={a.label}
+          icon={a.icon}
+          onClick={a.onClick}
+          loading={!!a.loading}
+          ariaLabel={a.label}
+        />
+      ))}
     </div>
   )
 }

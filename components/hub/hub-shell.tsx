@@ -177,7 +177,10 @@ export default function HubShell() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 sm:p-5">
+      <div
+        className="flex-1 overflow-y-auto p-3 sm:p-5 [-webkit-overflow-scrolling:touch]"
+        data-allow-touch-scroll
+      >
         <div className="max-w-6xl mx-auto">
           {page === 'home' ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

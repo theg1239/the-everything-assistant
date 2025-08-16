@@ -121,8 +121,9 @@ export default function VTOPPanel() {
     return Boolean(VTOP_COMMANDS.find(cmd => cmd.id === command))
   }, [command, isLoading])
 
-  const runQuery = async () => {
-    const selected = VTOP_COMMANDS.find(c => c.id === command)
+  const runQuery = async (nextId?: string) => {
+    const cmdId = nextId || command
+    const selected = VTOP_COMMANDS.find(c => c.id === cmdId)
     if (selected?.requiresCreds && !linked) {
       setShowCreds(true)
       return
@@ -133,20 +134,21 @@ export default function VTOPPanel() {
       if (!Number.isNaN(n)) extras.semester = n
     }
 
-    if (command === 'course-page') {
+    if (cmdId === 'course-page') {
       if (extra.courseQuery) extras.courseQuery = extra.courseQuery
       if (extra.facultyQuery) extras.facultyQuery = extra.facultyQuery
       if (extra.materialQuery) extras.materialQuery = extra.materialQuery
-    } else if (command === 'syllabus') {
+    } else if (cmdId === 'syllabus') {
       if (extra.courseQuery) extras.courseQuery = extra.courseQuery
-    } else if (command === 'marks' || command === 'grades') {
+    } else if (cmdId === 'marks' || cmdId === 'grades') {
       // already passed semester/semesterQuery if present
     }
     setLocalError(null)
     setMobileView('result')
     try {
       setDisplay(null)
-      await submit({ command, extras })
+      if (nextId) setCommand(nextId)
+      await submit({ command: cmdId, extras })
     } catch (e: any) {
       setLocalError(e?.message || 'request failed')
     }
@@ -236,6 +238,9 @@ export default function VTOPPanel() {
                   <button
                     key={cmd.id}
                     onClick={() => !isDisabled && setCommand(cmd.id)}
+                    onDoubleClick={() => {
+                      if (!isDisabled) runQuery(cmd.id)
+                    }}
                     disabled={isDisabled}
                     className={`group w-full p-2.5 text-left rounded-lg transition-all duration-200 border shadow-sm
                       ${isSelected 
@@ -301,7 +306,7 @@ export default function VTOPPanel() {
                       </Button>
                     )}
                     <Button 
-                      onClick={runQuery}
+                      onClick={() => runQuery()}
                       disabled={!canRun}
                       className="h-7 px-4 text-xs shadow-sm"
                     >
@@ -461,11 +466,18 @@ export default function VTOPPanel() {
             <div className="flex items-center gap-2">
               {command && (
                 <Button
-                  onClick={() => setMobileView(mobileView === 'select' ? 'result' : 'select')}
-                  variant="outline"
+                  onClick={() => {
+                    if (mobileView === 'select') {
+                      runQuery()
+                    } else {
+                      setMobileView('select')
+                    }
+                  }}
+                  variant={mobileView === 'select' ? 'default' : 'outline'}
+                  disabled={mobileView === 'select' && !canRun}
                   className="h-8 px-3 text-xs border-border/50 shadow-sm"
                 >
-                  {mobileView === 'select' ? 'view result' : 'select service'}
+                  {mobileView === 'select' ? 'execute' : 'select service'}
                 </Button>
               )}
               {!linked && (
@@ -522,6 +534,22 @@ export default function VTOPPanel() {
                           if (!isDisabled) {
                             setCommand(cmd.id)
                             if (cache[cmd.id]) setMobileView('result')
+                          }
+                        }}
+                        onDoubleClick={() => {
+                          if (!isDisabled) {
+                            runQuery(cmd.id)
+                          }
+                        }}
+                        onTouchEnd={(e) => {
+                          if (isDisabled) return
+                          const el = e.currentTarget as HTMLElement
+                          const last = (el as any)._lastTap || 0
+                          const now = Date.now()
+                          ;(el as any)._lastTap = now
+                          if (now - last < 300) {
+                            e.preventDefault()
+                            runQuery(cmd.id)
                           }
                         }}
                         disabled={isDisabled}
@@ -618,7 +646,7 @@ export default function VTOPPanel() {
                           </Button>
                         )}
                         <Button 
-                          onClick={runQuery}
+                          onClick={() => runQuery()}
                           disabled={!canRun}
                           className="h-8 px-4 text-xs shadow-sm"
                         >

@@ -34,7 +34,10 @@ export default function ResultViewer({ open, onClose, result, title, mode = 'sta
           </Button>
           </div>
         </div>
-        <div className="p-3 max-h-[60vh] overflow-auto">
+        <div
+          className="p-3 max-h-[60vh] overflow-auto [-webkit-overflow-scrolling:touch]"
+          data-allow-touch-scroll
+        >
           {mode === 'stream' && isLoading && <StreamingSkeleton />}
           {renderResult(result)}
         </div>
@@ -45,7 +48,6 @@ export default function ResultViewer({ open, onClose, result, title, mode = 'sta
 
 function renderResult(data: any) {
   if (!data) return <div className="text-xs text-muted-foreground">no data</div>
-  // Prefer formatted_content HTML
   if (data.formatted_content && typeof data.formatted_content === 'string') {
     return (
       <div
@@ -54,11 +56,9 @@ function renderResult(data: any) {
       />
     )
   }
-  // Fallback to summary
   if (data.summary && typeof data.summary === 'string') {
     return <div className="text-sm whitespace-pre-wrap">{data.summary}</div>
   }
-  // Generic pretty JSON fallback
   return (
     <pre className="text-xs whitespace-pre-wrap break-words">{safeStringify(data)}</pre>
   )

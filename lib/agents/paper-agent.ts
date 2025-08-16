@@ -649,10 +649,10 @@ async function extractTextFromPdf(pdfData: Buffer, log?: Logger, runId?: string,
     } catch (err: any) {
       log?.('pdf-parse failed, attempting pdfjs-dist extraction before OCR', { error: err?.message })
       if (runId) logEmit(runId, 'Switching extraction strategy', { error: err?.message })
-      // Fallback 1: Use pdfjs-dist to extract text in Node (avoids OCR + browser)
+      // Fallback 1: Use pdfjs-dist (legacy build) to extract text in Node (avoids OCR + browser)
       try {
-        // Use pdfjs-dist (ESM) to extract text directly from PDF bytes in Node
-        const pdfjs: any = await import('pdfjs-dist')
+        // Use pdfjs-dist legacy ESM build which is compatible with Node
+        const pdfjs: any = await import('pdfjs-dist/legacy/build/pdf.mjs')
         const getDocument = (pdfjs as any).getDocument || (pdfjs as any).default?.getDocument
         if (!getDocument) throw new Error('pdfjs-dist getDocument not available')
         const task = getDocument({ data: new Uint8Array(pdfData), isEvalSupported: false, disableFontFace: true })
@@ -1048,10 +1048,26 @@ export async function indexPastPapers(options: {
         } catch (e: any) {
           log('Headless capture/OCR fallback failed', { error: e?.message })
         }
-      } else if (/cloudinary\.com/i.test(p.url)) {
-        log('Cloudinary URL detected, skipping headless fallback and screenshot logic', { url: p.url })
       } else {
-        log('Non-Drive/Non-Cloudinary URL, skipping headless fallback', { url: p.url })
+        // For non-Drive links (including Cloudinary), try a generic headless capture
+        // to rasterize viewer content and OCR it.
+        try {
+          log('Attempting generic headless capture + OCR', { url: p.url })
+          const cap = await genericHeadlessPdfToImages(p.url, log, options.runId)
+          if (cap?.images?.length) {
+            const ocrText = await extractTextFromPdf(Buffer.alloc(0), log, options.runId, cap.images)
+            if (ocrText && ocrText.length >= 50) {
+              text = ocrText
+              log('Generic fallback OCR succeeded', { chars: text.length })
+            } else {
+              log('Generic fallback OCR returned too little text', { chars: ocrText?.length || 0 })
+            }
+          } else {
+            log('Generic headless capture produced no images')
+          }
+        } catch (e: any) {
+          log('Generic headless/OCR fallback failed', { error: e?.message })
+        }
       }
     }
 

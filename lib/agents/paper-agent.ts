@@ -155,83 +155,114 @@ interface DriveFallbackResult { pdf: Buffer | null; images: Buffer[] }
 let sharedBrowser: any = null
 let sharedBrowserUsageCount = 0
 const MAX_SHARED_BROWSER_USAGE = 10
+let launchingBrowserPromise: Promise<any> | null = null
 
 async function getOrCreateSharedBrowser(log?: Logger): Promise<any> {
-  if (!sharedBrowser || sharedBrowserUsageCount >= MAX_SHARED_BROWSER_USAGE) {
-    if (sharedBrowser) {
-      try {
-        await sharedBrowser.close()
-        log?.('Closed previous shared browser instance')
-      } catch (e) {
-        log?.('Error closing previous browser (continuing)', { error: (e as Error)?.message })
-      }
-    }
-
-    log?.('Creating new shared browser instance')
-
-    const preferSystem = process.env.PAPER_AGENT_USE_SYSTEM_BROWSER === '1' || process.env.NODE_ENV === 'development'
-    const explicitPath = process.env.PAPER_AGENT_BROWSER_PATH
-
-    function resolveSystemBrowserPath(): string | null {
-      if (explicitPath && existsSync(explicitPath)) return explicitPath
-      const plat = process.platform
-      const candidates: string[] = []
-      if (plat === 'win32') {
-        const pf = process.env['PROGRAMFILES'] || 'C:/Program Files'
-        const pf86 = process.env['PROGRAMFILES(X86)'] || 'C:/Program Files (x86)'
-        const local = process.env['LOCALAPPDATA'] || 'C:/Users/Default/AppData/Local'
-        candidates.push(
-          `${pf}/Google/Chrome/Application/chrome.exe`,
-          `${pf86}/Google/Chrome/Application/chrome.exe`,
-          `${local}/Google/Chrome/Application/chrome.exe`,
-          `${pf}/Microsoft/Edge/Application/msedge.exe`,
-          `${pf86}/Microsoft/Edge/Application/msedge.exe`,
-          `${local}/Microsoft/Edge/Application/msedge.exe`,
-        )
-      } else if (plat === 'darwin') {
-        candidates.push(
-          '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-          '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
-          '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'
-        )
-      } else {
-        candidates.push(
-          '/usr/bin/google-chrome',
-          '/usr/bin/google-chrome-stable',
-          '/usr/bin/chromium',
-          '/usr/bin/chromium-browser',
-          '/usr/bin/microsoft-edge',
-          '/usr/bin/brave-browser'
-        )
-      }
-      for (const p of candidates) {
-        try { if (existsSync(p)) return p } catch {}
-      }
-      return null
-    }
-
-    let args = [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--headless=new']
-
-    const sysPath = (preferSystem && resolveSystemBrowserPath()) || undefined
-    if (sysPath) {
-      sharedBrowser = await puppeteer.launch({
-        args,
-        defaultViewport: { width: 1280, height: 1024 },
-        executablePath: sysPath,
-        headless: true,
-      })
-    } else {
-      sharedBrowser = await puppeteer.launch({
-        args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-      })
-    }
-    sharedBrowserUsageCount = 0
+  if (sharedBrowser && sharedBrowserUsageCount < MAX_SHARED_BROWSER_USAGE) {
+    sharedBrowserUsageCount++
+    return sharedBrowser
   }
+
+  if (!launchingBrowserPromise) {
+    launchingBrowserPromise = (async () => {
+      if (sharedBrowser) {
+        try {
+          await sharedBrowser.close()
+          log?.('Closed previous shared browser instance')
+        } catch (e) {
+          log?.('Error closing previous browser (continuing)', { error: (e as Error)?.message })
+        } finally {
+          sharedBrowser = null
+        }
+      }
+
+      log?.('Creating new shared browser instance')
+
+      const preferSystem = process.env.PAPER_AGENT_USE_SYSTEM_BROWSER === '1' || process.env.NODE_ENV === 'development'
+      const explicitPath = process.env.PAPER_AGENT_BROWSER_PATH
+
+      function resolveSystemBrowserPath(): string | null {
+        if (explicitPath && existsSync(explicitPath)) return explicitPath
+        const plat = process.platform
+        const candidates: string[] = []
+        if (plat === 'win32') {
+          const pf = process.env['PROGRAMFILES'] || 'C:/Program Files'
+          const pf86 = process.env['PROGRAMFILES(X86)'] || 'C:/Program Files (x86)'
+          const local = process.env['LOCALAPPDATA'] || 'C:/Users/Default/AppData/Local'
+          candidates.push(
+            `${pf}/Google/Chrome/Application/chrome.exe`,
+            `${pf86}/Google/Chrome/Application/chrome.exe`,
+            `${local}/Google/Chrome/Application/chrome.exe`,
+            `${pf}/Microsoft/Edge/Application/msedge.exe`,
+            `${pf86}/Microsoft/Edge/Application/msedge.exe`,
+            `${local}/Microsoft/Edge/Application/msedge.exe`,
+          )
+        } else if (plat === 'darwin') {
+          candidates.push(
+            '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+            '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+            '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'
+          )
+        } else {
+          candidates.push(
+            '/usr/bin/google-chrome',
+            '/usr/bin/google-chrome-stable',
+            '/usr/bin/chromium',
+            '/usr/bin/chromium-browser',
+            '/usr/bin/microsoft-edge',
+            '/usr/bin/brave-browser'
+          )
+        }
+        for (const p of candidates) {
+          try { if (existsSync(p)) return p } catch {}
+        }
+        return null
+      }
+
+      // Hardened args for serverless environments
+      let args = [
+        ...chromium.args,
+        '--no-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-zygote',
+        '--single-process',
+        '--headless=new',
+      ]
+
+      const sysPath = (preferSystem && resolveSystemBrowserPath()) || undefined
+      if (sysPath) {
+        sharedBrowser = await puppeteer.launch({
+          args,
+          defaultViewport: { width: 1280, height: 1024 },
+          executablePath: sysPath,
+          headless: true,
+        })
+      } else {
+        sharedBrowser = await puppeteer.launch({
+          args,
+          defaultViewport: chromium.defaultViewport,
+          executablePath: await chromium.executablePath(),
+          headless: chromium.headless,
+        })
+      }
+      sharedBrowserUsageCount = 0
+      return sharedBrowser
+    })()
+      .catch((e) => {
+        log?.('Browser launch failed', { error: (e as Error)?.message })
+        throw e
+      })
+      .finally(() => {
+        // allow next launch attempt if needed
+        launchingBrowserPromise = null
+      })
+  }
+
+  const b = await launchingBrowserPromise
+  sharedBrowser = b
   sharedBrowserUsageCount++
-  return sharedBrowser
+  return b
 }
 
 async function cleanupSharedBrowser(log?: Logger): Promise<void> {
@@ -245,6 +276,40 @@ async function cleanupSharedBrowser(log?: Logger): Promise<void> {
       sharedBrowser = null
       sharedBrowserUsageCount = 0
     }
+  }
+}
+
+/**
+ * Cloudinary PDF page image derivation
+ * Example raw PDF: https://res.cloudinary.com/<cloud>/raw/upload/v12345/folder/file.pdf
+ * Page image URL:  https://res.cloudinary.com/<cloud>/image/upload/pg_1/v12345/folder/file.png
+ */
+function toCloudinaryPageImageUrls(pdfUrl: string, pages = 4): string[] | null {
+  try {
+    const m = pdfUrl.match(/^https?:\/\/res\.cloudinary\.com\/([^/]+)\/raw\/upload\/(.+\.pdf)(?:$|\?)/i)
+    if (!m) return null
+    const cloud = m[1]
+    let publicId = m[2]
+    if (publicId.endsWith('.pdf')) publicId = publicId.slice(0, -4)
+    const urls: string[] = []
+    for (let i = 1; i <= pages; i++) {
+      urls.push(`https://res.cloudinary.com/${cloud}/image/upload/pg_${i}/${publicId}.png`)
+    }
+    return urls
+  } catch {
+    return null
+  }
+}
+
+async function fetchAsBuffer(url: string, timeoutMs = 10000, headers?: Record<string, string>): Promise<Buffer | null> {
+  try {
+    const resp = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) })
+    if (!resp.ok) return null
+    const ab = await resp.arrayBuffer()
+    if (!ab || ab.byteLength < 500) return null
+    return Buffer.from(ab)
+  } catch {
+    return null
   }
 }
 
@@ -1051,9 +1116,51 @@ export async function indexPastPapers(options: {
         } catch (e: any) {
           log('Headless capture/OCR fallback failed', { error: e?.message })
         }
+      } else if (/res\.cloudinary\.com\/.*\/raw\/upload\/.*\.pdf/i.test(p.url)) {
+        // Cloudinary-specific lightweight OCR: request page images directly via Cloudinary transformations
+        try {
+          log('Attempting cloudinary direct page images + OCR', { url: p.url })
+          const pageUrls = toCloudinaryPageImageUrls(p.url, 5) || []
+          const images: Buffer[] = []
+          for (const u of pageUrls) {
+            const buf = await fetchAsBuffer(u, 8000, { Accept: 'image/png,image/*;q=0.8' })
+            if (buf) images.push(buf)
+          }
+          if (images.length) {
+            const ocrText = await extractTextFromPdf(Buffer.alloc(0), log, options.runId, images)
+            if (ocrText && ocrText.length >= 50) {
+              text = ocrText
+              log('Cloudinary OCR succeeded', { chars: text.length, pages: images.length })
+            } else {
+              log('Cloudinary OCR returned too little text', { chars: ocrText?.length || 0 })
+            }
+          } else {
+            log('Cloudinary page images not available, falling back to headless')
+          }
+        } catch (e: any) {
+          log('Cloudinary OCR path failed (continuing to headless)', { error: e?.message })
+        }
+        if (!text || text.length < 50) {
+          try {
+            log('Attempting generic headless capture + OCR', { url: p.url })
+            const cap = await genericHeadlessPdfToImages(p.url, log, options.runId)
+            if (cap?.images?.length) {
+              const ocrText = await extractTextFromPdf(Buffer.alloc(0), log, options.runId, cap.images)
+              if (ocrText && ocrText.length >= 50) {
+                text = ocrText
+                log('Generic fallback OCR succeeded', { chars: text.length })
+              } else {
+                log('Generic fallback OCR returned too little text', { chars: ocrText?.length || 0 })
+              }
+            } else {
+              log('Generic headless capture produced no images')
+            }
+          } catch (e: any) {
+            log('Generic headless/OCR fallback failed', { error: e?.message })
+          }
+        }
       } else {
-        // For non-Drive links (including Cloudinary), try a generic headless capture
-        // to rasterize viewer content and OCR it.
+        // Non-Drive/Non-Cloudinary: generic headless OCR
         try {
           log('Attempting generic headless capture + OCR', { url: p.url })
           const cap = await genericHeadlessPdfToImages(p.url, log, options.runId)

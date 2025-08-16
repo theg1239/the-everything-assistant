@@ -835,8 +835,12 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
   try {
     const needsSemester = ['semester', 'course', 'faculty', 'materials', 'download'].includes(step)
     if (needsSemester) {
-      const hasExplicitSemester = flags && (typeof flags.semester === 'number' || (typeof flags.semester === 'string' && flags.semester.trim() !== ''))
-      const hasSemesterQuery = flags && typeof flags.semesterQuery === 'string' && flags.semesterQuery.trim() !== ''
+      const hasExplicitSemester =
+        flags &&
+        (typeof flags.semester === 'number' ||
+          (typeof flags.semester === 'string' && flags.semester.trim() !== ''))
+      const hasSemesterQuery =
+        flags && typeof flags.semesterQuery === 'string' && flags.semesterQuery.trim() !== ''
       if (!hasExplicitSemester && !hasSemesterQuery) {
         flags = { ...(flags || {}), semesterQuery: 'latest' }
         if (process.env.NODE_ENV !== 'production') {
@@ -1654,19 +1658,19 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
         })
       } else if (code === 0) {
         // Always check for download path in stdout, even if step is not 'materials'
-        const downloadPathMatch = stdout.match(/Download path:\s*(.*)/i);
-        const hasDownloadPath = !!(downloadPathMatch && downloadPathMatch[1]);
+        const downloadPathMatch = stdout.match(/Download path:\s*(.*)/i)
+        const hasDownloadPath = !!(downloadPathMatch && downloadPathMatch[1])
         const shouldParseDownloadInfo =
           step === 'materials' ||
           stdout.includes('Downloaded') ||
           stdout.includes('Downloading') ||
           stdout.includes('files downloaded') ||
           stdout.includes('download complete') ||
-          hasDownloadPath;
+          hasDownloadPath
 
         if (process.env.NODE_ENV !== 'production') {
-          console.log(`shouldParseDownloadInfo: ${shouldParseDownloadInfo} (step: ${step})`);
-          if (hasDownloadPath) console.log('Detected download path:', downloadPathMatch[1]);
+          console.log(`shouldParseDownloadInfo: ${shouldParseDownloadInfo} (step: ${step})`)
+          if (hasDownloadPath) console.log('Detected download path:', downloadPathMatch[1])
         }
 
         // If download path found, inject into downloadInfo
@@ -1678,16 +1682,16 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
               downloadPath: null,
               files: [],
               errors: [],
-            };
+            }
         if (hasDownloadPath && !downloadInfo.downloadPath) {
-          downloadInfo.downloadPath = downloadPathMatch[1].trim();
+          downloadInfo.downloadPath = downloadPathMatch[1].trim()
         }
 
         const servedFiles = shouldParseDownloadInfo
           ? await serveDownloadedFiles(downloadInfo.downloadPath, downloadInfo)
-          : [];
+          : []
 
-        const cleanedOutput = cleanCliOutput(stdout, servedFiles.length > 0);
+        const cleanedOutput = cleanCliOutput(stdout, servedFiles.length > 0)
 
         const sessionInfo = {
           currentStep: step,
@@ -1696,13 +1700,13 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           completed: true,
           downloadInfo: downloadInfo,
           timestamp: Date.now(),
-        };
+        }
 
-        let completionMessage = 'Course page workflow completed successfully';
+        let completionMessage = 'Course page workflow completed successfully'
         if (downloadInfo.filesDownloaded > 0) {
-          completionMessage = `Successfully downloaded ${downloadInfo.filesDownloaded} course materials`;
+          completionMessage = `Successfully downloaded ${downloadInfo.filesDownloaded} course materials`
           if (servedFiles.length > 0) {
-            completionMessage += ` and made them available for download`;
+            completionMessage += ` and made them available for download`
           }
         }
         const responseDownloadInfo = {
@@ -1711,9 +1715,9 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           servedFiles: servedFiles,
           files: downloadInfo.files,
           errors: downloadInfo.errors,
-        };
+        }
 
-        isResolved = true;
+        isResolved = true
         resolve({
           success: true,
           step: step,
@@ -1724,17 +1728,22 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           sessionData: JSON.stringify(sessionInfo),
           interactiveState: 'completed',
           raw: false,
-        });
+        })
         if (process.env.NODE_ENV !== 'production' && shouldParseDownloadInfo) {
-          console.log('Final response structure:');
-          console.log('- downloadInfo.filesDownloaded:', downloadInfo.filesDownloaded);
-          console.log('- downloadInfo.totalFiles:', downloadInfo.totalFiles);
-          console.log('- responseDownloadInfo.downloadPath:', responseDownloadInfo.downloadPath || 'EXCLUDED');
-          console.log('- downloadPath included in response:', !!responseDownloadInfo.downloadPath);
-          console.log('- servedFiles.length:', servedFiles.length);
+          console.log('Final response structure:')
+          console.log('- downloadInfo.filesDownloaded:', downloadInfo.filesDownloaded)
+          console.log('- downloadInfo.totalFiles:', downloadInfo.totalFiles)
+          console.log(
+            '- responseDownloadInfo.downloadPath:',
+            responseDownloadInfo.downloadPath || 'EXCLUDED'
+          )
+          console.log('- downloadPath included in response:', !!responseDownloadInfo.downloadPath)
+          console.log('- servedFiles.length:', servedFiles.length)
           if (servedFiles.length > 0) {
-            console.log('- First served file:', servedFiles[0]);
-            console.log('Local downloadPath successfully excluded from response (served files available)');
+            console.log('- First served file:', servedFiles[0])
+            console.log(
+              'Local downloadPath successfully excluded from response (served files available)'
+            )
           }
         }
       } else {
@@ -1901,15 +1910,15 @@ function parseFacultyOptions(output) {
     return options
   }
 
-  let startParsingIndex = -1;
+  let startParsingIndex = -1
   // Find the header row for faculty (not course codes)
   for (let i = 0; i < lines.length; i++) {
     if (
       lines[i].includes('INDEX │ FACULTY') ||
       (lines[i].includes('INDEX │') && lines[i].toLowerCase().includes('faculty'))
     ) {
-      startParsingIndex = i;
-      break;
+      startParsingIndex = i
+      break
     }
   }
 
@@ -1917,49 +1926,53 @@ function parseFacultyOptions(output) {
     // Fallback: look for the prompt line
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].includes('Enter a search term or number for Faculty')) {
-        startParsingIndex = i;
-        break;
+        startParsingIndex = i
+        break
       }
     }
   }
 
   if (startParsingIndex === -1) {
-    return options;
+    return options
   }
 
   // Only parse lines that look like faculty names, not course codes
   for (let i = startParsingIndex + 1; i < lines.length; i++) {
-    const line = lines[i];
+    const line = lines[i]
     if (line.includes('─') || line.trim() === '') {
-      continue;
+      continue
     }
     // Stop parsing if we hit another table or unrelated prompt
-    if (line.includes('INDEX │ COURSE') || line.includes('Choose a Course') || line.includes('Enter a search term or number for Course')) {
-      break;
+    if (
+      line.includes('INDEX │ COURSE') ||
+      line.includes('Choose a Course') ||
+      line.includes('Enter a search term or number for Course')
+    ) {
+      break
     }
     // Faculty table: "  1 │ RACHNA BHATIA"
-    const facultyMatch = line.match(/^\s*(\d+)\s*│\s*([A-Z .'-]+)$/i);
+    const facultyMatch = line.match(/^\s*(\d+)\s*│\s*([A-Z .'-]+)$/i)
     if (facultyMatch) {
-      const description = facultyMatch[2].trim();
+      const description = facultyMatch[2].trim()
       // Ignore lines that look like course codes (e.g., BMAT201L)
       if (!/^[A-Z]{4}\d{3}[A-Z]?$/.test(description)) {
         options.push({
           number: parseInt(facultyMatch[1]),
           description: description,
           text: line.trim(),
-        });
+        })
       }
-      continue;
+      continue
     }
-    const simpleMatch = line.match(/^\s*(\d+)\.\s*([A-Z .'-]+)$/i);
+    const simpleMatch = line.match(/^\s*(\d+)\.\s*([A-Z .'-]+)$/i)
     if (simpleMatch) {
-      const description = simpleMatch[2].trim();
+      const description = simpleMatch[2].trim()
       if (!/^[A-Z]{4}\d{3}[A-Z]?$/.test(description)) {
         options.push({
           number: parseInt(simpleMatch[1]),
           description: description,
           text: line.trim(),
-        });
+        })
       }
     }
   }
@@ -2412,7 +2425,6 @@ app.post('/vtop', vtopLimiter, async (req, res) => {
     if (interactiveConfig.requiresClassGroup && !flagsForCLI.classGroup) {
       flagsForCLI.classGroup = 1
     }
-
   }
 
   if (process.env.NODE_ENV !== 'production') {

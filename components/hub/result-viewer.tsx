@@ -13,7 +13,15 @@ interface ResultViewerProps {
   onStop?: () => void
 }
 
-export default function ResultViewer({ open, onClose, result, title, mode = 'static', isLoading, onStop }: ResultViewerProps) {
+export default function ResultViewer({
+  open,
+  onClose,
+  result,
+  title,
+  mode = 'static',
+  isLoading,
+  onStop,
+}: ResultViewerProps) {
   if (!open) return null
   return (
     <div className="fixed inset-x-0 bottom-0 z-[60] p-2 sm:p-4">
@@ -22,16 +30,20 @@ export default function ResultViewer({ open, onClose, result, title, mode = 'sta
           <div className="flex items-center gap-2 min-w-0">
             <div className="text-sm font-medium truncate">{title || 'result'}</div>
             {mode === 'stream' && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted/60 text-muted-foreground">live</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted/60 text-muted-foreground">
+                live
+              </span>
             )}
           </div>
           <div className="flex items-center gap-1">
             {mode === 'stream' && isLoading && (
-              <Button variant="ghost" size="sm" onClick={onStop} className="h-8 px-2">stop</Button>
+              <Button variant="ghost" size="sm" onClick={onStop} className="h-8 px-2">
+                stop
+              </Button>
             )}
             <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
-            <X className="h-4 w-4" />
-          </Button>
+              <X className="h-4 w-4" />
+            </Button>
           </div>
         </div>
         <div
@@ -59,9 +71,7 @@ function renderResult(data: any) {
   if (data.summary && typeof data.summary === 'string') {
     return <div className="text-sm whitespace-pre-wrap">{data.summary}</div>
   }
-  return (
-    <pre className="text-xs whitespace-pre-wrap break-words">{safeStringify(data)}</pre>
-  )
+  return <pre className="text-xs whitespace-pre-wrap break-words">{safeStringify(data)}</pre>
 }
 
 function safeStringify(obj: any) {

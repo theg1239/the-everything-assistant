@@ -39,7 +39,10 @@ export function getContextDataBySection(section: string): ContextData | null {
 
 export function getHighPriorityContextData(): ContextData[] {
   const highPriority = getAllContextData().filter(data => data.priority === 'high')
-  console.log('[getHighPriorityContextData] High priority sections:', highPriority.map(d => d.section))
+  console.log(
+    '[getHighPriorityContextData] High priority sections:',
+    highPriority.map(d => d.section)
+  )
   return highPriority
 }
 
@@ -70,7 +73,10 @@ export function getRecentlyUpdatedData(withinDays: number = 7): ContextData[] {
     const updateDate = new Date(data.lastUpdated)
     return updateDate >= cutoffDate
   })
-  console.log('[getRecentlyUpdatedData] Recently updated sections:', recent.map(d => d.section))
+  console.log(
+    '[getRecentlyUpdatedData] Recently updated sections:',
+    recent.map(d => d.section)
+  )
   return recent
 }
 

@@ -572,9 +572,10 @@ CRITICAL TOOL CONTINUATION RULES:
       const lastUserMessage = enhancedMessages[enhancedMessages.length - 1]
       if (lastUserMessage && lastUserMessage.role === 'user') {
         let toolContext = ''
-        
+
         if (directToolCallResult.toolName === 'queryVTOP' && directToolCallResult.result?.success) {
-          const command = directToolCallResult.result.command || directToolCallResult.args?.command || 'data'
+          const command =
+            directToolCallResult.result.command || directToolCallResult.args?.command || 'data'
           let dataContext = ''
 
           if (directToolCallResult.result.formatted_content) {
@@ -591,7 +592,7 @@ CRITICAL TOOL CONTINUATION RULES:
               dataContext = `Retrieved ${command} data from VTOP`
             }
           }
-          
+
           if (dataContext) {
             toolContext = `\n\n[VTOP ${command.toUpperCase()} DATA CONTEXT]:\n${dataContext}`
             toolContext += `\n\n[IMPORTANT]: VTOP ${command} data was successfully retrieved above. Use this data to answer the user's question about ${command}.`
@@ -607,27 +608,36 @@ CRITICAL TOOL CONTINUATION RULES:
       }
     }
 
-    if (directToolCallResult && directToolCallExecuted && directToolCallResult.result?.formatted_content) {
-      const responseText = directToolCallResult.result.formatted_content || 
-                          directToolCallResult.result.summary ||
-                          `Here's your ${directToolCallResult.args?.command || 'data'} from VTOP.`
+    if (
+      directToolCallResult &&
+      directToolCallExecuted &&
+      directToolCallResult.result?.formatted_content
+    ) {
+      const responseText =
+        directToolCallResult.result.formatted_content ||
+        directToolCallResult.result.summary ||
+        `Here's your ${directToolCallResult.args?.command || 'data'} from VTOP.`
 
       const mockResult = {
         text: responseText,
         response: { id: `direct-${Date.now()}` },
         toolResults: [directToolCallResult],
-        steps: [{
-          toolResults: [directToolCallResult]
-        }]
+        steps: [
+          {
+            toolResults: [directToolCallResult],
+          },
+        ],
       }
 
-      const safeInvocations = sanitizeToolInvocations([{
-        toolCallId: directToolCallResult.toolCallId,
-        toolName: directToolCallResult.toolName,
-        args: directToolCallResult.args,
-        result: directToolCallResult.result,
-        state: directToolCallResult.state,
-      }])
+      const safeInvocations = sanitizeToolInvocations([
+        {
+          toolCallId: directToolCallResult.toolCallId,
+          toolName: directToolCallResult.toolName,
+          args: directToolCallResult.args,
+          result: directToolCallResult.result,
+          state: directToolCallResult.state,
+        },
+      ])
 
       try {
         await saveMessage(
@@ -645,12 +655,24 @@ CRITICAL TOOL CONTINUATION RULES:
       const encoder = new TextEncoder()
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode(`9:{"toolCallId":"${directToolCallResult.toolCallId}","toolName":"${directToolCallResult.toolName}","args":${JSON.stringify(directToolCallResult.args)}}\n`))
-          controller.enqueue(encoder.encode(`a:{"toolCallId":"${directToolCallResult.toolCallId}","result":${JSON.stringify(directToolCallResult.result)}}\n`))
+          controller.enqueue(
+            encoder.encode(
+              `9:{"toolCallId":"${directToolCallResult.toolCallId}","toolName":"${directToolCallResult.toolName}","args":${JSON.stringify(directToolCallResult.args)}}\n`
+            )
+          )
+          controller.enqueue(
+            encoder.encode(
+              `a:{"toolCallId":"${directToolCallResult.toolCallId}","result":${JSON.stringify(directToolCallResult.result)}}\n`
+            )
+          )
           controller.enqueue(encoder.encode(`0:"${responseText.replace(/"/g, '\\"')}"\n`))
-          controller.enqueue(encoder.encode(`e:{"finishReason":"stop","usage":{"promptTokens":100,"completionTokens":50},"isContinued":false}\n`))
+          controller.enqueue(
+            encoder.encode(
+              `e:{"finishReason":"stop","usage":{"promptTokens":100,"completionTokens":50},"isContinued":false}\n`
+            )
+          )
           controller.close()
-        }
+        },
       })
 
       return new Response(stream, {
@@ -663,11 +685,20 @@ CRITICAL TOOL CONTINUATION RULES:
     }
 
     const attachmentAware = enhancedMessages.some(
-      (m: any) => Array.isArray(m.attachments) && m.attachments.some((a: any) => a?.contentType?.startsWith('application/pdf') || a?.contentType?.startsWith('image/'))
+      (m: any) =>
+        Array.isArray(m.attachments) &&
+        m.attachments.some(
+          (a: any) =>
+            a?.contentType?.startsWith('application/pdf') || a?.contentType?.startsWith('image/')
+        )
     )
 
     let modelName = 'gemini-2.5-flash'
-    const hasPdf = attachmentAware && enhancedMessages.some((m: any) => m.attachments?.some((a: any) => a?.contentType === 'application/pdf'))
+    const hasPdf =
+      attachmentAware &&
+      enhancedMessages.some((m: any) =>
+        m.attachments?.some((a: any) => a?.contentType === 'application/pdf')
+      )
     if (hasPdf) {
       modelName = 'gemini-2.5-flash'
     }
@@ -707,7 +738,9 @@ CRITICAL TOOL CONTINUATION RULES:
                 type: 'file',
                 data: Buffer.from(ab),
                 mimeType: att.contentType,
-                name: att.name || (att.contentType.startsWith('image/') ? 'image' : 'document') + '-' + Date.now(),
+                name:
+                  att.name ||
+                  (att.contentType.startsWith('image/') ? 'image' : 'document') + '-' + Date.now(),
               })
             } catch (e: any) {
               parts.push({
@@ -751,7 +784,7 @@ CRITICAL TOOL CONTINUATION RULES:
         },
         onStepFinish: async ({
           text,
-            toolCalls,
+          toolCalls,
           toolResults,
           finishReason,
           usage,
@@ -763,7 +796,7 @@ CRITICAL TOOL CONTINUATION RULES:
             toolResultsCount: toolResults?.length || 0,
             finishReason,
             stepIndex,
-            usage
+            usage,
           })
 
           try {
@@ -776,7 +809,8 @@ CRITICAL TOOL CONTINUATION RULES:
                 stepIndex: typeof stepIndex === 'number' ? stepIndex : null,
                 promptTokens: usage.promptTokens || 0,
                 completionTokens: usage.completionTokens || 0,
-                totalTokens: usage.totalTokens || (usage.promptTokens || 0) + (usage.completionTokens || 0),
+                totalTokens:
+                  usage.totalTokens || (usage.promptTokens || 0) + (usage.completionTokens || 0),
                 meta: { finishReason },
               })
               // Mark if we already saved a final step usage to avoid saving again in onFinish
@@ -815,7 +849,9 @@ CRITICAL TOOL CONTINUATION RULES:
           )
 
           if (directToolCallResult) {
-            const existingIndex = uniqueToolResults.findIndex(r => r.toolCallId === directToolCallResult.toolCallId)
+            const existingIndex = uniqueToolResults.findIndex(
+              r => r.toolCallId === directToolCallResult.toolCallId
+            )
             if (existingIndex === -1) {
               uniqueToolResults.push(directToolCallResult)
             } else {
@@ -823,7 +859,9 @@ CRITICAL TOOL CONTINUATION RULES:
             }
           }
 
-          console.log(`Collected ${uniqueToolResults.length} unique tool results from all steps${directToolCallResult ? ' (including direct tool call)' : ''}`)
+          console.log(
+            `Collected ${uniqueToolResults.length} unique tool results from all steps${directToolCallResult ? ' (including direct tool call)' : ''}`
+          )
 
           for (const tr of uniqueToolResults) {
             if (
@@ -903,7 +941,9 @@ CRITICAL TOOL CONTINUATION RULES:
                 stepIndex: null,
                 promptTokens: finalUsage.promptTokens || 0,
                 completionTokens: finalUsage.completionTokens || 0,
-                totalTokens: finalUsage.totalTokens || (finalUsage.promptTokens || 0) + (finalUsage.completionTokens || 0),
+                totalTokens:
+                  finalUsage.totalTokens ||
+                  (finalUsage.promptTokens || 0) + (finalUsage.completionTokens || 0),
                 meta: { type: 'final' },
               })
             }

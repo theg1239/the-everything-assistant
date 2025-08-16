@@ -27,7 +27,13 @@ export async function POST(req: Request) {
     }
 
     const serverCreds = await getServerFormatted()
-    const args: any = { command, ...(serverCreds ? { username: serverCreds.username, password: serverCreds.encryptedPassword } : {}), ...extras }
+    const args: any = {
+      command,
+      ...(serverCreds
+        ? { username: serverCreds.username, password: serverCreds.encryptedPassword }
+        : {}),
+      ...extras,
+    }
 
     const raw = await vtop.execute(args, { toolCallId: `vtop-${Date.now()}`, messages: [] })
 
@@ -53,7 +59,7 @@ export async function POST(req: Request) {
       ].join('\n'),
       onFinish: async (final: any) => {
         try {
-          const usage = (final && final.usage) || (final?.response?.usage) || null
+          const usage = (final && final.usage) || final?.response?.usage || null
           if (usage && typeof usage === 'object') {
             await saveTokenUsage({
               userId: session.user.id,
@@ -76,6 +82,8 @@ export async function POST(req: Request) {
     console.log('VTOP result:', result)
     return result.toTextStreamResponse()
   } catch (e: any) {
-    return new Response(JSON.stringify({ error: e?.message || 'failed to stream vtop result' }), { status: 500 })
+    return new Response(JSON.stringify({ error: e?.message || 'failed to stream vtop result' }), {
+      status: 500,
+    })
   }
 }

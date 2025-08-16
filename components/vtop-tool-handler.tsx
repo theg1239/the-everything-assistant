@@ -99,7 +99,10 @@ export function VTOPToolHandler({
         // Show disclaimer on chat before opening dialog
         dispatchDisclaimer(
           vtopToolCall,
-          vtopToolCall.result.command || vtopToolCall.args?.command || triggerCommand || 'attendance'
+          vtopToolCall.result.command ||
+            vtopToolCall.args?.command ||
+            triggerCommand ||
+            'attendance'
         )
       } else {
         setCommand(triggerCommand || 'attendance')
@@ -141,12 +144,13 @@ export function VTOPToolHandler({
   useEffect(() => {
     if (toolInvocations && !showCredentialsDialog) {
       const vtopToolCall = toolInvocations.find(
-        (tool) => 
-          tool.toolName === 'queryVTOP' && 
-          tool.result && 
+        tool =>
+          tool.toolName === 'queryVTOP' &&
+          tool.result &&
           (tool.result.requiresCredentials === true ||
-            (tool.result.error && tool.result.error.includes('VTOP credentials required')))
-          && !tool.result.data && !tool.result.output &&
+            (tool.result.error && tool.result.error.includes('VTOP credentials required'))) &&
+          !tool.result.data &&
+          !tool.result.output &&
           !dismissedToolCallIds.has(tool.toolCallId)
       )
       if (vtopToolCall) {

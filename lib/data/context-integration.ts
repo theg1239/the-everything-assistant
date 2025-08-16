@@ -73,7 +73,14 @@ export function getContextSummary(): {
     const latestDate = new Date(latest)
     return currentDate > latestDate ? current.lastUpdated : latest
   }, '1970-01-01')
-  console.log('[getContextSummary] Sections:', allData.length, 'High priority:', highPriorityCount, 'Last updated:', mostRecentUpdate)
+  console.log(
+    '[getContextSummary] Sections:',
+    allData.length,
+    'High priority:',
+    highPriorityCount,
+    'Last updated:',
+    mostRecentUpdate
+  )
   return {
     totalSections: allData.length,
     highPrioritySections: highPriorityCount,
@@ -102,7 +109,10 @@ export function validateContextData(): {
     return new Date(data.lastUpdated) < thirtyDaysAgo
   })
   if (outdatedSections.length > 0) {
-    console.warn('[validateContextData] Outdated sections:', outdatedSections.map(s => s.section))
+    console.warn(
+      '[validateContextData] Outdated sections:',
+      outdatedSections.map(s => s.section)
+    )
     warnings.push(`${outdatedSections.length} sections are outdated (>30 days old)`)
     recommendations.push(
       'Update outdated sections: ' + outdatedSections.map(s => s.section).join(', ')
@@ -118,7 +128,10 @@ export function validateContextData(): {
   }
   const emptySections = allData.filter(data => !data.content || data.content.trim().length < 100)
   if (emptySections.length > 0) {
-    console.warn('[validateContextData] Minimal content in sections:', emptySections.map(s => s.section))
+    console.warn(
+      '[validateContextData] Minimal content in sections:',
+      emptySections.map(s => s.section)
+    )
     warnings.push(`${emptySections.length} sections have minimal content`)
     recommendations.push(
       'Review and expand content for: ' + emptySections.map(s => s.section).join(', ')

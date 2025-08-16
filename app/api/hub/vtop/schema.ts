@@ -15,4 +15,3 @@ export const vtopResultSchema = z.object({
     })
     .optional(),
 })
-

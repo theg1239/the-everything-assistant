@@ -5,7 +5,13 @@ import { OptimizedMarkdown } from '@/components/optimized-markdown'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
 import { useHubTool } from '../use-hub-tool'
 import { Flame, Search, Sparkles, X } from 'lucide-react'
 
@@ -25,7 +31,7 @@ export default function RedditPanel() {
 
   const placeholders: Record<Mode, string> = {
     smart: "try 'what's trending at vit', 'placements discussions', 'hostel complaints'",
-    knowledge: 'ask a specific question: e.g. best way to prep CAT2 DS?'
+    knowledge: 'ask a specific question: e.g. best way to prep CAT2 DS?',
   }
 
   const suggested: string[] = [
@@ -53,13 +59,17 @@ export default function RedditPanel() {
   }
 
   const clear = () => {
-    smart.reset(); knowledge.reset(); setQuery('')
+    smart.reset()
+    knowledge.reset()
+    setQuery('')
   }
 
   return (
     <Card className="border-0 shadow-none bg-transparent">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2"><Flame className="h-5 w-5" /> reddit knowledge</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <Flame className="h-5 w-5" /> reddit knowledge
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-col md:flex-row gap-2 items-stretch md:items-center">
@@ -67,7 +77,9 @@ export default function RedditPanel() {
             <Input
               value={query}
               onChange={e => setQuery(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') onSearch() }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') onSearch()
+              }}
               placeholder={placeholders[mode]}
               className="h-9 text-sm"
             />
@@ -98,7 +110,9 @@ export default function RedditPanel() {
             <button
               key={s}
               type="button"
-              onClick={() => { setQuery(s); }}
+              onClick={() => {
+                setQuery(s)
+              }}
               className="text-[11px] px-2 py-1 rounded-full border border-border/60 text-muted-foreground hover:text-foreground hover:border-border transition-colors"
             >
               {s}
@@ -125,13 +139,17 @@ export default function RedditPanel() {
           <div className="space-y-6">
             {result.trending && Array.isArray(result.trending) && result.trending.length > 0 && (
               <div>
-                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">trending topics</div>
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+                  trending topics
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                   {result.trending.map((t: any, idx: number) => (
                     <div key={idx} className="p-3 rounded-md border border-border/40 bg-card/40">
                       <div className="flex items-start gap-2">
                         <Sparkles className="h-4 w-4 mt-0.5 text-amber-500" />
-                        <div className="text-sm break-words">{typeof t === 'string' ? t : (t?.title || JSON.stringify(t))}</div>
+                        <div className="text-sm break-words">
+                          {typeof t === 'string' ? t : t?.title || JSON.stringify(t)}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -147,7 +165,9 @@ export default function RedditPanel() {
 
             {result.sources && Array.isArray(result.sources) && result.sources.length > 0 && (
               <div>
-                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">sources</div>
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+                  sources
+                </div>
                 <div className="space-y-2">
                   {result.sources.map((s: any, idx: number) => (
                     <a

@@ -38,25 +38,26 @@ const PureMessageBubble = ({
         .filter((part: any) => part.type === 'tool-invocation')
         .map((part: any) => part.toolInvocation)
     }
-    
+
     const directToolInvocations = (message as any).toolInvocations
     if (Array.isArray(directToolInvocations)) {
       return directToolInvocations
     }
-    
+
     const toolCalls = (message as any).toolCalls
     if (Array.isArray(toolCalls)) {
       return toolCalls
     }
-    
+
     return []
   }, [message.parts, (message as any).toolInvocations, (message as any).toolCalls])
 
   const visibleToolCalls = useMemo(() => {
-    const filtered = toolInvocations?.filter(
-      (t: any) => t.toolName !== 'knowledgeBase' && t.toolName !== 'saveMemory'
-    ) || []
-    
+    const filtered =
+      toolInvocations?.filter(
+        (t: any) => t.toolName !== 'knowledgeBase' && t.toolName !== 'saveMemory'
+      ) || []
+
     return filtered
   }, [toolInvocations])
 
@@ -119,10 +120,7 @@ const PureMessageBubble = ({
             {isUser ? (
               <p className="text-base leading-relaxed">{message.content}</p>
             ) : hasContent ? (
-              <OptimizedMarkdown
-                id={message.id}
-                content={message.content as string}
-              />
+              <OptimizedMarkdown id={message.id} content={message.content as string} />
             ) : null}
 
             {/* Message actions */}

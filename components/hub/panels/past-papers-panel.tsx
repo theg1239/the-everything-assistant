@@ -6,7 +6,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useHubTool } from '../use-hub-tool'
 import { FileText, Search, X, ExternalLink } from 'lucide-react'
 
@@ -25,13 +31,20 @@ export default function PastPapersPanel() {
   return (
     <Card className="border-0 shadow-none bg-transparent">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5" /> past papers</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <FileText className="h-5 w-5" /> past papers
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-1.5">
             <Label htmlFor="courseCode">course code or name</Label>
-            <Input id="courseCode" placeholder="e.g. bcse302l" value={courseCode} onChange={e => setCourseCode(e.target.value)} />
+            <Input
+              id="courseCode"
+              placeholder="e.g. bcse302l"
+              value={courseCode}
+              onChange={e => setCourseCode(e.target.value)}
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="examType">exam type</Label>
@@ -40,7 +53,7 @@ export default function PastPapersPanel() {
                 <SelectValue placeholder="any" />
               </SelectTrigger>
               <SelectContent>
-                  <SelectItem value="any">any</SelectItem>
+                <SelectItem value="any">any</SelectItem>
                 <SelectItem value="CAT-1">cat-1</SelectItem>
                 <SelectItem value="CAT-2">cat-2</SelectItem>
                 <SelectItem value="FAT">fat</SelectItem>
@@ -50,7 +63,12 @@ export default function PastPapersPanel() {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="year">year</Label>
-            <Input id="year" placeholder="optional (e.g. 2023)" value={year} onChange={e => setYear(e.target.value)} />
+            <Input
+              id="year"
+              placeholder="optional (e.g. 2023)"
+              value={year}
+              onChange={e => setYear(e.target.value)}
+            />
           </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
@@ -66,12 +84,17 @@ export default function PastPapersPanel() {
           )}
         </div>
 
-        {error && <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">{error}</div>}
+        {error && (
+          <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">{error}</div>
+        )}
 
         {papers.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pt-4">
             {papers.map((p: any, i: number) => (
-              <Card key={i} className="bg-muted/20 border-border/30 hover:bg-muted/40 transition-colors flex flex-col">
+              <Card
+                key={i}
+                className="bg-muted/20 border-border/30 hover:bg-muted/40 transition-colors flex flex-col"
+              >
                 <CardContent className="p-4 flex-grow">
                   <div className="text-sm font-medium line-clamp-2 mb-3">
                     {p.title || p.fileName || p.url}
@@ -85,7 +108,12 @@ export default function PastPapersPanel() {
                 </CardContent>
                 {p.url && (
                   <div className="p-4 pt-0 mt-auto">
-                    <a className="text-xs text-blue-400 hover:underline flex items-center gap-1" href={p.url} target="_blank" rel="noreferrer">
+                    <a
+                      className="text-xs text-blue-400 hover:underline flex items-center gap-1"
+                      href={p.url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
                       open link <ExternalLink className="h-3 w-3" />
                     </a>
                   </div>

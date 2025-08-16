@@ -150,7 +150,11 @@ const PureMultimodalInput = ({
       animate={{ opacity: 1, y: 0 }}
       className={cn('relative w-full flex justify-center', className)}
     >
-      <form onSubmit={onSubmit} className="relative max-w-3xl w-full px-4" aria-label="Chat composer">
+      <form
+        onSubmit={onSubmit}
+        className="relative max-w-3xl w-full px-4"
+        aria-label="Chat composer"
+      >
         <div
           className={cn(
             'relative flex flex-col w-full rounded-2xl bg-transparent backdrop-blur-md overflow-hidden transition-all duration-200 border border-white/10',

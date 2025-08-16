@@ -41,7 +41,13 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { ResponsiveCard } from '@/components/responsive-card'
@@ -65,17 +71,17 @@ interface ArtifactDisplayProps {
     | 'vtop-data'
     | 'interactive-course-page'
     | 'reddit-knowledge'
-  | 'reddit-overview'
-  | 'error'
-  | 'campus-info'
-  | 'getPlacementInfo'
-  | 'ffcs-planner'
-  | 'course-info'
-  | 'papers-index'
-  | 'papers-qa'
-  | 'question-patterns'
-  | 'general'
-  | 'general'
+    | 'reddit-overview'
+    | 'error'
+    | 'campus-info'
+    | 'getPlacementInfo'
+    | 'ffcs-planner'
+    | 'course-info'
+    | 'papers-index'
+    | 'papers-qa'
+    | 'question-patterns'
+    | 'general'
+    | 'general'
   className?: string
   onLoginClick?: () => void
   maximizedItem?: any
@@ -155,59 +161,62 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
         //   console.log('[VTOP] raw attendance rawOutput', rawOutput)
         //   console.log('[VTOP] full vtopData', vtopData)
         // }
-        
-        let attendanceData = [];
-        
+
+        let attendanceData = []
+
         if (Array.isArray(content) && content.length > 0) {
-          const firstItem = content[0];
+          const firstItem = content[0]
           if (firstItem && firstItem.SUBJECT && firstItem.SUBJECT.trim() !== '') {
-            attendanceData = content;
+            attendanceData = content
           }
         }
-        
+
         if (attendanceData.length === 0 && rawOutput && typeof rawOutput === 'string') {
           try {
-            const lines = rawOutput.split('\n').filter(line => line.trim());
-            
-            const dataLines = lines.filter(line => 
-              line.includes('│') && 
-              !line.includes('INDEX') && 
-              !line.includes('──────') &&
-              line.trim() !== '' &&
-              /^\s*\d+\s*│/.test(line)
-            );
-            
+            const lines = rawOutput.split('\n').filter(line => line.trim())
+
+            const dataLines = lines.filter(
+              line =>
+                line.includes('│') &&
+                !line.includes('INDEX') &&
+                !line.includes('──────') &&
+                line.trim() !== '' &&
+                /^\s*\d+\s*│/.test(line)
+            )
+
             //console.log('[VTOP] Found', dataLines.length, 'data lines to parse from rawOutput');
-            
-            attendanceData = dataLines.map(line => {
-              const allColumns = line.split('│').map(col => col.trim());
-              
-              if (allColumns.length >= 7) {
-                const result = {
-                  INDEX: allColumns[0] || '',
-                  SUBJECT: allColumns[1] || '',
-                  TYPE: allColumns[2] || '', 
-                  'FACULTY NAME': allColumns[3] || '',
-                  'CLASSES ATTENDED': allColumns[4] || '',
-                  PERCENTAGE: (allColumns[5] || '').replace('%', ''),
-                  '75% ALERT': allColumns[6] || ''
-                };
-                
-                return result;
-              } else {
-                //console.log('[VTOP] Insufficient columns:', allColumns.length, 'for line:', line);
-                return null;
-              }
-            }).filter(Boolean);
+
+            attendanceData = dataLines
+              .map(line => {
+                const allColumns = line.split('│').map(col => col.trim())
+
+                if (allColumns.length >= 7) {
+                  const result = {
+                    INDEX: allColumns[0] || '',
+                    SUBJECT: allColumns[1] || '',
+                    TYPE: allColumns[2] || '',
+                    'FACULTY NAME': allColumns[3] || '',
+                    'CLASSES ATTENDED': allColumns[4] || '',
+                    PERCENTAGE: (allColumns[5] || '').replace('%', ''),
+                    '75% ALERT': allColumns[6] || '',
+                  }
+
+                  return result
+                } else {
+                  //console.log('[VTOP] Insufficient columns:', allColumns.length, 'for line:', line);
+                  return null
+                }
+              })
+              .filter(Boolean)
           } catch (error) {
             //console.error('Error parsing attendance data from rawOutput:', error);
-            attendanceData = [];
+            attendanceData = []
           }
         }
-        
+
         if (!Array.isArray(attendanceData) || attendanceData.length === 0) {
           //console.log('[VTOP] Parsing failed, checking for formatted content:', vtopData.formatted_content);
-          
+
           if (vtopData.formatted_content) {
             return (
               <div className="space-y-3">
@@ -220,27 +229,23 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
               </div>
             )
           }
-          
+
           if (data && typeof data === 'string') {
             return (
               <div className="space-y-3">
                 <div className="p-3 bg-muted/50 rounded-md overflow-x-auto">
-                  <pre className="text-xs text-muted-foreground whitespace-pre-wrap">
-                    {data}
-                  </pre>
+                  <pre className="text-xs text-muted-foreground whitespace-pre-wrap">{data}</pre>
                 </div>
               </div>
             )
           }
-          
-          return (
-            <div className="text-muted-foreground text-sm">No attendance data available.</div>
-          )
+
+          return <div className="text-muted-foreground text-sm">No attendance data available.</div>
         }
-        
+
         if (Array.isArray(attendanceData) && attendanceData.length > 0) {
           //console.log('[VTOP] Successfully parsed', attendanceData.length, 'attendance records');
-          
+
           const validSubjects = attendanceData.filter((subject: any) => {
             const subjectName = subject.SUBJECT || subject.subject || subject.name || ''
             const percentage = parseFloat(
@@ -251,13 +256,10 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
             const total = subject['TOTAL CLASSES'] || subject.total || subject.totalClasses || '0'
 
             // More lenient validation - just check if subject name exists and isn't a placeholder
-            const isValid = (
-              subjectName &&
-              subjectName.trim() !== '' &&
-              !subjectName.match(/^Subject \d+$/i)
-            );
-            
-            return isValid;
+            const isValid =
+              subjectName && subjectName.trim() !== '' && !subjectName.match(/^Subject \d+$/i)
+
+            return isValid
           })
 
           if (process.env.NODE_ENV !== 'production') {
@@ -466,7 +468,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
             </div>
           )
         }
-        
+
         // Fallback: show formatted content if available
         if (vtopData.formatted_content) {
           return (
@@ -480,23 +482,19 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
             </div>
           )
         }
-        
+
         // Final fallback: show raw data
         if (data && typeof data === 'string') {
           return (
             <div className="space-y-3">
               <div className="p-3 bg-muted/50 rounded-md overflow-x-auto">
-                <pre className="text-xs text-muted-foreground whitespace-pre-wrap">
-                  {data}
-                </pre>
+                <pre className="text-xs text-muted-foreground whitespace-pre-wrap">{data}</pre>
               </div>
             </div>
           )
         }
-        
-        return (
-          <div className="text-muted-foreground text-sm">No attendance data available.</div>
-        )
+
+        return <div className="text-muted-foreground text-sm">No attendance data available.</div>
         break
 
       case 'marks':
@@ -672,7 +670,9 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
             </div>
             <p className="text-sm text-destructive font-medium">{errorMessage}</p>
             {vtopData.requiresCredentials && (
-              <p className="text-xs text-muted-foreground mt-2">Credentials required to view this data.</p>
+              <p className="text-xs text-muted-foreground mt-2">
+                Credentials required to view this data.
+              </p>
             )}
             {rawOutput && typeof rawOutput === 'string' && rawOutput !== errorMessage && (
               <details className="mt-3">
@@ -845,7 +845,9 @@ const PaperCard = ({
             {paper.title}
           </CardTitle>
           {paper.rank && (
-            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 shrink-0">#{paper.rank}</Badge>
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 shrink-0">
+              #{paper.rank}
+            </Badge>
           )}
         </div>
       </CardHeader>
@@ -866,7 +868,9 @@ const PaperCard = ({
               )}
               {paper.slot && (
                 <span className="inline-flex items-center gap-1">
-                  <Badge variant="outline" className="text-[10px] h-5 px-2">Slot {paper.slot}</Badge>
+                  <Badge variant="outline" className="text-[10px] h-5 px-2">
+                    Slot {paper.slot}
+                  </Badge>
                 </span>
               )}
             </div>
@@ -922,14 +926,25 @@ const PaperCard = ({
           )} */}
           {Array.isArray(paper.matchedQuestions) && paper.matchedQuestions.length > 0 && (
             <div className="mt-1 space-y-1">
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70">Matched Questions</div>
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                Matched Questions
+              </div>
               <ul className="list-disc pl-4 space-y-0.5">
                 {paper.matchedQuestions.slice(0, expanded ? 6 : 3).map((mq: string, i: number) => (
-                  <li key={i} className="text-[11px] leading-snug line-clamp-2" title={mq}>{mq}</li>
+                  <li key={i} className="text-[11px] leading-snug line-clamp-2" title={mq}>
+                    {mq}
+                  </li>
                 ))}
               </ul>
               {paper.matchedQuestions.length > 3 && !expanded && (
-                <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]" onClick={() => setExpanded(true)}>Show Matches</Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[10px]"
+                  onClick={() => setExpanded(true)}
+                >
+                  Show Matches
+                </Button>
               )}
             </div>
           )}
@@ -2481,7 +2496,9 @@ const PureArtifactDisplay = ({
     let processedItems = items
     if (type === 'papers' && items.length) {
       const chunkScores = items.map(p => (typeof p.chunkScore === 'number' ? p.chunkScore : 0))
-      const questionScores = items.map(p => (typeof p.questionScore === 'number' ? p.questionScore : 0))
+      const questionScores = items.map(p =>
+        typeof p.questionScore === 'number' ? p.questionScore : 0
+      )
       const maxChunk = Math.max(...chunkScores)
       const minChunk = Math.min(...chunkScores)
       const maxQ = Math.max(...questionScores)
@@ -2492,7 +2509,12 @@ const PureArtifactDisplay = ({
       processedItems = items.map((p, i) => {
         const rawChunk = chunkScores[i]
         const rawQ = questionScores[i]
-        let relChunk = spreadChunk < 0.005 ? (maxChunk ? rawChunk / (maxChunk || 1) : 0) : (rawChunk - minChunk) / (spreadChunk || 1)
+        let relChunk =
+          spreadChunk < 0.005
+            ? maxChunk
+              ? rawChunk / (maxChunk || 1)
+              : 0
+            : (rawChunk - minChunk) / (spreadChunk || 1)
         relChunk = Math.min(1, Math.max(0, relChunk ** 0.85))
         let relQ = 0
         if (!allQZero) {
@@ -2527,7 +2549,8 @@ const PureArtifactDisplay = ({
       // Filter
       processedItems = processedItems.filter(p => {
         const okExam =
-          paperExamFilter === 'all' || normalizeExam(p.examType || p.category) === normalizeExam(paperExamFilter)
+          paperExamFilter === 'all' ||
+          normalizeExam(p.examType || p.category) === normalizeExam(paperExamFilter)
         const okYear = paperYearFilter === 'all' || String(p.year || '').includes(paperYearFilter)
         return okExam && okYear
       })
@@ -2566,7 +2589,8 @@ const PureArtifactDisplay = ({
     }
 
     const itemCount = processedItems.length
-    const displayItems = showAllItems || !isMobile || isFullscreen ? processedItems : processedItems.slice(0, 3)
+    const displayItems =
+      showAllItems || !isMobile || isFullscreen ? processedItems : processedItems.slice(0, 3)
     const hasMoreItems = isMobile && items.length > 3 && !showAllItems && !isFullscreen
 
     return (
@@ -2607,14 +2631,19 @@ const PureArtifactDisplay = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Years</SelectItem>
-                {Array.from(new Set((Array.isArray(items) ? items : []).map((p: any) => p.year).filter(Boolean))).map((y: any) => (
-                  <SelectItem key={String(y)} value={String(y)}>{String(y)}</SelectItem>
+                {Array.from(
+                  new Set(
+                    (Array.isArray(items) ? items : []).map((p: any) => p.year).filter(Boolean)
+                  )
+                ).map((y: any) => (
+                  <SelectItem key={String(y)} value={String(y)}>
+                    {String(y)}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-        )}
-        {' '}
+        )}{' '}
         <div
           className={cn(
             'grid gap-3',
@@ -2676,7 +2705,8 @@ const PureArtifactDisplay = ({
               case 'papers-qa':
                 return <PapersQAArtifact key={index} data={item} />
               case 'question-patterns':
-                const QuestionPatternsArtifact = require('./artifacts/question-patterns-artifact').default
+                const QuestionPatternsArtifact =
+                  require('./artifacts/question-patterns-artifact').default
                 return <QuestionPatternsArtifact key={index} data={item} />
               case 'general':
                 return <GeneralCard key={index} data={item} />
@@ -2902,14 +2932,18 @@ function GeneralCard({ data }: { data: any }) {
 
   const copy = async (text?: string) => {
     if (!text) return
-    try { await navigator.clipboard.writeText(String(text)) } catch {}
+    try {
+      await navigator.clipboard.writeText(String(text))
+    } catch {}
   }
 
   return (
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="p-4 space-y-3">
         {data?.message && (
-          <div className="text-sm text-foreground/90 whitespace-pre-wrap break-words">{data.message}</div>
+          <div className="text-sm text-foreground/90 whitespace-pre-wrap break-words">
+            {data.message}
+          </div>
         )}
 
         {hasIndex && (
@@ -2917,7 +2951,12 @@ function GeneralCard({ data }: { data: any }) {
             <span className="px-2 py-1 rounded bg-muted border border-border/50 font-mono break-all">
               {String(data.indexId)}
             </span>
-            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => copy(data.indexId)}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => copy(data.indexId)}
+            >
               <Copy className="h-3.5 w-3.5 mr-1" /> copy indexId
             </Button>
           </div>
@@ -2925,25 +2964,51 @@ function GeneralCard({ data }: { data: any }) {
 
         {(data?.course || data?.examType || data?.year || data?.totalIndexed) && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-muted-foreground">
-            {data.course && (<div><span className="font-medium text-foreground/80">course:</span> {data.course}</div>)}
-            {data.examType && (<div><span className="font-medium text-foreground/80">exam:</span> {data.examType}</div>)}
-            {data.year && (<div><span className="font-medium text-foreground/80">year:</span> {data.year}</div>)}
-            {typeof data.totalIndexed !== 'undefined' && (<div><span className="font-medium text-foreground/80">indexed:</span> {data.totalIndexed}</div>)}
+            {data.course && (
+              <div>
+                <span className="font-medium text-foreground/80">course:</span> {data.course}
+              </div>
+            )}
+            {data.examType && (
+              <div>
+                <span className="font-medium text-foreground/80">exam:</span> {data.examType}
+              </div>
+            )}
+            {data.year && (
+              <div>
+                <span className="font-medium text-foreground/80">year:</span> {data.year}
+              </div>
+            )}
+            {typeof data.totalIndexed !== 'undefined' && (
+              <div>
+                <span className="font-medium text-foreground/80">indexed:</span> {data.totalIndexed}
+              </div>
+            )}
           </div>
         )}
 
         {hasAnswer && (
           <div className="p-3 rounded border border-border/40 bg-card/40">
-            <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">{data.answer}</div>
+            <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+              {data.answer}
+            </div>
           </div>
         )}
 
         {hasSources && (
           <div>
-            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">sources</div>
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">
+              sources
+            </div>
             <div className="space-y-1">
               {data.sources.map((s: any, idx: number) => (
-                <a key={idx} href={s?.url || s?.link || '#'} target="_blank" rel="noreferrer" className="block p-2 rounded border border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-colors text-xs break-words">
+                <a
+                  key={idx}
+                  href={s?.url || s?.link || '#'}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block p-2 rounded border border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-colors text-xs break-words"
+                >
                   {s?.title || s?.url || s?.link || 'source'}
                 </a>
               ))}
@@ -2952,7 +3017,9 @@ function GeneralCard({ data }: { data: any }) {
         )}
 
         {!hasIndex && !hasAnswer && !hasSources && (
-          <pre className="text-xs text-muted-foreground whitespace-pre-wrap overflow-x-auto">{JSON.stringify(data, null, 2)}</pre>
+          <pre className="text-xs text-muted-foreground whitespace-pre-wrap overflow-x-auto">
+            {JSON.stringify(data, null, 2)}
+          </pre>
         )}
       </CardContent>
     </Card>

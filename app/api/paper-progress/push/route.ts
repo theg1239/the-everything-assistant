@@ -7,7 +7,9 @@ export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions as any) as { user?: { id?: string } } | null;
+    const session = (await getServerSession(authOptions as any)) as {
+      user?: { id?: string }
+    } | null
     if (!session?.user?.id) {
       return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 })
     }

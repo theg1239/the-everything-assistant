@@ -33,7 +33,9 @@ async function computeHash(buf: Buffer | Uint8Array): Promise<string> {
     const subtle: any = (globalThis as any).crypto?.subtle
     if (subtle) {
       const hashBuf = await subtle.digest('SHA-256', data)
-      return Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('')
+      return Array.from(new Uint8Array(hashBuf))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('')
     }
     const { createHash } = await import('crypto')
     return createHash('sha256').update(data).digest('hex')
@@ -126,10 +128,11 @@ async function fetchAllPapers(courseCode: string, examType?: string, year?: stri
 
   const final: Annotated[] = []
   for (const p of byKey) {
-    const dup = final.find(f =>
-      f.examType === p.examType &&
-      f.year === p.year &&
-      jaccardTokens(f._normTitle, p._normTitle) >= 0.88
+    const dup = final.find(
+      f =>
+        f.examType === p.examType &&
+        f.year === p.year &&
+        jaccardTokens(f._normTitle, p._normTitle) >= 0.88
     )
     if (dup) continue
     final.push(p)
@@ -150,7 +153,10 @@ function toDirectDrive(url: string): string {
   return url
 }
 
-interface DriveFallbackResult { pdf: Buffer | null; images: Buffer[] }
+interface DriveFallbackResult {
+  pdf: Buffer | null
+  images: Buffer[]
+}
 
 let sharedBrowser: any = null
 let sharedBrowserUsageCount = 0
@@ -178,7 +184,8 @@ async function getOrCreateSharedBrowser(log?: Logger): Promise<any> {
 
       log?.('Creating new shared browser instance')
 
-      const preferSystem = process.env.PAPER_AGENT_USE_SYSTEM_BROWSER === '1' || process.env.NODE_ENV === 'development'
+      const preferSystem =
+        process.env.PAPER_AGENT_USE_SYSTEM_BROWSER === '1' || process.env.NODE_ENV === 'development'
       const explicitPath = process.env.PAPER_AGENT_BROWSER_PATH
 
       function resolveSystemBrowserPath(): string | null {
@@ -195,7 +202,7 @@ async function getOrCreateSharedBrowser(log?: Logger): Promise<any> {
             `${local}/Google/Chrome/Application/chrome.exe`,
             `${pf}/Microsoft/Edge/Application/msedge.exe`,
             `${pf86}/Microsoft/Edge/Application/msedge.exe`,
-            `${local}/Microsoft/Edge/Application/msedge.exe`,
+            `${local}/Microsoft/Edge/Application/msedge.exe`
           )
         } else if (plat === 'darwin') {
           candidates.push(
@@ -214,7 +221,9 @@ async function getOrCreateSharedBrowser(log?: Logger): Promise<any> {
           )
         }
         for (const p of candidates) {
-          try { if (existsSync(p)) return p } catch {}
+          try {
+            if (existsSync(p)) return p
+          } catch {}
         }
         return null
       }
@@ -249,7 +258,7 @@ async function getOrCreateSharedBrowser(log?: Logger): Promise<any> {
       sharedBrowserUsageCount = 0
       return sharedBrowser
     })()
-      .catch((e) => {
+      .catch(e => {
         log?.('Browser launch failed', { error: (e as Error)?.message })
         throw e
       })
@@ -286,7 +295,9 @@ async function cleanupSharedBrowser(log?: Logger): Promise<void> {
  */
 function toCloudinaryPageImageUrls(pdfUrl: string, pages = 4): string[] | null {
   try {
-    const m = pdfUrl.match(/^https?:\/\/res\.cloudinary\.com\/([^/]+)\/raw\/upload\/(.+\.pdf)(?:$|\?)/i)
+    const m = pdfUrl.match(
+      /^https?:\/\/res\.cloudinary\.com\/([^/]+)\/raw\/upload\/(.+\.pdf)(?:$|\?)/i
+    )
     if (!m) return null
     const cloud = m[1]
     let publicId = m[2]
@@ -318,7 +329,11 @@ function toCloudinaryFetchPageImageUrls(pdfUrl: string, pages = 4): string[] | n
   }
 }
 
-async function fetchAsBuffer(url: string, timeoutMs = 10000, headers?: Record<string, string>): Promise<Buffer | null> {
+async function fetchAsBuffer(
+  url: string,
+  timeoutMs = 10000,
+  headers?: Record<string, string>
+): Promise<Buffer | null> {
   try {
     const resp = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) })
     if (!resp.ok) return null
@@ -331,7 +346,11 @@ async function fetchAsBuffer(url: string, timeoutMs = 10000, headers?: Record<st
 }
 
 /** Headless capture that always produces images (canvas/img first; else viewport scroll screenshots). */
-async function genericHeadlessPdfToImages(url: string, log?: Logger, runId?: string): Promise<DriveFallbackResult> {
+async function genericHeadlessPdfToImages(
+  url: string,
+  log?: Logger,
+  runId?: string
+): Promise<DriveFallbackResult> {
   let browser: any
   let page: any
   try {
@@ -342,7 +361,9 @@ async function genericHeadlessPdfToImages(url: string, log?: Logger, runId?: str
 
     browser = await getOrCreateSharedBrowser(log)
     page = await browser.newPage()
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36')
+    await page.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
+    )
     let targetUrl = url
     if (/\.pdf($|\?|#)/i.test(url) && !/drive\.google\.com/i.test(url)) {
       // Use Google Docs viewer to render the PDF when direct view is not ideal
@@ -366,13 +387,30 @@ async function genericHeadlessPdfToImages(url: string, log?: Logger, runId?: str
     })
 
     let pageInfos = await page.evaluate(() => {
-      const items: { x: number; y: number; width: number; height: number; aspect: number; tag: string }[] = []
-      const els = Array.from(document.querySelectorAll('canvas, img')) as (HTMLCanvasElement | HTMLImageElement)[]
+      const items: {
+        x: number
+        y: number
+        width: number
+        height: number
+        aspect: number
+        tag: string
+      }[] = []
+      const els = Array.from(document.querySelectorAll('canvas, img')) as (
+        | HTMLCanvasElement
+        | HTMLImageElement
+      )[]
       for (const el of els) {
         const r = el.getBoundingClientRect()
         const aspect = r.height / Math.max(1, r.width)
         if (r.width > 380 && r.height > 480 && aspect > 1.0) {
-          items.push({ x: r.x, y: r.y + window.scrollY, width: r.width, height: r.height, aspect, tag: el.tagName.toLowerCase() })
+          items.push({
+            x: r.x,
+            y: r.y + window.scrollY,
+            width: r.width,
+            height: r.height,
+            aspect,
+            tag: el.tagName.toLowerCase(),
+          })
         }
       }
       items.sort((a, b) => a.y - b.y)
@@ -389,8 +427,8 @@ async function genericHeadlessPdfToImages(url: string, log?: Logger, runId?: str
           seen.add(key)
           screenshots.push(buf)
         }
-  await page.evaluate(() => window.scrollBy(0, window.innerHeight * 0.92))
-  await new Promise(resolve => setTimeout(resolve, 150))
+        await page.evaluate(() => window.scrollBy(0, window.innerHeight * 0.92))
+        await new Promise(resolve => setTimeout(resolve, 150))
       }
     }
 
@@ -430,11 +468,16 @@ async function genericHeadlessPdfToImages(url: string, log?: Logger, runId?: str
       const pdfBytes = await pdfDoc.save()
       const out = Buffer.from(pdfBytes)
       log?.('Generic headless PDF assembled', { pages: screenshots.length, bytes: out.length })
-      if (runId) logEmit(runId, 'driveFallbackSuccess', { pages: screenshots.length, bytes: out.length })
+      if (runId)
+        logEmit(runId, 'driveFallbackSuccess', { pages: screenshots.length, bytes: out.length })
       return { pdf: out, images: screenshots }
     } catch (e: any) {
-      log?.('Generic headless: PDF assembly failed (continuing with images only)', { error: e?.message, pages: screenshots.length })
-      if (runId) logEmit(runId, 'driveFallbackSuccess', { pages: screenshots.length, note: 'images-only' })
+      log?.('Generic headless: PDF assembly failed (continuing with images only)', {
+        error: e?.message,
+        pages: screenshots.length,
+      })
+      if (runId)
+        logEmit(runId, 'driveFallbackSuccess', { pages: screenshots.length, note: 'images-only' })
       return { pdf: null, images: screenshots }
     }
   } catch (e: any) {
@@ -442,11 +485,19 @@ async function genericHeadlessPdfToImages(url: string, log?: Logger, runId?: str
     if (runId) logEmit(runId, 'driveFallbackDevRetryFailed', { error: e?.message })
     return { pdf: null, images: [] }
   } finally {
-    if (page) { try { await page.close() } catch {} }
+    if (page) {
+      try {
+        await page.close()
+      } catch {}
+    }
   }
 }
 
-async function driveHeadlessFallback(url: string, log?: Logger, runId?: string): Promise<DriveFallbackResult> {
+async function driveHeadlessFallback(
+  url: string,
+  log?: Logger,
+  runId?: string
+): Promise<DriveFallbackResult> {
   let browser: any
   let page: any
   try {
@@ -457,10 +508,14 @@ async function driveHeadlessFallback(url: string, log?: Logger, runId?: string):
 
     browser = await getOrCreateSharedBrowser(log)
     page = await browser.newPage()
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36')
+    await page.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
+    )
 
     let viewerUrl = url
-    const fileIdMatch = url.match(/drive\.google\.com\/(?:file\/d\/|uc\?export=download&id=)([^&/]+)/)
+    const fileIdMatch = url.match(
+      /drive\.google\.com\/(?:file\/d\/|uc\?export=download&id=)([^&/]+)/
+    )
     if (fileIdMatch) viewerUrl = `https://drive.google.com/file/d/${fileIdMatch[1]}/view`
     await page.goto(viewerUrl, { waitUntil: 'domcontentloaded', timeout: 15000 })
 
@@ -480,14 +535,28 @@ async function driveHeadlessFallback(url: string, log?: Logger, runId?: string):
     })
 
     const pageInfos = await page.evaluate(() => {
-      const items: { index: number; x: number; y: number; width: number; height: number; aspect: number }[] = []
+      const items: {
+        index: number
+        x: number
+        y: number
+        width: number
+        height: number
+        aspect: number
+      }[] = []
       const candidates = Array.from(document.querySelectorAll('img')) as HTMLImageElement[]
       let idx = 0
       for (const img of candidates) {
         const rect = img.getBoundingClientRect()
         const aspect = rect.height / Math.max(1, rect.width)
         if (rect.width > 380 && rect.height > 480 && aspect > 1.0) {
-          items.push({ index: idx++, x: rect.x, y: rect.y + window.scrollY, width: rect.width, height: rect.height, aspect })
+          items.push({
+            index: idx++,
+            x: rect.x,
+            y: rect.y + window.scrollY,
+            width: rect.width,
+            height: rect.height,
+            aspect,
+          })
         }
       }
       items.sort((a, b) => a.y - b.y)
@@ -504,7 +573,8 @@ async function driveHeadlessFallback(url: string, log?: Logger, runId?: string):
         await new Promise(resolve => setTimeout(resolve, 150))
       }
     } else {
-      if (runId) logEmit(runId, `Found ${pageInfos.length} pages to scan`, { pages: pageInfos.length })
+      if (runId)
+        logEmit(runId, `Found ${pageInfos.length} pages to scan`, { pages: pageInfos.length })
       for (const info of pageInfos.slice(0, 10)) {
         try {
           await page.evaluate((y: number) => window.scrollTo(0, Math.max(0, y - 20)), info.y)
@@ -534,11 +604,22 @@ async function driveHeadlessFallback(url: string, log?: Logger, runId?: string):
       const pdfBytes = await pdfDoc.save()
       const out = Buffer.from(pdfBytes)
       log?.('Drive fallback PDF assembled', { pages: screenshots.length, bytes: out.length })
-      if (runId) logEmit(runId, `Successfully processed ${screenshots.length} pages`, { pages: screenshots.length, bytes: out.length })
+      if (runId)
+        logEmit(runId, `Successfully processed ${screenshots.length} pages`, {
+          pages: screenshots.length,
+          bytes: out.length,
+        })
       return { pdf: out, images: screenshots }
     } catch (e: any) {
-      log?.('Drive fallback: PDF assembly failed (continuing with images only)', { error: e?.message, pages: screenshots.length })
-      if (runId) logEmit(runId, `Successfully processed ${screenshots.length} pages`, { pages: screenshots.length, note: 'images-only' })
+      log?.('Drive fallback: PDF assembly failed (continuing with images only)', {
+        error: e?.message,
+        pages: screenshots.length,
+      })
+      if (runId)
+        logEmit(runId, `Successfully processed ${screenshots.length} pages`, {
+          pages: screenshots.length,
+          note: 'images-only',
+        })
       return { pdf: null, images: screenshots }
     }
   } catch (e: any) {
@@ -546,31 +627,44 @@ async function driveHeadlessFallback(url: string, log?: Logger, runId?: string):
     if (runId) logEmit(runId, 'Document processing failed', { error: e?.message })
     if (process.env.NODE_ENV === 'development') {
       try {
-        const fileIdMatch = url.match(/drive\.google\.com\/(?:file\/d\/|uc\?export=download&id=)([^&/]+)/)
-        const viewerUrl = fileIdMatch ? `https://drive.google.com/file/d/${fileIdMatch[1]}/view` : url
+        const fileIdMatch = url.match(
+          /drive\.google\.com\/(?:file\/d\/|uc\?export=download&id=)([^&/]+)/
+        )
+        const viewerUrl = fileIdMatch
+          ? `https://drive.google.com/file/d/${fileIdMatch[1]}/view`
+          : url
         const platform = process.platform
         let cmd: string
         if (platform === 'win32') cmd = `start "" "${viewerUrl}"`
         else if (platform === 'darwin') cmd = `open "${viewerUrl}"`
         else cmd = `xdg-open "${viewerUrl}"`
         const { exec } = await import('child_process')
-        exec(cmd, err => { if (err) log?.('Dev browser open failed', { error: err.message }) })
+        exec(cmd, err => {
+          if (err) log?.('Dev browser open failed', { error: err.message })
+        })
         log?.('Dev fallback opened external browser (final)', { viewerUrl })
-        if (runId) logEmit(runId, 'Opened in external browser for manual review', { url: viewerUrl })
+        if (runId)
+          logEmit(runId, 'Opened in external browser for manual review', { url: viewerUrl })
       } catch {}
     }
     return { pdf: null, images: [] }
   } finally {
-    if (page) { try { await page.close() } catch {} }
+    if (page) {
+      try {
+        await page.close()
+      } catch {}
+    }
   }
 }
 
 function logEmit(runId: string, step: string, detail?: any) {
   const hasSpace = /\s/.test(step)
   const isCamelLike = /^[a-z][a-z0-9]*(?:[A-Z][a-z0-9]*)+$/.test(step)
-  const normalizedStep = hasSpace ? step.toLowerCase() : (isCamelLike ? step : step.toLowerCase())
+  const normalizedStep = hasSpace ? step.toLowerCase() : isCamelLike ? step : step.toLowerCase()
   try {
-    console.log(`[paperProgressEmit] runId=${runId} step=${normalizedStep} detail=${detail ? JSON.stringify(detail) : '{}'}`)
+    console.log(
+      `[paperProgressEmit] runId=${runId} step=${normalizedStep} detail=${detail ? JSON.stringify(detail) : '{}'}`
+    )
   } catch {
     console.log(`[paperProgressEmit] runId=${runId} step=${normalizedStep} detail=[unserializable]`)
   }
@@ -669,7 +763,11 @@ async function resolveCourseCode(input: string, log?: Logger): Promise<string | 
   return null
 }
 
-async function downloadPdf(url: string, log?: Logger, runId?: string): Promise<{ pdf: Buffer | null; images?: Buffer[] }> {
+async function downloadPdf(
+  url: string,
+  log?: Logger,
+  runId?: string
+): Promise<{ pdf: Buffer | null; images?: Buffer[] }> {
   try {
     const transformed = toDirectDrive(url)
     if (transformed !== url) log?.('Transformed Google Drive URL', { original: url, transformed })
@@ -686,14 +784,18 @@ async function downloadPdf(url: string, log?: Logger, runId?: string): Promise<{
         log?.('PDF downloaded', { url: transformed, bytes: arr.byteLength })
         return { pdf: Buffer.from(arr) } // return bytes; parse first
       }
-      log?.('Non-PDF or tiny response, will attempt Drive fallback', { ctype, bytes: arr.byteLength })
+      log?.('Non-PDF or tiny response, will attempt Drive fallback', {
+        ctype,
+        bytes: arr.byteLength,
+      })
     }
     if (/drive\.google\.com/.test(url)) {
       try {
         return await driveHeadlessFallback(url, log, runId)
       } catch (fallbackError: any) {
         log?.('Drive fallback failed completely', { url, error: fallbackError?.message })
-        if (runId) logEmit(runId, 'Unable to access document', { url, error: fallbackError?.message })
+        if (runId)
+          logEmit(runId, 'Unable to access document', { url, error: fallbackError?.message })
         return { pdf: null, images: [] }
       }
     }
@@ -704,8 +806,12 @@ async function downloadPdf(url: string, log?: Logger, runId?: string): Promise<{
       try {
         return await driveHeadlessFallback(url, log, runId)
       } catch (fallbackError: any) {
-        log?.('Drive fallback failed completely after exception', { url, error: fallbackError?.message })
-        if (runId) logEmit(runId, 'Unable to access document', { url, error: fallbackError?.message })
+        log?.('Drive fallback failed completely after exception', {
+          url,
+          error: fallbackError?.message,
+        })
+        if (runId)
+          logEmit(runId, 'Unable to access document', { url, error: fallbackError?.message })
         return { pdf: null, images: [] }
       }
     }
@@ -719,25 +825,37 @@ function pickGeminiModel(opts: { pdf?: boolean; ocr?: boolean; fast?: boolean } 
   return 'gemini-2.5-flash'
 }
 
-async function extractTextFromPdf(pdfData: Buffer, log?: Logger, runId?: string, pageImages?: Buffer[]): Promise<string> {
+async function extractTextFromPdf(
+  pdfData: Buffer,
+  log?: Logger,
+  runId?: string,
+  pageImages?: Buffer[]
+): Promise<string> {
   if (runId) logEmit(runId, 'Extracting text from document', {})
 
   const hasPdfBytes = !!pdfData && pdfData.length > 1500
   if (hasPdfBytes) {
     try {
-      if (runId) logEmit(runId, 'Reading document structure', { bytes: pdfData.length, method: 'pdf-parse' })
+      if (runId)
+        logEmit(runId, 'Reading document structure', { bytes: pdfData.length, method: 'pdf-parse' })
       const mod: any = await import('pdf-parse')
       const pdfParseFn = (mod?.default ?? mod) as (data: Buffer) => Promise<any> // robust import
       const res = await pdfParseFn(Buffer.isBuffer(pdfData) ? pdfData : Buffer.from(pdfData))
       if (res && res.text) {
         log?.('pdf-parse extraction success', { chars: res.text.length, pages: res.numpages })
-        if (runId) logEmit(runId, `Successfully read ${res.numpages} pages`, { chars: res.text.length, pages: res.numpages })
+        if (runId)
+          logEmit(runId, `Successfully read ${res.numpages} pages`, {
+            chars: res.text.length,
+            pages: res.numpages,
+          })
         if (runId) logEmit(runId, 'Document processing complete', { method: 'pdf-parse' })
         return res.text
       }
       log?.('pdf-parse produced empty text, falling back to OCR')
     } catch (err: any) {
-      log?.('pdf-parse failed, attempting pdfjs-dist extraction before OCR', { error: err?.message })
+      log?.('pdf-parse failed, attempting pdfjs-dist extraction before OCR', {
+        error: err?.message,
+      })
       if (runId) logEmit(runId, 'Switching extraction strategy', { error: err?.message })
       // Fallback 1: Use pdfjs-dist (legacy build) to extract text in Node (avoids OCR + browser)
       try {
@@ -750,20 +868,28 @@ async function extractTextFromPdf(pdfData: Buffer, log?: Logger, runId?: string,
         const pdfjs: any = await import('pdfjs-dist/legacy/build/pdf.mjs')
         const getDocument = (pdfjs as any).getDocument || (pdfjs as any).default?.getDocument
         if (!getDocument) throw new Error('pdfjs-dist getDocument not available')
-        const task = getDocument({ data: new Uint8Array(pdfData), isEvalSupported: false, disableFontFace: true })
+        const task = getDocument({
+          data: new Uint8Array(pdfData),
+          isEvalSupported: false,
+          disableFontFace: true,
+        })
         const doc = await task.promise
         const maxPages = Math.min(doc.numPages || 0, 25)
         let out: string[] = []
         for (let p = 1; p <= maxPages; p++) {
           const page = await doc.getPage(p)
           const tc = await page.getTextContent()
-          const text = (tc.items || []).map((it: any) => (it.str || '')).join(' ')
+          const text = (tc.items || []).map((it: any) => it.str || '').join(' ')
           if (text && text.trim().length > 0) out.push(text)
         }
         const combined = out.join('\n').replace(/\s+/g, ' ').trim()
         if (combined.length > 100) {
           log?.('pdfjs-dist extraction success', { pages: maxPages, chars: combined.length })
-          if (runId) logEmit(runId, `Successfully read ${maxPages} pages`, { chars: combined.length, method: 'pdfjs-dist' })
+          if (runId)
+            logEmit(runId, `Successfully read ${maxPages} pages`, {
+              chars: combined.length,
+              method: 'pdfjs-dist',
+            })
           if (runId) logEmit(runId, 'Document processing complete', { method: 'pdfjs-dist' })
           return combined
         }
@@ -772,21 +898,27 @@ async function extractTextFromPdf(pdfData: Buffer, log?: Logger, runId?: string,
         log?.('pdfjs-dist extraction failed', { error: e?.message })
       }
       // Fallback 2: OCR below
-      if (runId) logEmit(runId, 'Switching to advanced text recognition', { note: 'pdfjs-dist fallback did not yield enough text' })
+      if (runId)
+        logEmit(runId, 'Switching to advanced text recognition', {
+          note: 'pdfjs-dist fallback did not yield enough text',
+        })
     }
   }
 
   // OCR path (only if we have images)
   if (pageImages && pageImages.length) {
     try {
-      if (runId) logEmit(runId, `Scanning ${pageImages.length} pages with AI vision`, { pages: pageImages.length })
+      if (runId)
+        logEmit(runId, `Scanning ${pageImages.length} pages with AI vision`, {
+          pages: pageImages.length,
+        })
       const modelId = pickGeminiModel({ pdf: true, ocr: true })
       const limited = pageImages.slice(0, 5)
       const contentParts: any[] = [
         {
           type: 'text',
-          text: 'You will receive exam paper page images. Perform OCR and return ONLY the readable question text. Preserve numbering (1, 1(a), (i), etc.). Separate distinct questions with a blank line. No extra commentary.'
-        }
+          text: 'You will receive exam paper page images. Perform OCR and return ONLY the readable question text. Preserve numbering (1, 1(a), (i), etc.). Separate distinct questions with a blank line. No extra commentary.',
+        },
       ]
       for (const img of limited) {
         contentParts.push({ type: 'image', image: img.toString('base64'), mimeType: 'image/png' })
@@ -796,8 +928,17 @@ async function extractTextFromPdf(pdfData: Buffer, log?: Logger, runId?: string,
         messages: [{ role: 'user', content: contentParts }],
       })
       const txt = (ocrRes && (ocrRes.text || (ocrRes as any).outputText)) || ''
-      log?.('Gemini OCR (image) extraction result', { chars: txt.length, model: modelId, pagesUsed: limited.length })
-      if (runId) logEmit(runId, `AI vision successfully read ${txt.length} characters`, { chars: txt.length, model: modelId, pages: limited.length })
+      log?.('Gemini OCR (image) extraction result', {
+        chars: txt.length,
+        model: modelId,
+        pagesUsed: limited.length,
+      })
+      if (runId)
+        logEmit(runId, `AI vision successfully read ${txt.length} characters`, {
+          chars: txt.length,
+          model: modelId,
+          pages: limited.length,
+        })
       if (runId) logEmit(runId, 'Document processing complete', { method: 'gemini-image-ocr' })
       return txt
     } catch (e: any) {
@@ -842,7 +983,10 @@ function splitIntoChunks(text: string, targetSize = 1000, overlapPct = 0.25): st
 }
 
 function extractQuestions(text: string, log?: Logger): string[] {
-  const lines = text.split(/\n+/).map(l => l.trim()).filter(Boolean)
+  const lines = text
+    .split(/\n+/)
+    .map(l => l.trim())
+    .filter(Boolean)
   const qs = new Set<string>()
   const cueWords = ['determine', 'prove', 'show that', 'find', 'evaluate', 'compute', 'explain']
   for (const line of lines) {
@@ -860,7 +1004,9 @@ function extractQuestions(text: string, log?: Logger): string[] {
 }
 
 function cosine(a: number[], b: number[]): number {
-  let dot = 0, as = 0, bs = 0
+  let dot = 0,
+    as = 0,
+    bs = 0
   for (let i = 0; i < a.length; i++) {
     dot += a[i] * b[i]
     as += a[i] * a[i]
@@ -882,12 +1028,21 @@ export async function indexPastPapers(options: {
 }) {
   const log = createLogger(options.debug || process.env.PAPER_AGENT_DEBUG === 'true')
   const useDB = !!process.env.DATABASE_URL2
-  const storePdf = process.env.PAPER_AGENT_STORE_PDF === '1' || process.env.NODE_ENV === 'development'
+  const storePdf =
+    process.env.PAPER_AGENT_STORE_PDF === '1' || process.env.NODE_ENV === 'development'
   if (useDB) {
-    try { await ensurePaperSchema() } catch (e: any) { log('DB schema ensure failed (continuing in-memory)', { error: e?.message }) }
+    try {
+      await ensurePaperSchema()
+    } catch (e: any) {
+      log('DB schema ensure failed (continuing in-memory)', { error: e?.message })
+    }
   }
   const courseCode = await resolveCourseCode(options.course, log)
-  if (options.runId) logEmit(options.runId, `Searching for ${courseCode || options.course} papers`, { input: options.course, courseCode })
+  if (options.runId)
+    logEmit(options.runId, `Searching for ${courseCode || options.course} papers`, {
+      input: options.course,
+      courseCode,
+    })
   if (!courseCode) {
     await cleanupSharedBrowser(log)
     return {
@@ -898,12 +1053,17 @@ export async function indexPastPapers(options: {
     }
   }
   const all = await fetchAllPapers(courseCode, options.examType, options.year, log)
-  if (options.runId) logEmit(options.runId, `Found ${all.length} papers across all sources`, { count: all.length })
+  if (options.runId)
+    logEmit(options.runId, `Found ${all.length} papers across all sources`, { count: all.length })
   log('Total papers after fetch', { count: all.length })
 
   const maxPapers = options.maxPapers ?? 4
   const selected = all.slice(0, maxPapers)
-  if (options.runId) logEmit(options.runId, `Processing ${selected.length} papers for optimal speed`, { selected: selected.length, maxAllowed: maxPapers })
+  if (options.runId)
+    logEmit(options.runId, `Processing ${selected.length} papers for optimal speed`, {
+      selected: selected.length,
+      maxAllowed: maxPapers,
+    })
   log('Selected subset for processing', { selected: selected.length })
   if (selected.length === 0) {
     await cleanupSharedBrowser(log)
@@ -926,31 +1086,39 @@ export async function indexPastPapers(options: {
       log('Approaching timeout limit, stopping paper processing', {
         processed: indexed.length,
         remaining: selected.length - attemptedPapers,
-        timeElapsed: Date.now() - startTime
+        timeElapsed: Date.now() - startTime,
       })
-      if (options.runId) logEmit(options.runId, 'Optimizing for speed - wrapping up processing', {
-        processed: indexed.length,
-        timeElapsed: Date.now() - startTime
-      })
+      if (options.runId)
+        logEmit(options.runId, 'Optimizing for speed - wrapping up processing', {
+          processed: indexed.length,
+          timeElapsed: Date.now() - startTime,
+        })
       stopAll = true
       return
     }
 
     if (attemptedPapers > 3 && indexed.length === 0) {
       log('No papers successfully processed after 3 attempts, bailing out early')
-      if (options.runId) logEmit(options.runId, 'Having trouble accessing papers - may need to try different sources', { attempted: attemptedPapers })
+      if (options.runId)
+        logEmit(
+          options.runId,
+          'Having trouble accessing papers - may need to try different sources',
+          { attempted: attemptedPapers }
+        )
       stopAll = true
       return
     }
 
-    if (options.runId) logEmit(options.runId, `Processing: ${p.title}`, { title: p.title, url: p.url })
+    if (options.runId)
+      logEmit(options.runId, `Processing: ${p.title}`, { title: p.title, url: p.url })
     log('Processing paper', { title: p.title, url: p.url })
 
     if (useDB) {
       try {
         const existing = await findPaperByUrl(p.url)
         if (existing) {
-          if (options.runId) logEmit(options.runId, 'Using cached paper from database', { title: p.title })
+          if (options.runId)
+            logEmit(options.runId, 'Using cached paper from database', { title: p.title })
           log('Reusing existing paper from DB, skipping re-download', { title: p.title })
           const loaded = await loadChunksAndQuestions([existing.id])
           const chunks: PaperChunk[] = (loaded.chunks || [])
@@ -976,7 +1144,9 @@ export async function indexPastPapers(options: {
           return
         }
       } catch (reuseErr: any) {
-        log('DB reuse check failed (continuing with fresh processing)', { error: reuseErr?.message })
+        log('DB reuse check failed (continuing with fresh processing)', {
+          error: reuseErr?.message,
+        })
       }
     }
 
@@ -1001,15 +1171,24 @@ export async function indexPastPapers(options: {
         const text = await extractTextFromPdf(Buffer.alloc(0), log, options.runId, cap.images)
         if (!text || text.length < 50) {
           log('Skipping paper due to insufficient text post-OCR', { chars: text?.length || 0 })
-          if (options.runId) logEmit(options.runId, 'Paper appears empty or unreadable', { title: p.title })
+          if (options.runId)
+            logEmit(options.runId, 'Paper appears empty or unreadable', { title: p.title })
           return
         }
 
         const questions = extractQuestions(text, log)
-        if (options.runId) logEmit(options.runId, `Found ${questions.length} practice questions`, { title: p.title, questions: questions.length })
+        if (options.runId)
+          logEmit(options.runId, `Found ${questions.length} practice questions`, {
+            title: p.title,
+            questions: questions.length,
+          })
         const chunksRaw = splitIntoChunks(text)
         log('Chunking complete', { chunks: chunksRaw.length })
-        if (options.runId) logEmit(options.runId, `Split into ${chunksRaw.length} searchable sections`, { title: p.title, chunks: chunksRaw.length })
+        if (options.runId)
+          logEmit(options.runId, `Split into ${chunksRaw.length} searchable sections`, {
+            title: p.title,
+            chunks: chunksRaw.length,
+          })
 
         const embeddingResult: any = await rateLimitedAI.google.embed({ values: chunksRaw })
         log('Embedding complete', { embeddings: embeddingResult.embeddings?.length })
@@ -1021,10 +1200,16 @@ export async function indexPastPapers(options: {
             const qeRes: any = await rateLimitedAI.google.embed({ values: questions })
             questionEmbeddings = qeRes.embeddings || []
             log('Question embeddings complete', { count: (questionEmbeddings || []).length })
-            if (options.runId) logEmit(options.runId, `Indexed ${(questionEmbeddings || []).length} questions for smart search`, { title: p.title, count: (questionEmbeddings || []).length })
+            if (options.runId)
+              logEmit(
+                options.runId,
+                `Indexed ${(questionEmbeddings || []).length} questions for smart search`,
+                { title: p.title, count: (questionEmbeddings || []).length }
+              )
           } catch (e: any) {
             log('Question embeddings failed', { error: e?.message })
-            if (options.runId) logEmit(options.runId, 'Question indexing incomplete', { title: p.title })
+            if (options.runId)
+              logEmit(options.runId, 'Question indexing incomplete', { title: p.title })
           }
         }
 
@@ -1056,7 +1241,11 @@ export async function indexPastPapers(options: {
           if (questionEmbeddings?.length)
             await upsertQuestionEmbeddings(
               paperId,
-              questionEmbeddings.map((qe, i) => ({ index: i, question: questions[i], embedding: qe }))
+              questionEmbeddings.map((qe, i) => ({
+                index: i,
+                question: questions[i],
+                embedding: qe,
+              }))
             )
           persistedPaperIds.push(paperId)
         }
@@ -1083,12 +1272,16 @@ export async function indexPastPapers(options: {
     try {
       const downloadPromise = downloadPdf(p.url, log, options.runId)
       const timeoutPromise = new Promise<{ pdf: Buffer | null; images?: Buffer[] }>((_, reject) =>
-        setTimeout(() => reject(new Error(`Paper processing timeout after ${PAPER_TIMEOUT}ms`)), PAPER_TIMEOUT)
+        setTimeout(
+          () => reject(new Error(`Paper processing timeout after ${PAPER_TIMEOUT}ms`)),
+          PAPER_TIMEOUT
+        )
       )
       download = await Promise.race([downloadPromise, timeoutPromise])
     } catch (timeoutError: any) {
       log('Paper processing timeout, skipping', { url: p.url, error: timeoutError.message })
-      if (options.runId) logEmit(options.runId, '⏱Taking too long, moving to next paper', { url: p.url })
+      if (options.runId)
+        logEmit(options.runId, '⏱Taking too long, moving to next paper', { url: p.url })
       return
     }
 
@@ -1099,7 +1292,10 @@ export async function indexPastPapers(options: {
     }
 
     if (download.pdf && options.runId) {
-      logEmit(options.runId, `Downloaded paper (${Math.round(download.pdf.length / 1024)}KB)`, { url: p.url, bytes: download.pdf.length })
+      logEmit(options.runId, `Downloaded paper (${Math.round(download.pdf.length / 1024)}KB)`, {
+        url: p.url,
+        bytes: download.pdf.length,
+      })
     }
 
     let contentHashRef: string | undefined
@@ -1126,11 +1322,18 @@ export async function indexPastPapers(options: {
     // *** SECOND-CHANCE FALLBACK ***
     if (!text || text.length < 50) {
       if (/drive\.google\.com/i.test(p.url)) {
-        log('Primary parse produced little text — attempting headless capture + OCR', { url: p.url })
+        log('Primary parse produced little text — attempting headless capture + OCR', {
+          url: p.url,
+        })
         try {
           const cap = await driveHeadlessFallback(p.url, log, options.runId)
           if (cap?.images?.length) {
-            const ocrText = await extractTextFromPdf(Buffer.alloc(0), log, options.runId, cap.images)
+            const ocrText = await extractTextFromPdf(
+              Buffer.alloc(0),
+              log,
+              options.runId,
+              cap.images
+            )
             if (ocrText && ocrText.length >= 50) {
               text = ocrText
               log('Fallback OCR succeeded', { chars: text.length })
@@ -1181,12 +1384,19 @@ export async function indexPastPapers(options: {
             log('Attempting generic headless capture + OCR', { url: p.url })
             const cap = await genericHeadlessPdfToImages(p.url, log, options.runId)
             if (cap?.images?.length) {
-              const ocrText = await extractTextFromPdf(Buffer.alloc(0), log, options.runId, cap.images)
+              const ocrText = await extractTextFromPdf(
+                Buffer.alloc(0),
+                log,
+                options.runId,
+                cap.images
+              )
               if (ocrText && ocrText.length >= 50) {
                 text = ocrText
                 log('Generic fallback OCR succeeded', { chars: text.length })
               } else {
-                log('Generic fallback OCR returned too little text', { chars: ocrText?.length || 0 })
+                log('Generic fallback OCR returned too little text', {
+                  chars: ocrText?.length || 0,
+                })
               }
             } else {
               log('Generic headless capture produced no images')
@@ -1201,7 +1411,12 @@ export async function indexPastPapers(options: {
           log('Attempting generic headless capture + OCR', { url: p.url })
           const cap = await genericHeadlessPdfToImages(p.url, log, options.runId)
           if (cap?.images?.length) {
-            const ocrText = await extractTextFromPdf(Buffer.alloc(0), log, options.runId, cap.images)
+            const ocrText = await extractTextFromPdf(
+              Buffer.alloc(0),
+              log,
+              options.runId,
+              cap.images
+            )
             if (ocrText && ocrText.length >= 50) {
               text = ocrText
               log('Generic fallback OCR succeeded', { chars: text.length })
@@ -1219,15 +1434,24 @@ export async function indexPastPapers(options: {
 
     if (!text || text.length < 50) {
       log('Skipping paper due to insufficient text', { chars: text.length })
-      if (options.runId) logEmit(options.runId, 'Paper appears empty or unreadable', { title: p.title })
+      if (options.runId)
+        logEmit(options.runId, 'Paper appears empty or unreadable', { title: p.title })
       return
     }
 
     const questions = extractQuestions(text, log)
-    if (options.runId) logEmit(options.runId, `Found ${questions.length} practice questions`, { title: p.title, questions: questions.length })
+    if (options.runId)
+      logEmit(options.runId, `Found ${questions.length} practice questions`, {
+        title: p.title,
+        questions: questions.length,
+      })
     const chunksRaw = splitIntoChunks(text)
     log('Chunking complete', { chunks: chunksRaw.length })
-    if (options.runId) logEmit(options.runId, `Split into ${chunksRaw.length} searchable sections`, { title: p.title, chunks: chunksRaw.length })
+    if (options.runId)
+      logEmit(options.runId, `Split into ${chunksRaw.length} searchable sections`, {
+        title: p.title,
+        chunks: chunksRaw.length,
+      })
 
     const embeddingResult: any = await rateLimitedAI.google.embed({ values: chunksRaw })
     log('Embedding complete', { embeddings: embeddingResult.embeddings?.length })
@@ -1239,10 +1463,16 @@ export async function indexPastPapers(options: {
         const qeRes: any = await rateLimitedAI.google.embed({ values: questions })
         questionEmbeddings = qeRes.embeddings || []
         log('Question embeddings complete', { count: (questionEmbeddings || []).length })
-        if (options.runId) logEmit(options.runId, `Indexed ${(questionEmbeddings || []).length} questions for smart search`, { title: p.title, count: (questionEmbeddings || []).length })
+        if (options.runId)
+          logEmit(
+            options.runId,
+            `Indexed ${(questionEmbeddings || []).length} questions for smart search`,
+            { title: p.title, count: (questionEmbeddings || []).length }
+          )
       } catch (e: any) {
         log('Question embeddings failed', { error: e?.message })
-        if (options.runId) logEmit(options.runId, 'Question indexing incomplete', { title: p.title })
+        if (options.runId)
+          logEmit(options.runId, 'Question indexing incomplete', { title: p.title })
       }
     }
 
@@ -1302,10 +1532,11 @@ export async function indexPastPapers(options: {
           remaining: selected.length - attemptedPapers,
           timeElapsed: Date.now() - startTime,
         })
-        if (options.runId) logEmit(options.runId, 'Optimizing for speed - wrapping up processing', {
-          processed: indexed.length,
-          timeElapsed: Date.now() - startTime,
-        })
+        if (options.runId)
+          logEmit(options.runId, 'Optimizing for speed - wrapping up processing', {
+            processed: indexed.length,
+            timeElapsed: Date.now() - startTime,
+          })
         stopAll = true
         break
       }
@@ -1343,10 +1574,16 @@ export async function indexPastPapers(options: {
     chunkCount,
   })
   log('Index stored', { indexId, papers: indexed.length, chunkCount })
-  if (options.runId) logEmit(options.runId, `Successfully indexed ${indexed.length} papers with ${chunkCount} searchable sections!`, { indexId, papers: indexed.length, chunks: chunkCount })
+  if (options.runId)
+    logEmit(
+      options.runId,
+      `Successfully indexed ${indexed.length} papers with ${chunkCount} searchable sections!`,
+      { indexId, papers: indexed.length, chunks: chunkCount }
+    )
 
   await cleanupSharedBrowser(log)
-  if (options.runId) logEmit(options.runId, 'done', { status: 'complete', indexId, papers: indexed.length })
+  if (options.runId)
+    logEmit(options.runId, 'done', { status: 'complete', indexId, papers: indexed.length })
 
   return {
     success: true,
@@ -1360,7 +1597,12 @@ export async function indexPastPapers(options: {
   }
 }
 
-export async function askIndexedPaperQuestion(indexId: string, question: string, debug?: boolean, runId?: string) {
+export async function askIndexedPaperQuestion(
+  indexId: string,
+  question: string,
+  debug?: boolean,
+  runId?: string
+) {
   const log = createLogger(debug || process.env.PAPER_AGENT_DEBUG === 'true')
   let index = paperIndexes.get(indexId)
   if (!index) {
@@ -1444,7 +1686,8 @@ export async function askIndexedPaperQuestion(indexId: string, question: string,
   log('Top chunks selected', { count: top.length })
   const context = top
     .map(
-      t => `Source: ${t.paper.title} (${t.paper.year} ${t.paper.examType})\n${t.chunk.text.substring(0, 1000)}`
+      t =>
+        `Source: ${t.paper.title} (${t.paper.year} ${t.paper.examType})\n${t.chunk.text.substring(0, 1000)}`
     )
     .join('\n\n---\n\n')
   const prompt = `You are a precise assistant answering questions about VIT past exam papers.\nQuestion: ${question}\nUse ONLY the provided context. Quote specific question numbers or lines if relevant. If unknown, say you cannot find it.\nContext:\n${context}`
@@ -1456,13 +1699,17 @@ export async function askIndexedPaperQuestion(indexId: string, question: string,
   return {
     success: true,
     answer: (answer as any).text,
-    sources: Array.from(new Set(top.map(t => ({
-      title: t.paper.title,
-      url: t.paper.url,
-      year: t.paper.year,
-      examType: t.paper.examType,
-      score: Number(t.score.toFixed(3)),
-    })))).slice(0, 6),
+    sources: Array.from(
+      new Set(
+        top.map(t => ({
+          title: t.paper.title,
+          url: t.paper.url,
+          year: t.paper.year,
+          examType: t.paper.examType,
+          score: Number(t.score.toFixed(3)),
+        }))
+      )
+    ).slice(0, 6),
     runId,
     logs: log.getLogs(),
   }
@@ -1478,13 +1725,24 @@ export async function smartPaperSearchByQuestion(opts: {
   runId?: string
 }) {
   const log = createLogger(opts.debug || process.env.PAPER_AGENT_DEBUG === 'true')
-  console.log(`[smartPaperSearchByQuestion] Starting with runId: "${opts.runId}" for course: ${opts.course}`)
-  log('Smart paper search start', { course: opts.course, question: opts.question, runId: opts.runId })
+  console.log(
+    `[smartPaperSearchByQuestion] Starting with runId: "${opts.runId}" for course: ${opts.course}`
+  )
+  log('Smart paper search start', {
+    course: opts.course,
+    question: opts.question,
+    runId: opts.runId,
+  })
   if (opts.runId) {
     console.log(`[smartPaperSearchByQuestion] Emitting start event for runId: ${opts.runId}`)
-    logEmit(opts.runId, 'Starting smart paper search', { course: opts.course, question: opts.question })
+    logEmit(opts.runId, 'Starting smart paper search', {
+      course: opts.course,
+      question: opts.question,
+    })
   } else {
-    console.log(`[smartPaperSearchByQuestion] WARNING: No runId provided! Cannot emit progress events.`)
+    console.log(
+      `[smartPaperSearchByQuestion] WARNING: No runId provided! Cannot emit progress events.`
+    )
   }
   const indexResult = await indexPastPapers({
     course: opts.course,
@@ -1521,11 +1779,28 @@ export async function smartPaperSearchByQuestion(opts: {
     for (const t of qTokens) if (cTokens.includes(t)) overlap++
     return overlap / qTokens.length
   }
-  const paperScores: { paper: IndexedPaper; score: number; matchedQuestions: string[]; chunkScore: number; questionScore: number }[] = []
+  const paperScores: {
+    paper: IndexedPaper
+    score: number
+    matchedQuestions: string[]
+    chunkScore: number
+    questionScore: number
+  }[] = []
   if (useDB) {
     try {
-      const semantic = await semanticRankQuestion(indexResult.courseCode!, qEmb, 20, opts.examType, opts.year)
-      const qScores = await questionEmbeddingScores(indexResult.courseCode!, qEmb, opts.examType, opts.year)
+      const semantic = await semanticRankQuestion(
+        indexResult.courseCode!,
+        qEmb,
+        20,
+        opts.examType,
+        opts.year
+      )
+      const qScores = await questionEmbeddingScores(
+        indexResult.courseCode!,
+        qEmb,
+        opts.examType,
+        opts.year
+      )
       let urlMap: Map<string, string> | null = null
       try {
         const coursePapers = await getCoursePapers(indexResult.courseCode!)
@@ -1609,7 +1884,12 @@ export async function smartPaperSearchByQuestion(opts: {
     logEmit(opts.runId, 'Found the most relevant papers for you!', { papers: paperScores.length })
     logEmit(opts.runId, 'Search complete', {})
   }
-  if (opts.runId) logEmit(opts.runId, 'done', { status: 'complete', indexId: index.id, papers: paperScores.length })
+  if (opts.runId)
+    logEmit(opts.runId, 'done', {
+      status: 'complete',
+      indexId: index.id,
+      papers: paperScores.length,
+    })
   return {
     success: true,
     indexId: index.id,
@@ -1662,7 +1942,9 @@ const __maybeCli = (async () => {
     try {
       const { fileURLToPath } = await import('url')
       if (typeof import.meta === 'object' && (import.meta as any)?.url) {
-        const thisFile = fileURLToPath((import.meta as any).url).replace(/\\/g, '/').toLowerCase()
+        const thisFile = fileURLToPath((import.meta as any).url)
+          .replace(/\\/g, '/')
+          .toLowerCase()
         const argvNorm = (process.argv || []).map(a => (a || '').replace(/\\/g, '/').toLowerCase())
         // tsx keeps the target file path in argv; detect presence
         if (argvNorm.some(a => a.endsWith('/lib/agents/paper-agent.ts'))) {
@@ -1675,7 +1957,9 @@ const __maybeCli = (async () => {
     if (!isMain) return
 
     // Load env if present
-    try { (await import('dotenv')).config() } catch {}
+    try {
+      ;(await import('dotenv')).config()
+    } catch {}
 
     // Prefer system browser for local runs
     process.env.PAPER_AGENT_USE_SYSTEM_BROWSER = process.env.PAPER_AGENT_USE_SYSTEM_BROWSER || '1'
@@ -1688,21 +1972,44 @@ const __maybeCli = (async () => {
       const next = () => args[++i]
       switch (a) {
         case '-c':
-        case '--course': opts.course = next(); break
+        case '--course':
+          opts.course = next()
+          break
         case '-e':
-        case '--examType': opts.examType = next(); break
+        case '--examType':
+          opts.examType = next()
+          break
         case '-y':
-        case '--year': opts.year = next(); break
-        case '--max': opts.maxPapers = Number(next()); break
-        case '--all': opts.maxPapers = Number.MAX_SAFE_INTEGER; break
-        case '--max-ms': opts.maxProcessingMs = Number(next()); break
-        case '--headless-only': opts.headlessOnly = true; break
-        case '--no-headless-only': opts.headlessOnly = false; break
-        case '--debug': opts.debug = true; process.env.PAPER_AGENT_DEBUG = 'true'; break
-        case '--store-pdf': process.env.PAPER_AGENT_STORE_PDF = '1'; break
+        case '--year':
+          opts.year = next()
+          break
+        case '--max':
+          opts.maxPapers = Number(next())
+          break
+        case '--all':
+          opts.maxPapers = Number.MAX_SAFE_INTEGER
+          break
+        case '--max-ms':
+          opts.maxProcessingMs = Number(next())
+          break
+        case '--headless-only':
+          opts.headlessOnly = true
+          break
+        case '--no-headless-only':
+          opts.headlessOnly = false
+          break
+        case '--debug':
+          opts.debug = true
+          process.env.PAPER_AGENT_DEBUG = 'true'
+          break
+        case '--store-pdf':
+          process.env.PAPER_AGENT_STORE_PDF = '1'
+          break
         case '-h':
         case '--help':
-          console.log(`\nUsage: tsx lib/agents/paper-agent.ts --course <code|name> [options]\n\nOptions:\n  -c, --course <code|name>   Course code or name (required)\n  -e, --examType <type>      Filter by exam type (CAT1,CAT2,FAT,...)\n  -y, --year <year>          Filter by year (e.g., 2023)\n      --all                  Process all discovered papers\n      --max <n>              Limit number of papers to process\n      --max-ms <ms>          Increase overall processing time budget\n      --headless-only        Use browser screenshots + OCR only (default)\n      --no-headless-only     Allow direct PDF parsing\n      --store-pdf            Keep downloaded PDFs in memory (dev aid)\n      --debug                Verbose logging\n  -h, --help                 Show this help\n`)
+          console.log(
+            `\nUsage: tsx lib/agents/paper-agent.ts --course <code|name> [options]\n\nOptions:\n  -c, --course <code|name>   Course code or name (required)\n  -e, --examType <type>      Filter by exam type (CAT1,CAT2,FAT,...)\n  -y, --year <year>          Filter by year (e.g., 2023)\n      --all                  Process all discovered papers\n      --max <n>              Limit number of papers to process\n      --max-ms <ms>          Increase overall processing time budget\n      --headless-only        Use browser screenshots + OCR only (default)\n      --no-headless-only     Allow direct PDF parsing\n      --store-pdf            Keep downloaded PDFs in memory (dev aid)\n      --debug                Verbose logging\n  -h, --help                 Show this help\n`
+          )
           process.exit(0)
         default:
           if (a.startsWith('-')) {
@@ -1712,8 +2019,6 @@ const __maybeCli = (async () => {
           }
       }
     }
-
-    
 
     if (!opts.course && positionals.length > 0) {
       opts.course = positionals[0]
@@ -1736,7 +2041,9 @@ const __maybeCli = (async () => {
       if (res?.logs?.length) console.error(res.logs.join('\n'))
       process.exit(2)
     }
-    console.log(`[paper-agent] indexed ${res?.papers || res?.chunkCount ? `${res?.papers ?? '?'} papers` : 'papers'} | indexId=${res.indexId}`)
+    console.log(
+      `[paper-agent] indexed ${res?.papers || res?.chunkCount ? `${res?.papers ?? '?'} papers` : 'papers'} | indexId=${res.indexId}`
+    )
     if (res?.logs?.length) {
       console.log('\n[paper-agent] log summary:')
       for (const line of res.logs.slice(-50)) console.log(line)

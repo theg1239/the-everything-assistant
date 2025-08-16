@@ -399,13 +399,13 @@ You can create tables using HTML/markdown table syntax.
 </tables_and_formatting>
 `
 export async function getVITSystemPromptWithCredentialStatus(): Promise<string> {
-  const hasCreds = await hasVTOPCredentials();
+  const hasCreds = await hasVTOPCredentials()
   const credentialStatus = hasCreds
     ? 'User has VTOP credentials linked. If you need the user to enter their username and password, you MUST ALWAYS call the queryVTOP tool. Credentials can only be provided or updated via the secure dialog when queryVTOP is called for personal VTOP data.'
-    : 'User does not have VTOP credentials linked. If you need the user to enter their username and password, you MUST ALWAYS call the queryVTOP tool. The user will be prompted to securely provide credentials only when queryVTOP is called for personal VTOP data.';
+    : 'User does not have VTOP credentials linked. If you need the user to enter their username and password, you MUST ALWAYS call the queryVTOP tool. The user will be prompted to securely provide credentials only when queryVTOP is called for personal VTOP data.'
 
   return VIT_SYSTEM_PROMPT.replace(
     /<user_credentials_status>[\s\S]*?<\/user_credentials_status>/,
     `<user_credentials_status>\n${credentialStatus}\n</user_credentials_status>`
-  );
+  )
 }

@@ -100,7 +100,7 @@ Output exactly 3 questions, one per line, without numbering or bullet points.`
         maxTokens: 150,
         temperature: 0.7,
       },
-      userId  
+      userId
     )
 
     // console.log('AI model raw response:', result.text)

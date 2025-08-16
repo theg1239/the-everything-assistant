@@ -149,7 +149,11 @@ export default function ManagementPage() {
   const [loadingBroadcasts, setLoadingBroadcasts] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [showEditPreview, setShowEditPreview] = useState(false)
-  const [usage, setUsage] = useState<{ recent: UsageLog[]; summary: any; summaryAllTime?: any } | null>(null)
+  const [usage, setUsage] = useState<{
+    recent: UsageLog[]
+    summary: any
+    summaryAllTime?: any
+  } | null>(null)
   const [usageOpen, setUsageOpen] = useState(true)
 
   const fetchData = useCallback(async () => {
@@ -377,7 +381,10 @@ export default function ManagementPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-transparent text-foreground overflow-hidden" data-allow-touch-scroll>
+    <div
+      className="flex flex-col h-screen bg-transparent text-foreground overflow-hidden"
+      data-allow-touch-scroll
+    >
       {/* Header */}
       <header className="flex-shrink-0 bg-black/20 backdrop-blur-sm border-b border-border/50">
         <div className="container mx-auto px-4 max-w-7xl">
@@ -434,7 +441,11 @@ export default function ManagementPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-hidden" data-allow-touch-scroll>
-        <div className="h-full overflow-y-auto" data-allow-touch-scroll style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div
+          className="h-full overflow-y-auto"
+          data-allow-touch-scroll
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
           <div className="container mx-auto px-4 max-w-7xl py-6">
             {error && (
               <motion.div
@@ -480,12 +491,14 @@ export default function ManagementPage() {
                         <div className="flex flex-col items-end gap-0.5">
                           {usage?.summary && (
                             <div className="text-xs md:text-sm text-muted-foreground">
-                              24h: {usage.summary.totalTokens?.toLocaleString?.() || 0} tokens · {usage.summary.count || 0} events
+                              24h: {usage.summary.totalTokens?.toLocaleString?.() || 0} tokens ·{' '}
+                              {usage.summary.count || 0} events
                             </div>
                           )}
                           {usage?.summaryAllTime && (
                             <div className="text-[11px] md:text-xs text-muted-foreground/80">
-                              all time: {usage.summaryAllTime.totalTokens?.toLocaleString?.() || 0} tokens · {usage.summaryAllTime.count || 0} events
+                              all time: {usage.summaryAllTime.totalTokens?.toLocaleString?.() || 0}{' '}
+                              tokens · {usage.summaryAllTime.count || 0} events
                             </div>
                           )}
                         </div>
@@ -502,7 +515,11 @@ export default function ManagementPage() {
                       </div>
                     </div>
                     {usageOpen && (
-                      <div id="usage-table" className="overflow-x-auto rounded-md border border-border/20" style={{ WebkitOverflowScrolling: 'touch' }}>
+                      <div
+                        id="usage-table"
+                        className="overflow-x-auto rounded-md border border-border/20"
+                        style={{ WebkitOverflowScrolling: 'touch' }}
+                      >
                         <table className="min-w-full text-xs sm:text-sm">
                           <thead className="bg-black/30">
                             <tr>
@@ -516,20 +533,37 @@ export default function ManagementPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {usage?.recent?.map((u) => (
+                            {usage?.recent?.map(u => (
                               <tr key={u.id} className="border-t border-border/10">
-                                <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{new Date(u.createdAt).toLocaleTimeString()}</td>
+                                <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
+                                  {new Date(u.createdAt).toLocaleTimeString()}
+                                </td>
                                 <td className="px-3 py-2 whitespace-nowrap">{u.model || '-'}</td>
-                                <td className="px-3 py-2 text-right whitespace-nowrap">{u.promptTokens.toLocaleString()}</td>
-                                <td className="px-3 py-2 text-right whitespace-nowrap">{u.completionTokens.toLocaleString()}</td>
-                                <td className="px-3 py-2 text-right font-medium whitespace-nowrap">{u.totalTokens.toLocaleString()}</td>
-                                <td className="px-3 py-2 text-right whitespace-nowrap">{u.stepIndex ?? '-'}</td>
-                                <td className="px-3 py-2 text-muted-foreground break-all">{u.chatId?.slice(0, 8) || '-'}</td>
+                                <td className="px-3 py-2 text-right whitespace-nowrap">
+                                  {u.promptTokens.toLocaleString()}
+                                </td>
+                                <td className="px-3 py-2 text-right whitespace-nowrap">
+                                  {u.completionTokens.toLocaleString()}
+                                </td>
+                                <td className="px-3 py-2 text-right font-medium whitespace-nowrap">
+                                  {u.totalTokens.toLocaleString()}
+                                </td>
+                                <td className="px-3 py-2 text-right whitespace-nowrap">
+                                  {u.stepIndex ?? '-'}
+                                </td>
+                                <td className="px-3 py-2 text-muted-foreground break-all">
+                                  {u.chatId?.slice(0, 8) || '-'}
+                                </td>
                               </tr>
                             ))}
                             {(!usage || usage.recent.length === 0) && (
                               <tr>
-                                <td colSpan={7} className="px-3 py-4 text-center text-muted-foreground">no usage records</td>
+                                <td
+                                  colSpan={7}
+                                  className="px-3 py-4 text-center text-muted-foreground"
+                                >
+                                  no usage records
+                                </td>
                               </tr>
                             )}
                           </tbody>

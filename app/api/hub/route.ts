@@ -35,10 +35,10 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await tool.execute(args)
-    return new Response(
-      JSON.stringify({ success: true, toolName, args, result }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
-    )
+    return new Response(JSON.stringify({ success: true, toolName, args, result }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
   } catch (error: any) {
     console.error('[HUB] Tool execution failed:', error)
     return new Response(
@@ -47,4 +47,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

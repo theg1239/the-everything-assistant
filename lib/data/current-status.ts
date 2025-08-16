@@ -80,7 +80,7 @@ Campus Status: Busy with examination schedules
       'Carry hall ticket and ID card',
       'Arrive 30 minutes early',
       'Maintain 75% attendance',
-      'Assignment deadline: November 14'
-    ]
+      'Assignment deadline: November 14',
+    ],
   },
 }

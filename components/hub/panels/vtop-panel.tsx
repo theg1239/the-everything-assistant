@@ -3,29 +3,125 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { hasVTOPCredentials, getFormattedVTOPCredentials } from '@/lib/vtop-credentials'
 import { experimental_useObject as useObject } from '@ai-sdk/react'
 import { vtopResultSchema } from '@/app/api/hub/vtop/schema'
 import { VTOPCredentialsDialog } from '@/components/vtop-credentials-dialog'
 
 const VTOP_COMMANDS = [
-  { id: 'attendance', label: 'attendance', category: 'academic', requiresCreds: true, description: 'view class attendance records' },
-  { id: 'timetable', label: 'timetable', category: 'academic', requiresCreds: true, description: 'current semester schedule' },
-  { id: 'marks', label: 'marks', category: 'academic', requiresCreds: true, description: 'exam and assignment marks' },
-  { id: 'grades', label: 'grades', category: 'academic', requiresCreds: true, description: 'final course grades' },
-  { id: 'cgpa', label: 'cgpa', category: 'academic', requiresCreds: true, description: 'cumulative grade point average' },
-  { id: 'exams', label: 'exams', category: 'academic', requiresCreds: true, description: 'exam timetable and details' },
+  {
+    id: 'attendance',
+    label: 'attendance',
+    category: 'academic',
+    requiresCreds: true,
+    description: 'view class attendance records',
+  },
+  {
+    id: 'timetable',
+    label: 'timetable',
+    category: 'academic',
+    requiresCreds: true,
+    description: 'current semester schedule',
+  },
+  {
+    id: 'marks',
+    label: 'marks',
+    category: 'academic',
+    requiresCreds: true,
+    description: 'exam and assignment marks',
+  },
+  {
+    id: 'grades',
+    label: 'grades',
+    category: 'academic',
+    requiresCreds: true,
+    description: 'final course grades',
+  },
+  {
+    id: 'cgpa',
+    label: 'cgpa',
+    category: 'academic',
+    requiresCreds: true,
+    description: 'cumulative grade point average',
+  },
+  {
+    id: 'exams',
+    label: 'exams',
+    category: 'academic',
+    requiresCreds: true,
+    description: 'exam timetable and details',
+  },
   // { id: 'syllabus', label: 'syllabus', category: 'academic', requiresCreds: true, description: 'course curriculum and topics' },
-  { id: 'course-page', label: 'course page', category: 'academic', requiresCreds: true, description: 'search course materials and info' },
-  { id: 'receipts', label: 'fee receipts', category: 'finance', requiresCreds: true, description: 'payment history and receipts' },
-  { id: 'hostel', label: 'hostel info', category: 'services', requiresCreds: true, description: 'hostel details' },
-  { id: 'library-dues', label: 'library dues', category: 'services', requiresCreds: true, description: 'outstanding library dues' },
-  { id: 'nightslip', label: 'night slip', category: 'services', requiresCreds: true, description: 'hostel night out permissions' },
-  { id: 'leave-status', label: 'leave status', category: 'services', requiresCreds: true, description: 'track leave requests' },
-  { id: 'class-message', label: 'class messages', category: 'communication', requiresCreds: true, description: 'class messages' },
-  { id: 'da', label: 'digital assignments', category: 'academic', requiresCreds: true, description: 'assignment deadlines' },
-  { id: 'facility', label: 'facilities', category: 'services', requiresCreds: true, description: 'campus facility bookings' },
+  {
+    id: 'course-page',
+    label: 'course page',
+    category: 'academic',
+    requiresCreds: true,
+    description: 'search course materials and info',
+  },
+  {
+    id: 'receipts',
+    label: 'fee receipts',
+    category: 'finance',
+    requiresCreds: true,
+    description: 'payment history and receipts',
+  },
+  {
+    id: 'hostel',
+    label: 'hostel info',
+    category: 'services',
+    requiresCreds: true,
+    description: 'hostel details',
+  },
+  {
+    id: 'library-dues',
+    label: 'library dues',
+    category: 'services',
+    requiresCreds: true,
+    description: 'outstanding library dues',
+  },
+  {
+    id: 'nightslip',
+    label: 'night slip',
+    category: 'services',
+    requiresCreds: true,
+    description: 'hostel night out permissions',
+  },
+  {
+    id: 'leave-status',
+    label: 'leave status',
+    category: 'services',
+    requiresCreds: true,
+    description: 'track leave requests',
+  },
+  {
+    id: 'class-message',
+    label: 'class messages',
+    category: 'communication',
+    requiresCreds: true,
+    description: 'class messages',
+  },
+  {
+    id: 'da',
+    label: 'digital assignments',
+    category: 'academic',
+    requiresCreds: true,
+    description: 'assignment deadlines',
+  },
+  {
+    id: 'facility',
+    label: 'facilities',
+    category: 'services',
+    requiresCreds: true,
+    description: 'campus facility bookings',
+  },
 ]
 
 const CATEGORIES = {
@@ -42,13 +138,13 @@ const LoadingSkeleton = () => (
         <div className="w-3 h-3 bg-emerald-500/50 rounded-full animate-pulse" />
         <div className="h-4 bg-muted/40 rounded w-48" />
       </div>
-      
+
       <div className="space-y-4">
         <div className="h-6 bg-muted/40 rounded w-3/4" />
         <div className="h-4 bg-muted/30 rounded w-full" />
         <div className="h-4 bg-muted/30 rounded w-5/6" />
         <div className="h-4 bg-muted/20 rounded w-4/5" />
-        
+
         <div className="mt-8 space-y-3">
           <div className="h-4 bg-muted/30 rounded w-2/3" />
           <div className="h-4 bg-muted/20 rounded w-full" />
@@ -56,7 +152,7 @@ const LoadingSkeleton = () => (
           <div className="h-4 bg-muted/20 rounded w-5/6" />
           <div className="h-4 bg-muted/30 rounded w-1/2" />
         </div>
-        
+
         <div className="mt-8 grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <div className="h-3 bg-muted/40 rounded w-full" />
@@ -69,7 +165,7 @@ const LoadingSkeleton = () => (
             <div className="h-3 bg-muted/40 rounded w-1/2" />
           </div>
         </div>
-        
+
         <div className="mt-8 space-y-3">
           <div className="h-4 bg-muted/20 rounded w-full" />
           <div className="h-4 bg-muted/30 rounded w-4/5" />
@@ -84,7 +180,13 @@ const LoadingSkeleton = () => (
 )
 
 export default function VTOPPanel() {
-  const { object, submit, isLoading, stop, error: objectError } = useObject({ api: '/api/hub/vtop', schema: vtopResultSchema }) as any
+  const {
+    object,
+    submit,
+    isLoading,
+    stop,
+    error: objectError,
+  } = useObject({ api: '/api/hub/vtop', schema: vtopResultSchema }) as any
   const [command, setCommand] = useState<string>('')
   const [username, setUsername] = useState('')
   const [encryptedPassword, setEncryptedPassword] = useState('')
@@ -100,19 +202,20 @@ export default function VTOPPanel() {
 
   const filteredCommands = useMemo(() => {
     let filtered = VTOP_COMMANDS
-    
+
     if (selectedCategory !== 'all') {
       filtered = filtered.filter(cmd => cmd.category === selectedCategory)
     }
-    
+
     if (searchTerm) {
-      filtered = filtered.filter(cmd => 
-        cmd.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        cmd.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        cmd.id.toLowerCase().includes(searchTerm.toLowerCase())
+      filtered = filtered.filter(
+        cmd =>
+          cmd.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          cmd.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          cmd.id.toLowerCase().includes(searchTerm.toLowerCase())
       )
     }
-    
+
     return filtered
   }, [selectedCategory, searchTerm])
 
@@ -190,9 +293,9 @@ export default function VTOPPanel() {
                 <span className="text-xs text-muted-foreground font-medium">{linked ? 'linked' : 'auth needed'}</span>
               </div>
             </div> */}
-            
+
             {!linked && (
-              <Button 
+              <Button
                 onClick={() => setShowCreds(true)}
                 className="w-full h-7 text-xs bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 transition-all duration-200 shadow-sm"
               >
@@ -205,7 +308,7 @@ export default function VTOPPanel() {
             <Input
               placeholder="search services..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={e => setSearchTerm(e.target.value)}
               className="h-7 text-xs bg-background/60 border border-border/40 focus:border-border focus:ring-1 focus:ring-primary/20 transition-all duration-200"
             />
 
@@ -216,9 +319,10 @@ export default function VTOPPanel() {
                   onClick={() => setSelectedCategory(key)}
                   className={`
                     px-2 py-1 text-xs rounded-full transition-all duration-200 border shadow-sm
-                    ${selectedCategory === key
-                      ? 'bg-primary text-primary-foreground border-transparent shadow-md'
-                      : 'bg-background/60 text-foreground/80 border-border/40 hover:bg-background/80 hover:border-border/60'
+                    ${
+                      selectedCategory === key
+                        ? 'bg-primary text-primary-foreground border-transparent shadow-md'
+                        : 'bg-background/60 text-foreground/80 border-border/40 hover:bg-background/80 hover:border-border/60'
                     }
                   `}
                 >
@@ -233,7 +337,7 @@ export default function VTOPPanel() {
               {filteredCommands.map((cmd, index) => {
                 const isSelected = command === cmd.id
                 const isDisabled = cmd.requiresCreds && !linked
-                
+
                 return (
                   <button
                     key={cmd.id}
@@ -243,11 +347,12 @@ export default function VTOPPanel() {
                     }}
                     disabled={isDisabled}
                     className={`group w-full p-2.5 text-left rounded-lg transition-all duration-200 border shadow-sm
-                      ${isSelected 
-                        ? 'bg-primary text-primary-foreground border-transparent shadow-md' 
-                        : isDisabled
-                          ? 'bg-muted/30 text-muted-foreground border-border/30 cursor-not-allowed opacity-60'
-                          : 'bg-card/60 text-foreground border-border/40 hover:bg-card/80 hover:border-border/60 hover:shadow-md'
+                      ${
+                        isSelected
+                          ? 'bg-primary text-primary-foreground border-transparent shadow-md'
+                          : isDisabled
+                            ? 'bg-muted/30 text-muted-foreground border-border/30 cursor-not-allowed opacity-60'
+                            : 'bg-card/60 text-foreground border-border/40 hover:bg-card/80 hover:border-border/60 hover:shadow-md'
                       }`}
                   >
                     <div className="flex items-start justify-between">
@@ -261,7 +366,9 @@ export default function VTOPPanel() {
                       </div>
                       <div className="flex flex-col items-end gap-1 ml-2">
                         {cmd.requiresCreds && (
-                          <div className={`w-1.5 h-1.5 rounded-full ${linked ? 'bg-emerald-500' : 'bg-amber-400'} transition-colors duration-300 shadow-sm`} />
+                          <div
+                            className={`w-1.5 h-1.5 rounded-full ${linked ? 'bg-emerald-500' : 'bg-amber-400'} transition-colors duration-300 shadow-sm`}
+                          />
                         )}
                         {isSelected && (
                           <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
@@ -283,10 +390,12 @@ export default function VTOPPanel() {
                   {selectedCommand ? selectedCommand.label : 'select a service'}
                 </h2>
                 <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                  {selectedCommand ? selectedCommand.description : 'choose from the services on the left to get started'}
+                  {selectedCommand
+                    ? selectedCommand.description
+                    : 'choose from the services on the left to get started'}
                 </p>
               </div>
-              
+
               {command && (
                 <div className="flex items-center gap-3 ml-4">
                   {isLoading && (
@@ -297,7 +406,7 @@ export default function VTOPPanel() {
                   )}
                   <div className="flex gap-2">
                     {isLoading && (
-                      <Button 
+                      <Button
                         variant="outline"
                         onClick={stop}
                         className="h-7 px-3 text-xs border-border/50 hover:border-border shadow-sm"
@@ -305,7 +414,7 @@ export default function VTOPPanel() {
                         stop
                       </Button>
                     )}
-                    <Button 
+                    <Button
                       onClick={() => runQuery()}
                       disabled={!canRun}
                       className="h-7 px-4 text-xs shadow-sm"
@@ -330,14 +439,16 @@ export default function VTOPPanel() {
                     <div className="text-xs text-muted-foreground w-24">semester</div>
                     <Select
                       value={extra.semester || (undefined as any)}
-                      onValueChange={(v) => setExtra(prev => ({ ...prev, semester: v }))}
+                      onValueChange={v => setExtra(prev => ({ ...prev, semester: v }))}
                     >
                       <SelectTrigger className="h-7 px-2 text-xs bg-background/70 border-border/50 w-44">
                         <SelectValue placeholder="choose semester" />
                       </SelectTrigger>
                       <SelectContent>
                         {Array.from({ length: 10 }, (_, i) => String(i + 1)).map(n => (
-                          <SelectItem key={n} value={n}>Semester {n}</SelectItem>
+                          <SelectItem key={n} value={n}>
+                            Semester {n}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -380,7 +491,9 @@ export default function VTOPPanel() {
                       <div className="text-xs text-muted-foreground w-24">faculty</div>
                       <Input
                         value={extra.facultyQuery || ''}
-                        onChange={e => setExtra(prev => ({ ...prev, facultyQuery: e.target.value }))}
+                        onChange={e =>
+                          setExtra(prev => ({ ...prev, facultyQuery: e.target.value }))
+                        }
                         placeholder="optional"
                         className="h-7 text-xs bg-background/70 border-border/50 focus:border-border shadow-sm flex-1"
                       />
@@ -397,7 +510,6 @@ export default function VTOPPanel() {
                         </button>
                       ))}
                     </div> */}
-                    
                   </div>
                 )}
               </div>
@@ -412,7 +524,9 @@ export default function VTOPPanel() {
                     <div className="w-12 h-12 rounded-full bg-muted/40 flex items-center justify-center mx-auto border border-border/30">
                       <div className="w-6 h-6 border-2 border-muted-foreground/40 rounded-full border-dashed animate-spin" />
                     </div>
-                    <div className="text-sm text-muted-foreground">waiting for service selection</div>
+                    <div className="text-sm text-muted-foreground">
+                      waiting for service selection
+                    </div>
                   </div>
                 </div>
               )}
@@ -423,7 +537,9 @@ export default function VTOPPanel() {
                     <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center mx-auto text-primary-foreground text-sm font-medium border border-primary/20 shadow-sm">
                       {selectedCommand?.label.charAt(0).toUpperCase()}
                     </div>
-                    <div className="text-sm text-muted-foreground">ready to execute {selectedCommand?.label}</div>
+                    <div className="text-sm text-muted-foreground">
+                      ready to execute {selectedCommand?.label}
+                    </div>
                   </div>
                 </div>
               )}
@@ -431,12 +547,12 @@ export default function VTOPPanel() {
               {!display && isLoading && <LoadingSkeleton />}
 
               {display && (
-                <div 
+                <div
                   className="h-full overflow-y-auto p-4 animate-in fade-in duration-500"
                   key={display.command}
                 >
                   {display.formatted_content ? (
-                    <div 
+                    <div
                       className="prose prose-slate dark:prose-invert max-w-none prose-sm"
                       dangerouslySetInnerHTML={{ __html: display.formatted_content }}
                     />
@@ -461,7 +577,9 @@ export default function VTOPPanel() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <h1 className="text-lg font-semibold text-foreground">vtop</h1>
-              <div className={`w-2 h-2 rounded-full ${linked ? 'bg-emerald-500' : 'bg-amber-500'} shadow-sm`} />
+              <div
+                className={`w-2 h-2 rounded-full ${linked ? 'bg-emerald-500' : 'bg-amber-500'} shadow-sm`}
+              />
             </div>
             <div className="flex items-center gap-2">
               {command && (
@@ -481,7 +599,7 @@ export default function VTOPPanel() {
                 </Button>
               )}
               {!linked && (
-                <Button 
+                <Button
                   onClick={() => setShowCreds(true)}
                   className="h-8 px-3 text-xs bg-primary hover:bg-primary/90 shadow-sm"
                 >
@@ -499,7 +617,7 @@ export default function VTOPPanel() {
                 <Input
                   placeholder="search services..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={e => setSearchTerm(e.target.value)}
                   className="h-8 text-sm border-border/50 shadow-sm"
                 />
                 <div className="flex gap-2 overflow-x-auto pb-1">
@@ -509,9 +627,10 @@ export default function VTOPPanel() {
                       onClick={() => setSelectedCategory(key)}
                       className={`
                         flex-shrink-0 px-3 py-1.5 text-xs rounded-full transition-all duration-200 border shadow-sm
-                        ${selectedCategory === key
-                          ? 'bg-primary text-primary-foreground border-transparent'
-                          : 'bg-card/70 text-foreground border-border/40 hover:bg-card/90'
+                        ${
+                          selectedCategory === key
+                            ? 'bg-primary text-primary-foreground border-transparent'
+                            : 'bg-card/70 text-foreground border-border/40 hover:bg-card/90'
                         }
                       `}
                     >
@@ -523,10 +642,10 @@ export default function VTOPPanel() {
 
               <div className="flex-1 overflow-y-auto p-4 min-h-0">
                 <div className="space-y-2">
-                  {filteredCommands.map((cmd) => {
+                  {filteredCommands.map(cmd => {
                     const isSelected = command === cmd.id
                     const isDisabled = cmd.requiresCreds && !linked
-                    
+
                     return (
                       <button
                         key={cmd.id}
@@ -541,7 +660,7 @@ export default function VTOPPanel() {
                             runQuery(cmd.id)
                           }
                         }}
-                        onTouchEnd={(e) => {
+                        onTouchEnd={e => {
                           if (isDisabled) return
                           const el = e.currentTarget as HTMLElement
                           const last = (el as any)._lastTap || 0
@@ -554,11 +673,12 @@ export default function VTOPPanel() {
                         }}
                         disabled={isDisabled}
                         className={`w-full p-4 text-left rounded-lg transition-all duration-200 border shadow-sm
-                          ${isSelected 
-                            ? 'bg-primary text-primary-foreground border-transparent shadow-md' 
-                            : isDisabled
-                              ? 'bg-muted/30 text-muted-foreground border-border/30 cursor-not-allowed opacity-60'
-                              : 'bg-card/70 text-foreground border-border/40 hover:bg-card/90 hover:shadow-md'
+                          ${
+                            isSelected
+                              ? 'bg-primary text-primary-foreground border-transparent shadow-md'
+                              : isDisabled
+                                ? 'bg-muted/30 text-muted-foreground border-border/30 cursor-not-allowed opacity-60'
+                                : 'bg-card/70 text-foreground border-border/40 hover:bg-card/90 hover:shadow-md'
                           }`}
                       >
                         <div className="flex items-start justify-between">
@@ -568,7 +688,9 @@ export default function VTOPPanel() {
                           </div>
                           <div className="flex flex-col items-end gap-1 ml-3">
                             {cmd.requiresCreds && (
-                              <div className={`w-2 h-2 rounded-full ${linked ? 'bg-emerald-500' : 'bg-amber-400'} shadow-sm`} />
+                              <div
+                                className={`w-2 h-2 rounded-full ${linked ? 'bg-emerald-500' : 'bg-amber-400'} shadow-sm`}
+                              />
                             )}
                             {isSelected && (
                               <div className="w-2 h-2 rounded-full bg-current animate-pulse" />
@@ -598,7 +720,9 @@ export default function VTOPPanel() {
                       {command === 'syllabus' && (
                         <Input
                           value={extra.courseQuery || ''}
-                          onChange={e => setExtra(prev => ({ ...prev, courseQuery: e.target.value }))}
+                          onChange={e =>
+                            setExtra(prev => ({ ...prev, courseQuery: e.target.value }))
+                          }
                           placeholder="course (e.g., fluid mechanics)"
                           className="h-8 text-xs border-border/50 shadow-sm"
                         />
@@ -607,19 +731,25 @@ export default function VTOPPanel() {
                         <>
                           <Input
                             value={extra.courseQuery || ''}
-                            onChange={e => setExtra(prev => ({ ...prev, courseQuery: e.target.value }))}
+                            onChange={e =>
+                              setExtra(prev => ({ ...prev, courseQuery: e.target.value }))
+                            }
                             placeholder="course (e.g., data structures)"
                             className="h-8 text-xs border-border/50 shadow-sm"
                           />
                           <Input
                             value={extra.materialQuery || ''}
-                            onChange={e => setExtra(prev => ({ ...prev, materialQuery: e.target.value }))}
+                            onChange={e =>
+                              setExtra(prev => ({ ...prev, materialQuery: e.target.value }))
+                            }
                             placeholder="materials (e.g., week 5)"
                             className="h-8 text-xs border-border/50 shadow-sm"
                           />
                           <Input
                             value={extra.facultyQuery || ''}
-                            onChange={e => setExtra(prev => ({ ...prev, facultyQuery: e.target.value }))}
+                            onChange={e =>
+                              setExtra(prev => ({ ...prev, facultyQuery: e.target.value }))
+                            }
                             placeholder="faculty (optional)"
                             className="h-8 text-xs border-border/50 shadow-sm"
                           />
@@ -641,11 +771,15 @@ export default function VTOPPanel() {
                       </div>
                       <div className="flex gap-2 ml-3">
                         {isLoading && (
-                          <Button variant="outline" onClick={stop} className="h-8 px-3 text-xs border-border/50 shadow-sm">
+                          <Button
+                            variant="outline"
+                            onClick={stop}
+                            className="h-8 px-3 text-xs border-border/50 shadow-sm"
+                          >
                             stop
                           </Button>
                         )}
-                        <Button 
+                        <Button
                           onClick={() => runQuery()}
                           disabled={!canRun}
                           className="h-8 px-4 text-xs shadow-sm"
@@ -654,7 +788,7 @@ export default function VTOPPanel() {
                         </Button>
                       </div>
                     </div>
-                    
+
                     {localError && (
                       <div className="p-2 bg-red-50 border border-red-200/60 rounded text-xs text-red-700 dark:bg-red-900/20 dark:border-red-800/30 dark:text-red-400 shadow-sm">
                         {localError}
@@ -675,7 +809,9 @@ export default function VTOPPanel() {
                       <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center mx-auto text-primary-foreground text-sm font-medium border border-primary/20 shadow-sm">
                         {selectedCommand?.label.charAt(0).toUpperCase()}
                       </div>
-                      <div className="text-sm text-muted-foreground">ready to execute {selectedCommand?.label}</div>
+                      <div className="text-sm text-muted-foreground">
+                        ready to execute {selectedCommand?.label}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -683,12 +819,12 @@ export default function VTOPPanel() {
                 {!display && isLoading && <LoadingSkeleton />}
 
                 {display && (
-                  <div 
+                  <div
                     className="h-full overflow-y-auto p-4 animate-in fade-in duration-500"
                     key={display.command}
                   >
                     {display.formatted_content ? (
-                      <div 
+                      <div
                         className="prose prose-slate dark:prose-invert max-w-none prose-sm"
                         dangerouslySetInnerHTML={{ __html: display.formatted_content }}
                       />

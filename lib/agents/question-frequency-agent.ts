@@ -43,7 +43,8 @@ export async function analyzeQuestionFrequencies(opts: {
   debug?: boolean
 }) {
   const courseCode = resolveCourse(opts.course || '')
-  if (!courseCode) return { success: false, error: 'Could not resolve course code', input: opts.course }
+  if (!courseCode)
+    return { success: false, error: 'Could not resolve course code', input: opts.course }
 
   const useDB = !!process.env.DATABASE_URL2
   if (!useDB) {
@@ -57,13 +58,17 @@ export async function analyzeQuestionFrequencies(opts: {
 
   const coursePapers = await getCoursePapers(courseCode)
   const filtered = (coursePapers || []).filter(p =>
-    opts.examType ? String(p.exam_type || '').toLowerCase().replace(/[-\s]/g, '') === String(opts.examType).toLowerCase().replace(/[-\s]/g, '') : true
+    opts.examType
+      ? String(p.exam_type || '')
+          .toLowerCase()
+          .replace(/[-\s]/g, '') === String(opts.examType).toLowerCase().replace(/[-\s]/g, '')
+      : true
   )
   const paperIds = filtered.map(p => p.id)
   const loaded = await loadChunksAndQuestions(paperIds)
   const questionsRaw: { paper_id: string; text: string }[] = []
   for (const p of filtered) {
-    const eq = (p.extracted_questions as any) as string[] | undefined
+    const eq = p.extracted_questions as any as string[] | undefined
     if (Array.isArray(eq)) {
       for (const q of eq) questionsRaw.push({ paper_id: p.id, text: String(q) })
     }
@@ -72,9 +77,15 @@ export async function analyzeQuestionFrequencies(opts: {
     if (q && q.question) questionsRaw.push({ paper_id: q.paper_id, text: String(q.question) })
   }
 
-  const byPaper: Map<string, { title: string; year: string; examType: string; url?: string }> = new Map()
+  const byPaper: Map<string, { title: string; year: string; examType: string; url?: string }> =
+    new Map()
   for (const p of filtered) {
-    byPaper.set(p.id, { title: p.title || '', year: p.year || '', examType: p.exam_type || '', url: p.url || undefined })
+    byPaper.set(p.id, {
+      title: p.title || '',
+      year: p.year || '',
+      examType: p.exam_type || '',
+      url: p.url || undefined,
+    })
   }
 
   const normList = questionsRaw
@@ -114,7 +125,31 @@ export async function analyzeQuestionFrequencies(opts: {
     }
   })
 
-  const stop = new Set(['the','a','an','of','to','and','for','in','on','with','by','is','are','be','or','as','from','that','this','it','its','let','given'])
+  const stop = new Set([
+    'the',
+    'a',
+    'an',
+    'of',
+    'to',
+    'and',
+    'for',
+    'in',
+    'on',
+    'with',
+    'by',
+    'is',
+    'are',
+    'be',
+    'or',
+    'as',
+    'from',
+    'that',
+    'this',
+    'it',
+    'its',
+    'let',
+    'given',
+  ])
   const freq = new Map<string, number>()
   for (const q of normList) {
     for (const t of tokens(q.norm)) {

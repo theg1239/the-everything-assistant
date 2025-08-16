@@ -102,7 +102,12 @@ const mathBlockEnv = {
     if (!m) return
     const env = m[1]
     const body = m[2]
-    return { type: 'mathBlockEnv', env, raw: m[0], text: `\\begin{${env}}${body}\\end{${env}}` } as any
+    return {
+      type: 'mathBlockEnv',
+      env,
+      raw: m[0],
+      text: `\\begin{${env}}${body}\\end{${env}}`,
+    } as any
   },
   renderer(token: any) {
     return `<div class="katex-display">${renderMathToHtml(token.text, true)}</div>\n`
@@ -186,10 +191,27 @@ export const MarkdownBlock = memo(function PureMarkdownBlock({
     FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'link', 'style'],
     FORBID_ATTR: ['onerror', 'onload', 'onclick'], // NOTE: allow inline style
     ADD_TAGS: [
-      'math','mrow','mi','mo','mn','msup','msub','msubsup','mfrac','msqrt','mroot','mstyle','mspace','mtable','mtr','mtd',
-      'semantics','annotation','annotation-xml',
+      'math',
+      'mrow',
+      'mi',
+      'mo',
+      'mn',
+      'msup',
+      'msub',
+      'msubsup',
+      'mfrac',
+      'msqrt',
+      'mroot',
+      'mstyle',
+      'mspace',
+      'mtable',
+      'mtr',
+      'mtd',
+      'semantics',
+      'annotation',
+      'annotation-xml',
     ],
-    ADD_ATTR: ['style','display','xmlns','mathvariant','aria-hidden','role','focusable'],
+    ADD_ATTR: ['style', 'display', 'xmlns', 'mathvariant', 'aria-hidden', 'role', 'focusable'],
   })
 
   return (
@@ -207,9 +229,17 @@ export const OptimizedMarkdown = memo(
     return (
       <>
         <style jsx global>{`
-          .prose .katex { font-size: 1em; line-height: inherit; }
-          .prose .katex-display { margin: 0.5rem 0; overflow-x: auto; }
-          .prose .katex-display > .katex { display: inline-block; }
+          .prose .katex {
+            font-size: 1em;
+            line-height: inherit;
+          }
+          .prose .katex-display {
+            margin: 0.5rem 0;
+            overflow-x: auto;
+          }
+          .prose .katex-display > .katex {
+            display: inline-block;
+          }
         `}</style>
         <div className="text-base leading-relaxed prose prose-sm max-w-none dark:prose-invert">
           {Array.from({ length: blockCount }, (_, i) => (

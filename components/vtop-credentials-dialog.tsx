@@ -196,13 +196,13 @@ export function VTOPCredentialsDialog({
                 </label>
               </div> */}
 
-            {/* <div className="flex items-center space-x-3">
+              {/* <div className="flex items-center space-x-3">
               <span className="text-sm text-slate-300 flex items-center">
                 Credentials will be linked for auto-login
               </span>
             </div> */}
 
-            {/* <p className="text-xs text-slate-400 ml-6">
+              {/* <p className="text-xs text-slate-400 ml-6">
               Your credentials will be encrypted and stored for automatic VTOP access
             </p> */}
             </div>
@@ -211,9 +211,7 @@ export function VTOPCredentialsDialog({
               <div className="flex items-start gap-2">
                 <Lock className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
                 <div className="text-xs text-slate-300">
-                  <p>
-                    Your password is always encrypted and stored in your browser locally.
-                  </p>
+                  <p>Your password is always encrypted and stored in your browser locally.</p>
                 </div>
               </div>
             </div>

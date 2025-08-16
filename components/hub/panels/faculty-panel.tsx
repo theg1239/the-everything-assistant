@@ -37,18 +37,37 @@ export default function FacultyPanel() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <Label htmlFor="department">department</Label>
-            <Input id="department" value={department} onChange={e => setDepartment(e.target.value)} placeholder="e.g. CSE, SMEC" />
+            <Input
+              id="department"
+              value={department}
+              onChange={e => setDepartment(e.target.value)}
+              placeholder="e.g. CSE, SMEC"
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="facultyName">faculty Name</Label>
-            <Input id="facultyName" value={facultyName} onChange={e => setFacultyName(e.target.value)} placeholder="Optional" />
+            <Input
+              id="facultyName"
+              value={facultyName}
+              onChange={e => setFacultyName(e.target.value)}
+              placeholder="Optional"
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="courseQuery">course filter</Label>
-            <Input id="courseQuery" value={courseQuery} onChange={e => setCourseQuery(e.target.value)} placeholder="Optional" />
+            <Input
+              id="courseQuery"
+              value={courseQuery}
+              onChange={e => setCourseQuery(e.target.value)}
+              placeholder="Optional"
+            />
           </div>
           <div className="flex items-center space-x-2 pt-4">
-            <Switch id="includeCourses" checked={includeCourses} onCheckedChange={setIncludeCourses} />
+            <Switch
+              id="includeCourses"
+              checked={includeCourses}
+              onCheckedChange={setIncludeCourses}
+            />
             <Label htmlFor="includeCourses" className="text-sm text-muted-foreground">
               include courses taught by faculty
             </Label>
@@ -68,12 +87,17 @@ export default function FacultyPanel() {
           )}
         </div>
 
-        {error && <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">{error}</div>}
+        {error && (
+          <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">{error}</div>
+        )}
 
         {list.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {list.map((f: any, i: number) => (
-              <Card key={i} className="bg-muted/20 border-border/30 hover:bg-muted/40 transition-colors">
+              <Card
+                key={i}
+                className="bg-muted/20 border-border/30 hover:bg-muted/40 transition-colors"
+              >
                 <CardHeader>
                   <CardTitle className="text-base">{f.name}</CardTitle>
                 </CardHeader>
@@ -82,7 +106,11 @@ export default function FacultyPanel() {
                     {f.department && <Badge variant="secondary">{f.department}</Badge>}
                     {f.school && <Badge variant="outline">{f.school}</Badge>}
                   </div>
-                  {f.email && <Badge variant="outline" className="text-xs">{f.email}</Badge>}
+                  {f.email && (
+                    <Badge variant="outline" className="text-xs">
+                      {f.email}
+                    </Badge>
+                  )}
                 </CardContent>
                 {Array.isArray(f.courses) && f.courses.length > 0 && (
                   <CardFooter className="flex-col items-start gap-2 pt-4">
@@ -92,7 +120,9 @@ export default function FacultyPanel() {
                     </div>
                     <ul className="text-xs text-muted-foreground list-disc pl-5 space-y-1">
                       {f.courses.map((c: any, idx: number) => (
-                        <li key={idx}>{c.code}: {c.title}</li>
+                        <li key={idx}>
+                          {c.code}: {c.title}
+                        </li>
                       ))}
                     </ul>
                   </CardFooter>

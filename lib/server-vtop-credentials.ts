@@ -32,7 +32,10 @@ export async function getSavedVTOPCredentials(): Promise<SavedVTOPCredentials | 
   }
 }
 
-export async function getDecryptedVTOPCredentials(): Promise<{ username: string; password: string } | null> {
+export async function getDecryptedVTOPCredentials(): Promise<{
+  username: string
+  password: string
+} | null> {
   try {
     const saved = await getSavedVTOPCredentials()
     if (!saved) return null

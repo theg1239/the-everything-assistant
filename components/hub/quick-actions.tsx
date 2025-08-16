@@ -6,7 +6,16 @@ import { hasVTOPCredentials } from '@/lib/vtop-credentials'
 import { experimental_useObject as useObject } from '@ai-sdk/react'
 import { vtopResultSchema } from '@/app/api/hub/vtop/schema'
 import { useHubTool } from './use-hub-tool'
-import { CalendarClock, ClipboardCheck, UtensilsCrossed, FileSearch, Briefcase, Loader2, Users, Flame } from 'lucide-react'
+import {
+  CalendarClock,
+  ClipboardCheck,
+  UtensilsCrossed,
+  FileSearch,
+  Briefcase,
+  Loader2,
+  Users,
+  Flame,
+} from 'lucide-react'
 
 interface QuickActionsProps {
   onShowResult: (title: string, result: any) => void
@@ -26,14 +35,16 @@ export default function QuickActions({ onShowResult, onShowStream, goTo }: Quick
   const runAttendance = async () => {
     if (!linked) return goTo('vtop')
     await attendance.submit({ command: 'attendance', extras: {} })
-    if (onShowStream) onShowStream('attendance', attendance.object, attendance.isLoading, attendance.stop)
+    if (onShowStream)
+      onShowStream('attendance', attendance.object, attendance.isLoading, attendance.stop)
     setStartedAttendance(true)
   }
 
   const runTimetable = async () => {
     if (!linked) return goTo('vtop')
     await timetable.submit({ command: 'timetable', extras: {} })
-    if (onShowStream) onShowStream('timetable', timetable.object, timetable.isLoading, timetable.stop)
+    if (onShowStream)
+      onShowStream('timetable', timetable.object, timetable.isLoading, timetable.stop)
     setStartedTimetable(true)
   }
 
@@ -160,7 +171,21 @@ export default function QuickActions({ onShowResult, onShowStream, goTo }: Quick
   )
 }
 
-function ActionButton({ label, icon, onClick, loading, disabled, ariaLabel }: { label: string; icon?: React.ReactNode; onClick: () => void; loading?: boolean; disabled?: boolean; ariaLabel?: string }) {
+function ActionButton({
+  label,
+  icon,
+  onClick,
+  loading,
+  disabled,
+  ariaLabel,
+}: {
+  label: string
+  icon?: React.ReactNode
+  onClick: () => void
+  loading?: boolean
+  disabled?: boolean
+  ariaLabel?: string
+}) {
   return (
     <Button
       size="sm"

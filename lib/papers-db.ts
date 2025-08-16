@@ -110,7 +110,10 @@ export async function insertPaper(meta: {
   return row?.id || id
 }
 
-export async function upsertChunks(paperId: string, chunks: { index: number; text: string; embedding: number[] }[]) {
+export async function upsertChunks(
+  paperId: string,
+  chunks: { index: number; text: string; embedding: number[] }[]
+) {
   if (!chunks.length) return
   const db = getPool()
   const values: any[] = []
@@ -129,7 +132,10 @@ export async function upsertChunks(paperId: string, chunks: { index: number; tex
   )
 }
 
-export async function upsertQuestionEmbeddings(paperId: string, questions: { index: number; question: string; embedding: number[] }[]) {
+export async function upsertQuestionEmbeddings(
+  paperId: string,
+  questions: { index: number; question: string; embedding: number[] }[]
+) {
   if (!questions.length) return
   const db = getPool()
   const values: any[] = []
@@ -200,7 +206,13 @@ export async function loadChunksAndQuestions(paperIds: string[]) {
   return { chunks: r1.rows, questions: r2.rows }
 }
 
-export async function semanticRankQuestion(courseCode: string, qEmbedding: number[], limit = 10, examType?: string, year?: string) {
+export async function semanticRankQuestion(
+  courseCode: string,
+  qEmbedding: number[],
+  limit = 10,
+  examType?: string,
+  year?: string
+) {
   const db = getPool()
   const r = await db.query(
     `SELECT p.id as paper_id, p.title, p.exam_type, p.year,
@@ -224,15 +236,20 @@ export async function getIndexMetaById(indexId: string) {
     `SELECT id, course_code, exam_type, year, created_at FROM paper_indexes WHERE id=$1`,
     [indexId]
   )
-  return r.rows[0] as { id: string; course_code: string; exam_type: string | null; year: string | null; created_at: string } | undefined
+  return r.rows[0] as
+    | {
+        id: string
+        course_code: string
+        exam_type: string | null
+        year: string | null
+        created_at: string
+      }
+    | undefined
 }
 
 export async function getIndexPaperIds(indexId: string) {
   const db = getPool()
-  const r = await db.query(
-    `SELECT paper_id FROM paper_index_papers WHERE index_id=$1`,
-    [indexId]
-  )
+  const r = await db.query(`SELECT paper_id FROM paper_index_papers WHERE index_id=$1`, [indexId])
   return r.rows.map(row => row.paper_id as string)
 }
 
@@ -246,7 +263,12 @@ export async function getPapersByIds(ids: string[]) {
   return r.rows as DBPaperMeta[]
 }
 
-export async function questionEmbeddingScores(courseCode: string, qEmbedding: number[], examType?: string, year?: string) {
+export async function questionEmbeddingScores(
+  courseCode: string,
+  qEmbedding: number[],
+  examType?: string,
+  year?: string
+) {
   const db = getPool()
   const r = await db.query(
     `SELECT p.id as paper_id, MAX(1 - (qe.embedding <=> $1)) as question_score

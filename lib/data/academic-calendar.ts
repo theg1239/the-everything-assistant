@@ -1,4 +1,4 @@
-import { ContextData } from './index';
+import { ContextData } from './index'
 
 export const academicCalendar: ContextData = {
   section: 'academic-calendar',
@@ -396,14 +396,14 @@ Final Examinations:
 - Saturday, November 15, 2025: (Lab FAT. Last Instructional day for theory) (Lab FAT. Last Instructional day for theory)
 `,
   metadata: {
-  "currentSemester": "Fall 2025-26",
-  "nextImportantDate": "2025-07-24",
-  "academicYear": "2025-26",
-  "semesterStart": "2025-07-08",
-  "semesterEnd": "2025-11-14",
-  "cat1Period": "TBD",
-  "cat2Period": "TBD",
-  "fatPeriod": "November 10-15, 2025",
-  "deanAcademics": "M. Anthony Xavior PhD"
-},
-};
+    currentSemester: 'Fall 2025-26',
+    nextImportantDate: '2025-07-24',
+    academicYear: '2025-26',
+    semesterStart: '2025-07-08',
+    semesterEnd: '2025-11-14',
+    cat1Period: 'TBD',
+    cat2Period: 'TBD',
+    fatPeriod: 'November 10-15, 2025',
+    deanAcademics: 'M. Anthony Xavior PhD',
+  },
+}

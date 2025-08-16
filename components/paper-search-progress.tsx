@@ -1,4 +1,4 @@
-"use client"
+'use client'
 import React, { useEffect, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -31,7 +31,11 @@ const LABELS: Record<string, string> = {
 }
 
 function formatTime(ts: number) {
-  return new Date(ts).toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' })
+  return new Date(ts).toLocaleTimeString([], {
+    hour12: false,
+    minute: '2-digit',
+    second: '2-digit',
+  })
 }
 
 export function PaperSearchProgress({ runId }: { runId: string }) {
@@ -66,13 +70,22 @@ export function PaperSearchProgress({ runId }: { runId: string }) {
           <ul className="space-y-2 text-xs">
             {events.map((e, i) => {
               const label = LABELS[e.step] || e.step
-              const isError = ['paperDownloadFailed', 'paperTextInsufficient', 'questionEmbeddingsFailed'].includes(e.step)
+              const isError = [
+                'paperDownloadFailed',
+                'paperTextInsufficient',
+                'questionEmbeddingsFailed',
+              ].includes(e.step)
               return (
                 <li key={i} className="flex items-start gap-2">
-                  <span className="text-[10px] text-muted-foreground mt-0.5 w-14 shrink-0 tabular-nums">{formatTime(e.ts)}</span>
+                  <span className="text-[10px] text-muted-foreground mt-0.5 w-14 shrink-0 tabular-nums">
+                    {formatTime(e.ts)}
+                  </span>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <Badge variant={isError ? 'destructive' : 'secondary'} className="h-4 px-1.5 text-[10px] capitalize">
+                      <Badge
+                        variant={isError ? 'destructive' : 'secondary'}
+                        className="h-4 px-1.5 text-[10px] capitalize"
+                      >
                         {label}
                       </Badge>
                       {e.detail?.title && (

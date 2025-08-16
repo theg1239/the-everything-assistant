@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, memo, useCallback } from 'react' 
+import { useState, useRef, useEffect, memo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useChat, type Message as AIMessage } from '@ai-sdk/react'
 import { useRouter } from 'next/navigation'
@@ -118,7 +118,7 @@ const PureChatInterface = memo(
     const [showFullChat, setShowFullChat] = useState(initialMessages.length > 0)
     const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebar()
     const [hubOpen, setHubOpen] = useState(false)
-  const [vtopLoading, setVtopLoading] = useState(false)
+    const [vtopLoading, setVtopLoading] = useState(false)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [hasUserInitiatedConversation, setHasUserInitiatedConversation] = useState(false)
     const [isInitialRender, setIsInitialRender] = useState(true)
@@ -147,7 +147,11 @@ const PureChatInterface = memo(
 
     const mainRef = useViewportHeight()
 
-  const [vtopDisclaimer, setVtopDisclaimer] = useState<{ toolCallId: string; command: string; message: string } | null>(null)
+    const [vtopDisclaimer, setVtopDisclaimer] = useState<{
+      toolCallId: string
+      command: string
+      message: string
+    } | null>(null)
     useEffect(() => {
       const onDisclaimer = (e: any) => {
         const d = e?.detail
@@ -155,7 +159,8 @@ const PureChatInterface = memo(
         setVtopDisclaimer({ toolCallId: d.toolCallId, command: d.command, message: d.message })
       }
       window.addEventListener('vtopCredentialsDisclaimer', onDisclaimer as EventListener)
-      return () => window.removeEventListener('vtopCredentialsDisclaimer', onDisclaimer as EventListener)
+      return () =>
+        window.removeEventListener('vtopCredentialsDisclaimer', onDisclaimer as EventListener)
     }, [])
 
     useEffect(() => {
@@ -336,7 +341,8 @@ const PureChatInterface = memo(
           errorMessage.includes('INVALID_ARGUMENT') ||
           errorMessage.includes('GenerateContentRequest.contents') ||
           errorMessage.includes('streamGenerateContent') ||
-          (typeof responseBody === 'string' && responseBody.includes('contents.parts must not be empty'))
+          (typeof responseBody === 'string' &&
+            responseBody.includes('contents.parts must not be empty'))
 
         const isRateLimit = checkForRateLimitError(err)
         if (!isRateLimit && !isGeminiStreamingError) {
@@ -355,7 +361,10 @@ const PureChatInterface = memo(
     })
 
     const scrollToBottom = useCallback(() => {
-      const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      const prefersReducedMotion =
+        typeof window !== 'undefined' &&
+        window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches
       if (!messagesEndRef.current) return
       const container = contentRef.current?.parentElement
       const scrollBehavior: ScrollBehavior = isLoading || prefersReducedMotion ? 'auto' : 'smooth'
@@ -409,19 +418,23 @@ const PureChatInterface = memo(
       }
     }, [initialMessages.length, showFullChat])
 
-  const throttledScrollToBottom = useThrottle(scrollToBottom, 50)
+    const throttledScrollToBottom = useThrottle(scrollToBottom, 50)
 
-  useEffect(() => {
+    useEffect(() => {
       // Global keyboard shortcuts: focus composer with '/', blur with Escape
       const handleGlobalKeyDown = (e: KeyboardEvent) => {
         const target = e.target as HTMLElement | null
-        const isTypingField = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+        const isTypingField =
+          target &&
+          (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
 
         // Focus chat input with '/'
         if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
           if (!isTypingField) {
             e.preventDefault()
-            const textarea = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message input"]')
+            const textarea = document.querySelector<HTMLTextAreaElement>(
+              'textarea[aria-label="Message input"]'
+            )
             textarea?.focus()
           }
         }
@@ -500,14 +513,16 @@ const PureChatInterface = memo(
     useEffect(() => {
       if (error) {
         const errorMessage = error.message || error.toString()
-        const hasResponseBody = typeof error === 'object' && error !== null && 'responseBody' in error
+        const hasResponseBody =
+          typeof error === 'object' && error !== null && 'responseBody' in error
         const responseBody = hasResponseBody ? (error as any).responseBody : ''
 
         const isGeminiStreamingError =
           errorMessage.includes('contents.parts must not be empty') ||
           errorMessage.includes('INVALID_ARGUMENT') ||
           errorMessage.includes('GenerateContentRequest') ||
-          (typeof responseBody === 'string' && responseBody.includes('contents.parts must not be empty'))
+          (typeof responseBody === 'string' &&
+            responseBody.includes('contents.parts must not be empty'))
 
         if (isGeminiStreamingError) {
           setErrorMessage('An error occurred. Please start a new chat.')
@@ -706,7 +721,7 @@ const PureChatInterface = memo(
           return base
         })
 
-  const response = await fetch('/api/chat', {
+        const response = await fetch('/api/chat', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -730,150 +745,150 @@ const PureChatInterface = memo(
         if (response.ok) {
           const responseText = await response.text()
 
-function parseVTOPResponse(raw: string) {
-  if (!raw || typeof raw !== 'string') {
-    throw new Error('Empty response');
-  }
+          function parseVTOPResponse(raw: string) {
+            if (!raw || typeof raw !== 'string') {
+              throw new Error('Empty response')
+            }
 
-  const trimmed = raw.trim();
+            const trimmed = raw.trim()
 
-  // Fast path: entire body is a single JSON doc
-  if (/^[\[{]/.test(trimmed)) {
-    try {
-      return JSON.parse(trimmed);
-    } catch (e: any) {
-      // keep going; might be framed
-    }
-  }
+            // Fast path: entire body is a single JSON doc
+            if (/^[\[{]/.test(trimmed)) {
+              try {
+                return JSON.parse(trimmed)
+              } catch (e: any) {
+                // keep going; might be framed
+              }
+            }
 
-  // Tokenize into frames. A frame looks like: "<prefix>:<payload...>"
-  // Payload can span multiple lines until the next "<prefix>:"
-  const lines = raw.replace(/\r/g, '').split('\n');
-  const frameHeader = /^([a-z0-9]):(.*)$/i;
+            // Tokenize into frames. A frame looks like: "<prefix>:<payload...>"
+            // Payload can span multiple lines until the next "<prefix>:"
+            const lines = raw.replace(/\r/g, '').split('\n')
+            const frameHeader = /^([a-z0-9]):(.*)$/i
 
-  type Frame = { prefix: string; payload: string };
-  const frames: Frame[] = [];
+            type Frame = { prefix: string; payload: string }
+            const frames: Frame[] = []
 
-  let current: Frame | null = null;
+            let current: Frame | null = null
 
-  const flush = () => {
-    if (current) {
-      // trim only trailing newlines; keep inner newlines
-      current.payload = current.payload.replace(/\n$/, '');
-      frames.push(current);
-      current = null;
-    }
-  };
+            const flush = () => {
+              if (current) {
+                // trim only trailing newlines; keep inner newlines
+                current.payload = current.payload.replace(/\n$/, '')
+                frames.push(current)
+                current = null
+              }
+            }
 
-  for (let i = 0; i < lines.length; i++) {
-    const rawLine = lines[i];
-    const line = rawLine; // keep exact spacing; payload might be HTML
-    const m = line.match(frameHeader);
+            for (let i = 0; i < lines.length; i++) {
+              const rawLine = lines[i]
+              const line = rawLine // keep exact spacing; payload might be HTML
+              const m = line.match(frameHeader)
 
-    if (m) {
-      // New frame starts; flush the previous one
-      flush();
-      current = { prefix: m[1], payload: m[2] ?? '' };
-      if (i < lines.length - 1) current.payload += '\n'; // preserve newline after first line
-    } else {
-      // Continuation of current frame’s payload (if any)
-      if (current) {
-        current.payload += line + (i < lines.length - 1 ? '\n' : '');
-      } else {
-        // Orphan line — ignore; not part of a frame
-      }
-    }
-  }
-  flush();
+              if (m) {
+                // New frame starts; flush the previous one
+                flush()
+                current = { prefix: m[1], payload: m[2] ?? '' }
+                if (i < lines.length - 1) current.payload += '\n' // preserve newline after first line
+              } else {
+                // Continuation of current frame’s payload (if any)
+                if (current) {
+                  current.payload += line + (i < lines.length - 1 ? '\n' : '')
+                } else {
+                  // Orphan line — ignore; not part of a frame
+                }
+              }
+            }
+            flush()
 
-  // Helpers
-  const safeParseJSON = (s: string) => {
-    const t = s.trim();
-    // If payload contains multiple JSON docs concatenated, try to take the largest {...} or [...]
-    if (!/^[\[{]/.test(t)) throw new Error('Not JSON');
-    try {
-      return JSON.parse(t);
-    } catch (_) {
-      // Try to extract the outermost JSON block
-      const firstBrace = t.indexOf('{');
-      const lastBrace = t.lastIndexOf('}');
-      const firstBracket = t.indexOf('[');
-      const lastBracket = t.lastIndexOf(']');
-      const sliceObject =
-        firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace
-          ? t.slice(firstBrace, lastBrace + 1)
-          : null;
-      const sliceArray =
-        firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket
-          ? t.slice(firstBracket, lastBracket + 1)
-          : null;
-      const candidate = sliceObject ?? sliceArray;
-      if (!candidate) throw new Error('JSON extract failed');
-      return JSON.parse(candidate);
-    }
-  };
+            // Helpers
+            const safeParseJSON = (s: string) => {
+              const t = s.trim()
+              // If payload contains multiple JSON docs concatenated, try to take the largest {...} or [...]
+              if (!/^[\[{]/.test(t)) throw new Error('Not JSON')
+              try {
+                return JSON.parse(t)
+              } catch (_) {
+                // Try to extract the outermost JSON block
+                const firstBrace = t.indexOf('{')
+                const lastBrace = t.lastIndexOf('}')
+                const firstBracket = t.indexOf('[')
+                const lastBracket = t.lastIndexOf(']')
+                const sliceObject =
+                  firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace
+                    ? t.slice(firstBrace, lastBrace + 1)
+                    : null
+                const sliceArray =
+                  firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket
+                    ? t.slice(firstBracket, lastBracket + 1)
+                    : null
+                const candidate = sliceObject ?? sliceArray
+                if (!candidate) throw new Error('JSON extract failed')
+                return JSON.parse(candidate)
+              }
+            }
 
-  const decodePossibleJSONString = (s: string) => {
-    const t = s.trim();
-    // If it looks like a *single-line* quoted JSON string, try JSON.parse
-    if (t.startsWith('"') && t.endsWith('"') && !t.includes('\n')) {
-      try {
-        return JSON.parse(t); // unescapes \n, \", etc.
-      } catch {
-        // fall through to raw
-      }
-    }
-    // Otherwise treat as raw text. If it’s multi-line and starts/ends with a bare quote, strip it.
-    if (t.startsWith('"') && t.endsWith('"')) {
-      return t.slice(1, -1);
-    }
-    return s;
-  };
+            const decodePossibleJSONString = (s: string) => {
+              const t = s.trim()
+              // If it looks like a *single-line* quoted JSON string, try JSON.parse
+              if (t.startsWith('"') && t.endsWith('"') && !t.includes('\n')) {
+                try {
+                  return JSON.parse(t) // unescapes \n, \", etc.
+                } catch {
+                  // fall through to raw
+                }
+              }
+              // Otherwise treat as raw text. If it’s multi-line and starts/ends with a bare quote, strip it.
+              if (t.startsWith('"') && t.endsWith('"')) {
+                return t.slice(1, -1)
+              }
+              return s
+            }
 
-  // Collect frames
-  const toolFrames: any[] = [];
-  const textChunks: string[] = [];
+            // Collect frames
+            const toolFrames: any[] = []
+            const textChunks: string[] = []
 
-  for (const f of frames) {
-    const payload = f.payload ?? '';
+            for (const f of frames) {
+              const payload = f.payload ?? ''
 
-    if (f.prefix === 'a' || f.prefix === '9' || f.prefix === 'e') {
-      // JSON-ish frames
-      // Some backends sometimes include leading noise; be forgiving
-      const trimmedPayload = payload.trim();
-      try {
-        const parsed = safeParseJSON(trimmedPayload);
-        if (f.prefix === 'a') toolFrames.push(parsed);
-        // we rarely need '9' or 'e' here, but keeping parity with your original logic
-      } catch {
-        // ignore unparseable diagnostic lines (e.g., "still")
-      }
-    } else if (f.prefix === '0') {
-      // Text frame: keep all lines; do not JSON.parse unless it's clearly a single-line JSON string
-      textChunks.push(decodePossibleJSONString(payload));
-    } else {
-      // Unknown prefix; ignore
-    }
-  }
+              if (f.prefix === 'a' || f.prefix === '9' || f.prefix === 'e') {
+                // JSON-ish frames
+                // Some backends sometimes include leading noise; be forgiving
+                const trimmedPayload = payload.trim()
+                try {
+                  const parsed = safeParseJSON(trimmedPayload)
+                  if (f.prefix === 'a') toolFrames.push(parsed)
+                  // we rarely need '9' or 'e' here, but keeping parity with your original logic
+                } catch {
+                  // ignore unparseable diagnostic lines (e.g., "still")
+                }
+              } else if (f.prefix === '0') {
+                // Text frame: keep all lines; do not JSON.parse unless it's clearly a single-line JSON string
+                textChunks.push(decodePossibleJSONString(payload))
+              } else {
+                // Unknown prefix; ignore
+              }
+            }
 
-  // Prefer the last a: frame that has a "result"
-  const chosen =
-    [...toolFrames].reverse().find((x) => x && typeof x === 'object' && 'result' in x) ??
-    [...toolFrames].reverse().find((x) => x); // fallback to any 'a' frame
+            // Prefer the last a: frame that has a "result"
+            const chosen =
+              [...toolFrames].reverse().find(x => x && typeof x === 'object' && 'result' in x) ??
+              [...toolFrames].reverse().find(x => x) // fallback to any 'a' frame
 
-  if (chosen && chosen.result !== undefined) {
-    return { result: chosen.result };
-  }
-  if (chosen) {
-    return { result: chosen }; // sometimes the object itself is the result
-  }
-  if (textChunks.length) {
-    return { result: { success: true, output: textChunks.join('\n') } };
-  }
+            if (chosen && chosen.result !== undefined) {
+              return { result: chosen.result }
+            }
+            if (chosen) {
+              return { result: chosen } // sometimes the object itself is the result
+            }
+            if (textChunks.length) {
+              return { result: { success: true, output: textChunks.join('\n') } }
+            }
 
-  // Nothing usable found
-  throw new Error('No parsable tool frames found in streaming response');
-}
+            // Nothing usable found
+            throw new Error('No parsable tool frames found in streaming response')
+          }
 
           let result: any
           try {
@@ -885,7 +900,7 @@ function parseVTOPResponse(raw: string) {
             setVtopLoading(false)
             return
           }
-          
+
           if (toolCallId) {
             updateToolResult(toolCallId, command, result.result)
           }
@@ -976,9 +991,7 @@ function parseVTOPResponse(raw: string) {
               // Track last assistant message text for follow-up suggestions
               try {
                 setLastAssistantMessage(
-                  formattedContent.length > 400
-                    ? formattedContent.slice(0, 400)
-                    : formattedContent
+                  formattedContent.length > 400 ? formattedContent.slice(0, 400) : formattedContent
                 )
               } catch {}
             }
@@ -1095,145 +1108,163 @@ function parseVTOPResponse(raw: string) {
       }
     }, [messages, updateToolResult])
 
-  if (!showFullChat) {
-    return (
-      <VTOPToolHandler
-        toolInvocations={messages[messages.length - 1]?.toolInvocations}
-        onCredentialsSubmit={handleVTOPCredentials}
-      >
-        <UpsellBanner />
-        <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
-        <Hub
-          isOpen={hubOpen}
-          onClose={() => {
-            setHubOpen(false)
-          }}
-        />
-        <div className="flex flex-col h-[100dvh] bg-transparent text-foreground relative overflow-hidden mobile-viewport-fix">
-          <div className="relative z-10 flex flex-col h-full">
-            <header className="flex-shrink-0 sticky top-0 z-40">
-              <div className="flex h-14 items-center px-4 gap-2">
-                <HamburgerButton onClick={toggleSidebar} className="md:hidden" />
-              </div>
-            </header>
-            <div className="flex-1 flex flex-col items-center justify-center px-4 space-y-8 overflow-y-auto overflow-fix pt-6 md:pt-0">
-              <ChatHeader />
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
-                className="w-full max-w-3xl"
-              >
-                <MultimodalInput
-                  input={input}
-                  setInput={setInput}
-                  handleSubmit={handleFormSubmit}
-                  isLoading={isLoading}
-                  onToolSelect={handleToolSelection}
-                  selectedTool={selectedTool}
-                  placeholder="ask anything..."
-                />{' '}
-              </motion.div>
-
-
-              <div className="w-full max-w-5xl flex justify-center -mt-3">
+    if (!showFullChat) {
+      return (
+        <VTOPToolHandler
+          toolInvocations={messages[messages.length - 1]?.toolInvocations}
+          onCredentialsSubmit={handleVTOPCredentials}
+        >
+          <UpsellBanner />
+          <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
+          <Hub
+            isOpen={hubOpen}
+            onClose={() => {
+              setHubOpen(false)
+            }}
+          />
+          <div className="flex flex-col h-[100dvh] bg-transparent text-foreground relative overflow-hidden mobile-viewport-fix">
+            <div className="relative z-10 flex flex-col h-full">
+              <header className="flex-shrink-0 sticky top-0 z-40">
+                <div className="flex h-14 items-center px-4 gap-2">
+                  <HamburgerButton onClick={toggleSidebar} className="md:hidden" />
+                </div>
+              </header>
+              <div className="flex-1 flex flex-col items-center justify-center px-4 space-y-8 overflow-y-auto overflow-fix pt-6 md:pt-0">
+                <ChatHeader />
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
+                  className="w-full max-w-3xl"
                 >
-                  <button
-                    onClick={() => setHubOpen(true)}
-                    aria-label="Open hub"
-                    className="hub-gradient-btn"
-                    style={{ minWidth: '320px', paddingLeft: '32px', paddingRight: '32px' }}
-                  >
-                    <span className="hub-gradient-inner">
-                      <GraduationCap className="h-4 w-4 mr-2" />
-                      <span>hub</span>
-                    </span>
-                  </button>
+                  <MultimodalInput
+                    input={input}
+                    setInput={setInput}
+                    handleSubmit={handleFormSubmit}
+                    isLoading={isLoading}
+                    onToolSelect={handleToolSelection}
+                    selectedTool={selectedTool}
+                    placeholder="ask anything..."
+                  />{' '}
                 </motion.div>
 
-                <style jsx>{`
-                  .hub-gradient-btn {
-                    position: relative;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    height: 40px;
-                    padding: 0 14px;
-                    border-radius: 9999px;
-                    border: 1px solid rgba(255,255,255,0.08);
-                    cursor: pointer;
-                    color: var(--card-foreground);
-                    background: linear-gradient(90deg,
-                      rgba(110,231,249,0.25) 0%,
-                      rgba(167,139,250,0.25) 25%,
-                      rgba(244,114,182,0.25) 50%,
-                      rgba(245,158,11,0.25) 75%,
-                      rgba(110,231,249,0.25) 100%
-                    );
-                    backdrop-filter: blur(8px);
-                    -webkit-backdrop-filter: blur(8px);
-                    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
-                    transition: transform 160ms ease, box-shadow 200ms ease, border-color 200ms ease;
-                    overflow: hidden;
-                  }
-                  .hub-gradient-btn::before {
-                    content: '';
-                    position: absolute;
-                    inset: -2px;
-                    border-radius: inherit;
-                    background: linear-gradient(90deg, #6EE7F9, #A78BFA, #F472B6, #F59E0B, #6EE7F9);
-                    background-size: 200% 200%;
-                    filter: blur(10px);
-                    opacity: 0.45;
-                    z-index: 0;
-                    animation: hub-shine 5s linear infinite;
-                  }
-                  .hub-gradient-btn:hover {
-                    transform: translateY(-1px) scale(1.02);
-                    box-shadow: 0 8px 22px rgba(0,0,0,0.35);
-                    border-color: rgba(255,255,255,0.12);
-                  }
-                  .hub-gradient-inner {
-                    position: relative;
-                    z-index: 1;
-                    display: inline-flex;
-                    align-items: center;
-                    font-size: 0.9rem;
-                    line-height: 1;
-                    font-weight: 500;
-                    color: hsl(var(--foreground));
-                  }
-                  .hub-gradient-inner :global(svg) {
-                    color: hsl(var(--foreground));
-                  }
-                  .hub-gradient-btn::after {
-                    content: '';
-                    position: absolute;
-                    inset: 0;
-                    border-radius: inherit;
-                    background: radial-gradient(120% 120% at 50% 100%, rgba(255,255,255,0.06) 0%, transparent 55%);
-                    z-index: 1;
-                    pointer-events: none;
-                  }
-                  @keyframes hub-shine {
-                    0% { background-position: 0% 50%; }
-                    50% { background-position: 100% 50%; }
-                    100% { background-position: 0% 50%; }
-                  }
-                `}</style>
-              </div>
+                <div className="w-full max-w-5xl flex justify-center -mt-3">
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
+                  >
+                    <button
+                      onClick={() => setHubOpen(true)}
+                      aria-label="Open hub"
+                      className="hub-gradient-btn"
+                      style={{ minWidth: '320px', paddingLeft: '32px', paddingRight: '32px' }}
+                    >
+                      <span className="hub-gradient-inner">
+                        <GraduationCap className="h-4 w-4 mr-2" />
+                        <span>hub</span>
+                      </span>
+                    </button>
+                  </motion.div>
 
-              {errorMessage && (
-                <StreamingErrorDisplay message={errorMessage} />
-              )}
+                  <style jsx>{`
+                    .hub-gradient-btn {
+                      position: relative;
+                      display: inline-flex;
+                      align-items: center;
+                      justify-content: center;
+                      height: 40px;
+                      padding: 0 14px;
+                      border-radius: 9999px;
+                      border: 1px solid rgba(255, 255, 255, 0.08);
+                      cursor: pointer;
+                      color: var(--card-foreground);
+                      background: linear-gradient(
+                        90deg,
+                        rgba(110, 231, 249, 0.25) 0%,
+                        rgba(167, 139, 250, 0.25) 25%,
+                        rgba(244, 114, 182, 0.25) 50%,
+                        rgba(245, 158, 11, 0.25) 75%,
+                        rgba(110, 231, 249, 0.25) 100%
+                      );
+                      backdrop-filter: blur(8px);
+                      -webkit-backdrop-filter: blur(8px);
+                      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+                      transition:
+                        transform 160ms ease,
+                        box-shadow 200ms ease,
+                        border-color 200ms ease;
+                      overflow: hidden;
+                    }
+                    .hub-gradient-btn::before {
+                      content: '';
+                      position: absolute;
+                      inset: -2px;
+                      border-radius: inherit;
+                      background: linear-gradient(
+                        90deg,
+                        #6ee7f9,
+                        #a78bfa,
+                        #f472b6,
+                        #f59e0b,
+                        #6ee7f9
+                      );
+                      background-size: 200% 200%;
+                      filter: blur(10px);
+                      opacity: 0.45;
+                      z-index: 0;
+                      animation: hub-shine 5s linear infinite;
+                    }
+                    .hub-gradient-btn:hover {
+                      transform: translateY(-1px) scale(1.02);
+                      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+                      border-color: rgba(255, 255, 255, 0.12);
+                    }
+                    .hub-gradient-inner {
+                      position: relative;
+                      z-index: 1;
+                      display: inline-flex;
+                      align-items: center;
+                      font-size: 0.9rem;
+                      line-height: 1;
+                      font-weight: 500;
+                      color: hsl(var(--foreground));
+                    }
+                    .hub-gradient-inner :global(svg) {
+                      color: hsl(var(--foreground));
+                    }
+                    .hub-gradient-btn::after {
+                      content: '';
+                      position: absolute;
+                      inset: 0;
+                      border-radius: inherit;
+                      background: radial-gradient(
+                        120% 120% at 50% 100%,
+                        rgba(255, 255, 255, 0.06) 0%,
+                        transparent 55%
+                      );
+                      z-index: 1;
+                      pointer-events: none;
+                    }
+                    @keyframes hub-shine {
+                      0% {
+                        background-position: 0% 50%;
+                      }
+                      50% {
+                        background-position: 100% 50%;
+                      }
+                      100% {
+                        background-position: 0% 50%;
+                      }
+                    }
+                  `}</style>
+                </div>
+
+                {errorMessage && <StreamingErrorDisplay message={errorMessage} />}
 
                 <RateLimitErrorDisplay />
 
-                <DynamicLoadingIndicator 
+                <DynamicLoadingIndicator
                   messages={messages}
                   isLoading={isLoading || vtopLoading}
                   showForFirstMessage={true}
@@ -1307,7 +1338,6 @@ function parseVTOPResponse(raw: string) {
                 <Plus className="h-4 w-4 mr-2" />
                 new chat
               </Button>
-
             </div>
           </header>{' '}
           <div className="flex-1 relative overflow-hidden">
@@ -1429,10 +1459,7 @@ function parseVTOPResponse(raw: string) {
                   maximizedItem={maximizedArtifact}
                   setMaximizedItem={setMaximizedArtifact}
                 />
-                <DynamicLoadingIndicator 
-                  messages={messages}
-                  isLoading={isLoading || vtopLoading}
-                />
+                <DynamicLoadingIndicator messages={messages} isLoading={isLoading || vtopLoading} />
                 <div
                   ref={messagesEndRef}
                   className={isLoading ? 'h-20' : 'h-0'}

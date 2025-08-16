@@ -225,7 +225,8 @@ async function tryAPIApproach(
         })
         const beforeDedupe = papers.length
         papers = deduplicatePapers(papers)
-        if (beforeDedupe !== papers.length) dbg('deduped', { before: beforeDedupe, after: papers.length })
+        if (beforeDedupe !== papers.length)
+          dbg('deduped', { before: beforeDedupe, after: papers.length })
 
         if (examType) {
           const before = papers.length
@@ -522,7 +523,7 @@ async function tryBrowserScraping(
 
     dbg('initial scraped paper cards', papers.length)
     const papersWithFinalUrls: Paper[] = []
-    
+
     // Process papers sequentially to prevent browser resource exhaustion
     for (const paper of papers) {
       if (paper.url.includes('.pdf') || paper.url.includes('cloudinary.com')) {
@@ -532,8 +533,8 @@ async function tryBrowserScraping(
 
       try {
         const finalUrlPromise = extractFinalUrlFromPaperPage(paper.url)
-        const timeoutPromise = new Promise<string | null>((_, reject) =>
-          setTimeout(() => reject(new Error('Timeout')), 8000) // Reduced from 15000 to 8000
+        const timeoutPromise = new Promise<string | null>(
+          (_, reject) => setTimeout(() => reject(new Error('Timeout')), 8000) // Reduced from 15000 to 8000
         )
 
         const finalUrl = await Promise.race([finalUrlPromise, timeoutPromise])
@@ -594,7 +595,7 @@ async function extractFinalUrlFromPaperPage(paperPageUrl: string): Promise<strin
   try {
     // Add small delay to prevent resource exhaustion
     await new Promise(resolve => setTimeout(resolve, 200)) // Reduced from 500ms
-    
+
     browser = await puppeteer.launch({
       args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
       defaultViewport: chromium.defaultViewport,

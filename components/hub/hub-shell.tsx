@@ -3,7 +3,16 @@
 import { useMemo, useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { GraduationCap, FileSearch, UtensilsCrossed, Briefcase, Users, Home, Flame, Search } from 'lucide-react'
+import {
+  GraduationCap,
+  FileSearch,
+  UtensilsCrossed,
+  Briefcase,
+  Users,
+  Home,
+  Flame,
+  Search,
+} from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { useRef } from 'react'
 import VTOPPanel from './panels/vtop-panel'
@@ -35,7 +44,8 @@ export default function HubShell() {
     const handleKey = (e: KeyboardEvent) => {
       if (e.altKey || e.metaKey || e.ctrlKey) return
       const target = e.target as HTMLElement | null
-      const activeEl = (typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null)
+      const activeEl =
+        typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null
       const isTypingContext = (el: HTMLElement | null) => {
         if (!el) return false
         if (el instanceof HTMLTextAreaElement) return true
@@ -43,19 +53,39 @@ export default function HubShell() {
           if (el.readOnly || el.disabled) return false
           const t = (el.type || '').toLowerCase()
           const typingTypes = new Set([
-            'text','search','url','tel','email','password','number','date','time','datetime-local','month','week'
+            'text',
+            'search',
+            'url',
+            'tel',
+            'email',
+            'password',
+            'number',
+            'date',
+            'time',
+            'datetime-local',
+            'month',
+            'week',
           ])
           return typingTypes.has(t)
         }
         if (el.isContentEditable) return true
         const role = el.getAttribute('role')?.toLowerCase()
-        if (role === 'textbox' || role === 'combobox' || role === 'searchbox' || role === 'spinbutton') return true
-        return !!el.closest('input:not([disabled]):not([readonly]), textarea:not([disabled]):not([readonly]), select, [contenteditable=""], [contenteditable="true"], [role="textbox"], [role="combobox"], [role="searchbox"], [role="spinbutton"]')
+        if (
+          role === 'textbox' ||
+          role === 'combobox' ||
+          role === 'searchbox' ||
+          role === 'spinbutton'
+        )
+          return true
+        return !!el.closest(
+          'input:not([disabled]):not([readonly]), textarea:not([disabled]):not([readonly]), select, [contenteditable=""], [contenteditable="true"], [role="textbox"], [role="combobox"], [role="searchbox"], [role="spinbutton"]'
+        )
       }
       const path: any[] = (e as any).composedPath?.() || []
       const pathHasTyping = path.some(el => el instanceof HTMLElement && isTypingContext(el))
       const activeIsBody = !activeEl || activeEl === document.body
-      if (isTypingContext(target) || isTypingContext(activeEl) || pathHasTyping || !activeIsBody) return
+      if (isTypingContext(target) || isTypingContext(activeEl) || pathHasTyping || !activeIsBody)
+        return
       const map: Record<string, Page> = {
         '1': 'home',
         '2': 'vtop',
@@ -139,15 +169,29 @@ export default function HubShell() {
             style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x' }}
           >
             <div className="flex gap-1.5 min-w-max">
-              {([ 
-                { id: 'home', label: 'home', icon: <Home className="h-3.5 w-3.5" /> },
-                { id: 'vtop', label: 'vtop', icon: <GraduationCap className="h-3.5 w-3.5" /> },
-                { id: 'papers', label: 'past papers', icon: <FileSearch className="h-3.5 w-3.5" /> },
-                { id: 'mess', label: 'mess menu', icon: <UtensilsCrossed className="h-3.5 w-3.5" /> },
-                { id: 'placements', label: 'placements', icon: <Briefcase className="h-3.5 w-3.5" /> },
-                { id: 'faculty', label: 'faculty', icon: <Users className="h-3.5 w-3.5" /> },
-                { id: 'reddit', label: 'reddit', icon: <Flame className="h-3.5 w-3.5" /> },
-              ] as { id: Page; label: string; icon: React.ReactNode }[]).map(tab => (
+              {(
+                [
+                  { id: 'home', label: 'home', icon: <Home className="h-3.5 w-3.5" /> },
+                  { id: 'vtop', label: 'vtop', icon: <GraduationCap className="h-3.5 w-3.5" /> },
+                  {
+                    id: 'papers',
+                    label: 'past papers',
+                    icon: <FileSearch className="h-3.5 w-3.5" />,
+                  },
+                  {
+                    id: 'mess',
+                    label: 'mess menu',
+                    icon: <UtensilsCrossed className="h-3.5 w-3.5" />,
+                  },
+                  {
+                    id: 'placements',
+                    label: 'placements',
+                    icon: <Briefcase className="h-3.5 w-3.5" />,
+                  },
+                  { id: 'faculty', label: 'faculty', icon: <Users className="h-3.5 w-3.5" /> },
+                  { id: 'reddit', label: 'reddit', icon: <Flame className="h-3.5 w-3.5" /> },
+                ] as { id: Page; label: string; icon: React.ReactNode }[]
+              ).map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setPage(tab.id)}
@@ -170,10 +214,14 @@ export default function HubShell() {
               <div className="rounded-xl border border-border/60 bg-gradient-to-r from-primary/10 to-transparent p-3 sm:p-4 flex items-center justify-between gap-3">
                 <div>
                   <div className="text-sm sm:text-base font-semibold">welcome to your hub</div>
-                  <div className="text-xs sm:text-sm text-muted-foreground">quickly jump to tools and tasks</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">
+                    quickly jump to tools and tasks
+                  </div>
                 </div>
                 <div className="hidden sm:flex items-center gap-2">
-                  <span className={`text-[11px] px-2 py-1 rounded-full border ${linked ? 'border-green-500/50 text-green-400' : 'border-yellow-500/40 text-yellow-400'}`}>
+                  <span
+                    className={`text-[11px] px-2 py-1 rounded-full border ${linked ? 'border-green-500/50 text-green-400' : 'border-yellow-500/40 text-yellow-400'}`}
+                  >
                     vtop {linked ? 'linked' : 'not linked'}
                   </span>
                 </div>
@@ -191,9 +239,14 @@ export default function HubShell() {
                       if (e.key === 'Enter') {
                         const q = query.toLowerCase().trim()
                         if (!q) return
-                        if (q.includes('vtop') || q.includes('attendance') || q.includes('timetable')) setPage('vtop')
+                        if (
+                          q.includes('vtop') ||
+                          q.includes('attendance') ||
+                          q.includes('timetable')
+                        )
+                          setPage('vtop')
                         else if (q.includes('paper') || q.includes('past')) setPage('papers')
-                        else if (q.includes('mess') || q.includes("menu")) setPage('mess')
+                        else if (q.includes('mess') || q.includes('menu')) setPage('mess')
                         else if (q.includes('place')) setPage('placements')
                         else if (q.includes('faculty') || q.includes('prof')) setPage('faculty')
                         else if (q.includes('reddit') || q.includes('trend')) setPage('reddit')
@@ -205,7 +258,9 @@ export default function HubShell() {
                     aria-label="search tools"
                   />
                 </div>
-                <div className="mt-1 text-[11px] text-muted-foreground">press g to focus search · enter to jump</div>
+                <div className="mt-1 text-[11px] text-muted-foreground">
+                  press g to focus search · enter to jump
+                </div>
               </div>
 
               {/* Quick actions wrapper */}
@@ -215,7 +270,12 @@ export default function HubShell() {
                     <div className="text-sm font-medium">quick actions</div>
                     <div className="flex items-center gap-2">
                       {!linked && (
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-[11px]" onClick={() => setPage('vtop')}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2 text-[11px]"
+                          onClick={() => setPage('vtop')}
+                        >
                           link vtop
                         </Button>
                       )}
@@ -223,24 +283,24 @@ export default function HubShell() {
                     </div>
                   </div>
                   <QuickActions
-                  onShowResult={(t, r) => {
-                    setViewerTitle(t)
-                    setViewerData(r)
-                    setViewerMode('static')
-                    setViewerLoading(false)
-                    setViewerStop(undefined)
-                    setViewerOpen(true)
-                  }}
-                  onShowStream={(t, object, isLoading, stop) => {
-                    setViewerTitle(t)
-                    setViewerData(object || null)
-                    setViewerMode('stream')
-                    setViewerLoading(isLoading)
-                    setViewerStop(() => stop)
-                    setViewerOpen(true)
-                  }}
-                  goTo={(p) => setPage(p)}
-                />
+                    onShowResult={(t, r) => {
+                      setViewerTitle(t)
+                      setViewerData(r)
+                      setViewerMode('static')
+                      setViewerLoading(false)
+                      setViewerStop(undefined)
+                      setViewerOpen(true)
+                    }}
+                    onShowStream={(t, object, isLoading, stop) => {
+                      setViewerTitle(t)
+                      setViewerData(object || null)
+                      setViewerMode('stream')
+                      setViewerLoading(isLoading)
+                      setViewerStop(() => stop)
+                      setViewerOpen(true)
+                    }}
+                    goTo={p => setPage(p)}
+                  />
                 </CardContent>
               </Card>
             </div>
@@ -257,7 +317,11 @@ export default function HubShell() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mt-2">
               <HubTile
                 title="vtop"
-                description={linked ? 'access your attendance, marks, timetable, and more' : 'link credentials to access your personal data'}
+                description={
+                  linked
+                    ? 'access your attendance, marks, timetable, and more'
+                    : 'link credentials to access your personal data'
+                }
                 icon={<GraduationCap className="h-5 w-5" />}
                 onClick={() => setPage('vtop')}
                 cta={linked ? 'open' : 'link now'}
@@ -312,7 +376,14 @@ export default function HubShell() {
   )
 }
 
-function HubTile({ title, description, icon, onClick, disabled, cta }: {
+function HubTile({
+  title,
+  description,
+  icon,
+  onClick,
+  disabled,
+  cta,
+}: {
   title: string
   description: string
   icon: React.ReactNode
@@ -321,7 +392,9 @@ function HubTile({ title, description, icon, onClick, disabled, cta }: {
   cta?: string
 }) {
   return (
-    <Card className={`group transition-all border border-border/60 ${disabled ? 'opacity-70' : 'hover:border-primary/40 hover:shadow-lg hover:shadow-black/10'}`}>
+    <Card
+      className={`group transition-all border border-border/60 ${disabled ? 'opacity-70' : 'hover:border-primary/40 hover:shadow-lg hover:shadow-black/10'}`}
+    >
       <button onClick={onClick} disabled={disabled} className="w-full text-left">
         <CardContent className="p-4">
           <div className="flex items-center gap-3">

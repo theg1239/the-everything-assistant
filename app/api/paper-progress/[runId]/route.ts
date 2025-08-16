@@ -7,11 +7,8 @@ export const runtime = 'nodejs'
 
 type Params = { runId: string }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<Params> } 
-) {
-  const session = await getServerSession(authOptions as any) as { user?: { id?: string } } | null;
+export async function GET(req: NextRequest, { params }: { params: Promise<Params> }) {
+  const session = (await getServerSession(authOptions as any)) as { user?: { id?: string } } | null
   if (!session?.user?.id) {
     return new Response('Unauthorized', { status: 401 })
   }

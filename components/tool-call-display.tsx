@@ -15,6 +15,7 @@ import {
   Shield,
   MapPin,
   Search,
+  BookOpen,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -24,7 +25,6 @@ import { ArtifactDisplay, type ArtifactDisplayProps } from './artifact-display'
 import { PaperSearchProgress } from './paper-search-progress'
 import { useVTOP } from '../contexts/vtop-context'
 import { useMediaQuery } from '@/hooks/use-media-query'
-// Removed credential-based visibility helpers to always show VTOP tool calls
 
 interface ToolCallDisplayProps {
   toolCalls: any[]
@@ -318,6 +318,49 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     }
   }
 
+  // Syllabi: map getSyllabus tool results or syllabus-like responses to a syllabi artifact
+  if (
+    toolName === 'getSyllabus' ||
+    result.syllabus ||
+    result.filename ||
+    result.url ||
+    (result.success && result.filename)
+  ) {
+    const filename = result.filename || result.syllabus || (result.data && result.data.filename) || null
+    const url = result.url || (filename ? `https://storage.googleapis.com/examcooker/syllabi/${filename}` : null)
+
+    const normalizeFilename = (fn: string | null) => {
+      if (!fn || typeof fn !== 'string') return { code: null, title: null }
+      const base = fn.split('/').pop() || fn
+      const withoutExt = base.replace(/\.[^.]+$/, '')
+      const parts = withoutExt.split(/_(.+)/)
+      const codePart = (parts[0] || '').trim()
+      const titlePart = (parts[1] || '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
+      const title = titlePart ? titlePart.replace(/\b\w/g, c => c.toUpperCase()) : null
+      return { code: codePart || null, title }
+    }
+
+    const norm = normalizeFilename(filename)
+    const code = result.code || norm.code
+    const title = result.title || norm.title
+
+    return {
+      type: 'syllabi' as const,
+      title: code && title ? `${code} — ${title}` : title || filename ? `Syllabus: ${title || filename}` : 'Syllabus',
+      icon: <BookOpen className="h-5 w-5 text-emerald-500" />,
+      data: {
+        filename,
+        url,
+        code,
+        title,
+        message: result.message || result.title || undefined,
+        success: result.success !== false,
+        raw: result,
+      },
+      source: 'Syllabus Tool',
+    }
+  }
+
   if (result.rankedPapers && Array.isArray(result.rankedPapers) && result.rankedPapers.length > 0) {
     return {
       type: 'papers' as const,
@@ -370,7 +413,6 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     }
   }
 
-  // Question patterns analysis artifact
   if (toolName === 'analyzeQuestionPatterns' || result.source === 'question-patterns') {
     if (result && result.success) {
       return {
@@ -394,7 +436,6 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     }
   }
 
-  // Past paper Q&A: render answer with metadata
   if (toolName === 'askPaperQuestion') {
     if (result && result.success) {
       return {

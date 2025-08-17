@@ -64,6 +64,7 @@ interface ArtifactDisplayProps {
   data: any
   type:
     | 'papers'
+  | 'syllabi'
     | 'faculty'
     | 'companies'
     | 'placements'
@@ -1014,6 +1015,75 @@ const PaperCard = ({
                 DOI
               </Button>
             )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+const SyllabusCard = ({
+  syllabus,
+  onViewPdf,
+}: {
+  syllabus: any
+  onViewPdf: (url: string, title?: string) => void
+}) => {
+  const isMobile = useMediaQuery('(max-width: 640px)')
+  const [isLoading, setIsLoading] = useState(false)
+
+  const handleView = async () => {
+    setIsLoading(true)
+    try {
+      const urlToView = syllabus.url || syllabus.link || syllabus.pdf || syllabus.downloadUrl
+      onViewPdf(urlToView, syllabus.title || syllabus.filename || 'Syllabus')
+    } finally {
+      setTimeout(() => setIsLoading(false), 800)
+    }
+  }
+
+  return (
+    <Card className="w-full hover:shadow-md transition-all duration-200 border-border bg-card group flex flex-col h-full">
+      <CardHeader className="pb-3 flex-shrink-0">
+        <div className="flex items-start justify-between gap-2">
+          <CardTitle className="text-sm font-medium line-clamp-3 text-card-foreground group-hover:text-primary transition-colors leading-snug">
+            {syllabus.title || syllabus.filename || syllabus.code}
+          </CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-0 space-y-3 flex-1 flex flex-col">
+        <div className="space-y-2 text-xs text-muted-foreground flex-1">
+          {syllabus.code && (
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground/80">
+              <Badge variant="secondary" className="text-[10px] h-5 px-2">
+                {syllabus.code}
+              </Badge>
+            </div>
+          )}
+          {/* {syllabus.title && <div className="text-xs text-muted-foreground">{syllabus.title}</div>} */}
+        </div>
+
+        <div className="flex-shrink-0 pt-1">
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="default"
+              size="sm"
+              className="h-8 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm transition-all duration-200 hover:shadow-md"
+              onClick={handleView}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <div className="animate-spin h-3 w-3 mr-2 border-2 border-current border-t-transparent rounded-full" />
+                  Loading...
+                </>
+              ) : (
+                <>
+                  <FileSearch className="h-3 w-3 mr-2" />
+                  View Syllabus
+                </>
+              )}
+            </Button>
           </div>
         </div>
       </CardContent>
@@ -2679,6 +2749,14 @@ const PureArtifactDisplay = ({
                   <PaperCard
                     key={index}
                     paper={item}
+                    onViewPdf={(url, title) => handleViewPdf(url, title)}
+                  />
+                )
+              case 'syllabi':
+                return (
+                  <SyllabusCard
+                    key={index}
+                    syllabus={item}
                     onViewPdf={(url, title) => handleViewPdf(url, title)}
                   />
                 )

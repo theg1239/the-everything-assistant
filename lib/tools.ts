@@ -1475,6 +1475,187 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       },
     }),
 
+    getSyllabus: tool({
+      description:
+        'Fetch the syllabus PDF for a given course. The tool looks up available syllabus filenames from public/syllabi.json and constructs a Google Storage URL like https://storage.googleapis.com/examcooker/syllabi/<FILENAME>. Use course code or partial course name to search.',
+      parameters: z.object({
+        query: z.string().describe('Course code (e.g., ACXC101N) or course name (e.g., "Art of Advertising")'),
+      }),
+      execute: async ({ query }) => {
+        try {
+          console.debug('[getSyllabus] query:', query)
+          if (!query || query.trim().length === 0) {
+            return {
+              success: false,
+              error: 'Query required',
+              message: 'Please provide a course code or course name to lookup the syllabus.',
+            }
+          }
+
+          const base = typeof window === 'undefined' ? process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000' : ''
+          const res = await fetch(`${base}/syllabi.json`)
+          if (!res.ok) {
+            console.error('[getSyllabus] could not load syllabi.json', res.status)
+            return {
+              success: false,
+              error: `Could not load syllabi.json (${res.status})`,
+            }
+          }
+
+          const data = await res.json()
+          console.debug('[getSyllabus] loaded items:', Array.isArray(data) ? data.length : 'unknown')
+
+          const qRaw = query.trim()
+          const q = qRaw.toLowerCase()
+          const tokens = q
+            .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\[\]]/g, ' ')
+            .split(/\s+/)
+            .filter(Boolean)
+
+          const normalizeFilename = (fn: string) => {
+            if (!fn || typeof fn !== 'string') return { code: null, title: null }
+            const base = fn.split('/').pop() || fn
+            const withoutExt = base.replace(/\.[^.]+$/, '')
+            const parts = withoutExt.split(/_(.+)/)
+            const codePart = parts[0] || ''
+            const titlePart = parts[1] || ''
+            const title = titlePart
+              .replace(/[_-]+/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .replace(/\b\w/g, c => c.toUpperCase())
+            return { code: codePart, title: title || null }
+          }
+
+          const scoreCandidate = (cand: any) => {
+            let code = ''
+            let title = ''
+            let filename = ''
+            if (typeof cand === 'string') {
+              filename = cand
+              code = cand.split('_')[0] || ''
+            } else if (cand && typeof cand === 'object') {
+              code = (cand.code || '').toString()
+              title = (cand.title || '').toString()
+              filename = (cand.file || cand.filename || '').toString()
+            }
+            const hay = (code + ' ' + title + ' ' + filename).toLowerCase()
+            let score = 0
+            if (code.toLowerCase() === q) score += 100
+            if (filename.toLowerCase() === q) score += 80
+            for (const t of tokens) {
+              if (hay.includes(t)) score += 10
+              const re = new RegExp('\\b' + t.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + '\\b')
+              if (re.test(hay)) score += 5
+            }
+            return score
+          }
+
+          if (Array.isArray(data) && data.length > 0) {
+            if (typeof data[0] === 'string') {
+              const exact = data.find((fn: string) => fn.split('_')[0].toLowerCase() === q)
+              if (exact) {
+                console.debug('[getSyllabus] exact code match:', exact)
+                const norm = normalizeFilename(exact)
+                return {
+                  success: true,
+                  filename: exact,
+                  code: norm.code,
+                  title: norm.title,
+                  url: `https://storage.googleapis.com/examcooker/syllabi/${exact}`,
+                  message: `Found syllabus file for query: ${query}`,
+                }
+              }
+
+              const scored = data
+                .map((fn: string) => ({ fn, score: scoreCandidate(fn) }))
+                .sort((a: any, b: any) => b.score - a.score)
+              console.debug('[getSyllabus] top candidates (string):', scored.slice(0, 5))
+              if (scored.length > 0 && scored[0].score > 0) {
+                const matched = scored[0].fn
+                const norm = normalizeFilename(matched)
+                return {
+                  success: true,
+                  filename: matched,
+                  code: norm.code,
+                  title: norm.title,
+                  url: `https://storage.googleapis.com/examcooker/syllabi/${matched}`,
+                  message: `Found syllabus file matching query: ${query}`,
+                }
+              }
+            } else {
+              const scored = data
+                .map((item: any) => ({ item, score: scoreCandidate(item) }))
+                .sort((a: any, b: any) => b.score - a.score)
+              console.debug('[getSyllabus] top candidates (objects):', scored.slice(0, 6).map((s: any) => ({ code: s.item.code, title: s.item.title, filename: s.item.file || s.item.filename, score: s.score })))
+              if (scored.length > 0 && scored[0].score > 0) {
+                const best = scored[0].item
+                const filename = best.file || best.filename || `${best.code || 'syllabus'}.pdf`
+                let codeOut = best.code || null
+                let titleOut = best.title || null
+                if (!codeOut || !titleOut) {
+                  const norm = normalizeFilename(filename)
+                  codeOut = codeOut || norm.code
+                  titleOut = titleOut || norm.title
+                }
+                return {
+                  success: true,
+                  filename,
+                  code: codeOut,
+                  title: titleOut,
+                  url: `https://storage.googleapis.com/examcooker/syllabi/${filename}`,
+                  message: `Found syllabus for ${codeOut || titleOut}`,
+                }
+              }
+            }
+          }
+
+          try {
+            const lowered = Array.isArray(data) ? data.map((d: any) => (typeof d === 'string' ? d.toLowerCase() : JSON.stringify(d).toLowerCase())) : []
+            let bestIndex = -1
+            for (let i = 0; i < lowered.length; i++) {
+              if (lowered[i].includes(q)) {
+                bestIndex = i
+                break
+              }
+            }
+            if (bestIndex >= 0) {
+              const orig = data[bestIndex]
+              const filename = typeof orig === 'string' ? orig : orig.file || orig.filename || null
+              const norm = typeof filename === 'string' ? normalizeFilename(filename) : { code: null, title: null }
+              return {
+                success: true,
+                filename,
+                code: norm.code,
+                title: norm.title,
+                url: filename ? `https://storage.googleapis.com/examcooker/syllabi/${filename}` : null,
+                message: `Found syllabus matching query: ${query}`,
+              }
+            }
+          } catch (e) {
+          }
+
+          console.debug('[getSyllabus] no match for query:', query)
+          return {
+            success: false,
+            query,
+            message: `No syllabus found matching "${query}". Try using the exact course code (e.g., ACXC101N) or a more distinctive part of the course title.`,
+            suggestions: [
+              'Use the exact course code like ACXC101N',
+              'Try a shorter distinctive phrase from the course title (e.g., include a module name or code)',
+            ],
+          }
+        } catch (error: any) {
+          console.error('[getSyllabus] error', error)
+          return {
+            success: false,
+            error: error?.message || String(error),
+            message: 'Failed to lookup syllabi.json',
+          }
+        }
+      },
+    }),
+
     getMessMenu: tool({
       description:
         "get mess menu for VIT hostels (both men's and ladies' hostels). Use this when users ask about mess menu, today's food, what's for lunch/dinner/breakfast/snacks, tomorrow's menu, etc. Covers special mess, veg mess, and non-veg mess for both hostels. IMPORTANT: Do NOT ask for hostelType and messType if you are already aware of the user's preference through memory, populate them from memory.",

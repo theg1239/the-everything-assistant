@@ -14,7 +14,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useHubTool } from '../use-hub-tool'
-import { FileText, Search, X, ExternalLink } from 'lucide-react'
+import { FileText, Search, X } from 'lucide-react'
+import PdfViewer from '@/components/pdf-viewer'
 
 export default function PastPapersPanel() {
   const { run, loading, error, result, reset } = useHubTool<any>('findPastPapers')
@@ -108,20 +109,23 @@ export default function PastPapersPanel() {
                 </CardContent>
                 {p.url && (
                   <div className="p-4 pt-0 mt-auto">
-                    <a
+                    <button
                       className="text-xs text-blue-400 hover:underline flex items-center gap-1"
-                      href={p.url}
-                      target="_blank"
-                      rel="noreferrer"
+                      onClick={() => {
+                        const url = p.url
+                        const title = p.title || p.fileName || p.year
+                        window.dispatchEvent(new CustomEvent('pdfViewerOpen', { detail: { url, title } }))
+                      }}
                     >
-                      open link <ExternalLink className="h-3 w-3" />
-                    </a>
+                      open
+                    </button>
                   </div>
                 )}
               </Card>
             ))}
           </div>
         )}
+        <PdfViewer />
 
         {result && papers.length === 0 && (
           <div className="text-sm text-muted-foreground text-center py-8">

@@ -345,6 +345,11 @@ const PureChatInterface = memo(
             responseBody.includes('contents.parts must not be empty'))
 
         const isRateLimit = checkForRateLimitError(err)
+        try {
+          // debug logging to help trace why UI may show generic toast instead of rate limit display
+          // eslint-disable-next-line no-console
+          console.debug('[Chat] onError - isRateLimit:', isRateLimit, 'isGeminiStreamingError:', isGeminiStreamingError, 'error:', err)
+        } catch {}
         if (!isRateLimit && !isGeminiStreamingError) {
           toast.error('Something went wrong. Please try again.')
         }
@@ -537,6 +542,10 @@ const PureChatInterface = memo(
         }
 
         const isRateLimit = checkForRateLimitError(error)
+        try {
+          // eslint-disable-next-line no-console
+          console.debug('[Chat] error effect - isRateLimit:', isRateLimit, 'error:', error)
+        } catch {}
         if (isRateLimit) return
       }
     }, [error, checkForRateLimitError])

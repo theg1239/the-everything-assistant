@@ -34,7 +34,7 @@ export function RateLimitErrorDisplay() {
         return `${diffMinutes} minute${diffMinutes !== 1 ? 's' : ''}`
       } else {
         const diffHours = Math.ceil(diffMinutes / 60)
-        return `${diffHours} hour${diffHours !== 1 ? 's' : ''}`
+  return `${diffHours} hour${diffHours !== 1 ? 's' : ''}`
       }
     } catch {
       return null
@@ -103,7 +103,14 @@ export function RateLimitErrorDisplay() {
               <div className="px-6 py-3 bg-muted/30">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Clock className="w-4 h-4 text-orange-500/70" />
-                  <span>Rate limit resets in {resetTimeFormatted}</span>
+                  <div>
+                    <div>Rate limit resets in {resetTimeFormatted}</div>
+                    {rateLimitError.resetTime && (
+                      <div className="text-xs text-muted-foreground/80">
+                        (at {new Date(rateLimitError.resetTime).toLocaleString()})
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev --turbo",
-    "build": "npx prisma generate && next build --turbo",
+    "build": "npx prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "format": "npx prettier --write .",

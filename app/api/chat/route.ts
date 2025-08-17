@@ -16,6 +16,7 @@ import { memoryService } from '@/lib/memory/memory-service'
 import { generateChatPath, extractTitleFromContent } from '@/lib/utils'
 import { sanitizeToolInvocations } from '@/lib/sanitize-tools'
 
+/** ---- local UI-shape used by your client payload ---- */
 type UIMsg = {
   id?: string
   role: 'system' | 'user' | 'assistant' | 'tool'

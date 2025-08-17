@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, memo, useCallback } from 'react'
+import { useState, useRef, useEffect, memo, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useChat } from '@ai-sdk/react'
 import type { UIMessage as AIMessage } from 'ai'
@@ -18,7 +18,7 @@ import { FollowUpSuggestions } from '@/components/follow-up-suggestions'
 import { ChatHeader } from '@/components/chat-header'
 import { MultimodalInput } from '@/components/multimodal-input'
 import Hub from '@/components/hub/hub'
-import { extractTitleFromContent } from '@/lib/utils'
+import { extractTitleFromContent, cn } from '@/lib/utils'
 import UpsellBanner from '@/components/upsell-banner'
 import { VTOPToolHandler } from '@/components/vtop-tool-handler'
 import { VTOPProvider, useVTOP } from '@/contexts/vtop-context'
@@ -28,7 +28,6 @@ import { OnboardingDialog } from '@/components/onboarding-dialog'
 import { useOnboarding } from '@/hooks/use-onboarding'
 import { toast } from 'sonner'
 import ScrollToTopButton from '@/components/scroll-to-top-button'
-import { cn } from '@/lib/utils'
 import { useThrottle } from '@/hooks/use-debounce'
 import { useSidebar } from '@/contexts/sidebar-context'
 import { StreamingErrorDisplay } from '@/components/streaming-error-display'
@@ -63,10 +62,11 @@ const useViewportHeight = () => {
     }
 
     const handleVisualViewportChange = () => setVh()
+    const onOrientation = () => setTimeout(setVh, 50)
 
     setVh()
     window.addEventListener('resize', setVh, { passive: true })
-    window.addEventListener('orientationchange', () => setTimeout(setVh, 50), { passive: true }) // Reduced from 100ms to 50ms
+    window.addEventListener('orientationchange', onOrientation, { passive: true })
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', handleVisualViewportChange)
     }
@@ -74,7 +74,7 @@ const useViewportHeight = () => {
     return () => {
       clearTimeout(timeoutId)
       window.removeEventListener('resize', setVh)
-      window.removeEventListener('orientationchange', () => setTimeout(setVh, 50)) // Updated to match the above
+      window.removeEventListener('orientationchange', onOrientation)
       if (window.visualViewport) {
         window.visualViewport.removeEventListener('resize', handleVisualViewportChange)
       }
@@ -118,7 +118,6 @@ const getTextFromMessage = (m: { parts?: Array<{ type: string; text?: string }> 
   m?.parts?.filter(p => p.type === 'text').map(p => p.text || '').join(' ') || ''
 
 import { createId as cuid } from '@paralleldrive/cuid2'
-
 const makeClientId = () => cuid()
 
 const PureChatInterface = memo(
@@ -142,6 +141,7 @@ const PureChatInterface = memo(
     const [maximizedArtifact, setMaximizedArtifact] = useState<any>(null)
     const [isAtBottom, setIsAtBottom] = useState(true)
     const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
+
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const contentRef = useRef<HTMLDivElement>(null)
     const router = useRouter()
@@ -160,6 +160,7 @@ const PureChatInterface = memo(
       command: string
       message: string
     } | null>(null)
+
     useEffect(() => {
       const onDisclaimer = (e: any) => {
         const d = e?.detail
@@ -212,7 +213,6 @@ const PureChatInterface = memo(
     useEffect(() => {
       currentChatIdRef.current = optimisticChatId || chatId
     }, [optimisticChatId, chatId])
-
 
     useEffect(() => {
       const loadPreferences = async () => {
@@ -271,7 +271,6 @@ const PureChatInterface = memo(
           setShowFullChat(true)
         }
 
-        // v5: no onResponse; generate client id before first message
         const id = ensureClientChatId(input)
 
         setErrorMessage(null)
@@ -294,81 +293,86 @@ const PureChatInterface = memo(
 
     const [input, setInput] = useState('')
 
-const {
-  messages = [],
-  sendMessage,
-  regenerate,
-  status,
-  addToolResult,
-  stop,
-  setMessages,
-  error,
-} = useChat({
-  // v5 transport & initial messages
-  transport: new DefaultChatTransport({
-    api: '/api/chat',
-  }),
-  id: chatId,
+    const {
+      messages = [],
+      sendMessage,
+      regenerate,
+      status,
+      addToolResult,
+      stop,
+      setMessages,
+      error,
+    } = useChat({
+      transport: new DefaultChatTransport({
+        api: '/api/chat',
+      }),
+      id: chatId,
 
-  onFinish: ({ message }: { message: AIMessage }) => {
-    const currentChatId = currentChatIdRef.current;
+      onFinish: ({ message }: { message: AIMessage }) => {
+        const currentChatId = currentChatIdRef.current
 
-    const asstText = getTextFromMessage(message as any);
-    if ((message as any).role === 'assistant' && asstText) {
-      setLastAssistantMessage(asstText);
-      if (userPreferences.followUpSuggestions !== false) {
-        setShowFollowUpSuggestions(true);
-      }
-    }
-
-    if (currentChatId && isFirstMessageInNewChat) {
-      setIsFirstMessageInNewChat(false);
-      const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
-        try {
-          const response = await fetch(`/api/chats/${currentChatId}`);
-          if (response.ok) {
-            const chatData = await response.json();
-            if (chatData.title && chatData.title !== 'New Chat') {
-              window.dispatchEvent(
-                new CustomEvent('chatTitleUpdated', {
-                  detail: { chatId: currentChatId, title: chatData.title },
-                })
-              );
-            } else if (attempt < maxAttempts) {
-              setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000);
-            }
-          }
-        } catch {
-          if (attempt < maxAttempts) {
-            setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000);
+        const asstText = getTextFromMessage(message as any)
+        if ((message as any).role === 'assistant' && asstText) {
+          setLastAssistantMessage(asstText)
+          if (userPreferences.followUpSuggestions !== false) {
+            setShowFollowUpSuggestions(true)
           }
         }
-      };
-      setTimeout(() => checkTitleUpdate(), 3000);
-    }
-  },
 
-  onError: (err: any) => {
-    const errorMessage = err.message || err.toString();
-    const hasResponseBody = typeof err === 'object' && err !== null && 'responseBody' in err;
-    const responseBody = hasResponseBody ? (err as any).responseBody : '';
+        if (currentChatId && isFirstMessageInNewChat) {
+          setIsFirstMessageInNewChat(false)
+          const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
+            try {
+              const response = await fetch(`/api/chats/${currentChatId}`)
+              if (response.ok) {
+                const chatData = await response.json()
+                if (chatData.title && chatData.title !== 'New Chat') {
+                  window.dispatchEvent(
+                    new CustomEvent('chatTitleUpdated', {
+                      detail: { chatId: currentChatId, title: chatData.title },
+                    })
+                  )
+                } else if (attempt < maxAttempts) {
+                  setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
+                }
+              }
+            } catch {
+              if (attempt < maxAttempts) {
+                setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
+              }
+            }
+          }
+          setTimeout(() => checkTitleUpdate(), 3000)
+        }
+      },
 
-    const isGeminiStreamingError =
-      errorMessage.includes('contents.parts must not be empty') ||
-      errorMessage.includes('INVALID_ARGUMENT') ||
-      errorMessage.includes('GenerateContentRequest.contents') ||
-      errorMessage.includes('streamGenerateContent') ||
-      (typeof responseBody === 'string' && responseBody.includes('contents.parts must not be empty'));
+      onError: (err: any) => {
+        const errorMessage = err.message || err.toString()
+        const hasResponseBody = typeof err === 'object' && err !== null && 'responseBody' in err
+        const responseBody = hasResponseBody ? (err as any).responseBody : ''
 
-    const isRateLimit = checkForRateLimitError(err);
-    if (!isRateLimit && !isGeminiStreamingError) {
-      toast.error('Something went wrong. Please try again.');
-    }
-    // Do NOT show toast for Gemini streaming errors!
-  },
-});
+        const isGeminiStreamingError =
+          errorMessage.includes('contents.parts must not be empty') ||
+          errorMessage.includes('INVALID_ARGUMENT') ||
+          errorMessage.includes('GenerateContentRequest.contents') ||
+          errorMessage.includes('streamGenerateContent') ||
+          (typeof responseBody === 'string' && responseBody.includes('contents.parts must not be empty'))
+
+        const isRateLimit = checkForRateLimitError(err)
+        if (!isRateLimit && !isGeminiStreamingError) {
+          toast.error('Something went wrong. Please try again.')
+        }
+      },
+    })
 
     const isLoading = status === 'streaming'
+
+    // computed loading status used in multiple places
+    const computedIsLoading = useMemo(
+      () => String(status) === 'loading' || String(status) === 'submitted' || vtopLoading,
+      [status, vtopLoading]
+    )
+
     const scrollToBottom = useCallback(() => {
       const prefersReducedMotion =
         typeof window !== 'undefined' &&
@@ -388,7 +392,6 @@ const {
     const checkScrollPosition = useCallback(() => {
       const container = contentRef.current?.parentElement
       if (!container) return
-
       const threshold = 100
       const isAtBottomNow =
         container.scrollHeight - container.scrollTop - container.clientHeight < threshold
@@ -407,14 +410,12 @@ const {
       return () => container.removeEventListener('scroll', handleScroll)
     }, [checkScrollPosition])
 
+    // Guarded: reflect isLoading->autoScrollEnabled without redundant flips
     useEffect(() => {
-      if (isLoading) {
-        setAutoScrollEnabled(false)
-      } else {
-        setAutoScrollEnabled(true)
-      }
+      setAutoScrollEnabled(prev => (prev !== !isLoading ? !isLoading : prev))
     }, [isLoading])
 
+    // Only set "at bottom" when it actually changes
     useEffect(() => {
       if (messages.length > 0 && showFullChat) {
         const container = contentRef.current?.parentElement
@@ -423,21 +424,19 @@ const {
         } else if (messagesEndRef.current) {
           messagesEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' })
         }
-        setIsAtBottom(true)
+        if (!isAtBottom) setIsAtBottom(true)
       }
-    }, [messages.length, showFullChat])
+    }, [messages.length, showFullChat, isAtBottom])
 
     const throttledScrollToBottom = useThrottle(scrollToBottom, 50)
 
     useEffect(() => {
-      // Global keyboard shortcuts: focus composer with '/', blur with Escape
       const handleGlobalKeyDown = (e: KeyboardEvent) => {
         const target = e.target as HTMLElement | null
         const isTypingField =
           target &&
           (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
 
-        // Focus chat input with '/'
         if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
           if (!isTypingField) {
             e.preventDefault()
@@ -448,7 +447,6 @@ const {
           }
         }
 
-        // Blur input on Escape
         if (e.key === 'Escape') {
           const active = document.activeElement as HTMLElement | null
           if (active && active.tagName === 'TEXTAREA') {
@@ -464,7 +462,6 @@ const {
     useEffect(() => {
       if (isInitialRender) {
         setIsInitialRender(false)
-
         if (isMobile) {
           setTimeout(() => {
             window.scrollTo(0, 0)
@@ -474,19 +471,16 @@ const {
     }, [isInitialRender, isMobile])
 
     useEffect(() => {
-      if (
-        !isInitialRender &&
-        messages.length > 0 &&
-        messages[messages.length - 1].role === 'user'
-      ) {
+      if (!isInitialRender && messages.length > 0 && messages[messages.length - 1].role === 'user') {
         throttledScrollToBottom()
       }
     }, [messages, isLoading, isInitialRender, throttledScrollToBottom])
 
-        useEffect(() => {
+    useEffect(() => {
       const hasUser = messages.some(m => m.role === 'user')
-      setHasUserInitiatedConversation(hasUser)
-      setIsFirstMessageInNewChat(messages.length === 0)
+      setHasUserInitiatedConversation(prev => (prev !== hasUser ? hasUser : prev))
+      const isEmpty = messages.length === 0
+      setIsFirstMessageInNewChat(prev => (prev !== isEmpty ? isEmpty : prev))
     }, [messages])
 
     useEffect(() => {
@@ -501,14 +495,12 @@ const {
         if (!targetNode) return
 
         const observer = new MutationObserver(throttledScrollToBottom)
-
         observer.observe(targetNode, {
           childList: true,
           subtree: true,
           characterData: true,
           attributes: false,
         })
-
         return () => {
           observer.disconnect()
         }
@@ -520,7 +512,6 @@ const {
         const timeoutId = setTimeout(() => {
           throttledScrollToBottom()
         }, 200)
-
         return () => clearTimeout(timeoutId)
       }
     }, [messages.length, isMobile, isInitialRender, throttledScrollToBottom, autoScrollEnabled])
@@ -566,7 +557,6 @@ const {
           setShowFullChat(true)
           setIsFirstMessageInNewChat(true)
         }
-        // Ensure we have a client chat id in v5
         const id = ensureClientChatId(question)
 
         setErrorMessage(null)
@@ -589,8 +579,6 @@ const {
         setLastUserMessage,
         setErrorMessage,
         setHasUserInitiatedConversation,
-        optimisticChatId,
-        chatId,
         sendMessage,
       ]
     )
@@ -620,24 +608,29 @@ const {
       }
     }
 
-    const createCanvasFromMessage = (content: string) => {
+    // STABILIZED CALLBACKS
+    const createCanvasFromMessage = useCallback((_content: string) => {
       setHubOpen(true)
-    }
+    }, [])
 
-    const handleLoginClick = () => {
+    const handleLoginClick = useCallback(() => {
       const triggerEvent = new CustomEvent('vtopLoginTrigger', {
         detail: { command: 'attendance' },
       })
       window.dispatchEvent(triggerEvent)
-    }
+    }, [])
 
-    const handlePlacementSearch = (company: string) => {
-      const id = ensureClientChatId(`Get placement information for ${company}`)
-      sendMessage(
-        { text: `Get placement information for ${company}` },
-        { body: { ...(id ? { id } : {}) } }
-      )
-    }
+    const handlePlacementSearch = useCallback(
+      (company: string) => {
+        const id = ensureClientChatId(`Get placement information for ${company}`)
+        sendMessage(
+          { text: `Get placement information for ${company}` },
+          { body: { ...(id ? { id } : {}) } }
+        )
+      },
+      // deliberately only depend on sendMessage to keep identity stable
+      [sendMessage]
+    )
 
     const handleVTOPCredentials = async (
       credentials: { username: string; encryptedPassword: string },
@@ -675,7 +668,6 @@ const {
           return message
         })
 
-        // Ensure there's a trailing assistant message with the pending VTOP tool call
         setMessages((prev: any[]) => {
           const base = [...updatedMessagesForLoading]
           if (base.length === 0) return base
@@ -695,7 +687,6 @@ const {
                 toolInvocations: [...(last.toolInvocations || []), toolInvocationPayload],
               }
             } else {
-              // make sure its state is call
               base[base.length - 1] = {
                 ...last,
                 toolInvocations: last.toolInvocations.map((t: any) =>
@@ -704,7 +695,6 @@ const {
               }
             }
           } else {
-            // Append a new assistant shell to surface loading state
             base.push({
               id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
               role: 'assistant',
@@ -719,9 +709,7 @@ const {
 
         const response = await fetch('/api/chat', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: messages,
             directToolCall: {
@@ -742,70 +730,44 @@ const {
           const responseText = await response.text()
 
           function parseVTOPResponse(raw: string) {
-            if (!raw || typeof raw !== 'string') {
-              throw new Error('Empty response')
-            }
-
+            if (!raw || typeof raw !== 'string') throw new Error('Empty response')
             const trimmed = raw.trim()
-
-            // Fast path: entire body is a single JSON doc
             if (/^[\[{]/.test(trimmed)) {
               try {
                 return JSON.parse(trimmed)
-              } catch (e: any) {
-                // keep going; might be framed
-              }
+              } catch {}
             }
-
-            // Tokenize into frames. A frame looks like: "<prefix>:<payload...>"
-            // Payload can span multiple lines until the next "<prefix>:"
             const lines = raw.replace(/\r/g, '').split('\n')
             const frameHeader = /^([a-z0-9]):(.*)$/i
-
             type Frame = { prefix: string; payload: string }
             const frames: Frame[] = []
-
             let current: Frame | null = null
-
             const flush = () => {
               if (current) {
-                // trim only trailing newlines; keep inner newlines
                 current.payload = current.payload.replace(/\n$/, '')
                 frames.push(current)
                 current = null
               }
             }
-
             for (let i = 0; i < lines.length; i++) {
-              const rawLine = lines[i]
-              const line = rawLine // keep exact spacing; payload might be HTML
+              const line = lines[i]
               const m = line.match(frameHeader)
-
               if (m) {
-                // New frame starts; flush the previous one
                 flush()
                 current = { prefix: m[1], payload: m[2] ?? '' }
-                if (i < lines.length - 1) current.payload += '\n' // preserve newline after first line
+                if (i < lines.length - 1) current.payload += '\n'
               } else {
-                // Continuation of current frame’s payload (if any)
-                if (current) {
-                  current.payload += line + (i < lines.length - 1 ? '\n' : '')
-                } else {
-                  // Orphan line — ignore; not part of a frame
-                }
+                if (current) current.payload += line + (i < lines.length - 1 ? '\n' : '')
               }
             }
             flush()
 
-            // Helpers
             const safeParseJSON = (s: string) => {
               const t = s.trim()
-              // If payload contains multiple JSON docs concatenated, try to take the largest {...} or [...]
               if (!/^[\[{]/.test(t)) throw new Error('Not JSON')
               try {
                 return JSON.parse(t)
-              } catch (_) {
-                // Try to extract the outermost JSON block
+              } catch {
                 const firstBrace = t.indexOf('{')
                 const lastBrace = t.lastIndexOf('}')
                 const firstBracket = t.indexOf('[')
@@ -826,63 +788,42 @@ const {
 
             const decodePossibleJSONString = (s: string) => {
               const t = s.trim()
-              // If it looks like a *single-line* quoted JSON string, try JSON.parse
               if (t.startsWith('"') && t.endsWith('"') && !t.includes('\n')) {
                 try {
-                  return JSON.parse(t) // unescapes \n, \", etc.
-                } catch {
-                  // fall through to raw
-                }
+                  return JSON.parse(t)
+                } catch {}
               }
-              // Otherwise treat as raw text. If it’s multi-line and starts/ends with a bare quote, strip it.
               if (t.startsWith('"') && t.endsWith('"')) {
                 return t.slice(1, -1)
               }
               return s
             }
 
-            // Collect frames
             const toolFrames: any[] = []
             const textChunks: string[] = []
 
             for (const f of frames) {
               const payload = f.payload ?? ''
-
               if (f.prefix === 'a' || f.prefix === '9' || f.prefix === 'e') {
-                // JSON-ish frames
-                // Some backends sometimes include leading noise; be forgiving
                 const trimmedPayload = payload.trim()
                 try {
                   const parsed = safeParseJSON(trimmedPayload)
                   if (f.prefix === 'a') toolFrames.push(parsed)
-                  // we rarely need '9' or 'e' here, but keeping parity with your original logic
-                } catch {
-                  // ignore unparseable diagnostic lines (e.g., "still")
-                }
+                } catch {}
               } else if (f.prefix === '0') {
-                // Text frame: keep all lines; do not JSON.parse unless it's clearly a single-line JSON string
                 textChunks.push(decodePossibleJSONString(payload))
-              } else {
-                // Unknown prefix; ignore
               }
             }
 
-            // Prefer the last a: frame that has a "result"
             const chosen =
               [...toolFrames].reverse().find(x => x && typeof x === 'object' && 'result' in x) ??
-              [...toolFrames].reverse().find(x => x) // fallback to any 'a' frame
+              [...toolFrames].reverse().find(x => x)
 
             if (chosen && chosen.result !== undefined) {
               return { result: chosen.result }
             }
-            if (chosen) {
-              return { result: chosen } // sometimes the object itself is the result
-            }
-            if (textChunks.length) {
-              return { result: { success: true, output: textChunks.join('\n') } }
-            }
-
-            // Nothing usable found
+            if (chosen) return { result: chosen }
+            if (textChunks.length) return { result: { success: true, output: textChunks.join('\n') } }
             throw new Error('No parsable tool frames found in streaming response')
           }
 
@@ -913,10 +854,8 @@ const {
                 return toolInvocation
               })
 
-              // v5: also try to update parts for tool-* / tool-call / tool-result
               const updatedParts = message.parts
                 ? message.parts.map((part: any) => {
-                    // legacy shape
                     if (
                       part.type === 'tool-invocation' &&
                       part.toolInvocation?.toolCallId === toolCallId
@@ -930,14 +869,12 @@ const {
                         },
                       }
                     }
-                    // v5 generic tool-call/result
                     if (part.type === 'tool-call' && part.toolCallId === toolCallId) {
                       return { ...part, state: 'result', output: result.result }
                     }
                     if (part.type === 'tool-result' && part.toolCallId === toolCallId) {
                       return { ...part, result: result.result }
                     }
-                    // v5 typed tool part: tool-queryVTOP
                     if (part.type?.startsWith?.('tool-') && part.toolCallId === toolCallId) {
                       return { ...part, state: 'result', output: result.result }
                     }
@@ -955,7 +892,6 @@ const {
           })
           setMessages([...updatedMessages])
 
-          // Inject formatted/summary content into the assistant message if absent so UI reflects parsed result promptly
           try {
             const formattedContent =
               (result.result && (result.result.formatted_content || result.result.summary)) || ''
@@ -986,7 +922,6 @@ const {
                   }
                   return clone
                 }
-                // If no existing assistant container, create one
                 const newAssistantMsg = {
                   id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
                   role: 'assistant',
@@ -1003,7 +938,6 @@ const {
                 } as any
                 return [...prev, newAssistantMsg]
               })
-              // Track last assistant message text for follow-up suggestions
               try {
                 setLastAssistantMessage(
                   formattedContent.length > 400 ? formattedContent.slice(0, 400) : formattedContent
@@ -1011,7 +945,6 @@ const {
               } catch {}
             }
             if (!showFullChat) setShowFullChat(true)
-            // Attempt scroll to bottom shortly after DOM updates
             setTimeout(() => {
               try {
                 const container = contentRef.current?.parentElement
@@ -1070,7 +1003,6 @@ const {
     useEffect(() => {
       if (chatId || optimisticChatId) {
         window.scrollTo(0, 0)
-
         setTimeout(() => {
           window.scrollTo(0, 0)
         }, 100)
@@ -1082,11 +1014,8 @@ const {
         const forceScrollToTop = () => {
           window.scrollTo(0, 0)
         }
-
         forceScrollToTop()
-
         const timeoutId = setTimeout(forceScrollToTop, 50)
-
         return () => {
           clearTimeout(timeoutId)
         }
@@ -1124,14 +1053,21 @@ const {
       }
     }, [messages, updateToolResult])
 
+    // ---------- MEMOIZED toolParts so it doesn't change every render ----------
+    const lastMessageAny = messages.length ? (messages[messages.length - 1] as any) : undefined
+    const toolParts = useMemo(() => {
+      const parts = lastMessageAny?.parts ?? []
+      return parts.filter(
+        (p: any) =>
+          typeof p?.type === 'string' &&
+          (p.type === 'tool-call' || p.type === 'tool-result' || p.type.startsWith('tool-'))
+      )
+    }, [lastMessageAny])
+    // -------------------------------------------------------------------------
+
     if (!showFullChat) {
       return (
-        <VTOPToolHandler
-          toolParts={messages[messages.length - 1]?.parts?.filter(
-            (p: any) => p.type === 'tool-call' || p.type === 'tool-result' || p.type.startsWith('tool-')
-          )}
-          onCredentialsSubmit={handleVTOPCredentials}
-        >
+        <VTOPToolHandler toolParts={toolParts} onCredentialsSubmit={handleVTOPCredentials}>
           <UpsellBanner />
           <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
           <Hub
@@ -1163,7 +1099,7 @@ const {
                     onToolSelect={handleToolSelection}
                     selectedTool={selectedTool}
                     placeholder="ask anything..."
-                  />{' '}
+                  />
                 </motion.div>
 
                 <div className="w-full max-w-5xl flex justify-center -mt-3">
@@ -1284,9 +1220,9 @@ const {
 
                 <DynamicLoadingIndicator
                   messages={messages}
-                  isLoading={String(status) === 'loading' || String(status) === 'submitted' || vtopLoading}
+                  isLoading={computedIsLoading}
                   status={status}
-                  showForFirstMessage={true}
+                  showForFirstMessage
                 />
 
                 <SuggestedQuestions
@@ -1300,13 +1236,9 @@ const {
         </VTOPToolHandler>
       )
     }
+
     return (
-      <VTOPToolHandler
-        toolParts={messages[messages.length - 1]?.parts?.filter(
-          (p: any) => p.type === 'tool-call' || p.type === 'tool-result' || p.type.startsWith('tool-')
-        )}
-        onCredentialsSubmit={handleVTOPCredentials}
-      >
+      <VTOPToolHandler toolParts={toolParts} onCredentialsSubmit={handleVTOPCredentials}>
         <UpsellBanner />
         <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
         <Hub
@@ -1314,7 +1246,7 @@ const {
           onClose={() => {
             setHubOpen(false)
           }}
-        />{' '}
+        />
         <div
           ref={mainRef}
           className="flex flex-col h-[calc(var(--vh,1vh)*100)] bg-transparent text-foreground overflow-hidden mobile-viewport-fix"
@@ -1360,7 +1292,7 @@ const {
                 new chat
               </Button>
             </div>
-          </header>{' '}
+          </header>
           <div className="flex-1 relative overflow-hidden">
             <div
               className={cn(
@@ -1369,7 +1301,6 @@ const {
                 isMobile && isFirstMessageInNewChat && 'mobile-prevent-auto-scroll'
               )}
             >
-              {' '}
               <div
                 ref={contentRef}
                 className={cn('max-w-3xl mx-auto px-4 space-y-6', isMobile ? 'pt-2 pb-6' : 'pt-5')}
@@ -1383,68 +1314,8 @@ const {
                     {errorMessage}
                   </motion.div>
                 )}
-                <RateLimitErrorDisplay />{' '}
-                {/* {vtopDisclaimer && (
-                  (() => {
-                    const formatCommandName = (cmd: string) => {
-                      const map: Record<string, string> = {
-                        'class-message': 'Class Message',
-                        'exam-schedule': 'Exam Schedule',
-                        'library-dues': 'Library Dues',
-                        'leave-status': 'Leave Status',
-                        nightslip: 'Night Slip',
-                        da: 'Digital Assignment',
-                        'course-page': 'Course Page',
-                        attendance: 'Attendance',
-                        timetable: 'Timetable',
-                        grades: 'Grades',
-                        profile: 'Profile',
-                      }
-                      return map[cmd] || (cmd ? cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ') : 'VTOP data')
-                    }
-                    const prettyCmd = formatCommandName(vtopDisclaimer.command)
-                    return (
-                      <motion.div
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="rounded-xl border border-blue-500/30 bg-blue-500/5 px-4 py-3 text-sm flex flex-col sm:flex-row sm:items-center gap-3"
-                      >
-                        <div className="flex items-start gap-3 flex-1 min-w-0">
-                          <div className="mt-0.5">
-                            <GraduationCap className="h-5 w-5 text-blue-500" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-foreground truncate">Authentication Required</div>
-                            <div className="text-xs text-muted-foreground mt-1 truncate">
-                              Please log in to VTOP to access your {prettyCmd} data.
-                            </div>
-                            <div className="text-[11px] text-muted-foreground/80 mt-2">
-                              Privacy notice: Your credentials are encrypted and stored locally in your browser. They are used only to log into VTOP to fetch your data.
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              window.dispatchEvent(
-                                new CustomEvent('vtopLoginTrigger', {
-                                  detail: { command: vtopDisclaimer.command, toolCallId: vtopDisclaimer.toolCallId },
-                                })
-                              )
-                            }}
-                            className="bg-blue-500 hover:bg-blue-600 text-white"
-                          >
-                            Login
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setVtopDisclaimer(null)}>
-                            Dismiss
-                          </Button>
-                        </div>
-                      </motion.div>
-                    )
-                  })()
-                )} */}
+                <RateLimitErrorDisplay />
+                {/* Optional vtop disclaimer block is intentionally kept commented out */}
                 <VirtualizedMessages
                   messages={messages}
                   chatId={optimisticChatId}
@@ -1455,7 +1326,11 @@ const {
                   maximizedItem={maximizedArtifact}
                   setMaximizedItem={setMaximizedArtifact}
                 />
-                <DynamicLoadingIndicator messages={messages} isLoading={String(status) === 'loading' || String(status) === 'submitted' || vtopLoading} status={status} />
+                <DynamicLoadingIndicator
+                  messages={messages}
+                  isLoading={computedIsLoading}
+                  status={status}
+                />
                 <div ref={messagesEndRef} className={isLoading ? 'h-20' : 'h-0'} aria-hidden="true" />
               </div>
             </div>
@@ -1546,9 +1421,6 @@ export const ChatInterface = memo(
     )
   },
   (prevProps, nextProps) => {
-    return (
-      prevProps.chatId === nextProps.chatId &&
-      prevProps.autoResume === nextProps.autoResume
-    )
+    return prevProps.chatId === nextProps.chatId && prevProps.autoResume === nextProps.autoResume
   }
 )

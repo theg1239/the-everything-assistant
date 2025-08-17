@@ -234,6 +234,7 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
 interface DynamicLoadingIndicatorProps {
   messages: any[]
   isLoading: boolean
+  status: 'idle' | 'loading' | 'streaming' | 'error' | 'submitted' | 'ready'
   showForFirstMessage?: boolean
   className?: string
   retryCount?: number
@@ -242,6 +243,7 @@ interface DynamicLoadingIndicatorProps {
 export function DynamicLoadingIndicator({
   messages,
   isLoading,
+  status,
   showForFirstMessage = false,
   className = '',
 }: DynamicLoadingIndicatorProps) {
@@ -405,8 +407,6 @@ export function DynamicLoadingIndicator({
     }
   }, [isLoading, paperStatus])
 
-  if (!isLoading && !paperStatus) return null
-  if (hideAfterDone || hideAfterNoProgress) return null
 
   const labelMap: Record<string, string> = {
     start: 'Starting smart paper search...',
@@ -433,53 +433,52 @@ export function DynamicLoadingIndicator({
     ? labelMap[paperStatus.lastStep] || paperStatus.lastStep
     : null
 
-  const getCurrentToolInfo = (): ToolInfo => {
-    if (messages.length === 0) {
-      return TOOL_CONFIGS.thinking
+  const getCurrentToolInfo = (): ToolInfo | null => {
+    if (status === 'loading' || status === 'submitted') {
+      return TOOL_CONFIGS.thinking;
     }
 
-    const lastMessage = messages[messages.length - 1]
-
-    if (lastMessage?.role === 'assistant' && lastMessage.streaming) {
-      return TOOL_CONFIGS.streaming
-    }
-
-    if (lastMessage?.role === 'user') {
-      return TOOL_CONFIGS.thinking
-    }
-    if (lastMessage?.role === 'assistant' && lastMessage.toolInvocations) {
-      const activeTools = lastMessage.toolInvocations.filter((tool: any) => {
-        return tool.state === 'call' || tool.state !== 'result' || !tool.result
-      })
-
-      activeTools.sort((a: any, b: any) => {
-        const aPriority = getPriority(a.toolName)
-        const bPriority = getPriority(b.toolName)
-
-        if (aPriority !== bPriority) return bPriority - aPriority
-        if (a.state === 'call' && b.state !== 'call') return -1
-        if (b.state === 'call' && a.state !== 'call') return 1
-        return 0
-      })
-
-      if (activeTools.length > 0 && activeTools[0].toolName) {
-        return TOOL_CONFIGS[activeTools[0].toolName] || TOOL_CONFIGS.default
-      }
-
-      if (lastMessage.toolInvocations.length > 0) {
-        const latestTool = lastMessage.toolInvocations[lastMessage.toolInvocations.length - 1]
-        if (latestTool.toolName) {
-          return TOOL_CONFIGS[latestTool.toolName] || TOOL_CONFIGS.default
+    if (status === 'streaming') {
+        if (messages.length === 0) {
+          return null
         }
-      }
+
+        const lastMessage = messages[messages.length - 1]
+
+        if (lastMessage?.role === 'assistant' && lastMessage.toolInvocations) {
+          const activeTools = lastMessage.toolInvocations.filter((tool: any) => {
+            return tool.state === 'call' || tool.state !== 'result' || !tool.result
+          })
+
+          activeTools.sort((a: any, b: any) => {
+            const aPriority = getPriority(a.toolName)
+            const bPriority = getPriority(b.toolName)
+
+            if (aPriority !== bPriority) return bPriority - aPriority
+            if (a.state === 'call' && b.state !== 'call') return -1
+            if (b.state === 'call' && a.state !== 'call') return 1
+            return 0
+          })
+
+          if (activeTools.length > 0 && activeTools[0].toolName) {
+            return TOOL_CONFIGS[activeTools[0].toolName] || TOOL_CONFIGS.default
+          }
+
+          if (lastMessage.toolInvocations.length > 0) {
+            const latestTool = lastMessage.toolInvocations[lastMessage.toolInvocations.length - 1]
+            if (latestTool.toolName) {
+              return TOOL_CONFIGS[latestTool.toolName] || TOOL_CONFIGS.default
+            }
+          }
+        }
     }
 
-    if (showForFirstMessage && messages.length === 1) {
-      return TOOL_CONFIGS.thinking
-    }
-
-    return TOOL_CONFIGS.thinking
+    return null
   }
+
+  const toolInfo = getCurrentToolInfo()
+
+  if (!toolInfo) return null
 
   const getPriority = (toolName: string): number => {
     const priorities: Record<string, number> = {
@@ -499,7 +498,6 @@ export function DynamicLoadingIndicator({
     return priorities[toolName] || 1
   }
 
-  const toolInfo = getCurrentToolInfo()
 
   const isSmartPaperSearch =
     toolInfo.name === 'Smart Paper Search' ||

@@ -24,19 +24,12 @@ export default async function ChatPage({ params }: ChatPageProps) {
     redirect('/')
   }
 
-  const messages = await getMessages(id)
+  
   return (
     <main id="main-content" className="flex min-h-screen flex-col bg-transparent">
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex flex-1 flex-col overflow-hidden">
           <ChatInterface
-            initialMessages={messages.map(msg => ({
-              id: msg.id,
-              role: msg.role,
-              parts: [{ type: 'text', text: msg.content }],
-              toolInvocations: msg.toolInvocations,
-              createdAt: msg.created_at,
-            }))}
             chatId={id}
             autoResume={true}
           />

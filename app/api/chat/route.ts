@@ -16,7 +16,6 @@ import { memoryService } from '@/lib/memory/memory-service'
 import { generateChatPath, extractTitleFromContent } from '@/lib/utils'
 import { sanitizeToolInvocations } from '@/lib/sanitize-tools'
 
-/** ---- local UI-shape used by your client payload ---- */
 type UIMsg = {
   id?: string
   role: 'system' | 'user' | 'assistant' | 'tool'
@@ -396,7 +395,7 @@ export async function POST(req: Request) {
       const firstText = messages[0] ? getTextFromUIMsg(messages[0]) : ''
       const tempTitle = extractTitleFromContent(firstText || 'New Chat')
       const path = generateChatPath()
-      chat = await createChat(session.user.id, tempTitle, path)
+      chat = await createChat(session.user.id, tempTitle, path, chatId)
 
       if (firstText.trim()) {
         setTimeout(() => {

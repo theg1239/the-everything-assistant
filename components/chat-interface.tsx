@@ -110,23 +110,20 @@ function memoryToMessage(memory: MemoryWithId): Message {
 }
 
 interface ChatInterfaceProps {
-  initialMessages?: Message[]
   chatId?: string
   autoResume?: boolean
 }
 
-// helpers for v5 parts-based messages
 const getTextFromMessage = (m: { parts?: Array<{ type: string; text?: string }> } | undefined) =>
   m?.parts?.filter(p => p.type === 'text').map(p => p.text || '').join(' ') || ''
 
-const makeClientId = () =>
-  (typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2)}`)
+import { createId as cuid } from '@paralleldrive/cuid2'
+
+const makeClientId = () => cuid()
 
 const PureChatInterface = memo(
-  ({ initialMessages = [], chatId, autoResume = false }: ChatInterfaceProps) => {
-    const [showFullChat, setShowFullChat] = useState(initialMessages.length > 0)
+  ({ chatId, autoResume = false }: ChatInterfaceProps) => {
+    const [showFullChat, setShowFullChat] = useState(false)
     const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebar()
     const [hubOpen, setHubOpen] = useState(false)
     const [vtopLoading, setVtopLoading] = useState(false)
@@ -215,11 +212,7 @@ const PureChatInterface = memo(
     useEffect(() => {
       currentChatIdRef.current = optimisticChatId || chatId
     }, [optimisticChatId, chatId])
-    useEffect(() => {
-      const hasUser = initialMessages.some(m => m.role === 'user')
-      setHasUserInitiatedConversation(hasUser)
-      setIsFirstMessageInNewChat(initialMessages.length === 0)
-    }, [initialMessages])
+
 
     useEffect(() => {
       const loadPreferences = async () => {
@@ -315,14 +308,11 @@ const {
   transport: new DefaultChatTransport({
     api: '/api/chat',
   }),
-  messages: initialMessages,
-  experimental_throttle: 25,
+  id: chatId,
 
-  // v5: onFinish receives a single options object { message }
   onFinish: ({ message }: { message: AIMessage }) => {
     const currentChatId = currentChatIdRef.current;
 
-    // update last assistant text
     const asstText = getTextFromMessage(message as any);
     if ((message as any).role === 'assistant' && asstText) {
       setLastAssistantMessage(asstText);
@@ -426,7 +416,7 @@ const {
     }, [isLoading])
 
     useEffect(() => {
-      if (initialMessages.length > 0 && showFullChat) {
+      if (messages.length > 0 && showFullChat) {
         const container = contentRef.current?.parentElement
         if (container) {
           container.scrollTop = container.scrollHeight
@@ -435,7 +425,7 @@ const {
         }
         setIsAtBottom(true)
       }
-    }, [initialMessages.length, showFullChat])
+    }, [messages.length, showFullChat])
 
     const throttledScrollToBottom = useThrottle(scrollToBottom, 50)
 
@@ -492,6 +482,12 @@ const {
         throttledScrollToBottom()
       }
     }, [messages, isLoading, isInitialRender, throttledScrollToBottom])
+
+        useEffect(() => {
+      const hasUser = messages.some(m => m.role === 'user')
+      setHasUserInitiatedConversation(hasUser)
+      setIsFirstMessageInNewChat(messages.length === 0)
+    }, [messages])
 
     useEffect(() => {
       if (!isInitialRender && messages.length > 0 && isLoading && autoScrollEnabled) {
@@ -1288,7 +1284,8 @@ const {
 
                 <DynamicLoadingIndicator
                   messages={messages}
-                  isLoading={isLoading || vtopLoading}
+                  isLoading={String(status) === 'loading' || String(status) === 'submitted' || vtopLoading}
+                  status={status}
                   showForFirstMessage={true}
                 />
 
@@ -1458,7 +1455,7 @@ const {
                   maximizedItem={maximizedArtifact}
                   setMaximizedItem={setMaximizedArtifact}
                 />
-                <DynamicLoadingIndicator messages={messages} isLoading={isLoading || vtopLoading} />
+                <DynamicLoadingIndicator messages={messages} isLoading={String(status) === 'loading' || String(status) === 'submitted' || vtopLoading} status={status} />
                 <div ref={messagesEndRef} className={isLoading ? 'h-20' : 'h-0'} aria-hidden="true" />
               </div>
             </div>
@@ -1539,11 +1536,11 @@ const {
 )
 
 export const ChatInterface = memo(
-  ({ initialMessages = [], chatId, autoResume = true }: ChatInterfaceProps) => {
+  ({ chatId, autoResume = true }: ChatInterfaceProps) => {
     return (
       <RateLimitProvider>
         <VTOPProvider>
-          <PureChatInterface initialMessages={initialMessages} chatId={chatId} autoResume={autoResume} />
+          <PureChatInterface chatId={chatId} autoResume={autoResume} />
         </VTOPProvider>
       </RateLimitProvider>
     )
@@ -1551,12 +1548,7 @@ export const ChatInterface = memo(
   (prevProps, nextProps) => {
     return (
       prevProps.chatId === nextProps.chatId &&
-      prevProps.autoResume === nextProps.autoResume &&
-      prevProps.initialMessages?.length === nextProps.initialMessages?.length &&
-      (prevProps.initialMessages?.every(
-        (msg, index) => msg.id === nextProps.initialMessages?.[index]?.id
-      ) ??
-        true)
+      prevProps.autoResume === nextProps.autoResume
     )
   }
 )

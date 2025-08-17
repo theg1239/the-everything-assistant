@@ -331,7 +331,7 @@ const PureChatInterface = memo(
           setTimeout(() => checkTitleUpdate(), 3000)
         }
       },
-      onError: err => {
+  onError: err => {
         const errorMessage = err.message || err.toString()
         const hasResponseBody = typeof err === 'object' && err !== null && 'responseBody' in err
         const responseBody = hasResponseBody ? (err as any).responseBody : ''
@@ -344,16 +344,28 @@ const PureChatInterface = memo(
           (typeof responseBody === 'string' &&
             responseBody.includes('contents.parts must not be empty'))
 
-        const isRateLimit = checkForRateLimitError(err)
+        const localRateLimitDetected = /rate limit|too many requests|quota exceeded|rate_limited/i.test(
+          String(errorMessage || responseBody || '')
+        )
+
+        let isRateLimit = false
         try {
-          // debug logging to help trace why UI may show generic toast instead of rate limit display
+          isRateLimit = checkForRateLimitError(err)
+        } catch (e) {
+          // ignore
+        }
+
+        const contextRateLimit = !!rateLimitError?.isRateLimit
+
+        try {
+          // debug logging
           // eslint-disable-next-line no-console
-          console.debug('[Chat] onError - isRateLimit:', isRateLimit, 'isGeminiStreamingError:', isGeminiStreamingError, 'error:', err)
+          //console.debug('[Chat] onError - localRateLimitDetected:', localRateLimitDetected, 'isRateLimit:', isRateLimit, 'contextRateLimit:', contextRateLimit, 'isGeminiStreamingError:', isGeminiStreamingError, 'error:', err)
         } catch {}
-        if (!isRateLimit && !isGeminiStreamingError) {
+
+        if (!localRateLimitDetected && !isRateLimit && !contextRateLimit && !isGeminiStreamingError) {
           toast.error('Something went wrong. Please try again.')
         }
-        // Do NOT show toast for Gemini streaming errors!
       },
     })
 

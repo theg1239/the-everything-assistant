@@ -43,6 +43,8 @@ export function RateLimitErrorDisplay() {
 
   const resetTimeFormatted = formatResetTime(rateLimitError.resetTime)
 
+  const estimated = rateLimitError.estimated ?? false
+
   const errorDisplay = (
     <AnimatePresence>
       <motion.div
@@ -99,7 +101,7 @@ export function RateLimitErrorDisplay() {
 
           {/* Reset Time and Tips Footer */}
           <div className="overflow-hidden rounded-b-2xl">
-            {resetTimeFormatted && (
+            {rateLimitError.resetTime && (
               <div className="px-6 py-3 bg-muted/30">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Clock className="w-4 h-4 text-orange-500/70" />

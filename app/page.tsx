@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth/mfa-otp'
+import { authOptions } from '@/lib/auth/options'
 import { ChatInterface } from '@/components/chat/chat-interface'
 
 async function getLatestBroadcast() {

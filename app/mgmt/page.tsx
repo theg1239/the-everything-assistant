@@ -1,37 +1,10 @@
-'use client'
+import ManagementClient from './management-client'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
-import { useState, useEffect, useCallback } from 'react'
-import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
-import { motion } from 'framer-motion'
-import {
-  RefreshCw,
-  AlertTriangle,
-  CheckCircle,
-  XCircle,
-  Play,
-  Pause,
-  Eye,
-  EyeOff,
-  Loader2,
-  X,
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
-import TokenUsage from './components/token-usage'
-import MessagesViewerDialog from './components/messages-viewer'
-import SystemHealth from './components/system-health'
-import BroadcastForm from './components/broadcast-form'
-import PastBroadcasts from './components/past-broadcasts'
-import SystemStatistics from './components/system-statistics'
-import APIKeyManagement from './components/api-key-mgmt'
-import UserRateLimiting from './components/user-rate-limiting'
-import ManagementActions from './components/mgmt-actions'
-import MgmtLayout from './components/mgmt-layout'
-import MgmtTabBar from './components/mgmt-tabbar'
-import Overview from './components/overview'
-
+/* ────────────────────────────────────────────────────────────────
+   Types (kept so your file compiles if imported elsewhere)
+────────────────────────────────────────────────────────────────── */
 type UsageLog = {
   id: string
   userId?: string | null
@@ -43,49 +16,24 @@ type UsageLog = {
   totalTokens: number
   createdAt: string
 }
-import { BroadcastDialog } from '@/components/broadcast-dialog'
 
 interface RateLimitStatus {
   status: string
   timestamp: string
   environment: {
-    validation: {
-      isValid: boolean
-      errors: string[]
-      warnings: string[]
-    }
-    summary: {
-      hasRedis: boolean
-      apiKeys: {
-        totalAvailable: number
-      }
-      adminAccess: {
-        email: string
-      }
-    }
+    validation: { isValid: boolean; errors: string[]; warnings: string[] }
+    summary: { hasRedis: boolean; apiKeys: { totalAvailable: number }; adminAccess: { email: string } }
   }
   configuration: {
     apiKeys: {
       enableRotation: boolean
       rotateOnRateLimit: boolean
       keyCount: number
-      rateLimit: {
-        requestsPerMinute: number
-        requestsPerHour: number
-      }
-      retryConfig: {
-        maxRetries: number
-        baseDelay: number
-        maxDelay: number
-      }
+      rateLimit: { requestsPerMinute: number; requestsPerHour: number }
+      retryConfig: { maxRetries: number; baseDelay: number; maxDelay: number }
       keyHealthCheckInterval: number
     }
-    userRateLimit: {
-      enabled: boolean
-      requestsPerMinute: number
-      requestsPerHour: number
-      requestsPerDay: number
-    }
+    userRateLimit: { enabled: boolean; requestsPerMinute: number; requestsPerHour: number; requestsPerDay: number }
   }
   keyUsage: {
     [keyIndex: string]: {
@@ -93,28 +41,18 @@ interface RateLimitStatus {
       failures: number
       lastUsed: number | null
       lastFailed: number | null
-      availableTokens: {
-        minute: number
-        hour: number
-        day: number
-      }
+      availableTokens: { minute: number; hour: number; day: number }
       isRateLimited: boolean
       isCurrent: boolean
     }
   }
-  healthCheck: {
-    redis: string
-    apiKeys: string
-  }
+  healthCheck: { redis: string; apiKeys: string }
 }
 
 interface Stats {
   totalUsers: number
   messagesInLast30Minutes: number
-  toolCallStats: {
-    toolName: string
-    count: number
-  }[]
+  toolCallStats: { toolName: string; count: number }[]
 }
 
 interface BroadcastSlide {
@@ -130,418 +68,389 @@ interface PastBroadcast {
   sentBy: string
 }
 
-export default function ManagementPage() {
-  const { data: session, status } = useSession()
-  const router = useRouter()
-  const [loading, setLoading] = useState(false)
-  const [autoRefresh, setAutoRefresh] = useState(false)
-  const [data, setData] = useState<RateLimitStatus | null>(null)
-  const [stats, setStats] = useState<Stats | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
-  // details should always be visible by default per user request
-  const [showSensitiveData, setShowSensitiveData] = useState(true)
-  const [broadcastSlides, setBroadcastSlides] = useState([{ title: '', text: '', image: '' }])
-  const [pastBroadcasts, setPastBroadcasts] = useState<PastBroadcast[]>([])
-  const [editingBroadcast, setEditingBroadcast] = useState<string | null>(null)
-  const [editSlides, setEditSlides] = useState<BroadcastSlide[]>([])
-  const [loadingBroadcasts, setLoadingBroadcasts] = useState(false)
-  const [showPreview, setShowPreview] = useState(false)
-  const [showEditPreview, setShowEditPreview] = useState(false)
-  const [usage, setUsage] = useState<{
-    recent: UsageLog[]
-    summary: any
-    summaryAllTime?: any
-  } | null>(null)
-  const [usageOpen, setUsageOpen] = useState(true)
-  const [viewerOpen, setViewerOpen] = useState(false)
-  const [viewerLoading, setViewerLoading] = useState(false)
-  const [viewerError, setViewerError] = useState<string | null>(null)
-  const [viewerData, setViewerData] = useState<
-    | {
-        chatId: string
-        user: { id: string; name: string | null; email: string | null } | null
-        messages: { id: string; role: 'user' | 'assistant'; content: string; createdAt: string }[]
-      }
-    | null
-  >(null)
+/* ────────────────────────────────────────────────────────────────
+   Goofy visual helpers (SSR-only, zero client JS)
+────────────────────────────────────────────────────────────────── */
+const EMOJI_SET_NEAR = ['🤡','🦄','🪄','🌈','🥳','🍩','☕','🛸','👾','🧪']
+const EMOJI_SET_FAR  = ['🐄','🐥','💥','🍕','🧃','🍌','🧨','🌀','🐸','🪅']
 
-  const openMessagesViewer = useCallback(async (chatId: string) => {
-    if (!chatId) return
-    try {
-      setViewerError(null)
-      setViewerLoading(true)
-      setViewerOpen(true)
-      const res = await fetch(`/api/chat-messages/${chatId}`)
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.error || 'Failed to fetch messages')
-      }
-      const data = (await res.json()) as {
-        chatId: string
-        user: { id: string; name: string | null; email: string | null } | null
-        messages: { id: string; role: 'user' | 'assistant'; content: string; createdAt: string }[]
-      }
-      setViewerData(data)
-    } catch (e: any) {
-      setViewerError(e?.message || 'Failed to fetch messages')
-    } finally {
-      setViewerLoading(false)
-    }
-  }, [])
+function makeDrops(count: number, emojis: string[]) {
+  return Array.from({ length: count }, (_, i) => {
+    const left = Math.floor(Math.random() * 100)
+    const delay = (Math.random() * -12).toFixed(2)
+    const duration = (7 + Math.random() * 10).toFixed(2)
+    const size = 16 + Math.floor(Math.random() * 28)
+    const emoji = emojis[i % emojis.length]
+    const rotate = -30 + Math.floor(Math.random() * 60)
+    const blur = Math.random() > 0.6 ? 'blur(1px)' : 'none'
+    const opacity = (0.6 + Math.random() * 0.4).toFixed(2)
+    return { left, delay, duration, size, emoji, rotate, blur, opacity }
+  })
+}
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const [rateLimitRes, statsRes, usageRes] = await Promise.all([
-        fetch('/api/rate-limit-status'),
-        fetch('/api/stats'),
-        fetch('/api/usage?limit=25&days=1'),
-      ])
+function EmojiRain({ countNear = 38, countFar = 26 }: { countNear?: number; countFar?: number }) {
+  const near = makeDrops(countNear, EMOJI_SET_NEAR)
+  const far  = makeDrops(countFar, EMOJI_SET_FAR)
 
-      if (!rateLimitRes.ok) {
-        const json = await rateLimitRes.json()
-        throw new Error(json.error || 'Failed to fetch rate limit status')
-      }
-      if (!statsRes.ok) {
-        const json = await statsRes.json()
-        throw new Error(json.error || 'Failed to fetch stats')
-      }
-      if (!usageRes.ok) {
-        const json = await usageRes.json()
-        throw new Error(json.error || 'Failed to fetch usage')
-      }
+  return (
+    <>
+      <style>{`
+        @keyframes fall {
+          0% { transform: translateY(-12vh) rotate(0deg); opacity: 0; }
+          10% { opacity: 1; }
+          100% { transform: translateY(115vh) rotate(360deg); opacity: 0.85; }
+        }
+        .unhinged-halo {
+          background:
+            radial-gradient(60% 60% at 50% 40%, rgba(236,72,153,.25), transparent 60%),
+            conic-gradient(from 180deg at 50% 50%, rgba(14,165,233,.22), rgba(168,85,247,.22), rgba(236,72,153,.22), rgba(14,165,233,.22));
+          filter: blur(40px);
+        }
+        .grid-warp {
+          background-image:
+            linear-gradient(to right, rgba(255,255,255,.06) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(255,255,255,.06) 1px, transparent 1px);
+          background-size: 28px 28px;
+          mask-image: radial-gradient(ellipse at center, rgba(0,0,0,1), rgba(0,0,0,0) 70%);
+          transform: perspective(800px) rotateX(55deg) translateY(-10%);
+        }
+        .glitch {
+          position: relative;
+          text-shadow:
+            0.03em 0 0 rgba(255,0,0,.7),
+            -0.02em -0.03em 0 rgba(0,255,255,.7);
+          animation: glitchy 2.5s infinite;
+        }
+        @keyframes glitchy {
+          0% { transform: translate(0) }
+          10% { transform: translate(1px,-1px) }
+          20% { transform: translate(-1px,1px) }
+          30% { transform: translate(1px,0) }
+          40% { transform: translate(0,1px) }
+          50% { transform: translate(-1px,0) }
+          60% { transform: translate(0,-1px) }
+          100% { transform: translate(0) }
+        }
+        .ticker {
+          animation: ticker-move 18s linear infinite;
+          white-space: nowrap;
+        }
+        @keyframes ticker-move {
+          0% { transform: translateX(0) }
+          100% { transform: translateX(-50%) }
+        }
+        .wobble:hover { transform: rotate(-1deg) translateY(-2px) scale(1.01); }
+        .crt {
+          background: radial-gradient(ellipse at center, rgba(255,255,255,.05), rgba(0,0,0,.15));
+          box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+        }
+      `}</style>
 
-      const rateLimitData = await rateLimitRes.json()
-      const statsData = await statsRes.json()
-      const usageData = await usageRes.json()
+      {/* FAR LAYER */}
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+        {far.map((d, idx) => (
+          <span
+            key={`far-${idx}`}
+            aria-hidden
+            style={{
+              left: `${d.left}%`,
+              animation: `fall ${d.duration}s linear infinite`,
+              animationDelay: `${d.delay}s`,
+              fontSize: `${Math.max(12, d.size - 8)}px`,
+              transform: `rotate(${d.rotate}deg)`,
+              filter: d.blur,
+              opacity: d.opacity as any,
+            }}
+            className="absolute top-0 select-none"
+          >
+            {d.emoji}
+          </span>
+        ))}
+      </div>
 
-      setData(rateLimitData)
-      setStats(statsData)
-      setUsage(usageData)
-      setLastUpdate(new Date())
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch data')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+      {/* NEAR LAYER */}
+      <div className="pointer-events-none fixed inset-0 z-10 overflow-hidden">
+        {near.map((d, idx) => (
+          <span
+            key={`near-${idx}`}
+            aria-hidden
+            style={{
+              left: `${d.left}%`,
+              animation: `fall ${d.duration}s linear infinite`,
+              animationDelay: `${d.delay}s`,
+              fontSize: `${d.size}px`,
+              transform: `rotate(${d.rotate}deg)`,
+              opacity: d.opacity as any,
+            }}
+            className="absolute top-0 select-none"
+          >
+            {d.emoji}
+          </span>
+        ))}
+      </div>
+    </>
+  )
+}
 
-  const fetchPastBroadcasts = useCallback(async () => {
-    setLoadingBroadcasts(true)
-    try {
-      const res = await fetch('/api/broadcast')
-      if (!res.ok) {
-        const json = await res.json()
-        throw new Error(json.error || 'Failed to fetch past broadcasts')
-      }
-      const data = await res.json()
-      setPastBroadcasts(data.broadcasts || [])
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to fetch past broadcasts')
-    } finally {
-      setLoadingBroadcasts(false)
-    }
-  }, [])
+function HaloBG() {
+  return (
+    <div aria-hidden className="fixed inset-0 -z-10 overflow-hidden">
+      <div className="absolute -top-24 left-1/2 h-[60vmax] w-[60vmax] -translate-x-1/2 rounded-full unhinged-halo opacity-60" />
+      <div className="grid-warp absolute bottom-[-30%] left-[-10%] right-[-10%] top-1/3" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,.06),transparent_60%)]" />
+    </div>
+  )
+}
 
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/login?callbackUrl=%2Fmgmt')
-      return
-    }
-    if (status === 'authenticated') {
-      fetchData()
-      fetchPastBroadcasts()
-    }
-  }, [status, router, fetchData, fetchPastBroadcasts])
+function AsciiCow({ small = false }: { small?: boolean }) {
+  const art = small
+    ? String.raw`
+  ^__^
+  (oo)\_______
+  (__)\       )\/\
+      ||----w |
+      ||     ||
+`
+    : String.raw`
+          \   ^__^
+           \  (oo)\_______
+              (__)\       )\/\
+                  ||----w |
+                  ||     ||
+`
+  return (
+    <pre className="mt-5 w-full overflow-x-auto rounded-md bg-muted/40 p-4 text-xs leading-4 text-muted-foreground">
+      {art}
+    </pre>
+  )
+}
 
-  // Default collapse heavy tables on mobile
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const isMobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches
-      setUsageOpen(!isMobile)
-    }
-  }, [])
+function Marquee({ text }: { text: string }) {
+  return (
+    <div className="relative mx-auto mt-4 w-full overflow-hidden rounded-md border border-dashed border-muted-foreground/30 bg-card/60 py-1">
+      <div className="ticker flex gap-8 px-4 text-[11px] sm:text-xs lowercase text-muted-foreground">
+        <span>{text}</span>
+        <span>{text}</span>
+        <span>{text}</span>
+        <span>{text}</span>
+      </div>
+    </div>
+  )
+}
 
-  useEffect(() => {
-    if (!autoRefresh) return
-    const iv = setInterval(fetchData, 10000)
-    return () => clearInterval(iv)
-  }, [autoRefresh, fetchData])
+function BigButton({
+  label,
+  subtitle,
+  href,
+  variant = 'primary',
+}: {
+  label: string
+  subtitle?: string
+  href?: string
+  variant?: 'primary' | 'danger' | 'ghost'
+}) {
+  const base =
+    'group relative flex w-full items-center justify-between rounded-md px-4 py-3 text-left transition wobble'
+  const variants = {
+    primary:
+      'bg-gradient-to-r from-fuchsia-500 to-rose-500 text-white hover:from-fuchsia-600 hover:to-rose-600 shadow-lg shadow-fuchsia-500/20',
+    danger:
+      'bg-gradient-to-r from-red-500 to-orange-500 text-white hover:from-red-600 hover:to-orange-600 shadow-lg shadow-red-500/20',
+    ghost:
+      'border border-dashed border-muted-foreground/40 bg-card/70 text-foreground hover:bg-card/90',
+  } as const
+  const Cmp = href ? 'a' : 'button'
+  return (
+    <Cmp href={href} className={`${base} ${variants[variant]}`}>
+      <div className="flex min-w-0 flex-col">
+        <span className="truncate font-semibold">{label}</span>
+        {subtitle ? (
+          <span className="truncate text-[11px] opacity-80">{subtitle}</span>
+        ) : null}
+      </div>
+      <span aria-hidden className="ml-3 text-xl transition group-hover:scale-110">🪄</span>
+    </Cmp>
+  )
+}
 
-  const handleSlideChange = (index: number, field: string, value: string) => {
-    const newSlides = [...broadcastSlides]
-    newSlides[index] = { ...newSlides[index], [field]: value }
-    setBroadcastSlides(newSlides)
-  }
+function CRTPanel({ title, lines }: { title: string; lines: string[] }) {
+  return (
+    <div className="crt rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-red-200 shadow-[0_0_30px_rgba(239,68,68,0.15)]">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-xs font-semibold">{title}</span>
+        <span aria-hidden className="text-[10px]">● ● ●</span>
+      </div>
+      <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-[11px] leading-5">
+        {lines.join('\n')}
+      </pre>
+    </div>
+  )
+}
 
-  const addSlide = () => {
-    setBroadcastSlides([...broadcastSlides, { title: '', text: '', image: '' }])
-  }
+function WobbleCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-border/60 bg-card/80 p-4 shadow-lg transition hover:shadow-xl">
+      <div className="mb-2 text-sm font-semibold lowercase">{title}</div>
+      <div className="text-xs text-muted-foreground">{children}</div>
+    </div>
+  )
+}
 
-  const removeSlide = (index: number) => {
-    if (broadcastSlides.length > 1) {
-      const newSlides = broadcastSlides.filter((_, i) => i !== index)
-      setBroadcastSlides(newSlides)
-    }
-  }
+function Wall({
+  title,
+  blurb,
+  checklist,
+  footer,
+  adminEmail,
+}: {
+  title: string
+  blurb: string
+  checklist: string[]
+  footer?: string
+  adminEmail: string
+}) {
+  return (
+    <main className="relative mx-auto flex min-h-screen w-full max-w-5xl flex-col items-center justify-start gap-6 px-4 py-8 sm:py-12 lg:py-16">
+      <HaloBG />
+      <EmojiRain />
 
-  const handleSendBroadcast = async () => {
-    setLoading(true)
-    try {
-      const res = await fetch('/api/broadcast/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slides: broadcastSlides }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Broadcast failed')
-      toast.success(json.message)
-      setBroadcastSlides([{ title: '', text: '', image: '' }]) // Reset form
-      fetchPastBroadcasts() // Refresh past broadcasts
-    } catch (err: any) {
-      toast.error(err.message || 'Broadcast failed')
-    } finally {
-      setLoading(false)
-    }
-  }
+      <div className="relative mx-auto w-full max-w-3xl text-center">
+        <h1 className="glitch bg-gradient-to-r from-pink-600 via-violet-600 to-sky-600 bg-clip-text text-3xl font-extrabold lowercase text-transparent sm:text-4xl md:text-5xl">
+          {title}
+        </h1>
+        <p className="mx-auto mt-3 max-w-2xl whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground sm:text-sm md:text-base lowercase">
+          {blurb}
+        </p>
+        <AsciiCow />
+      </div>
 
-  const handleEditBroadcast = (broadcast: PastBroadcast) => {
-    setEditingBroadcast(broadcast.id)
-    setEditSlides([...broadcast.slides])
-  }
+      <Marquee text="warning: unauthorized vibes detected • tip: never deploy on fridays • rubber chickens neutralize rate limits • hydrate now • touch grass • semicolons are optional (no they aren’t)" />
 
-  const handleSaveEditedBroadcast = async () => {
-    if (!editingBroadcast) return
-    setLoading(true)
-    try {
-      const res = await fetch('/api/broadcast', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: editingBroadcast,
-          slides: editSlides,
-        }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Failed to update broadcast')
-      toast.success('Broadcast updated successfully')
-      setEditingBroadcast(null)
-      setEditSlides([])
-      fetchPastBroadcasts() // Refresh past broadcasts
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to update broadcast')
-    } finally {
-      setLoading(false)
-    }
-  }
+      <section className="grid w-full max-w-4xl grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <WobbleCard title="ritual checklist">
+          <ul className="list-disc pl-4">
+            {checklist.map((c, i) => (
+              <li key={i} className="mb-1 lowercase">
+                {c}
+              </li>
+            ))}
+          </ul>
+        </WobbleCard>
 
-  const handleDeleteBroadcast = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this broadcast? This action cannot be undone.')) {
-      return
-    }
-    setLoading(true)
-    try {
-      const res = await fetch('/api/broadcast', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Failed to delete broadcast')
-      toast.success('Broadcast deleted successfully')
-      fetchPastBroadcasts() // Refresh past broadcasts
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to delete broadcast')
-    } finally {
-      setLoading(false)
-    }
-  }
+        <WobbleCard title="random vibe check">
+          <div className="flex flex-wrap gap-2 text-base">
+            <span aria-hidden>🪅</span>
+            <span aria-hidden>🛸</span>
+            <span aria-hidden>🍩</span>
+            <span aria-hidden>🧪</span>
+            <span aria-hidden>🤡</span>
+            <span aria-hidden>🐄</span>
+            <span aria-hidden>🌈</span>
+            <span aria-hidden>🦄</span>
+            <span aria-hidden>💥</span>
+            <span aria-hidden>👾</span>
+          </div>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            results: **unhinged**. proceed with sparkles.
+          </p>
+        </WobbleCard>
 
-  const handleEditSlideChange = (index: number, field: string, value: string) => {
-    const newSlides = [...editSlides]
-    newSlides[index] = { ...newSlides[index], [field]: value }
-    setEditSlides(newSlides)
-  }
+        <CRTPanel
+          title="red alert terminal"
+          lines={[
+            '>$ checking_admin_credentials … FAILED',
+            '>$ recalibrating_neon_grid … OK',
+            '>$ deploying_confetti_driver … OK',
+            '>$ contacting_rubber_chicken … VOICEMAIL',
+            '>$ escalating_to_goose_council … HONK PENDING',
+          ]}
+        />
+      </section>
 
-  const addEditSlide = () => {
-    setEditSlides([...editSlides, { title: '', text: '', image: '' }])
-  }
+      <section className="grid w-full max-w-4xl grid-cols-1 gap-3 sm:grid-cols-2">
+        <BigButton
+          label="summon admin"
+          subtitle="opens sacred email portal"
+          href={`mailto:jobs@vimegle.com?subject=grant%20me%20the%20powers`}
+          variant="primary"
+        />
+        <BigButton label="try login ritual" subtitle="you might be the chosen one" href="/api/auth/signin" variant="ghost" />
+        <BigButton label="open portal of chaos" subtitle="definitely do not press" href="#" variant="danger" />
+        <BigButton label="summon rubber chicken" subtitle="bonk rate limits away" href="#" variant="ghost" />
+      </section>
 
-  const removeEditSlide = (index: number) => {
-    if (editSlides.length > 1) {
-      const newSlides = editSlides.filter((_, i) => i !== index)
-      setEditSlides(newSlides)
-    }
-  }
+      {footer ? (
+        <p className="mt-4 px-4 text-center text-[11px] text-muted-foreground lowercase">{footer}</p>
+      ) : null}
 
-  const handleAction = async (action: string, config?: any) => {
-    setLoading(true)
-    try {
-      const res = await fetch('/api/rate-limit-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, config }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Action failed')
-      toast.success(json.message)
-      await fetchData()
-    } catch (err: any) {
-      toast.error(err.message || 'Action failed')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const formatTimestamp = (ts: number | null) => {
-    return ts ? new Date(ts).toLocaleString() : 'Never'
-  }
-
-  const getStatusColor = (isHealthy: boolean) => (isHealthy ? 'text-green-500' : 'text-red-500')
-  const getStatusIcon = (isHealthy: boolean) => (isHealthy ? CheckCircle : XCircle)
-
-  if (status === 'loading') {
-    return (
-      <div className="flex flex-col h-screen bg-transparent">
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="w-5 h-5 animate-spin" /> Loading...
+      <footer className="mt-8 w-full max-w-4xl rounded-md border border-dashed border-muted-foreground/30 bg-card/70 p-3">
+        <div className="flex flex-col items-center justify-between gap-2 sm:flex-row">
+          <div className="text-[11px] lowercase text-muted-foreground">
+            disclaimer: all cows depicted are professionals on a closed course. 🐄
+          </div>
+          <div className="flex items-center gap-2 text-lg" aria-hidden>
+            <span>🌀</span>
+            <span>🍕</span>
+            <span>🧃</span>
           </div>
         </div>
-      </div>
+      </footer>
+    </main>
+  )
+}
+
+/* ────────────────────────────────────────────────────────────────
+   Page (auth logic unchanged)
+────────────────────────────────────────────────────────────────── */
+export default async function ManagementPage() {
+  const session = await getServerSession(authOptions)
+  const adminEmail = process.env.RATE_LIMIT_ADMIN_EMAIL ?? 'admin@example.com'
+
+  if (!process.env.RATE_LIMIT_ADMIN_EMAIL) {
+    return (
+      <Wall
+        adminEmail={adminEmail}
+        title={'oopsie-daisy! admin not found (503)'}
+        blurb={[
+          'the council of ducks reviewed your request and decreed:',
+          '"needs admin vibes."',
+          '',
+          'to appease the ducks, set RATE_LIMIT_ADMIN_EMAIL in your env,',
+          'preferably while wearing sunglasses indoors. 😎',
+        ].join('\n')}
+        checklist={[
+          'locate your .env like it’s a rare pokemon',
+          'add RATE_LIMIT_ADMIN_EMAIL=you@really.cool',
+          'restart dev server with jazz hands',
+          'refresh page and shout “enhance!”',
+        ]}
+        footer={'pro tip: coffee + donuts increase admin spawn rate by 9000%. 🍩☕'}
+      />
     )
   }
 
-  // header actions removed: show details always on, no auto-refresh/load buttons in header
-
-  const [activeTab, setActiveTab] = useState<'overview' | 'tokens' | 'broadcasts' | 'keys' | 'stats' | 'users'>('overview')
-
-  return (
-    <MgmtLayout
-      title="mgmt"
-      subtitle="monitor system health, tokens, broadcasts, and keys"
-      nav={<MgmtTabBar active={activeTab} onChange={(t: any) => setActiveTab(t)} />}
-    >
-      {/* error / loading */}
-      {error && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-          <div className="rounded-lg bg-destructive/10 backdrop-blur-sm border border-destructive/20 p-4">
-            <div className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="w-5 h-5" />
-              <span className="font-medium">error: {error}</span>
-            </div>
-          </div>
-        </motion.div>
-      )}
-
-      {!data && loading && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-center py-12">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="w-6 h-6 animate-spin" /> loading status...
-          </div>
-        </motion.div>
-      )}
-
-      {data && (
-        <div className="space-y-6">
-          <MessagesViewerDialog viewerOpen={viewerOpen} setViewerOpen={setViewerOpen} viewerLoading={viewerLoading} viewerError={viewerError} viewerData={viewerData} />
-
-          {activeTab === 'overview' && (
-            <Overview stats={stats} usage={usage} />
-          )}
-
-          {activeTab === 'tokens' && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-              <TokenUsage usage={usage} usageOpen={usageOpen} setUsageOpen={setUsageOpen} openMessagesViewer={openMessagesViewer} />
-            </motion.div>
-          )}
-
-          {activeTab === 'broadcasts' && (
-            <div className="space-y-4">
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-                <BroadcastForm broadcastSlides={broadcastSlides} handleSlideChange={handleSlideChange} addSlide={addSlide} removeSlide={removeSlide} setShowPreview={setShowPreview} handleSendBroadcast={handleSendBroadcast} loading={loading} />
-              </motion.div>
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-                <PastBroadcasts
-                  pastBroadcasts={pastBroadcasts}
-                  loadingBroadcasts={loadingBroadcasts}
-                  editingBroadcast={editingBroadcast}
-                  setEditingBroadcast={setEditingBroadcast}
-                  editSlides={editSlides}
-                  setEditSlides={setEditSlides}
-                  handleEditBroadcast={handleEditBroadcast}
-                  handleDeleteBroadcast={handleDeleteBroadcast}
-                  handleEditSlideChange={handleEditSlideChange}
-                  addEditSlide={addEditSlide}
-                  removeEditSlide={removeEditSlide}
-                  showEditPreview={showEditPreview}
-                  setShowEditPreview={setShowEditPreview}
-                  handleSaveEditedBroadcast={handleSaveEditedBroadcast}
-                  loading={loading}
-                />
-              </motion.div>
-            </div>
-          )}
-
-          {activeTab === 'keys' && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-              <APIKeyManagement data={data} showSensitiveData={showSensitiveData} formatTimestamp={formatTimestamp} />
-            </motion.div>
-          )}
-
-          {activeTab === 'stats' && stats && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-              <SystemStatistics stats={stats} />
-            </motion.div>
-          )}
-
-          {activeTab === 'users' && (
-            <div className="space-y-4">
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-                <UserRateLimiting data={data} />
-              </motion.div>
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-                <ManagementActions handleAction={handleAction} loading={loading} />
-              </motion.div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Preview Modals */}
-      <BroadcastDialog
-        isOpen={showPreview}
-        onClose={() => setShowPreview(false)}
-        payload={{
-          slides: broadcastSlides.filter((slide) => slide.title.trim() || slide.text.trim() || slide.image.trim()).length > 0
-            ? broadcastSlides.filter((slide) => slide.title.trim() || slide.text.trim() || slide.image.trim())
-            : [
-                {
-                  title: 'Preview',
-                  text: 'No content to preview yet. Add a title, text, or image to see the preview.',
-                  image: '/onboarding-artwork/artwork1.png',
-                },
-              ],
-        }}
+  if (!session?.user?.email || session.user.email !== adminEmail) {
+    return (
+      <Wall
+        adminEmail={adminEmail}
+        title={'nice try, keyboard ninja (403)'}
+        blurb={[
+          'you do not possess the sacred admin amulet.',
+          'to earn it, pass three trials:',
+          '1) never deploy on friday,',
+          '2) tame the mysterious eslint,',
+          '3) name things better than "utils.ts".',
+        ].join('\n')}
+        checklist={[
+          `be the admin`,
+          'verify your email like a responsible wizard',
+          'whisper to the rubber chicken for moral support',
+          'press “try login ritual” and hope for sparkles',
+        ]}
+        footer={'imaginary confetti deployed. if you saw nothing, your gpu is shy. 🎉'}
       />
+    )
+  }
 
-      <BroadcastDialog
-        isOpen={showEditPreview}
-        onClose={() => setShowEditPreview(false)}
-        payload={{
-          slides: editSlides.filter((slide) => slide.title.trim() || slide.text.trim() || slide.image.trim()).length > 0
-            ? editSlides.filter((slide) => slide.title.trim() || slide.text.trim() || slide.image.trim())
-            : [
-                {
-                  title: 'Preview',
-                  text: 'No content to preview yet. Add a title, text, or image to see the preview.',
-                  image: '/onboarding-artwork/artwork1.png',
-                },
-              ],
-        }}
-      />
-    </MgmtLayout>
-  )
+  return <ManagementClient />
 }

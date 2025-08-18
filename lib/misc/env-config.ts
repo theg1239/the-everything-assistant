@@ -1,4 +1,4 @@
-import { ApiKeyConfig, DEFAULT_API_KEY_CONFIG } from './server/api-key-manager'
+import { ApiKeyConfig, DEFAULT_API_KEY_CONFIG } from '../server/api-key-manager'
 
 export function loadApiKeyConfigFromEnv(): ApiKeyConfig {
   return {

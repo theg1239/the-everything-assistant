@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth/mfa-otp'
+import { authOptions } from '@/lib/auth/options'
 import { getRateLimitedAI } from '@/lib/ai/rate-limited-ai'
-import { validateEnvironmentConfig, getEnvironmentSummary } from '@/lib/env-config'
+import { validateEnvironmentConfig, getEnvironmentSummary } from '@/lib/misc/env-config'
 
 export async function GET(req: NextRequest) {
   try {

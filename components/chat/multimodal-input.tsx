@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
-import { ToolsDropdown } from '@/components/controls/tools-dropdown'
+import { ToolsDropdown } from '@/components/chat/tools-dropdown'
 
 interface MultimodalInputProps {
   input: string

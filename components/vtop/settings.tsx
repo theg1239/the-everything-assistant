@@ -22,7 +22,7 @@ import {
   clearSavedVTOPCredentials,
   getSavedVTOPCredentials,
   validateSavedCredentials,
-} from '@/lib/vtop-credentials'
+} from '@/lib/server/vtop-credentials'
 
 interface VTOPSettingsProps {
   className?: string

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { authOptions } from '@/lib/auth/mfa-otp'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import {
@@ -9,7 +9,7 @@ import {
   generateBackupCodes,
   logSecurityEvent,
   checkRateLimit,
-} from '@/lib/mfa/index'
+} from '@/lib/auth/mfa-otp'
 
 export async function POST(request: NextRequest) {
   try {

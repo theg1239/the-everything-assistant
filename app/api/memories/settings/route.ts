@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/lib/auth'
+import { authOptions } from '@/lib/auth/mfa-otp'
 import { memoryService, memorySettingsSchema } from '@/lib/memory/memory-service'
 import { z } from 'zod'
 

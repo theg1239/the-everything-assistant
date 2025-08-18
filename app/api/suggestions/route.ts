@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateFollowUpSuggestions } from '@/lib/ai/follow-up-generator'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { authOptions } from '@/lib/auth/mfa-otp'
 
 export const maxDuration = 30
 

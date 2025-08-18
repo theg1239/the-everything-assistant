@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { authOptions } from '@/lib/auth/mfa-otp'
 import { PrismaClient } from '@prisma/client'
 import { isSMTPConfigured } from '@/lib/env-config'
 import speakeasy from 'speakeasy'

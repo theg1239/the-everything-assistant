@@ -1,4 +1,4 @@
-import { auth } from '@/lib/auth'
+import { auth } from '@/lib/auth/mfa-otp'
 import { getChat, getMessages, deleteChat } from '@/lib/db'
 import type { NextRequest } from 'next/server'
 

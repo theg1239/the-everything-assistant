@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { checkBotId } from 'botid/server'
-import { auth } from '@/lib/auth'
+import { auth } from '@/lib/auth/mfa-otp'
 import { prisma } from '@/lib/prisma'
-import { verifyTOTP, verifyBackupCode } from '@/lib/mfa/index'
+import { verifyTOTP, verifyBackupCode } from '@/lib/auth/mfa-otp'
 
 export async function POST(request: Request) {
   try {

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { authOptions } from '@/lib/auth/mfa-otp'
 import { prisma } from '@/lib/prisma'
-import { generateBackupCodes, hashBackupCodes, checkRateLimit, logSecurityEvent } from '@/lib/mfa/index'
+import { generateBackupCodes, hashBackupCodes, checkRateLimit, logSecurityEvent } from '@/lib/auth/mfa-otp'
 
 export async function POST(request: NextRequest) {
   try {

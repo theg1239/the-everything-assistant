@@ -12,7 +12,7 @@ import {
   getAllCourseMatches,
   recognizeCourseInText,
 } from '../course-map'
-import { getCourseData, School } from '../ffcs-tool'
+import { getCourseData, School } from './ffcs-tool'
 import { createKnowledgeTools } from '../ai/knowledge-tools'
 import { createMemoryTool } from '../memory/memory-tools'
 import { hasVTOPCredentials, getFormattedVTOPCredentials } from '../server/server-vtop-credentials'

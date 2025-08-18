@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { X, Eye, EyeOff, Shield, Lock, Link } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import CryptoJS from 'crypto-js'
-import { saveVTOPCredentials, hasVTOPCredentials } from '@/lib/vtop-credentials'
+import { saveVTOPCredentials, hasVTOPCredentials } from '@/lib/server/vtop-credentials'
 import { toast } from 'sonner'
 
 interface VTOPCredentialsDialogProps {

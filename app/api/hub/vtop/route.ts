@@ -1,5 +1,5 @@
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { authOptions } from '@/lib/auth/mfa-otp'
 import { createVITTools } from '@/lib/tools/tools'
 import { getFormattedVTOPCredentials as getServerFormatted } from '@/lib/server/server-vtop-credentials'
 import { google } from '@ai-sdk/google'

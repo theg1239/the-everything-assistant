@@ -20,7 +20,7 @@ import PlacementPanel from './panels/placement-panel'
 import FacultyPanel from './panels/faculty-panel'
 import RedditPanel from './panels/reddit-panel'
 import SyllabiPanel from './panels/syllabi-panel'
-import { hasVTOPCredentials } from '@/lib/vtop-credentials'
+import { hasVTOPCredentials } from '@/lib/server/vtop-credentials'
 import QuickActions from './quick-actions'
 import ResultViewer from './result-viewer'
 

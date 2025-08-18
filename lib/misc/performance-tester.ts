@@ -1,4 +1,4 @@
-import { DbOptimizations, QueryCache } from './db-optimizations'
+import { DbOptimizations, QueryCache } from './misc/db-optimizations'
 import { getChats, getUser, getChatsWithMessageCounts } from './db'
 import { checkDatabaseConnection, withQueryTimer } from './prisma'
 

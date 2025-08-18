@@ -1,6 +1,6 @@
 import NextAuth from 'next-auth'
 import { checkBotId } from 'botid/server'
-import { authOptions } from '@/lib/auth'
+import { authOptions } from '@/lib/auth/mfa-otp'
 
 const handler = async (request: Request, context: any) => {
   if (request.method === 'POST') {

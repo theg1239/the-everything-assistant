@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { VTOPCredentialsDialog } from './credentials-dialog'
-import { hasVTOPCredentials, getFormattedVTOPCredentials } from '@/lib/vtop-credentials'
+import { hasVTOPCredentials, getFormattedVTOPCredentials } from '@/lib/server/vtop-credentials'
 
 interface VTOPToolHandlerProps {
   children: React.ReactNode

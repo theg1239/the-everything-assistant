@@ -9,7 +9,7 @@ import {
   createChatWithFirstMessage,
   saveMessage,
 } from '../lib/db'
-import { DbOptimizations } from '../lib/db-optimizations'
+import { DbOptimizations } from '../lib/misc/db-optimizations'
 import { nanoid } from 'nanoid'
 
 const TEST_CONFIG = {

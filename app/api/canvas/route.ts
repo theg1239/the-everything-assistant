@@ -1,6 +1,6 @@
 import { createCanvasDocument, updateCanvasDocument, getCanvasDocuments } from '@/lib/db'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { authOptions } from '@/lib/auth/mfa-otp'
 
 export async function GET(request: Request) {
   try {

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { Course } from '@/lib/ffcs-tool'
+import { Course } from '@/lib/tools/ffcs-tool'
 
 export interface TimetableEntry {
   id: string

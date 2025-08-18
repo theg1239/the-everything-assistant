@@ -1,6 +1,6 @@
 import { rateLimitedAI } from '@/lib/ai/rate-limited-ai'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { authOptions } from '@/lib/auth/mfa-otp'
 import { getCurrentVITContext } from '@/lib/data/context-integration'
 
 export async function generateFollowUpSuggestions(

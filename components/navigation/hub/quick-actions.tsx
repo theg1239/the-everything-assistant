@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { hasVTOPCredentials } from '@/lib/vtop-credentials'
+import { hasVTOPCredentials } from '@/lib/server/vtop-credentials'
 import { experimental_useObject as useObject } from '@ai-sdk/react'
 import { vtopResultSchema } from '@/app/api/hub/vtop/schema'
 import { useHubTool } from './use-hub-tool'

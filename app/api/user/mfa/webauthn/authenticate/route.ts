@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { authOptions } from '@/lib/auth/mfa-otp'
 import { prisma } from '@/lib/prisma'
-import { logSecurityEvent } from '@/lib/mfa/index'
+import { logSecurityEvent } from '@/lib/auth/mfa-otp'
 import {
   generateAuthenticationOptions,
   verifyAuthenticationResponse,

@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { hasVTOPCredentials, getFormattedVTOPCredentials } from '@/lib/vtop-credentials'
+import { hasVTOPCredentials, getFormattedVTOPCredentials } from '@/lib/server/vtop-credentials'
 import { experimental_useObject as useObject } from '@ai-sdk/react'
 import { vtopResultSchema } from '@/app/api/hub/vtop/schema'
 import { VTOPCredentialsDialog } from '@/components/vtop/credentials-dialog'

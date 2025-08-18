@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { MessageBubble } from '@/components/message-bubble'
+import { MessageBubble } from '@/components/chat/message-bubble'
 
 interface VirtualizedMessagesProps {
   messages: any[]

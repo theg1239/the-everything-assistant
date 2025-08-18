@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { ChatInterface } from '@/components/chat-interface'
+import { ChatInterface } from '@/components/chat/chat-interface'
 
 async function getLatestBroadcast() {
   try {

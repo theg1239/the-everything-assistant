@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getChat, getMessages } from '@/lib/db'
-import { ChatInterface } from '@/components/chat-interface'
+import { ChatInterface } from '@/components/chat/chat-interface'
 
 interface ChatPageProps {
   params: Promise<{

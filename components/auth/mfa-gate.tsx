@@ -3,7 +3,7 @@
 import { useSession } from 'next-auth/react'
 import { usePathname } from 'next/navigation'
 import { MFAProvider, useMFA } from '@/contexts/mfa-context'
-import { MFAChallenge } from '@/components/mfa-challenge'
+import { MFAChallenge } from '@/components/auth/mfa-challenge'
 
 function MFAGateInner({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession()

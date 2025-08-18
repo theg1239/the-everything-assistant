@@ -42,8 +42,8 @@ import type { BackgroundType } from '@/components/backgrounds/custom-background'
 import dynamic from 'next/dynamic'
 import { useMemo } from 'react'
 import { FeedbackSection } from '@/components/feedback-section'
-import { MemoryManagement } from '@/components/memory-management'
-import { VTOPSettings } from '@/components/vtop-settings'
+import { MemoryManagement } from '@/components/memory/management'
+import { VTOPSettings } from '@/components/vtop/settings'
 
 const Aurora = dynamic(() => import('@/components/backgrounds/aurora'), {
   ssr: false,

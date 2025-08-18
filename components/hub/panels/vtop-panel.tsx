@@ -13,7 +13,7 @@ import {
 import { hasVTOPCredentials, getFormattedVTOPCredentials } from '@/lib/vtop-credentials'
 import { experimental_useObject as useObject } from '@ai-sdk/react'
 import { vtopResultSchema } from '@/app/api/hub/vtop/schema'
-import { VTOPCredentialsDialog } from '@/components/vtop-credentials-dialog'
+import { VTOPCredentialsDialog } from '@/components/vtop/credentials-dialog'
 
 const VTOP_COMMANDS = [
   {

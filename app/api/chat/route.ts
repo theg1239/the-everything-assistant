@@ -1,7 +1,7 @@
 import { smoothStream } from 'ai'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { createVITTools } from '@/lib/tools'
-import { VIT_SYSTEM_PROMPT } from '@/lib/prompts'
+import { VIT_SYSTEM_PROMPT } from '@/lib/ai/prompts'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getChat, createChat, saveMessage, updateChat } from '@/lib/db'

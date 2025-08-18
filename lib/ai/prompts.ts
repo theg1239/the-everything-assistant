@@ -1,4 +1,4 @@
-import { hasVTOPCredentials } from './server-vtop-credentials'
+import { hasVTOPCredentials } from '../server-vtop-credentials'
 
 export const VIT_SYSTEM_PROMPT = `
 <system_prompt>

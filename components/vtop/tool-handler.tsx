@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { VTOPCredentialsDialog } from './vtop-credentials-dialog'
+import { VTOPCredentialsDialog } from './credentials-dialog'
 import { hasVTOPCredentials, getFormattedVTOPCredentials } from '@/lib/vtop-credentials'
 
 interface VTOPToolHandlerProps {

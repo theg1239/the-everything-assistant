@@ -5,35 +5,32 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
-  Activity,
   RefreshCw,
-  RotateCcw,
-  Shield,
   AlertTriangle,
   CheckCircle,
   XCircle,
-  Clock,
-  Users,
-  Key,
-  Server,
-  Database,
   Play,
   Pause,
-  Settings,
   Eye,
   EyeOff,
   Loader2,
-  Edit,
-  History,
-  Calendar,
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { Plus, Send, Trash2 } from 'lucide-react'
+import TokenUsage from './components/token-usage'
+import MessagesViewerDialog from './components/messages-viewer'
+import SystemHealth from './components/system-health'
+import BroadcastForm from './components/broadcast-form'
+import PastBroadcasts from './components/past-broadcasts'
+import SystemStatistics from './components/system-statistics'
+import APIKeyManagement from './components/api-key-mgmt'
+import UserRateLimiting from './components/user-rate-limiting'
+import ManagementActions from './components/mgmt-actions'
+import MgmtLayout from './components/mgmt-layout'
+import MgmtTabBar from './components/mgmt-tabbar'
+import Overview from './components/overview'
 
 type UsageLog = {
   id: string
@@ -142,7 +139,8 @@ export default function ManagementPage() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
-  const [showSensitiveData, setShowSensitiveData] = useState(false)
+  // details should always be visible by default per user request
+  const [showSensitiveData, setShowSensitiveData] = useState(true)
   const [broadcastSlides, setBroadcastSlides] = useState([{ title: '', text: '', image: '' }])
   const [pastBroadcasts, setPastBroadcasts] = useState<PastBroadcast[]>([])
   const [editingBroadcast, setEditingBroadcast] = useState<string | null>(null)
@@ -416,980 +414,116 @@ export default function ManagementPage() {
     )
   }
 
+  // header actions removed: show details always on, no auto-refresh/load buttons in header
+
+  const [activeTab, setActiveTab] = useState<'overview' | 'tokens' | 'broadcasts' | 'keys' | 'stats' | 'users'>('overview')
+
   return (
-    <div
-      className="flex flex-col h-screen bg-transparent text-foreground overflow-hidden"
-      data-allow-touch-scroll
+    <MgmtLayout
+      title="mgmt"
+      subtitle="monitor system health, tokens, broadcasts, and keys"
+      nav={<MgmtTabBar active={activeTab} onChange={(t: any) => setActiveTab(t)} />}
     >
-      {/* Header */}
-      <header className="flex-shrink-0 bg-black/20 backdrop-blur-sm border-b border-border/50">
-        <div className="container mx-auto px-4 max-w-7xl">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="py-6"
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <h1 className="text-3xl font-bold">rate limit management</h1>
-                <p className="text-muted-foreground mt-1">
-                  monitor and manage API rate limiting and system health
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowSensitiveData(!showSensitiveData)}
-                  className="gap-2"
-                >
-                  {showSensitiveData ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  {showSensitiveData ? 'Hide' : 'Show'} Details
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setAutoRefresh(!autoRefresh)}
-                  className={cn('gap-2', autoRefresh && 'bg-primary/10 text-primary')}
-                >
-                  {autoRefresh ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                  auto refresh
-                </Button>
-                <Button onClick={fetchData} disabled={loading} size="sm" className="gap-2">
-                  {loading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="w-4 h-4" />
-                  )}
-                  load data
-                </Button>
-              </div>
+      {/* error / loading */}
+      {error && (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
+          <div className="rounded-lg bg-destructive/10 backdrop-blur-sm border border-destructive/20 p-4">
+            <div className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-5 h-5" />
+              <span className="font-medium">error: {error}</span>
             </div>
-            {lastUpdate && (
-              <div className="mt-4 text-sm text-muted-foreground">
-                last updated: {lastUpdate.toLocaleString()}
-              </div>
-            )}
-          </motion.div>
-        </div>
-      </header>
-
-      {/* Content */}
-      <div className="flex-1 overflow-hidden" data-allow-touch-scroll>
-        <div
-          className="h-full overflow-y-auto"
-          data-allow-touch-scroll
-          style={{ WebkitOverflowScrolling: 'touch' }}
-        >
-          <div className="container mx-auto px-4 max-w-7xl py-6">
-            {error && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mb-6"
-              >
-                <div className="rounded-lg bg-destructive/10 backdrop-blur-sm border border-destructive/20 p-4">
-                  <div className="flex items-center gap-2 text-destructive">
-                    <AlertTriangle className="w-5 h-5" />
-                    <span className="font-medium">error: {error}</span>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {!data && loading && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex items-center justify-center py-12"
-              >
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Loader2 className="w-6 h-6 animate-spin" /> loading status...
-                </div>
-              </motion.div>
-            )}
-
-            {data && (
-              <div className="space-y-6">
-                {/* Token Usage */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.05 }}
-                >
-                  <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
-                        <Activity className="w-5 h-5" /> token usage (last 24h)
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex flex-col items-end gap-0.5">
-                          {usage?.summary && (
-                            <div className="text-xs md:text-sm text-muted-foreground">
-                              24h: {usage.summary.totalTokens?.toLocaleString?.() || 0} tokens ·{' '}
-                              {usage.summary.count || 0} events
-                            </div>
-                          )}
-                          {usage?.summaryAllTime && (
-                            <div className="text-[11px] md:text-xs text-muted-foreground/80">
-                              all time: {usage.summaryAllTime.totalTokens?.toLocaleString?.() || 0}{' '}
-                              tokens · {usage.summaryAllTime.count || 0} events
-                            </div>
-                          )}
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 px-2 text-xs"
-                          onClick={() => setUsageOpen(v => !v)}
-                          aria-expanded={usageOpen}
-                          aria-controls="usage-table"
-                        >
-                          {usageOpen ? 'hide' : 'show'}
-                        </Button>
-                      </div>
-                    </div>
-                    {usageOpen && (
-                      <div
-                        id="usage-table"
-                        className="overflow-x-auto rounded-md border border-border/20"
-                        style={{ WebkitOverflowScrolling: 'touch' }}
-                      >
-                        <table className="min-w-full text-xs sm:text-sm">
-                          <thead className="bg-black/30">
-                            <tr>
-                              <th className="text-left px-3 py-2">time</th>
-                              <th className="text-left px-3 py-2">model</th>
-                              <th className="text-right px-3 py-2">prompt</th>
-                              <th className="text-right px-3 py-2">completion</th>
-                              <th className="text-right px-3 py-2">total</th>
-                              <th className="text-right px-3 py-2">step</th>
-                              <th className="text-left px-3 py-2">chat</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {usage?.recent?.map(u => (
-                              <tr key={u.id} className="border-t border-border/10">
-                                <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
-                                  {new Date(u.createdAt).toLocaleTimeString()}
-                                </td>
-                                <td className="px-3 py-2 whitespace-nowrap">{u.model || '-'}</td>
-                                <td className="px-3 py-2 text-right whitespace-nowrap">
-                                  {u.promptTokens.toLocaleString()}
-                                </td>
-                                <td className="px-3 py-2 text-right whitespace-nowrap">
-                                  {u.completionTokens.toLocaleString()}
-                                </td>
-                                <td className="px-3 py-2 text-right font-medium whitespace-nowrap">
-                                  {u.totalTokens.toLocaleString()}
-                                </td>
-                                <td className="px-3 py-2 text-right whitespace-nowrap">
-                                  {u.stepIndex ?? '-'}
-                                </td>
-                                <td className="px-3 py-2 text-muted-foreground break-all">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-mono">{u.chatId?.slice(0, 8) || '-'}</span>
-                                    {u.chatId && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-7 w-7"
-                                        title="View messages"
-                                        onClick={() => openMessagesViewer(u.chatId!)}
-                                      >
-                                        <Eye className="w-4 h-4" />
-                                      </Button>
-                                    )}
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
-                            {(!usage || usage.recent.length === 0) && (
-                              <tr>
-                                <td
-                                  colSpan={7}
-                                  className="px-3 py-4 text-center text-muted-foreground"
-                                >
-                                  no usage records
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-                {/* Messages Viewer */}
-                <Dialog open={viewerOpen} onOpenChange={setViewerOpen}>
-                  <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                      <DialogTitle>Chat messages</DialogTitle>
-                      <DialogDescription>
-                        {viewerData?.chatId ? `Chat ID: ${viewerData.chatId}` : '—'}
-                        {viewerData?.user && (
-                          <span className="block mt-1">User: {viewerData.user.name || viewerData.user.email || 'Unknown'}</span>
-                        )}
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-3 max-h-[60vh] overflow-auto pr-1">
-                      {viewerLoading && (
-                        <div className="text-muted-foreground text-sm">loading messages…</div>
-                      )}
-                      {viewerError && (
-                        <div className="text-destructive text-sm">{viewerError}</div>
-                      )}
-                      {!viewerLoading && !viewerError && viewerData?.messages?.length === 0 && (
-                        <div className="text-muted-foreground text-sm">no messages</div>
-                      )}
-                      {!viewerLoading && !viewerError && viewerData?.messages?.map(m => (
-                        <div key={m.id} className="rounded-md border border-border/30 p-3 bg-black/20">
-                          <div className="flex items-center justify-between mb-1">
-                            <span
-                              className={cn(
-                                'text-xs font-medium px-2 py-0.5 rounded-full',
-                                m.role === 'user' ? 'bg-blue-500/20 text-blue-200' : 'bg-green-500/20 text-green-200'
-                              )}
-                            >
-                              {m.role}
-                            </span>
-                            <span className="text-[11px] text-muted-foreground">
-                              {new Date(m.createdAt).toLocaleString?.() || ''}
-                            </span>
-                          </div>
-                          <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                            {m.content}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </DialogContent>
-                </Dialog>
-                {/* System Health */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                >
-                  <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
-                    <div className="flex flex-col space-y-1.5 mb-6">
-                      <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
-                        <Shield className="w-5 h-5" /> system health
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        overall system status and configuration validation
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
-                        <Database
-                          className={cn(
-                            'w-5 h-5 flex-shrink-0',
-                            data.healthCheck.redis === 'Connected'
-                              ? 'text-green-500'
-                              : 'text-yellow-500'
-                          )}
-                        />
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm md:text-base">Redis</p>
-                          <p className="text-xs md:text-sm text-muted-foreground">
-                            {data.healthCheck.redis}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
-                        <Key
-                          className={cn(
-                            'w-5 h-5 flex-shrink-0',
-                            data.healthCheck.apiKeys === 'Available'
-                              ? 'text-green-500'
-                              : 'text-red-500'
-                          )}
-                        />
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm md:text-base">API Keys</p>
-                          <p className="text-xs md:text-sm text-muted-foreground">
-                            {data.environment.summary.apiKeys.totalAvailable}/
-                            {data.configuration.apiKeys.keyCount} available
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
-                        <Server
-                          className={cn(
-                            'w-5 h-5 flex-shrink-0',
-                            data.environment.validation.isValid
-                              ? 'text-green-500'
-                              : 'text-yellow-500'
-                          )}
-                        />
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm md:text-base">Environment</p>
-                          <p className="text-xs md:text-sm text-muted-foreground">
-                            {data.environment.validation.isValid ? 'Valid' : 'Issues Found'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
-                        <Settings className="w-5 h-5 flex-shrink-0 text-blue-500" />
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm md:text-base">Status</p>
-                          <p className="text-xs md:text-sm text-muted-foreground">{data.status}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Broadcast Dialog */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                >
-                  <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
-                    <div className="flex flex-col space-y-1.5 mb-6">
-                      <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
-                        <Send className="w-5 h-5" /> broadcast dialog
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        send a dialog to all connected users in real-time
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      {broadcastSlides.map((slide, index) => (
-                        <div
-                          key={index}
-                          className="p-4 rounded-lg bg-black/20 border border-border/20 relative space-y-3"
-                        >
-                          <h4 className="font-medium">Slide {index + 1}</h4>
-                          <input
-                            type="text"
-                            placeholder="Title"
-                            value={slide.title}
-                            onChange={e => handleSlideChange(index, 'title', e.target.value)}
-                            className="w-full bg-slate-800/50 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                          <textarea
-                            placeholder="Text content"
-                            value={slide.text}
-                            onChange={e => handleSlideChange(index, 'text', e.target.value)}
-                            className="w-full bg-slate-800/50 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[80px]"
-                          />
-                          <input
-                            type="text"
-                            placeholder="Image URL"
-                            value={slide.image}
-                            onChange={e => handleSlideChange(index, 'image', e.target.value)}
-                            className="w-full bg-slate-800/50 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                          {broadcastSlides.length > 1 && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeSlide(index)}
-                              className="absolute top-2 right-2 w-8 h-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="mt-4 flex justify-between items-center">
-                      <div className="flex gap-2">
-                        <Button variant="outline" onClick={addSlide} className="gap-2">
-                          <Plus className="w-4 h-4" /> Add Slide
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => setShowPreview(true)}
-                          className="gap-2"
-                          disabled={
-                            !broadcastSlides.some(
-                              slide => slide.title.trim() || slide.text.trim() || slide.image.trim()
-                            )
-                          }
-                        >
-                          <Eye className="w-4 h-4" /> Preview
-                        </Button>
-                      </div>
-                      <Button
-                        onClick={handleSendBroadcast}
-                        disabled={loading}
-                        className="gap-2 bg-purple-600 hover:bg-purple-700"
-                      >
-                        <Send className="w-4 h-4" /> Send Broadcast
-                      </Button>
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Past Broadcasts Management */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.25 }}
-                >
-                  <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
-                    <div className="flex flex-col space-y-1.5 mb-6">
-                      <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
-                        <History className="w-5 h-5" /> Past Broadcasts
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        View, edit, and manage previously sent broadcasts
-                      </div>
-                    </div>
-
-                    {loadingBroadcasts ? (
-                      <div className="flex items-center justify-center py-8">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                          Loading past broadcasts...
-                        </div>
-                      </div>
-                    ) : pastBroadcasts.length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground">
-                        No past broadcasts found.
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {pastBroadcasts.map(broadcast => (
-                          <div
-                            key={broadcast.id}
-                            className="border border-border/20 rounded-lg bg-black/20 p-4"
-                          >
-                            <div className="flex items-start justify-between mb-3">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <Calendar className="w-4 h-4 text-blue-500" />
-                                  <span className="text-sm font-medium">
-                                    {new Date(broadcast.timestamp).toLocaleString()}
-                                  </span>
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  Sent by: {broadcast.sentBy}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleEditBroadcast(broadcast)}
-                                  disabled={editingBroadcast === broadcast.id}
-                                  className="gap-1"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                  Edit
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDeleteBroadcast(broadcast.id)}
-                                  disabled={loading}
-                                  className="gap-1 text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  Delete
-                                </Button>
-                              </div>
-                            </div>
-
-                            {editingBroadcast === broadcast.id ? (
-                              <div className="space-y-4 mt-4">
-                                <div className="text-sm font-medium text-yellow-400 mb-2">
-                                  Editing broadcast slides:
-                                </div>
-                                {editSlides.map((slide, index) => (
-                                  <div
-                                    key={index}
-                                    className="p-3 rounded-lg bg-slate-800/50 border border-slate-700 relative space-y-3"
-                                  >
-                                    <h5 className="font-medium text-sm">Edit Slide {index + 1}</h5>
-                                    <input
-                                      type="text"
-                                      placeholder="Title"
-                                      value={slide.title}
-                                      onChange={e =>
-                                        handleEditSlideChange(index, 'title', e.target.value)
-                                      }
-                                      className="w-full bg-slate-900/50 border border-slate-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    />
-                                    <textarea
-                                      placeholder="Text content"
-                                      value={slide.text}
-                                      onChange={e =>
-                                        handleEditSlideChange(index, 'text', e.target.value)
-                                      }
-                                      className="w-full bg-slate-900/50 border border-slate-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[60px]"
-                                    />
-                                    <input
-                                      type="text"
-                                      placeholder="Image URL"
-                                      value={slide.image}
-                                      onChange={e =>
-                                        handleEditSlideChange(index, 'image', e.target.value)
-                                      }
-                                      className="w-full bg-slate-900/50 border border-slate-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    />
-                                    {editSlides.length > 1 && (
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => removeEditSlide(index)}
-                                        className="absolute top-2 right-2 w-6 h-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                      >
-                                        <Trash2 className="w-3 h-3" />
-                                      </Button>
-                                    )}
-                                  </div>
-                                ))}
-                                <div className="flex justify-between items-center pt-2">
-                                  <div className="flex gap-2">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={addEditSlide}
-                                      className="gap-1"
-                                    >
-                                      <Plus className="w-4 h-4" />
-                                      Add Slide
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => setShowEditPreview(true)}
-                                      className="gap-1"
-                                      disabled={
-                                        !editSlides.some(
-                                          slide =>
-                                            slide.title.trim() ||
-                                            slide.text.trim() ||
-                                            slide.image.trim()
-                                        )
-                                      }
-                                    >
-                                      <Eye className="w-4 h-4" />
-                                      Preview
-                                    </Button>
-                                  </div>
-                                  <div className="flex gap-2">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => {
-                                        setEditingBroadcast(null)
-                                        setEditSlides([])
-                                      }}
-                                      disabled={loading}
-                                    >
-                                      Cancel
-                                    </Button>
-                                    <Button
-                                      onClick={handleSaveEditedBroadcast}
-                                      disabled={loading}
-                                      size="sm"
-                                      className="gap-1"
-                                    >
-                                      {loading ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                      ) : (
-                                        <CheckCircle className="w-4 h-4" />
-                                      )}
-                                      Save Changes
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="space-y-3">
-                                <div className="text-sm font-medium text-blue-400 mb-2">
-                                  Broadcast slides ({broadcast.slides.length}):
-                                </div>
-                                {broadcast.slides.map((slide, index) => (
-                                  <div
-                                    key={index}
-                                    className="p-3 rounded-lg bg-slate-800/30 border border-slate-700/50"
-                                  >
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className="text-xs font-medium text-muted-foreground">
-                                        Slide {index + 1}
-                                      </span>
-                                    </div>
-                                    {slide.title && (
-                                      <div className="font-medium text-sm mb-1">{slide.title}</div>
-                                    )}
-                                    {slide.text && (
-                                      <div className="text-sm text-muted-foreground mb-2">
-                                        {slide.text}
-                                      </div>
-                                    )}
-                                    {slide.image && (
-                                      <div className="text-xs text-blue-400 truncate">
-                                        Image: {slide.image}
-                                      </div>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-
-                {/* System Statistics */}
-                {stats && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                  >
-                    <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
-                      <div className="flex flex-col space-y-1.5 mb-6">
-                        <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
-                          <Database className="w-5 h-5" /> System Statistics
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          High-level overview of system activity
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
-                          <Users className="w-5 h-5 text-blue-500" />
-                          <div>
-                            <p className="font-medium text-sm md:text-base">Total Users</p>
-                            <p className="text-2xl font-bold">{stats.totalUsers}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
-                          <Clock className="w-5 h-5 text-green-500" />
-                          <div>
-                            <p className="font-medium text-sm md:text-base">Messages (30min)</p>
-                            <p className="text-2xl font-bold">{stats.messagesInLast30Minutes}</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="mt-6">
-                        <h4 className="font-semibold mb-2">Tool Call Stats</h4>
-                        <div className="space-y-2">
-                          {stats.toolCallStats.length > 0 ? (
-                            stats.toolCallStats.map(tool => (
-                              <div
-                                key={tool.toolName}
-                                className="flex justify-between items-center text-sm p-2 rounded-md bg-black/20"
-                              >
-                                <span>{tool.toolName}</span>
-                                <span className="font-bold">{tool.count}</span>
-                              </div>
-                            ))
-                          ) : (
-                            <p className="text-sm text-muted-foreground">
-                              No tool calls recorded yet.
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* API Key Management */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.35 }}
-                >
-                  <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
-                    <div className="flex flex-col space-y-1.5 mb-6">
-                      <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
-                        <Key className="w-5 h-5" /> API Key Management
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Configuration and usage status for API keys
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-3">
-                        <h4 className="font-medium text-sm md:text-base">Configuration</h4>
-                        <div className="space-y-2 text-xs md:text-sm">
-                          <div className="flex justify-between">
-                            <span>Total Keys:</span>
-                            <Badge variant="outline">{data.configuration.apiKeys.keyCount}</Badge>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Rotation Enabled:</span>
-                            <Badge
-                              variant={
-                                data.configuration.apiKeys.enableRotation ? 'default' : 'secondary'
-                              }
-                            >
-                              {data.configuration.apiKeys.enableRotation ? 'Yes' : 'No'}
-                            </Badge>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Auto-rotate on Limit:</span>
-                            <Badge
-                              variant={
-                                data.configuration.apiKeys.rotateOnRateLimit
-                                  ? 'default'
-                                  : 'secondary'
-                              }
-                            >
-                              {data.configuration.apiKeys.rotateOnRateLimit ? 'Yes' : 'No'}
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="space-y-3">
-                        <h4 className="font-medium text-sm md:text-base">Rate Limits</h4>
-                        <div className="space-y-2 text-xs md:text-sm">
-                          <div className="flex justify-between">
-                            <span>Per Minute:</span>
-                            <Badge variant="outline">
-                              {data.configuration.apiKeys.rateLimit.requestsPerMinute}
-                            </Badge>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Per Hour:</span>
-                            <Badge variant="outline">
-                              {data.configuration.apiKeys.rateLimit.requestsPerHour}
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {showSensitiveData && (
-                      <div className="mt-6 space-y-4">
-                        <h4 className="font-medium text-sm md:text-base">Individual Key Status</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {Object.entries(data.keyUsage)
-                            .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
-                            .map(([key, usage]) => {
-                              const parts = key.split('_')
-                              const provider = parts[0] || 'Unknown'
-                              const keyIndex = parts.length > 2 ? parts.slice(2).join('_') : 'N/A'
-                              const displayName = `${provider.charAt(0).toUpperCase() + provider.slice(1)} Key ${keyIndex}`
-
-                              return (
-                                <div
-                                  key={key}
-                                  className={cn(
-                                    'p-4 rounded-lg bg-black/20 border',
-                                    usage.isRateLimited && 'border-red-500/80'
-                                  )}
-                                >
-                                  <div className="flex justify-between items-start mb-3">
-                                    <h4 className="font-semibold">{displayName}</h4>
-                                    <div className="flex gap-2">
-                                      {/* {usage.isCurrent && (
-                                        <Badge
-                                          variant="outline"
-                                          className="text-blue-400 border-blue-400/50"
-                                        >
-                                          Current
-                                        </Badge>
-                                      )} */}
-                                      {usage.isRateLimited && (
-                                        <Badge variant="destructive">Rate Limited</Badge>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div className="space-y-2 text-sm text-muted-foreground">
-                                    <div className="flex justify-between">
-                                      <span>Requests</span>
-                                      <span className="font-mono">{usage.requests}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span>Failures</span>
-                                      <span className="font-mono">{usage.failures}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span>Last Used</span>
-                                      <span className="font-mono">
-                                        {formatTimestamp(usage.lastUsed)}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span>Last Failed</span>
-                                      <span className="font-mono">
-                                        {formatTimestamp(usage.lastFailed)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                              )
-                            })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-
-                {/* System Statistics
-                {stats && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.15 }}
-                  >
-                    <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
-                      <div className="flex flex-col space-y-1.5 mb-6">
-                        <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
-                          <Database className="w-5 h-5" /> System Statistics
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          High-level overview of system activity
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
-                          <Users className="w-5 h-5 text-blue-500" />
-                          <div>
-                            <p className="font-medium text-sm md:text-base">Total Users</p>
-                            <p className="text-2xl font-bold">{stats.totalUsers}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
-                          <Clock className="w-5 h-5 text-green-500" />
-                          <div>
-                            <p className="font-medium text-sm md:text-base">Messages (30min)</p>
-                            <p className="text-2xl font-bold">{stats.messagesInLast30Minutes}</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="mt-6">
-                        <h4 className="font-semibold mb-2">Tool Call Stats</h4>
-                        <div className="space-y-2">
-                          {stats.toolCallStats.length > 0 ? (
-                            stats.toolCallStats.map(tool => (
-                              <div key={tool.toolName} className="flex justify-between items-center text-sm p-2 rounded-md bg-black/20">
-                                <span>{tool.toolName}</span>
-                                <span className="font-bold">{tool.count}</span>
-                              </div>
-                            ))
-                          ) : (
-                            <p className="text-sm text-muted-foreground">No tool calls recorded yet.</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                )} */}
-
-                {/* User Rate Limiting */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
-                >
-                  <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
-                    <div className="flex flex-col space-y-1.5 mb-6">
-                      <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
-                        <Users className="w-5 h-5" /> User Rate Limiting
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Per-user request rate limiting configuration
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
-                        <Clock className="w-5 h-5 text-blue-500" />
-                        <div>
-                          <p className="font-medium text-sm md:text-base">Per Minute</p>
-                          <p className="text-xs md:text-sm text-muted-foreground">
-                            {data.configuration.userRateLimit.requestsPerMinute} requests
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
-                        <Clock className="w-5 h-5 text-green-500" />
-                        <div>
-                          <p className="font-medium text-sm md:text-base">Per Hour</p>
-                          <p className="text-xs md:text-sm text-muted-foreground">
-                            {data.configuration.userRateLimit.requestsPerHour} requests
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 p-3 rounded-lg bg-black/20 border border-border/20">
-                        <Clock className="w-5 h-5 text-orange-500" />
-                        <div>
-                          <p className="font-medium text-sm md:text-base">Per Day</p>
-                          <p className="text-xs md:text-sm text-muted-foreground">
-                            {data.configuration.userRateLimit.requestsPerDay} requests
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Actions */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.45 }}
-                >
-                  <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
-                    <div className="flex flex-col space-y-1.5 mb-6">
-                      <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
-                        <Activity className="w-5 h-5" /> Management Actions
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Perform maintenance and administrative actions
-                      </div>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <Button
-                        onClick={() => handleAction('rotate')}
-                        disabled={loading}
-                        variant="outline"
-                        className="gap-2 w-full sm:w-auto"
-                      >
-                        <RotateCcw className="w-4 h-4" /> Rotate API Key
-                      </Button>
-                      <Button
-                        onClick={() => handleAction('reset')}
-                        disabled={loading}
-                        variant="outline"
-                        className="gap-2 w-full sm:w-auto"
-                      >
-                        <RefreshCw className="w-4 h-4" /> Reset Rate Limits
-                      </Button>
-                    </div>
-                  </div>
-                </motion.div>
-              </div>
-            )}
           </div>
+        </motion.div>
+      )}
+
+      {!data && loading && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-center py-12">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="w-6 h-6 animate-spin" /> loading status...
+          </div>
+        </motion.div>
+      )}
+
+      {data && (
+        <div className="space-y-6">
+          <MessagesViewerDialog viewerOpen={viewerOpen} setViewerOpen={setViewerOpen} viewerLoading={viewerLoading} viewerError={viewerError} viewerData={viewerData} />
+
+          {activeTab === 'overview' && (
+            <Overview stats={stats} usage={usage} />
+          )}
+
+          {activeTab === 'tokens' && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+              <TokenUsage usage={usage} usageOpen={usageOpen} setUsageOpen={setUsageOpen} openMessagesViewer={openMessagesViewer} />
+            </motion.div>
+          )}
+
+          {activeTab === 'broadcasts' && (
+            <div className="space-y-4">
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+                <BroadcastForm broadcastSlides={broadcastSlides} handleSlideChange={handleSlideChange} addSlide={addSlide} removeSlide={removeSlide} setShowPreview={setShowPreview} handleSendBroadcast={handleSendBroadcast} loading={loading} />
+              </motion.div>
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                <PastBroadcasts
+                  pastBroadcasts={pastBroadcasts}
+                  loadingBroadcasts={loadingBroadcasts}
+                  editingBroadcast={editingBroadcast}
+                  setEditingBroadcast={setEditingBroadcast}
+                  editSlides={editSlides}
+                  setEditSlides={setEditSlides}
+                  handleEditBroadcast={handleEditBroadcast}
+                  handleDeleteBroadcast={handleDeleteBroadcast}
+                  handleEditSlideChange={handleEditSlideChange}
+                  addEditSlide={addEditSlide}
+                  removeEditSlide={removeEditSlide}
+                  showEditPreview={showEditPreview}
+                  setShowEditPreview={setShowEditPreview}
+                  handleSaveEditedBroadcast={handleSaveEditedBroadcast}
+                  loading={loading}
+                />
+              </motion.div>
+            </div>
+          )}
+
+          {activeTab === 'keys' && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+              <APIKeyManagement data={data} showSensitiveData={showSensitiveData} formatTimestamp={formatTimestamp} />
+            </motion.div>
+          )}
+
+          {activeTab === 'stats' && stats && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+              <SystemStatistics stats={stats} />
+            </motion.div>
+          )}
+
+          {activeTab === 'users' && (
+            <div className="space-y-4">
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+                <UserRateLimiting data={data} />
+              </motion.div>
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                <ManagementActions handleAction={handleAction} loading={loading} />
+              </motion.div>
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
       {/* Preview Modals */}
       <BroadcastDialog
         isOpen={showPreview}
         onClose={() => setShowPreview(false)}
         payload={{
-          slides:
-            broadcastSlides.filter(
-              slide => slide.title.trim() || slide.text.trim() || slide.image.trim()
-            ).length > 0
-              ? broadcastSlides.filter(
-                  slide => slide.title.trim() || slide.text.trim() || slide.image.trim()
-                )
-              : [
-                  {
-                    title: 'Preview',
-                    text: 'No content to preview yet. Add a title, text, or image to see the preview.',
-                    image: '/onboarding-artwork/artwork1.png',
-                  },
-                ],
+          slides: broadcastSlides.filter((slide) => slide.title.trim() || slide.text.trim() || slide.image.trim()).length > 0
+            ? broadcastSlides.filter((slide) => slide.title.trim() || slide.text.trim() || slide.image.trim())
+            : [
+                {
+                  title: 'Preview',
+                  text: 'No content to preview yet. Add a title, text, or image to see the preview.',
+                  image: '/onboarding-artwork/artwork1.png',
+                },
+              ],
         }}
       />
 
@@ -1397,22 +531,17 @@ export default function ManagementPage() {
         isOpen={showEditPreview}
         onClose={() => setShowEditPreview(false)}
         payload={{
-          slides:
-            editSlides.filter(
-              slide => slide.title.trim() || slide.text.trim() || slide.image.trim()
-            ).length > 0
-              ? editSlides.filter(
-                  slide => slide.title.trim() || slide.text.trim() || slide.image.trim()
-                )
-              : [
-                  {
-                    title: 'Preview',
-                    text: 'No content to preview yet. Add a title, text, or image to see the preview.',
-                    image: '/onboarding-artwork/artwork1.png',
-                  },
-                ],
+          slides: editSlides.filter((slide) => slide.title.trim() || slide.text.trim() || slide.image.trim()).length > 0
+            ? editSlides.filter((slide) => slide.title.trim() || slide.text.trim() || slide.image.trim())
+            : [
+                {
+                  title: 'Preview',
+                  text: 'No content to preview yet. Add a title, text, or image to see the preview.',
+                  image: '/onboarding-artwork/artwork1.png',
+                },
+              ],
         }}
       />
-    </div>
+    </MgmtLayout>
   )
 }

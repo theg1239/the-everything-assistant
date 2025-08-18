@@ -8,7 +8,7 @@ import { useSession } from 'next-auth/react'
 import { useMemory } from '@/contexts/memory-context'
 import { VirtualizedMessages } from '@/components/virtualized-messages'
 import { motion } from 'framer-motion'
-import { FileText, Plus, ChevronDown, GraduationCap } from 'lucide-react'
+import { Download, Plus, ChevronDown, GraduationCap } from 'lucide-react'
 import { HamburgerButton } from '@/components/hamburger-button'
 import { Button } from '@/components/ui/button'
 import { SuggestedQuestions } from '@/components/suggested-questions'
@@ -133,6 +133,10 @@ const PureChatInterface = memo(
     const [chatCreatedEventDispatched, setChatCreatedEventDispatched] = useState(false)
     const [maximizedArtifact, setMaximizedArtifact] = useState<any>(null)
     const [isAtBottom, setIsAtBottom] = useState(true)
+  // PWA install handling
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
+  const [canInstall, setCanInstall] = useState(false)
+  const [isInstalled, setIsInstalled] = useState(false)
     const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const contentRef = useRef<HTMLDivElement>(null)
@@ -152,6 +156,50 @@ const PureChatInterface = memo(
       command: string
       message: string
     } | null>(null)
+
+    useEffect(() => {
+      const onBeforeInstallPrompt = (e: any) => {
+        try {
+          e.preventDefault()
+        } catch {}
+        setDeferredPrompt(e)
+        setCanInstall(true)
+      }
+
+      const onAppInstalled = () => {
+        setIsInstalled(true)
+        setCanInstall(false)
+        setDeferredPrompt(null)
+      }
+
+      window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener)
+      window.addEventListener('appinstalled', onAppInstalled as EventListener)
+
+      return () => {
+        window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener)
+        window.removeEventListener('appinstalled', onAppInstalled as EventListener)
+      }
+    }, [])
+
+    const handleInstallClick = async () => {
+      if (deferredPrompt && deferredPrompt.prompt) {
+        try {
+          await deferredPrompt.prompt()
+          const choiceResult = await deferredPrompt.userChoice
+          if (choiceResult && choiceResult.outcome === 'accepted') {
+            setIsInstalled(true)
+          }
+        } catch (err) {
+        } finally {
+          setDeferredPrompt(null)
+          setCanInstall(false)
+        }
+        return
+      }
+
+      window.dispatchEvent(new CustomEvent('showPwaInstallHint'))
+    }
+
     useEffect(() => {
       const onDisclaimer = (e: any) => {
         const d = e?.detail
@@ -1359,6 +1407,26 @@ const PureChatInterface = memo(
                 <Plus className="h-4 w-4 mr-2" />
                 new chat
               </Button>
+              {canInstall && !isInstalled && (
+                <Button
+                  variant="ghost"
+                  onClick={handleInstallClick}
+                  className="h-9 ml-2 hidden md:inline-flex"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  install app
+                </Button>
+              )}
+              {canInstall && !isInstalled && (
+                <Button
+                  variant="ghost"
+                  onClick={handleInstallClick}
+                  className="h-9 ml-2 md:hidden"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  install
+                </Button>
+              )}
             </div>
           </header>{' '}
           <div className="flex-1 relative overflow-hidden">

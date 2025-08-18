@@ -2784,7 +2784,7 @@ const PureArtifactDisplay = ({
                 return <PapersQAArtifact key={index} data={item} />
               case 'question-patterns':
                 const QuestionPatternsArtifact =
-                  require('./artifacts/question-patterns-artifact').default
+                  require('./question-patterns-artifact').default
                 return <QuestionPatternsArtifact key={index} data={item} />
               case 'general':
                 return <GeneralCard key={index} data={item} />

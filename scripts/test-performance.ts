@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 
-import { PerformanceTester, runQuickPerformanceCheck } from '../lib/performance-tester'
+import { PerformanceTester, runQuickPerformanceCheck } from '../lib/misc/performance-tester'
 import {
   getUser,
   createUser,

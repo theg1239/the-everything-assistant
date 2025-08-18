@@ -1,5 +1,5 @@
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth/mfa-otp'
+import { authOptions } from '@/lib/auth/options'
 import { saveVote } from '@/lib/db'
 
 export async function POST(request: Request) {

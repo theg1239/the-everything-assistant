@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { paperProgress } from '@/lib/progress/paper-progress'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth/mfa-otp'
+import { authOptions } from '@/lib/auth/options'
 
 export const runtime = 'nodejs'
 

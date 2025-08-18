@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth/mfa-otp'
+import { authOptions } from '@/lib/auth/options'
 import { createVITTools } from '@/lib/tools/tools'
 
 export async function POST(request: NextRequest) {

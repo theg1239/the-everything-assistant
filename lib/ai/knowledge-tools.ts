@@ -1,8 +1,8 @@
 import { tool } from 'ai'
 import { z } from 'zod'
-import { getContextForAIPrompt } from './data/context-integration'
-import { rateLimitedAI } from './ai/rate-limited-ai'
-import { searchRedditWithContext } from './tools/tools'
+import { getContextForAIPrompt } from '../data/context-integration'
+import { rateLimitedAI } from '../ai/rate-limited-ai'
+import { searchRedditWithContext } from '../tools/tools'
 
 let _ragPool: import('pg').Pool | null = null
 export async function getRagPool() {

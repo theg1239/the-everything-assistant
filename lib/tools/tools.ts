@@ -1,28 +1,28 @@
 import { tool } from 'ai'
 import { z } from 'zod'
-import { scrapePapersCodeChef } from './scrapers/papers-codechef'
-import { scrapePapersService } from './scrapers/papers-scraper'
-import { scrapeVITPaperVault } from './scrapers/vit-papervault'
-import { scrapePlacementInfo } from './scrapers/placement-scraper'
-import { getMessMenu, formatMenuItems, getAvailableDateRange } from './scrapers/mess-menu-scraper'
-import { getCourseCode } from './question-generator'
+import { scrapePapersCodeChef } from '../scrapers/papers-codechef'
+import { scrapePapersService } from '../scrapers/papers-scraper'
+import { scrapeVITPaperVault } from '../scrapers/vit-papervault'
+import { scrapePlacementInfo } from '../scrapers/placement-scraper'
+import { getMessMenu, formatMenuItems, getAvailableDateRange } from '../scrapers/mess-menu-scraper'
+import { getCourseCode } from '../question-generator'
 import {
   findFullCourseName,
   searchCoursesByName,
   getAllCourseMatches,
   recognizeCourseInText,
-} from './course-map'
-import { getCourseData, School } from './ffcs-tool'
-import { createKnowledgeTools } from './ai/knowledge-tools'
-import { createMemoryTool } from './memory/memory-tools'
-import { hasVTOPCredentials, getFormattedVTOPCredentials } from './server/server-vtop-credentials'
+} from '../course-map'
+import { getCourseData, School } from '../ffcs-tool'
+import { createKnowledgeTools } from '../ai/knowledge-tools'
+import { createMemoryTool } from '../memory/memory-tools'
+import { hasVTOPCredentials, getFormattedVTOPCredentials } from '../server/server-vtop-credentials'
 import {
   indexPastPapers,
   askIndexedPaperQuestion,
   smartPaperSearchByQuestion,
   getPaperIndexMeta,
-} from './agents/paper-agent'
-import { analyzeQuestionFrequencies } from './agents/question-frequency-agent'
+} from '../agents/paper-agent'
+import { analyzeQuestionFrequencies } from '../agents/question-frequency-agent'
 
 async function searchRedditKnowledge(query: string, limit: number = 10) {
   try {
@@ -901,7 +901,7 @@ export function createVITTools(userId: string) {
 
           // Always fire a start event to establish connection
           try {
-            const { paperProgress } = await import('./progress/paper-progress')
+            const { paperProgress } = await import('../progress/paper-progress')
             paperProgress.emitStep(runId, 'start', { course, question })
             console.log(`[smartPaperSearch] Emitted start event for runId: ${runId}`)
           } catch (e) {
@@ -1453,7 +1453,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       execute: async ({ year, companyFilter, combineWitch, campus }) => {
         const raw = await scrapePlacementInfo(year, companyFilter, combineWitch, campus)
         try {
-          const { parsePlacementData } = await import('../lib/scrapers/placement-scraper')
+          const { parsePlacementData } = await import('../scrapers/placement-scraper')
           interface ParsedPlacementData {
             formatted_content: string
             summary: string

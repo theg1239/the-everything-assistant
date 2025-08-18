@@ -13,13 +13,13 @@
  */
 
 import { getContextForAIPrompt } from '../lib/data/context-integration'
-import { VIT_COMPREHENSIVE_KNOWLEDGE } from '../lib/knowledge-base'
+import { VIT_COMPREHENSIVE_KNOWLEDGE } from '../lib/ai/knowledge-base'
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter'
 import { encoding_for_model } from 'tiktoken'
 import 'dotenv/config'
 import pg from 'pg'
 import { randomUUID } from 'crypto'
-import { rateLimitedAI } from '../lib/rate-limited-ai'
+import { rateLimitedAI } from '../lib/ai/rate-limited-ai'
 const { Pool } = pg
 
 async function promptForChunkSize(defaultSize: number): Promise<number> {
@@ -49,7 +49,6 @@ async function main() {
     const parsed = parseInt(process.argv[chunkArgIndex + 1], 10)
     if (!isNaN(parsed)) chunkSize = parsed
   } else {
-    // Prompt user for chunk size if not provided
     chunkSize = await promptForChunkSize(chunkSize)
   }
 
@@ -81,7 +80,6 @@ async function main() {
     await pool.query('TRUNCATE vit_rag_chunks;')
   }
 
-  // Insert custom chunk if provided
   if (customText) {
     console.log('Inserting custom chunk:', customText)
     try {

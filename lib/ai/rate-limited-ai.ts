@@ -1,8 +1,8 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google' // Google provider
 import { createGroq } from '@ai-sdk/groq' // Groq provider
 import { cerebras, createCerebras } from '@ai-sdk/cerebras' // Cerebras provider
-import { ApiKeyManager, ApiKeyConfig, DEFAULT_API_KEY_CONFIG } from './server/api-key-manager'
-import { UserRateLimiter, UserRateLimitConfig, loadUserRateLimitConfig } from './user-rate-limiter'
+import { ApiKeyManager, ApiKeyConfig, DEFAULT_API_KEY_CONFIG } from '../server/api-key-manager'
+import { UserRateLimiter, UserRateLimitConfig, loadUserRateLimitConfig } from '../user-rate-limiter'
 import {
   streamText,
   generateText,

@@ -11,7 +11,7 @@
  */
 
 import { PrismaClient } from '@prisma/client'
-import { sanitizeToolInvocations } from '../lib/sanitize-tools'
+import { sanitizeToolInvocations } from '../lib/tools/sanitize-tools'
 
 const prisma = new PrismaClient()
 
@@ -21,7 +21,6 @@ async function sanitizeExistingData() {
   console.log(`${isDryRun ? 'DRY RUN:' : ''} Starting sanitization of existing tool invocations...`)
 
   try {
-    // Get all messages with tool invocations
     const messagesWithTools = await prisma.message.findMany({
       select: {
         id: true,
@@ -29,7 +28,6 @@ async function sanitizeExistingData() {
       },
     })
 
-    // Filter messages that have tool invocations
     const messagesWithActualTools = messagesWithTools.filter(
       msg =>
         msg.tool_invocations &&
@@ -47,14 +45,11 @@ async function sanitizeExistingData() {
         continue
       }
 
-      // Check if this message contains queryVTOP calls with credentials
       const containsCredentials = message.tool_invocations.some((tool: any) => {
         if (tool.toolName === 'queryVTOP' || tool.function?.name === 'queryVTOP') {
-          // Check args
           if (tool.args && (tool.args.password || tool.args.username)) {
             return true
           }
-          // Check function.arguments
           if (tool.function?.arguments) {
             try {
               const args =
@@ -65,10 +60,8 @@ async function sanitizeExistingData() {
                 return true
               }
             } catch (e) {
-              // Ignore parsing errors
             }
           }
-          // Check result.args
           if (tool.result?.args && (tool.result.args.password || tool.result.args.username)) {
             return true
           }
@@ -82,10 +75,8 @@ async function sanitizeExistingData() {
         if (isDryRun) {
           console.log(`Would sanitize message ${message.id}`)
         } else {
-          // Sanitize the tool invocations
           const sanitizedToolInvocations = sanitizeToolInvocations(message.tool_invocations)
 
-          // Update the message
           await prisma.message.update({
             where: { id: message.id },
             data: {
@@ -118,7 +109,6 @@ async function sanitizeExistingData() {
   }
 }
 
-// Run the script
 sanitizeExistingData().catch(error => {
   console.error('Failed to run sanitization script:', error)
   process.exit(1)

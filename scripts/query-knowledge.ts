@@ -14,7 +14,7 @@
 
 import 'dotenv/config'
 import readline from 'readline'
-import { createKnowledgeTools } from '../lib/knowledge-tools'
+import { createKnowledgeTools } from '../lib/ai/knowledge-tools'
 
 async function runQuery(query: string, maxChunks = 4) {
   const { knowledgeBase } = createKnowledgeTools()

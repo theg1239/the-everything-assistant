@@ -32,7 +32,7 @@ import { scrapePapersCodeChef } from '../lib/scrapers/papers-codechef'
 import { scrapeVITPaperVault } from '../lib/scrapers/vit-papervault'
 import { getCourseCode } from '../lib/question-generator'
 import { getAllCourseMatches } from '../lib/course-map'
-import rateLimitedAI from '../lib/rate-limited-ai'
+import rateLimitedAI from '../lib/ai/rate-limited-ai'
 import {
   ensurePaperSchema,
   insertPaper,

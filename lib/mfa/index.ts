@@ -139,7 +139,7 @@ export async function logSecurityEvent(
   request?: Request
 ) {
   try {
-    const { prisma } = await import('./prisma')
+    const { prisma } = await import('../prisma')
 
     const ipAddress =
       request?.headers.get('x-forwarded-for') || request?.headers.get('x-real-ip') || 'unknown'

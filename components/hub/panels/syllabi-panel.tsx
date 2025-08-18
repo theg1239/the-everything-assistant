@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { useHubTool } from '../use-hub-tool'
 import { FileText, Search, X } from 'lucide-react'
-import PdfViewer from '@/components/pdf-viewer'
+import PdfViewer from '@/components/ui/pdf-viewer'
 
 export default function SyllabiPanel() {
   const { run, loading, error, result, reset } = useHubTool<any>('getSyllabus')

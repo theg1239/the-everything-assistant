@@ -50,7 +50,7 @@ import {
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { useMediaQuery } from '@/hooks/use-media-query'
-import { ResponsiveCard } from '@/components/responsive-card'
+import { ResponsiveCard } from '@/components/ui/responsive-card'
 import FFCSArtifact from './artifacts/ffcs-artifact'
 import FfcsCourseSearchResult from './artifacts/get-course-info-artifact'
 import { ResponsiveTable } from '@/components/responsive-table'

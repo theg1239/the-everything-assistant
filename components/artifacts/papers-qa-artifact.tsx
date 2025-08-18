@@ -1,7 +1,7 @@
 'use client'
 
 import { Card, CardContent } from '@/components/ui/card'
-import { OptimizedMarkdown } from '@/components/optimized-markdown'
+import { OptimizedMarkdown } from '@/components/ui/optimized-markdown'
 
 export default function PapersQAArtifact({ data }: { data: any }) {
   const answer = data?.answer

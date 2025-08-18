@@ -3,7 +3,7 @@
 import { memo, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { usePathname } from 'next/navigation'
-import { Sidebar } from '@/components/sidebar'
+import { Sidebar } from '@/components/navigation/sidebar'
 import { useSidebar } from '@/contexts/sidebar-context'
 import { useMFA } from '@/contexts/mfa-context'
 

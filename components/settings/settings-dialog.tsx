@@ -41,7 +41,7 @@ import { useCustomBackground } from '@/hooks/use-custom-background'
 import type { BackgroundType } from '@/components/backgrounds/custom-background'
 import dynamic from 'next/dynamic'
 import { useMemo } from 'react'
-import { FeedbackSection } from '@/components/feedback-section'
+import { FeedbackSection } from '@/components/shared/feedback-section'
 import { MemoryManagement } from '@/components/memory/management'
 import { VTOPSettings } from '@/components/vtop/settings'
 

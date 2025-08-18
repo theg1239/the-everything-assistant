@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { BroadcastDialog } from '@/components/broadcast-dialog'
+import { BroadcastDialog } from '@/components/controls/broadcast-dialog'
 import { useOnboarding } from '@/hooks/use-onboarding'
 
 interface GlobalBroadcastDialogProps {

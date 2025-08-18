@@ -19,7 +19,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/utils'
-import { SettingsDialog } from '@/components/settings-dialog'
+import { SettingsDialog } from '@/components/settings/settings-dialog'
 import { useSidebar } from '@/contexts/sidebar-context'
 
 interface Chat {

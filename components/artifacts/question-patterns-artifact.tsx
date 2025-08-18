@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ChevronDown, ChevronUp, ListChecks, Copy, ExternalLink } from 'lucide-react'
 import React from 'react'
-import { OptimizedMarkdown } from '@/components/optimized-markdown'
+import { OptimizedMarkdown } from '@/components/ui/optimized-markdown'
 
 export default function QuestionPatternsArtifact({ data }: { data: any }) {
   const [expanded, setExpanded] = React.useState<Record<number, boolean>>({})

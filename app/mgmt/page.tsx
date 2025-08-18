@@ -46,7 +46,7 @@ type UsageLog = {
   totalTokens: number
   createdAt: string
 }
-import { BroadcastDialog } from '@/components/broadcast-dialog'
+import { BroadcastDialog } from '@/components/controls/broadcast-dialog'
 
 interface RateLimitStatus {
   status: string

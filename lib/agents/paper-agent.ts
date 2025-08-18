@@ -3,7 +3,7 @@ import { scrapePapersCodeChef } from '../scrapers/papers-codechef'
 import { scrapeVITPaperVault } from '../scrapers/vit-papervault'
 import { getCourseCode } from '../question-generator'
 import { getAllCourseMatches } from '../course-map'
-import rateLimitedAI from '../rate-limited-ai'
+import rateLimitedAI from '../ai/rate-limited-ai'
 import {
   ensurePaperSchema,
   insertPaper,

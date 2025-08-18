@@ -1,5 +1,5 @@
 import { prisma } from './prisma'
-import { sanitizeToolInvocations } from './sanitize-tools'
+import { sanitizeToolInvocations } from './tools/sanitize-tools'
 
 export interface User {
   id: string

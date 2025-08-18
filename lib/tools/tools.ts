@@ -13,9 +13,9 @@ import {
   recognizeCourseInText,
 } from './course-map'
 import { getCourseData, School } from './ffcs-tool'
-import { createKnowledgeTools } from './knowledge-tools'
+import { createKnowledgeTools } from './ai/knowledge-tools'
 import { createMemoryTool } from './memory/memory-tools'
-import { hasVTOPCredentials, getFormattedVTOPCredentials } from './server-vtop-credentials'
+import { hasVTOPCredentials, getFormattedVTOPCredentials } from './server/server-vtop-credentials'
 import {
   indexPastPapers,
   askIndexedPaperQuestion,

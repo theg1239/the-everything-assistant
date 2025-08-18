@@ -51,12 +51,12 @@ import {
 import { cn } from '@/lib/utils'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { ResponsiveCard } from '@/components/ui/responsive-card'
-import FFCSArtifact from './artifacts/ffcs-artifact'
-import FfcsCourseSearchResult from './artifacts/get-course-info-artifact'
+import FFCSArtifact from './ffcs-artifact'
+import FfcsCourseSearchResult from './get-course-info-artifact'
 import { ResponsiveTable } from '@/components/ui/responsive-table'
 import { Copy } from 'lucide-react'
-import PapersIndexArtifact from './artifacts/papers-index-artifact'
-import PapersQAArtifact from './artifacts/papers-qa-artifact'
+import PapersIndexArtifact from './papers-index-artifact'
+import PapersQAArtifact from './papers-qa-artifact'
 
 interface ArtifactDisplayProps {
   title: string

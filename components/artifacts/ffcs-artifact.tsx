@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Course, FFCSToolData, getCourseData } from '@/lib/ffcs-tool'
-import TimetableGrid, { TimetableEntry, TimetableSchema } from '../timetable-grid'
+import TimetableGrid, { TimetableEntry, TimetableSchema } from '../shared/timetable-grid'
 import { v4 as uuidv4 } from 'uuid'
 import { Calendar, X } from 'lucide-react'
 

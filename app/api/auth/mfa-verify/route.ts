@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { checkBotId } from 'botid/server'
-import { auth } from '@/lib/auth/mfa-otp'
+import { auth } from '@/lib/auth/options'
 import { prisma } from '@/lib/prisma'
 import { verifyTOTP, verifyBackupCode } from '@/lib/auth/mfa-otp'
 

@@ -1,6 +1,6 @@
-import { DbOptimizations, QueryCache } from './misc/db-optimizations'
-import { getChats, getUser, getChatsWithMessageCounts } from './db'
-import { checkDatabaseConnection, withQueryTimer } from './prisma'
+import { DbOptimizations, QueryCache } from '../misc/db-optimizations'
+import { getChats, getUser, getChatsWithMessageCounts } from '../db'
+import { checkDatabaseConnection, withQueryTimer } from '../prisma'
 
 export class PerformanceTester {
   static async runPerformanceTests(userId: string): Promise<{

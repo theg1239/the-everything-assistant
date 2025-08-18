@@ -326,9 +326,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     result.url ||
     (result.success && result.filename)
   ) {
-    const filename = result.filename || result.syllabus || (result.data && result.data.filename) || null
-    const url = result.url || (filename ? `https://storage.googleapis.com/examcooker/syllabi/${filename}` : null)
-
+    // result may be ambiguous and contain a 'matches' array
     const normalizeFilename = (fn: string | null) => {
       if (!fn || typeof fn !== 'string') return { code: null, title: null }
       const base = fn.split('/').pop() || fn
@@ -340,23 +338,37 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
       return { code: codePart || null, title }
     }
 
-    const norm = normalizeFilename(filename)
-    const code = result.code || norm.code
-    const title = result.title || norm.title
+    const makeEntryFrom = (entry: any) => {
+      const filename = entry.filename || entry.file || null
+      const url = entry.url || (filename ? `https://storage.googleapis.com/examcooker/syllabi/${filename}` : null)
+      const norm = normalizeFilename(filename)
+      const code = entry.code || norm.code
+      const title = entry.title || norm.title || (entry.message ? String(entry.message) : null)
+      return { filename, url, code, title, raw: entry }
+    }
+
+    let entries: any[] = []
+    if (result) {
+      if (result.ambiguous && Array.isArray(result.matches)) {
+        entries = result.matches.map((m: any) => makeEntryFrom(m))
+      } else if (Array.isArray(result.syllabi)) {
+        entries = result.syllabi.map((s: any) => makeEntryFrom(s))
+      } else if (result.filename || result.url || result.code || result.title) {
+        entries = [makeEntryFrom(result)]
+      } else if (result.data && result.data.filename) {
+        entries = [makeEntryFrom(result.data)]
+      }
+    }
+
+    const title = entries.length === 1 ?
+      (entries[0].code && entries[0].title ? `${entries[0].code} — ${entries[0].title}` : `Syllabus: ${entries[0].title || entries[0].filename}`)
+      : `${entries.length} Syllabi`;
 
     return {
       type: 'syllabi' as const,
-      title: code && title ? `${code} — ${title}` : title || filename ? `Syllabus: ${title || filename}` : 'Syllabus',
+      title,
       icon: <BookOpen className="h-5 w-5 text-emerald-500" />,
-      data: {
-        filename,
-        url,
-        code,
-        title,
-        message: result.message || result.title || undefined,
-        success: result.success !== false,
-        raw: result,
-      },
+      data: entries,
       source: 'Syllabus Tool',
     }
   }

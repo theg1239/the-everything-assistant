@@ -1572,6 +1572,29 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 .sort((a: any, b: any) => b.score - a.score)
               console.debug('[getSyllabus] top candidates (string):', scored.slice(0, 5))
               if (scored.length > 0 && scored[0].score > 0) {
+                const topScore = scored[0].score
+                // include candidates with score > 0 and close to top score (within 5 points) — adjust as needed
+                const topMatches = scored.filter((s: any) => s.score > 0 && s.score >= Math.max(1, topScore - 5)).slice(0, 8)
+                if (topMatches.length > 1) {
+                  const matches = topMatches.map((s: any) => {
+                    const norm = normalizeFilename(s.fn)
+                    return {
+                      filename: s.fn,
+                      code: norm.code,
+                      title: norm.title,
+                      url: `https://storage.googleapis.com/examcooker/syllabi/${s.fn}`,
+                      score: s.score,
+                    }
+                  })
+                  return {
+                    success: true,
+                    ambiguous: true,
+                    query,
+                    matches,
+                    message: `Multiple syllabus files may match "${query}". Please pick one.`,
+                  }
+                }
+
                 const matched = scored[0].fn
                 const norm = normalizeFilename(matched)
                 return {
@@ -1589,6 +1612,30 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 .sort((a: any, b: any) => b.score - a.score)
               console.debug('[getSyllabus] top candidates (objects):', scored.slice(0, 6).map((s: any) => ({ code: s.item.code, title: s.item.title, filename: s.item.file || s.item.filename, score: s.score })))
               if (scored.length > 0 && scored[0].score > 0) {
+                const topScore = scored[0].score
+                const topMatches = scored.filter((s: any) => s.score > 0 && s.score >= Math.max(1, topScore - 5)).slice(0, 8)
+                if (topMatches.length > 1) {
+                  const matches = topMatches.map((s: any) => {
+                    const best = s.item
+                    const filename = best.file || best.filename || `${best.code || 'syllabus'}.pdf`
+                    const norm = normalizeFilename(filename)
+                    return {
+                      filename,
+                      code: best.code || norm.code,
+                      title: best.title || norm.title,
+                      url: `https://storage.googleapis.com/examcooker/syllabi/${filename}`,
+                      score: s.score,
+                    }
+                  })
+                  return {
+                    success: true,
+                    ambiguous: true,
+                    query,
+                    matches,
+                    message: `Multiple syllabi may match "${query}". Please pick one.`,
+                  }
+                }
+
                 const best = scored[0].item
                 const filename = best.file || best.filename || `${best.code || 'syllabus'}.pdf`
                 let codeOut = best.code || null
@@ -1620,15 +1667,32 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               }
             }
             if (bestIndex >= 0) {
-              const orig = data[bestIndex]
-              const filename = typeof orig === 'string' ? orig : orig.file || orig.filename || null
-              const norm = typeof filename === 'string' ? normalizeFilename(filename) : { code: null, title: null }
+              // Gather all items that include the query substring (to present possible multiple matches)
+              const matchesFound: any[] = []
+              for (let i = 0; i < lowered.length; i++) {
+                if (lowered[i].includes(q)) {
+                  const orig = data[i]
+                  const filename = typeof orig === 'string' ? orig : orig.file || orig.filename || null
+                  const norm = typeof filename === 'string' ? normalizeFilename(filename) : { code: null, title: null }
+                  matchesFound.push({ filename, code: norm.code, title: norm.title, url: filename ? `https://storage.googleapis.com/examcooker/syllabi/${filename}` : null })
+                }
+              }
+              if (matchesFound.length > 1) {
+                return {
+                  success: true,
+                  ambiguous: true,
+                  query,
+                  matches: matchesFound,
+                  message: `Multiple syllabus files match "${query}". Please pick one.`,
+                }
+              }
+              const m = matchesFound[0]
               return {
                 success: true,
-                filename,
-                code: norm.code,
-                title: norm.title,
-                url: filename ? `https://storage.googleapis.com/examcooker/syllabi/${filename}` : null,
+                filename: m.filename,
+                code: m.code,
+                title: m.title,
+                url: m.url,
                 message: `Found syllabus matching query: ${query}`,
               }
             }

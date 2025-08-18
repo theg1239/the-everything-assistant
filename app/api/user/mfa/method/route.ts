@@ -11,7 +11,7 @@ import {
   sendEmailCode,
   checkRateLimit,
   logSecurityEvent,
-} from '@/lib/mfa'
+} from '@/lib/mfa/index'
 
 export async function PATCH(request: NextRequest) {
   try {

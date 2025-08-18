@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { createVITTools } from '@/lib/tools'
+import { createVITTools } from '@/lib/tools/tools'
 
 export async function POST(request: NextRequest) {
   try {

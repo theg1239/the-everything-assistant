@@ -1,4 +1,4 @@
-import { getRagPool } from '@/lib/knowledge-tools'
+import { getRagPool } from '@/lib/ai/knowledge-tools'
 import { NextResponse } from 'next/server'
 
 export async function GET() {

@@ -1,4 +1,4 @@
-import { rateLimitedAI } from '@/lib/rate-limited-ai'
+import { rateLimitedAI } from '@/lib/ai/rate-limited-ai'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getCurrentVITContext } from '@/lib/data/context-integration'

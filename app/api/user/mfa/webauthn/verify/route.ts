@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { generateBackupCodes, hashBackupCodes, logSecurityEvent } from '@/lib/mfa'
+import { generateBackupCodes, hashBackupCodes, logSecurityEvent } from '@/lib/mfa/index'
 import { verifyRegistrationResponse } from '@simplewebauthn/server'
 import type { VerifyRegistrationResponseOpts } from '@simplewebauthn/server'
 

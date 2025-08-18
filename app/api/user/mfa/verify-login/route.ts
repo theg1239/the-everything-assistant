@@ -10,7 +10,7 @@ import {
   sendEmailCode,
   checkRateLimit,
   logSecurityEvent,
-} from '@/lib/mfa'
+} from '@/lib/mfa/index'
 
 export async function POST(request: NextRequest) {
   try {

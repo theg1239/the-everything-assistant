@@ -1,13 +1,13 @@
 import { smoothStream } from 'ai'
-import { rateLimitedAI } from '@/lib/rate-limited-ai'
-import { createVITTools } from '@/lib/tools'
+import { rateLimitedAI } from '@/lib/ai/rate-limited-ai'
+import { createVITTools } from '@/lib/tools/tools'
 import { VIT_SYSTEM_PROMPT } from '@/lib/ai/prompts'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getChat, createChat, saveMessage, updateChat } from '@/lib/db'
 import { memoryService } from '@/lib/memory/memory-service'
 import { generateChatPath, extractTitleFromContent } from '@/lib/utils'
-import { sanitizeToolInvocations } from '@/lib/sanitize-tools'
+import { sanitizeToolInvocations } from '@/lib/tools/sanitize-tools'
 import { z } from 'zod'
 
 async function generateChatTitle(userMessage: string, userId?: string): Promise<string> {

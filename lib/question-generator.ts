@@ -1,4 +1,4 @@
-import { VIT_COMPREHENSIVE_KNOWLEDGE } from '@/lib/knowledge-base'
+import { VIT_COMPREHENSIVE_KNOWLEDGE } from '@/lib/ai/knowledge-base'
 
 const courseMapping: { [key: string]: string } = {
   calc: 'BMAT101L',

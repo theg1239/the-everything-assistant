@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { checkBotId } from 'botid/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { verifyTOTP, verifyBackupCode } from '@/lib/mfa'
+import { verifyTOTP, verifyBackupCode } from '@/lib/mfa/index'
 
 export async function POST(request: Request) {
   try {

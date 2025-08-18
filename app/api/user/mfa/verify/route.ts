@@ -9,7 +9,7 @@ import {
   generateBackupCodes,
   logSecurityEvent,
   checkRateLimit,
-} from '@/lib/mfa'
+} from '@/lib/mfa/index'
 
 export async function POST(request: NextRequest) {
   try {

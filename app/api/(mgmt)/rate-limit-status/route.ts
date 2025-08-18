@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { getRateLimitedAI } from '@/lib/rate-limited-ai'
+import { getRateLimitedAI } from '@/lib/ai/rate-limited-ai'
 import { validateEnvironmentConfig, getEnvironmentSummary } from '@/lib/env-config'
 
 export async function GET(req: NextRequest) {

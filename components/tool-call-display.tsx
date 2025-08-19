@@ -314,11 +314,10 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
           source,
         }
       }),
-      source: 'Papers Archive',
+      source: 'evtg. asst.',
     }
   }
 
-  // Syllabi: map getSyllabus tool results or syllabus-like responses to a syllabi artifact
   if (
     toolName === 'getSyllabus' ||
     result.syllabus ||
@@ -326,7 +325,6 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     result.url ||
     (result.success && result.filename)
   ) {
-    // result may be ambiguous and contain a 'matches' array
     const normalizeFilename = (fn: string | null) => {
       if (!fn || typeof fn !== 'string') return { code: null, title: null }
       const base = fn.split('/').pop() || fn
@@ -369,7 +367,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
       title,
       icon: <BookOpen className="h-5 w-5 text-emerald-500" />,
       data: entries,
-      source: 'Syllabus Tool',
+      source: 'Syllabus',
     }
   }
 
@@ -390,7 +388,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         courseCode: result.courseCode,
         runId: result.runId || result.run_id,
       })),
-      source: 'smartPaperSearch',
+      source: 'Smart Agent',
     }
   }
 
@@ -409,7 +407,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
           totalIndexed: result.totalIndexed || result.total || result.count,
           stats: result.stats || undefined,
         },
-        source: 'paper-index',
+        source: 'Index Agent',
       }
     } else {
       return {
@@ -420,7 +418,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
           success: false,
           error: result?.error || result?.message || 'Unable to index papers',
         },
-        source: 'paper-index',
+        source: 'Index Agent',
       }
     }
   }
@@ -432,7 +430,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         title: `Most Repeated Question Patterns${result.courseCode ? ` (${result.courseCode}${result.examType ? ` • ${result.examType}` : ''})` : ''}`,
         icon: <TrendingUp className="h-5 w-5 text-indigo-500" />,
         data: result,
-        source: 'question-patterns',
+        source: 'Analysis Agent',
       }
     } else {
       return {
@@ -443,7 +441,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
           success: false,
           error: result?.error || result?.message || 'Unable to analyze question patterns',
         },
-        source: 'question-patterns',
+        source: 'Analysis Agent',
       }
     }
   }
@@ -462,7 +460,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
           question: result.question || undefined,
           debug: result.debug || undefined,
         },
-        source: 'paper-index-qa',
+        source: 'Papers Agent',
       }
     } else {
       return {
@@ -473,7 +471,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
           success: false,
           error: result?.error || result?.message || 'Unable to answer question',
         },
-        source: 'paper-index-qa',
+        source: 'Papers Agent',
       }
     }
   }
@@ -638,7 +636,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         success: false,
         ...result,
       },
-      source: toolName || 'Search',
+      source: 'Agent',
     }
   }
 

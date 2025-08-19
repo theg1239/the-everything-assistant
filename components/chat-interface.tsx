@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { SuggestedQuestions } from '@/components/suggested-questions'
 import { FollowUpSuggestions } from '@/components/follow-up-suggestions'
 import { ChatHeader } from '@/components/chat-header'
+import { MobilePdfDockButton, DesktopPdfDockButton } from '@/components/pdf-dock'
 import { MultimodalInput } from '@/components/multimodal-input'
 import Hub from '@/components/hub/hub'
 import { extractTitleFromContent } from '@/lib/utils'
@@ -1427,6 +1428,12 @@ const PureChatInterface = memo(
                   install
                 </Button>
               )}
+              <div className="hidden md:block ml-2">
+                <DesktopPdfDockButton />
+              </div>
+              <div className="ml-2 md:hidden">
+                <MobilePdfDockButton />
+              </div>
             </div>
           </header>{' '}
           <div className="flex-1 relative overflow-hidden">

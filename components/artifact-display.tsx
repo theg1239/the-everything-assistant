@@ -57,6 +57,7 @@ import { ResponsiveTable } from '@/components/responsive-table'
 import { Copy } from 'lucide-react'
 import PapersIndexArtifact from './artifacts/papers-index-artifact'
 import PapersQAArtifact from './artifacts/papers-qa-artifact'
+import { usePdfDock } from '@/contexts/pdf-dock-context'
 
 interface ArtifactDisplayProps {
   title: string
@@ -2476,11 +2477,90 @@ const PureArtifactDisplay = ({
     }
   }
 
+  let items: any[] = []
+  let addPdf: ((item: any) => void) | undefined
+  let openPdf: ((id: string) => void) | undefined
+  let minimizePdf: ((id: string) => void) | undefined
+  let openByUrl: ((url: string) => void) | undefined
+  let minimizeByUrl: ((url: string) => void) | undefined
+  let removeByUrl: ((url: string) => void) | undefined
+
+  try {
+    const ctx = usePdfDock()
+    items = ctx.items || []
+    addPdf = ctx.addPdf
+    openPdf = ctx.openPdf
+    minimizePdf = ctx.minimizePdf
+    openByUrl = (ctx as any).openByUrl
+    minimizeByUrl = (ctx as any).minimizeByUrl
+    removeByUrl = (ctx as any).removeByUrl
+  } catch (e) {
+    // provider not available; fall back to local behavior
+  }
+
+  // Listen for dock open events so clicking a title in the dock opens the viewer
+  useEffect(() => {
+    const onOpenById = (ev: Event) => {
+      try {
+        const detail = (ev as CustomEvent)?.detail
+        const id = detail?.id
+        if (!id) return
+        const found = items.find((p: any) => p.id === id)
+        if (found && found.url) {
+          setPdfTitle(found.title || 'PDF Document')
+          setPdfUrl(found.url)
+          setIsPdfLoading(false)
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    const onOpenByUrl = (ev: Event) => {
+      try {
+        const detail = (ev as CustomEvent)?.detail
+        const url = detail?.url
+        if (!url) return
+        // prefer a matching dock item for title, otherwise use generic
+        const found = items.find((p: any) => p.url === url)
+        setPdfTitle((found && found.title) || 'PDF Document')
+        setPdfUrl(url)
+        setIsPdfLoading(false)
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    window.addEventListener('pdf-dock:open', onOpenById as EventListener)
+    window.addEventListener('pdf-dock:open-by-url', onOpenByUrl as EventListener)
+
+    return () => {
+      window.removeEventListener('pdf-dock:open', onOpenById as EventListener)
+      window.removeEventListener('pdf-dock:open-by-url', onOpenByUrl as EventListener)
+    }
+  }, [items])
+
   const handleViewPdf = (url: string, title?: string) => {
     setIsPdfLoading(true)
     setPdfTitle(title || 'PDF Preview')
     const embedUrl = url.replace('/view?usp=sharing', '/preview').replace('/view', '/preview')
-    setPdfUrl(embedUrl)
+
+    // If dock is available, add to dock and open from there
+    try {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      if (addPdf) {
+        addPdf({ id, url: embedUrl, title: title || 'PDF Document' })
+        // ensure it's opened
+        openPdf && openPdf(id)
+        // set local url so current viewer still displays
+        setPdfUrl(embedUrl)
+      } else {
+        setPdfUrl(embedUrl)
+      }
+    } catch (e) {
+      setPdfUrl(embedUrl)
+    }
+
     setTimeout(() => setIsPdfLoading(false), 2000)
   }
 
@@ -2906,23 +2986,51 @@ const PureArtifactDisplay = ({
               >
                 <div className="p-4 space-y-4">
                   <div className="flex items-center justify-between">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleClosePdf}
-                      className="h-8 w-8 p-0"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs"
-                      onClick={() => window.open(pdfUrl, '_blank')}
-                    >
-                      <ExternalLink className="h-3 w-3 mr-1" />
-                      Open External
-                    </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleClosePdf}
+                            className="h-8 w-8 p-0"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+
+                          {/* Minimize to dock - only shown when minimizePdf exists */}
+                          {(minimizeByUrl || minimizePdf) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 text-xs"
+                              onClick={() => {
+                                try {
+                                  if (minimizeByUrl && pdfUrl) {
+                                    minimizeByUrl(String(pdfUrl))
+                                  } else if (minimizePdf && items && pdfUrl) {
+                                    const found = items.find((p: any) => p.url === pdfUrl)
+                                    if (found) minimizePdf(found.id)
+                                  }
+                                } catch (e) {
+                                  // ignore
+                                }
+
+                                handleClosePdf()
+                              }}
+                            >
+                              Minimize
+                            </Button>
+                          )}
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-xs"
+                            onClick={() => window.open(pdfUrl, '_blank')}
+                          >
+                            <ExternalLink className="h-3 w-3 mr-1" />
+                            Open External
+                          </Button>
+                        </div>
                   </div>
 
                   <div className="space-y-3">
@@ -2965,6 +3073,34 @@ const PureArtifactDisplay = ({
                       <FileSearch className="h-3 w-3 text-primary" />
                       <span className="text-sm font-medium line-clamp-1">{pdfTitle}</span>
                     </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {/* Minimize button visible on mobile header */}
+                    {(minimizeByUrl || minimizePdf) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        onClick={() => {
+                          try {
+                            if (minimizeByUrl && pdfUrl) {
+                              minimizeByUrl(String(pdfUrl))
+                            } else if (minimizePdf && items && pdfUrl) {
+                              const found = items.find((p: any) => p.url === pdfUrl)
+                              if (found) minimizePdf(found.id)
+                            } else if (items && items.length > 0) {
+                              // fallback: minimize most recent
+                              const mostRecent = items[items.length - 1]
+                              if (mostRecent) minimizePdf && minimizePdf(mostRecent.id)
+                            }
+                          } catch (e) {}
+                          handleClosePdf()
+                        }}
+                        aria-label="Minimize PDF"
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                   <Button
                     variant="outline"

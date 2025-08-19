@@ -2545,14 +2545,12 @@ const PureArtifactDisplay = ({
     setPdfTitle(title || 'PDF Preview')
     const embedUrl = url.replace('/view?usp=sharing', '/preview').replace('/view', '/preview')
 
-    // If dock is available, add to dock and open from there
     try {
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
       if (addPdf) {
         addPdf({ id, url: embedUrl, title: title || 'PDF Document' })
         // ensure it's opened
         openPdf && openPdf(id)
-        // set local url so current viewer still displays
         setPdfUrl(embedUrl)
       } else {
         setPdfUrl(embedUrl)

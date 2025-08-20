@@ -167,49 +167,6 @@ const PureChatInterface = memo(
     } | null>(null)
 
     useEffect(() => {
-      const onBeforeInstallPrompt = (e: any) => {
-        try {
-          e.preventDefault()
-        } catch {}
-        setDeferredPrompt(e)
-        setCanInstall(true)
-      }
-
-      const onAppInstalled = () => {
-        setIsInstalled(true)
-        setCanInstall(false)
-        setDeferredPrompt(null)
-      }
-
-      window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener)
-      window.addEventListener('appinstalled', onAppInstalled as EventListener)
-
-      return () => {
-        window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener)
-        window.removeEventListener('appinstalled', onAppInstalled as EventListener)
-      }
-    }, [])
-
-    const handleInstallClick = async () => {
-      if (deferredPrompt && deferredPrompt.prompt) {
-        try {
-          await deferredPrompt.prompt()
-          const choiceResult = await deferredPrompt.userChoice
-          if (choiceResult && choiceResult.outcome === 'accepted') {
-            setIsInstalled(true)
-          }
-        } catch (err) {
-        } finally {
-          setDeferredPrompt(null)
-          setCanInstall(false)
-        }
-        return
-      }
-
-      window.dispatchEvent(new CustomEvent('showPwaInstallHint'))
-    }
-
-    useEffect(() => {
       const onDisclaimer = (e: any) => {
         const d = e?.detail
         if (!d) return
@@ -367,63 +324,32 @@ const PureChatInterface = memo(
           }
         }
 
-    if (currentChatId && isFirstMessageInNewChat) {
-      setIsFirstMessageInNewChat(false);
-      const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
-        try {
-          const response = await fetch(`/api/chats/${currentChatId}`);
-          if (response.ok) {
-            const chatData = await response.json();
-            if (chatData.title && chatData.title !== 'New Chat') {
-              window.dispatchEvent(
-                new CustomEvent('chatTitleUpdated', {
-                  detail: { chatId: currentChatId, title: chatData.title },
-                })
-              );
-            } else if (attempt < maxAttempts) {
-              setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000);
+        if (currentChatId && isFirstMessageInNewChat) {
+          setIsFirstMessageInNewChat(false)
+          const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
+            try {
+              const response = await fetch(`/api/chats/${currentChatId}`)
+              if (response.ok) {
+                const chatData = await response.json()
+                if (chatData.title && chatData.title !== 'New Chat') {
+                  window.dispatchEvent(
+                    new CustomEvent('chatTitleUpdated', {
+                      detail: { chatId: currentChatId, title: chatData.title },
+                    })
+                  )
+                } else if (attempt < maxAttempts) {
+                  setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
+                }
+              }
+            } catch {
+              if (attempt < maxAttempts) {
+                setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
+              }
             }
           }
           setTimeout(() => checkTitleUpdate(), 3000)
         }
       },
-  onError: err => {
-        const errorMessage = err.message || err.toString()
-        const hasResponseBody = typeof err === 'object' && err !== null && 'responseBody' in err
-        const responseBody = hasResponseBody ? (err as any).responseBody : ''
-
-        const isGeminiStreamingError =
-          errorMessage.includes('contents.parts must not be empty') ||
-          errorMessage.includes('INVALID_ARGUMENT') ||
-          errorMessage.includes('GenerateContentRequest.contents') ||
-          errorMessage.includes('streamGenerateContent') ||
-          (typeof responseBody === 'string' &&
-            responseBody.includes('contents.parts must not be empty'))
-
-        const localRateLimitDetected = /rate limit|too many requests|quota exceeded|rate_limited/i.test(
-          String(errorMessage || responseBody || '')
-        )
-
-        let isRateLimit = false
-        try {
-          isRateLimit = checkForRateLimitError(err)
-        } catch (e) {
-          // ignore
-        }
-
-        const contextRateLimit = !!rateLimitError?.isRateLimit
-
-        try {
-          // debug logging
-          // eslint-disable-next-line no-console
-          //console.debug('[Chat] onError - localRateLimitDetected:', localRateLimitDetected, 'isRateLimit:', isRateLimit, 'contextRateLimit:', contextRateLimit, 'isGeminiStreamingError:', isGeminiStreamingError, 'error:', err)
-        } catch {}
-
-        if (!localRateLimitDetected && !isRateLimit && !contextRateLimit && !isGeminiStreamingError) {
-          toast.error('Something went wrong. Please try again.')
-        }
-      },
-    })
 
       onError: (err: any) => {
         const errorMessage = err.message || err.toString()
@@ -595,40 +521,43 @@ const PureChatInterface = memo(
       }
     }, [messages.length, isMobile, isInitialRender, throttledScrollToBottom, autoScrollEnabled])
 
+    // Prevent repeated handling of the same error causing render loops
+    const lastProcessedErrorRef = useRef<string | null>(null)
     useEffect(() => {
-      if (error) {
-        const errorMessage = (error as any).message || error.toString()
-        const hasResponseBody =
-          typeof error === 'object' && error !== null && 'responseBody' in (error as any)
-        const responseBody = hasResponseBody ? (error as any).responseBody : ''
+      if (!error) return
 
-        const isGeminiStreamingError =
-          errorMessage.includes('contents.parts must not be empty') ||
-          errorMessage.includes('INVALID_ARGUMENT') ||
-          errorMessage.includes('GenerateContentRequest') ||
-          (typeof responseBody === 'string' &&
-            responseBody.includes('contents.parts must not be empty'))
+      const msg = (error as any).message || String(error)
+      const hasResponseBody = typeof error === 'object' && error !== null && 'responseBody' in (error as any)
+      const responseBody = hasResponseBody ? (error as any).responseBody : ''
+      const key = `${msg}|${typeof responseBody === 'string' ? responseBody.slice(0, 128) : ''}`
+      if (lastProcessedErrorRef.current === key) return
+      lastProcessedErrorRef.current = key
 
-        if (isGeminiStreamingError) {
-          setErrorMessage('An error occurred. Please start a new chat.')
-          setMessages(prev =>
-            prev.map((msg: any, idx: number) =>
-              idx === prev.length - 1 && msg.role === 'assistant'
-                ? { ...msg, parts: [], error: 'streaming_error' }
-                : msg
-            )
-          )
-          return
-        }
+      const isGeminiStreamingError =
+        msg.includes('contents.parts must not be empty') ||
+        msg.includes('INVALID_ARGUMENT') ||
+        msg.includes('GenerateContentRequest') ||
+        (typeof responseBody === 'string' && responseBody.includes('contents.parts must not be empty'))
 
-        const isRateLimit = checkForRateLimitError(error)
-        try {
-          // eslint-disable-next-line no-console
-          console.debug('[Chat] error effect - isRateLimit:', isRateLimit, 'error:', error)
-        } catch {}
-        if (isRateLimit) return
+      if (isGeminiStreamingError) {
+        setErrorMessage('An error occurred. Please start a new chat.')
+        setMessages(prev =>
+          prev.map((m: any, idx: number) => {
+            if (idx !== prev.length - 1 || m.role !== 'assistant') return m
+            if (m.error === 'streaming_error' && (!m.parts || m.parts.length === 0)) return m
+            return { ...m, parts: [], error: 'streaming_error' }
+          })
+        )
+        return
       }
-    }, [error, checkForRateLimitError])
+
+      const isRateLimit = checkForRateLimitError(error)
+      try {
+        // eslint-disable-next-line no-console
+        console.debug('[Chat] error effect - isRateLimit:', isRateLimit, 'error:', error)
+      } catch {}
+      if (isRateLimit) return
+    }, [error, checkForRateLimitError, setMessages])
 
     const handleSuggestedQuestion = useCallback(
       async (question: string) => {
@@ -1377,7 +1306,6 @@ const PureChatInterface = memo(
               {canInstall && !isInstalled && (
                 <Button
                   variant="ghost"
-                  onClick={handleInstallClick}
                   className="h-9 ml-2 hidden md:inline-flex"
                 >
                   <Download className="h-4 w-4 mr-2" />
@@ -1387,7 +1315,6 @@ const PureChatInterface = memo(
               {canInstall && !isInstalled && (
                 <Button
                   variant="ghost"
-                  onClick={handleInstallClick}
                   className="h-9 ml-2 md:hidden"
                 >
                   <Download className="h-4 w-4 mr-2" />
@@ -1401,7 +1328,7 @@ const PureChatInterface = memo(
                 <MobilePdfDockButton />
               </div>
             </div>
-          </header>{' '}
+          </header>
           <div className="flex-1 relative overflow-hidden">
             <div
               className={cn(

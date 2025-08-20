@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { getRandomQuestions } from '@/lib/question-generator'
-import { useEffect, useState } from 'react'
+import { useMemo } from 'react'
 
 interface SuggestedQuestionsProps {
   isFirstMessage: boolean
@@ -16,11 +16,8 @@ export function SuggestedQuestions({
   onQuestionClick,
   sidebarOpen = false,
 }: SuggestedQuestionsProps) {
-  const [questions, setQuestions] = useState<string[]>([])
-
-  useEffect(() => {
-    setQuestions(getRandomQuestions(6, isFirstMessage))
-  }, [isFirstMessage])
+  // Compute once per isFirstMessage change to avoid mount-time state updates
+  const questions = useMemo(() => getRandomQuestions(6, isFirstMessage), [isFirstMessage])
 
   return (
     <motion.div

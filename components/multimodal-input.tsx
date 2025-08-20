@@ -7,8 +7,7 @@ import { ArrowUpIcon, StopCircleIcon, PaperclipIcon, MicIcon, ImageIcon } from '
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
-import { ToolsDropdown } from '@/components/tools-dropdown'
+// Tooltips removed to isolate update loop
 
 interface MultimodalInputProps {
   input: string
@@ -178,11 +177,10 @@ const PureMultimodalInput = ({
   }, [])
 
   useEffect(() => {
-    if (!borderRef.current) return
     const node = borderRef.current
+    if (!node) return
 
     const compute = () => {
-      if (!node) return
       const rect = node.getBoundingClientRect()
       const cs = getComputedStyle(node)
       const rStr = cs.borderTopLeftRadius || '0px'
@@ -190,7 +188,21 @@ const PureMultimodalInput = ({
       const r = parseFloat(rStr) || 0
       const bw = parseFloat(bwStr) || 1
       const color = cs.borderColor || 'hsl(var(--border))'
-      setBorderMetrics({ width: rect.width, height: rect.height, radius: r, borderWidth: bw, borderColor: color })
+      const next = { width: rect.width, height: rect.height, radius: r, borderWidth: bw, borderColor: color }
+      // Only update when values actually changed to avoid feedback loops
+      setBorderMetrics(prev => {
+        if (
+          prev &&
+          prev.width === next.width &&
+          prev.height === next.height &&
+          prev.radius === next.radius &&
+          prev.borderWidth === next.borderWidth &&
+          prev.borderColor === next.borderColor
+        ) {
+          return prev
+        }
+        return next
+      })
     }
 
     compute()
@@ -305,8 +317,7 @@ const PureMultimodalInput = ({
             />
 
             <div className="flex items-end gap-2 p-2">
-              {/* Tools Dropdown */}
-              <ToolsDropdown onToolSelect={onToolSelect} selectedTool={selectedTool} />
+              {/* Tools Dropdown temporarily disabled to isolate render loop */}
 
               <AnimatePresence mode="wait">
                 {isLoading ? (
@@ -317,23 +328,17 @@ const PureMultimodalInput = ({
                     key="stop"
                     transition={{ duration: 0.15 }}
                   >
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={stop}
-                            className="size-10 sm:size-9 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm"
-                            aria-label="Stop generating"
-                          >
-                            <StopCircleIcon size={16} />
-                            <span className="sr-only">stop generating</span>
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>stop generating</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={stop}
+                      className="size-10 sm:size-9 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm"
+                      aria-label="Stop generating"
+                      title="stop generating"
+                    >
+                      <StopCircleIcon size={16} />
+                      <span className="sr-only">stop generating</span>
+                    </Button>
                   </motion.div>
                 ) : (
                   <motion.div
@@ -343,23 +348,17 @@ const PureMultimodalInput = ({
                     key="submit"
                     transition={{ duration: 0.15 }}
                   >
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="submit"
-                            size="sm"
-                            disabled={!input.trim() || isLoading}
-                            className="size-10 sm:size-9 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 shadow-sm"
-                            aria-label="Send message"
-                          >
-                            <ArrowUpIcon size={16} />
-                            <span className="sr-only">send message</span>
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>send message</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={!input.trim() || isLoading}
+                      className="size-10 sm:size-9 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 shadow-sm"
+                      aria-label="Send message"
+                      title="send message"
+                    >
+                      <ArrowUpIcon size={16} />
+                      <span className="sr-only">send message</span>
+                    </Button>
                   </motion.div>
                 )}
               </AnimatePresence>

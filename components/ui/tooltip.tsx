@@ -1,4 +1,4 @@
-'use client'
+"use client"
 
 import * as React from 'react'
 import * as TooltipPrimitive from '@radix-ui/react-tooltip'
@@ -16,12 +16,6 @@ const TooltipContent = React.forwardRef<
   React.ElementRef<typeof TooltipPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>
 >(({ className, sideOffset = 4, ...props }, ref) => {
-  const [mounted, setMounted] = React.useState(false)
-
-  React.useEffect(() => {
-    setMounted(true)
-  }, [])
-
   const content = (
     <TooltipPrimitive.Content
       ref={ref}
@@ -34,9 +28,8 @@ const TooltipContent = React.forwardRef<
     />
   )
 
-  if (!mounted) return null
-
-  return typeof window !== 'undefined' ? createPortal(content, document.body) : content
+  if (typeof window === 'undefined') return null
+  return createPortal(content, document.body)
 })
 TooltipContent.displayName = TooltipPrimitive.Content.displayName
 

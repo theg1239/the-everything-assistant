@@ -4,7 +4,6 @@ import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { Wrench, Search, FileText, GraduationCap, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 interface Tool {
@@ -111,90 +110,75 @@ export function ToolsDropdown({ onToolSelect, selectedTool }: ToolsDropdownProps
 
   return (
     <div className="relative">
-      <TooltipProvider>
-        {' '}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              ref={buttonRef}
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsOpen(!isOpen)}
+      <Button
+        ref={buttonRef}
+        variant="ghost"
+        size="sm"
+        onClick={() => setIsOpen(o => !o)}
+        className={cn(
+          'h-8 px-2 text-muted-foreground hover:text-foreground transition-all',
+          selectedTool && 'text-blue-500 hover:text-blue-600 bg-blue-50/50 dark:bg-blue-950/20'
+        )}
+        title={selectedTool ? `using: ${selectedToolData?.name}` : 'available tools'}
+      >
+        {selectedTool ? (
+          <>
+            <Wrench className="w-4 h-4" />
+            <span className="ml-1 text-xs font-medium hidden sm:inline">
+              {selectedToolData?.name || 'Tool'}
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="text-xs font-medium hidden sm:inline mr-1">Tools</span>
+            <Wrench className="w-4 h-4" />
+          </>
+        )}
+      </Button>
+
+      {isOpen && mounted && (
+        <div
+          ref={dropdownRef}
+          className="absolute z-50 min-w-[240px] bg-background/80 backdrop-blur-md border border-border/50 rounded-lg shadow-lg overflow-hidden"
+          style={{ top: 'auto', left: 0 }}
+        >
+          <div>
+            <button
+              onClick={() => handleToolSelect('')}
               className={cn(
-                'h-8 px-2 text-muted-foreground hover:text-foreground transition-all',
-                selectedTool &&
-                  'text-blue-500 hover:text-blue-600 bg-blue-50/50 dark:bg-blue-950/20'
+                'w-full flex items-center gap-3 px-3 py-2 text-left transition-colors',
+                'hover:bg-muted/50',
+                !selectedTool && 'bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300'
               )}
             >
-              {selectedTool ? (
-                <>
-                  <Wrench className="w-4 h-4" />
-                  <span className="ml-1 text-xs font-medium hidden sm:inline">
-                    {selectedToolData?.name || 'Tool'}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="text-xs font-medium hidden sm:inline mr-1">Tools</span>
-                  <Wrench className="w-4 h-4" />
-                </>
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {selectedTool ? `using: ${selectedToolData?.name}` : 'available tools'}
-          </TooltipContent>{' '}
-        </Tooltip>
-      </TooltipProvider>{' '}
-      {isOpen &&
-        mounted &&
-        createPortal(
-          <div
-            ref={dropdownRef}
-            className="fixed z-50 min-w-[240px] bg-background/80 backdrop-blur-md border border-border/50 rounded-lg shadow-lg overflow-hidden"
-            style={{
-              top: dropdownPosition.top,
-              left: dropdownPosition.left,
-            }}
-          >
-            <div className="">
+              <div className="flex-shrink-0">
+                <MessageSquare className="w-4 h-4" />
+              </div>
+              <div className="flex-1">
+                <div className="text-sm font-medium">general</div>
+              </div>
+            </button>
+
+            {availableTools.map(tool => (
               <button
-                onClick={() => handleToolSelect('')}
+                key={tool.id}
+                onClick={() => handleToolSelect(tool.id)}
                 className={cn(
                   'w-full flex items-center gap-3 px-3 py-2 text-left transition-colors',
                   'hover:bg-muted/50',
-                  !selectedTool && 'bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300'
+                  selectedTool === tool.id &&
+                    'bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300'
                 )}
               >
-                <div className="flex-shrink-0">
-                  <MessageSquare className="w-4 h-4" />
-                </div>
+                <div className="flex-shrink-0">{tool.icon}</div>
                 <div className="flex-1">
-                  <div className="text-sm font-medium">general</div>
+                  <div className="text-sm font-medium">{tool.name}</div>
                 </div>
               </button>
-
-              {availableTools.map((tool, index) => (
-                <button
-                  key={tool.id}
-                  onClick={() => handleToolSelect(tool.id)}
-                  className={cn(
-                    'w-full flex items-center gap-3 px-3 py-2 text-left transition-colors',
-                    'hover:bg-muted/50',
-                    selectedTool === tool.id &&
-                      'bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300'
-                  )}
-                >
-                  <div className="flex-shrink-0">{tool.icon}</div>
-                  <div className="flex-1">
-                    <div className="text-sm font-medium">{tool.name}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>,
-          document.body
-        )}
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

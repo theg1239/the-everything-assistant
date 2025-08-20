@@ -7,7 +7,7 @@ export function createMemoryTool(userId: string) {
     saveMemory: tool({
       description:
         'Save a memory to the knowledge base. Use this to remember important information about the user, their preferences, or key facts from the conversation. Use it when the user explicitly asks to remember something, or when you infer a piece of information is important for future interactions. If a similar memory already exists, it will be updated instead of creating a duplicate.',
-      parameters: z.object({
+      inputSchema: z.object({
         memoryContent: z.string().describe('The content of the memory to save.'),
         importance: z
           .number()
@@ -69,5 +69,5 @@ export function createMemoryTool(userId: string) {
         }
       },
     }),
-  }
+  };
 }

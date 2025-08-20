@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "next dev --turbo",
-    "build": "npx prisma generate && next build",
+    "build": "npx prisma generate && next build --turbo",
     "start": "next start",
     "lint": "next lint",
     "format": "npx prettier --write .",
@@ -29,9 +29,10 @@
     "papers:index": "tsx scripts/papers.ts"
   },
   "dependencies": {
-    "@ai-sdk/cerebras": "^0.2.15",
-    "@ai-sdk/google": "latest",
-    "@ai-sdk/groq": "latest",
+    "@ai-sdk/cerebras": "^1.0.0-beta.8",
+    "@ai-sdk/google": "^2.0.0-beta.14",
+    "@ai-sdk/groq": "^2.0.0-beta.7",
+    "@ai-sdk/react": "^2.0.15",
     "@dqbd/tiktoken": "^1.0.21",
     "@ducanh2912/next-pwa": "^10.2.9",
     "@emotion/is-prop-valid": "^1.2.1",
@@ -62,7 +63,7 @@
     "@types/crypto-js": "^4.2.2",
     "@types/marked": "^6.0.0",
     "@upstash/redis": "^1.35.0",
-    "ai": "latest",
+    "ai": "^5.0.0-beta.26",
     "bcryptjs": "^3.0.2",
     "botid": "^1.4.1",
     "class-variance-authority": "^0.7.1",
@@ -107,7 +108,7 @@
     "three": "^0.177.0",
     "tiktoken": "^1.0.21",
     "uuid": "^9.0.1",
-    "zod": "latest"
+    "zod": "^4.0.10"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",

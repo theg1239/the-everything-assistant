@@ -340,15 +340,15 @@ export async function getTokenUsageAllTimeSummary(): Promise<{
 }> {
   try {
     const agg = await (prisma as any).tokenUsage.aggregate({
-      _sum: { promptTokens: true, completionTokens: true, totalTokens: true },
+      _sum: { inputTokens: true, outputTokens: true, totalTokens: true },
       _count: { _all: true },
     })
     return {
-      totalPromptTokens: agg._sum?.promptTokens || 0,
-      totalCompletionTokens: agg._sum?.completionTokens || 0,
+      totalPromptTokens: agg._sum?.inputTokens || 0,
+      totalCompletionTokens: agg._sum?.outputTokens || 0,
       totalTokens: agg._sum?.totalTokens || 0,
       count: agg._count?._all || 0,
-    }
+    };
   } catch {
     // Fallback if aggregate not supported
     const rows = await prisma.tokenUsage.findMany({

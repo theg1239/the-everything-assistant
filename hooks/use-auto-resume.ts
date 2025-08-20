@@ -1,15 +1,15 @@
 'use client'
 
 import { useEffect } from 'react'
-import type { Message } from 'ai'
-import type { UseChatHelpers } from 'ai/react'
+import type { UIMessage } from 'ai'
+import type { UseChatHelpers } from '@ai-sdk/react'
 
 export interface UseAutoResumeParams {
   autoResume: boolean
-  initialMessages: Message[]
-  experimental_resume: UseChatHelpers['experimental_resume']
-  data: UseChatHelpers['data']
-  setMessages: UseChatHelpers['setMessages']
+  initialMessages: UIMessage[]
+  experimental_resume?: () => void
+  data?: any[]
+  setMessages?: (messages: UIMessage[]) => void
 }
 
 export interface DataPart {
@@ -31,7 +31,7 @@ export function useAutoResume({
     const mostRecentMessage = initialMessages.at(-1)
 
     if (mostRecentMessage?.role === 'user') {
-      experimental_resume()
+      experimental_resume?.()
     }
 
     // we intentionally run this once
@@ -47,8 +47,8 @@ export function useAutoResume({
     if (dataPart.type === 'append-message') {
       if (dataPart.message) {
         try {
-          const message = JSON.parse(dataPart.message) as Message
-          setMessages([...initialMessages, message])
+          const message = JSON.parse(dataPart.message) as UIMessage
+          setMessages?.([...initialMessages, message])
         } catch (error) {
           console.error('Failed to parse resume message:', error)
         }

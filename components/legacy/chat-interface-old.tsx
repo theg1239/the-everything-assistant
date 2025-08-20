@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, memo } from 'react'
-import { useChat } from 'ai/react'
+import { useChat } from '@ai-sdk/react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Menu, ArrowLeft, FileText, ChevronRight, Send } from 'lucide-react'

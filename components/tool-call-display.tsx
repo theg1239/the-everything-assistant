@@ -15,6 +15,7 @@ import {
   Shield,
   MapPin,
   Search,
+  BookOpen,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -24,7 +25,6 @@ import { ArtifactDisplay, type ArtifactDisplayProps } from './artifact-display'
 import { PaperSearchProgress } from './paper-search-progress'
 import { useVTOP } from '../contexts/vtop-context'
 import { useMediaQuery } from '@/hooks/use-media-query'
-// Removed credential-based visibility helpers to always show VTOP tool calls
 
 interface ToolCallDisplayProps {
   toolCalls: any[]
@@ -314,7 +314,60 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
           source,
         }
       }),
-      source: 'Papers Archive',
+      source: 'evtg. asst.',
+    }
+  }
+
+  if (
+    toolName === 'getSyllabus' ||
+    result.syllabus ||
+    result.filename ||
+    result.url ||
+    (result.success && result.filename)
+  ) {
+    const normalizeFilename = (fn: string | null) => {
+      if (!fn || typeof fn !== 'string') return { code: null, title: null }
+      const base = fn.split('/').pop() || fn
+      const withoutExt = base.replace(/\.[^.]+$/, '')
+      const parts = withoutExt.split(/_(.+)/)
+      const codePart = (parts[0] || '').trim()
+      const titlePart = (parts[1] || '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
+      const title = titlePart ? titlePart.replace(/\b\w/g, c => c.toUpperCase()) : null
+      return { code: codePart || null, title }
+    }
+
+    const makeEntryFrom = (entry: any) => {
+      const filename = entry.filename || entry.file || null
+      const url = entry.url || (filename ? `https://storage.googleapis.com/examcooker/syllabi/${filename}` : null)
+      const norm = normalizeFilename(filename)
+      const code = entry.code || norm.code
+      const title = entry.title || norm.title || (entry.message ? String(entry.message) : null)
+      return { filename, url, code, title, raw: entry }
+    }
+
+    let entries: any[] = []
+    if (result) {
+      if (result.ambiguous && Array.isArray(result.matches)) {
+        entries = result.matches.map((m: any) => makeEntryFrom(m))
+      } else if (Array.isArray(result.syllabi)) {
+        entries = result.syllabi.map((s: any) => makeEntryFrom(s))
+      } else if (result.filename || result.url || result.code || result.title) {
+        entries = [makeEntryFrom(result)]
+      } else if (result.data && result.data.filename) {
+        entries = [makeEntryFrom(result.data)]
+      }
+    }
+
+    const title = entries.length === 1 ?
+      (entries[0].code && entries[0].title ? `${entries[0].code} — ${entries[0].title}` : `Syllabus: ${entries[0].title || entries[0].filename}`)
+      : `${entries.length} Syllabi`;
+
+    return {
+      type: 'syllabi' as const,
+      title,
+      icon: <BookOpen className="h-5 w-5 text-emerald-500" />,
+      data: entries,
+      source: 'Syllabus',
     }
   }
 
@@ -335,7 +388,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         courseCode: result.courseCode,
         runId: result.runId || result.run_id,
       })),
-      source: 'smartPaperSearch',
+      source: 'Smart Agent',
     }
   }
 
@@ -354,7 +407,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
           totalIndexed: result.totalIndexed || result.total || result.count,
           stats: result.stats || undefined,
         },
-        source: 'paper-index',
+        source: 'Index Agent',
       }
     } else {
       return {
@@ -365,12 +418,11 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
           success: false,
           error: result?.error || result?.message || 'Unable to index papers',
         },
-        source: 'paper-index',
+        source: 'Index Agent',
       }
     }
   }
 
-  // Question patterns analysis artifact
   if (toolName === 'analyzeQuestionPatterns' || result.source === 'question-patterns') {
     if (result && result.success) {
       return {
@@ -378,7 +430,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         title: `Most Repeated Question Patterns${result.courseCode ? ` (${result.courseCode}${result.examType ? ` • ${result.examType}` : ''})` : ''}`,
         icon: <TrendingUp className="h-5 w-5 text-indigo-500" />,
         data: result,
-        source: 'question-patterns',
+        source: 'Analysis Agent',
       }
     } else {
       return {
@@ -389,12 +441,11 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
           success: false,
           error: result?.error || result?.message || 'Unable to analyze question patterns',
         },
-        source: 'question-patterns',
+        source: 'Analysis Agent',
       }
     }
   }
 
-  // Past paper Q&A: render answer with metadata
   if (toolName === 'askPaperQuestion') {
     if (result && result.success) {
       return {
@@ -409,7 +460,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
           question: result.question || undefined,
           debug: result.debug || undefined,
         },
-        source: 'paper-index-qa',
+        source: 'Papers Agent',
       }
     } else {
       return {
@@ -420,7 +471,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
           success: false,
           error: result?.error || result?.message || 'Unable to answer question',
         },
-        source: 'paper-index-qa',
+        source: 'Papers Agent',
       }
     }
   }
@@ -585,7 +636,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         success: false,
         ...result,
       },
-      source: toolName || 'Search',
+      source: 'Agent',
     }
   }
 

@@ -17,6 +17,8 @@ import { Toaster } from 'sonner'
 import MobileViewportFix from '@/components/mobile-viewport-fix'
 import ScrollToTop from '@/components/scroll-to-top'
 import CustomBackground from '@/components/backgrounds/custom-background'
+import { PdfDockProvider } from '@/contexts/pdf-dock-context'
+import PdfDock from '@/components/pdf-dock'
 import { PerformanceMonitor } from '@/components/performance-monitor'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
@@ -269,8 +271,11 @@ export default async function RootLayout({
               <MemoryProvider>
                 <SidebarProvider>
                   <MFAGate>
-                    <SidebarWrapper />
-                    {children}
+                    <PdfDockProvider>
+                      <SidebarWrapper />
+                      {children}
+                      <PdfDock />
+                    </PdfDockProvider>
                   </MFAGate>
                 </SidebarProvider>
               </MemoryProvider>

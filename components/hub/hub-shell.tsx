@@ -19,11 +19,12 @@ import MessMenuPanel from './panels/mess-menu-panel'
 import PlacementPanel from './panels/placement-panel'
 import FacultyPanel from './panels/faculty-panel'
 import RedditPanel from './panels/reddit-panel'
+import SyllabiPanel from './panels/syllabi-panel'
 import { hasVTOPCredentials } from '@/lib/vtop-credentials'
 import QuickActions from './quick-actions'
 import ResultViewer from './result-viewer'
 
-type Page = 'home' | 'vtop' | 'papers' | 'mess' | 'placements' | 'faculty' | 'reddit'
+type Page = 'home' | 'vtop' | 'papers' | 'mess' | 'placements' | 'faculty' | 'reddit' | 'syllabi'
 
 export default function HubShell() {
   const [page, setPage] = useState<Page>('home')
@@ -134,6 +135,8 @@ export default function HubShell() {
         return <FacultyPanel />
       case 'reddit':
         return <RedditPanel />
+      case 'syllabi':
+        return <SyllabiPanel />
       default:
         return null
     }
@@ -180,6 +183,7 @@ export default function HubShell() {
                   },
                   { id: 'faculty', label: 'faculty', icon: <Users className="h-3.5 w-3.5" /> },
                   { id: 'reddit', label: 'reddit', icon: <Flame className="h-3.5 w-3.5" /> },
+                  { id: 'syllabi', label: 'syllabi', icon: <FileSearch className="h-3.5 w-3.5" /> },
                 ] as { id: Page; label: string; icon: React.ReactNode }[]
               ).map(tab => (
                 <button
@@ -284,6 +288,12 @@ export default function HubShell() {
                 description="find previous exam papers by course"
                 icon={<FileSearch className="h-5 w-5" />}
                 onClick={() => setPage('papers')}
+              />
+              <HubTile
+                title="syllabi"
+                description="find course syllabi by code or name"
+                icon={<FileSearch className="h-5 w-5" />}
+                onClick={() => setPage('syllabi')}
               />
               <HubTile
                 title="mess menu"

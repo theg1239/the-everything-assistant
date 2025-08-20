@@ -1,4 +1,3 @@
-// Common acronyms and alternative course codes
 export const COURSE_ACRONYMS: { [key: string]: string[] } = {
   // Data Structures and Algorithms
   DSA: ['BCSE202L', 'BITE201L', 'ISWE102L', 'CSI2002'],
@@ -8,6 +7,9 @@ export const COURSE_ACRONYMS: { [key: string]: string[] } = {
   // Digital System Design
   DSD: ['BECE102L'],
   'DIGITAL DESIGN': ['BECE102L'],
+
+
+  'Artificial Intelligence': ['BCSE306L'],
 
   // Operating Systems
   OS: ['BCSE303L', 'BITE303L', 'ISWE204L'],
@@ -30,7 +32,6 @@ export const COURSE_ACRONYMS: { [key: string]: string[] } = {
   ML: ['BCSE209L', 'BITE410L', 'CSE4020'],
   'MACHINE LEARNING': ['BCSE209L', 'BITE410L', 'CSE4020'],
 
-  // Artificial Intelligence
   AI: ['BCSE306L', 'BITE308L', 'BMEE407L', 'CBS3004'],
   'ARTIFICIAL INTELLIGENCE': ['BCSE306L', 'BITE308L', 'BMEE407L', 'CBS3004'],
 

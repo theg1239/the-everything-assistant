@@ -50,7 +50,7 @@ export default function FacultyPanel() {
               id="facultyName"
               value={facultyName}
               onChange={e => setFacultyName(e.target.value)}
-              placeholder="Optional"
+              placeholder="optional"
             />
           </div>
           <div className="space-y-1.5">
@@ -59,7 +59,7 @@ export default function FacultyPanel() {
               id="courseQuery"
               value={courseQuery}
               onChange={e => setCourseQuery(e.target.value)}
-              placeholder="Optional"
+              placeholder="optional"
             />
           </div>
           <div className="flex items-center space-x-2 pt-4">

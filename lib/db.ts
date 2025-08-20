@@ -368,6 +368,51 @@ export async function getTokenUsageAllTimeSummary(): Promise<{
   }
 }
 
+export async function getTokenUsageLifetimeBuckets(granularity: 'day' | 'month' | 'hour' = 'day') {
+  const unit = granularity === 'month' ? 'month' : granularity === 'hour' ? 'hour' : 'day'
+  try {
+    const rows: any[] = await prisma.$queryRaw`
+      SELECT date_trunc(${unit}, "createdAt") AS bucket,
+             sum("totalTokens") AS "totalTokens",
+             sum("promptTokens") AS "promptTokens",
+             sum("completionTokens") AS "completionTokens",
+             count(*) AS count
+      FROM "TokenUsage"
+      GROUP BY bucket
+      ORDER BY bucket ASC
+    `
+
+    return rows.map(r => ({
+      ts: new Date(r.bucket).getTime(),
+      date: new Date(r.bucket).toISOString(),
+      totalTokens: Number(r.totalTokens || 0),
+      promptTokens: Number(r.promptTokens || 0),
+      completionTokens: Number(r.completionTokens || 0),
+      count: Number(r.count || 0),
+    }))
+  } catch (err) {
+    try {
+      const all = await prisma.tokenUsage.findMany({ select: { createdAt: true, totalTokens: true, promptTokens: true, completionTokens: true } })
+      const buckets: Record<string, { ts: number; date: string; totalTokens: number; promptTokens: number; completionTokens: number; count: number }> = {}
+      for (const r of all) {
+        const d = new Date(r.createdAt)
+        let key: string
+        if (unit === 'hour') key = d.toISOString().slice(0, 13) // YYYY-MM-DDTHH
+        else key = d.toISOString().slice(0, 10) // YYYY-MM-DD
+        if (!buckets[key]) buckets[key] = { ts: new Date(key).getTime(), date: key, totalTokens: 0, promptTokens: 0, completionTokens: 0, count: 0 }
+        buckets[key].totalTokens += Number(r.totalTokens || 0)
+        buckets[key].promptTokens += Number(r.promptTokens || 0)
+        buckets[key].completionTokens += Number(r.completionTokens || 0)
+        buckets[key].count += 1
+      }
+      return Object.values(buckets).sort((a, b) => a.ts - b.ts)
+    } catch (err2) {
+      console.error('Failed to aggregate token usage buckets:', err, err2)
+      return []
+    }
+  }
+}
+
 export async function getArchivedChats(
   userId: string,
   limit: number = 15,

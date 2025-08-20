@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { getRecentTokenUsage, getTokenUsageSummary, getTokenUsageAllTimeSummary } from '@/lib/db'
+import { getRecentTokenUsage, getTokenUsageSummary, getTokenUsageAllTimeSummary, getTokenUsageLifetimeBuckets } from '@/lib/db'
+import { getDetailedUsageStats } from '@/lib/stats'
 
 export async function GET(req: NextRequest) {
   try {
@@ -22,16 +23,20 @@ export async function GET(req: NextRequest) {
     const limit = limitParam ? Math.min(200, Math.max(1, parseInt(limitParam, 10))) : 50
     const days = daysParam ? Math.max(0, parseInt(daysParam, 10)) : 1
 
-    const [recent, summary, summaryAllTime] = await Promise.all([
+    const [recent, summary, summaryAllTime, lifetimeBuckets, detailedStats] = await Promise.all([
       getRecentTokenUsage(limit),
       getTokenUsageSummary(days),
       getTokenUsageAllTimeSummary(),
+      getTokenUsageLifetimeBuckets('day'),
+      getDetailedUsageStats(),
     ])
 
     return NextResponse.json({
       recent,
       summary,
       summaryAllTime,
+      lifetimeBuckets,
+      detailedStats,
     })
   } catch (error: any) {
     console.error('Usage retrieval failed:', error)

@@ -10,12 +10,13 @@ import { useSession } from 'next-auth/react'
 import { useMemory } from '@/contexts/memory-context'
 import { VirtualizedMessages } from '@/components/virtualized-messages'
 import { motion } from 'framer-motion'
-import { FileText, Plus, ChevronDown, GraduationCap } from 'lucide-react'
+import { Download, Plus, ChevronDown, GraduationCap } from 'lucide-react'
 import { HamburgerButton } from '@/components/hamburger-button'
 import { Button } from '@/components/ui/button'
 import { SuggestedQuestions } from '@/components/suggested-questions'
 import { FollowUpSuggestions } from '@/components/follow-up-suggestions'
 import { ChatHeader } from '@/components/chat-header'
+import { MobilePdfDockButton, DesktopPdfDockButton } from '@/components/pdf-dock'
 import { MultimodalInput } from '@/components/multimodal-input'
 import Hub from '@/components/hub/hub'
 import { extractTitleFromContent, cn } from '@/lib/utils'
@@ -140,6 +141,10 @@ const PureChatInterface = memo(
     const [chatCreatedEventDispatched, setChatCreatedEventDispatched] = useState(false)
     const [maximizedArtifact, setMaximizedArtifact] = useState<any>(null)
     const [isAtBottom, setIsAtBottom] = useState(true)
+  // PWA install handling
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
+  const [canInstall, setCanInstall] = useState(false)
+  const [isInstalled, setIsInstalled] = useState(false)
     const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
 
     const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -160,6 +165,49 @@ const PureChatInterface = memo(
       command: string
       message: string
     } | null>(null)
+
+    useEffect(() => {
+      const onBeforeInstallPrompt = (e: any) => {
+        try {
+          e.preventDefault()
+        } catch {}
+        setDeferredPrompt(e)
+        setCanInstall(true)
+      }
+
+      const onAppInstalled = () => {
+        setIsInstalled(true)
+        setCanInstall(false)
+        setDeferredPrompt(null)
+      }
+
+      window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener)
+      window.addEventListener('appinstalled', onAppInstalled as EventListener)
+
+      return () => {
+        window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener)
+        window.removeEventListener('appinstalled', onAppInstalled as EventListener)
+      }
+    }, [])
+
+    const handleInstallClick = async () => {
+      if (deferredPrompt && deferredPrompt.prompt) {
+        try {
+          await deferredPrompt.prompt()
+          const choiceResult = await deferredPrompt.userChoice
+          if (choiceResult && choiceResult.outcome === 'accepted') {
+            setIsInstalled(true)
+          }
+        } catch (err) {
+        } finally {
+          setDeferredPrompt(null)
+          setCanInstall(false)
+        }
+        return
+      }
+
+      window.dispatchEvent(new CustomEvent('showPwaInstallHint'))
+    }
 
     useEffect(() => {
       const onDisclaimer = (e: any) => {
@@ -319,32 +367,63 @@ const PureChatInterface = memo(
           }
         }
 
-        if (currentChatId && isFirstMessageInNewChat) {
-          setIsFirstMessageInNewChat(false)
-          const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
-            try {
-              const response = await fetch(`/api/chats/${currentChatId}`)
-              if (response.ok) {
-                const chatData = await response.json()
-                if (chatData.title && chatData.title !== 'New Chat') {
-                  window.dispatchEvent(
-                    new CustomEvent('chatTitleUpdated', {
-                      detail: { chatId: currentChatId, title: chatData.title },
-                    })
-                  )
-                } else if (attempt < maxAttempts) {
-                  setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
-                }
-              }
-            } catch {
-              if (attempt < maxAttempts) {
-                setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
-              }
+    if (currentChatId && isFirstMessageInNewChat) {
+      setIsFirstMessageInNewChat(false);
+      const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
+        try {
+          const response = await fetch(`/api/chats/${currentChatId}`);
+          if (response.ok) {
+            const chatData = await response.json();
+            if (chatData.title && chatData.title !== 'New Chat') {
+              window.dispatchEvent(
+                new CustomEvent('chatTitleUpdated', {
+                  detail: { chatId: currentChatId, title: chatData.title },
+                })
+              );
+            } else if (attempt < maxAttempts) {
+              setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000);
             }
           }
           setTimeout(() => checkTitleUpdate(), 3000)
         }
       },
+  onError: err => {
+        const errorMessage = err.message || err.toString()
+        const hasResponseBody = typeof err === 'object' && err !== null && 'responseBody' in err
+        const responseBody = hasResponseBody ? (err as any).responseBody : ''
+
+        const isGeminiStreamingError =
+          errorMessage.includes('contents.parts must not be empty') ||
+          errorMessage.includes('INVALID_ARGUMENT') ||
+          errorMessage.includes('GenerateContentRequest.contents') ||
+          errorMessage.includes('streamGenerateContent') ||
+          (typeof responseBody === 'string' &&
+            responseBody.includes('contents.parts must not be empty'))
+
+        const localRateLimitDetected = /rate limit|too many requests|quota exceeded|rate_limited/i.test(
+          String(errorMessage || responseBody || '')
+        )
+
+        let isRateLimit = false
+        try {
+          isRateLimit = checkForRateLimitError(err)
+        } catch (e) {
+          // ignore
+        }
+
+        const contextRateLimit = !!rateLimitError?.isRateLimit
+
+        try {
+          // debug logging
+          // eslint-disable-next-line no-console
+          //console.debug('[Chat] onError - localRateLimitDetected:', localRateLimitDetected, 'isRateLimit:', isRateLimit, 'contextRateLimit:', contextRateLimit, 'isGeminiStreamingError:', isGeminiStreamingError, 'error:', err)
+        } catch {}
+
+        if (!localRateLimitDetected && !isRateLimit && !contextRateLimit && !isGeminiStreamingError) {
+          toast.error('Something went wrong. Please try again.')
+        }
+      },
+    })
 
       onError: (err: any) => {
         const errorMessage = err.message || err.toString()
@@ -542,10 +621,14 @@ const PureChatInterface = memo(
           return
         }
 
-        const isRateLimit = checkForRateLimitError(error as any)
+        const isRateLimit = checkForRateLimitError(error)
+        try {
+          // eslint-disable-next-line no-console
+          console.debug('[Chat] error effect - isRateLimit:', isRateLimit, 'error:', error)
+        } catch {}
         if (isRateLimit) return
       }
-    }, [error, checkForRateLimitError, setMessages])
+    }, [error, checkForRateLimitError])
 
     const handleSuggestedQuestion = useCallback(
       async (question: string) => {
@@ -1291,8 +1374,34 @@ const PureChatInterface = memo(
                 <Plus className="h-4 w-4 mr-2" />
                 new chat
               </Button>
+              {canInstall && !isInstalled && (
+                <Button
+                  variant="ghost"
+                  onClick={handleInstallClick}
+                  className="h-9 ml-2 hidden md:inline-flex"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  install app
+                </Button>
+              )}
+              {canInstall && !isInstalled && (
+                <Button
+                  variant="ghost"
+                  onClick={handleInstallClick}
+                  className="h-9 ml-2 md:hidden"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  install
+                </Button>
+              )}
+              <div className="hidden md:block ml-2">
+                <DesktopPdfDockButton />
+              </div>
+              <div className="ml-2 md:hidden">
+                <MobilePdfDockButton />
+              </div>
             </div>
-          </header>
+          </header>{' '}
           <div className="flex-1 relative overflow-hidden">
             <div
               className={cn(

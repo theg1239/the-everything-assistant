@@ -1,4 +1,5 @@
-import { smoothStream } from 'ai'
+import { smoothStream, extractReasoningMiddleware } from 'ai'
+import { inspect } from 'util'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { createVITTools } from '@/lib/tools'
 import { VIT_SYSTEM_PROMPT } from '@/lib/prompts'
@@ -756,6 +757,10 @@ CRITICAL TOOL CONTINUATION RULES:
 
     let savedFinalStepUsage = false
 
+    const reasoningMiddleware = extractReasoningMiddleware({
+      tagName: 'reasoning',
+    })
+
     const resultStream = await rateLimitedAI.google.streamText(
       {
         model: await rateLimitedAI.google.model(modelName),
@@ -763,7 +768,16 @@ CRITICAL TOOL CONTINUATION RULES:
         tools,
         temperature: 0.7,
         maxTokens: 4096,
+        providerOptions: {
+          google: {
+            thinkingConfig: {
+              thinkingBudget: 2048,
+              includeThoughts: true
+            },
+          }
+        },
         experimental_transform: smoothStream({ chunking: 'word' }),
+        middleware: [reasoningMiddleware],
         maxSteps: 5,
         experimental_continueSteps: true,
         onError: async (error: any) => {
@@ -789,6 +803,7 @@ CRITICAL TOOL CONTINUATION RULES:
           finishReason,
           usage,
           stepIndex,
+          reasoning,
         }: any) => {
           console.log(`Step finished:`, {
             model: modelName,
@@ -799,6 +814,14 @@ CRITICAL TOOL CONTINUATION RULES:
             stepIndex,
             usage,
           })
+
+          if (reasoning) {
+            try {
+              console.log('Extracted reasoning (step):', reasoning)
+            } catch (e) {
+              console.warn('Failed to log extracted reasoning (step):', e)
+            }
+          }
 
           try {
             if (usage && typeof usage === 'object') {
@@ -828,8 +851,69 @@ CRITICAL TOOL CONTINUATION RULES:
             console.log('Knowledge base tool called, model should continue automatically...')
           }
         },
-        onFinish: async (result: any) => {
+        onFinish: async (result: any, { reasoning }: any = {}) => {
           console.log('Stream finished, processing final result...')
+
+          try {
+            console.log('Full model response:', inspect(result, { depth: null }))
+          } catch (e) {
+            console.warn('Failed to log full model response:', e)
+          }
+
+          // Collect reasoning from multiple possible locations for robustness:
+          // 1) middleware-provided `reasoning` argument
+          // 2) result.response.messages -> message.content parts with type === 'reasoning'
+          // 3) Google-style candidates[].content.parts where part.thought === true
+          try {
+            const reasoningParts: string[] = []
+
+            if (reasoning) {
+              if (typeof reasoning === 'string') reasoningParts.push(reasoning)
+              else if (Array.isArray(reasoning)) reasoningParts.push(...reasoning)
+              else if (typeof reasoning === 'object') reasoningParts.push(JSON.stringify(reasoning))
+            }
+
+            const resp = (result && (result.response || result)) || null
+            if (resp && Array.isArray(resp.messages)) {
+              for (const msg of resp.messages) {
+                const content = msg.content
+                if (Array.isArray(content)) {
+                  for (const part of content) {
+                    if (part && (part.type === 'reasoning' || part.type === 'thought')) {
+                      if (part.text) reasoningParts.push(part.text)
+                      else reasoningParts.push(JSON.stringify(part))
+                    }
+                  }
+                }
+              }
+            }
+
+            if ((result as any)?.candidates) {
+              const candidates = (result as any).candidates
+              for (const cand of candidates) {
+                if (cand?.content?.parts && Array.isArray(cand.content.parts)) {
+                  for (const p of cand.content.parts) {
+                    if (p && (p.thought || p.type === 'reasoning' || p.type === 'thought')) {
+                      if (p.text) reasoningParts.push(p.text)
+                      else if (p.content) reasoningParts.push(p.content)
+                      else reasoningParts.push(JSON.stringify(p))
+                    }
+                  }
+                }
+              }
+            }
+
+            if (reasoningParts.length > 0) {
+              console.log('Extracted reasoning parts (final):')
+              for (const [i, r] of reasoningParts.entries()) {
+                console.log(`[reasoning #${i + 1}]\n${r}`)
+              }
+            } else {
+              console.log('No reasoning parts found in final result')
+            }
+          } catch (e) {
+            console.warn('Failed to extract/log reasoning parts (final):', e)
+          }
 
           const allToolResults: any[] = []
 
@@ -929,7 +1013,6 @@ CRITICAL TOOL CONTINUATION RULES:
             }
           }
 
-          // Persist aggregate usage if available on final result
           try {
             const finalUsage = (result as any)?.usage
             if (!savedFinalStepUsage && finalUsage && typeof finalUsage === 'object') {

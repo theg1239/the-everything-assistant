@@ -172,9 +172,10 @@ const PureMultimodalInput = ({
   const isNearLimit = Boolean(maxLength) && maxLength ? characterCount > maxLength * 0.8 : false
   
   useEffect(() => {
+    if (introPlayed) return
     const t = setTimeout(() => setIntroPlayed(true), 1600)
     return () => clearTimeout(t)
-  }, [])
+  }, [introPlayed])
 
   useEffect(() => {
     const node = borderRef.current

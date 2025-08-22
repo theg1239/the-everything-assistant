@@ -783,7 +783,152 @@ CRITICAL TOOL CONTINUATION RULES:
       maxSteps: 5,
     })
 
-    return result.toUIMessageStreamResponse()
+    // Helper: convert UIMessage parts to legacy toolInvocations for DB persistence
+    const toToolInvocations = (parts: any[]): any[] => {
+      const out: any[] = []
+      for (const p of Array.isArray(parts) ? parts : []) {
+        if (!p || typeof p.type !== 'string') continue
+        if (p.type === 'tool-call') {
+          const name = p.toolName || p.name || 'unknown'
+          out.push({
+            toolCallId: p.toolCallId || `${name}-${Date.now()}`,
+            toolName: name,
+            args: p.input ?? p.args,
+            state: 'call',
+            result: undefined,
+          })
+        } else if (p.type === 'tool-result') {
+          const name = p.toolName || p.name || 'unknown'
+          out.push({
+            toolCallId: p.toolCallId || `${name}-${Date.now()}`,
+            toolName: name,
+            args: undefined,
+            state: 'result',
+            result: p.result ?? p.output,
+          })
+        } else if (p.type.startsWith('tool-')) {
+          const toolName = p.type.replace(/^tool-/, '')
+          const state =
+            p.state === 'output-available' || p.state === 'output-error' ? 'result' : 'call'
+          const result =
+            p.state === 'output-available'
+              ? p.output
+              : p.state === 'output-error'
+              ? { success: false, error: p.errorText || 'Tool error' }
+              : undefined
+          const args = p.input ?? p.args
+          out.push({
+            toolCallId: p.toolCallId || `${toolName}-${Date.now()}`,
+            toolName,
+            args,
+            state,
+            result,
+          })
+        }
+      }
+      return out
+    }
+
+    const extractText = (msg: any): string => {
+      try {
+        // Prefer UIMessage.parts -> text
+        if (Array.isArray(msg?.parts)) {
+          const t = msg.parts
+            .filter((p: any) => p && p.type === 'text' && typeof p.text === 'string')
+            .map((p: any) => p.text)
+            .join('\n')
+          if (t) return t
+        }
+        // Fallback: string content
+        if (typeof msg?.content === 'string') return msg.content
+        // Fallback: array content segments
+        if (Array.isArray(msg?.content)) {
+          const t = msg.content
+            .filter((c: any) => c && c.type === 'text' && typeof c.text === 'string')
+            .map((c: any) => c.text)
+            .join('\n')
+          if (t) return t
+        }
+        // Fallback: text field
+        if (typeof msg?.text === 'string') return msg.text
+      } catch {}
+      return ''
+    }
+
+    return result.toUIMessageStreamResponse({
+      async onFinish(payload: any) {
+        // Optional structured debug logging (no content leakage)
+        const DEBUG = process.env.DEBUG_AI_STREAM === '1' || process.env.NODE_ENV !== 'production'
+        const safeLog = (...args: any[]) => {
+          if (DEBUG) {
+            try {
+              console.log('[chat:onFinish]', ...args)
+            } catch {}
+          }
+        }
+        try {
+          // Adapter variants:
+          // - payload.message (UIMessage)
+          // - payload.responseMessage (UI/UI-like message)
+          // - payload.messages (array of messages; take the last)
+          const responseMessage = payload?.responseMessage
+          const messagesArray = Array.isArray(payload?.messages) ? payload.messages : undefined
+          const finalMessage =
+            payload?.message ??
+            responseMessage ??
+            (messagesArray && messagesArray.length ? messagesArray[messagesArray.length - 1] : payload)
+          const payloadKeys = payload && typeof payload === 'object' ? Object.keys(payload) : []
+          const responseMessageKeys = responseMessage && typeof responseMessage === 'object' ? Object.keys(responseMessage) : []
+          const messagesLength = Array.isArray(messagesArray) ? messagesArray.length : 0
+          // Summarize parts
+          const parts: any[] = Array.isArray(finalMessage?.parts) ? finalMessage.parts : []
+          const typeCounts: Record<string, number> = {}
+          for (const p of parts) {
+            const t = (p && typeof p.type === 'string') ? p.type : 'unknown'
+            typeCounts[t] = (typeCounts[t] || 0) + 1
+          }
+
+          let text = extractText(finalMessage)
+          const invocations = toToolInvocations(parts)
+
+          // If no direct text but tool parsed content exists, use that
+          if (!text && Array.isArray(invocations)) {
+            const formatted = invocations.find((i: any) => i?.result?.formatted_content)?.result
+              ?.formatted_content
+            if (typeof formatted === 'string' && formatted.trim()) {
+              text = formatted
+            }
+          }
+
+          // Log summary (no text content)
+          safeLog({
+            role: finalMessage?.role,
+            id: finalMessage?.id,
+            payloadHasMessage: Boolean(payload?.message),
+            payloadKeys,
+            hasResponseMessage: Boolean(responseMessage),
+            responseMessageKeys,
+            messagesLength,
+            partsCount: parts.length,
+            partTypes: typeCounts,
+            contentType: typeof finalMessage?.content,
+            contentIsArray: Array.isArray(finalMessage?.content) || undefined,
+            textLength: typeof text === 'string' ? text.length : 0,
+            invocationsCount: Array.isArray(invocations) ? invocations.length : 0,
+          })
+
+          await saveMessage(chat!.id, 'assistant', text || '', invocations)
+        } catch (e) {
+          console.error('Failed to persist assistant message:', e)
+          // If failing to persist, still log a minimal finalMessage shape for diagnosis
+          try {
+            const finalMessage = payload?.message ?? payload
+            const keys = finalMessage && typeof finalMessage === 'object' ? Object.keys(finalMessage) : []
+            console.log('[chat:onFinish:error] finalMessage keys:', keys)
+          } catch {}
+        }
+      },
+    })
   } catch (error: any) {
     console.error('Chat API error:', error)
 

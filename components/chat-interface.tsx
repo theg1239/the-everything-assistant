@@ -113,6 +113,7 @@ function memoryToMessage(memory: MemoryWithId): Message {
 interface ChatInterfaceProps {
   chatId?: string
   autoResume?: boolean
+  initialMessages?: any[]
 }
 
 const getTextFromMessage = (m: { parts?: Array<{ type: string; text?: string }> } | undefined) =>
@@ -122,7 +123,7 @@ import { createId as cuid } from '@paralleldrive/cuid2'
 const makeClientId = () => cuid()
 
 const PureChatInterface = memo(
-  ({ chatId, autoResume = false }: ChatInterfaceProps) => {
+  ({ chatId, autoResume = false, initialMessages = [] }: ChatInterfaceProps) => {
     const [showFullChat, setShowFullChat] = useState(false)
     const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebar()
     const [hubOpen, setHubOpen] = useState(false)
@@ -245,8 +246,9 @@ const PureChatInterface = memo(
         if (!chatCreatedEventDispatched) {
           setChatCreatedEventDispatched(true)
           const chatPath = `/chat/${newId}`
-          router.push(chatPath)
-          window.history.replaceState({}, '', chatPath)
+          // Avoid full Next.js navigation here to prevent unmounting during first send
+          // and losing the in-flight stream. Update URL softly for bookmarking.
+          try { window.history.replaceState({}, '', chatPath) } catch {}
           window.dispatchEvent(
             new CustomEvent('newChatCreated', {
               detail: {
@@ -261,7 +263,29 @@ const PureChatInterface = memo(
         }
         return newId
       }
-      return optimisticChatId || chatId!
+      // If we already have a chatId (seeded from server) but URL is '/', reflect it now
+      const id = optimisticChatId || chatId!
+      try {
+        const desired = `/chat/${id}`
+        if (typeof window !== 'undefined' && window.location.pathname !== desired) {
+          window.history.replaceState({}, '', desired)
+          if (!chatCreatedEventDispatched) {
+            setChatCreatedEventDispatched(true)
+            window.dispatchEvent(
+              new CustomEvent('newChatCreated', {
+                detail: {
+                  id,
+                  title: extractTitleFromContent(titleSeed || 'New Chat'),
+                  path: desired,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                },
+              })
+            )
+          }
+        }
+      } catch {}
+      return id
     }
 
     const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -311,7 +335,7 @@ const PureChatInterface = memo(
       transport: new DefaultChatTransport({
         api: '/api/chat',
       }),
-      id: chatId,
+      id: optimisticChatId || chatId,
 
       onFinish: ({ message }: { message: AIMessage }) => {
         const currentChatId = currentChatIdRef.current
@@ -326,28 +350,6 @@ const PureChatInterface = memo(
 
         if (currentChatId && isFirstMessageInNewChat) {
           setIsFirstMessageInNewChat(false)
-          const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
-            try {
-              const response = await fetch(`/api/chats/${currentChatId}`)
-              if (response.ok) {
-                const chatData = await response.json()
-                if (chatData.title && chatData.title !== 'New Chat') {
-                  window.dispatchEvent(
-                    new CustomEvent('chatTitleUpdated', {
-                      detail: { chatId: currentChatId, title: chatData.title },
-                    })
-                  )
-                } else if (attempt < maxAttempts) {
-                  setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
-                }
-              }
-            } catch {
-              if (attempt < maxAttempts) {
-                setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
-              }
-            }
-          }
-          setTimeout(() => checkTitleUpdate(), 3000)
         }
       },
 
@@ -369,6 +371,17 @@ const PureChatInterface = memo(
         }
       },
     })
+
+    useEffect(() => {
+      if (Array.isArray(initialMessages) && initialMessages.length) {
+        setMessages(initialMessages as any)
+        setShowFullChat(true)
+      }
+      if (chatId) {
+        setOptimisticChatId(chatId)
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [chatId])
 
     const isLoading = status === 'streaming'
 
@@ -481,12 +494,16 @@ const PureChatInterface = memo(
       }
     }, [messages, isLoading, isInitialRender, throttledScrollToBottom])
 
+    const derivedHasUser = useMemo(() => messages.some(m => m.role === 'user'), [
+      messages.length,
+      messages[messages.length - 1]?.role,
+    ])
+    const derivedIsEmpty = useMemo(() => messages.length === 0, [messages.length])
+
     useEffect(() => {
-      const hasUser = messages.some(m => m.role === 'user')
-      setHasUserInitiatedConversation(prev => (prev !== hasUser ? hasUser : prev))
-      const isEmpty = messages.length === 0
-      setIsFirstMessageInNewChat(prev => (prev !== isEmpty ? isEmpty : prev))
-    }, [messages])
+      setHasUserInitiatedConversation(prev => (prev !== derivedHasUser ? derivedHasUser : prev))
+      setIsFirstMessageInNewChat(prev => (prev !== derivedIsEmpty ? derivedIsEmpty : prev))
+    }, [derivedHasUser, derivedIsEmpty])
 
     useEffect(() => {
       if (!isInitialRender && messages.length > 0 && isLoading && autoScrollEnabled) {
@@ -577,11 +594,7 @@ const PureChatInterface = memo(
 
         await sendMessage(
           { text: question },
-          {
-            body: {
-              ...(id ? { id } : {}),
-            },
-          }
+          { body: { ...(id ? { id } : {}) } }
         )
       },
       [
@@ -972,22 +985,7 @@ const PureChatInterface = memo(
             result.result.success !== false &&
             (result.result.data || result.result.output)
           ) {
-            const id = currentChatIdRef.current
-            if (id) {
-              setTimeout(async () => {
-                try {
-                  const refreshResponse = await fetch(`/api/chats/${id}`)
-                  if (refreshResponse.ok) {
-                    const chatData = await refreshResponse.json()
-                    if (chatData.messages) {
-                      setMessages(chatData.messages)
-                    }
-                  }
-                } catch (error) {
-                  console.warn('Failed to refresh conversation after VTOP data retrieval:', error)
-                }
-              }, 500)
-            }
+            // Skip server refresh; rely on current streaming state
           } else if (result.result && result.result.success === false) {
             const errorMessage =
               result.result.error || result.result.message || 'Unknown error occurred'
@@ -1447,16 +1445,20 @@ const PureChatInterface = memo(
 )
 
 export const ChatInterface = memo(
-  ({ chatId, autoResume = true }: ChatInterfaceProps) => {
+  ({ chatId, autoResume = true, initialMessages = [] }: ChatInterfaceProps) => {
     return (
       <RateLimitProvider>
         <VTOPProvider>
-          <PureChatInterface chatId={chatId} autoResume={autoResume} />
+          <PureChatInterface chatId={chatId} autoResume={autoResume} initialMessages={initialMessages} />
         </VTOPProvider>
       </RateLimitProvider>
     )
   },
   (prevProps, nextProps) => {
-    return prevProps.chatId === nextProps.chatId && prevProps.autoResume === nextProps.autoResume
+    return (
+      prevProps.chatId === nextProps.chatId &&
+      prevProps.autoResume === nextProps.autoResume &&
+      prevProps.initialMessages === nextProps.initialMessages
+    )
   }
 )

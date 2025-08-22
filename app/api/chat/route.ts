@@ -5,6 +5,7 @@ import {
   convertToModelMessages,
   type UIMessage as SDKUIMessage,
   type ModelMessage as SDKModelMessage,
+  stepCountIs
 } from 'ai'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { createVITTools } from '@/lib/tools'
@@ -780,7 +781,7 @@ CRITICAL TOOL CONTINUATION RULES:
       tools,
       temperature: 0.7,
       maxTokens: 4096,
-      maxSteps: 5,
+      stopWhen: stepCountIs(5)
     })
 
     // Helper: convert UIMessage parts to legacy toolInvocations for DB persistence

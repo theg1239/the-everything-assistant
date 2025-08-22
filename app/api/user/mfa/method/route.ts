@@ -188,6 +188,7 @@ export async function PATCH(request: NextRequest) {
         method: newMethod,
       })
     }
+  return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
   } catch (error) {
     console.error('MFA method change error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

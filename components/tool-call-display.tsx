@@ -16,6 +16,7 @@ import {
   MapPin,
   Search,
   BookOpen,
+  Calendar
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -589,6 +590,16 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         icon: <AlertCircle className="h-5 w-5 text-red-500" />,
         data: { error: result.message || 'Could not fetch placement data.' },
       }
+    }
+  }
+
+  if (toolName === 'gravitasEvents') {
+    return {
+      type: 'gravitas-events' as const,
+      title: result.event ? 'Gravitas Event Details' : 'Gravitas Events',
+      icon: <Calendar className="h-5 w-5 text-purple-500" />,
+      data: result,
+      source: 'Gravitas Portal',
     }
   }
 

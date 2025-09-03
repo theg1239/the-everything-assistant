@@ -82,7 +82,7 @@ interface ArtifactDisplayProps {
     | 'papers-index'
     | 'papers-qa'
     | 'question-patterns'
-    | 'general'
+    | 'gravitas-events'
     | 'general'
   className?: string
   onLoginClick?: () => void
@@ -2864,6 +2864,10 @@ const PureArtifactDisplay = ({
                 const QuestionPatternsArtifact =
                   require('./artifacts/question-patterns-artifact').default
                 return <QuestionPatternsArtifact key={index} data={item} />
+              case 'gravitas-events':
+                const GravitasEventsArtifact =
+                  require('./artifacts/gravitas-events-artifact').default
+                return <GravitasEventsArtifact key={index} data={item} />
               case 'general':
                 return <GeneralCard key={index} data={item} />
               default:

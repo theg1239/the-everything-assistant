@@ -2802,6 +2802,7 @@ const PureArtifactDisplay = ({
               type === 'papers-index' ||
               type === 'papers-qa' ||
               type === 'question-patterns' ||
+              type === 'gravitas-events' ||
               type === 'general' ||
               type === 'error' ||
               type === 'campus-info' ||

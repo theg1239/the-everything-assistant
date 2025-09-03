@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,8 @@ import {
   ChevronDown,
   ChevronUp,
   Info,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -32,7 +34,11 @@ interface EventSlot {
   endDate: string
   totalEntries: number
   isRegistrable: boolean
+  seatsLeft?: number
 }
+
+// Internal normalized slot shape that may carry eventId when available
+type NormalizedSlot = EventSlot & { eventId?: string }
 
 interface Event {
   id: string
@@ -52,6 +58,8 @@ interface Event {
   judgementCriteria?: string
   rules?: string
   prizes?: string
+  // Optional embedded slots in arbitrary shape
+  slots?: any
 }
 
 interface GravitasEventsData {
@@ -62,6 +70,8 @@ interface GravitasEventsData {
     registrationStatus: string
     slots: EventSlot[]
   }
+  // Optional global slots list returned by API
+  eventSlots?: any[]
   totalEvents?: number
   message?: string
   filters?: {
@@ -105,7 +115,12 @@ const formatDateRange = (startDate: string, endDate: string) => {
   }
 }
 
-const EventCard: React.FC<{ event: Event; detailed?: boolean }> = ({ event, detailed = false }) => {
+const EventCard: React.FC<{
+  event: Event
+  detailed?: boolean
+  slots?: NormalizedSlot[]
+  onExpandChange?: (expanded: boolean) => void
+}> = ({ event, detailed = false, slots = [], onExpandChange }) => {
   const [expanded, setExpanded] = useState(false)
   
   const getCategoryColor = (category: string) => {
@@ -174,6 +189,16 @@ const EventCard: React.FC<{ event: Event; detailed?: boolean }> = ({ event, deta
               <span className="break-words">Team Size: {event.teamSize}</span>
             </div>
 
+            {/* Combined venues from slots, if any */}
+            {Array.isArray(slots) && slots.length > 0 && (
+              <div className="flex items-start gap-2 min-w-0 md:col-span-2">
+                <MapPin className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
+                <span className="break-words leading-relaxed">
+                  {Array.from(new Set(slots.map(s => s.venue).filter(Boolean))).join(', ')}
+                </span>
+              </div>
+            )}
+
             {event.price === 0 ? (
               <div className="flex items-center gap-2">
                 <DollarSign className="h-4 w-4 text-green-500 flex-shrink-0" />
@@ -187,7 +212,7 @@ const EventCard: React.FC<{ event: Event; detailed?: boolean }> = ({ event, deta
             )}
 
             <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-primary flex-shrink-0" />
+              <Clock className="sr-only h-4 w-4" />
               <span className="capitalize break-words">{event.scope}</span>
             </div>
           </div>
@@ -205,7 +230,11 @@ const EventCard: React.FC<{ event: Event; detailed?: boolean }> = ({ event, deta
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setExpanded(!expanded)}
+                onClick={() => {
+                  const next = !expanded
+                  setExpanded(next)
+                  onExpandChange?.(next)
+                }}
                 className="flex items-center gap-2 p-0 h-auto text-primary hover:text-primary/80"
               >
                 <Info className="h-4 w-4" />
@@ -255,6 +284,55 @@ const EventCard: React.FC<{ event: Event; detailed?: boolean }> = ({ event, deta
             </div>
           )}
 
+          {/* Registration and seats summary from slots */}
+          {Array.isArray(slots) && slots.length > 0 && (
+            <div className="bg-muted/50 rounded-lg p-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <div className="flex items-center gap-2">
+                  {slots.some(s => s.isRegistrable) ? (
+                    <>
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <span className="text-green-700 dark:text-green-400 font-medium">Registration Open</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="h-4 w-4 text-red-600" />
+                      <span className="text-red-700 dark:text-red-400 font-medium">Registration Closed</span>
+                    </>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-primary flex-shrink-0" />
+                  <span className="font-medium">
+                    {slots.reduce((sum, s) => sum + (s.seatsLeft ?? 0), 0).toLocaleString()} seats left
+                  </span>
+                </div>
+              </div>
+
+              {slots.length > 1 && (
+                <div className="mt-3 space-y-2">
+                  <h4 className="text-xs font-medium text-muted-foreground">Slots</h4>
+                  {slots.map(slot => (
+                    <div key={slot.id} className="flex items-center justify-between text-xs bg-background rounded p-2 border border-border/50">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <MapPin className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                        <span className="break-words">{slot.venue}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-muted-foreground whitespace-nowrap">{(slot.seatsLeft ?? 0).toLocaleString()} left</span>
+                        {slot.isRegistrable ? (
+                          <CheckCircle className="h-3 w-3 text-green-600" />
+                        ) : (
+                          <XCircle className="h-3 w-3 text-red-600" />
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Event Image */}
           {event.image && (
             <div className="mt-3">
@@ -298,7 +376,7 @@ const SeatsInfo: React.FC<{ seats: GravitasEventsData['seats'] }> = ({ seats }) 
               </Badge>
             </div>
             <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-              <span className="text-sm font-medium">Total Registrations</span>
+              <span className="text-sm font-medium">Total Seats Left</span>
               <span className="font-semibold">{seats.totalRegistrations}</span>
             </div>
           </div>
@@ -319,7 +397,7 @@ const SeatsInfo: React.FC<{ seats: GravitasEventsData['seats'] }> = ({ seats }) 
                       </div>
                     </div>
                     <div className="flex items-center justify-between md:flex-col md:items-end gap-2">
-                      <div className="text-sm font-medium">{slot.totalEntries} registrations</div>
+                      <div className="text-sm font-medium">{slot.seatsLeft ?? 0} seats left</div>
                       <Badge 
                         variant={slot.isRegistrable ? 'default' : 'secondary'}
                         className={cn(
@@ -345,8 +423,89 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
   const [searchQuery, setSearchQuery] = useState(data.filters?.searchQuery || '')
   const [typeFilter, setTypeFilter] = useState(data.filters?.eventType || 'all')
   const [categoryFilter, setCategoryFilter] = useState(data.filters?.category || 'all')
+  const [seatsByEvent, setSeatsByEvent] = useState<Record<string, GravitasEventsData['seats']>>({})
+  const [loadingEventSeats, setLoadingEventSeats] = useState<Record<string, boolean>>({})
 
   const events = data.events || (data.event ? [data.event] : [])
+
+  // Normalize any slot shape into NormalizedSlot
+  const normalizeSlots = (slots: any[], fallbackEventId?: string): NormalizedSlot[] => {
+    if (!Array.isArray(slots)) return []
+    return slots
+      .map((s: any) => {
+        const eventId = s.eventId || s.event_id || fallbackEventId
+        const start = s.startDate || s.start_date
+        const end = s.endDate || s.end_date
+        const total = s.totalEntries ?? s.total_entries ?? 0
+        const registrable = s.isRegistrable ?? s.is_registrable ?? false
+        const venue = s.venue || s.location || ''
+        const seatsLeft = (
+          s.seatsLeft ?? s.seats_left ?? s.availableEntries ?? s.available_entries ?? s.entries_left ?? s.remaining ?? s.remaining_entries
+        )
+        const id = s.id ?? `${eventId ?? 'event'}-${venue}-${start || ''}`
+        if (!venue && !start && !end && total === 0) return null
+        return {
+          id: String(id),
+          eventId: eventId ? String(eventId) : undefined,
+          venue: String(venue),
+          startDate: String(start ?? ''),
+          endDate: String(end ?? ''),
+          totalEntries: Number(total),
+          isRegistrable: Boolean(registrable),
+          seatsLeft: seatsLeft !== undefined ? Number(seatsLeft) : undefined,
+        } as NormalizedSlot
+      })
+      .filter(Boolean) as NormalizedSlot[]
+  }
+
+  // Build a map of eventId -> slots from various sources
+  const slotsByEventId = useMemo(() => {
+    const map = new Map<string, NormalizedSlot[]>()
+
+    // 1) Global eventSlots at root (if provided by API)
+    if (Array.isArray((data as any).eventSlots)) {
+      const normalized = normalizeSlots((data as any).eventSlots)
+      for (const s of normalized) {
+        if (!s.eventId) continue
+        const arr = map.get(s.eventId) || []
+        arr.push(s)
+        map.set(s.eventId, arr)
+      }
+    }
+
+    // 2) Single event seats payload (server-side)
+    if (data.event && data.seats && Array.isArray(data.seats.slots)) {
+      const normalized = normalizeSlots(data.seats.slots, data.event.id)
+      const arr = map.get(data.event.id) || []
+      map.set(data.event.id, [...arr, ...normalized])
+    }
+
+    // 2b) Any client-fetched seats per event (cached in state)
+    for (const [eventId, seats] of Object.entries(seatsByEvent)) {
+      if (seats && Array.isArray(seats.slots)) {
+        const normalized = normalizeSlots(seats.slots, eventId)
+        const arr = map.get(eventId) || []
+        map.set(eventId, [...arr, ...normalized])
+      }
+    }
+
+    // 3) Embedded slots per event
+    for (const ev of events) {
+      if (Array.isArray((ev as any).slots)) {
+        const normalized = normalizeSlots((ev as any).slots, ev.id)
+        const arr = map.get(ev.id) || []
+        map.set(ev.id, [...arr, ...normalized])
+      }
+    }
+
+    // Deduplicate by slot id per event
+    for (const [eventId, arr] of map.entries()) {
+      const byId = new Map(arr.map(s => [s.id, s]))
+      map.set(eventId, Array.from(byId.values()))
+    }
+
+    return map
+  }, [data, events, seatsByEvent])
   
   const filteredEvents = useMemo(() => {
     let filtered = events
@@ -379,6 +538,21 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
   const eventTypes = [...new Set(events.map(e => e.type))]
   const categories = [...new Set(events.map(e => e.category))]
 
+  // Client-side view-more pagination
+  const DEFAULT_COUNT = 6
+  const LOAD_STEP = 6
+  const [visibleCount, setVisibleCount] = useState(DEFAULT_COUNT)
+
+  // Reset visible window when filters/search change
+  useEffect(() => {
+    setVisibleCount(DEFAULT_COUNT)
+  }, [searchQuery, typeFilter, categoryFilter])
+
+  const visibleEvents = useMemo(
+    () => filteredEvents.slice(0, Math.max(0, visibleCount)),
+    [filteredEvents, visibleCount]
+  )
+
   if (events.length === 0) {
     return (
       <Card>
@@ -393,10 +567,70 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
     )
   }
 
+  // Auto-fetch seats for single event to populate venues in the main card
+  useEffect(() => {
+    if (events.length === 1) {
+      const id = events[0].id
+      const existing = slotsByEventId.get(id) || []
+      if (existing.length === 0) {
+        void fetchEventSeats(id)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [events, slotsByEventId])
+
+  // Client-side: fetch specific event details (including seats/slots) for a given event id
+  const fetchEventSeats = async (eventId: string) => {
+    if (!eventId || loadingEventSeats[eventId] || seatsByEvent[eventId]) return
+    setLoadingEventSeats(prev => ({ ...prev, [eventId]: true }))
+    try {
+      // Use our own API route if present, else fallback to gravitas API directly
+      const base = typeof window === 'undefined' ? (process.env.NEXT_PUBLIC_BASE_URL || '') : ''
+      const url = `${base}/api/events/${eventId}`
+      const res = await fetch(url)
+      if (res.ok) {
+        const json = await res.json()
+        // Expecting shape similar to lib/tools.ts single event result
+        if (json && json.data && json.data.seats) {
+          setSeatsByEvent(prev => ({ ...prev, [eventId]: json.data.seats }))
+        } else if (json && json.seats) {
+          setSeatsByEvent(prev => ({ ...prev, [eventId]: json.seats }))
+        }
+      } else {
+        // Fallback: try gravitas API directly
+        const alt = await fetch(`https://gravitas.vit.ac.in/api/events/${eventId}`)
+        if (alt.ok) {
+          const data = await alt.json()
+          const eventSlots = (data?.data?.eventSlots || []).map((slot: any) => ({
+            id: String(slot.id),
+            venue: String(slot.venue || ''),
+            startDate: String(slot.start_date || ''),
+            endDate: String(slot.end_date || ''),
+            totalEntries: Number(slot.total_entries || 0),
+            isRegistrable: Boolean(slot.is_registrable || false),
+            seatsLeft: Number(
+              (slot.seats_left ?? slot.available_entries ?? slot.entries_left ?? slot.remaining ?? 0) as any
+            ),
+          }))
+          const seats = {
+            totalRegistrations: eventSlots.reduce((sum: number, s: any) => sum + (s.seatsLeft ?? 0), 0),
+            registrationStatus: eventSlots.some((s: any) => s.isRegistrable) ? 'Open' : 'Closed',
+            slots: eventSlots,
+          }
+          setSeatsByEvent(prev => ({ ...prev, [eventId]: seats }))
+        }
+      }
+    } catch (e) {
+      // Silent fail; UI will just not show extra details
+    } finally {
+      setLoadingEventSeats(prev => ({ ...prev, [eventId]: false }))
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="text-center">
+      <div className="text-left">
         <h2 className="text-2xl font-bold text-foreground mb-2">
           Gravitas Events {data.totalEvents ? `(${data.totalEvents})` : ''}
         </h2>
@@ -405,9 +639,9 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
         )}
       </div>
 
-      {/* Single event with seats info */}
-      {data.event && data.seats && (
-        <SeatsInfo seats={data.seats} />
+      {/* Single event with seats info (server-side or client-fetched) */}
+      {events.length === 1 && (
+        <SeatsInfo seats={data.seats || seatsByEvent[events[0].id]} />
       )}
 
       {/* Filters for multiple events */}
@@ -492,15 +726,55 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
       )}
 
       {/* Events Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
-        {filteredEvents.map((event) => (
-          <EventCard
-            key={event.id}
-            event={event}
-            detailed={events.length === 1}
-          />
-        ))}
-      </div>
+      {events.length === 1 ? (
+        <div className="grid grid-cols-1 gap-4 lg:gap-6">
+          {visibleEvents.map((event) => {
+            const slots = slotsByEventId.get(event.id) || []
+            return (
+              <EventCard
+                key={event.id}
+                event={event}
+                slots={slots}
+                detailed
+                onExpandChange={(open) => {
+                  if (open && slots.length === 0) {
+                    void fetchEventSeats(event.id)
+                  }
+                }}
+              />
+            )
+          })}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+          {visibleEvents.map((event) => {
+            const slots = slotsByEventId.get(event.id) || []
+            return (
+              <EventCard
+                key={event.id}
+                event={event}
+                slots={slots}
+                onExpandChange={(open) => {
+                  if (open && slots.length === 0) {
+                    void fetchEventSeats(event.id)
+                  }
+                }}
+              />
+            )
+          })}
+        </div>
+      )}
+
+      {filteredEvents.length > visibleEvents.length && (
+        <div className="flex justify-center">
+          <Button
+            variant="outline"
+            onClick={() => setVisibleCount(c => c + LOAD_STEP)}
+          >
+            View more ({filteredEvents.length - visibleEvents.length} more)
+          </Button>
+        </div>
+      )}
 
       {filteredEvents.length === 0 && (searchQuery || typeFilter !== 'all' || categoryFilter !== 'all') && (
         <Card>

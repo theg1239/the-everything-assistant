@@ -2367,8 +2367,15 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           .string()
           .optional()
           .describe('Filter by event category (e.g., General, Premium)'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(1000)
+          .optional()
+          .describe('Optional: limit number of events returned by API (default 500; 50 when searching).'),
       }),
-      execute: async ({ eventId, searchQuery, eventType, category }) => {
+      execute: async ({ eventId, searchQuery, eventType, category, limit }) => {
         try {
           if (eventId) {
             // Fetch specific event details with seat information
@@ -2443,8 +2450,25 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               message: `Found event: ${event.name} by ${event.club}. ${registrationStatus === 'Open' ? 'Registration is open!' : 'Check registration status.'}`,
             }
           } else {
-            // Fetch all events
-            const response = await fetch('https://gravitas.vit.ac.in/api/events')
+            // Fetch events list using query params (limit, name)
+            // Resolve aliases for name param (e.g., c2c -> Code2Create)
+            const NAME_ALIASES: Record<string, string> = {
+              c2c: 'Code2Create',
+              code2create: 'Code2Create',
+              'code 2 create': 'Code2Create',
+              'code to create': 'Code2Create',
+            }
+
+            const qNorm = searchQuery ? normalizeString(searchQuery) : null
+            const resolvedName = qNorm && NAME_ALIASES[qNorm] ? NAME_ALIASES[qNorm] : searchQuery
+            const effectiveLimit = typeof limit === 'number' ? limit : searchQuery ? 50 : 500
+            const params = new URLSearchParams()
+            params.set('limit', String(effectiveLimit))
+            if (resolvedName && resolvedName.trim().length > 0) {
+              params.set('name', resolvedName)
+            }
+
+            const response = await fetch(`https://gravitas.vit.ac.in/api/events?${params.toString()}`)
             if (!response.ok) {
               return {
                 success: false,
@@ -2466,13 +2490,72 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             
             // Apply filters
             if (searchQuery) {
-              const query = searchQuery.toLowerCase()
-              events = events.filter((event: any) =>
-                event.name.toLowerCase().includes(query) ||
-                event.description.toLowerCase().includes(query) ||
-                event.club.toLowerCase().includes(query) ||
-                event.type.toLowerCase().includes(query)
-              )
+              // Normalize and expand aliases (e.g., c2c -> Code2Create)
+              const ALIASES: Record<string, string[]> = {
+                c2c: ['code2create', 'code 2 create', 'code to create'],
+                code2create: ['code2create', 'code 2 create', 'code to create', 'c2c'],
+                'code 2 create': ['code2create', 'code 2 create', 'code to create', 'c2c'],
+                'code to create': ['code2create', 'code 2 create', 'code to create', 'c2c'],
+              }
+
+              const qNorm = normalizeString(searchQuery)
+              const tokens = qNorm.split(' ').filter(Boolean)
+              const seen = new Set<string>()
+              const expandedTerms: string[] = []
+
+              function addTerm(t: string) {
+                const tt = normalizeString(t)
+                if (tt && !seen.has(tt)) {
+                  seen.add(tt)
+                  expandedTerms.push(tt)
+                }
+              }
+
+              // Add the full query and its aliases
+              addTerm(qNorm)
+              if (ALIASES[qNorm]) {
+                ALIASES[qNorm].forEach(addTerm)
+              }
+
+              // Add token-level aliases too
+              for (const t of tokens) {
+                addTerm(t)
+                if (ALIASES[t]) {
+                  ALIASES[t].forEach(addTerm)
+                }
+              }
+
+              const matchesEvent = (ev: any) => {
+                const fields = [
+                  ev.name || '',
+                  ev.short_description || '',
+                  ev.description || '',
+                  ev.club || '',
+                  ev.type || '',
+                  ev.tagline || '',
+                ]
+                const hay = normalizeString(fields.join(' '))
+
+                // Direct substring match on any expanded term
+                if (expandedTerms.some(t => t && hay.includes(t))) return true
+
+                // Fallback: simple fuzzy check against event name/tagline
+                const name = normalizeString(ev.name || '')
+                const tag = normalizeString(ev.tagline || '')
+                return expandedTerms.some(t => {
+                  if (!t) return false
+                  // Levenshtein within small edit distance or prefix
+                  const dName = name && t ? getLevenshteinDistance(name, t) : 99
+                  const dTag = tag && t ? getLevenshteinDistance(tag, t) : 99
+                  return (
+                    (name && (name.includes(t) || t.includes(name) || dName <= 2)) ||
+                    (tag && (tag.includes(t) || t.includes(tag) || dTag <= 2))
+                  )
+                })
+              }
+
+              // If the backend name filter already narrowed it, this acts as a safe secondary filter
+              events = events.filter((event: any) => matchesEvent(event))
             }
             
             if (eventType) {

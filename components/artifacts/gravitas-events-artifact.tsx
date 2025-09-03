@@ -128,32 +128,34 @@ const EventCard: React.FC<{ event: Event; detailed?: boolean }> = ({ event, deta
   return (
     <Card className="hover:shadow-lg transition-all duration-200 border border-border/50">
       <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <CardTitle className="text-lg font-semibold leading-6 text-foreground">
-              {event.name}
-            </CardTitle>
-            {event.tagline && (
-              <p className="text-sm text-muted-foreground mt-1 italic">
-                "{event.tagline}"
-              </p>
-            )}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <CardTitle className="text-lg font-semibold leading-6 text-foreground break-words">
+                {event.name}
+              </CardTitle>
+              {event.tagline && (
+                <p className="text-sm text-muted-foreground mt-1 italic break-words">
+                  "{event.tagline}"
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col gap-2 flex-shrink-0">
+              <Badge variant="outline" className={getCategoryColor(event.category)}>
+                {event.category}
+              </Badge>
+            </div>
           </div>
-          <div className="flex flex-col gap-2 flex-shrink-0">
-            <Badge variant="outline" className={getCategoryColor(event.category)}>
-              {event.category}
-            </Badge>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
-          <div className="flex items-center gap-1">
-            {getTypeIcon(event.type)}
-            <span>{event.type}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Building2 className="h-4 w-4" />
-            <span className="truncate">{event.club}</span>
+          
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-1">
+              {getTypeIcon(event.type)}
+              <span>{event.type}</span>
+            </div>
+            <div className="flex items-center gap-1 min-w-0">
+              <Building2 className="h-4 w-4 flex-shrink-0" />
+              <span className="break-words">{event.club}</span>
+            </div>
           </div>
         </div>
       </CardHeader>
@@ -161,38 +163,38 @@ const EventCard: React.FC<{ event: Event; detailed?: boolean }> = ({ event, deta
       <CardContent className="pt-0">
         <div className="space-y-3">
           {/* Event Details */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-primary" />
-              <span className="truncate">{formatDateRange(event.startDate, event.endDate)}</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+            <div className="flex items-start gap-2 min-w-0">
+              <Calendar className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
+              <span className="break-words leading-relaxed">{formatDateRange(event.startDate, event.endDate)}</span>
             </div>
             
             <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-primary" />
-              <span>Team Size: {event.teamSize}</span>
+              <Users className="h-4 w-4 text-primary flex-shrink-0" />
+              <span className="break-words">Team Size: {event.teamSize}</span>
             </div>
 
             {event.price === 0 ? (
               <div className="flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-green-500" />
+                <DollarSign className="h-4 w-4 text-green-500 flex-shrink-0" />
                 <span className="text-green-600 font-medium">Free</span>
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-primary" />
+                <DollarSign className="h-4 w-4 text-primary flex-shrink-0" />
                 <span>₹{event.price}</span>
               </div>
             )}
 
             <div className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-primary" />
-              <span className="capitalize">{event.scope}</span>
+              <MapPin className="h-4 w-4 text-primary flex-shrink-0" />
+              <span className="capitalize break-words">{event.scope}</span>
             </div>
           </div>
 
           {/* Description */}
           <div>
-            <p className="text-sm text-muted-foreground leading-relaxed">
+            <p className="text-sm text-muted-foreground leading-relaxed break-words whitespace-pre-wrap">
               {event.shortDescription || event.description}
             </p>
           </div>
@@ -216,7 +218,7 @@ const EventCard: React.FC<{ event: Event; detailed?: boolean }> = ({ event, deta
                   {event.description && event.description !== event.shortDescription && (
                     <div>
                       <h4 className="font-medium text-sm mb-2">Full Description</h4>
-                      <p className="text-sm text-muted-foreground leading-relaxed">
+                      <p className="text-sm text-muted-foreground leading-relaxed break-words whitespace-pre-wrap">
                         {event.description}
                       </p>
                     </div>
@@ -225,7 +227,7 @@ const EventCard: React.FC<{ event: Event; detailed?: boolean }> = ({ event, deta
                   {event.judgementCriteria && event.judgementCriteria !== 'NA' && (
                     <div>
                       <h4 className="font-medium text-sm mb-2">Judgement Criteria</h4>
-                      <p className="text-sm text-muted-foreground leading-relaxed">
+                      <p className="text-sm text-muted-foreground leading-relaxed break-words whitespace-pre-wrap">
                         {event.judgementCriteria}
                       </p>
                     </div>
@@ -234,7 +236,7 @@ const EventCard: React.FC<{ event: Event; detailed?: boolean }> = ({ event, deta
                   {event.rules && event.rules !== 'NA' && (
                     <div>
                       <h4 className="font-medium text-sm mb-2">Rules & Regulations</h4>
-                      <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
+                      <p className="text-sm text-muted-foreground leading-relaxed break-words whitespace-pre-line">
                         {event.rules}
                       </p>
                     </div>
@@ -243,7 +245,7 @@ const EventCard: React.FC<{ event: Event; detailed?: boolean }> = ({ event, deta
                   {event.prizes && event.prizes !== 'NA' && (
                     <div>
                       <h4 className="font-medium text-sm mb-2">Prizes</h4>
-                      <p className="text-sm text-muted-foreground leading-relaxed">
+                      <p className="text-sm text-muted-foreground leading-relaxed break-words whitespace-pre-wrap">
                         {event.prizes}
                       </p>
                     </div>
@@ -285,7 +287,7 @@ const SeatsInfo: React.FC<{ seats: GravitasEventsData['seats'] }> = ({ seats }) 
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
               <span className="text-sm font-medium">Registration Status</span>
               <Badge 
@@ -308,15 +310,15 @@ const SeatsInfo: React.FC<{ seats: GravitasEventsData['seats'] }> = ({ seats }) 
                 {seats.slots.map((slot) => (
                   <div
                     key={slot.id}
-                    className="flex items-center justify-between p-3 border border-border/50 rounded-lg"
+                    className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 p-3 border border-border/50 rounded-lg"
                   >
-                    <div className="flex-1">
-                      <div className="font-medium text-sm">{slot.venue}</div>
-                      <div className="text-xs text-muted-foreground">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm break-words">{slot.venue}</div>
+                      <div className="text-xs text-muted-foreground break-words">
                         {formatDateRange(slot.startDate, slot.endDate)}
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div className="flex items-center justify-between md:flex-col md:items-end gap-2">
                       <div className="text-sm font-medium">{slot.totalEntries} registrations</div>
                       <Badge 
                         variant={slot.isRegistrable ? 'default' : 'secondary'}
@@ -418,7 +420,7 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Search</label>
                 <div className="relative">
@@ -490,7 +492,7 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
       )}
 
       {/* Events Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
         {filteredEvents.map((event) => (
           <EventCard
             key={event.id}

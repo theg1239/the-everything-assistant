@@ -21,6 +21,8 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import TokenUsage from './components/token-usage'
 import MessagesViewerDialog from './components/messages-viewer'
+import UsersList from './components/users-list'
+import UserMessages from './components/user-messages'
 import SystemHealth from './components/system-health'
 import BroadcastForm from './components/broadcast-form'
 import PastBroadcasts from './components/past-broadcasts'
@@ -190,6 +192,10 @@ export default function ManagementClient() {
     }
   }, [])
 
+  // users panel state
+  const [selectedUser, setSelectedUser] = useState<any | null>(null)
+  const [usersOpen, setUsersOpen] = useState(false)
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -253,6 +259,8 @@ export default function ManagementClient() {
     if (status === 'authenticated') {
       fetchData()
       fetchPastBroadcasts()
+      // prefetch users data when authenticated
+      // no-op here; UsersList will fetch when mounted
     }
   }, [status, router, fetchData, fetchPastBroadcasts])
 
@@ -500,6 +508,23 @@ export default function ManagementClient() {
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
                 <ManagementActions handleAction={handleAction} loading={loading} />
               </motion.div>
+
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+                <div className="rounded-lg border border-border/20 p-4 bg-black/10">
+                  <h3 className="lowercase font-medium mb-2">users</h3>
+                  <UsersList onSelectUser={(u: any) => { setSelectedUser(u); setUsersOpen(true) }} />
+                </div>
+              </motion.div>
+
+              {/* user messages drawer/modal */}
+              {usersOpen && selectedUser && (
+                <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4">
+                  <div className="absolute inset-0 bg-black/50" onClick={() => { setUsersOpen(false); setSelectedUser(null) }} />
+                  <div className="relative w-full max-w-3xl bg-background rounded-lg p-4">
+                    <UserMessages user={selectedUser} onClose={() => { setUsersOpen(false); setSelectedUser(null) }} />
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

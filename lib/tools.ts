@@ -2346,6 +2346,186 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
         }
       },
     }),
+
+    gravitasEvents: tool({
+      description:
+        'Get information about Gravitas events at VIT, including event details, schedules, registration status, and seat availability. Can fetch all events or specific event details by ID.',
+      parameters: z.object({
+        eventId: z
+          .string()
+          .optional()
+          .describe('Specific event ID to get detailed information for a single event'),
+        searchQuery: z
+          .string()
+          .optional()
+          .describe('Search term to filter events by name, type, or description'),
+        eventType: z
+          .string()
+          .optional()
+          .describe('Filter by event type (e.g., Hackathon, Workshop, Competition)'),
+        category: z
+          .string()
+          .optional()
+          .describe('Filter by event category (e.g., General, Premium)'),
+      }),
+      execute: async ({ eventId, searchQuery, eventType, category }) => {
+        try {
+          if (eventId) {
+            // Fetch specific event details with seat information
+            const response = await fetch(`https://gravitas.vit.ac.in/api/events/${eventId}`)
+            if (!response.ok) {
+              return {
+                success: false,
+                message: `Failed to fetch event details for ID: ${eventId}`,
+                error: `HTTP ${response.status}`,
+              }
+            }
+            
+            const data = await response.json()
+            if (!data.success || !data.data?.event) {
+              return {
+                success: false,
+                message: `Event not found for ID: ${eventId}`,
+                error: data.message || 'Event not found',
+              }
+            }
+
+            const event = data.data.event
+            const eventSlots = data.data.eventSlots || []
+            
+            // Calculate total seats and availability
+            let totalSeats = 0
+            let availableSeats = 0
+            let registrationStatus = 'Unknown'
+            
+            if (eventSlots.length > 0) {
+              eventSlots.forEach((slot: any) => {
+                totalSeats += slot.total_entries || 0
+                if (slot.is_registrable) {
+                  registrationStatus = 'Open'
+                }
+              })
+              availableSeats = totalSeats // This would need more API data for exact availability
+            }
+
+            return {
+              success: true,
+              event: {
+                id: event.id,
+                name: event.name,
+                type: event.type,
+                category: event.category,
+                description: event.description,
+                club: event.club,
+                tagline: event.tagline,
+                startDate: event.start_date,
+                endDate: event.end_date,
+                teamSize: event.team_size,
+                price: event.price_per_ticket,
+                scope: event.scope,
+                image: event.image,
+                judgementCriteria: event.judgement_criteria,
+                rules: event.rules_and_regulations,
+                prizes: event.prize_distribution,
+              },
+              seats: {
+                totalRegistrations: totalSeats,
+                registrationStatus,
+                slots: eventSlots.map((slot: any) => ({
+                  id: slot.id,
+                  venue: slot.venue,
+                  startDate: slot.start_date,
+                  endDate: slot.end_date,
+                  totalEntries: slot.total_entries,
+                  isRegistrable: slot.is_registrable,
+                })),
+              },
+              message: `Found event: ${event.name} by ${event.club}. ${registrationStatus === 'Open' ? 'Registration is open!' : 'Check registration status.'}`,
+            }
+          } else {
+            // Fetch all events
+            const response = await fetch('https://gravitas.vit.ac.in/api/events')
+            if (!response.ok) {
+              return {
+                success: false,
+                message: 'Failed to fetch Gravitas events',
+                error: `HTTP ${response.status}`,
+              }
+            }
+            
+            const data = await response.json()
+            if (!data.data?.events) {
+              return {
+                success: false,
+                message: 'No events data found',
+                error: 'Invalid API response',
+              }
+            }
+
+            let events = data.data.events
+            
+            // Apply filters
+            if (searchQuery) {
+              const query = searchQuery.toLowerCase()
+              events = events.filter((event: any) =>
+                event.name.toLowerCase().includes(query) ||
+                event.description.toLowerCase().includes(query) ||
+                event.club.toLowerCase().includes(query) ||
+                event.type.toLowerCase().includes(query)
+              )
+            }
+            
+            if (eventType) {
+              const type = eventType.toLowerCase()
+              events = events.filter((event: any) =>
+                event.type.toLowerCase().includes(type)
+              )
+            }
+            
+            if (category) {
+              const cat = category.toLowerCase()
+              events = events.filter((event: any) =>
+                event.category.toLowerCase().includes(cat)
+              )
+            }
+
+            const eventSummary = events.map((event: any) => ({
+              id: event.id,
+              name: event.name,
+              type: event.type,
+              category: event.category,
+              club: event.club,
+              tagline: event.tagline,
+              startDate: event.start_date,
+              endDate: event.end_date,
+              teamSize: event.team_size,
+              price: event.price_per_ticket,
+              scope: event.scope,
+              shortDescription: event.short_description,
+            }))
+
+            return {
+              success: true,
+              events: eventSummary,
+              totalEvents: eventSummary.length,
+              message: `Found ${eventSummary.length} Gravitas events${searchQuery ? ` matching "${searchQuery}"` : ''}${eventType ? ` of type "${eventType}"` : ''}${category ? ` in category "${category}"` : ''}.`,
+              filters: {
+                searchQuery,
+                eventType,
+                category,
+              },
+            }
+          }
+        } catch (error: any) {
+          return {
+            success: false,
+            message: 'Failed to fetch Gravitas events',
+            error: error.message || 'Network error',
+            suggestion: 'Check your internet connection and try again.',
+          }
+        }
+      },
+    }),
   }
 }
 

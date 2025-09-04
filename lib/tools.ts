@@ -2400,19 +2400,22 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             const event = data.data.event
             const eventSlots = data.data.eventSlots || []
             
-            // Calculate total seats and availability
-            let totalSeats = 0
-            let availableSeats = 0
-            let registrationStatus = 'Unknown'
-            
+            // Calculate seats remaining and registration status
+            let totalSeatsLeft = 0
+            let registrationStatus = 'Closed'
             if (eventSlots.length > 0) {
               eventSlots.forEach((slot: any) => {
-                totalSeats += slot.total_entries || 0
-                if (slot.is_registrable) {
-                  registrationStatus = 'Open'
-                }
+                const left =
+                  slot.seats_left ??
+                  slot.available_entries ??
+                  slot.entries_left ??
+                  slot.remaining ??
+                  slot.remaining_entries ??
+                  slot.total_entries ??
+                  0
+                totalSeatsLeft += Number(left) || 0
+                if (slot.is_registrable) registrationStatus = 'Open'
               })
-              availableSeats = totalSeats // This would need more API data for exact availability
             }
 
             return {
@@ -2436,7 +2439,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 prizes: event.prize_distribution,
               },
               seats: {
-                totalRegistrations: totalSeats,
+                totalRegistrations: totalSeatsLeft,
                 registrationStatus,
                 slots: eventSlots.map((slot: any) => ({
                   id: slot.id,
@@ -2445,6 +2448,13 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                   endDate: slot.end_date,
                   totalEntries: slot.total_entries,
                   isRegistrable: slot.is_registrable,
+                  seatsLeft:
+                    slot.seats_left ??
+                    slot.available_entries ??
+                    slot.entries_left ??
+                    slot.remaining ??
+                    slot.remaining_entries ??
+                    slot.total_entries ?? 0,
                 })),
               },
               message: `Found event: ${event.name} by ${event.club}. ${registrationStatus === 'Open' ? 'Registration is open!' : 'Check registration status.'}`,
@@ -2595,6 +2605,80 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               scope: event.scope,
               shortDescription: event.short_description,
             }))
+
+            // If the API name param was used and we have exactly one match, fetch detailed info via /events/[id]
+            if (usedNameParam && eventSummary.length === 1) {
+              try {
+                const singleId = eventSummary[0].id
+                const det = await fetch(`https://gravitas.vit.ac.in/api/events/${singleId}`)
+                if (det.ok) {
+                  const dj = await det.json()
+                  const ev = dj?.data?.event
+                  const slots = dj?.data?.eventSlots || []
+                  if (ev) {
+                    let totalSeatsLeft = 0
+                    let registrationStatus = 'Closed'
+                    slots.forEach((slot: any) => {
+                      const left =
+                        slot.seats_left ??
+                        slot.available_entries ??
+                        slot.entries_left ??
+                        slot.remaining ??
+                        slot.remaining_entries ??
+                        slot.total_entries ?? 0
+                      totalSeatsLeft += Number(left) || 0
+                      if (slot.is_registrable) registrationStatus = 'Open'
+                    })
+
+                    return {
+                      success: true,
+                      event: {
+                        id: ev.id,
+                        name: ev.name,
+                        type: ev.type,
+                        category: ev.category,
+                        description: ev.description,
+                        club: ev.club,
+                        tagline: ev.tagline,
+                        startDate: ev.start_date,
+                        endDate: ev.end_date,
+                        teamSize: ev.team_size,
+                        price: ev.price_per_ticket,
+                        scope: ev.scope,
+                        image: ev.image,
+                        judgementCriteria: ev.judgement_criteria,
+                        rules: ev.rules_and_regulations,
+                        prizes: ev.prize_distribution,
+                      },
+                      seats: {
+                        totalRegistrations: totalSeatsLeft,
+                        registrationStatus,
+                        slots: slots.map((slot: any) => ({
+                          id: slot.id,
+                          venue: slot.venue,
+                          startDate: slot.start_date,
+                          endDate: slot.end_date,
+                          totalEntries: slot.total_entries,
+                          isRegistrable: slot.is_registrable,
+                          seatsLeft:
+                            slot.seats_left ??
+                            slot.available_entries ??
+                            slot.entries_left ??
+                            slot.remaining ??
+                            slot.remaining_entries ??
+                            slot.total_entries ?? 0,
+                        })),
+                      },
+                      totalEvents: 1,
+                      message: `Found 1 Gravitas event${searchQuery ? ` matching "${searchQuery}"` : ''}.`,
+                      filters: { searchQuery, eventType, category },
+                    }
+                  }
+                }
+              } catch (e) {
+                // fall back to summary return below
+              }
+            }
 
             return {
               success: true,

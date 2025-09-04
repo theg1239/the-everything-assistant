@@ -1,15 +1,4 @@
 import type { NextConfig } from 'next'
-import { withBotId } from 'botid/next/config'
-
-const withPWA = require('@ducanh2912/next-pwa').default({
-  dest: 'public',
-  register: true,
-  skipWaiting: true,
-  disable: process.env.NO_PWA === '1',
-  runtimeCaching: [],
-  buildExcludes: [/middleware-manifest\.json$/],
-  sw: 'sw.js',
-})
 
 const nextConfig: NextConfig = {
   turbopack: {},
@@ -23,4 +12,4 @@ const nextConfig: NextConfig = {
   // },
 }
 
-export default withBotId(withPWA(nextConfig))
+export default (nextConfig)

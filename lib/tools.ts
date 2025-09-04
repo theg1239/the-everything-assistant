@@ -820,6 +820,241 @@ export function createVITTools(userId: string) {
       },
     }),
 
+    gravitasEventRegistration: tool({
+      description:
+        'Resolve a Gravitas event by name (or id) and return the direct registration page URL (https://gravitas.vit.ac.in/events/[id]). Use when the user asks to register for an event.',
+      parameters: z.object({
+        searchQuery: z
+          .string()
+          .optional()
+          .describe('Event name or keywords, e.g. "code2create" or "hackathon"'),
+        eventId: z
+          .string()
+          .optional()
+          .describe('Known event UUID, if provided'),
+      }),
+      execute: async ({ searchQuery, eventId }) => {
+        const baseUrl = 'https://gravitas.vit.ac.in'
+        const buildRegUrl = (id: string) => `${baseUrl}/events/${id}`
+
+        try {
+          // If eventId is provided, validate and return the direct link
+          if (eventId && typeof eventId === 'string' && eventId.trim().length > 0) {
+            try {
+              const res = await fetch(`${baseUrl}/api/events/${eventId}`)
+              if (res.ok) {
+                const json = await res.json()
+                const ev = json?.data?.event
+                const slots = json?.data?.eventSlots || []
+
+                let totalSeatsLeft = 0
+                let registrationStatus = 'Closed'
+                for (const slot of slots) {
+                  const left =
+                    slot?.seats_left ??
+                    slot?.available_entries ??
+                    slot?.entries_left ??
+                    slot?.remaining ??
+                    slot?.remaining_entries ??
+                    slot?.total_entries ??
+                    0
+                  totalSeatsLeft += Number(left) || 0
+                  if (slot?.is_registrable) registrationStatus = 'Open'
+                }
+
+                return {
+                  success: true,
+                  event: ev
+                    ? {
+                        id: ev.id,
+                        name: ev.name,
+                        type: ev.type,
+                        category: ev.category,
+                        club: ev.club,
+                        tagline: ev.tagline,
+                        startDate: ev.start_date,
+                        endDate: ev.end_date,
+                      }
+                    : undefined,
+                  registrationUrl: buildRegUrl(eventId),
+                  seats: slots.length
+                    ? {
+                        totalRegistrations: totalSeatsLeft,
+                        registrationStatus,
+                      }
+                    : undefined,
+                  message: `Registration link for event ${ev?.name ? '"' + ev.name + '" ' : ''}is ready.`,
+                }
+              }
+            } catch (_) {
+              // Fall through to return the constructed URL even if validation fails
+            }
+
+            return {
+              success: true,
+              registrationUrl: buildRegUrl(eventId),
+              message: 'Direct registration link constructed from the provided event id.',
+            }
+          }
+
+          // Otherwise, search by name
+          if (!searchQuery || !searchQuery.trim()) {
+            return {
+              success: false,
+              message:
+                'Please provide an event name (searchQuery) or a known eventId to get the registration link.',
+            }
+          }
+
+          const q = searchQuery.trim()
+          const qNorm = normalizeString(q)
+
+          // Try backend name filtering first
+          const params = new URLSearchParams()
+          params.set('limit', '50')
+          params.set('name', q)
+
+          let events: any[] = []
+          let usedNameParam = true
+          try {
+            const res = await fetch(`${baseUrl}/api/events?${params.toString()}`)
+            if (res.ok) {
+              const json = await res.json()
+              events = json?.data?.events || []
+            } else {
+              usedNameParam = false
+            }
+          } catch {
+            usedNameParam = false
+          }
+
+          // Fallback: fetch many and filter client-side if name param failed
+          if (!usedNameParam) {
+            try {
+              const res = await fetch(`${baseUrl}/api/events?limit=500`)
+              if (res.ok) {
+                const json = await res.json()
+                const all: any[] = json?.data?.events || []
+                events = all.filter(ev => {
+                  const hay = normalizeString(
+                    [ev?.name || '', ev?.tagline || '', ev?.short_description || '', ev?.club || ''].join(' ')
+                  )
+                  return hay.includes(qNorm)
+                })
+              }
+            } catch {
+              // ignore
+            }
+          }
+
+          if (!events || events.length === 0) {
+            return {
+              success: false,
+              message: `No Gravitas events found matching "${searchQuery}".`,
+              suggestions: [
+                'Try a different spelling or keyword',
+                'Use a more specific event name',
+                'If you know the event id, provide it directly',
+              ],
+            }
+          }
+
+          // If exactly one, return its registration link directly
+          if (events.length === 1) {
+            const ev = events[0]
+            const id = ev?.id
+            if (id) {
+              return {
+                success: true,
+                event: {
+                  id,
+                  name: ev.name,
+                  type: ev.type,
+                  category: ev.category,
+                  club: ev.club,
+                  tagline: ev.tagline,
+                  startDate: ev.start_date,
+                  endDate: ev.end_date,
+                },
+                registrationUrl: buildRegUrl(id),
+                message: `Found one match for "${searchQuery}". Registration link ready.`,
+              }
+            }
+          }
+
+          // Multiple matches: pick best by simple similarity, but also return choices
+          type Candidate = { ev: any; score: number }
+          const candidates: Candidate[] = events.map(ev => {
+            const name = normalizeString(ev?.name || '')
+            const tag = normalizeString(ev?.tagline || '')
+            const dName = name ? getLevenshteinDistance(name, qNorm) : 99
+            const dTag = tag ? getLevenshteinDistance(tag, qNorm) : 99
+            let score = Math.min(dName, dTag)
+            if (name && name.includes(qNorm)) score -= 5
+            if (tag && tag.includes(qNorm)) score -= 3
+            if (name === qNorm) score -= 10
+            return { ev, score }
+          })
+
+          candidates.sort((a, b) => a.score - b.score)
+          const top = candidates[0]
+
+          // If the top candidate looks like a strong match, provide its link and also list alternatives
+          if (top && top.ev?.id && (top.score <= 2 || normalizeString(top.ev.name || '') === qNorm)) {
+            const id = top.ev.id
+            return {
+              success: true,
+              event: {
+                id,
+                name: top.ev.name,
+                type: top.ev.type,
+                category: top.ev.category,
+                club: top.ev.club,
+                tagline: top.ev.tagline,
+                startDate: top.ev.start_date,
+                endDate: top.ev.end_date,
+              },
+              registrationUrl: buildRegUrl(id),
+              ambiguous: events.length > 1,
+              alternatives: candidates.slice(1, 5).map(c => ({
+                id: c.ev.id,
+                name: c.ev.name,
+                type: c.ev.type,
+                category: c.ev.category,
+                startDate: c.ev.start_date,
+              })),
+              message:
+                events.length > 1
+                  ? `Best match selected for "${searchQuery}". If this isn’t right, choose one of the alternatives.`
+                  : `Registration link ready for "${searchQuery}".`,
+            }
+          }
+
+          // Otherwise, ask the user to disambiguate
+          const choices = candidates.slice(0, 8).map(c => ({
+            id: c.ev.id,
+            name: c.ev.name,
+            type: c.ev.type,
+            category: c.ev.category,
+            startDate: c.ev.start_date,
+          }))
+
+          return {
+            success: true,
+            ambiguous: true,
+            matches: choices,
+            message: `Found ${events.length} events matching "${searchQuery}". Please pick one to get the registration link.`,
+          }
+        } catch (error: any) {
+          return {
+            success: false,
+            message: 'Failed to resolve event registration link',
+            error: error?.message || 'Network error',
+          }
+        }
+      },
+    }),
+
     indexPastPapers: tool({
       description:
         'Download, OCR/extract, embed, and index past papers for a course so the user can ask detailed questions about them. Returns an indexId to use with askPaperQuestion.',

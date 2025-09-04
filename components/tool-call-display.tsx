@@ -608,6 +608,16 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     }
   }
 
+  if (toolName === 'gravitasEventRegistration') {
+    return {
+      type: 'gravitas-event-registration' as const,
+      title: 'Event Registration Link',
+      icon: <Calendar className="h-5 w-5 text-purple-500" />,
+      data: result,
+      source: 'Gravitas Portal',
+    }
+  }
+
   if (
     (toolName === 'interactiveCoursePage' || toolName === 'queryVTOP') &&
     (result.type === 'interactive-course-page' ||

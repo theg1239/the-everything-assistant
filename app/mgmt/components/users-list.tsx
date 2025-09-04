@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import React, { useState, useEffect } from 'react'
 import { Input } from '@/components/ui/input'
@@ -40,35 +40,53 @@ export default function UsersList({ onSelectUser }: any) {
   return (
     <div className="space-y-3">
       <div className="flex gap-2">
-        <Input value={query} onChange={(e: any) => setQuery(e.target.value)} placeholder="search by email or name" />
-        <Button onClick={() => {
-          // client-side search over loaded users
-        }}><Search className="w-4 h-4" /></Button>
+        <Input
+          value={query}
+          onChange={(e: any) => setQuery(e.target.value)}
+          placeholder="search by email or name"
+        />
+        <Button
+          onClick={() => {
+            // client-side search over loaded users
+          }}
+        >
+          <Search className="w-4 h-4" />
+        </Button>
       </div>
 
       <div className="space-y-2 max-h-[48vh] overflow-auto pr-1">
-        {users.filter((u) => {
+        {users.filter(u => {
           if (!query) return true
           const q = query.toLowerCase()
-          return (u.email || '').toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q)
-        }).length === 0 && !loading && <div className="text-muted-foreground text-sm">no users</div>}
-        {users.filter((u) => {
-          if (!query) return true
-          const q = query.toLowerCase()
-          return (u.email || '').toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q)
-        }).map((u: any) => (
-          <div key={u.id} className="rounded-md border border-border/30 p-3 flex items-center justify-between bg-black/10">
-            <div>
-              <div className="font-medium">{u.name || u.email || 'Unknown'}</div>
-              <div className="text-xs text-muted-foreground">{u.email || '—'}</div>
+          return (
+            (u.email || '').toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q)
+          )
+        }).length === 0 &&
+          !loading && <div className="text-muted-foreground text-sm">no users</div>}
+        {users
+          .filter(u => {
+            if (!query) return true
+            const q = query.toLowerCase()
+            return (
+              (u.email || '').toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q)
+            )
+          })
+          .map((u: any) => (
+            <div
+              key={u.id}
+              className="rounded-md border border-border/30 p-3 flex items-center justify-between bg-black/10"
+            >
+              <div>
+                <div className="font-medium">{u.name || u.email || 'Unknown'}</div>
+                <div className="text-xs text-muted-foreground">{u.email || '—'}</div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="ghost" size="sm" onClick={() => onSelectUser?.(u)}>
+                  view messages
+                </Button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <Button variant="ghost" size="sm" onClick={() => onSelectUser?.(u)}>
-                view messages
-              </Button>
-            </div>
-          </div>
-        ))}
+          ))}
       </div>
 
       <div className="flex justify-center">

@@ -69,7 +69,7 @@ export async function getHourlyHeatmap(days = 14): Promise<HourlyHeat[]> {
     `
 
     return rows
-      .map((r) => {
+      .map(r => {
         const d = parseDateInput(r.bucket)
         if (!d) return null
         return {
@@ -118,7 +118,7 @@ export async function getDailyPeakHours(days = 30): Promise<DailyPeaks> {
   }
 
   const perDay: DailyPeak[] = Object.keys(byDay)
-    .map((day) => {
+    .map(day => {
       const arr = byDay[day]
       arr.sort((a, b) => b.totalTokens - a.totalTokens)
       return {
@@ -147,14 +147,15 @@ export async function getDailyPeakHours(days = 30): Promise<DailyPeaks> {
 
 export async function getTopModels(limit = 10): Promise<ModelTotals[]> {
   try {
-    const rows: Array<{ model: string | null; totalTokens: any; count: any }> = await prisma.$queryRaw`
+    const rows: Array<{ model: string | null; totalTokens: any; count: any }> =
+      await prisma.$queryRaw`
       SELECT "model", SUM("totalTokens") AS "totalTokens", COUNT(*) AS "count"
       FROM "TokenUsage"
       GROUP BY "model"
       ORDER BY "totalTokens" DESC
       LIMIT ${limit}
     `
-    return rows.map((r) => ({
+    return rows.map(r => ({
       model: r.model ?? 'unknown',
       totalTokens: Number(r.totalTokens || 0),
       count: Number(r.count || 0),
@@ -167,7 +168,7 @@ export async function getTopModels(limit = 10): Promise<ModelTotals[]> {
       orderBy: { _sum: { totalTokens: 'desc' } },
       take: limit,
     })
-    return rows.map((r) => ({
+    return rows.map(r => ({
       model: r.model ?? 'unknown',
       totalTokens: Number(r._sum.totalTokens || 0),
       count: Number(r._count._all || 0),
@@ -177,7 +178,8 @@ export async function getTopModels(limit = 10): Promise<ModelTotals[]> {
 
 export async function getTokensPerUser(limit = 50): Promise<UserTotals[]> {
   try {
-    const rows: Array<{ userId: string | null; totalTokens: any; count: any }> = await prisma.$queryRaw`
+    const rows: Array<{ userId: string | null; totalTokens: any; count: any }> =
+      await prisma.$queryRaw`
       SELECT "userId", SUM("totalTokens") AS "totalTokens", COUNT(*) AS "count"
       FROM "TokenUsage"
       WHERE "userId" IS NOT NULL
@@ -185,7 +187,7 @@ export async function getTokensPerUser(limit = 50): Promise<UserTotals[]> {
       ORDER BY "totalTokens" DESC
       LIMIT ${limit}
     `
-    return rows.map((r) => ({
+    return rows.map(r => ({
       userId: r.userId,
       totalTokens: Number(r.totalTokens || 0),
       count: Number(r.count || 0),
@@ -199,7 +201,7 @@ export async function getTokensPerUser(limit = 50): Promise<UserTotals[]> {
       orderBy: { _sum: { totalTokens: 'desc' } },
       take: limit,
     })
-    return rows.map((r) => ({
+    return rows.map(r => ({
       userId: r.userId,
       totalTokens: Number(r._sum.totalTokens || 0),
       count: Number(r._count._all || 0),
@@ -233,7 +235,7 @@ export async function getMovingAverages(windowDays = 7): Promise<MovingAvg[]> {
       ORDER BY day ASC
     `
     const buckets = rows
-      .map((r) => ({
+      .map(r => ({
         day: (parseDateInput(r.day) ?? new Date(0)).toISOString().slice(0, 10),
         totalTokens: Number(r.totalTokens || 0),
       }))
@@ -251,7 +253,7 @@ export async function getMovingAverages(windowDays = 7): Promise<MovingAvg[]> {
     }
     const buckets = Object.keys(map)
       .sort()
-      .map((k) => ({ day: k, totalTokens: map[k] }))
+      .map(k => ({ day: k, totalTokens: map[k] }))
     return computeMA(buckets)
   }
 }
@@ -270,21 +272,15 @@ export async function getToolCallStats() {
 }
 
 export async function getDetailedUsageStats() {
-  const [
-    lifetimeBuckets,
-    hourlyHeatmap,
-    dailyPeaks,
-    topModels,
-    tokensPerUser,
-    movingAverages,
-  ] = await Promise.all([
-    (await import('./db')).getTokenUsageLifetimeBuckets('day'),
-    getHourlyHeatmap(14),
-    getDailyPeakHours(30),
-    getTopModels(10),
-    getTokensPerUser(25),
-    getMovingAverages(7),
-  ])
+  const [lifetimeBuckets, hourlyHeatmap, dailyPeaks, topModels, tokensPerUser, movingAverages] =
+    await Promise.all([
+      (await import('./db')).getTokenUsageLifetimeBuckets('day'),
+      getHourlyHeatmap(14),
+      getDailyPeakHours(30),
+      getTopModels(10),
+      getTokensPerUser(25),
+      getMovingAverages(7),
+    ])
 
   return { lifetimeBuckets, hourlyHeatmap, dailyPeaks, topModels, tokensPerUser, movingAverages }
 }

@@ -772,9 +772,9 @@ CRITICAL TOOL CONTINUATION RULES:
           google: {
             thinkingConfig: {
               thinkingBudget: 2048,
-              includeThoughts: true
+              includeThoughts: true,
             },
-          }
+          },
         },
         experimental_transform: smoothStream({ chunking: 'word' }),
         middleware: [reasoningMiddleware],

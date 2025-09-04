@@ -52,9 +52,7 @@ const PureMultimodalInput = ({
   } | null>(null)
 
   const lightenColor = (color: string, amount = 0.22) => {
-    const m = color
-      .replace(/\s+/g, '')
-      .match(/^rgba?\((\d+),(\d+),(\d+)(?:,(\d*\.?\d+))?\)$/i)
+    const m = color.replace(/\s+/g, '').match(/^rgba?\((\d+),(\d+),(\d+)(?:,(\d*\.?\d+))?\)$/i)
     if (m) {
       const r = Math.min(255, Math.max(0, parseInt(m[1], 10)))
       const g = Math.min(255, Math.max(0, parseInt(m[2], 10)))
@@ -171,7 +169,7 @@ const PureMultimodalInput = ({
   const characterCount = input.length
   const showCharacterCount = Boolean(maxLength) && characterCount > 0
   const isNearLimit = Boolean(maxLength) && maxLength ? characterCount > maxLength * 0.8 : false
-  
+
   useEffect(() => {
     const t = setTimeout(() => setIntroPlayed(true), 1600)
     return () => clearTimeout(t)
@@ -190,7 +188,13 @@ const PureMultimodalInput = ({
       const r = parseFloat(rStr) || 0
       const bw = parseFloat(bwStr) || 1
       const color = cs.borderColor || 'hsl(var(--border))'
-      setBorderMetrics({ width: rect.width, height: rect.height, radius: r, borderWidth: bw, borderColor: color })
+      setBorderMetrics({
+        width: rect.width,
+        height: rect.height,
+        radius: r,
+        borderWidth: bw,
+        borderColor: color,
+      })
     }
 
     compute()
@@ -235,52 +239,46 @@ const PureMultimodalInput = ({
               preserveAspectRatio="none"
               initial={false}
             >
-              {
-                (() => {
-                  const w = borderMetrics.width
-                  const h = borderMetrics.height
-                  const bw = borderMetrics.borderWidth
-                  const r = Math.max(
-                    0,
-                    Math.min(borderMetrics.radius, Math.min(w, h) / 2 - bw)
-                  )
-                  const x0 = bw / 2
-                  const y0 = bw / 2
-                  const x1 = w - bw / 2
-                  const y1 = h - bw / 2
-                  const strokeColor = lightenColor(borderMetrics.borderColor, 0.25)
-                  const strokeWidth = Math.max(1, bw)
-                  const d = [
-                    `M ${w / 2} ${y1}`,
-                    `H ${x1 - r}`,
-                    `A ${r} ${r} 0 0 0 ${x1} ${y1 - r}`,
-                    `V ${y0 + r}`,
-                    `A ${r} ${r} 0 0 0 ${x1 - r} ${y0}`,
-                    `H ${x0 + r}`,
-                    `A ${r} ${r} 0 0 0 ${x0} ${y0 + r}`,
-                    `V ${y1 - r}`,
-                    `A ${r} ${r} 0 0 0 ${x0 + r} ${y1}`,
-                    `H ${w / 2}`,
-                  ].join(' ')
-                  return (
-                    <motion.path
-                      d={d}
-                      fill="none"
-                      stroke={strokeColor}
-                      strokeWidth={strokeWidth}
-                      vectorEffect="non-scaling-stroke"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      initial={{ pathLength: 0 }}
-                      animate={{ pathLength: 1 }}
-                      transition={{ duration: 1.3, ease: 'easeOut' }}
-                    />
-                  )
-                })()
-              }
+              {(() => {
+                const w = borderMetrics.width
+                const h = borderMetrics.height
+                const bw = borderMetrics.borderWidth
+                const r = Math.max(0, Math.min(borderMetrics.radius, Math.min(w, h) / 2 - bw))
+                const x0 = bw / 2
+                const y0 = bw / 2
+                const x1 = w - bw / 2
+                const y1 = h - bw / 2
+                const strokeColor = lightenColor(borderMetrics.borderColor, 0.25)
+                const strokeWidth = Math.max(1, bw)
+                const d = [
+                  `M ${w / 2} ${y1}`,
+                  `H ${x1 - r}`,
+                  `A ${r} ${r} 0 0 0 ${x1} ${y1 - r}`,
+                  `V ${y0 + r}`,
+                  `A ${r} ${r} 0 0 0 ${x1 - r} ${y0}`,
+                  `H ${x0 + r}`,
+                  `A ${r} ${r} 0 0 0 ${x0} ${y0 + r}`,
+                  `V ${y1 - r}`,
+                  `A ${r} ${r} 0 0 0 ${x0 + r} ${y1}`,
+                  `H ${w / 2}`,
+                ].join(' ')
+                return (
+                  <motion.path
+                    d={d}
+                    fill="none"
+                    stroke={strokeColor}
+                    strokeWidth={strokeWidth}
+                    vectorEffect="non-scaling-stroke"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    initial={{ pathLength: 0 }}
+                    animate={{ pathLength: 1 }}
+                    transition={{ duration: 1.3, ease: 'easeOut' }}
+                  />
+                )
+              })()}
             </motion.svg>
-          )}
-          {' '}
+          )}{' '}
           <div className="relative flex items-end w-full">
             <Textarea
               ref={textareaRef}

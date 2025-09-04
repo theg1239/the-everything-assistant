@@ -86,7 +86,7 @@ Re-examination Policy:
 `,
   metadata: {
     currentSemester: 'Fall 2025-26',
-  nextExamPeriod: 'CAT-2 October 5-11, 2025',
+    nextExamPeriod: 'CAT-2 October 5-11, 2025',
     cat1Dates: 'August 17-23, 2025',
     cat2Dates: 'October 5-11, 2025',
     fatDates: 'November 17 - December 4, 2025',

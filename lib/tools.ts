@@ -1479,7 +1479,9 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       description:
         'Fetch the syllabus PDF for a given course. The tool looks up available syllabus filenames from public/syllabi.json and constructs a Google Storage URL like https://storage.googleapis.com/examcooker/syllabi/<FILENAME>. Use course code or partial course name to search.',
       parameters: z.object({
-        query: z.string().describe('Course code (e.g., ACXC101N) or course name (e.g., "Art of Advertising")'),
+        query: z
+          .string()
+          .describe('Course code (e.g., ACXC101N) or course name (e.g., "Art of Advertising")'),
       }),
       execute: async ({ query }) => {
         try {
@@ -1492,7 +1494,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             }
           }
 
-          const base = typeof window === 'undefined' ? process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000' : ''
+          const base =
+            typeof window === 'undefined'
+              ? process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+              : ''
           const res = await fetch(`${base}/syllabi.json`)
           if (!res.ok) {
             console.error('[getSyllabus] could not load syllabi.json', res.status)
@@ -1503,7 +1508,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           }
 
           const data = await res.json()
-          console.debug('[getSyllabus] loaded items:', Array.isArray(data) ? data.length : 'unknown')
+          console.debug(
+            '[getSyllabus] loaded items:',
+            Array.isArray(data) ? data.length : 'unknown'
+          )
 
           const qRaw = query.trim()
           const q = qRaw.toLowerCase()
@@ -1574,7 +1582,9 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               if (scored.length > 0 && scored[0].score > 0) {
                 const topScore = scored[0].score
                 // include candidates with score > 0 and close to top score (within 5 points) — adjust as needed
-                const topMatches = scored.filter((s: any) => s.score > 0 && s.score >= Math.max(1, topScore - 5)).slice(0, 8)
+                const topMatches = scored
+                  .filter((s: any) => s.score > 0 && s.score >= Math.max(1, topScore - 5))
+                  .slice(0, 8)
                 if (topMatches.length > 1) {
                   const matches = topMatches.map((s: any) => {
                     const norm = normalizeFilename(s.fn)
@@ -1610,10 +1620,22 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               const scored = data
                 .map((item: any) => ({ item, score: scoreCandidate(item) }))
                 .sort((a: any, b: any) => b.score - a.score)
-              console.debug('[getSyllabus] top candidates (objects):', scored.slice(0, 6).map((s: any) => ({ code: s.item.code, title: s.item.title, filename: s.item.file || s.item.filename, score: s.score })))
+              console.debug(
+                '[getSyllabus] top candidates (objects):',
+                scored
+                  .slice(0, 6)
+                  .map((s: any) => ({
+                    code: s.item.code,
+                    title: s.item.title,
+                    filename: s.item.file || s.item.filename,
+                    score: s.score,
+                  }))
+              )
               if (scored.length > 0 && scored[0].score > 0) {
                 const topScore = scored[0].score
-                const topMatches = scored.filter((s: any) => s.score > 0 && s.score >= Math.max(1, topScore - 5)).slice(0, 8)
+                const topMatches = scored
+                  .filter((s: any) => s.score > 0 && s.score >= Math.max(1, topScore - 5))
+                  .slice(0, 8)
                 if (topMatches.length > 1) {
                   const matches = topMatches.map((s: any) => {
                     const best = s.item
@@ -1658,7 +1680,11 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           }
 
           try {
-            const lowered = Array.isArray(data) ? data.map((d: any) => (typeof d === 'string' ? d.toLowerCase() : JSON.stringify(d).toLowerCase())) : []
+            const lowered = Array.isArray(data)
+              ? data.map((d: any) =>
+                  typeof d === 'string' ? d.toLowerCase() : JSON.stringify(d).toLowerCase()
+                )
+              : []
             let bestIndex = -1
             for (let i = 0; i < lowered.length; i++) {
               if (lowered[i].includes(q)) {
@@ -1672,9 +1698,20 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               for (let i = 0; i < lowered.length; i++) {
                 if (lowered[i].includes(q)) {
                   const orig = data[i]
-                  const filename = typeof orig === 'string' ? orig : orig.file || orig.filename || null
-                  const norm = typeof filename === 'string' ? normalizeFilename(filename) : { code: null, title: null }
-                  matchesFound.push({ filename, code: norm.code, title: norm.title, url: filename ? `https://storage.googleapis.com/examcooker/syllabi/${filename}` : null })
+                  const filename =
+                    typeof orig === 'string' ? orig : orig.file || orig.filename || null
+                  const norm =
+                    typeof filename === 'string'
+                      ? normalizeFilename(filename)
+                      : { code: null, title: null }
+                  matchesFound.push({
+                    filename,
+                    code: norm.code,
+                    title: norm.title,
+                    url: filename
+                      ? `https://storage.googleapis.com/examcooker/syllabi/${filename}`
+                      : null,
+                  })
                 }
               }
               if (matchesFound.length > 1) {
@@ -1696,8 +1733,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 message: `Found syllabus matching query: ${query}`,
               }
             }
-          } catch (e) {
-          }
+          } catch (e) {}
 
           console.debug('[getSyllabus] no match for query:', query)
           return {
@@ -2373,7 +2409,9 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           .min(1)
           .max(1000)
           .optional()
-          .describe('Optional: limit number of events returned by API (default 500; 50 when searching).'),
+          .describe(
+            'Optional: limit number of events returned by API (default 500; 50 when searching).'
+          ),
       }),
       execute: async ({ eventId, searchQuery, eventType, category, limit }) => {
         try {
@@ -2387,7 +2425,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 error: `HTTP ${response.status}`,
               }
             }
-            
+
             const data = await response.json()
             if (!data.success || !data.data?.event) {
               return {
@@ -2399,7 +2437,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
 
             const event = data.data.event
             const eventSlots = data.data.eventSlots || []
-            
+
             // Calculate seats remaining and registration status
             let totalSeatsLeft = 0
             let registrationStatus = 'Closed'
@@ -2454,7 +2492,8 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                     slot.entries_left ??
                     slot.remaining ??
                     slot.remaining_entries ??
-                    slot.total_entries ?? 0,
+                    slot.total_entries ??
+                    0,
                 })),
               },
               message: `Found event: ${event.name} by ${event.club}. ${registrationStatus === 'Open' ? 'Registration is open!' : 'Check registration status.'}`,
@@ -2482,7 +2521,9 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               params.set('name', resolvedName)
             }
 
-            const response = await fetch(`https://gravitas.vit.ac.in/api/events?${params.toString()}`)
+            const response = await fetch(
+              `https://gravitas.vit.ac.in/api/events?${params.toString()}`
+            )
             if (!response.ok) {
               return {
                 success: false,
@@ -2490,7 +2531,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 error: `HTTP ${response.status}`,
               }
             }
-            
+
             const data = await response.json()
             if (!data.data?.events) {
               return {
@@ -2576,19 +2617,15 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               // Secondary client-side filter if backend did not use name param
               events = events.filter((event: any) => matchesEvent(event))
             }
-            
+
             if (eventType) {
               const type = eventType.toLowerCase()
-              events = events.filter((event: any) =>
-                event.type.toLowerCase().includes(type)
-              )
+              events = events.filter((event: any) => event.type.toLowerCase().includes(type))
             }
-            
+
             if (category) {
               const cat = category.toLowerCase()
-              events = events.filter((event: any) =>
-                event.category.toLowerCase().includes(cat)
-              )
+              events = events.filter((event: any) => event.category.toLowerCase().includes(cat))
             }
 
             const eventSummary = events.map((event: any) => ({
@@ -2625,7 +2662,8 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                         slot.entries_left ??
                         slot.remaining ??
                         slot.remaining_entries ??
-                        slot.total_entries ?? 0
+                        slot.total_entries ??
+                        0
                       totalSeatsLeft += Number(left) || 0
                       if (slot.is_registrable) registrationStatus = 'Open'
                     })
@@ -2666,7 +2704,8 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                             slot.entries_left ??
                             slot.remaining ??
                             slot.remaining_entries ??
-                            slot.total_entries ?? 0,
+                            slot.total_entries ??
+                            0,
                         })),
                       },
                       totalEvents: 1,

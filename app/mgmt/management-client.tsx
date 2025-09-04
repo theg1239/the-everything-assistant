@@ -159,14 +159,11 @@ export default function ManagementClient() {
   const [viewerOpen, setViewerOpen] = useState(false)
   const [viewerLoading, setViewerLoading] = useState(false)
   const [viewerError, setViewerError] = useState<string | null>(null)
-  const [viewerData, setViewerData] = useState<
-    | {
-        chatId: string
-        user: { id: string; name: string | null; email: string | null } | null
-        messages: { id: string; role: 'user' | 'assistant'; content: string; createdAt: string }[]
-      }
-    | null
-  >(null)
+  const [viewerData, setViewerData] = useState<{
+    chatId: string
+    user: { id: string; name: string | null; email: string | null } | null
+    messages: { id: string; role: 'user' | 'assistant'; content: string; createdAt: string }[]
+  } | null>(null)
 
   const openMessagesViewer = useCallback(async (chatId: string) => {
     if (!chatId) return
@@ -419,7 +416,9 @@ export default function ManagementClient() {
     )
   }
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'tokens' | 'broadcasts' | 'keys' | 'stats' | 'users'>('overview')
+  const [activeTab, setActiveTab] = useState<
+    'overview' | 'tokens' | 'broadcasts' | 'keys' | 'stats' | 'users'
+  >('overview')
 
   return (
     <MgmtLayout
@@ -440,7 +439,11 @@ export default function ManagementClient() {
       )}
 
       {!data && loading && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center justify-center py-12">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex items-center justify-center py-12"
+        >
           <div className="flex items-center gap-2 text-muted-foreground">
             <Loader2 className="w-6 h-6 animate-spin" /> loading status...
           </div>
@@ -449,24 +452,53 @@ export default function ManagementClient() {
 
       {data && (
         <div className="space-y-6">
-          <MessagesViewerDialog viewerOpen={viewerOpen} setViewerOpen={setViewerOpen} viewerLoading={viewerLoading} viewerError={viewerError} viewerData={viewerData} />
+          <MessagesViewerDialog
+            viewerOpen={viewerOpen}
+            setViewerOpen={setViewerOpen}
+            viewerLoading={viewerLoading}
+            viewerError={viewerError}
+            viewerData={viewerData}
+          />
 
-          {activeTab === 'overview' && (
-            <Overview stats={stats} usage={usage} />
-          )}
+          {activeTab === 'overview' && <Overview stats={stats} usage={usage} />}
 
           {activeTab === 'tokens' && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-              <TokenUsage usage={usage} usageOpen={usageOpen} setUsageOpen={setUsageOpen} openMessagesViewer={openMessagesViewer} />
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05 }}
+            >
+              <TokenUsage
+                usage={usage}
+                usageOpen={usageOpen}
+                setUsageOpen={setUsageOpen}
+                openMessagesViewer={openMessagesViewer}
+              />
             </motion.div>
           )}
 
           {activeTab === 'broadcasts' && (
             <div className="space-y-4">
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-                <BroadcastForm broadcastSlides={broadcastSlides} handleSlideChange={handleSlideChange} addSlide={addSlide} removeSlide={removeSlide} setShowPreview={setShowPreview} handleSendBroadcast={handleSendBroadcast} loading={loading} />
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.05 }}
+              >
+                <BroadcastForm
+                  broadcastSlides={broadcastSlides}
+                  handleSlideChange={handleSlideChange}
+                  addSlide={addSlide}
+                  removeSlide={removeSlide}
+                  setShowPreview={setShowPreview}
+                  handleSendBroadcast={handleSendBroadcast}
+                  loading={loading}
+                />
               </motion.div>
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
                 <PastBroadcasts
                   pastBroadcasts={pastBroadcasts}
                   loadingBroadcasts={loadingBroadcasts}
@@ -489,39 +521,80 @@ export default function ManagementClient() {
           )}
 
           {activeTab === 'keys' && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
-              <APIKeyManagement data={data} showSensitiveData={showSensitiveData} formatTimestamp={formatTimestamp} />
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05 }}
+            >
+              <APIKeyManagement
+                data={data}
+                showSensitiveData={showSensitiveData}
+                formatTimestamp={formatTimestamp}
+              />
             </motion.div>
           )}
 
           {activeTab === 'stats' && stats && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05 }}
+            >
               <SystemStatistics stats={stats} />
             </motion.div>
           )}
 
           {activeTab === 'users' && (
             <div className="space-y-4">
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.05 }}
+              >
                 <UserRateLimiting data={data} />
               </motion.div>
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
                 <ManagementActions handleAction={handleAction} loading={loading} />
               </motion.div>
 
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+              >
                 <div className="rounded-lg border border-border/20 p-4 bg-black/10">
                   <h3 className="lowercase font-medium mb-2">users</h3>
-                  <UsersList onSelectUser={(u: any) => { setSelectedUser(u); setUsersOpen(true) }} />
+                  <UsersList
+                    onSelectUser={(u: any) => {
+                      setSelectedUser(u)
+                      setUsersOpen(true)
+                    }}
+                  />
                 </div>
               </motion.div>
 
               {/* user messages drawer/modal */}
               {usersOpen && selectedUser && (
                 <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4">
-                  <div className="absolute inset-0 bg-black/50" onClick={() => { setUsersOpen(false); setSelectedUser(null) }} />
+                  <div
+                    className="absolute inset-0 bg-black/50"
+                    onClick={() => {
+                      setUsersOpen(false)
+                      setSelectedUser(null)
+                    }}
+                  />
                   <div className="relative w-full max-w-3xl bg-background rounded-lg p-4">
-                    <UserMessages user={selectedUser} onClose={() => { setUsersOpen(false); setSelectedUser(null) }} />
+                    <UserMessages
+                      user={selectedUser}
+                      onClose={() => {
+                        setUsersOpen(false)
+                        setSelectedUser(null)
+                      }}
+                    />
                   </div>
                 </div>
               )}
@@ -535,15 +608,20 @@ export default function ManagementClient() {
         isOpen={showPreview}
         onClose={() => setShowPreview(false)}
         payload={{
-          slides: broadcastSlides.filter((slide) => slide.title.trim() || slide.text.trim() || slide.image.trim()).length > 0
-            ? broadcastSlides.filter((slide) => slide.title.trim() || slide.text.trim() || slide.image.trim())
-            : [
-                {
-                  title: 'Preview',
-                  text: 'No content to preview yet. Add a title, text, or image to see the preview.',
-                  image: '/onboarding-artwork/artwork1.png',
-                },
-              ],
+          slides:
+            broadcastSlides.filter(
+              slide => slide.title.trim() || slide.text.trim() || slide.image.trim()
+            ).length > 0
+              ? broadcastSlides.filter(
+                  slide => slide.title.trim() || slide.text.trim() || slide.image.trim()
+                )
+              : [
+                  {
+                    title: 'Preview',
+                    text: 'No content to preview yet. Add a title, text, or image to see the preview.',
+                    image: '/onboarding-artwork/artwork1.png',
+                  },
+                ],
         }}
       />
 
@@ -551,15 +629,20 @@ export default function ManagementClient() {
         isOpen={showEditPreview}
         onClose={() => setShowEditPreview(false)}
         payload={{
-          slides: editSlides.filter((slide) => slide.title.trim() || slide.text.trim() || slide.image.trim()).length > 0
-            ? editSlides.filter((slide) => slide.title.trim() || slide.text.trim() || slide.image.trim())
-            : [
-                {
-                  title: 'Preview',
-                  text: 'No content to preview yet. Add a title, text, or image to see the preview.',
-                  image: '/onboarding-artwork/artwork1.png',
-                },
-              ],
+          slides:
+            editSlides.filter(
+              slide => slide.title.trim() || slide.text.trim() || slide.image.trim()
+            ).length > 0
+              ? editSlides.filter(
+                  slide => slide.title.trim() || slide.text.trim() || slide.image.trim()
+                )
+              : [
+                  {
+                    title: 'Preview',
+                    text: 'No content to preview yet. Add a title, text, or image to see the preview.',
+                    image: '/onboarding-artwork/artwork1.png',
+                  },
+                ],
         }}
       />
     </MgmtLayout>

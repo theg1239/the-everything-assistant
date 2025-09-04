@@ -5,7 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Calendar,
   Clock,
@@ -104,7 +110,7 @@ const formatDateRange = (startDate: string, endDate: string) => {
     const start = new Date(startDate)
     const end = new Date(endDate)
     const isSameDay = start.toDateString() === end.toDateString()
-    
+
     if (isSameDay) {
       return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • ${start.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`
     } else {
@@ -122,21 +128,28 @@ const EventCard: React.FC<{
   onExpandChange?: (expanded: boolean) => void
 }> = ({ event, detailed = false, slots = [], onExpandChange }) => {
   const [expanded, setExpanded] = useState(false)
-  
+
   const getCategoryColor = (category: string) => {
     switch (category.toLowerCase()) {
-      case 'premium': return 'bg-purple-100 text-purple-800 border-purple-200'
-      case 'general': return 'bg-blue-100 text-blue-800 border-blue-200'
-      default: return 'bg-gray-100 text-gray-800 border-gray-200'
+      case 'premium':
+        return 'bg-purple-100 text-purple-800 border-purple-200'
+      case 'general':
+        return 'bg-blue-100 text-blue-800 border-blue-200'
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200'
     }
   }
 
   const getTypeIcon = (type: string) => {
     switch (type.toLowerCase()) {
-      case 'hackathon': return <Target className="h-4 w-4" />
-      case 'workshop': return <Building2 className="h-4 w-4" />
-      case 'competition': return <Trophy className="h-4 w-4" />
-      default: return <Star className="h-4 w-4" />
+      case 'hackathon':
+        return <Target className="h-4 w-4" />
+      case 'workshop':
+        return <Building2 className="h-4 w-4" />
+      case 'competition':
+        return <Trophy className="h-4 w-4" />
+      default:
+        return <Star className="h-4 w-4" />
     }
   }
 
@@ -161,7 +174,7 @@ const EventCard: React.FC<{
               </Badge>
             </div>
           </div>
-          
+
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
             <div className="flex items-center gap-1">
               {getTypeIcon(event.type)}
@@ -181,9 +194,11 @@ const EventCard: React.FC<{
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
             <div className="flex items-start gap-2 min-w-0">
               <Calendar className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
-              <span className="break-words leading-relaxed">{formatDateRange(event.startDate, event.endDate)}</span>
+              <span className="break-words leading-relaxed">
+                {formatDateRange(event.startDate, event.endDate)}
+              </span>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4 text-primary flex-shrink-0" />
               <span className="break-words">Team Size: {event.teamSize}</span>
@@ -225,64 +240,69 @@ const EventCard: React.FC<{
           </div>
 
           {/* Expandable detailed content */}
-          {detailed && (event.description || event.judgementCriteria || event.rules || event.prizes) && (
-            <div className="border-t pt-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  const next = !expanded
-                  setExpanded(next)
-                  onExpandChange?.(next)
-                }}
-                className="flex items-center gap-2 p-0 h-auto text-primary hover:text-primary/80"
-              >
-                <Info className="h-4 w-4" />
-                <span>{expanded ? 'Hide Details' : 'Show Details'}</span>
-                {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </Button>
-
-              {expanded && (
-                <div className="mt-3 space-y-4">
-                  {event.description && event.description !== event.shortDescription && (
-                    <div>
-                      <h4 className="font-medium text-sm mb-2">Full Description</h4>
-                      <p className="text-sm text-muted-foreground leading-relaxed break-words whitespace-pre-wrap">
-                        {event.description}
-                      </p>
-                    </div>
+          {detailed &&
+            (event.description || event.judgementCriteria || event.rules || event.prizes) && (
+              <div className="border-t pt-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const next = !expanded
+                    setExpanded(next)
+                    onExpandChange?.(next)
+                  }}
+                  className="flex items-center gap-2 p-0 h-auto text-primary hover:text-primary/80"
+                >
+                  <Info className="h-4 w-4" />
+                  <span>{expanded ? 'Hide Details' : 'Show Details'}</span>
+                  {expanded ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
                   )}
+                </Button>
 
-                  {event.judgementCriteria && event.judgementCriteria !== 'NA' && (
-                    <div>
-                      <h4 className="font-medium text-sm mb-2">Judgement Criteria</h4>
-                      <p className="text-sm text-muted-foreground leading-relaxed break-words whitespace-pre-wrap">
-                        {event.judgementCriteria}
-                      </p>
-                    </div>
-                  )}
+                {expanded && (
+                  <div className="mt-3 space-y-4">
+                    {event.description && event.description !== event.shortDescription && (
+                      <div>
+                        <h4 className="font-medium text-sm mb-2">Full Description</h4>
+                        <p className="text-sm text-muted-foreground leading-relaxed break-words whitespace-pre-wrap">
+                          {event.description}
+                        </p>
+                      </div>
+                    )}
 
-                  {event.rules && event.rules !== 'NA' && (
-                    <div>
-                      <h4 className="font-medium text-sm mb-2">Rules & Regulations</h4>
-                      <p className="text-sm text-muted-foreground leading-relaxed break-words whitespace-pre-line">
-                        {event.rules}
-                      </p>
-                    </div>
-                  )}
+                    {event.judgementCriteria && event.judgementCriteria !== 'NA' && (
+                      <div>
+                        <h4 className="font-medium text-sm mb-2">Judgement Criteria</h4>
+                        <p className="text-sm text-muted-foreground leading-relaxed break-words whitespace-pre-wrap">
+                          {event.judgementCriteria}
+                        </p>
+                      </div>
+                    )}
 
-                  {event.prizes && event.prizes !== 'NA' && (
-                    <div>
-                      <h4 className="font-medium text-sm mb-2">Prizes</h4>
-                      <p className="text-sm text-muted-foreground leading-relaxed break-words whitespace-pre-wrap">
-                        {event.prizes}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+                    {event.rules && event.rules !== 'NA' && (
+                      <div>
+                        <h4 className="font-medium text-sm mb-2">Rules & Regulations</h4>
+                        <p className="text-sm text-muted-foreground leading-relaxed break-words whitespace-pre-line">
+                          {event.rules}
+                        </p>
+                      </div>
+                    )}
+
+                    {event.prizes && event.prizes !== 'NA' && (
+                      <div>
+                        <h4 className="font-medium text-sm mb-2">Prizes</h4>
+                        <p className="text-sm text-muted-foreground leading-relaxed break-words whitespace-pre-wrap">
+                          {event.prizes}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
           {/* Registration and seats summary from slots */}
           {Array.isArray(slots) && slots.length > 0 && (
@@ -292,19 +312,26 @@ const EventCard: React.FC<{
                   {slots.some(s => s.isRegistrable) ? (
                     <>
                       <CheckCircle className="h-4 w-4 text-green-600" />
-                      <span className="text-green-700 dark:text-green-400 font-medium">Registration Open</span>
+                      <span className="text-green-700 dark:text-green-400 font-medium">
+                        Registration Open
+                      </span>
                     </>
                   ) : (
                     <>
                       <XCircle className="h-4 w-4 text-red-600" />
-                      <span className="text-red-700 dark:text-red-400 font-medium">Registration Closed</span>
+                      <span className="text-red-700 dark:text-red-400 font-medium">
+                        Registration Closed
+                      </span>
                     </>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-primary flex-shrink-0" />
                   <span className="font-medium">
-                    {slots.reduce((sum, s) => sum + (s.seatsLeft ?? s.totalEntries ?? 0), 0).toLocaleString()} seats left
+                    {slots
+                      .reduce((sum, s) => sum + (s.seatsLeft ?? s.totalEntries ?? 0), 0)
+                      .toLocaleString()}{' '}
+                    seats left
                   </span>
                 </div>
               </div>
@@ -313,13 +340,18 @@ const EventCard: React.FC<{
                 <div className="mt-3 space-y-2">
                   <h4 className="text-xs font-medium text-muted-foreground">Slots</h4>
                   {slots.map(slot => (
-                    <div key={slot.id} className="flex items-center justify-between text-xs bg-background rounded p-2 border border-border/50">
+                    <div
+                      key={slot.id}
+                      className="flex items-center justify-between text-xs bg-background rounded p-2 border border-border/50"
+                    >
                       <div className="flex items-center gap-2 min-w-0">
                         <MapPin className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                         <span className="break-words">{slot.venue}</span>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-muted-foreground whitespace-nowrap">{(slot.seatsLeft ?? slot.totalEntries ?? 0).toLocaleString()} left</span>
+                        <span className="text-muted-foreground whitespace-nowrap">
+                          {(slot.seatsLeft ?? slot.totalEntries ?? 0).toLocaleString()} left
+                        </span>
                         {slot.isRegistrable ? (
                           <CheckCircle className="h-3 w-3 text-green-600" />
                         ) : (
@@ -340,8 +372,8 @@ const EventCard: React.FC<{
                 src={event.image}
                 alt={event.name}
                 className="w-full h-32 object-cover rounded-md border border-border/50"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none'
+                onError={e => {
+                  ;(e.target as HTMLImageElement).style.display = 'none'
                 }}
               />
             </div>
@@ -368,7 +400,7 @@ const SeatsInfo: React.FC<{ seats: GravitasEventsData['seats'] }> = ({ seats }) 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
               <span className="text-sm font-medium">Registration Status</span>
-              <Badge 
+              <Badge
                 variant={seats.registrationStatus === 'Open' ? 'default' : 'secondary'}
                 className={seats.registrationStatus === 'Open' ? 'bg-green-500' : ''}
               >
@@ -385,7 +417,7 @@ const SeatsInfo: React.FC<{ seats: GravitasEventsData['seats'] }> = ({ seats }) 
             <div>
               <h4 className="font-medium text-sm mb-3">Event Slots</h4>
               <div className="space-y-2">
-                {seats.slots.map((slot) => (
+                {seats.slots.map(slot => (
                   <div
                     key={slot.id}
                     className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 p-3 border border-border/50 rounded-lg"
@@ -397,13 +429,12 @@ const SeatsInfo: React.FC<{ seats: GravitasEventsData['seats'] }> = ({ seats }) 
                       </div>
                     </div>
                     <div className="flex items-center justify-between md:flex-col md:items-end gap-2">
-                      <div className="text-sm font-medium">{(slot.seatsLeft ?? slot.totalEntries ?? 0)} seats left</div>
-                      <Badge 
+                      <div className="text-sm font-medium">
+                        {slot.seatsLeft ?? slot.totalEntries ?? 0} seats left
+                      </div>
+                      <Badge
                         variant={slot.isRegistrable ? 'default' : 'secondary'}
-                        className={cn(
-                          "text-xs",
-                          slot.isRegistrable ? 'bg-green-500' : ''
-                        )}
+                        className={cn('text-xs', slot.isRegistrable ? 'bg-green-500' : '')}
                       >
                         {slot.isRegistrable ? 'Open' : 'Closed'}
                       </Badge>
@@ -442,9 +473,15 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
         const total = s.totalEntries ?? s.total_entries ?? 0
         const registrable = s.isRegistrable ?? s.is_registrable ?? false
         const venue = s.venue || s.location || ''
-        const seatsLeft = (
-          s.seatsLeft ?? s.seats_left ?? s.availableEntries ?? s.available_entries ?? s.entries_left ?? s.remaining ?? s.remaining_entries ?? total
-        )
+        const seatsLeft =
+          s.seatsLeft ??
+          s.seats_left ??
+          s.availableEntries ??
+          s.available_entries ??
+          s.entries_left ??
+          s.remaining ??
+          s.remaining_entries ??
+          total
         const id = s.id ?? `${eventId ?? 'event'}-${venue}-${start || ''}`
         if (!venue && !start && !end && total === 0) return null
         return {
@@ -509,7 +546,7 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
 
     return map
   }, [data, events, seatsByEvent])
-  
+
   const filteredEvents = useMemo(() => {
     let filtered = events
 
@@ -533,8 +570,8 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
     }
 
     if (categoryFilter !== 'all') {
-      filtered = filtered.filter(event =>
-        event.category.toLowerCase() === categoryFilter.toLowerCase()
+      filtered = filtered.filter(
+        event => event.category.toLowerCase() === categoryFilter.toLowerCase()
       )
     }
 
@@ -649,7 +686,7 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
     setLoadingEventSeats(prev => ({ ...prev, [eventId]: true }))
     try {
       // Use our own API route if present, else fallback to gravitas API directly
-      const base = typeof window === 'undefined' ? (process.env.NEXT_PUBLIC_BASE_URL || '') : ''
+      const base = typeof window === 'undefined' ? process.env.NEXT_PUBLIC_BASE_URL || '' : ''
       const url = `${base}/api/events/${eventId}`
       const res = await fetch(url)
       if (res.ok) {
@@ -673,11 +710,19 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
             totalEntries: Number(slot.total_entries || 0),
             isRegistrable: Boolean(slot.is_registrable || false),
             seatsLeft: Number(
-              (slot.seats_left ?? slot.available_entries ?? slot.entries_left ?? slot.remaining ?? slot.total_entries ?? 0) as any
+              (slot.seats_left ??
+                slot.available_entries ??
+                slot.entries_left ??
+                slot.remaining ??
+                slot.total_entries ??
+                0) as any
             ),
           }))
           const seats = {
-            totalRegistrations: eventSlots.reduce((sum: number, s: any) => sum + (s.seatsLeft ?? 0), 0),
+            totalRegistrations: eventSlots.reduce(
+              (sum: number, s: any) => sum + (s.seatsLeft ?? 0),
+              0
+            ),
             registrationStatus: eventSlots.some((s: any) => s.isRegistrable) ? 'Open' : 'Closed',
             slots: eventSlots,
           }
@@ -698,15 +743,11 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
         <h2 className="text-2xl font-bold text-foreground mb-2">
           Gravitas Events {data.totalEvents ? `(${data.totalEvents})` : ''}
         </h2>
-        {data.message && (
-          <p className="text-muted-foreground">{data.message}</p>
-        )}
+        {data.message && <p className="text-muted-foreground">{data.message}</p>}
       </div>
 
       {/* Single event with seats info (server-side or client-fetched) */}
-      {events.length === 1 && (
-        <SeatsInfo seats={data.seats || seatsByEvent[events[0].id]} />
-      )}
+      {events.length === 1 && <SeatsInfo seats={data.seats || seatsByEvent[events[0].id]} />}
 
       {/* Filters for multiple events */}
       {events.length > 1 && (
@@ -726,7 +767,7 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
                   <Input
                     placeholder="Search events..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={e => setSearchQuery(e.target.value)}
                     className="pl-10"
                   />
                 </div>
@@ -792,7 +833,7 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
       {/* Events Grid */}
       {events.length === 1 ? (
         <div className="grid grid-cols-1 gap-4 lg:gap-6">
-          {visibleEvents.map((event) => {
+          {visibleEvents.map(event => {
             const slots = slotsByEventId.get(event.id) || []
             return (
               <EventCard
@@ -800,7 +841,7 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
                 event={event}
                 slots={slots}
                 detailed
-                onExpandChange={(open) => {
+                onExpandChange={open => {
                   if (open && slots.length === 0) {
                     void fetchEventSeats(event.id)
                   }
@@ -811,14 +852,14 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
-          {visibleEvents.map((event) => {
+          {visibleEvents.map(event => {
             const slots = slotsByEventId.get(event.id) || []
             return (
               <EventCard
                 key={event.id}
                 event={event}
                 slots={slots}
-                onExpandChange={(open) => {
+                onExpandChange={open => {
                   if (open && slots.length === 0) {
                     void fetchEventSeats(event.id)
                   }
@@ -832,36 +873,30 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
       {(filteredEvents.length > visibleEvents.length || !serverExhausted) && (
         <div className="flex justify-center gap-3 flex-wrap">
           {filteredEvents.length > visibleEvents.length && (
-            <Button
-              variant="outline"
-              onClick={() => setVisibleCount(c => c + LOAD_STEP)}
-            >
+            <Button variant="outline" onClick={() => setVisibleCount(c => c + LOAD_STEP)}>
               View more ({filteredEvents.length - visibleEvents.length} more)
             </Button>
           )}
           {!serverExhausted && (
-            <Button
-              variant="secondary"
-              onClick={fetchMoreFromServer}
-              disabled={serverLoading}
-            >
+            <Button variant="secondary" onClick={fetchMoreFromServer} disabled={serverLoading}>
               {serverLoading ? 'Loading…' : 'Load more'}
             </Button>
           )}
         </div>
       )}
 
-      {filteredEvents.length === 0 && (searchQuery || typeFilter !== 'all' || categoryFilter !== 'all') && (
-        <Card>
-          <CardContent className="p-6 text-center">
-            <Search className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No Events Match Your Filters</h3>
-            <p className="text-muted-foreground">
-              Try adjusting your search criteria or clearing the filters.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+      {filteredEvents.length === 0 &&
+        (searchQuery || typeFilter !== 'all' || categoryFilter !== 'all') && (
+          <Card>
+            <CardContent className="p-6 text-center">
+              <Search className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No Events Match Your Filters</h3>
+              <p className="text-muted-foreground">
+                Try adjusting your search criteria or clearing the filters.
+              </p>
+            </CardContent>
+          </Card>
+        )}
     </div>
   )
 }

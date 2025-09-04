@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 
 export async function GET(request: NextRequest) {
   try {
-  const session = (await getServerSession(authOptions as any)) as any
+    const session = (await getServerSession(authOptions as any)) as any
 
     const adminEmail = process.env.RATE_LIMIT_ADMIN_EMAIL
     if (!adminEmail) {
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
     // find chats for user
     const chats = await prisma.chat.findMany({ where: { userId }, select: { id: true } })
-    const chatIds = chats.map((c) => c.id)
+    const chatIds = chats.map(c => c.id)
 
     const where: any = { chatId: { in: chatIds } }
     if (q) where.content = { contains: q, mode: 'insensitive' }
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     })
 
     // normalize field names to match frontend expectations
-    const mapped = messages.map((m) => ({
+    const mapped = messages.map(m => ({
       id: m.id,
       chatId: m.chatId,
       role: m.role,
@@ -51,6 +51,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ messages: mapped })
   } catch (error: any) {
     console.error('Mgmt user-messages fetch failed:', error)
-    return NextResponse.json({ error: 'Failed to fetch user messages', message: error?.message || 'Unknown error' }, { status: 500 })
+    return NextResponse.json(
+      { error: 'Failed to fetch user messages', message: error?.message || 'Unknown error' },
+      { status: 500 }
+    )
   }
 }

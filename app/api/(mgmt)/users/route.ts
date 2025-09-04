@@ -37,11 +37,19 @@ export async function GET(request: NextRequest) {
       select: { id: true, name: true, email: true, created_at: true },
     })
 
-    const mapped = users.map((u) => ({ id: u.id, name: u.name, email: u.email, createdAt: u.created_at }))
+    const mapped = users.map(u => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      createdAt: u.created_at,
+    }))
 
     return NextResponse.json({ users: mapped })
   } catch (error: any) {
     console.error('Mgmt users fetch failed:', error)
-    return NextResponse.json({ error: 'Failed to fetch users', message: error?.message || 'Unknown error' }, { status: 500 })
+    return NextResponse.json(
+      { error: 'Failed to fetch users', message: error?.message || 'Unknown error' },
+      { status: 500 }
+    )
   }
 }

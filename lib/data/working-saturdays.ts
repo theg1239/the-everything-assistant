@@ -93,7 +93,7 @@ export const workingSaturdays: ContextData = {
 - Mess, library, and transportation services operate on a normal weekday schedule.
 `,
   metadata: {
-  nextWorkingSaturday: '2025-09-06',
+    nextWorkingSaturday: '2025-09-06',
     currentSemester: 'Fall 2025-26',
   },
 }

@@ -134,10 +134,10 @@ const PureChatInterface = memo(
     const [chatCreatedEventDispatched, setChatCreatedEventDispatched] = useState(false)
     const [maximizedArtifact, setMaximizedArtifact] = useState<any>(null)
     const [isAtBottom, setIsAtBottom] = useState(true)
-  // PWA install handling
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
-  const [canInstall, setCanInstall] = useState(false)
-  const [isInstalled, setIsInstalled] = useState(false)
+    // PWA install handling
+    const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
+    const [canInstall, setCanInstall] = useState(false)
+    const [isInstalled, setIsInstalled] = useState(false)
     const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const contentRef = useRef<HTMLDivElement>(null)
@@ -380,7 +380,7 @@ const PureChatInterface = memo(
           setTimeout(() => checkTitleUpdate(), 3000)
         }
       },
-  onError: err => {
+      onError: err => {
         const errorMessage = err.message || err.toString()
         const hasResponseBody = typeof err === 'object' && err !== null && 'responseBody' in err
         const responseBody = hasResponseBody ? (err as any).responseBody : ''
@@ -393,9 +393,10 @@ const PureChatInterface = memo(
           (typeof responseBody === 'string' &&
             responseBody.includes('contents.parts must not be empty'))
 
-        const localRateLimitDetected = /rate limit|too many requests|quota exceeded|rate_limited/i.test(
-          String(errorMessage || responseBody || '')
-        )
+        const localRateLimitDetected =
+          /rate limit|too many requests|quota exceeded|rate_limited/i.test(
+            String(errorMessage || responseBody || '')
+          )
 
         let isRateLimit = false
         try {
@@ -412,7 +413,12 @@ const PureChatInterface = memo(
           //console.debug('[Chat] onError - localRateLimitDetected:', localRateLimitDetected, 'isRateLimit:', isRateLimit, 'contextRateLimit:', contextRateLimit, 'isGeminiStreamingError:', isGeminiStreamingError, 'error:', err)
         } catch {}
 
-        if (!localRateLimitDetected && !isRateLimit && !contextRateLimit && !isGeminiStreamingError) {
+        if (
+          !localRateLimitDetected &&
+          !isRateLimit &&
+          !contextRateLimit &&
+          !isGeminiStreamingError
+        ) {
           toast.error('Something went wrong. Please try again.')
         }
       },
@@ -1419,11 +1425,7 @@ const PureChatInterface = memo(
                 </Button>
               )}
               {canInstall && !isInstalled && (
-                <Button
-                  variant="ghost"
-                  onClick={handleInstallClick}
-                  className="h-9 ml-2 md:hidden"
-                >
+                <Button variant="ghost" onClick={handleInstallClick} className="h-9 ml-2 md:hidden">
                   <Download className="h-4 w-4 mr-2" />
                   install
                 </Button>

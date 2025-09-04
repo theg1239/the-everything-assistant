@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import React from 'react'
 import { Button } from '@/components/ui/button'
@@ -27,7 +27,9 @@ export default function PastBroadcasts({
         <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
           <History className="w-5 h-5" /> Past Broadcasts
         </div>
-        <div className="text-sm text-muted-foreground">View, edit, and manage previously sent broadcasts</div>
+        <div className="text-sm text-muted-foreground">
+          View, edit, and manage previously sent broadcasts
+        </div>
       </div>
 
       {loadingBroadcasts ? (
@@ -47,7 +49,9 @@ export default function PastBroadcasts({
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <Calendar className="w-4 h-4 text-blue-500" />
-                    <span className="text-sm font-medium">{new Date(broadcast.timestamp).toLocaleString()}</span>
+                    <span className="text-sm font-medium">
+                      {new Date(broadcast.timestamp).toLocaleString()}
+                    </span>
                   </div>
                   <div className="text-xs text-muted-foreground">Sent by: {broadcast.sentBy}</div>
                 </div>
@@ -77,9 +81,14 @@ export default function PastBroadcasts({
 
               {editingBroadcast === broadcast.id ? (
                 <div className="space-y-4 mt-4">
-                  <div className="text-sm font-medium text-yellow-400 mb-2">Editing broadcast slides:</div>
+                  <div className="text-sm font-medium text-yellow-400 mb-2">
+                    Editing broadcast slides:
+                  </div>
                   {editSlides.map((slide: any, index: number) => (
-                    <div key={index} className="p-3 rounded-lg bg-slate-800/50 border border-slate-700 relative space-y-3">
+                    <div
+                      key={index}
+                      className="p-3 rounded-lg bg-slate-800/50 border border-slate-700 relative space-y-3"
+                    >
                       <h5 className="font-medium text-sm">Edit Slide {index + 1}</h5>
                       <input
                         type="text"
@@ -124,7 +133,12 @@ export default function PastBroadcasts({
                         size="sm"
                         onClick={() => setShowEditPreview(true)}
                         className="gap-1"
-                        disabled={!editSlides.some((slide: any) => slide.title.trim() || slide.text.trim() || slide.image.trim())}
+                        disabled={
+                          !editSlides.some(
+                            (slide: any) =>
+                              slide.title.trim() || slide.text.trim() || slide.image.trim()
+                          )
+                        }
                       >
                         <Eye className="w-4 h-4" />
                         Preview
@@ -142,8 +156,17 @@ export default function PastBroadcasts({
                       >
                         Cancel
                       </Button>
-                      <Button onClick={handleSaveEditedBroadcast} disabled={loading} size="sm" className="gap-1">
-                        {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                      <Button
+                        onClick={handleSaveEditedBroadcast}
+                        disabled={loading}
+                        size="sm"
+                        className="gap-1"
+                      >
+                        {loading ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <CheckCircle className="w-4 h-4" />
+                        )}
                         Save Changes
                       </Button>
                     </div>
@@ -151,15 +174,26 @@ export default function PastBroadcasts({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <div className="text-sm font-medium text-blue-400 mb-2">Broadcast slides ({broadcast.slides.length}):</div>
+                  <div className="text-sm font-medium text-blue-400 mb-2">
+                    Broadcast slides ({broadcast.slides.length}):
+                  </div>
                   {broadcast.slides.map((slide: any, index: number) => (
-                    <div key={index} className="p-3 rounded-lg bg-slate-800/30 border border-slate-700/50">
+                    <div
+                      key={index}
+                      className="p-3 rounded-lg bg-slate-800/30 border border-slate-700/50"
+                    >
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xs font-medium text-muted-foreground">Slide {index + 1}</span>
+                        <span className="text-xs font-medium text-muted-foreground">
+                          Slide {index + 1}
+                        </span>
                       </div>
                       {slide.title && <div className="font-medium text-sm mb-1">{slide.title}</div>}
-                      {slide.text && <div className="text-sm text-muted-foreground mb-2">{slide.text}</div>}
-                      {slide.image && <div className="text-xs text-blue-400 truncate">Image: {slide.image}</div>}
+                      {slide.text && (
+                        <div className="text-sm text-muted-foreground mb-2">{slide.text}</div>
+                      )}
+                      {slide.image && (
+                        <div className="text-xs text-blue-400 truncate">Image: {slide.image}</div>
+                      )}
                     </div>
                   ))}
                 </div>

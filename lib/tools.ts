@@ -2457,6 +2457,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               code2create: 'Code2Create',
               'code 2 create': 'Code2Create',
               'code to create': 'Code2Create',
+              // Additional common variations
+              'code 2create': 'Code2Create',
+              'code tocreate': 'Code2Create',
+              'code2 create': 'Code2Create',
             }
 
             const qNorm = searchQuery ? normalizeString(searchQuery) : null
@@ -2487,15 +2491,20 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             }
 
             let events = data.data.events
-            
+
             // Apply filters
-            if (searchQuery) {
+            // If we already used the backend name filter, avoid over-filtering here.
+            const usedNameParam = Boolean(resolvedName && resolvedName.trim().length > 0)
+            if (searchQuery && !usedNameParam) {
               // Normalize and expand aliases (e.g., c2c -> Code2Create)
               const ALIASES: Record<string, string[]> = {
                 c2c: ['code2create', 'code 2 create', 'code to create'],
                 code2create: ['code2create', 'code 2 create', 'code to create', 'c2c'],
                 'code 2 create': ['code2create', 'code 2 create', 'code to create', 'c2c'],
                 'code to create': ['code2create', 'code 2 create', 'code to create', 'c2c'],
+                'code 2create': ['code2create', 'code 2 create', 'code to create', 'c2c'],
+                'code tocreate': ['code2create', 'code 2 create', 'code to create', 'c2c'],
+                'code2 create': ['code2create', 'code 2 create', 'code to create', 'c2c'],
               }
 
               const qNorm = normalizeString(searchQuery)
@@ -2554,7 +2563,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 })
               }
 
-              // If the backend name filter already narrowed it, this acts as a safe secondary filter
+              // Secondary client-side filter if backend did not use name param
               events = events.filter((event: any) => matchesEvent(event))
             }
             

@@ -304,7 +304,7 @@ const EventCard: React.FC<{
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-primary flex-shrink-0" />
                   <span className="font-medium">
-                    {slots.reduce((sum, s) => sum + (s.seatsLeft ?? 0), 0).toLocaleString()} seats left
+                    {slots.reduce((sum, s) => sum + (s.seatsLeft ?? s.totalEntries ?? 0), 0).toLocaleString()} seats left
                   </span>
                 </div>
               </div>
@@ -319,7 +319,7 @@ const EventCard: React.FC<{
                         <span className="break-words">{slot.venue}</span>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-muted-foreground whitespace-nowrap">{(slot.seatsLeft ?? 0).toLocaleString()} left</span>
+                        <span className="text-muted-foreground whitespace-nowrap">{(slot.seatsLeft ?? slot.totalEntries ?? 0).toLocaleString()} left</span>
                         {slot.isRegistrable ? (
                           <CheckCircle className="h-3 w-3 text-green-600" />
                         ) : (
@@ -397,7 +397,7 @@ const SeatsInfo: React.FC<{ seats: GravitasEventsData['seats'] }> = ({ seats }) 
                       </div>
                     </div>
                     <div className="flex items-center justify-between md:flex-col md:items-end gap-2">
-                      <div className="text-sm font-medium">{slot.seatsLeft ?? 0} seats left</div>
+                      <div className="text-sm font-medium">{(slot.seatsLeft ?? slot.totalEntries ?? 0)} seats left</div>
                       <Badge 
                         variant={slot.isRegistrable ? 'default' : 'secondary'}
                         className={cn(
@@ -425,8 +425,11 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
   const [categoryFilter, setCategoryFilter] = useState(data.filters?.category || 'all')
   const [seatsByEvent, setSeatsByEvent] = useState<Record<string, GravitasEventsData['seats']>>({})
   const [loadingEventSeats, setLoadingEventSeats] = useState<Record<string, boolean>>({})
-
-  const events = data.events || (data.event ? [data.event] : [])
+  // Maintain events in state so we can load more from server
+  const initialEvents = data.events || (data.event ? [data.event] : [])
+  const [events, setEvents] = useState<Event[]>(initialEvents)
+  const [serverLoading, setServerLoading] = useState(false)
+  const [serverExhausted, setServerExhausted] = useState(false)
 
   // Normalize any slot shape into NormalizedSlot
   const normalizeSlots = (slots: any[], fallbackEventId?: string): NormalizedSlot[] => {
@@ -440,7 +443,7 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
         const registrable = s.isRegistrable ?? s.is_registrable ?? false
         const venue = s.venue || s.location || ''
         const seatsLeft = (
-          s.seatsLeft ?? s.seats_left ?? s.availableEntries ?? s.available_entries ?? s.entries_left ?? s.remaining ?? s.remaining_entries
+          s.seatsLeft ?? s.seats_left ?? s.availableEntries ?? s.available_entries ?? s.entries_left ?? s.remaining ?? s.remaining_entries ?? total
         )
         const id = s.id ?? `${eventId ?? 'event'}-${venue}-${start || ''}`
         if (!venue && !start && !end && total === 0) return null
@@ -512,12 +515,15 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
 
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
-      filtered = filtered.filter(event =>
-        event.name.toLowerCase().includes(query) ||
-        event.description.toLowerCase().includes(query) ||
-        event.club.toLowerCase().includes(query) ||
-        event.type.toLowerCase().includes(query)
-      )
+      filtered = filtered.filter(event => {
+        const desc = (event.description || event.shortDescription || '').toLowerCase()
+        return (
+          event.name.toLowerCase().includes(query) ||
+          desc.includes(query) ||
+          event.club.toLowerCase().includes(query) ||
+          event.type.toLowerCase().includes(query)
+        )
+      })
     }
 
     if (typeFilter !== 'all') {
@@ -552,6 +558,64 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
     () => filteredEvents.slice(0, Math.max(0, visibleCount)),
     [filteredEvents, visibleCount]
   )
+
+  // Fetch additional events from Gravitas API (increase limit and merge by id)
+  const fetchMoreFromServer = async () => {
+    try {
+      if (serverLoading || serverExhausted) return
+      setServerLoading(true)
+      const currentCount = events.length
+      const nextLimit = currentCount + 50
+
+      const params = new URLSearchParams()
+      params.set('limit', String(nextLimit))
+      const name = (data.filters?.searchQuery || '').trim()
+      if (name.length > 0) params.set('name', name)
+
+      const res = await fetch(`https://gravitas.vit.ac.in/api/events?${params.toString()}`)
+      if (!res.ok) {
+        setServerExhausted(true)
+        return
+      }
+      const json = await res.json()
+      const apiEvents: any[] = json?.data?.events || []
+      if (!Array.isArray(apiEvents) || apiEvents.length === 0) {
+        setServerExhausted(true)
+        return
+      }
+
+      const mapped: Event[] = apiEvents.map((ev: any) => ({
+        id: String(ev.id),
+        name: String(ev.name || ''),
+        type: String(ev.type || ''),
+        category: String(ev.category || ''),
+        description: String(ev.description || ''),
+        club: String(ev.club || ''),
+        tagline: String(ev.tagline || ''),
+        startDate: String(ev.start_date || ''),
+        endDate: String(ev.end_date || ''),
+        teamSize: String(ev.team_size || ''),
+        price: Number(ev.price_per_ticket ?? 0),
+        scope: String(ev.scope || ''),
+        image: String(ev.image || ''),
+        shortDescription: ev.short_description ? String(ev.short_description) : undefined,
+      }))
+
+      const byId = new Map<string, Event>(events.map(e => [e.id, e]))
+      for (const ev of mapped) byId.set(ev.id, { ...byId.get(ev.id), ...ev })
+      const merged = Array.from(byId.values())
+
+      if (merged.length === events.length) {
+        setServerExhausted(true)
+      } else {
+        setEvents(merged)
+      }
+    } catch (_) {
+      setServerExhausted(true)
+    } finally {
+      setServerLoading(false)
+    }
+  }
 
   if (events.length === 0) {
     return (
@@ -609,7 +673,7 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
             totalEntries: Number(slot.total_entries || 0),
             isRegistrable: Boolean(slot.is_registrable || false),
             seatsLeft: Number(
-              (slot.seats_left ?? slot.available_entries ?? slot.entries_left ?? slot.remaining ?? 0) as any
+              (slot.seats_left ?? slot.available_entries ?? slot.entries_left ?? slot.remaining ?? slot.total_entries ?? 0) as any
             ),
           }))
           const seats = {
@@ -765,14 +829,25 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
         </div>
       )}
 
-      {filteredEvents.length > visibleEvents.length && (
-        <div className="flex justify-center">
-          <Button
-            variant="outline"
-            onClick={() => setVisibleCount(c => c + LOAD_STEP)}
-          >
-            View more ({filteredEvents.length - visibleEvents.length} more)
-          </Button>
+      {(filteredEvents.length > visibleEvents.length || !serverExhausted) && (
+        <div className="flex justify-center gap-3 flex-wrap">
+          {filteredEvents.length > visibleEvents.length && (
+            <Button
+              variant="outline"
+              onClick={() => setVisibleCount(c => c + LOAD_STEP)}
+            >
+              View more ({filteredEvents.length - visibleEvents.length} more)
+            </Button>
+          )}
+          {!serverExhausted && (
+            <Button
+              variant="secondary"
+              onClick={fetchMoreFromServer}
+              disabled={serverLoading}
+            >
+              {serverLoading ? 'Loading…' : 'Load more'}
+            </Button>
+          )}
         </div>
       )}
 

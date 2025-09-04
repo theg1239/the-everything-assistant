@@ -3,7 +3,7 @@ import { ContextData } from './index'
 export const examSchedule: ContextData = {
   section: 'exam-schedule',
   title: 'Exam Schedule & Information Fall 2025-26',
-  lastUpdated: '2025-08-16',
+  lastUpdated: '2025-09-04',
   priority: 'high',
   content: `
 Fall Semester 2025-26 Exam Schedule:
@@ -14,6 +14,7 @@ Continuous Assessment Test - I (CAT-1):
 - Weightage: 15% of total marks
 - Venue: Regular classrooms
 - Syllabus: Topics covered till mid-semester
+ - Status: Concluded
 
 Continuous Assessment Test - II (CAT-2):
 - Dates: October 5-11, 2025 (Sunday to Saturday)
@@ -21,6 +22,7 @@ Continuous Assessment Test - II (CAT-2):
 - Weightage: 15% of total marks
 - Venue: Regular classrooms
 - Syllabus: Topics covered since CAT-1
+ - Status: Upcoming
 
 Final Assessment Test (FAT) - Laboratory:
 - Dates: November 10-14, 2025 (Monday to Friday)
@@ -84,7 +86,7 @@ Re-examination Policy:
 `,
   metadata: {
     currentSemester: 'Fall 2025-26',
-    nextExamPeriod: 'CAT-1 August 17-23, 2025',
+  nextExamPeriod: 'CAT-2 October 5-11, 2025',
     cat1Dates: 'August 17-23, 2025',
     cat2Dates: 'October 5-11, 2025',
     fatDates: 'November 17 - December 4, 2025',

@@ -384,85 +384,58 @@ const {
       setIsFirstMessageInNewChat(false);
       const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
         try {
-          const response = await fetch(`/api/chats/${currentChatId}`);
+          const response = await fetch(`/api/chats/${currentChatId}`)
           if (response.ok) {
-            const chatData = await response.json();
+            const chatData = await response.json()
             if (chatData.title && chatData.title !== 'New Chat') {
               window.dispatchEvent(
                 new CustomEvent('chatTitleUpdated', {
                   detail: { chatId: currentChatId, title: chatData.title },
                 })
-              );
+              )
             } else if (attempt < maxAttempts) {
-              setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000);
+              setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
             }
           }
-          setTimeout(() => checkTitleUpdate(), 3000)
-        }
-      },
-      onError: err => {
-        const errorMessage = err.message || err.toString()
-        const hasResponseBody = typeof err === 'object' && err !== null && 'responseBody' in err
-        const responseBody = hasResponseBody ? (err as any).responseBody : ''
-
-        const isGeminiStreamingError =
-          errorMessage.includes('contents.parts must not be empty') ||
-          errorMessage.includes('INVALID_ARGUMENT') ||
-          errorMessage.includes('GenerateContentRequest.contents') ||
-          errorMessage.includes('streamGenerateContent') ||
-          (typeof responseBody === 'string' &&
-            responseBody.includes('contents.parts must not be empty'))
-
-        const localRateLimitDetected =
-          /rate limit|too many requests|quota exceeded|rate_limited/i.test(
-            String(errorMessage || responseBody || '')
-          )
-
-        let isRateLimit = false
-        try {
-          isRateLimit = checkForRateLimitError(err)
         } catch (e) {
-          // ignore
+          // ignore errors and optionally retry later
         }
-
-        const contextRateLimit = !!rateLimitError?.isRateLimit
-
-        try {
-          // debug logging
-          // eslint-disable-next-line no-console
-          //console.debug('[Chat] onError - localRateLimitDetected:', localRateLimitDetected, 'isRateLimit:', isRateLimit, 'contextRateLimit:', contextRateLimit, 'isGeminiStreamingError:', isGeminiStreamingError, 'error:', err)
-        } catch {}
-
-        if (
-          !localRateLimitDetected &&
-          !isRateLimit &&
-          !contextRateLimit &&
-          !isGeminiStreamingError
-        ) {
-          toast.error('Something went wrong. Please try again.')
-        }
-      },
-    })
-
-  onError: (err: any) => {
-    const errorMessage = err.message || err.toString();
-    const hasResponseBody = typeof err === 'object' && err !== null && 'responseBody' in err;
-    const responseBody = hasResponseBody ? (err as any).responseBody : '';
+      }
+      // initial delayed poll to allow server to compute a title
+      setTimeout(() => checkTitleUpdate(), 3000)
+    }
+  },
+  onError: err => {
+    const errorMessage = err.message || err.toString()
+    const hasResponseBody = typeof err === 'object' && err !== null && 'responseBody' in err
+    const responseBody = hasResponseBody ? (err as any).responseBody : ''
 
     const isGeminiStreamingError =
       errorMessage.includes('contents.parts must not be empty') ||
       errorMessage.includes('INVALID_ARGUMENT') ||
       errorMessage.includes('GenerateContentRequest.contents') ||
       errorMessage.includes('streamGenerateContent') ||
-      (typeof responseBody === 'string' && responseBody.includes('contents.parts must not be empty'));
+      (typeof responseBody === 'string' && responseBody.includes('contents.parts must not be empty'))
 
-    const isRateLimit = checkForRateLimitError(err);
-    if (!isRateLimit && !isGeminiStreamingError) {
-      toast.error('Something went wrong. Please try again.');
+    const localRateLimitDetected =
+      /rate limit|too many requests|quota exceeded|rate_limited/i.test(
+        String(errorMessage || responseBody || '')
+      )
+
+    let isRateLimit = false
+    try {
+      isRateLimit = checkForRateLimitError(err)
+    } catch {
+      // ignore
     }
-    // Do NOT show toast for Gemini streaming errors!
+
+    const contextRateLimit = !!rateLimitError?.isRateLimit
+
+    if (!localRateLimitDetected && !isRateLimit && !contextRateLimit && !isGeminiStreamingError) {
+      toast.error('Something went wrong. Please try again.')
+    }
   },
-});
+})
 
     const isLoading = status === 'streaming'
     const scrollToBottom = useCallback(() => {

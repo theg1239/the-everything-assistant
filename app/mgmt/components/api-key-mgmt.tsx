@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import React from 'react'
 import { Key, Database } from 'lucide-react'
@@ -12,7 +12,9 @@ export default function APIKeyManagement({ data, showSensitiveData, formatTimest
         <div className="flex items-center gap-2 text-lg md:text-xl font-semibold lowercase">
           <Key className="w-5 h-5" /> api key management
         </div>
-        <div className="text-sm text-muted-foreground lowercase">configuration and usage status for api keys</div>
+        <div className="text-sm text-muted-foreground lowercase">
+          configuration and usage status for api keys
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -25,11 +27,17 @@ export default function APIKeyManagement({ data, showSensitiveData, formatTimest
             </div>
             <div className="flex justify-between">
               <span>Rotation Enabled:</span>
-              <Badge variant={data.configuration.apiKeys.enableRotation ? 'default' : 'secondary'}>{data.configuration.apiKeys.enableRotation ? 'Yes' : 'No'}</Badge>
+              <Badge variant={data.configuration.apiKeys.enableRotation ? 'default' : 'secondary'}>
+                {data.configuration.apiKeys.enableRotation ? 'Yes' : 'No'}
+              </Badge>
             </div>
             <div className="flex justify-between">
               <span>Auto-rotate on Limit:</span>
-              <Badge variant={data.configuration.apiKeys.rotateOnRateLimit ? 'default' : 'secondary'}>{data.configuration.apiKeys.rotateOnRateLimit ? 'Yes' : 'No'}</Badge>
+              <Badge
+                variant={data.configuration.apiKeys.rotateOnRateLimit ? 'default' : 'secondary'}
+              >
+                {data.configuration.apiKeys.rotateOnRateLimit ? 'Yes' : 'No'}
+              </Badge>
             </div>
           </div>
         </div>
@@ -38,11 +46,15 @@ export default function APIKeyManagement({ data, showSensitiveData, formatTimest
           <div className="space-y-2 text-xs md:text-sm">
             <div className="flex justify-between">
               <span>Per Minute:</span>
-              <Badge variant="outline">{data.configuration.apiKeys.rateLimit.requestsPerMinute}</Badge>
+              <Badge variant="outline">
+                {data.configuration.apiKeys.rateLimit.requestsPerMinute}
+              </Badge>
             </div>
             <div className="flex justify-between">
               <span>Per Hour:</span>
-              <Badge variant="outline">{data.configuration.apiKeys.rateLimit.requestsPerHour}</Badge>
+              <Badge variant="outline">
+                {data.configuration.apiKeys.rateLimit.requestsPerHour}
+              </Badge>
             </div>
           </div>
         </div>
@@ -61,7 +73,13 @@ export default function APIKeyManagement({ data, showSensitiveData, formatTimest
                 const displayName = `${provider.charAt(0).toUpperCase() + provider.slice(1)} Key ${keyIndex}`
 
                 return (
-                  <div key={key} className={cn('p-4 rounded-lg bg-black/20 border', usage.isRateLimited && 'border-red-500/80')}>
+                  <div
+                    key={key}
+                    className={cn(
+                      'p-4 rounded-lg bg-black/20 border',
+                      usage.isRateLimited && 'border-red-500/80'
+                    )}
+                  >
                     <div className="flex justify-between items-start mb-3">
                       <h4 className="font-semibold">{displayName}</h4>
                       <div className="flex gap-2">
@@ -69,10 +87,22 @@ export default function APIKeyManagement({ data, showSensitiveData, formatTimest
                       </div>
                     </div>
                     <div className="space-y-2 text-sm text-muted-foreground">
-                      <div className="flex justify-between"><span>Requests</span><span className="font-mono">{usage.requests}</span></div>
-                      <div className="flex justify-between"><span>Failures</span><span className="font-mono">{usage.failures}</span></div>
-                      <div className="flex justify-between"><span>Last Used</span><span className="font-mono">{formatTimestamp(usage.lastUsed)}</span></div>
-                      <div className="flex justify-between"><span>Last Failed</span><span className="font-mono">{formatTimestamp(usage.lastFailed)}</span></div>
+                      <div className="flex justify-between">
+                        <span>Requests</span>
+                        <span className="font-mono">{usage.requests}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Failures</span>
+                        <span className="font-mono">{usage.failures}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Last Used</span>
+                        <span className="font-mono">{formatTimestamp(usage.lastUsed)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Last Failed</span>
+                        <span className="font-mono">{formatTimestamp(usage.lastFailed)}</span>
+                      </div>
                     </div>
                   </div>
                 )

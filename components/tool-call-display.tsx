@@ -16,6 +16,7 @@ import {
   MapPin,
   Search,
   BookOpen,
+  Calendar,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -338,7 +339,9 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
 
     const makeEntryFrom = (entry: any) => {
       const filename = entry.filename || entry.file || null
-      const url = entry.url || (filename ? `https://storage.googleapis.com/examcooker/syllabi/${filename}` : null)
+      const url =
+        entry.url ||
+        (filename ? `https://storage.googleapis.com/examcooker/syllabi/${filename}` : null)
       const norm = normalizeFilename(filename)
       const code = entry.code || norm.code
       const title = entry.title || norm.title || (entry.message ? String(entry.message) : null)
@@ -358,9 +361,12 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
       }
     }
 
-    const title = entries.length === 1 ?
-      (entries[0].code && entries[0].title ? `${entries[0].code} — ${entries[0].title}` : `Syllabus: ${entries[0].title || entries[0].filename}`)
-      : `${entries.length} Syllabi`;
+    const title =
+      entries.length === 1
+        ? entries[0].code && entries[0].title
+          ? `${entries[0].code} — ${entries[0].title}`
+          : `Syllabus: ${entries[0].title || entries[0].filename}`
+        : `${entries.length} Syllabi`
 
     return {
       type: 'syllabi' as const,
@@ -589,6 +595,26 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         icon: <AlertCircle className="h-5 w-5 text-red-500" />,
         data: { error: result.message || 'Could not fetch placement data.' },
       }
+    }
+  }
+
+  if (toolName === 'gravitasEvents') {
+    return {
+      type: 'gravitas-events' as const,
+      title: result.event ? 'Gravitas Event Details' : 'Gravitas Events',
+      icon: <Calendar className="h-5 w-5 text-purple-500" />,
+      data: result,
+      source: 'Gravitas Portal',
+    }
+  }
+
+  if (toolName === 'gravitasEventRegistration') {
+    return {
+      type: 'gravitas-event-registration' as const,
+      title: 'Event Registration Link',
+      icon: <Calendar className="h-5 w-5 text-purple-500" />,
+      data: result,
+      source: 'Gravitas Portal',
     }
   }
 

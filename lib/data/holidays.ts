@@ -7,7 +7,7 @@ import { ContextData } from './index'
 export const holidays: ContextData = {
   section: 'holidays',
   title: 'Holiday Calendar 2025-26',
-  lastUpdated: '2025-08-16',
+  lastUpdated: '2025-09-04',
   priority: 'medium',
   content: `
 Official Holidays and Breaks for Academic Year 2025-26 (VIT Vellore):
@@ -19,7 +19,7 @@ August 2025:
 
 September 2025:
 - September 5 (Friday) - Meelad-un-Nabi (No Instructional Day)
-- September 26-28 (Saturday-Sunday) - Gravitas '25 (No Instructional Day)
+- September 26-28 (Saturday-Sunday) - GRAVITAS '25 (No Instructional Day)
 
 October 2025:
 - October 1 (Wednesday) - Ayutha Pooja (Holiday)

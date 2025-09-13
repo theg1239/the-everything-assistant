@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import React from 'react'
 import { Button } from '@/components/ui/button'
@@ -19,12 +19,17 @@ export default function BroadcastForm({
         <div className="flex items-center gap-2 text-lg md:text-xl font-semibold">
           <Send className="w-5 h-5" /> broadcast dialog
         </div>
-        <div className="text-sm text-muted-foreground">send a dialog to all connected users in real-time</div>
+        <div className="text-sm text-muted-foreground">
+          send a dialog to all connected users in real-time
+        </div>
       </div>
 
       <div className="space-y-4">
         {broadcastSlides.map((slide: any, index: number) => (
-          <div key={index} className="p-4 rounded-lg bg-black/20 border border-border/20 relative space-y-3">
+          <div
+            key={index}
+            className="p-4 rounded-lg bg-black/20 border border-border/20 relative space-y-3"
+          >
             <h4 className="font-medium">slide {index + 1}</h4>
             <input
               type="text"
@@ -69,12 +74,20 @@ export default function BroadcastForm({
             variant="outline"
             onClick={() => setShowPreview(true)}
             className="gap-2"
-            disabled={!broadcastSlides.some((slide: any) => slide.title.trim() || slide.text.trim() || slide.image.trim())}
+            disabled={
+              !broadcastSlides.some(
+                (slide: any) => slide.title.trim() || slide.text.trim() || slide.image.trim()
+              )
+            }
           >
             <Eye className="w-4 h-4" /> preview
           </Button>
         </div>
-        <Button onClick={handleSendBroadcast} disabled={loading} className="gap-2 bg-purple-600 hover:bg-purple-700">
+        <Button
+          onClick={handleSendBroadcast}
+          disabled={loading}
+          className="gap-2 bg-purple-600 hover:bg-purple-700"
+        >
           <Send className="w-4 h-4" /> send broadcast
         </Button>
       </div>

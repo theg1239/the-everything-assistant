@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { getRecentTokenUsage, getTokenUsageSummary, getTokenUsageAllTimeSummary, getTokenUsageLifetimeBuckets } from '@/lib/db'
+import {
+  getRecentTokenUsage,
+  getTokenUsageSummary,
+  getTokenUsageAllTimeSummary,
+  getTokenUsageLifetimeBuckets,
+} from '@/lib/db'
 import { getDetailedUsageStats } from '@/lib/stats'
 
 export async function GET(req: NextRequest) {

@@ -392,14 +392,35 @@ export async function getTokenUsageLifetimeBuckets(granularity: 'day' | 'month' 
     }))
   } catch (err) {
     try {
-      const all = await prisma.tokenUsage.findMany({ select: { createdAt: true, totalTokens: true, promptTokens: true, completionTokens: true } })
-      const buckets: Record<string, { ts: number; date: string; totalTokens: number; promptTokens: number; completionTokens: number; count: number }> = {}
+      const all = await prisma.tokenUsage.findMany({
+        select: { createdAt: true, totalTokens: true, promptTokens: true, completionTokens: true },
+      })
+      const buckets: Record<
+        string,
+        {
+          ts: number
+          date: string
+          totalTokens: number
+          promptTokens: number
+          completionTokens: number
+          count: number
+        }
+      > = {}
       for (const r of all) {
         const d = new Date(r.createdAt)
         let key: string
-        if (unit === 'hour') key = d.toISOString().slice(0, 13) // YYYY-MM-DDTHH
+        if (unit === 'hour')
+          key = d.toISOString().slice(0, 13) // YYYY-MM-DDTHH
         else key = d.toISOString().slice(0, 10) // YYYY-MM-DD
-        if (!buckets[key]) buckets[key] = { ts: new Date(key).getTime(), date: key, totalTokens: 0, promptTokens: 0, completionTokens: 0, count: 0 }
+        if (!buckets[key])
+          buckets[key] = {
+            ts: new Date(key).getTime(),
+            date: key,
+            totalTokens: 0,
+            promptTokens: 0,
+            completionTokens: 0,
+            count: 0,
+          }
         buckets[key].totalTokens += Number(r.totalTokens || 0)
         buckets[key].promptTokens += Number(r.promptTokens || 0)
         buckets[key].completionTokens += Number(r.completionTokens || 0)

@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -62,30 +62,48 @@ export default function SyllabiPanel() {
           )}
         </div>
 
-        {error && <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">{error}</div>}
+        {error && (
+          <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">{error}</div>
+        )}
 
         {syllabi.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pt-4">
             {syllabi.map((s: any, i: number) => (
-              <Card key={i} className="bg-muted/20 border-border/30 hover:bg-muted/40 transition-colors flex flex-col">
+              <Card
+                key={i}
+                className="bg-muted/20 border-border/30 hover:bg-muted/40 transition-colors flex flex-col"
+              >
                 <CardContent className="p-4 flex-grow">
-                  <div className="text-sm font-medium line-clamp-2 mb-3">{s.title || s.filename || s.code}</div>
+                  <div className="text-sm font-medium line-clamp-2 mb-3">
+                    {s.title || s.filename || s.code}
+                  </div>
                   <div className="flex flex-wrap gap-2">
-                    {s.code && <div className="text-xs px-2 py-1 rounded bg-muted/50">{s.code}</div>}
-                    {s.type && <div className="text-xs px-2 py-1 rounded bg-muted/50">{s.type}</div>}
+                    {s.code && (
+                      <div className="text-xs px-2 py-1 rounded bg-muted/50">{s.code}</div>
+                    )}
+                    {s.type && (
+                      <div className="text-xs px-2 py-1 rounded bg-muted/50">{s.type}</div>
+                    )}
                   </div>
                 </CardContent>
-                { (s.url || s.link || s.filename) && (
+                {(s.url || s.link || s.filename) && (
                   <div className="p-4 pt-0 mt-auto">
                     <button
                       className="text-xs text-blue-400 hover:underline flex items-center gap-1"
                       onClick={() => {
-                          const url = s.url || s.link || (s.filename ? `https://storage.googleapis.com/examcooker/syllabi/${s.filename}` : null)
-                          const title = s.title || s.filename || s.code
-                          window.dispatchEvent(new CustomEvent('pdfViewerOpen', { detail: { url, title } }))
-                        }}
+                        const url =
+                          s.url ||
+                          s.link ||
+                          (s.filename
+                            ? `https://storage.googleapis.com/examcooker/syllabi/${s.filename}`
+                            : null)
+                        const title = s.title || s.filename || s.code
+                        window.dispatchEvent(
+                          new CustomEvent('pdfViewerOpen', { detail: { url, title } })
+                        )
+                      }}
                     >
-                        open
+                      open
                     </button>
                   </div>
                 )}
@@ -93,7 +111,7 @@ export default function SyllabiPanel() {
             ))}
           </div>
         )}
-          <PdfViewer />
+        <PdfViewer />
 
         {result && syllabi.length === 0 && (
           <div className="text-sm text-muted-foreground text-center py-8">

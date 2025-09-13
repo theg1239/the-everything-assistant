@@ -3,7 +3,7 @@ import { ContextData } from './index'
 export const academicCalendar: ContextData = {
   section: 'academic-calendar',
   title: 'Academic Calendar Fall Semester 2025-26',
-  lastUpdated: '2025-08-16',
+  lastUpdated: '2025-09-04',
   priority: 'high',
   content: `
 Fall Semester 2025-26 Academic Calendar
@@ -401,8 +401,8 @@ Final Examinations:
     academicYear: '2025-26',
     semesterStart: '2025-07-08',
     semesterEnd: '2025-11-14',
-    cat1Period: 'TBD',
-    cat2Period: 'TBD',
+    cat1Period: 'August 17-23, 2025',
+    cat2Period: 'October 5-11, 2025',
     fatPeriod: 'November 10-15, 2025',
     deanAcademics: 'M. Anthony Xavior PhD',
   },

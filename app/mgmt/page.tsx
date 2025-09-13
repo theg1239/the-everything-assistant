@@ -22,7 +22,11 @@ interface RateLimitStatus {
   timestamp: string
   environment: {
     validation: { isValid: boolean; errors: string[]; warnings: string[] }
-    summary: { hasRedis: boolean; apiKeys: { totalAvailable: number }; adminAccess: { email: string } }
+    summary: {
+      hasRedis: boolean
+      apiKeys: { totalAvailable: number }
+      adminAccess: { email: string }
+    }
   }
   configuration: {
     apiKeys: {
@@ -33,7 +37,12 @@ interface RateLimitStatus {
       retryConfig: { maxRetries: number; baseDelay: number; maxDelay: number }
       keyHealthCheckInterval: number
     }
-    userRateLimit: { enabled: boolean; requestsPerMinute: number; requestsPerHour: number; requestsPerDay: number }
+    userRateLimit: {
+      enabled: boolean
+      requestsPerMinute: number
+      requestsPerHour: number
+      requestsPerDay: number
+    }
   }
   keyUsage: {
     [keyIndex: string]: {
@@ -71,8 +80,8 @@ interface PastBroadcast {
 /* ────────────────────────────────────────────────────────────────
    Goofy visual helpers (SSR-only, zero client JS)
 ────────────────────────────────────────────────────────────────── */
-const EMOJI_SET_NEAR = ['🤡','🦄','🪄','🌈','🥳','🍩','☕','🛸','👾','🧪']
-const EMOJI_SET_FAR  = ['🐄','🐥','💥','🍕','🧃','🍌','🧨','🌀','🐸','🪅']
+const EMOJI_SET_NEAR = ['🤡', '🦄', '🪄', '🌈', '🥳', '🍩', '☕', '🛸', '👾', '🧪']
+const EMOJI_SET_FAR = ['🐄', '🐥', '💥', '🍕', '🧃', '🍌', '🧨', '🌀', '🐸', '🪅']
 
 function makeDrops(count: number, emojis: string[]) {
   return Array.from({ length: count }, (_, i) => {
@@ -90,7 +99,7 @@ function makeDrops(count: number, emojis: string[]) {
 
 function EmojiRain({ countNear = 38, countFar = 26 }: { countNear?: number; countFar?: number }) {
   const near = makeDrops(countNear, EMOJI_SET_NEAR)
-  const far  = makeDrops(countFar, EMOJI_SET_FAR)
+  const far = makeDrops(countFar, EMOJI_SET_FAR)
 
   return (
     <>
@@ -264,11 +273,11 @@ function BigButton({
     <Cmp href={href} className={`${base} ${variants[variant]}`}>
       <div className="flex min-w-0 flex-col">
         <span className="truncate font-semibold">{label}</span>
-        {subtitle ? (
-          <span className="truncate text-[11px] opacity-80">{subtitle}</span>
-        ) : null}
+        {subtitle ? <span className="truncate text-[11px] opacity-80">{subtitle}</span> : null}
       </div>
-      <span aria-hidden className="ml-3 text-xl transition group-hover:scale-110">🪄</span>
+      <span aria-hidden className="ml-3 text-xl transition group-hover:scale-110">
+        🪄
+      </span>
     </Cmp>
   )
 }
@@ -278,7 +287,9 @@ function CRTPanel({ title, lines }: { title: string; lines: string[] }) {
     <div className="crt rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-red-200 shadow-[0_0_30px_rgba(239,68,68,0.15)]">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-xs font-semibold">{title}</span>
-        <span aria-hidden className="text-[10px]">● ● ●</span>
+        <span aria-hidden className="text-[10px]">
+          ● ● ●
+        </span>
       </div>
       <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-[11px] leading-5">
         {lines.join('\n')}
@@ -374,13 +385,30 @@ function Wall({
           href={`mailto:jobs@vimegle.com?subject=grant%20me%20the%20powers`}
           variant="primary"
         />
-        <BigButton label="try login ritual" subtitle="you might be the chosen one" href="/api/auth/signin" variant="ghost" />
-        <BigButton label="open portal of chaos" subtitle="definitely do not press" href="#" variant="danger" />
-        <BigButton label="summon rubber chicken" subtitle="bonk rate limits away" href="#" variant="ghost" />
+        <BigButton
+          label="try login ritual"
+          subtitle="you might be the chosen one"
+          href="/api/auth/signin"
+          variant="ghost"
+        />
+        <BigButton
+          label="open portal of chaos"
+          subtitle="definitely do not press"
+          href="#"
+          variant="danger"
+        />
+        <BigButton
+          label="summon rubber chicken"
+          subtitle="bonk rate limits away"
+          href="#"
+          variant="ghost"
+        />
       </section>
 
       {footer ? (
-        <p className="mt-4 px-4 text-center text-[11px] text-muted-foreground lowercase">{footer}</p>
+        <p className="mt-4 px-4 text-center text-[11px] text-muted-foreground lowercase">
+          {footer}
+        </p>
       ) : null}
 
       <footer className="mt-8 w-full max-w-4xl rounded-md border border-dashed border-muted-foreground/30 bg-card/70 p-3">

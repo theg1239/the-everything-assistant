@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import React from 'react'
 import { Button } from '@/components/ui/button'
@@ -24,20 +24,25 @@ export default function MgmtTabBar({ active, onChange }: any) {
   return (
     <div className="mt-4">
       <div className="sm:hidden">
-        <Select value={active} onValueChange={(v) => onChange?.(v)}>
+        <Select value={active} onValueChange={v => onChange?.(v)}>
           <SelectTrigger className="w-full">
             <SelectValue placeholder="tab" />
           </SelectTrigger>
           <SelectContent>
-            {tabs.map((t) => (
-              <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
+            {tabs.map(t => (
+              <SelectItem key={t.id} value={t.id}>
+                {t.label}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
 
-      <nav className="hidden sm:flex mt-2 gap-2 overflow-x-auto snap-x snap-mandatory touch-pan-x py-1" aria-label="management tabs">
-        {tabs.map((t) => {
+      <nav
+        className="hidden sm:flex mt-2 gap-2 overflow-x-auto snap-x snap-mandatory touch-pan-x py-1"
+        aria-label="management tabs"
+      >
+        {tabs.map(t => {
           const Icon = t.icon
           const isActive = active === t.id
           const base = 'gap-2 lowercase flex items-center snap-start'
@@ -52,7 +57,7 @@ export default function MgmtTabBar({ active, onChange }: any) {
               aria-current={isActive ? 'page' : undefined}
               className={`${base} ${isActive ? activeClasses : inactiveClasses} px-3 py-2 min-w-[96px] sm:min-w-[120px]`}
             >
-              <Icon className={"w-4 h-4 " + (isActive ? 'text-white' : 'text-muted-foreground')} />
+              <Icon className={'w-4 h-4 ' + (isActive ? 'text-white' : 'text-muted-foreground')} />
               {/* hide full label on very small sm screens, show on md+ */}
               <span className="text-sm hidden md:inline">{t.label}</span>
               {/* show small label under icon for sm screens if needed */}

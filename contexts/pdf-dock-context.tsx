@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
 
@@ -29,7 +29,6 @@ export const usePdfDock = () => {
 }
 
 export const PdfDockProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-
   const STORAGE_KEY = 'pdf-dock-items-v1'
 
   const [items, setItems] = useState<PdfItem[]>(() => {
@@ -69,85 +68,95 @@ export const PdfDockProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const removePdf = (id: string) => setItems(prev => prev.filter(p => p.id !== id))
 
-  
   const removeByUrl = (url: string) => setItems(prev => prev.filter(p => p.url !== url))
-  
-    const openPdf = (id: string) => {
-      setItems(prev => {
-        let changed = false
-        const updated = prev.map(p => {
-          if (p.id === id) {
-            if (!p.isOpen) {
-              changed = true
-              return { ...p, isOpen: true }
-            }
-            return p
-          }
-          return p
-        })
-        return changed ? updated : prev
-      })
-      try {
-        window.dispatchEvent(new CustomEvent('pdf-dock:open', { detail: { id } }))
-      } catch {}
-    }
 
-    const minimizePdf = (id: string) => {
-      setItems(prev => {
-        let changed = false
-        const updated = prev.map(p => {
-          if (p.id === id) {
-            if (p.isOpen) {
-              changed = true
-              return { ...p, isOpen: false }
-            }
-            return p
+  const openPdf = (id: string) => {
+    setItems(prev => {
+      let changed = false
+      const updated = prev.map(p => {
+        if (p.id === id) {
+          if (!p.isOpen) {
+            changed = true
+            return { ...p, isOpen: true }
           }
           return p
-        })
-        return changed ? updated : prev
+        }
+        return p
       })
-    }
+      return changed ? updated : prev
+    })
+    try {
+      window.dispatchEvent(new CustomEvent('pdf-dock:open', { detail: { id } }))
+    } catch {}
+  }
 
-    const openByUrl = (url: string) => {
-      setItems(prev => {
-        let changed = false
-        const updated = prev.map(p => {
-          if (p.url === url) {
-            if (!p.isOpen) {
-              changed = true
-              return { ...p, isOpen: true }
-            }
-            return p
+  const minimizePdf = (id: string) => {
+    setItems(prev => {
+      let changed = false
+      const updated = prev.map(p => {
+        if (p.id === id) {
+          if (p.isOpen) {
+            changed = true
+            return { ...p, isOpen: false }
           }
           return p
-        })
-        return changed ? updated : prev
+        }
+        return p
       })
-      try {
-        window.dispatchEvent(new CustomEvent('pdf-dock:open-by-url', { detail: { url } }))
-      } catch {}
-    }
+      return changed ? updated : prev
+    })
+  }
 
-    const minimizeByUrl = (url: string) => {
-      setItems(prev => {
-        let changed = false
-        const updated = prev.map(p => {
-          if (p.url === url) {
-            if (p.isOpen) {
-              changed = true
-              return { ...p, isOpen: false }
-            }
-            return p
+  const openByUrl = (url: string) => {
+    setItems(prev => {
+      let changed = false
+      const updated = prev.map(p => {
+        if (p.url === url) {
+          if (!p.isOpen) {
+            changed = true
+            return { ...p, isOpen: true }
           }
           return p
-        })
-        return changed ? updated : prev
+        }
+        return p
       })
-    }
+      return changed ? updated : prev
+    })
+    try {
+      window.dispatchEvent(new CustomEvent('pdf-dock:open-by-url', { detail: { url } }))
+    } catch {}
+  }
+
+  const minimizeByUrl = (url: string) => {
+    setItems(prev => {
+      let changed = false
+      const updated = prev.map(p => {
+        if (p.url === url) {
+          if (p.isOpen) {
+            changed = true
+            return { ...p, isOpen: false }
+          }
+          return p
+        }
+        return p
+      })
+      return changed ? updated : prev
+    })
+  }
 
   return (
-    <PdfDockContext.Provider value={{ items, addPdf, removePdf, openPdf, minimizePdf, openByUrl, minimizeByUrl, removeByUrl }}>
+    <PdfDockContext.Provider
+      value={{
+        items,
+        addPdf,
+        removePdf,
+        openPdf,
+        minimizePdf,
+        openByUrl,
+        minimizeByUrl,
+        removeByUrl,
+      }}
+    >
       {children}
     </PdfDockContext.Provider>
   )

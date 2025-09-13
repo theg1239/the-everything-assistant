@@ -65,7 +65,7 @@ interface ArtifactDisplayProps {
   data: any
   type:
     | 'papers'
-  | 'syllabi'
+    | 'syllabi'
     | 'faculty'
     | 'companies'
     | 'placements'
@@ -82,7 +82,8 @@ interface ArtifactDisplayProps {
     | 'papers-index'
     | 'papers-qa'
     | 'question-patterns'
-    | 'general'
+    | 'gravitas-events'
+    | 'gravitas-event-registration'
     | 'general'
   className?: string
   onLoginClick?: () => void
@@ -2802,6 +2803,8 @@ const PureArtifactDisplay = ({
               type === 'papers-index' ||
               type === 'papers-qa' ||
               type === 'question-patterns' ||
+              type === 'gravitas-events' ||
+              type === 'gravitas-event-registration' ||
               type === 'general' ||
               type === 'error' ||
               type === 'campus-info' ||
@@ -2864,6 +2867,14 @@ const PureArtifactDisplay = ({
                 const QuestionPatternsArtifact =
                   require('./artifacts/question-patterns-artifact').default
                 return <QuestionPatternsArtifact key={index} data={item} />
+              case 'gravitas-events':
+                const GravitasEventsArtifact =
+                  require('./artifacts/gravitas-events-artifact').default
+                return <GravitasEventsArtifact key={index} data={item} />
+              case 'gravitas-event-registration':
+                const GravitasEventRegistrationArtifact =
+                  require('./artifacts/gravitas-event-registration-artifact').default
+                return <GravitasEventRegistrationArtifact key={index} data={item} />
               case 'general':
                 return <GeneralCard key={index} data={item} />
               default:
@@ -2984,51 +2995,51 @@ const PureArtifactDisplay = ({
               >
                 <div className="p-4 space-y-4">
                   <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleClosePdf}
-                            className="h-8 w-8 p-0"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleClosePdf}
+                        className="h-8 w-8 p-0"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
 
-                          {/* Minimize to dock - only shown when minimizePdf exists */}
-                          {(minimizeByUrl || minimizePdf) && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 text-xs"
-                              onClick={() => {
-                                try {
-                                  if (minimizeByUrl && pdfUrl) {
-                                    minimizeByUrl(String(pdfUrl))
-                                  } else if (minimizePdf && items && pdfUrl) {
-                                    const found = items.find((p: any) => p.url === pdfUrl)
-                                    if (found) minimizePdf(found.id)
-                                  }
-                                } catch (e) {
-                                  // ignore
-                                }
+                      {/* Minimize to dock - only shown when minimizePdf exists */}
+                      {(minimizeByUrl || minimizePdf) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 text-xs"
+                          onClick={() => {
+                            try {
+                              if (minimizeByUrl && pdfUrl) {
+                                minimizeByUrl(String(pdfUrl))
+                              } else if (minimizePdf && items && pdfUrl) {
+                                const found = items.find((p: any) => p.url === pdfUrl)
+                                if (found) minimizePdf(found.id)
+                              }
+                            } catch (e) {
+                              // ignore
+                            }
 
-                                handleClosePdf()
-                              }}
-                            >
-                              Minimize
-                            </Button>
-                          )}
+                            handleClosePdf()
+                          }}
+                        >
+                          Minimize
+                        </Button>
+                      )}
 
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 text-xs"
-                            onClick={() => window.open(pdfUrl, '_blank')}
-                          >
-                            <ExternalLink className="h-3 w-3 mr-1" />
-                            Open External
-                          </Button>
-                        </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={() => window.open(pdfUrl, '_blank')}
+                      >
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        Open External
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="space-y-3">

@@ -8,7 +8,6 @@ export const COURSE_ACRONYMS: { [key: string]: string[] } = {
   DSD: ['BECE102L'],
   'DIGITAL DESIGN': ['BECE102L'],
 
-
   'Artificial Intelligence': ['BCSE306L'],
 
   // Operating Systems

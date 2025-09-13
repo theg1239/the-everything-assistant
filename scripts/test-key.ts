@@ -10,14 +10,17 @@ type Provider = 'google' | 'groq' | 'cerebras'
 function listEnvKeysForProvider(provider: Provider) {
   const keys: string[] = []
   if (provider === 'google') {
-    if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) keys.push(process.env.GOOGLE_GENERATIVE_AI_API_KEY)
+    if (process.env.GOOGLE_GENERATIVE_AI_API_KEY)
+      keys.push(process.env.GOOGLE_GENERATIVE_AI_API_KEY)
     for (let i = 1; i <= 10; i++) {
       const k = process.env[`GOOGLE_GENERATIVE_AI_API_KEY_${i}`]
       if (k) keys.push(k)
     }
     if (process.env.GOOGLE_AI_API_KEYS) {
       keys.push(
-        ...process.env.GOOGLE_AI_API_KEYS.split(',').map((s) => s.trim()).filter(Boolean)
+        ...process.env.GOOGLE_AI_API_KEYS.split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
       )
     }
   } else if (provider === 'groq') {
@@ -27,7 +30,11 @@ function listEnvKeysForProvider(provider: Provider) {
       if (k) keys.push(k)
     }
     if (process.env.GROQ_API_KEYS) {
-      keys.push(...process.env.GROQ_API_KEYS.split(',').map((s) => s.trim()).filter(Boolean))
+      keys.push(
+        ...process.env.GROQ_API_KEYS.split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
+      )
     }
   } else if (provider === 'cerebras') {
     if (process.env.CEREBRAS_API_KEY) keys.push(process.env.CEREBRAS_API_KEY)
@@ -37,7 +44,9 @@ function listEnvKeysForProvider(provider: Provider) {
     }
     if (process.env.CEREBRAS_API_KEYS) {
       keys.push(
-        ...process.env.CEREBRAS_API_KEYS.split(',').map((s) => s.trim()).filter(Boolean)
+        ...process.env.CEREBRAS_API_KEYS.split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
       )
     }
   }
@@ -104,7 +113,11 @@ async function testProvider(provider: Provider): Promise<TestResult> {
 
         console.log('  Calling generateText(...) as active test (short prompt)...')
         try {
-          const opts: any = { model: modelFn, prompt: 'Say hello in one short sentence', maxTokens: 24 }
+          const opts: any = {
+            model: modelFn,
+            prompt: 'Say hello in one short sentence',
+            maxTokens: 24,
+          }
           const gResult = await api.generateText(opts)
           console.log('  ✅ generateText succeeded.')
           try {
@@ -125,8 +138,14 @@ async function testProvider(provider: Provider): Promise<TestResult> {
             if (f > 0) failures.push({ key: k, failures: f })
           }
           if (failures.length > 0) {
-            result.retried = { anyFailures: true, details: failures.map(x => `${x.key}=${x.failures}`).join(',') }
-            console.log('  ⚠️ Detected API key failures recorded by ApiKeyManager:', result.retried.details)
+            result.retried = {
+              anyFailures: true,
+              details: failures.map(x => `${x.key}=${x.failures}`).join(','),
+            }
+            console.log(
+              '  ⚠️ Detected API key failures recorded by ApiKeyManager:',
+              result.retried.details
+            )
           } else {
             result.retried = { anyFailures: false }
           }
@@ -169,14 +188,14 @@ async function main() {
     parts.push(`${r.provider}: keys=${r.foundKeys}`)
     if (r.usageStats) parts.push(`usage=${r.usageStats.ok ? 'ok' : 'fail'}`)
     if (r.generateText) parts.push(`generateText=${r.generateText.ok ? 'ok' : 'fail'}`)
-  if (r.generateText?.error) parts.push(`err=${r.generateText.error.split('\n')[0]}`)
-  if (r.retried) parts.push(`retries=${r.retried.anyFailures ? 'yes' : 'no'}`)
-  if (r.retried?.details) parts.push(`retryDetails=${r.retried.details}`)
+    if (r.generateText?.error) parts.push(`err=${r.generateText.error.split('\n')[0]}`)
+    if (r.retried) parts.push(`retries=${r.retried.anyFailures ? 'yes' : 'no'}`)
+    if (r.retried?.details) parts.push(`retryDetails=${r.retried.details}`)
     console.log(' - ' + parts.join(' | '))
   }
 }
 
-main().catch((e) => {
+main().catch(e => {
   console.error('Fatal error:', e)
   process.exit(1)
 })

@@ -653,19 +653,22 @@ export default function VTOPPanel() {
                     return (
                       <button
                         key={cmd.id}
-                    onClick={() => {
-                      if (!isDisabled) {
-                        setCommand(cmd.id)
-                        if (cache[cmd.id]) setMobileView('result')
-                        // On mobile, when a cmd with options is selected, reveal options without manual scrolling
-                        if (commandHasOptions(cmd.id)) {
-                          // wait for render
-                          setTimeout(() => {
-                            mobileOptionsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
-                          }, 0)
-                        }
-                      }
-                    }}
+                        onClick={() => {
+                          if (!isDisabled) {
+                            setCommand(cmd.id)
+                            if (cache[cmd.id]) setMobileView('result')
+                            // On mobile, when a cmd with options is selected, reveal options without manual scrolling
+                            if (commandHasOptions(cmd.id)) {
+                              // wait for render
+                              setTimeout(() => {
+                                mobileOptionsRef.current?.scrollIntoView({
+                                  behavior: 'smooth',
+                                  block: 'nearest',
+                                })
+                              }, 0)
+                            }
+                          }
+                        }}
                         onDoubleClick={() => {
                           if (!isDisabled) {
                             runQuery(cmd.id)

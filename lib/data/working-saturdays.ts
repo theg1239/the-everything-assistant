@@ -2,7 +2,7 @@ import { ContextData } from './index'
 export const workingSaturdays: ContextData = {
   section: 'working-saturdays',
   title: 'Working Saturdays Schedule',
-  lastUpdated: '2025-08-16',
+  lastUpdated: '2025-09-04',
   priority: 'high',
   content: `
 **Working Saturdays for Fall Semester 2025-26:**
@@ -84,7 +84,8 @@ export const workingSaturdays: ContextData = {
 
 **Notes:**
 - Exam Saturdays (e.g., CATs, FATs) are not counted as compensatory working Saturdays.
-- Event Saturdays (e.g., Gravitas) are non-instructional.
+- CAT-1 concluded (Aug 23, 2025); next: CAT-2 (Oct 5–11, 2025).
+- Event Saturdays (e.g., GRAVITAS'25 on Sep 26–28) are non-instructional.
 
 **Schedule for Working Saturdays:**
 - Regular class timings apply as per the specified day order.
@@ -92,7 +93,7 @@ export const workingSaturdays: ContextData = {
 - Mess, library, and transportation services operate on a normal weekday schedule.
 `,
   metadata: {
-    nextWorkingSaturday: '2025-07-25',
+    nextWorkingSaturday: '2025-09-06',
     currentSemester: 'Fall 2025-26',
   },
 }

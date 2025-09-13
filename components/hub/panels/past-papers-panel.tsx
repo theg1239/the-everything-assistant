@@ -114,7 +114,9 @@ export default function PastPapersPanel() {
                       onClick={() => {
                         const url = p.url
                         const title = p.title || p.fileName || p.year
-                        window.dispatchEvent(new CustomEvent('pdfViewerOpen', { detail: { url, title } }))
+                        window.dispatchEvent(
+                          new CustomEvent('pdfViewerOpen', { detail: { url, title } })
+                        )
                       }}
                     >
                       open

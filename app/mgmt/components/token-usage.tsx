@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import React, { useMemo, useState } from 'react'
 import { Activity, Eye } from 'lucide-react'
@@ -21,15 +21,27 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
   const [showPeakHour, setShowPeakHour] = useState(false)
   const chartData = useMemo(() => {
     // Prefer aggregated lifetime buckets if available for trend chart
-    if (usage?.lifetimeBuckets && Array.isArray(usage.lifetimeBuckets) && usage.lifetimeBuckets.length) {
-      return usage.lifetimeBuckets.map((b: any) => ({ time: new Date(b.ts).toLocaleDateString(), tokens: b.totalTokens }))
+    if (
+      usage?.lifetimeBuckets &&
+      Array.isArray(usage.lifetimeBuckets) &&
+      usage.lifetimeBuckets.length
+    ) {
+      return usage.lifetimeBuckets.map((b: any) => ({
+        time: new Date(b.ts).toLocaleDateString(),
+        tokens: b.totalTokens,
+      }))
     }
     if (!usage?.recent) return []
     // reduce to hourly buckets or keep as-is; keep the last 24 points if available
     return usage.recent
       .slice()
       .reverse()
-      .map((u: any) => ({ time: new Date(u.createdAt).toLocaleTimeString(), prompt: u.promptTokens, completion: u.completionTokens, tokens: u.totalTokens }))
+      .map((u: any) => ({
+        time: new Date(u.createdAt).toLocaleTimeString(),
+        prompt: u.promptTokens,
+        completion: u.completionTokens,
+        tokens: u.totalTokens,
+      }))
   }, [usage])
 
   // build a heatmap matrix (days x 24 hours) from hourlyHeatmap data
@@ -70,12 +82,14 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
             <div className="flex flex-col items-end gap-0.5">
               {usage?.summary && (
                 <div className="text-xs md:text-sm text-muted-foreground lowercase">
-                  24h: {usage.summary.totalTokens?.toLocaleString?.() || 0} tokens · {usage.summary.count || 0} events
+                  24h: {usage.summary.totalTokens?.toLocaleString?.() || 0} tokens ·{' '}
+                  {usage.summary.count || 0} events
                 </div>
               )}
               {usage?.summaryAllTime && (
                 <div className="text-[11px] md:text-xs text-muted-foreground/80 lowercase">
-                  all time: {usage.summaryAllTime.totalTokens?.toLocaleString?.() || 0} tokens · {usage.summaryAllTime.count || 0} events
+                  all time: {usage.summaryAllTime.totalTokens?.toLocaleString?.() || 0} tokens ·{' '}
+                  {usage.summaryAllTime.count || 0} events
                 </div>
               )}
             </div>
@@ -89,10 +103,20 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
             >
               {usageOpen ? 'hide' : 'show'}
             </Button>
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setShowHeatmap(v => !v)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => setShowHeatmap(v => !v)}
+            >
               {showHeatmap ? 'hide heatmap' : 'show heatmap'}
             </Button>
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setShowPeakHour(v => !v)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => setShowPeakHour(v => !v)}
+            >
               {showPeakHour ? 'hide peak' : 'show peak'}
             </Button>
           </div>
@@ -100,9 +124,17 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <StatCard label="24h total tokens" value={usage?.summary?.totalTokens?.toLocaleString() ?? '0'} accent="text-purple-300" />
+        <StatCard
+          label="24h total tokens"
+          value={usage?.summary?.totalTokens?.toLocaleString() ?? '0'}
+          accent="text-purple-300"
+        />
         <StatCard label="24h events" value={usage?.summary?.count ?? '0'} accent="text-blue-200" />
-        <StatCard label="avg tokens / event" value={usage?.summary?.average?.toFixed?.(1) ?? '-'} accent="text-green-200" />
+        <StatCard
+          label="avg tokens / event"
+          value={usage?.summary?.average?.toFixed?.(1) ?? '-'}
+          accent="text-green-200"
+        />
       </div>
 
       <TokenUsageChart data={chartData} />
@@ -119,13 +151,21 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
       {showPeakHour && (
         <div className="mt-4 p-3 rounded-md bg-black/10">
           <div className="text-sm font-medium lowercase mb-2">peak hours</div>
-          <div className="text-xs text-muted-foreground">aggregated peak hour: {usage?.detailedStats?.dailyPeaks?.aggregatedPeakHour ?? '—'}</div>
+          <div className="text-xs text-muted-foreground">
+            aggregated peak hour: {usage?.detailedStats?.dailyPeaks?.aggregatedPeakHour ?? '—'}
+          </div>
           <div className="mt-2 text-sm">
             {/* show last 7 days peak hour list */}
-            {(Array.isArray(usage?.detailedStats?.dailyPeaks?.perDay) ? usage.detailedStats.dailyPeaks.perDay.slice(-7) : []).map((d:any)=> (
+            {(Array.isArray(usage?.detailedStats?.dailyPeaks?.perDay)
+              ? usage.detailedStats.dailyPeaks.perDay.slice(-7)
+              : []
+            ).map((d: any) => (
               <div key={d.day} className="flex justify-between text-xs py-0.5">
                 <span className="text-muted-foreground">{d.day}</span>
-                <span>{d.peakHour}:00 <span className="text-muted-foreground">({d.peakTokens.toLocaleString()})</span></span>
+                <span>
+                  {d.peakHour}:00{' '}
+                  <span className="text-muted-foreground">({d.peakTokens.toLocaleString()})</span>
+                </span>
               </div>
             ))}
           </div>
@@ -133,18 +173,29 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
           {/* small aggregated hour-bar using hourlyHeatmap */}
           {Array.isArray(usage?.detailedStats?.hourlyHeatmap) && (
             <div className="mt-3">
-              <div className="text-xs text-muted-foreground mb-1 lowercase">tokens by hour (aggregated)</div>
+              <div className="text-xs text-muted-foreground mb-1 lowercase">
+                tokens by hour (aggregated)
+              </div>
               <div className="flex items-end gap-1 h-20">
                 {Array.from({ length: 24 }).map((_, h) => {
-                  const hhArr = Array.isArray(usage.detailedStats.hourlyHeatmap) ? usage.detailedStats.hourlyHeatmap : []
+                  const hhArr = Array.isArray(usage.detailedStats.hourlyHeatmap)
+                    ? usage.detailedStats.hourlyHeatmap
+                    : []
                   const total = hhArr
-                    .filter((x:any) => { const d = new Date(Number(x.ts)); return !Number.isNaN(d.getTime()) && d.getUTCHours() === h })
-                    .reduce((s:any,x:any)=> s + Number(x.totalTokens||0), 0)
-                  const max = Math.max(1, ...hhArr.map((x:any)=>Number(x.totalTokens||0)))
+                    .filter((x: any) => {
+                      const d = new Date(Number(x.ts))
+                      return !Number.isNaN(d.getTime()) && d.getUTCHours() === h
+                    })
+                    .reduce((s: any, x: any) => s + Number(x.totalTokens || 0), 0)
+                  const max = Math.max(1, ...hhArr.map((x: any) => Number(x.totalTokens || 0)))
                   const hPct = Math.min(100, Math.round((total / (max || 1)) * 100))
                   return (
                     <div key={h} className="w-1/24 flex-1 flex items-end">
-                      <div className="w-full bg-violet-500 rounded-t-sm" style={{ height: `${hPct}%`, opacity: 0.85 }} title={`${h}:00 — ${total.toLocaleString()}`} />
+                      <div
+                        className="w-full bg-violet-500 rounded-t-sm"
+                        style={{ height: `${hPct}%`, opacity: 0.85 }}
+                        title={`${h}:00 — ${total.toLocaleString()}`}
+                      />
                     </div>
                   )
                 })}
@@ -155,15 +206,20 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
       )}
 
       {/* moving average sparkline (if available) */}
-  {Array.isArray(usage?.detailedStats?.movingAverages) && (
+      {Array.isArray(usage?.detailedStats?.movingAverages) && (
         <div className="mt-4 p-3 rounded-md bg-black/10">
           <div className="text-sm font-medium lowercase mb-2">moving average (7d)</div>
           <div style={{ width: '100%', height: 80 }}>
             <ResponsiveContainer>
-              <LineChart data={usage.detailedStats.movingAverages.map((m:any)=>({ day: m.day, avg: m.avg }))}>
+              <LineChart
+                data={usage.detailedStats.movingAverages.map((m: any) => ({
+                  day: m.day,
+                  avg: m.avg,
+                }))}
+              >
                 <XAxis dataKey="day" hide />
                 <YAxis hide />
-                <Tooltip formatter={(v:any)=>[v, 'avg']} labelFormatter={(l:any)=>l} />
+                <Tooltip formatter={(v: any) => [v, 'avg']} labelFormatter={(l: any) => l} />
                 <Line type="monotone" dataKey="avg" stroke="#A78BFA" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
@@ -172,7 +228,11 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
       )}
 
       {usageOpen && (
-        <div id="usage-table" className="overflow-x-auto rounded-md border border-border/20 mt-4" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div
+          id="usage-table"
+          className="overflow-x-auto rounded-md border border-border/20 mt-4"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
           <table className="min-w-full text-xs sm:text-sm">
             <thead className="bg-black/30 lowercase">
               <tr>
@@ -186,29 +246,46 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
               </tr>
             </thead>
             <tbody>
-              {Array.isArray(usage?.recent) && usage.recent.map((u: any) => (
-                <tr key={u.id} className="border-t border-border/10">
-                  <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{new Date(u.createdAt).toLocaleTimeString()}</td>
-                  <td className="px-3 py-2 whitespace-nowrap lowercase">{u.model || '-'}</td>
-                  <td className="px-3 py-2 text-right whitespace-nowrap">{u.promptTokens.toLocaleString()}</td>
-                  <td className="px-3 py-2 text-right whitespace-nowrap">{u.completionTokens.toLocaleString()}</td>
-                  <td className="px-3 py-2 text-right font-medium whitespace-nowrap">{u.totalTokens.toLocaleString()}</td>
-                  <td className="px-3 py-2 text-right whitespace-nowrap">{u.stepIndex ?? '-'}</td>
-                  <td className="px-3 py-2 text-muted-foreground break-all">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono">{u.chatId?.slice(0, 8) || '-'}</span>
-                      {u.chatId && (
-                        <Button variant="ghost" size="icon" className="h-7 w-7" title="View messages" onClick={() => openMessagesViewer(u.chatId)}>
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {Array.isArray(usage?.recent) &&
+                usage.recent.map((u: any) => (
+                  <tr key={u.id} className="border-t border-border/10">
+                    <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
+                      {new Date(u.createdAt).toLocaleTimeString()}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap lowercase">{u.model || '-'}</td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      {u.promptTokens.toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      {u.completionTokens.toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 text-right font-medium whitespace-nowrap">
+                      {u.totalTokens.toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">{u.stepIndex ?? '-'}</td>
+                    <td className="px-3 py-2 text-muted-foreground break-all">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono">{u.chatId?.slice(0, 8) || '-'}</span>
+                        {u.chatId && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            title="View messages"
+                            onClick={() => openMessagesViewer(u.chatId)}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               {(!usage || !Array.isArray(usage.recent) || usage.recent.length === 0) && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-4 text-center text-muted-foreground">no usage records</td>
+                  <td colSpan={7} className="px-3 py-4 text-center text-muted-foreground">
+                    no usage records
+                  </td>
                 </tr>
               )}
             </tbody>

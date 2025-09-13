@@ -34,7 +34,6 @@
     "@ai-sdk/groq": "^2.0.0-beta.7",
     "@ai-sdk/react": "^2.0.15",
     "@dqbd/tiktoken": "^1.0.21",
-    "@ducanh2912/next-pwa": "^10.2.9",
     "@emotion/is-prop-valid": "^1.2.1",
     "@langchain/core": "^0.3.61",
     "@langchain/textsplitters": "^0.1.0",

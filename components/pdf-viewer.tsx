@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import React, { useEffect, useState, useRef } from 'react'
 import { X, Maximize2, Minimize2 } from 'lucide-react'
@@ -19,15 +19,15 @@ export default function PdfViewer(_: PdfViewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const dragRef = useRef<{ startY: number; startH: number } | null>(null)
 
-  
-
   useEffect(() => {
     const openHandler = (e: any) => {
       const d = e?.detail || {}
       const theUrl = d.url
       const theTitle = d.title
       if (theUrl) {
-        setEmbedUrl(String(theUrl).replace('/view?usp=sharing', '/preview').replace('/view', '/preview'))
+        setEmbedUrl(
+          String(theUrl).replace('/view?usp=sharing', '/preview').replace('/view', '/preview')
+        )
         setTitle(theTitle)
         setIsLoading(true)
         setOpen(true)
@@ -84,7 +84,10 @@ export default function PdfViewer(_: PdfViewerProps) {
     <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4">
       <div
         ref={containerRef}
-        style={{ width: isMaximized ? '95%' : 'min(900px,95%)', height: isMaximized ? '90%' : `${height}px` }}
+        style={{
+          width: isMaximized ? '95%' : 'min(900px,95%)',
+          height: isMaximized ? '90%' : `${height}px`,
+        }}
         className={`bg-background/95 backdrop-blur shadow-xl overflow-hidden ring-1 ring-border/40 rounded-lg flex flex-col`}
       >
         <div className="flex items-center justify-between px-3 py-2 border-b border-border/60">

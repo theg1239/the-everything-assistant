@@ -34,7 +34,7 @@ export function RateLimitErrorDisplay() {
         return `${diffMinutes} minute${diffMinutes !== 1 ? 's' : ''}`
       } else {
         const diffHours = Math.ceil(diffMinutes / 60)
-  return `${diffHours} hour${diffHours !== 1 ? 's' : ''}`
+        return `${diffHours} hour${diffHours !== 1 ? 's' : ''}`
       }
     } catch {
       return null

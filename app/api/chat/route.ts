@@ -774,6 +774,7 @@ CRITICAL TOOL CONTINUATION RULES:
         throw new Error('Invalid message format for Google API')
       }
     }
+
     const result = await rateLimitedAI.google.streamText({
       model: await rateLimitedAI.google.model('gemini-2.5-flash'),
       messages: safeModelMessages, // always ModelMessage[]

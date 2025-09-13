@@ -12,7 +12,7 @@ import {
   Home,
   Flame,
 } from 'lucide-react'
- 
+
 import VTOPPanel from './panels/vtop-panel'
 import PastPapersPanel from './panels/past-papers-panel'
 import MessMenuPanel from './panels/mess-menu-panel'

@@ -134,9 +134,15 @@ export async function getChat(id: string, userId: string): Promise<Chat | null> 
   }
 }
 
-export async function createChat(userId: string, title: string, path: string): Promise<Chat> {
+export async function createChat(
+  userId: string,
+  title: string,
+  path: string,
+  id?: string
+): Promise<Chat> {
   const chat = await prisma.chat.create({
     data: {
+      ...(id ? { id } : {}),
       userId,
       title,
       path,

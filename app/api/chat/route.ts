@@ -177,9 +177,7 @@ async function parseVTOPData(
     const vtopParseSchema = z.object({
       success: z.boolean(),
       formatted_content: z.string(),
-      structured_data: z
-        .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
-        .optional(),
+      structured_data: z.any().optional(),
       summary: z.string(),
     })
 
@@ -396,7 +394,11 @@ export async function POST(req: Request) {
       const firstText = messages[0] ? getTextFromUIMsg(messages[0]) : ''
       const tempTitle = extractTitleFromContent(firstText || 'New Chat')
       const path = generateChatPath()
-      chat = await createChat(session.user.id, tempTitle, path)
+      try {
+        chat = await createChat(session.user.id, tempTitle, path, chatId)
+      } catch {
+        chat = await createChat(session.user.id, tempTitle, path)
+      }
 
       if (firstText.trim()) {
         setTimeout(() => {
@@ -784,7 +786,11 @@ CRITICAL TOOL CONTINUATION RULES:
       maxSteps: 5,
     })
 
-    return result.toUIMessageStreamResponse()
+    const streamRes = result.toUIMessageStreamResponse()
+    const headers = new Headers(streamRes.headers)
+    headers.set('X-Chat-Id', chat!.id)
+    headers.set('X-Chat-Path', chat!.path)
+    return new Response(streamRes.body, { headers })
   } catch (error: any) {
     console.error('Chat API error:', error)
 

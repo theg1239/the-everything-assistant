@@ -437,7 +437,7 @@ const {
   },
 })
 
-    const isLoading = status === 'streaming'
+    const isLoading = status === 'streaming' || status === 'submitted'
     const scrollToBottom = useCallback(() => {
       const prefersReducedMotion =
         typeof window !== 'undefined' &&

@@ -146,9 +146,12 @@ export class RateLimitedAI {
       if (!u.allowed) throw new Error(`Rate limit: ${u.error}`)
     }
     return this.apiKeyManager.executeWithRateLimit(async key => {
-      const provider = this.createProviderInstance(key)
-      const modelFn = provider(options.model?.modelId)
-      return streamText({ ...options, model: modelFn })
+      const provider = this.createProviderInstance(key);
+      const { model, ...restOfOptions } = options;
+      const modelFn = provider(model?.modelId)
+      // remove deprecated callbacks
+      const { onStepFinish, onFinish, onError, experimental_transform, experimental_continueSteps, ...validOptions } = restOfOptions;
+      return streamText({ ...validOptions, model: modelFn })
     })
   }
 

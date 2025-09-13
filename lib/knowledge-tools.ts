@@ -19,7 +19,7 @@ export function createKnowledgeTools() {
   const knowledgeBase = tool({
     description:
       'Retrieve the most relevant chunks from the VIT knowledge base. Use this when you need information about VIT policies, facilities, or general university information. After calling this tool, you MUST continue with a comprehensive response using the retrieved information - do not stop at the tool call.',
-    parameters: z.object({
+    inputSchema: z.object({
       query: z.string().describe('User query requiring university knowledge'),
       max_chunks: z
         .number()

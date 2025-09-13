@@ -49,7 +49,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json(memory)
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify(error.errors), { status: 400 })
+      return new NextResponse(JSON.stringify(error.issues), { status: 400 })
     }
     console.error('Failed to update memory:', error)
     return new NextResponse('Internal server error', { status: 500 })

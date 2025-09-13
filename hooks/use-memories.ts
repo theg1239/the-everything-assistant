@@ -158,12 +158,11 @@ interface MemorySettings {
   isEnabled: boolean
   autoSave: boolean
   autoSaveFilter: 'low' | 'medium' | 'high'
-  maxTokens: number
+  maxOutputTokens: number
 }
 
-// Cache memory settings for 10 minutes
-const MEMORY_SETTINGS_STALE_TIME = 1000 * 60 * 10 // 10 minutes
-const MEMORY_SETTINGS_GC_TIME = 1000 * 60 * 30 // 30 minutes
+const MEMORY_SETTINGS_STALE_TIME = 1000 * 60 * 10
+const MEMORY_SETTINGS_GC_TIME = 1000 * 60 * 30
 
 export function useMemorySettings() {
   const { data: session } = useSession()
@@ -194,7 +193,7 @@ interface UpdateMemorySettingsData {
   isEnabled?: boolean
   autoSave?: boolean
   autoSaveFilter?: 'low' | 'medium' | 'high'
-  maxTokens?: number
+  maxOutputTokens?: number
 }
 
 export function useUpdateMemorySettings() {

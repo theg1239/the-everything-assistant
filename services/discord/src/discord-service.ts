@@ -3,6 +3,7 @@ import {
   GatewayIntentBits,
   Message,
   TextChannel,
+  DMChannel,
   User,
   Guild,
   Collection,
@@ -11,7 +12,8 @@ import {
   EmbedBuilder,
   AttachmentBuilder,
   REST,
-  Routes
+  Routes,
+  BaseChannel
 } from 'discord.js';
 import { EventEmitter } from 'events';
 
@@ -26,7 +28,7 @@ interface MessageData {
   id: string;
   content: string;
   author: User;
-  channel: TextChannel;
+  channel: TextChannel | DMChannel;
   guild: Guild | null;
   timestamp: number;
   isBot: boolean;
@@ -275,10 +277,10 @@ class DiscordService extends EventEmitter {
       // Create a mock message data for compatibility with existing handler
       const messageData: MessageData = {
         id: interaction.id,
-        content: `!ask ${question}`,
+        content: `/ask ${question}`,
         author: interaction.user,
-        channel: interaction.channel as TextChannel,
-        guild: interaction.guild,
+        channel: interaction.channel as TextChannel | DMChannel,
+        guild: interaction.guild || null,
         timestamp: Date.now(),
         isBot: false
       };
@@ -798,12 +800,12 @@ Keep the response concise but informative.`;
     return formatted.trim();
   }
 
-  private async sendLongMessage(channel: TextChannel, text: string): Promise<void> {
+  private async sendLongMessage(channel: TextChannel | DMChannel, text: string): Promise<void> {
     const chunks = this.chunkMessage(text, 1900); // Leave some buffer
     
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
-      const prefix = chunks.length > 1 ? `**Part ${i + 1}/${chunks.length}**\n\n` : '';
+      const prefix = chunks.length > 1 ? `**part ${i + 1}/${chunks.length}**\\n\\n` : '';
       await channel.send(prefix + chunk);
     }
   }
@@ -858,9 +860,10 @@ Keep the response concise but informative.`;
     return chunks;
   }
 
-  private async getChannelHistory(channel: TextChannel, limit: number): Promise<any[]> {
+  private async getChannelHistory(channel: TextChannel | DMChannel, limit: number): Promise<any[]> {
     try {
-      console.log(`Fetching last ${limit} messages from channel ${channel.name}`);
+      const channelName = (channel as TextChannel).name || 'DM';
+      console.log(`fetching last ${limit} messages from channel ${channelName}`);
       
       const messages = await channel.messages.fetch({ limit });
       const processedMessages: any[] = [];

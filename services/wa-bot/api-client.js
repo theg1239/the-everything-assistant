@@ -44,6 +44,7 @@ class APIClient {
     async parseStreamingResponse(response) {
         try {
             const text = await response.text();
+            console.log('📥 Raw API response:', text.substring(0, 200) + '...');
             
             const lines = text.split('\n').filter(line => line.trim());
             let finalText = '';
@@ -52,26 +53,55 @@ class APIClient {
 
             for (const line of lines) {
                 try {
-                    if (line.startsWith('0:"')) {
-                        const content = line.slice(3, -1).replace(/\\"/g, '"');
+                    // Handle different streaming response formats
+                    if (line.startsWith('0:')) {
+                        // Text content - handle both quoted and unquoted formats
+                        let content = line.slice(2);
+                        if (content.startsWith('"') && content.endsWith('"')) {
+                            content = content.slice(1, -1);
+                        }
+                        content = content.replace(/\\"/g, '"').replace(/\\n/g, '\n');
+                        finalText += content;
+                    } else if (line.startsWith('1:')) {
+                        // Alternative text format
+                        let content = line.slice(2);
+                        if (content.startsWith('"') && content.endsWith('"')) {
+                            content = content.slice(1, -1);
+                        }
+                        content = content.replace(/\\"/g, '"').replace(/\\n/g, '\n');
                         finalText += content;
                     } else if (line.startsWith('9:')) {
+                        // Tool call
                         const toolCall = JSON.parse(line.slice(2));
-                        console.log('Tool call detected:', toolCall.toolName);
+                        console.log('🔧 Tool call detected:', toolCall.toolName);
                     } else if (line.startsWith('a:')) {
+                        // Tool result
                         const toolResult = JSON.parse(line.slice(2));
                         toolResults.push(toolResult);
                     } else if (line.startsWith('e:')) {
+                        // End of stream
                         const endData = JSON.parse(line.slice(2));
                         if (endData.finishReason !== 'stop') {
-                            console.warn('Stream ended unexpectedly:', endData.finishReason);
+                            console.warn('⚠️ Stream ended unexpectedly:', endData.finishReason);
+                        }
+                    } else if (line.startsWith('d:')) {
+                        // Data chunk format
+                        try {
+                            const data = JSON.parse(line.slice(2));
+                            if (data.text) {
+                                finalText += data.text;
+                            }
+                        } catch (e) {
+                            // Not JSON, treat as raw text
+                            finalText += line.slice(2);
                         }
                     }
                 } catch (parseError) {
-                    console.warn('Failed to parse line:', line, parseError.message);
+                    console.warn('⚠️ Failed to parse line:', line.substring(0, 100), parseError.message);
                 }
             }
 
+            // If no direct text found, try to extract from tool results
             if (!finalText.trim()) {
                 for (const result of toolResults) {
                     if (result.result && result.result.formatted_content) {
@@ -82,14 +112,20 @@ class APIClient {
                 }
             }
 
+            // Clean up the final text
+            finalText = finalText.trim();
+            
+            console.log('✅ Parsed response length:', finalText.length);
+            console.log('📄 Response preview:', finalText.substring(0, 100) + '...');
+
             return {
-                text: finalText.trim() || 'I received your message but couldn\'t generate a proper response. Please try again.',
+                text: finalText || 'I received your message but couldn\'t generate a proper response. Please try again.',
                 toolResults,
                 error
             };
 
         } catch (error) {
-            console.error('Failed to parse streaming response:', error);
+            console.error('❌ Failed to parse streaming response:', error);
             return {
                 text: 'Sorry, I encountered an error processing your request. Please try again later.',
                 toolResults: [],

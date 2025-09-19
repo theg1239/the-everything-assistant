@@ -33,3 +33,5 @@ ai-chatbot-main
 reddit-post.md
 downloads/
 scripts/dump/
+node_modules
+dist

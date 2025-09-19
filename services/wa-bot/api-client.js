@@ -11,8 +11,9 @@ class APIClient {
             // Build messages array with conversation history
             const messages = [];
             
-            // Add conversation history
-            for (const historyItem of conversationHistory) {
+            // Add conversation history (limit to prevent token overflow)
+            const recentHistory = conversationHistory.slice(-5); // Only last 5 messages
+            for (const historyItem of recentHistory) {
                 messages.push({
                     role: historyItem.role,
                     content: historyItem.content,
@@ -27,7 +28,7 @@ class APIClient {
                 id: `wa-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
             });
 
-            console.log(`📋 Sending ${messages.length} messages (${conversationHistory.length} history + 1 current)`);
+            console.log(`📋 Sending ${messages.length} messages (${recentHistory.length} history + 1 current)`);
 
             const response = await fetch(`${this.baseUrl}/api/whatsapp-bot`, {
                 method: 'POST',
@@ -48,7 +49,15 @@ class APIClient {
                 throw new Error(`API request failed: ${response.status} ${response.statusText}`);
             }
 
-            return await this.parseStreamingResponse(response);
+            const result = await this.parseStreamingResponse(response);
+            
+            // If we got an empty response and we included history, try without history
+            if ((!result.text || result.text.includes('couldn\'t generate a proper response')) && recentHistory.length > 0) {
+                console.log('🔄 Retrying request without conversation history...');
+                return await this.sendChatRequest(userQuestion, userContext, []);
+            }
+            
+            return result;
 
         } catch (error) {
             console.error('API request failed:', error);
@@ -144,6 +153,7 @@ class APIClient {
 
             // If no direct text found, try to extract from tool results
             if (!finalText.trim()) {
+                console.log('⚠️ No text content found, checking tool results...');
                 for (const result of toolResults) {
                     if (result.result && result.result.formatted_content) {
                         finalText += result.result.formatted_content + '\n';
@@ -151,6 +161,13 @@ class APIClient {
                         finalText += result.result.summary + '\n';
                     }
                 }
+            }
+
+            // If still no content and we have completion stats, this might be an API issue
+            if (!finalText.trim() && lines.some(line => line.includes('completionTokens'))) {
+                console.warn('⚠️ API completed successfully but returned no text content');
+                console.log('📋 Full response for debugging:', text);
+                finalText = 'I processed your request but the response was empty. This might be a temporary issue with the AI service. Please try again.';
             }
 
             // Clean up the final text

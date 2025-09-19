@@ -1,0 +1,38 @@
+# WhatsApp Bot Service Logs
+logs/
+
+# Environment variables
+.env
+
+# Node modules
+node_modules/
+
+# WhatsApp session data
+whatsapp-session/
+.wwebjs_auth/
+.wwebjs_cache/
+
+# PM2 logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+tmp/
+temp/
+
+# Coverage reports
+coverage/
+
+# NPM debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

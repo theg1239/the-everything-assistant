@@ -395,6 +395,7 @@ class WhatsAppService extends EventEmitter {
         const { body, from, fromName, chatId, isGroup } = messageData;
         const command = body.toLowerCase().split(' ')[0];
         const args = body.slice(command.length).trim();
+        const botOwnerNumber = '917975100121'; // Your phone number
 
         console.log(`🤖 Processing command: ${command} from ${fromName}`);
 
@@ -418,6 +419,16 @@ class WhatsAppService extends EventEmitter {
                 await this.handleAskCommand(originalChat, userChat, from, fromName, args, messageData);
                 break;
 
+            case '!context':
+                // Analyze chat context from recent messages - only for bot owner
+                if (from !== botOwnerNumber) {
+                    await this.sendMessageToChat(originalChat, 'only the bot owner can use the !context command');
+                } else {
+                    const question = args || 'what has been happening in this chat recently?';
+                    await this.handleContextCommand(originalChat, userChat, from, fromName, question, messageData);
+                }
+                break;
+
             case '!help':
                 // Help is moderately long - always send to DM with notification
                 if (isGroup) {
@@ -433,11 +444,10 @@ class WhatsAppService extends EventEmitter {
 
             case '!everyone':
                 // Manual @everyone tag - only works in groups and only for bot owner
-                const botOwnerNumber = '917975100121'; // Your phone number
                 if (!isGroup) {
                     await this.sendMessageToChat(originalChat, 'the !everyone command only works in group chats');
                 } else if (from !== botOwnerNumber) {
-                    // await this.sendMessageToChat(originalChat, 'only the bot owner can use the !everyone command');
+                    await this.sendMessageToChat(originalChat, 'only the bot owner can use the !everyone command');
                 } else {
                     const message = args || 'hey everyone! 👋';
                     const taggedMessage = await this.formatResponseWithTags(message, originalChat, true);
@@ -501,6 +511,135 @@ class WhatsAppService extends EventEmitter {
             console.error('❌ Error in handleAskCommand:', error);
             await this.sendMessageToChat(originalChat, 'sorry, i encountered an error processing your request. please try again.');
         }
+    }
+
+    /**
+     * Handle !context command - analyze chat history
+     */
+    async handleContextCommand(originalChat, userChat, phoneNumber, userName, question, messageData) {
+        try {
+            console.log(`📚 Processing context request from ${userName}: ${question}`);
+            
+            await this.sendTypingToChat(originalChat);
+            
+            // Fetch recent messages from the chat
+            const recentMessages = await this.getChatHistory(originalChat, 100);
+            
+            if (recentMessages.length === 0) {
+                await this.sendMessageToChat(originalChat, 'no recent messages found in this chat to analyze.');
+                return;
+            }
+            
+            // Format the chat history for AI analysis
+            const contextText = this.formatChatHistoryForAI(recentMessages);
+            
+            // Create a comprehensive prompt for AI analysis
+            const analysisPrompt = `Please analyze this WhatsApp chat history and answer the following question: "${question}"
+
+Chat History (last ${recentMessages.length} messages):
+${contextText}
+
+Please provide a helpful summary and answer based on the chat context. Focus on:
+- Recent topics and discussions
+- Important information or decisions
+- Any ongoing conversations or plans
+- Answer the specific question asked
+
+Keep the response concise but informative.`;
+
+            const startTime = Date.now();
+
+            this.emit('ask', {
+                originalChat,
+                userChat,
+                phoneNumber,
+                userName,
+                question: analysisPrompt,
+                messageData: { ...messageData, isContextAnalysis: true },
+                startTime,
+                conversationHistory: [], // Don't include previous context for this analysis
+                respondCallback: (response) => this.handleAIResponseSmart(originalChat, userChat, response, startTime, messageData)
+            });
+
+        } catch (error) {
+            console.error('❌ Error in handleContextCommand:', error);
+            await this.sendMessageToChat(originalChat, 'sorry, i encountered an error analyzing the chat context. please try again.');
+        }
+    }
+
+    /**
+     * Get recent chat history
+     */
+    async getChatHistory(chat, limit = 100) {
+        try {
+            console.log(`📖 Fetching last ${limit} messages from chat ${chat.name || chat.id.user}`);
+            
+            // Fetch messages from the chat
+            const messages = await chat.fetchMessages({ limit });
+            
+            // Process and filter messages
+            const processedMessages = [];
+            
+            for (const message of messages.reverse()) { // Reverse to get chronological order
+                // Skip system messages, media messages without caption, and very old messages
+                if (message.isStatus || message.type === 'notification') continue;
+                
+                const contact = await message.getContact();
+                const timestamp = new Date(message.timestamp * 1000);
+                
+                // Skip messages older than 7 days
+                const daysSinceMessage = (Date.now() - timestamp.getTime()) / (1000 * 60 * 60 * 24);
+                if (daysSinceMessage > 7) continue;
+                
+                let messageText = message.body || '';
+                
+                // Handle different message types
+                if (message.hasMedia) {
+                    const mediaType = message.type;
+                    messageText = `[${mediaType}${messageText ? ': ' + messageText : ''}]`;
+                } else if (message.type === 'location') {
+                    messageText = '[Location shared]';
+                } else if (message.type === 'vcard') {
+                    messageText = '[Contact shared]';
+                }
+                
+                if (messageText.trim()) {
+                    processedMessages.push({
+                        sender: contact.pushname || contact.name || contact.id.user,
+                        senderNumber: contact.id.user,
+                        text: messageText,
+                        timestamp: timestamp.toLocaleString(),
+                        isFromMe: message.fromMe
+                    });
+                }
+                
+                // Limit to requested number of messages
+                if (processedMessages.length >= limit) break;
+            }
+            
+            console.log(`📊 Retrieved ${processedMessages.length} messages for context analysis`);
+            return processedMessages;
+            
+        } catch (error) {
+            console.error('Failed to fetch chat history:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Format chat history for AI analysis
+     */
+    formatChatHistoryForAI(messages) {
+        if (!messages || messages.length === 0) {
+            return 'No messages found.';
+        }
+        
+        const formatted = messages.map(msg => {
+            const senderName = msg.isFromMe ? 'Bot' : msg.sender;
+            return `[${msg.timestamp}] ${senderName}: ${msg.text}`;
+        }).join('\n');
+        
+        return formatted;
     }
 
     /**
@@ -740,6 +879,13 @@ available commands:
    example: !ask what is the mess menu today?
    example: !ask explain quantum physics
 
+!context [question] - analyze recent chat history and answer questions (owner only)
+   example: !context what were the main topics discussed?
+   example: !context summarize what happened while i was away
+
+!everyone [message] - tag everyone in group chat (owner only)
+   example: !everyone meeting tomorrow at 5pm
+
 !status - check if the assistant is online
 
 !help - show this help message
@@ -748,6 +894,8 @@ tips:
 • ask specific questions for better responses
 • i can help with vit information, academic topics, and general knowledge
 • responses may take a few seconds to process
+• include @everyone in your message to tag everyone in groups (owner only)
+• use !context to catch up on missed conversations
 
 powered by the everything assistant ai system`;
 

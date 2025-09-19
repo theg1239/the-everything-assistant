@@ -1,0 +1,20 @@
+# Build directories
+.next/
+dist/
+build/
+
+# Dependencies
+node_modules/
+
+# Services directory (separate projects)
+services/
+
+# AI chatbot main
+ai-chatbot-main/
+
+# Environment files
+.env*
+
+# Generated files
+*.log
+*.tsbuildinfo

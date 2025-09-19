@@ -522,8 +522,8 @@ class WhatsAppService extends EventEmitter {
             // Check if response should trigger @everyone tags
             const shouldTagEveryone = this.shouldTagEveryone(response, messageData);
             
-            const formatted = await this.formatResponseWithTags(response, originalChat, shouldTagEveryone);
-            const responseLength = formatted.length;
+            const formattedResponse = await this.formatResponseWithTags(response, originalChat, shouldTagEveryone);
+            const responseLength = formattedResponse.text.length;
             const isLongResponse = responseLength > 300; // Threshold for smart routing
             
             console.log(`📏 Response length: ${responseLength} chars, ${isLongResponse ? 'sending to DM' : 'sending in current chat'}${shouldTagEveryone ? ' with @everyone tags' : ''}`);
@@ -531,10 +531,10 @@ class WhatsAppService extends EventEmitter {
             if (isLongResponse && messageData.isGroup) {
                 // Long responses in groups go to DM
                 await this.sendMessageToChat(originalChat, `sent a detailed response to ${messageData.senderName} in dm`);
-                await this.sendMessageToChat(userChat, formatted);
+                await this.sendMessageToChat(userChat, formattedResponse);
             } else {
                 // Short responses or DM conversations stay in current chat
-                await this.sendMessageToChat(originalChat, formatted);
+                await this.sendMessageToChat(originalChat, formattedResponse);
             }
             
         } catch (error) {
@@ -689,7 +689,8 @@ class WhatsAppService extends EventEmitter {
             try {
                 const participants = await this.getGroupParticipants(chat);
                 
-                // Create mention tags for all participants except the bot
+                // Create mention data for WhatsApp
+                const mentions = [];
                 const mentionText = [];
                 
                 for (const participant of participants) {
@@ -698,17 +699,24 @@ class WhatsAppService extends EventEmitter {
                         continue;
                     }
                     
-                    // Extract the phone number without the @c.us suffix
-                    const phoneNumber = participant.id.user;
-                    mentionText.push(`@${phoneNumber}`);
+                    mentions.push(participant.id._serialized);
+                    // Use participant name or phone number for display
+                    const displayName = participant.pushname || participant.id.user;
+                    mentionText.push(`@${displayName}`);
                 }
                 
-                if (mentionText.length > 0) {
+                if (mentions.length > 0) {
                     // Add mention tags at the beginning of the message
                     const tagLine = `🔔 ${mentionText.join(' ')}\n\n`;
                     formatted = tagLine + formatted;
                     
-                    console.log(`🏷️ Added ${mentionText.length} mentions to group response`);
+                    console.log(`🏷️ Prepared ${mentions.length} mentions for group response`);
+                    
+                    // Return both the formatted text and mention data
+                    return {
+                        text: formatted,
+                        mentions: mentions
+                    };
                 }
                 
             } catch (error) {
@@ -716,7 +724,11 @@ class WhatsAppService extends EventEmitter {
             }
         }
         
-        return formatted;
+        // Return just text if no mentions
+        return {
+            text: formatted,
+            mentions: []
+        };
     }
 
     async sendHelpMessage(chat) {
@@ -776,15 +788,34 @@ all systems running normally`;
         }
     }
 
-    async sendMessageToChat(chat, text) {
+    async sendMessageToChat(chat, messageData) {
         if (!this.isReady) {
             console.error('WhatsApp client is not ready');
             return false;
         }
 
         try {
-            const sentMessage = await chat.sendMessage(text);
-            console.log(`Message sent to chat ${chat.name || chat.id.user}: ${text.substring(0, 50)}...`);
+            let sentMessage;
+            
+            // Handle both string and object with mentions
+            if (typeof messageData === 'string') {
+                sentMessage = await chat.sendMessage(messageData);
+                console.log(`Message sent to chat ${chat.name || chat.id.user}: ${messageData.substring(0, 50)}...`);
+            } else if (messageData && messageData.text) {
+                // Send message with mentions if provided
+                if (messageData.mentions && messageData.mentions.length > 0) {
+                    sentMessage = await chat.sendMessage(messageData.text, {
+                        mentions: messageData.mentions
+                    });
+                    console.log(`Message with ${messageData.mentions.length} mentions sent to chat ${chat.name || chat.id.user}: ${messageData.text.substring(0, 50)}...`);
+                } else {
+                    sentMessage = await chat.sendMessage(messageData.text);
+                    console.log(`Message sent to chat ${chat.name || chat.id.user}: ${messageData.text.substring(0, 50)}...`);
+                }
+            } else {
+                console.error('Invalid message data provided');
+                return false;
+            }
             
             if (sentMessage && sentMessage.id) {
                 this.recentBotMessages.add(sentMessage.id._serialized);

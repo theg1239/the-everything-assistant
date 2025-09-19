@@ -2675,18 +2675,20 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
 
             // Calculate seats remaining and registration status
             let totalSeatsLeft = 0
+            let totalSeatsAvailable = 0
+            let totalCurrentRegistrations = 0
             let registrationStatus = 'Closed'
+            
             if (eventSlots.length > 0) {
               eventSlots.forEach((slot: any) => {
-                const left =
-                  slot.seats_left ??
-                  slot.available_entries ??
-                  slot.entries_left ??
-                  slot.remaining ??
-                  slot.remaining_entries ??
-                  slot.total_entries ??
-                  0
-                totalSeatsLeft += Number(left) || 0
+                const seatsLeft = Number(slot.total_entries) || 0  // total_entries = seats left
+                const maxSeats = Number(slot.overall_entries) || 0  // overall_entries = total seats
+                const currentRegistrations = Math.max(0, maxSeats - seatsLeft)  // registrations = max - left
+                
+                totalSeatsLeft += seatsLeft
+                totalSeatsAvailable += maxSeats
+                totalCurrentRegistrations += currentRegistrations
+                
                 if (slot.is_registrable) registrationStatus = 'Open'
               })
             }
@@ -2712,26 +2714,22 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 prizes: event.prize_distribution,
               },
               seats: {
-                totalRegistrations: totalSeatsLeft,
+                totalSeatsAvailable: totalSeatsAvailable,
+                currentRegistrations: totalCurrentRegistrations,
+                seatsLeft: totalSeatsLeft,
                 registrationStatus,
                 slots: eventSlots.map((slot: any) => ({
                   id: slot.id,
                   venue: slot.venue,
                   startDate: slot.start_date,
                   endDate: slot.end_date,
-                  totalEntries: slot.total_entries,
+                  totalSeats: slot.overall_entries || 0,
+                  currentRegistrations: Math.max(0, (slot.overall_entries || 0) - (slot.total_entries || 0)),
+                  seatsLeft: slot.total_entries || 0,
                   isRegistrable: slot.is_registrable,
-                  seatsLeft:
-                    slot.seats_left ??
-                    slot.available_entries ??
-                    slot.entries_left ??
-                    slot.remaining ??
-                    slot.remaining_entries ??
-                    slot.total_entries ??
-                    0,
                 })),
               },
-              message: `Found event: ${event.name} by ${event.club}. ${registrationStatus === 'Open' ? 'Registration is open!' : 'Check registration status.'}`,
+              message: `Found event: ${event.name} by ${event.club}. ${registrationStatus === 'Open' ? `Registration is open! ${totalSeatsLeft} seats left out of ${totalSeatsAvailable}.` : 'Check registration status.'}`,
             }
           } else {
             // Fetch events list using query params (limit, name)
@@ -2745,6 +2743,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               'code 2create': 'Code2Create',
               'code tocreate': 'Code2Create',
               'code2 create': 'Code2Create',
+              'ch':'cryptic hunt'
             }
 
             const qNorm = searchQuery ? normalizeString(searchQuery) : null

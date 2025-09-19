@@ -38,9 +38,10 @@ interface EventSlot {
   venue: string
   startDate: string
   endDate: string
-  totalEntries: number
+  totalSeats: number
+  currentRegistrations: number
+  seatsLeft: number
   isRegistrable: boolean
-  seatsLeft?: number
 }
 
 // Internal normalized slot shape that may carry eventId when available
@@ -72,7 +73,9 @@ interface GravitasEventsData {
   events?: Event[]
   event?: Event
   seats?: {
-    totalRegistrations: number
+    totalSeatsAvailable: number
+    currentRegistrations: number
+    seatsLeft: number
     registrationStatus: string
     slots: EventSlot[]
   }
@@ -329,7 +332,7 @@ const EventCard: React.FC<{
                   <Users className="h-4 w-4 text-primary flex-shrink-0" />
                   <span className="font-medium">
                     {slots
-                      .reduce((sum, s) => sum + (s.seatsLeft ?? s.totalEntries ?? 0), 0)
+                      .reduce((sum, s) => sum + (s.seatsLeft ?? 0), 0)
                       .toLocaleString()}{' '}
                     seats left
                   </span>
@@ -350,7 +353,7 @@ const EventCard: React.FC<{
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-muted-foreground whitespace-nowrap">
-                          {(slot.seatsLeft ?? slot.totalEntries ?? 0).toLocaleString()} left
+                          {(slot.seatsLeft ?? 0).toLocaleString()} left
                         </span>
                         {slot.isRegistrable ? (
                           <CheckCircle className="h-3 w-3 text-green-600" />
@@ -397,7 +400,7 @@ const SeatsInfo: React.FC<{ seats: GravitasEventsData['seats'] }> = ({ seats }) 
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
               <span className="text-sm font-medium">Registration Status</span>
               <Badge
@@ -408,9 +411,18 @@ const SeatsInfo: React.FC<{ seats: GravitasEventsData['seats'] }> = ({ seats }) 
               </Badge>
             </div>
             <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-              <span className="text-sm font-medium">Total Seats Left</span>
-              <span className="font-semibold">{seats.totalRegistrations}</span>
+              <span className="text-sm font-medium">Total Seats</span>
+              <span className="font-semibold">{seats.totalSeatsAvailable}</span>
             </div>
+            <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+              <span className="text-sm font-medium">Seats Left</span>
+              <span className="font-semibold text-green-600">{seats.seatsLeft}</span>
+            </div>
+          </div>
+          
+          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+            <span className="text-sm font-medium">Current Registrations</span>
+            <span className="font-semibold">{seats.currentRegistrations}</span>
           </div>
 
           {seats.slots && seats.slots.length > 0 && (
@@ -430,7 +442,10 @@ const SeatsInfo: React.FC<{ seats: GravitasEventsData['seats'] }> = ({ seats }) 
                     </div>
                     <div className="flex items-center justify-between md:flex-col md:items-end gap-2">
                       <div className="text-sm font-medium">
-                        {slot.seatsLeft ?? slot.totalEntries ?? 0} seats left
+                        {slot.seatsLeft} seats left
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {slot.currentRegistrations}/{slot.totalSeats} registered
                       </div>
                       <Badge
                         variant={slot.isRegistrable ? 'default' : 'secondary'}
@@ -471,6 +486,7 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
         const start = s.startDate || s.start_date
         const end = s.endDate || s.end_date
         const total = s.totalEntries ?? s.total_entries ?? 0
+        const maxSeats = s.totalSeats ?? s.overall_entries ?? total
         const registrable = s.isRegistrable ?? s.is_registrable ?? false
         const venue = s.venue || s.location || ''
         const seatsLeft =
@@ -490,9 +506,10 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
           venue: String(venue),
           startDate: String(start ?? ''),
           endDate: String(end ?? ''),
-          totalEntries: Number(total),
+          totalSeats: Number(maxSeats),
+          currentRegistrations: Math.max(0, Number(maxSeats) - Number(seatsLeft)),
+          seatsLeft: Number(seatsLeft),
           isRegistrable: Boolean(registrable),
-          seatsLeft: seatsLeft !== undefined ? Number(seatsLeft) : undefined,
         } as NormalizedSlot
       })
       .filter(Boolean) as NormalizedSlot[]
@@ -702,24 +719,31 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
         const alt = await fetch(`https://gravitas.vit.ac.in/api/events/${eventId}`)
         if (alt.ok) {
           const data = await alt.json()
-          const eventSlots = (data?.data?.eventSlots || []).map((slot: any) => ({
-            id: String(slot.id),
-            venue: String(slot.venue || ''),
-            startDate: String(slot.start_date || ''),
-            endDate: String(slot.end_date || ''),
-            totalEntries: Number(slot.total_entries || 0),
-            isRegistrable: Boolean(slot.is_registrable || false),
-            seatsLeft: Number(
-              (slot.seats_left ??
-                slot.available_entries ??
-                slot.entries_left ??
-                slot.remaining ??
-                slot.total_entries ??
-                0) as any
-            ),
-          }))
+          const eventSlots = (data?.data?.eventSlots || []).map((slot: any) => {
+            const totalSeats = Number(slot.overall_entries || slot.total_entries || 0)
+            const seatsLeft = Number(slot.total_entries || 0) // total_entries is seats left
+            const currentRegistrations = Math.max(0, totalSeats - seatsLeft)
+            return {
+              id: String(slot.id),
+              venue: String(slot.venue || ''),
+              startDate: String(slot.start_date || ''),
+              endDate: String(slot.end_date || ''),
+              totalSeats,
+              currentRegistrations,
+              seatsLeft,
+              isRegistrable: Boolean(slot.is_registrable || false),
+            }
+          })
           const seats = {
-            totalRegistrations: eventSlots.reduce(
+            totalSeatsAvailable: eventSlots.reduce(
+              (sum: number, s: any) => sum + (s.totalSeats ?? 0),
+              0
+            ),
+            currentRegistrations: eventSlots.reduce(
+              (sum: number, s: any) => sum + (s.currentRegistrations ?? 0),
+              0
+            ),
+            seatsLeft: eventSlots.reduce(
               (sum: number, s: any) => sum + (s.seatsLeft ?? 0),
               0
             ),

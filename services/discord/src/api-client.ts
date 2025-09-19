@@ -27,38 +27,34 @@ class APIClient {
     conversationHistory: ConversationHistory[] = []
   ): Promise<APIResponse> {
     try {
-      const messages: any[] = [];
+      console.log(`sending message: ${userQuestion.substring(0, 50)}...`);
       
-      const recentHistory = conversationHistory.slice(-5);
-      for (const historyItem of recentHistory) {
-        messages.push({
-          role: historyItem.role,
-          content: historyItem.content,
-          id: `discord-history-${historyItem.timestamp}-${Math.random().toString(36).substr(2, 6)}`
-        });
-      }
-      
-      messages.push({
-        role: 'user',
-        content: userQuestion,
-        id: `discord-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-      });
+      const requestBody = {
+        message: userQuestion,
+        source: 'discord',
+        userId: userContext.userId,
+        userContext: {
+          username: userContext.username,
+          channelId: userContext.channelId,
+          guildId: userContext.guildId
+        },
+        conversationHistory: conversationHistory.slice(-5).map(msg => ({
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.timestamp
+        }))
+      };
 
-      console.log(`sending ${messages.length} messages (${recentHistory.length} history + 1 current)`);
+      console.log(`sending discord request with ${conversationHistory.length} history messages`);
 
-      const response = await fetch(`${this.baseUrl}/api/chat`, {
+      const response = await fetch(`${this.baseUrl}/api/whatsapp-bot`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.apiKey}`,
           'User-Agent': 'the-everything-assistant-bot/1.0.0'
         },
-        body: JSON.stringify({
-          message: userQuestion,
-          source: 'discord',
-          userId: userContext.userId || 'discord-user',
-          conversationHistory: recentHistory
-        }),
+        body: JSON.stringify(requestBody),
         // @ts-ignore - node-fetch types issue
         timeout: 30000
       });
@@ -69,7 +65,7 @@ class APIClient {
 
       const result = await this.parseStreamingResponse(response);
       
-        if ((!result.text || result.text.includes('couldn\'t generate a proper response')) && recentHistory.length > 0) {
+      if ((!result.text || result.text.includes('couldn\'t generate a proper response')) && conversationHistory.length > 0) {
         console.log('retrying request without conversation history...');
         return await this.sendChatRequest(userQuestion, userContext, []);
       }      return result;

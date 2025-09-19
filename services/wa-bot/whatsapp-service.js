@@ -431,6 +431,20 @@ class WhatsAppService extends EventEmitter {
                 await this.sendStatusMessage(originalChat);
                 break;
 
+            case '!everyone':
+                // Manual @everyone tag - only works in groups and only for bot owner
+                const botOwnerNumber = '917975100121'; // Your phone number
+                if (!isGroup) {
+                    await this.sendMessageToChat(originalChat, 'the !everyone command only works in group chats');
+                } else if (from !== botOwnerNumber) {
+                    // await this.sendMessageToChat(originalChat, 'only the bot owner can use the !everyone command');
+                } else {
+                    const message = args || 'hey everyone! 👋';
+                    const taggedMessage = await this.formatResponseWithTags(message, originalChat, true);
+                    await this.sendMessageToChat(originalChat, taggedMessage);
+                }
+                break;
+
             default:
                 // Error messages are short - send in current chat
                 await this.sendMessageToChat(originalChat, `unknown command: ${command}\n\ntype !help to see available commands`);
@@ -505,11 +519,14 @@ class WhatsAppService extends EventEmitter {
                 return;
             }
             
-            const formatted = this.formatResponseForWhatsApp(response);
+            // Check if response should trigger @everyone tags
+            const shouldTagEveryone = this.shouldTagEveryone(response, messageData);
+            
+            const formatted = await this.formatResponseWithTags(response, originalChat, shouldTagEveryone);
             const responseLength = formatted.length;
             const isLongResponse = responseLength > 300; // Threshold for smart routing
             
-            console.log(`📏 Response length: ${responseLength} chars, ${isLongResponse ? 'sending to DM' : 'sending in current chat'}`);
+            console.log(`📏 Response length: ${responseLength} chars, ${isLongResponse ? 'sending to DM' : 'sending in current chat'}${shouldTagEveryone ? ' with @everyone tags' : ''}`);
             
             if (isLongResponse && messageData.isGroup) {
                 // Long responses in groups go to DM
@@ -524,6 +541,34 @@ class WhatsAppService extends EventEmitter {
             console.error('❌ Error in handleAIResponseSmart:', error);
             await this.sendMessageToChat(originalChat, 'sorry, there was an error processing the response. please try again.');
         }
+    }
+
+    /**
+     * Determine if response should trigger @everyone tags
+     */
+    shouldTagEveryone(response, messageData) {
+        // Only tag everyone in group chats
+        if (!messageData.isGroup) {
+            return false;
+        }
+        
+        // Only allow if the message is from you (the bot owner)
+        // Replace with your actual phone number
+        const botOwnerNumber = '917975100121'; // Your phone number
+        if (messageData.from !== botOwnerNumber) {
+            return false;
+        }
+        
+        // Check if the original user message contains @everyone
+        const userMessage = messageData.body.toLowerCase();
+        const hasEveryoneTrigger = userMessage.includes('@everyone');
+        
+        if (hasEveryoneTrigger) {
+            console.log(`🏷️ Tagging everyone - @everyone found in user message from bot owner`);
+            return true;
+        }
+        
+        return false;
     }
 
     async handleAIResponse(chat, response, startTime) {
@@ -614,6 +659,64 @@ class WhatsAppService extends EventEmitter {
             console.error(`Failed to get personal chat for ${phoneNumber}:`, error);
             return null;
         }
+    }
+
+    /**
+     * Get all participants in a group chat
+     */
+    async getGroupParticipants(chat) {
+        try {
+            if (!chat.isGroup) {
+                return [];
+            }
+            
+            const participants = chat.participants;
+            console.log(`Found ${participants.length} participants in group ${chat.name}`);
+            return participants;
+        } catch (error) {
+            console.error('Failed to get group participants:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Format response with @everyone tags for group chats
+     */
+    async formatResponseWithTags(response, chat, shouldTagEveryone = false) {
+        let formatted = this.formatResponseForWhatsApp(response);
+        
+        if (shouldTagEveryone && chat.isGroup) {
+            try {
+                const participants = await this.getGroupParticipants(chat);
+                
+                // Create mention tags for all participants except the bot
+                const mentionText = [];
+                
+                for (const participant of participants) {
+                    // Skip if it's the bot's own number
+                    if (participant.id._serialized === this.client.info.wid._serialized) {
+                        continue;
+                    }
+                    
+                    // Extract the phone number without the @c.us suffix
+                    const phoneNumber = participant.id.user;
+                    mentionText.push(`@${phoneNumber}`);
+                }
+                
+                if (mentionText.length > 0) {
+                    // Add mention tags at the beginning of the message
+                    const tagLine = `🔔 ${mentionText.join(' ')}\n\n`;
+                    formatted = tagLine + formatted;
+                    
+                    console.log(`🏷️ Added ${mentionText.length} mentions to group response`);
+                }
+                
+            } catch (error) {
+                console.error('Failed to add group mentions:', error);
+            }
+        }
+        
+        return formatted;
     }
 
     async sendHelpMessage(chat) {

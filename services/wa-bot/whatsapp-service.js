@@ -63,7 +63,11 @@ class WhatsAppService extends EventEmitter {
                 puppeteer: {
                     headless: true,
                     args: this.options.puppeteerArgs,
-                    executablePath: this.getChromePath()
+                    executablePath: this.getChromePath(),
+                    timeout: 60000, // Increase timeout
+                    handleSIGINT: false,
+                    handleSIGTERM: false,
+                    handleSIGHUP: false
                 },
                 webVersionCache: {
                     type: 'remote',

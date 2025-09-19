@@ -19,6 +19,36 @@ class WhatsAppService extends EventEmitter {
     }
 
     /**
+     * Get Chrome executable path, preferring system Chrome over bundled Chromium
+     */
+    getChromePath() {
+        const fs = require('fs');
+        const chromePaths = [
+            '/usr/bin/google-chrome',
+            '/usr/bin/google-chrome-stable',
+            '/usr/bin/chromium-browser',
+            '/usr/bin/chromium',
+            '/snap/bin/chromium',
+            'google-chrome',
+            'chromium'
+        ];
+        
+        for (const path of chromePaths) {
+            try {
+                if (path.startsWith('/') && fs.existsSync(path)) {
+                    console.log(`🌐 Using Chrome at: ${path}`);
+                    return path;
+                }
+            } catch (error) {
+                // Continue to next path
+            }
+        }
+        
+        console.log('🌐 Using default Puppeteer Chromium');
+        return undefined; // Let Puppeteer use its bundled Chromium
+    }
+
+    /**
      * Initialize WhatsApp client
      */
     async initialize() {
@@ -32,7 +62,8 @@ class WhatsAppService extends EventEmitter {
                 }),
                 puppeteer: {
                     headless: true,
-                    args: this.options.puppeteerArgs
+                    args: this.options.puppeteerArgs,
+                    executablePath: this.getChromePath()
                 },
                 webVersionCache: {
                     type: 'remote',

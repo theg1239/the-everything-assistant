@@ -1,54 +1,55 @@
 #!/bin/bash
 
-# Install Chrome dependencies for Ubuntu/Debian
+# Install Chrome dependencies for Ubuntu/Debian (Updated for Ubuntu 24.10)
 echo "Installing Chrome dependencies for WhatsApp Web..."
+
+# Fix repository issues first
+echo "Fixing repository issues..."
+sudo sed -i 's/oracular-security/noble-security/g' /etc/apt/sources.list.d/* 2>/dev/null || true
+sudo sed -i 's/oracular-security/noble-security/g' /etc/apt/sources.list 2>/dev/null || true
 
 # Update package list
 sudo apt-get update
 
-# Install required libraries for Chrome/Chromium
-sudo apt-get install -y \
-    gconf-service \
-    libasound2 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libc6 \
-    libcairo2 \
-    libcups2 \
-    libdbus-1-3 \
-    libexpat1 \
-    libfontconfig1 \
-    libgcc1 \
-    libgconf-2-4 \
-    libgdk-pixbuf2.0-0 \
-    libglib2.0-0 \
-    libgtk-3-0 \
-    libnspr4 \
-    libpango-1.0-0 \
-    libpangocairo-1.0-0 \
-    libstdc++6 \
-    libx11-6 \
-    libx11-xcb1 \
-    libxcb1 \
-    libxcomposite1 \
-    libxcursor1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    libxi6 \
-    libxrandr2 \
-    libxrender1 \
-    libxss1 \
-    libxtst6 \
-    ca-certificates \
-    fonts-liberation \
-    libappindicator1 \
-    libnss3 \
-    lsb-release \
-    xdg-utils \
-    wget \
-    libgbm-dev \
-    libxshmfence1
+# Install Google Chrome directly (which includes all dependencies)
+echo "Installing Google Chrome (includes all required dependencies)..."
+wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
 
-echo "Chrome dependencies installed successfully!"
+sudo apt-get update
+sudo apt-get install -y google-chrome-stable
+
+# Install additional dependencies for headless operation
+echo "Installing additional dependencies..."
+sudo apt-get install -y \
+    libasound2t64 \
+    libatk1.0-0t64 \
+    libatk-bridge2.0-0t64 \
+    libcups2t64 \
+    libdrm2 \
+    libgtk-3-0t64 \
+    libgtk-4-1 \
+    libnspr4 \
+    libnss3 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libgbm1 \
+    libxss1 \
+    libgconf-2-4 \
+    xvfb \
+    fonts-liberation \
+    libappindicator3-1 \
+    ca-certificates
+
+# Alternative: Install Chromium as fallback
+echo "Installing Chromium as fallback..."
+sudo apt-get install -y chromium-browser
+
+echo "✅ Chrome dependencies installed successfully!"
+echo ""
+echo "🔧 Additional recommended steps:"
+echo "1. Make sure your .env file has the correct Puppeteer arguments"
+echo "2. Consider using Xvfb if running completely headless"
+echo ""
 echo "You can now start the WhatsApp bot service."

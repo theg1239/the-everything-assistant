@@ -530,7 +530,7 @@ class WhatsAppService extends EventEmitter {
             
             if (isLongResponse && messageData.isGroup) {
                 // Long responses in groups go to DM
-                await this.sendMessageToChat(originalChat, `sent a detailed response to ${messageData.senderName} in dm`);
+                await this.sendMessageToChat(originalChat, `sent a detailed response in dm`);
                 await this.sendMessageToChat(userChat, formattedResponse);
             } else {
                 // Short responses or DM conversations stay in current chat

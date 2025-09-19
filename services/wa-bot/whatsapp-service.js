@@ -649,6 +649,7 @@ Keep the response concise but informative.`;
         try {
             const endTime = Date.now();
             const duration = endTime - startTime;
+            const botOwnerNumber = '917975100121'; // Your phone number
             
             console.log(`✅ AI Response ready in ${duration}ms`);
             
@@ -664,15 +665,16 @@ Keep the response concise but informative.`;
             const formattedResponse = await this.formatResponseWithTags(response, originalChat, shouldTagEveryone);
             const responseLength = formattedResponse.text.length;
             const isLongResponse = responseLength > 300; // Threshold for smart routing
+            const isBotOwner = messageData.from === botOwnerNumber;
             
-            console.log(`📏 Response length: ${responseLength} chars, ${isLongResponse ? 'sending to DM' : 'sending in current chat'}${shouldTagEveryone ? ' with @everyone tags' : ''}`);
+            console.log(`📏 Response length: ${responseLength} chars, ${isLongResponse ? (isBotOwner ? 'bot owner - sending in current chat' : 'sending to DM') : 'sending in current chat'}${shouldTagEveryone ? ' with @everyone tags' : ''}`);
             
-            if (isLongResponse && messageData.isGroup) {
-                // Long responses in groups go to DM
+            if (isLongResponse && messageData.isGroup && !isBotOwner) {
+                // Long responses in groups go to DM (but not for bot owner)
                 await this.sendMessageToChat(originalChat, `sent a detailed response in dm`);
                 await this.sendMessageToChat(userChat, formattedResponse);
             } else {
-                // Short responses or DM conversations stay in current chat
+                // Short responses, DM conversations, or bot owner messages stay in current chat
                 await this.sendMessageToChat(originalChat, formattedResponse);
             }
             

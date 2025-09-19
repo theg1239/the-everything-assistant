@@ -9,7 +9,9 @@ import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
   EmbedBuilder,
-  AttachmentBuilder
+  AttachmentBuilder,
+  REST,
+  Routes
 } from 'discord.js';
 import { EventEmitter } from 'events';
 
@@ -41,11 +43,15 @@ class DiscordService extends EventEmitter {
   private isReady: boolean = false;
   private botToken: string;
   private botOwnerID: string;
+  private rest: REST;
   
   private conversationContext: Map<string, ConversationContext[]>;
   private contextConfig: ContextConfig;
   private rateLimits: Map<string, { count: number; resetTime: number }>;
   private recentBotMessages: Set<string>;
+
+  // Slash commands
+  private slashCommands: Collection<string, any>;
 
   constructor(token: string, ownerId: string) {
     super();
@@ -62,6 +68,9 @@ class DiscordService extends EventEmitter {
       ]
     });
 
+    this.rest = new REST({ version: '10' }).setToken(token);
+    this.slashCommands = new Collection();
+
     this.conversationContext = new Map();
     this.contextConfig = {
       maxMessages: 10,
@@ -71,15 +80,96 @@ class DiscordService extends EventEmitter {
     this.rateLimits = new Map();
     this.recentBotMessages = new Set();
 
+    this.setupSlashCommands();
     this.setupEventHandlers();
   }
 
+  private setupSlashCommands(): void {
+    // Define slash commands
+    const commands = [
+      new SlashCommandBuilder()
+        .setName('ask')
+        .setDescription('ask the ai assistant a question')
+        .addStringOption(option =>
+          option.setName('question')
+            .setDescription('your question for the ai')
+            .setRequired(true)
+        ),
+      new SlashCommandBuilder()
+        .setName('status')
+        .setDescription('check the bot status'),
+      new SlashCommandBuilder()
+        .setName('help')
+        .setDescription('show available commands and help information')
+    ];
+
+    // Store commands in collection
+    commands.forEach(command => {
+      this.slashCommands.set(command.name, command);
+    });
+  }
+
+  private async registerSlashCommands(guildId?: string): Promise<void> {
+    try {
+      console.log('registering slash commands...');
+      
+      const commands = this.slashCommands.map(command => command.toJSON());
+      
+      if (guildId) {
+        // Register for specific guild (faster for testing)
+        await this.rest.put(
+          Routes.applicationGuildCommands(this.client.user!.id, guildId),
+          { body: commands }
+        );
+        console.log(`registered ${commands.length} slash commands for guild ${guildId}`);
+      } else {
+        // Register globally (takes up to 1 hour to propagate)
+        await this.rest.put(
+          Routes.applicationCommands(this.client.user!.id),
+          { body: commands }
+        );
+        console.log(`registered ${commands.length} slash commands globally`);
+      }
+    } catch (error) {
+      console.error('failed to register slash commands:', error);
+    }
+  }
+
   private setupEventHandlers(): void {
-    this.client.on('clientReady', () => {
+    this.client.on('clientReady', async () => {
       console.log(`discord bot logged in as ${this.client.user?.tag}`);
       this.isReady = true;
       this.startContextCleanup();
+      
+      // Register slash commands globally on startup
+      await this.registerSlashCommands();
+      
       this.emit('ready');
+    });
+
+    this.client.on('guildCreate', async (guild: Guild) => {
+      console.log(`joined new server: ${guild.name} (${guild.id})`);
+      
+      // Register slash commands for the new guild immediately
+      await this.registerSlashCommands(guild.id);
+    });
+
+    this.client.on('interactionCreate', async (interaction) => {
+      if (!interaction.isChatInputCommand()) return;
+      
+      try {
+        await this.handleSlashCommand(interaction);
+      } catch (error) {
+        console.error('error handling slash command:', error);
+        
+        const errorMessage = 'sorry, there was an error processing your command.';
+        
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp({ content: errorMessage, ephemeral: true });
+        } else {
+          await interaction.reply({ content: errorMessage, ephemeral: true });
+        }
+      }
     });
 
     this.client.on('messageCreate', async (message: Message) => {
@@ -102,6 +192,226 @@ class DiscordService extends EventEmitter {
       this.isReady = false;
       this.emit('disconnected');
     });
+  }
+
+  private async handleSlashCommand(interaction: ChatInputCommandInteraction): Promise<void> {
+    const { commandName, user, guild, channel } = interaction;
+
+    console.log(`processing slash command: /${commandName} from ${user.tag}`);
+
+    // Check rate limiting for non-owners
+    if (!this.isOwner(user.id) && this.isRateLimited(user.id)) {
+      await interaction.reply({ 
+        content: 'you are being rate limited. please wait before using another command.', 
+        ephemeral: true 
+      });
+      return;
+    }
+
+    // Update rate limiting
+    if (!this.isOwner(user.id)) {
+      this.updateRateLimit(user.id);
+    }
+
+    switch (commandName) {
+      case 'ask':
+        const question = interaction.options.getString('question');
+        if (!question) {
+          await interaction.reply({ 
+            content: 'please provide a question.', 
+            ephemeral: true 
+          });
+          return;
+        }
+        await this.handleSlashAskCommand(interaction, question);
+        break;
+
+      case 'status':
+        await this.handleSlashStatusCommand(interaction);
+        break;
+
+      case 'help':
+        await this.handleSlashHelpCommand(interaction);
+        break;
+
+      default:
+        await interaction.reply({ 
+          content: `unknown command: \`/${commandName}\``, 
+          ephemeral: true 
+        });
+        break;
+    }
+  }
+
+  private async handleSlashAskCommand(interaction: ChatInputCommandInteraction, question: string): Promise<void> {
+    try {
+      console.log(`processing ai request from ${interaction.user.tag}: ${question}`);
+
+      // Check for VTOP keywords
+      const vtopKeywords = ['vtop', 'grades', 'attendance', 'timetable', 'marks', 'schedule', 'exam', 'faculty', 'course'];
+      const isVtopQuery = vtopKeywords.some(keyword => question.toLowerCase().includes(keyword));
+
+      if (isVtopQuery) {
+        const embed = new EmbedBuilder()
+          .setColor(0x0099FF)
+          .setTitle('vtop features')
+          .setDescription('for vtop features like checking grades, attendance, timetable, and other academic information, please use the web interface:')
+          .addFields({ name: 'website', value: 'https://the-everything-assistant.vercel.app' })
+          .setFooter({ text: 'the website provides full access to all vtop features with a better user experience.' });
+
+        await interaction.reply({ embeds: [embed] });
+        return;
+      }
+
+      // Defer reply since AI processing might take time
+      await interaction.deferReply();
+
+      // Get conversation context
+      const conversationHistory = this.getContext(interaction.user.id);
+      console.log(`found ${conversationHistory.length} messages in conversation history for ${interaction.user.tag}`);
+
+      const startTime = Date.now();
+
+      // Create a mock message data for compatibility with existing handler
+      const messageData: MessageData = {
+        id: interaction.id,
+        content: `!ask ${question}`,
+        author: interaction.user,
+        channel: interaction.channel as TextChannel,
+        guild: interaction.guild,
+        timestamp: Date.now(),
+        isBot: false
+      };
+
+      this.emit('ask', {
+        messageData,
+        question,
+        conversationHistory,
+        startTime,
+        respondCallback: (response: string) => this.handleSlashAIResponse(interaction, response, startTime)
+      });
+
+    } catch (error) {
+      console.error('error in handleslashaskcommand:', error);
+      
+      if (interaction.deferred) {
+        await interaction.editReply('sorry, i encountered an error processing your request. please try again.');
+      } else {
+        await interaction.reply({ 
+          content: 'sorry, i encountered an error processing your request. please try again.', 
+          ephemeral: true 
+        });
+      }
+    }
+  }
+
+  private async handleSlashStatusCommand(interaction: ChatInputCommandInteraction): Promise<void> {
+    const uptime = process.uptime();
+    const uptimeMinutes = Math.floor(uptime / 60);
+    const uptimeHours = Math.floor(uptimeMinutes / 60);
+    const displayUptime = uptimeHours > 0 ? `${uptimeHours}h ${uptimeMinutes % 60}m` : `${uptimeMinutes}m`;
+
+    const embed = new EmbedBuilder()
+      .setColor(0x00FF00)
+      .setTitle('bot status')
+      .addFields(
+        { name: 'status', value: 'online and operational', inline: true },
+        { name: 'uptime', value: displayUptime, inline: true },
+        { name: 'discord connection', value: this.isReady ? 'connected' : 'disconnected', inline: true }
+      )
+      .setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  private async handleSlashHelpCommand(interaction: ChatInputCommandInteraction): Promise<void> {
+    const embed = new EmbedBuilder()
+      .setColor(0x0099FF)
+      .setTitle('the everything assistant - discord bot')
+      .setDescription('available commands:')
+      .addFields(
+        {
+          name: '/ask [question]',
+          value: 'ask me anything about academics, vit, or general topics\\nexample: `/ask what is quantum physics?`',
+          inline: false
+        },
+        {
+          name: '/status',
+          value: 'check if the assistant is online',
+          inline: false
+        },
+        {
+          name: '/help',
+          value: 'show this help message',
+          inline: false
+        }
+      )
+      .addFields(
+        {
+          name: 'legacy text commands',
+          value: 'you can also use text commands: `!ask`, `!status`, `!help`',
+          inline: false
+        },
+        {
+          name: 'tips',
+          value: '• ask specific questions for better responses\\n• i can help with vit information and academic topics\\n• responses may take a few seconds to process',
+          inline: false
+        }
+      )
+      .setFooter({ text: 'powered by the everything assistant ai system' });
+
+    await interaction.reply({ embeds: [embed] });
+  }
+
+  private async handleSlashAIResponse(interaction: ChatInputCommandInteraction, response: string, startTime: number): Promise<void> {
+    try {
+      const processingTime = Date.now() - startTime;
+      
+      console.log(`ai response ready in ${processingTime}ms`);
+
+      if (!response || response.trim() === '') {
+        await interaction.editReply('sorry, i could not generate a response. please try asking again.');
+        return;
+      }
+
+      let formattedResponse = this.formatResponseForDiscord(response);
+
+      // Smart routing: owner gets responses in same channel, others get DMs for long responses
+      const isLongResponse = formattedResponse.length > 1500;
+      const isOwner = this.isOwner(interaction.user.id);
+      const isInGuild = !!interaction.guild;
+
+      if (isLongResponse && isInGuild && !isOwner) {
+        // Long responses in servers go to DM (but not for owner)
+        await interaction.editReply(`sent a detailed response to ${interaction.user.tag} in dm.`);
+        await interaction.user.send(formattedResponse);
+      } else {
+        // Short responses, DM conversations, or owner messages stay in current channel
+        if (formattedResponse.length > 2000) {
+          // Split long messages for Discord's 2000 character limit
+          await interaction.editReply(formattedResponse.substring(0, 2000));
+          
+          // Send remaining parts as follow-ups
+          const remainingText = formattedResponse.substring(2000);
+          const chunks = this.chunkMessage(remainingText, 2000);
+          
+          for (const chunk of chunks) {
+            await interaction.followUp(chunk);
+          }
+        } else {
+          await interaction.editReply(formattedResponse);
+        }
+      }
+
+    } catch (error) {
+      console.error('error in handleslashairesponse:', error);
+      
+      try {
+        await interaction.editReply('sorry, there was an error processing the response. please try again.');
+      } catch (editError) {
+        console.error('failed to edit reply:', editError);
+      }
+    }
   }
 
   async initialize(): Promise<void> {

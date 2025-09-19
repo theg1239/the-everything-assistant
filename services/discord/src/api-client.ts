@@ -46,7 +46,7 @@ class APIClient {
 
       console.log(`sending ${messages.length} messages (${recentHistory.length} history + 1 current)`);
 
-      const response = await fetch(`${this.baseUrl}/api/whatsapp-bot`, {
+      const response = await fetch(`${this.baseUrl}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -54,9 +54,10 @@ class APIClient {
           'User-Agent': 'the-everything-assistant-bot/1.0.0'
         },
         body: JSON.stringify({
-          messages,
+          message: userQuestion,
           source: 'discord',
-          userContext
+          userId: userContext.userId || 'discord-user',
+          conversationHistory: recentHistory
         }),
         // @ts-ignore - node-fetch types issue
         timeout: 30000

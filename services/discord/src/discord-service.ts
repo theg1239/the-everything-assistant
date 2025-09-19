@@ -348,11 +348,6 @@ class DiscordService extends EventEmitter {
       )
       .addFields(
         {
-          name: 'legacy text commands',
-          value: 'you can also use text commands: `!ask`, `!status`, `!help`',
-          inline: false
-        },
-        {
           name: 'tips',
           value: '• ask specific questions for better responses\\n• i can help with vit information and academic topics\\n• responses may take a few seconds to process',
           inline: false
@@ -428,25 +423,11 @@ class DiscordService extends EventEmitter {
     // Skip bot messages and system messages
     if (message.author.bot || message.system) return;
 
-    const messageData: MessageData = {
-      id: message.id,
-      content: message.content.trim(),
-      author: message.author,
-      channel: message.channel as TextChannel,
-      guild: message.guild,
-      timestamp: message.createdTimestamp,
-      isBot: message.author.bot
-    };
-
+    // Only log messages for context, no command processing
     console.log(`message from ${message.author.tag}: ${message.content.substring(0, 100)}...`);
 
-    if (message.content.startsWith('!') || message.author.bot) {
-      this.addToContext(message.author.id, message.content, message.author.bot);
-    }
-
-    if (message.content.startsWith('!')) {
-      await this.handleCommand(messageData);
-    }
+    // Store message in context for conversation history
+    this.addToContext(message.author.id, message.content, message.author.bot);
   }
 
   private async handleCommand(messageData: MessageData): Promise<void> {

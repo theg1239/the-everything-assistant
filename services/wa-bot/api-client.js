@@ -6,8 +6,29 @@ class APIClient {
         this.apiKey = apiKey;
     }
 
-    async sendChatRequest(userQuestion, userContext = {}) {
+    async sendChatRequest(userQuestion, userContext = {}, conversationHistory = []) {
         try {
+            // Build messages array with conversation history
+            const messages = [];
+            
+            // Add conversation history
+            for (const historyItem of conversationHistory) {
+                messages.push({
+                    role: historyItem.role,
+                    content: historyItem.content,
+                    id: `wa-history-${historyItem.timestamp}-${Math.random().toString(36).substr(2, 6)}`
+                });
+            }
+            
+            // Add current user question
+            messages.push({
+                role: 'user',
+                content: userQuestion,
+                id: `wa-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+            });
+
+            console.log(`📋 Sending ${messages.length} messages (${conversationHistory.length} history + 1 current)`);
+
             const response = await fetch(`${this.baseUrl}/api/whatsapp-bot`, {
                 method: 'POST',
                 headers: {
@@ -16,13 +37,7 @@ class APIClient {
                     'User-Agent': 'WhatsApp-Bot-Service/1.0.0'
                 },
                 body: JSON.stringify({
-                    messages: [
-                        {
-                            role: 'user',
-                            content: userQuestion,
-                            id: `wa-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-                        }
-                    ],
+                    messages,
                     source: 'whatsapp',
                     userContext
                 }),

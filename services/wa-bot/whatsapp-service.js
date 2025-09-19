@@ -16,6 +16,12 @@ class WhatsAppService extends EventEmitter {
         this.messageQueue = new Map(); // Queue messages for users
         this.rateLimits = new Map(); // Rate limiting per user
         this.recentBotMessages = new Set(); // Track recent bot messages to prevent loops
+        this.conversationContext = new Map(); // Store recent conversation history per user
+        this.contextConfig = {
+            maxMessages: 10, // Keep last 10 messages per user
+            maxAge: 30 * 60 * 1000, // 30 minutes in milliseconds
+            cleanupInterval: 5 * 60 * 1000 // Cleanup every 5 minutes
+        };
     }
 
     /**
@@ -86,6 +92,88 @@ class WhatsAppService extends EventEmitter {
     }
 
     /**
+     * Add a message to conversation context
+     */
+    addToContext(phoneNumber, message, isBot = false) {
+        if (!this.conversationContext.has(phoneNumber)) {
+            this.conversationContext.set(phoneNumber, []);
+        }
+        
+        const context = this.conversationContext.get(phoneNumber);
+        const timestamp = Date.now();
+        
+        context.push({
+            content: message,
+            timestamp,
+            isBot,
+            role: isBot ? 'assistant' : 'user'
+        });
+        
+        // Keep only the most recent messages
+        while (context.length > this.contextConfig.maxMessages) {
+            context.shift();
+        }
+        
+        this.conversationContext.set(phoneNumber, context);
+    }
+
+    /**
+     * Get conversation context for a user
+     */
+    getContext(phoneNumber) {
+        if (!this.conversationContext.has(phoneNumber)) {
+            return [];
+        }
+        
+        const context = this.conversationContext.get(phoneNumber);
+        const now = Date.now();
+        
+        // Filter out messages older than maxAge
+        const validContext = context.filter(msg => 
+            (now - msg.timestamp) < this.contextConfig.maxAge
+        );
+        
+        // Update stored context to remove old messages
+        this.conversationContext.set(phoneNumber, validContext);
+        
+        return validContext;
+    }
+
+    /**
+     * Clear context for a user
+     */
+    clearContext(phoneNumber) {
+        this.conversationContext.delete(phoneNumber);
+    }
+
+    /**
+     * Cleanup old conversation contexts
+     */
+    cleanupContexts() {
+        const now = Date.now();
+        for (const [phoneNumber, context] of this.conversationContext.entries()) {
+            const validMessages = context.filter(msg => 
+                (now - msg.timestamp) < this.contextConfig.maxAge
+            );
+            
+            if (validMessages.length === 0) {
+                this.conversationContext.delete(phoneNumber);
+            } else if (validMessages.length !== context.length) {
+                this.conversationContext.set(phoneNumber, validMessages);
+            }
+        }
+    }
+
+    /**
+     * Start context cleanup interval
+     */
+    startContextCleanup() {
+        setInterval(() => {
+            this.cleanupContexts();
+        }, this.contextConfig.cleanupInterval);
+    }
+
+    /**
      * Setup event handlers for WhatsApp client
      */
     setupEventHandlers() {
@@ -101,6 +189,7 @@ class WhatsAppService extends EventEmitter {
             console.log('✅ WhatsApp client is ready!');
             console.log('📱 Client info:', this.client.info);
             this.isReady = true;
+            this.startContextCleanup(); // Start conversation context cleanup
             this.emit('ready');
         });
 
@@ -257,6 +346,15 @@ class WhatsAppService extends EventEmitter {
             fromMe: message.fromMe // Track if message is from the bot itself
         };
 
+        // Store all messages in conversation context (except status messages)
+        if (!message.isStatus && messageBody && messageBody.trim().length > 0) {
+            // For group messages, use individual user number; for DMs, use chat ID
+            const contextKey = chat.isGroup ? contact.number : chat.id._serialized;
+            this.addToContext(contextKey, messageBody, message.fromMe);
+            
+            console.log(`💾 Stored message in context for ${contextKey}: "${messageBody.substring(0, 50)}..."`);
+        }
+
         // Emit message event for external handling
         this.emit('message', messageData);
 
@@ -291,44 +389,58 @@ class WhatsAppService extends EventEmitter {
 
         console.log(`🤖 Processing command: ${command} from ${fromName}`);
 
-        // Always get the user's personal chat for DM responses
+        // Get both the original chat and user's personal chat
+        const originalChat = await originalMessage.getChat();
         const userChat = await this.getUserPersonalChat(from);
+        
         if (!userChat) {
             console.error(`❌ Could not get personal chat for ${from}`);
             return;
         }
 
-        // if (isGroup) {
-        //     const originalChat = await originalMessage.getChat();
-        //     await this.sendMessageToChat(originalChat, `responding to ${fromName} in dm`);
-        // }
-
         switch (command) {
             case '!ask':
                 if (!args) {
-                    await this.sendMessageToChat(userChat, 'please provide a question after !ask\n\nexample: !ask what is the mess menu today?');
+                    // Short response - send in current chat
+                    await this.sendMessageToChat(originalChat, 'please provide a question after !ask\n\nexample: !ask what is the mess menu today?');
                     return;
                 }
-                await this.handleAskCommand(userChat, from, fromName, args, messageData);
+                // Pass both chats to handleAskCommand for smart routing
+                await this.handleAskCommand(originalChat, userChat, from, fromName, args, messageData);
                 break;
 
             case '!help':
+                // Help is moderately long - always send to DM with notification
+                if (isGroup) {
+                    await this.sendMessageToChat(originalChat, `sent help info to ${fromName} in dm`);
+                }
                 await this.sendHelpMessage(userChat);
                 break;
 
             case '!status':
-                await this.sendStatusMessage(userChat);
+                // Status is short - send in current chat
+                await this.sendStatusMessage(originalChat);
                 break;
 
             default:
-                await this.sendMessageToChat(userChat, `unknown command: ${command}\n\ntype !help to see available commands`);
+                // Error messages are short - send in current chat
+                await this.sendMessageToChat(originalChat, `unknown command: ${command}\n\ntype !help to see available commands`);
                 break;
         }
     }
 
-    async handleAskCommand(userChat, phoneNumber, userName, question, messageData) {
+    /**
+     * Handle !ask command - main AI interaction with smart routing
+     */
+    async handleAskCommand(originalChat, userChat, phoneNumber, userName, question, messageData) {
         try {
             console.log(`🧠 Processing AI request from ${userName}: ${question}`);
+            
+            // Get conversation context for this user
+            const contextKey = messageData.isGroup ? phoneNumber : originalChat.id._serialized;
+            const conversationHistory = this.getContext(contextKey);
+            
+            console.log(`📚 Found ${conversationHistory.length} messages in conversation history for ${userName}`);
             
             const vtopKeywords = ['vtop', 'grades', 'attendance', 'timetable', 'marks', 'schedule', 'exam', 'faculty', 'course'];
             const isVtopQuery = vtopKeywords.some(keyword => 
@@ -337,27 +449,71 @@ class WhatsAppService extends EventEmitter {
             
             if (isVtopQuery) {
                 const vtopMessage = `for vtop features like checking grades, attendance, timetable, and other academic information, please use the web interface at:\n\nhttps://the-everything-assistant.vercel.app\n\nthe website provides full access to all vtop features with a better user experience for academic data.`;
-                await this.sendMessageToChat(userChat, vtopMessage);
+                // VTOP messages are medium length - send to DM if in group, otherwise current chat
+                const targetChat = messageData.isGroup ? userChat : originalChat;
+                if (messageData.isGroup) {
+                    await this.sendMessageToChat(originalChat, `sent vtop info to ${userName} in dm`);
+                }
+                await this.sendMessageToChat(targetChat, vtopMessage);
                 return;
             }
             
-            await this.sendTypingToChat(userChat);
+            await this.sendTypingToChat(originalChat);
 
             const startTime = Date.now();
 
             this.emit('ask', {
-                chat: userChat,
+                originalChat,
+                userChat,
                 phoneNumber,
                 userName,
                 question,
                 messageData,
                 startTime,
-                respondCallback: (response) => this.handleAIResponse(userChat, response, startTime)
+                conversationHistory, // Include conversation context
+                respondCallback: (response) => this.handleAIResponseSmart(originalChat, userChat, response, startTime, messageData)
             });
 
         } catch (error) {
             console.error('❌ Error in handleAskCommand:', error);
-            await this.sendMessageToChat(userChat, 'sorry, i encountered an error processing your request. please try again.');
+            await this.sendMessageToChat(originalChat, 'sorry, i encountered an error processing your request. please try again.');
+        }
+    }
+
+    /**
+     * Handle AI response with smart routing based on response length
+     */
+    async handleAIResponseSmart(originalChat, userChat, response, startTime, messageData) {
+        try {
+            const endTime = Date.now();
+            const duration = endTime - startTime;
+            
+            console.log(`✅ AI Response ready in ${duration}ms`);
+            
+            if (!response || response.trim() === '') {
+                console.warn('⚠️ Empty response received from AI');
+                await this.sendMessageToChat(originalChat, 'sorry, i couldn\'t generate a response. please try asking again.');
+                return;
+            }
+            
+            const formatted = this.formatResponseForWhatsApp(response);
+            const responseLength = formatted.length;
+            const isLongResponse = responseLength > 300; // Threshold for smart routing
+            
+            console.log(`📏 Response length: ${responseLength} chars, ${isLongResponse ? 'sending to DM' : 'sending in current chat'}`);
+            
+            if (isLongResponse && messageData.isGroup) {
+                // Long responses in groups go to DM
+                await this.sendMessageToChat(originalChat, `sent a detailed response to ${messageData.senderName} in dm`);
+                await this.sendMessageToChat(userChat, formatted);
+            } else {
+                // Short responses or DM conversations stay in current chat
+                await this.sendMessageToChat(originalChat, formatted);
+            }
+            
+        } catch (error) {
+            console.error('❌ Error in handleAIResponseSmart:', error);
+            await this.sendMessageToChat(originalChat, 'sorry, there was an error processing the response. please try again.');
         }
     }
 

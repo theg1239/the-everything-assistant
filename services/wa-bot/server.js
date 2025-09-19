@@ -287,16 +287,30 @@ class WABotServer {
     }
 
     async handleAskRequest(data) {
-        const { chat, phoneNumber, userName, question, startTime, respondCallback } = data;
+        const { 
+            originalChat, 
+            userChat, 
+            phoneNumber, 
+            userName, 
+            question, 
+            startTime, 
+            conversationHistory = [], 
+            respondCallback 
+        } = data;
         
         try {
             console.log(`Processing AI request for ${userName}: ${question}`);
+            console.log(`Including ${conversationHistory.length} messages from conversation history`);
 
-            const response = await this.apiClient.sendChatRequest(question, {
-                source: 'whatsapp',
-                phoneNumber,
-                userName
-            });
+            const response = await this.apiClient.sendChatRequest(
+                question, 
+                {
+                    source: 'whatsapp',
+                    phoneNumber,
+                    userName
+                },
+                conversationHistory
+            );
 
             const processingTimeMs = startTime ? Date.now() - startTime : null;
             console.log(`Total processing time: ${processingTimeMs}ms`);

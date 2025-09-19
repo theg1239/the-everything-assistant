@@ -75,7 +75,7 @@ class DiscordService extends EventEmitter {
   }
 
   private setupEventHandlers(): void {
-    this.client.on('ready', () => {
+    this.client.on('clientReady', () => {
       console.log(`discord bot logged in as ${this.client.user?.tag}`);
       this.isReady = true;
       this.startContextCleanup();

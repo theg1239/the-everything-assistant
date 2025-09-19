@@ -346,13 +346,22 @@ class WhatsAppService extends EventEmitter {
             fromMe: message.fromMe // Track if message is from the bot itself
         };
 
-        // Store all messages in conversation context (except status messages)
+        // Store only command messages and bot responses in conversation context
         if (!message.isStatus && messageBody && messageBody.trim().length > 0) {
-            // For group messages, use individual user number; for DMs, use chat ID
-            const contextKey = chat.isGroup ? contact.number : chat.id._serialized;
-            this.addToContext(contextKey, messageBody, message.fromMe);
+            // Only store messages that are:
+            // 1. Commands (start with !)
+            // 2. Bot responses (fromMe = true)
+            const isCommand = messageBody.startsWith('!');
+            const isBotResponse = message.fromMe;
             
-            console.log(`💾 Stored message in context for ${contextKey}: "${messageBody.substring(0, 50)}..."`);
+            if (isCommand || isBotResponse) {
+                // For group messages, use individual user number; for DMs, use chat ID
+                const contextKey = chat.isGroup ? contact.number : chat.id._serialized;
+                this.addToContext(contextKey, messageBody, message.fromMe);
+                
+                const messageType = isCommand ? 'command' : 'bot response';
+                console.log(`💾 Stored ${messageType} in context for ${contextKey}: "${messageBody.substring(0, 50)}..."`);
+            }
         }
 
         // Emit message event for external handling

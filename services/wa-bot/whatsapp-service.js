@@ -301,13 +301,13 @@ class WhatsAppService extends EventEmitter {
             return;
         }
 
+        try {
+            const contact = await message.getContact();
+            const chat = await message.getChat();
+            const messageBody = message.body.trim();
 
-        const contact = await message.getContact();
-        const chat = await message.getChat();
-        const messageBody = message.body.trim();
-
-        const contactNumber = contact.id?.user || contact.userid || 'unknown';
-        const contactName = contact.name || contact.pushname || contactNumber;
+            const contactNumber = contact?.id?.user || contact?.userid || message.author || message.from || 'unknown';
+            const contactName = contact?.name || contact?.pushname || contactNumber;
 
         // Debug logging
         console.log(`🔍 Debug - Message details:`, {
@@ -360,7 +360,7 @@ class WhatsAppService extends EventEmitter {
             
             if (isCommand || isBotResponse) {
                 // For group messages, use individual user number; for DMs, use chat ID
-                const contextKey = chat.isGroup ? contact.number : chat.id._serialized;
+                const contextKey = chat.isGroup ? contactNumber : chat.id._serialized;
                 this.addToContext(contextKey, messageBody, message.fromMe);
                 
                 const messageType = isCommand ? 'command' : 'bot response';
@@ -389,6 +389,10 @@ class WhatsAppService extends EventEmitter {
             } else {
                 console.log(`🚫 Skipping bot's own response: ${messageBody.substring(0, 50)}...`);
             }
+        }
+        } catch (error) {
+            console.error('❌ Error handling incoming message:', error);
+            // Continue processing despite the error
         }
     }
 

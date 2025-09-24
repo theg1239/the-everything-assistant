@@ -301,41 +301,45 @@ class WhatsAppService extends EventEmitter {
             return;
         }
 
+
         const contact = await message.getContact();
         const chat = await message.getChat();
         const messageBody = message.body.trim();
-        
+
+        const contactNumber = contact.id?.user || contact.userid || 'unknown';
+        const contactName = contact.name || contact.pushname || contactNumber;
+
         // Debug logging
         console.log(`🔍 Debug - Message details:`, {
             fromMe: message.fromMe,
             body: messageBody.substring(0, 50),
             messageId: message.id._serialized,
-            contactNumber: contact.number,
-            contactName: contact.name,
+            contactNumber,
+            contactName,
             isCommand: messageBody.startsWith('!')
         });
-        
+
         // Don't skip self messages - we want to process all messages including our own responses
         // This ensures proper logging and potential self-interaction features
         const messageType = message.fromMe ? '🤖 Self' : '👤 User';
-        console.log(`📨 ${messageType} message from ${contact.name || contact.number}: ${messageBody}`);
+        console.log(`📨 ${messageType} message from ${contactName}: ${messageBody}`);
 
         // Check rate limiting (but don't rate limit self messages)
-        if (!message.fromMe && this.isRateLimited(contact.number)) {
-            console.log(`🚫 Rate limited user: ${contact.number}`);
+        if (!message.fromMe && this.isRateLimited(contactNumber)) {
+            console.log(`🚫 Rate limited user: ${contactNumber}`);
             return;
         }
 
         // Update rate limiting (but only for non-self messages)
         if (!message.fromMe) {
-            this.updateRateLimit(contact.number);
+            this.updateRateLimit(contactNumber);
         }
 
         // Process the message
         const messageData = {
             id: message.id._serialized,
-            from: contact.number,
-            fromName: contact.name || contact.pushname || 'Unknown',
+            from: contactNumber,
+            fromName: contactName,
             body: messageBody,
             timestamp: message.timestamp,
             isGroup: chat.isGroup,
@@ -586,13 +590,13 @@ Keep the response concise but informative.`;
                 
                 const contact = await message.getContact();
                 const timestamp = new Date(message.timestamp * 1000);
-                
+
                 // Skip messages older than 7 days
                 const daysSinceMessage = (Date.now() - timestamp.getTime()) / (1000 * 60 * 60 * 24);
                 if (daysSinceMessage > 7) continue;
-                
+
                 let messageText = message.body || '';
-                
+
                 // Handle different message types
                 if (message.hasMedia) {
                     const mediaType = message.type;
@@ -602,11 +606,13 @@ Keep the response concise but informative.`;
                 } else if (message.type === 'vcard') {
                     messageText = '[Contact shared]';
                 }
-                
+
                 if (messageText.trim()) {
+                    const senderNumber = contact.id?.user || contact.userid || 'unknown';
+                    const senderName = contact.pushname || contact.name || senderNumber;
                     processedMessages.push({
-                        sender: contact.pushname || contact.name || contact.id.user,
-                        senderNumber: contact.id.user,
+                        sender: senderName,
+                        senderNumber: senderNumber,
                         text: messageText,
                         timestamp: timestamp.toLocaleString(),
                         isFromMe: message.fromMe

@@ -457,12 +457,59 @@ class WhatsAppService extends EventEmitter {
     }
 
     /**
+     * Parse arguments for the !context command, extracting optional limit and question.
+     */
+    parseContextCommandArgs(rawArgs) {
+        if (!rawArgs) {
+            return { question: '', limit: null };
+        }
+
+        let working = rawArgs.trim();
+        if (!working) {
+            return { question: '', limit: null };
+        }
+
+        let limit = null;
+
+        // Support "limit=500" or "limit:500" anywhere in the string
+        const limitRegex = /\blimit\s*[:=]\s*(\d+)\b/i;
+        const labeledMatch = working.match(limitRegex);
+        if (labeledMatch) {
+            limit = parseInt(labeledMatch[1], 10);
+            working = (working.slice(0, labeledMatch.index) + working.slice(labeledMatch.index + labeledMatch[0].length)).trim();
+        } else {
+            // Support "limit 500 ..." syntax
+            const limitWordMatch = working.match(/^limit\s+(\d+)(?:\s+(.*))?$/i);
+            if (limitWordMatch) {
+                limit = parseInt(limitWordMatch[1], 10);
+                working = (limitWordMatch[2] || '').trim();
+            } else {
+                // Support leading numeric value e.g., "500 summarize the chat"
+                const leadingMatch = working.match(/^(\d+)(?:\s+(.*))?$/);
+                if (leadingMatch) {
+                    limit = parseInt(leadingMatch[1], 10);
+                    working = (leadingMatch[2] || '').trim();
+                }
+            }
+        }
+
+        if (Number.isNaN(limit) || limit <= 0) {
+            limit = null;
+        }
+
+        return {
+            question: working,
+            limit
+        };
+    }
+
+    /**
      * Fetch chat history in batches until the desired size is reached.
      */
     async fetchAllChatMessages(chat, options = {}) {
         const {
             batchSize = 200,
-            maxMessages = 200
+            maxMessages = 800
         } = options;
 
         const messages = [];
@@ -668,13 +715,10 @@ class WhatsAppService extends EventEmitter {
                 break;
 
             case '!context':
-                // Analyze chat context from recent messages - only for bot owner
-                if (!isBotOwner) {
-                    await this.sendMessageToChat(originalChat, 'only the bot owner can use the !context command');
-                } else {
-                    const question = args || 'what has been happening in this chat recently?';
-                    await this.handleContextCommand(originalChat, userChat, from, fromName, question, messageData);
-                }
+                // Analyze chat context from recent messages - available to all users
+                const { question, limit } = this.parseContextCommandArgs(args);
+                const questionText = question || 'what has been happening in this chat recently?';
+                await this.handleContextCommand(originalChat, userChat, from, fromName, questionText, messageData, { limit });
                 break;
 
             case '!help':
@@ -764,20 +808,36 @@ class WhatsAppService extends EventEmitter {
     /**
      * Handle !context command - analyze chat history
      */
-    async handleContextCommand(originalChat, userChat, phoneNumber, userName, question, messageData) {
+    async handleContextCommand(originalChat, userChat, phoneNumber, userName, question, messageData, options = {}) {
         try {
             const trimmedQuestion = (question || '').trim();
             const questionText = trimmedQuestion || 'what has been happening in this chat recently?';
-            console.log(`📚 Processing context request from ${userName}: ${questionText}`);
+            const limitOverride = options?.limit ?? null;
+
+            let sanitizedLimit = null;
+            if (limitOverride !== null && Number.isFinite(limitOverride) && !Number.isNaN(limitOverride)) {
+                sanitizedLimit = Math.min(Math.max(Math.floor(limitOverride), 20), 2000);
+            } else if (limitOverride !== null) {
+                console.warn('⚠️ Invalid limit override provided for !context, ignoring.', { limitOverride });
+            }
+
+            console.log(`📚 Processing context request from ${userName}: ${questionText}`, {
+                limitOverride: sanitizedLimit
+            });
             
             await this.sendTypingToChat(originalChat);
             
-            // Fetch recent messages from the chat
-            const historyLimit = trimmedQuestion ? 200 : 150;
+            // Determine how many messages to fetch
+            const defaultLimit = 150;
+            const extendedLimit = 800;
+            const historyLimit = sanitizedLimit || (trimmedQuestion ? extendedLimit : defaultLimit);
+            const fetchAll = historyLimit > defaultLimit;
+            const maxAgeDays = sanitizedLimit !== null ? null : (trimmedQuestion ? null : 7);
+
             const recentMessages = await this.getChatHistory(originalChat, historyLimit, {
-                fetchAll: Boolean(trimmedQuestion),
+                fetchAll,
                 maxMessages: historyLimit,
-                maxAgeDays: trimmedQuestion ? null : 7
+                maxAgeDays
             });
             
             if (recentMessages.length === 0) {
@@ -789,7 +849,7 @@ class WhatsAppService extends EventEmitter {
             const contextText = this.formatChatHistoryForAI(recentMessages);
             
             // Create a comprehensive prompt for AI analysis
-            const analysisPrompt = `You are analyzing a WhatsApp chat history to answer the owner's question.
+            const analysisPrompt = `You are analyzing a WhatsApp chat history to answer the user's question.
 
 Question: "${questionText}"
 
@@ -812,7 +872,7 @@ Keep the response concise but informative.`;
                 phoneNumber,
                 userName,
                 question: analysisPrompt,
-                messageData: { ...messageData, isContextAnalysis: true },
+                messageData: { ...messageData, isContextAnalysis: true, contextLimit: historyLimit },
                 startTime,
                 conversationHistory: [], // Don't include previous context for this analysis
                 respondCallback: (response) => this.handleAIResponseSmart(originalChat, userChat, response, startTime, messageData)
@@ -1180,9 +1240,10 @@ available commands:
    example: !ask what is the mess menu today?
    example: !ask explain quantum physics
 
-!context [question] - analyze recent chat history and answer questions (owner only)
+!context [limit] [question] - analyze recent chat history and answer questions
    example: !context what were the main topics discussed?
-   example: !context summarize what happened while i was away
+   example: !context 400 summarize what happened while i was away
+   example: !context limit=200 give me the finance updates
 
 !everyone [message] - tag everyone in group chat (owner only)
    example: !everyone meeting tomorrow at 5pm
@@ -1196,7 +1257,7 @@ tips:
 • i can help with vit information, academic topics, and general knowledge
 • responses may take a few seconds to process
 • include @everyone in your message to tag everyone in groups (owner only)
-• use !context to catch up on missed conversations
+• use !context (optionally with a limit) to catch up on missed conversations
 
 powered by the everything assistant ai system`;
 

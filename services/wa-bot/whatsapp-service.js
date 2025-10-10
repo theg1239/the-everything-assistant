@@ -773,7 +773,7 @@ class WhatsAppService extends EventEmitter {
             await this.sendTypingToChat(originalChat);
             
             // Fetch recent messages from the chat
-            const historyLimit = trimmedQuestion ? 800 : 150;
+            const historyLimit = trimmedQuestion ? 200 : 150;
             const recentMessages = await this.getChatHistory(originalChat, historyLimit, {
                 fetchAll: Boolean(trimmedQuestion),
                 maxMessages: historyLimit,

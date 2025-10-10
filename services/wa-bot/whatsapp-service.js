@@ -285,6 +285,130 @@ class WhatsAppService extends EventEmitter {
     }
 
     /**
+     * Normalize contact identifiers, handling Linked Device (LID) suffixes used in communities.
+     */
+    getNormalizedContactId(message) {
+        if (!message) {
+            return null;
+        }
+
+        const candidate = message.author || message.from || message.to || (message.id && message.id.participant);
+
+        if (!candidate) {
+            return null;
+        }
+
+        if (candidate.endsWith('@lid')) {
+            const [rawId] = candidate.split('@');
+            if (!rawId) {
+                return null;
+            }
+            const [baseId] = rawId.split(':');
+            if (!baseId) {
+                return null;
+            }
+            return `${baseId}@c.us`;
+        }
+
+        return candidate;
+    }
+
+    /**
+     * Extract the contact/user portion from a WhatsApp identifier.
+     */
+    extractUserFromId(contactId) {
+        if (!contactId) {
+            return null;
+        }
+
+        const [userPart] = contactId.split('@');
+        if (!userPart) {
+            return null;
+        }
+
+        const [sanitizedUser] = userPart.split(':');
+        return sanitizedUser || null;
+    }
+
+    /**
+     * Build minimal contact information when WhatsApp does not expose full contact details.
+     */
+    buildFallbackContact(message, normalizedId) {
+        if (message && message.fromMe && this.client?.info?.wid) {
+            const { wid, pushname } = this.client.info;
+            const user = wid?.user || this.extractUserFromId(normalizedId);
+            const displayName = pushname || user || 'me';
+
+            return {
+                id: wid,
+                number: user,
+                user,
+                pushname: displayName,
+                name: displayName,
+                userid: user
+            };
+        }
+
+        if (!normalizedId) {
+            return null;
+        }
+
+        const user = this.extractUserFromId(normalizedId);
+        if (!user) {
+            return null;
+        }
+
+        const [, server] = normalizedId.split('@');
+
+        return {
+            id: {
+                _serialized: normalizedId,
+                user,
+                server
+            },
+            number: user,
+            user,
+            pushname: user,
+            name: user,
+            userid: user
+        };
+    }
+
+    /**
+     * Resolve the contact for a message, adding fallbacks for community (LID) identifiers.
+     */
+    async resolveContact(message, normalizedId = null) {
+        try {
+            return await message.getContact();
+        } catch (error) {
+            console.warn('⚠️ Failed to get contact via message.getContact', {
+                messageId: message?.id?._serialized,
+                rawAuthor: message?.author,
+                rawFrom: message?.from,
+                rawTo: message?.to,
+                error: error?.message
+            });
+
+            if (!normalizedId) {
+                normalizedId = this.getNormalizedContactId(message);
+            }
+
+            if (normalizedId) {
+                try {
+                    return await this.client.getContactById(normalizedId);
+                } catch (fallbackError) {
+                    console.warn('⚠️ Fallback contact lookup failed', {
+                        normalizedId,
+                        error: fallbackError?.message
+                    });
+                }
+            }
+
+            return this.buildFallbackContact(message, normalizedId);
+        }
+    }
+
+    /**
      * Handle incoming WhatsApp messages
      * 
      * This method processes ALL messages, including:
@@ -302,22 +426,32 @@ class WhatsAppService extends EventEmitter {
         }
 
         try {
-            const contact = await message.getContact();
+            const normalizedContactId = this.getNormalizedContactId(message);
+            const contact = await this.resolveContact(message, normalizedContactId);
             const chat = await message.getChat();
-            const messageBody = message.body.trim();
+            const messageBody = (message.body || '').trim();
 
-            const contactNumber = contact?.id?.user || contact?.userid || message.author || message.from || 'unknown';
-            const contactName = contact?.name || contact?.pushname || contactNumber;
+            const contactNumber = contact?.id?.user ||
+                contact?.userid ||
+                this.extractUserFromId(normalizedContactId) ||
+                message.author ||
+                message.from ||
+                'unknown';
 
-        // Debug logging
-        console.log(`🔍 Debug - Message details:`, {
-            fromMe: message.fromMe,
-            body: messageBody.substring(0, 50),
-            messageId: message.id._serialized,
-            contactNumber,
-            contactName,
-            isCommand: messageBody.startsWith('!')
-        });
+            const contactName = contact?.name ||
+                contact?.pushname ||
+                (message.fromMe && this.client?.info?.pushname) ||
+                contactNumber;
+
+            // Debug logging
+            console.log(`🔍 Debug - Message details:`, {
+                fromMe: message.fromMe,
+                body: messageBody.substring(0, 50),
+                messageId: message.id?._serialized || 'unknown',
+                contactNumber,
+                contactName,
+                isCommand: messageBody.startsWith('!')
+            });
 
         // Don't skip self messages - we want to process all messages including our own responses
         // This ensures proper logging and potential self-interaction features

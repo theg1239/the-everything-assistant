@@ -409,6 +409,60 @@ class WhatsAppService extends EventEmitter {
     }
 
     /**
+     * Fetch chat history in batches until the desired size is reached.
+     */
+    async fetchAllChatMessages(chat, options = {}) {
+        const {
+            batchSize = 200,
+            maxMessages = 800
+        } = options;
+
+        const messages = [];
+        const seenMessageIds = new Set();
+        let remaining = Math.max(maxMessages, 0);
+        let cursor = null;
+
+        while (remaining > 0) {
+            const limit = Math.min(batchSize, remaining);
+            const fetchOptions = { limit };
+            if (cursor) {
+                fetchOptions.before = cursor;
+            }
+
+            // Fetch a batch of messages
+            const batch = await chat.fetchMessages(fetchOptions);
+            if (!batch || batch.length === 0) {
+                break;
+            }
+
+            for (const message of batch) {
+                const serializedId = message?.id?._serialized;
+                if (serializedId && seenMessageIds.has(serializedId)) {
+                    continue;
+                }
+
+                messages.push(message);
+                if (serializedId) {
+                    seenMessageIds.add(serializedId);
+                }
+
+                remaining -= 1;
+                if (remaining <= 0) {
+                    break;
+                }
+            }
+
+            if (batch.length < limit || remaining <= 0) {
+                break;
+            }
+
+            cursor = batch[batch.length - 1];
+        }
+
+        return messages;
+    }
+
+    /**
      * Handle incoming WhatsApp messages
      * 
      * This method processes ALL messages, including:
@@ -660,12 +714,19 @@ class WhatsAppService extends EventEmitter {
      */
     async handleContextCommand(originalChat, userChat, phoneNumber, userName, question, messageData) {
         try {
-            console.log(`📚 Processing context request from ${userName}: ${question}`);
+            const trimmedQuestion = (question || '').trim();
+            const questionText = trimmedQuestion || 'what has been happening in this chat recently?';
+            console.log(`📚 Processing context request from ${userName}: ${questionText}`);
             
             await this.sendTypingToChat(originalChat);
             
             // Fetch recent messages from the chat
-            const recentMessages = await this.getChatHistory(originalChat, 100);
+            const historyLimit = trimmedQuestion ? 800 : 150;
+            const recentMessages = await this.getChatHistory(originalChat, historyLimit, {
+                fetchAll: Boolean(trimmedQuestion),
+                maxMessages: historyLimit,
+                maxAgeDays: trimmedQuestion ? null : 7
+            });
             
             if (recentMessages.length === 0) {
                 await this.sendMessageToChat(originalChat, 'no recent messages found in this chat to analyze.');
@@ -676,7 +737,9 @@ class WhatsAppService extends EventEmitter {
             const contextText = this.formatChatHistoryForAI(recentMessages);
             
             // Create a comprehensive prompt for AI analysis
-            const analysisPrompt = `Please analyze this WhatsApp chat history and answer the following question: "${question}"
+            const analysisPrompt = `You are analyzing a WhatsApp chat history to answer the owner's question.
+
+Question: "${questionText}"
 
 Chat History (last ${recentMessages.length} messages):
 ${contextText}
@@ -712,30 +775,54 @@ Keep the response concise but informative.`;
     /**
      * Get recent chat history
      */
-    async getChatHistory(chat, limit = 100) {
+    async getChatHistory(chat, limit = 100, options = {}) {
         try {
-            console.log(`📖 Fetching last ${limit} messages from chat ${chat.name || chat.id.user}`);
-            
-            // Fetch messages from the chat
-            const messages = await chat.fetchMessages({ limit });
-            
-            // Process and filter messages
-            const processedMessages = [];
-            
-            for (const message of messages.reverse()) { // Reverse to get chronological order
-                // Skip system messages, media messages without caption, and very old messages
-                if (message.isStatus || message.type === 'notification') continue;
-                
-                const contact = await message.getContact();
-                const timestamp = new Date(message.timestamp * 1000);
+            const {
+                fetchAll = false,
+                maxMessages = limit,
+                maxAgeDays = 7
+            } = options;
 
-                // Skip messages older than 7 days
-                const daysSinceMessage = (Date.now() - timestamp.getTime()) / (1000 * 60 * 60 * 24);
-                if (daysSinceMessage > 7) continue;
+            const maxCount = Math.max(maxMessages || limit || 100, 1);
+
+            console.log(`📖 Fetching chat history for ${chat.name || chat.id.user}`, {
+                fetchAll,
+                requestedLimit: limit,
+                maxMessages: maxCount,
+                maxAgeDays
+            });
+
+            let messages;
+            if (fetchAll) {
+                messages = await this.fetchAllChatMessages(chat, {
+                    maxMessages: maxCount
+                });
+            } else {
+                messages = await chat.fetchMessages({ limit: maxCount });
+            }
+
+            if (!messages || messages.length === 0) {
+                return [];
+            }
+
+            // Ensure chronological order (oldest first)
+            const chronologicalMessages = messages.slice().reverse();
+
+            const processedMessages = [];
+            for (const message of chronologicalMessages) {
+                if (message.isStatus || message.type === 'notification') {
+                    continue;
+                }
+
+                const timestamp = new Date(message.timestamp * 1000);
+                if (typeof maxAgeDays === 'number' && maxAgeDays >= 0) {
+                    const daysSinceMessage = (Date.now() - timestamp.getTime()) / (1000 * 60 * 60 * 24);
+                    if (daysSinceMessage > maxAgeDays) {
+                        continue;
+                    }
+                }
 
                 let messageText = message.body || '';
-
-                // Handle different message types
                 if (message.hasMedia) {
                     const mediaType = message.type;
                     messageText = `[${mediaType}${messageText ? ': ' + messageText : ''}]`;
@@ -745,25 +832,41 @@ Keep the response concise but informative.`;
                     messageText = '[Contact shared]';
                 }
 
-                if (messageText.trim()) {
-                    const senderNumber = contact.id?.user || contact.userid || 'unknown';
-                    const senderName = contact.pushname || contact.name || senderNumber;
-                    processedMessages.push({
-                        sender: senderName,
-                        senderNumber: senderNumber,
-                        text: messageText,
-                        timestamp: timestamp.toLocaleString(),
-                        isFromMe: message.fromMe
-                    });
+                if (!messageText.trim()) {
+                    continue;
                 }
-                
-                // Limit to requested number of messages
-                if (processedMessages.length >= limit) break;
+
+                const normalizedId = this.getNormalizedContactId(message);
+                const contact = await this.resolveContact(message, normalizedId);
+                const senderNumber = contact?.id?.user ||
+                    contact?.userid ||
+                    this.extractUserFromId(normalizedId) ||
+                    message.from ||
+                    'unknown';
+                const senderName = contact?.pushname ||
+                    contact?.name ||
+                    (message.fromMe ? (this.client?.info?.pushname || 'Bot') : senderNumber);
+
+                processedMessages.push({
+                    sender: senderName,
+                    senderNumber,
+                    text: messageText,
+                    timestamp: timestamp.toLocaleString(),
+                    isFromMe: message.fromMe
+                });
+
+                if (processedMessages.length >= maxCount) {
+                    break;
+                }
             }
-            
+
+            if (processedMessages.length === 0) {
+                return [];
+            }
+
             console.log(`📊 Retrieved ${processedMessages.length} messages for context analysis`);
             return processedMessages;
-            
+
         } catch (error) {
             console.error('Failed to fetch chat history:', error);
             return [];

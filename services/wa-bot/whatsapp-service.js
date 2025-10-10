@@ -485,12 +485,15 @@ class WhatsAppService extends EventEmitter {
             const chat = await message.getChat();
             const messageBody = (message.body || '').trim();
 
-            const contactNumber = contact?.id?.user ||
-                contact?.userid ||
-                this.extractUserFromId(normalizedContactId) ||
-                message.author ||
-                message.from ||
-                'unknown';
+            const selfNumber = this.client?.info?.wid?.user;
+            const contactNumber = message.fromMe
+                ? (selfNumber || contact?.id?.user || this.extractUserFromId(normalizedContactId) || 'unknown')
+                : (contact?.id?.user ||
+                    contact?.userid ||
+                    this.extractUserFromId(normalizedContactId) ||
+                    message.author ||
+                    message.from ||
+                    'unknown');
 
             const contactName = contact?.name ||
                 contact?.pushname ||
@@ -592,6 +595,7 @@ class WhatsAppService extends EventEmitter {
         const command = body.toLowerCase().split(' ')[0];
         const args = body.slice(command.length).trim();
         const botOwnerNumber = '917975100121'; // Your phone number
+        const isBotOwner = messageData.fromMe || from === botOwnerNumber;
 
         console.log(`🤖 Processing command: ${command} from ${fromName}`);
 
@@ -617,7 +621,7 @@ class WhatsAppService extends EventEmitter {
 
             case '!context':
                 // Analyze chat context from recent messages - only for bot owner
-                if (from !== botOwnerNumber) {
+                if (!isBotOwner) {
                     await this.sendMessageToChat(originalChat, 'only the bot owner can use the !context command');
                 } else {
                     const question = args || 'what has been happening in this chat recently?';

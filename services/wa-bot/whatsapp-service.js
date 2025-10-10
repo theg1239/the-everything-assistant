@@ -378,6 +378,17 @@ class WhatsAppService extends EventEmitter {
      * Resolve the contact for a message, adding fallbacks for community (LID) identifiers.
      */
     async resolveContact(message, normalizedId = null) {
+        if (!normalizedId) {
+            normalizedId = this.getNormalizedContactId(message);
+        }
+
+        if (message?.fromMe) {
+            const fallbackContact = this.buildFallbackContact(message, normalizedId);
+            if (fallbackContact) {
+                return fallbackContact;
+            }
+        }
+
         try {
             return await message.getContact();
         } catch (error) {
@@ -388,24 +399,61 @@ class WhatsAppService extends EventEmitter {
                 rawTo: message?.to,
                 error: error?.message
             });
-
-            if (!normalizedId) {
-                normalizedId = this.getNormalizedContactId(message);
-            }
-
-            if (normalizedId) {
-                try {
-                    return await this.client.getContactById(normalizedId);
-                } catch (fallbackError) {
-                    console.warn('⚠️ Fallback contact lookup failed', {
-                        normalizedId,
-                        error: fallbackError?.message
-                    });
-                }
-            }
-
-            return this.buildFallbackContact(message, normalizedId);
         }
+
+        if (normalizedId) {
+            try {
+                return await this.resolveContactById(normalizedId);
+            } catch (fallbackError) {
+                console.warn('⚠️ Fallback contact lookup failed', {
+                    normalizedId,
+                    error: fallbackError?.message
+                });
+            }
+        }
+
+        return this.buildFallbackContact(message, normalizedId);
+    }
+
+    /**
+     * Resolve a contact directly via the WhatsApp client by ID, normalizing LID identifiers.
+     */
+    async resolveContactById(contactId) {
+        if (!contactId || !this.client) {
+            return null;
+        }
+
+        const candidateId = typeof contactId === 'string'
+            ? contactId
+            : (contactId?._serialized || contactId?.id);
+
+        if (!candidateId) {
+            return null;
+        }
+
+        const normalizedId = candidateId.endsWith('@lid')
+            ? this.getNormalizedContactId({ author: candidateId })
+            : candidateId;
+
+        if (!normalizedId) {
+            return null;
+        }
+
+        const rawContact = await this.client.getContactById(normalizedId);
+        if (!rawContact) {
+            return null;
+        }
+
+        const contact = Array.isArray(rawContact) ? rawContact[0] : rawContact;
+        if (contact && !contact.id) {
+            contact.id = {
+                _serialized: normalizedId,
+                user: this.extractUserFromId(normalizedId),
+                server: normalizedId.split('@')[1]
+            };
+        }
+
+        return contact;
     }
 
     /**
@@ -414,7 +462,7 @@ class WhatsAppService extends EventEmitter {
     async fetchAllChatMessages(chat, options = {}) {
         const {
             batchSize = 200,
-            maxMessages = 800
+            maxMessages = 200
         } = options;
 
         const messages = [];

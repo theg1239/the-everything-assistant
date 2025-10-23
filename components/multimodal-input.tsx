@@ -166,7 +166,8 @@ const PureMultimodalInput = ({
     [input, isLoading, handleSubmit, resetHeight]
   )
 
-  const characterCount = input.length
+  const safeInput = input ?? ''
+  const characterCount = safeInput.length
   const showCharacterCount = Boolean(maxLength) && characterCount > 0
   const isNearLimit = Boolean(maxLength) && maxLength ? characterCount > maxLength * 0.8 : false
 
@@ -280,27 +281,27 @@ const PureMultimodalInput = ({
             </motion.svg>
           )}{' '}
           <div className="relative flex items-end w-full">
-            <Textarea
-              ref={textareaRef}
-              value={input}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
-              placeholder={getPlaceholderText()}
-              className={cn(
-                'min-h-[64px] max-h-[200px] w-full resize-none border-0 bg-transparent px-4 py-4 text-sm',
-                'ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
-                'pb-2 pt-3',
-                showAttachments ? 'pt-1' : 'pt-3'
-              )}
-              disabled={isLoading}
-              autoComplete="off"
-              style={{ height: '60px' }}
-              maxLength={maxLength}
-              aria-label="Message input"
-              aria-describedby={showCharacterCount && maxLength ? 'composer-charcount' : undefined}
-            />
+              <Textarea
+                ref={textareaRef}
+                value={safeInput}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
+                placeholder={getPlaceholderText()}
+                className={cn(
+                  'min-h-[64px] max-h-[200px] w-full resize-none border-0 bg-transparent px-4 py-4 text-sm',
+                  'ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
+                  'pb-2 pt-3',
+                  showAttachments ? 'pt-1' : 'pt-3'
+                )}
+                disabled={isLoading}
+                autoComplete="off"
+                style={{ height: '60px' }}
+                maxLength={maxLength}
+                aria-label="Message input"
+                aria-describedby={showCharacterCount && maxLength ? 'composer-charcount' : undefined}
+              />
 
             <div className="flex items-end gap-2 p-2">
               {/* Tools Dropdown */}
@@ -347,7 +348,7 @@ const PureMultimodalInput = ({
                           <Button
                             type="submit"
                             size="sm"
-                            disabled={!input.trim() || isLoading}
+                            disabled={!safeInput.trim() || isLoading}
                             className="size-10 sm:size-9 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 shadow-sm"
                             aria-label="Send message"
                           >

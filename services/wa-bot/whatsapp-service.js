@@ -479,13 +479,13 @@ class WhatsAppService extends EventEmitter {
             working = (working.slice(0, labeledMatch.index) + working.slice(labeledMatch.index + labeledMatch[0].length)).trim();
         } else {
             // Support "limit 500 ..." syntax
-            const limitWordMatch = working.match(/^limit\s+(\d+)(?:\s+(.*))?$/i);
+            const limitWordMatch = working.match(/^limit\s+(\d+)(?:\s+([\s\S]*))?$/i);
             if (limitWordMatch) {
                 limit = parseInt(limitWordMatch[1], 10);
                 working = (limitWordMatch[2] || '').trim();
             } else {
                 // Support leading numeric value e.g., "500 summarize the chat"
-                const leadingMatch = working.match(/^(\d+)(?:\s+(.*))?$/);
+                const leadingMatch = working.match(/^(\d+)(?:\s+([\s\S]*))?$/);
                 if (leadingMatch) {
                     limit = parseInt(leadingMatch[1], 10);
                     working = (leadingMatch[2] || '').trim();

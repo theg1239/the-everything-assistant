@@ -4,6 +4,7 @@ import { createVITTools } from '@/lib/tools'
 import { getFormattedVTOPCredentials as getServerFormatted } from '@/lib/server-vtop-credentials'
 import { google } from '@ai-sdk/google'
 import { streamObject } from 'ai'
+import type { LanguageModelV1 } from 'ai'
 import { vtopResultSchema } from './schema'
 import { saveTokenUsage } from '@/lib/db'
 
@@ -39,7 +40,7 @@ export async function POST(req: Request) {
 
     const modelName = 'gemini-2.5-flash-lite'
     const result = streamObject({
-      model: google(modelName),
+      model: google(modelName) as unknown as LanguageModelV1,
       schema: vtopResultSchema,
       prompt: [
         'You are a formatter for VTOP portal data (VIT University).',

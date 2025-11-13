@@ -2,12 +2,9 @@ import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
   turbopack: {},
-  eslint: { 
-    ignoreDuringBuilds: false,
-    dirs: ['app', 'components', 'lib', 'hooks', 'contexts', 'providers', 'types'] // Only lint specific directories
-  },
   typescript: { ignoreBuildErrors: false },
   images: { unoptimized: true },
+  reactCompiler: true,
   serverExternalPackages: ['playwright-core', '@sparticuz/chromium'],
   outputFileTracingExcludes: { '*': ['./ai-chatbot-main/**/*', './services/**/*'] },
   // compiler: {

@@ -1,18 +1,41 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { X } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import HubShell from './hub-shell'
+import type { PersonalHubState, HubVTOPCommand, PersonalHubSnapshot } from '@/types/hub'
+import { Drawer } from 'vaul'
+
+export type HubActionHandlers = {
+  refreshState: () => Promise<PersonalHubState>
+  syncCore: () => Promise<PersonalHubState>
+  refreshVTOP: (
+    command: HubVTOPCommand,
+    extras?: Record<string, any>
+  ) => Promise<PersonalHubSnapshot>
+  runTool: (toolName: string, args?: Record<string, any>) => Promise<any>
+}
 
 interface HubProps {
   isOpen: boolean
+  locked?: boolean
+  syncing?: boolean
   onClose?: () => void
+  onLink?: () => void
+  initialState: PersonalHubState
+  actions: HubActionHandlers
 }
 
-export default function Hub({ isOpen, onClose }: HubProps) {
+export default function Hub({
+  isOpen,
+  locked = false,
+  syncing = false,
+  onClose,
+  onLink,
+  initialState,
+  actions,
+}: HubProps) {
   const [mounted, setMounted] = useState(false)
   useEffect(() => {
     setMounted(true)
@@ -40,54 +63,59 @@ export default function Hub({ isOpen, onClose }: HubProps) {
     }
   }, [mounted, isOpen, onClose])
 
-  const content = (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/55 backdrop-blur-sm z-50 flex items-start justify-center p-2 sm:p-4 md:items-center overflow-y-auto"
-          onClick={e => e.target === e.currentTarget && onClose?.()}
-          aria-modal="true"
-          role="dialog"
-        >
-          <motion.div
-            initial={{ scale: 0.96, opacity: 0, y: 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.96, opacity: 0, y: 20 }}
-            transition={{ duration: 0.18 }}
-            className="relative bg-background/95 supports-[backdrop-filter]:bg-background/80 backdrop-blur-xl rounded-2xl w-full max-w-6xl h-[95vh] md:h-[90vh] flex flex-col overflow-hidden shadow-2xl ring-1 ring-border/60 my-2 md:my-0"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* subtle top gradient accent */}
-            <div className="pointer-events-none absolute inset-x-0 -top-32 h-32 bg-gradient-to-b from-blue-500/20 via-transparent to-transparent blur-2xl" />
-
-            <div className="flex items-center justify-between p-2 border-b border-border/60 bg-card/60">
-              <div className="px-2 text-sm font-semibold tracking-wide">hub</div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onClose}
-                className="h-8 w-8 p-0 rounded-full hover:bg-muted"
-                aria-label="Close hub"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <div className="flex-1 min-h-0">
-              <HubShell />
-            </div>
-
-            {/* mobile safe-area spacing */}
-            <div className="h-2" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} />
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  )
-
   if (!mounted) return null
-  return createPortal(content, document.body)
+
+  return (
+    <Drawer.Root open={isOpen} onOpenChange={next => !next && onClose?.()} modal dismissible>
+      <Drawer.Portal>
+        <Drawer.Overlay className="fixed inset-0 bg-black/55 backdrop-blur-sm z-40" />
+        <Drawer.Content className="fixed inset-x-0 bottom-0 mx-auto h-[96vh] max-w-6xl rounded-t-3xl border border-border bg-background shadow-2xl z-50 flex flex-col overflow-hidden">
+          <Drawer.Handle className="mx-auto mt-2 mb-1 h-1 w-16 rounded-full bg-border" />
+          <div className="flex items-center justify-between px-3 pb-3 border-b border-border/60">
+            <div className="text-sm font-semibold uppercase text-muted-foreground">hub</div>
+            <div className="flex items-center gap-2">
+              {syncing && !locked && (
+                <span className="text-xs px-2 py-0.5 rounded-full border border-border/50 text-muted-foreground flex items-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" /> syncing
+                </span>
+              )}
+              <Drawer.Close asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 rounded-full hover:bg-muted"
+                  aria-label="Close hub"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </Drawer.Close>
+            </div>
+          </div>
+          <div className="flex-1 min-h-0">
+            {locked ? (
+              <HubEmptyState onAction={onLink} />
+            ) : (
+              <HubShell initialState={initialState} actions={actions} syncing={syncing} onLink={onLink} />
+            )}
+          </div>
+        </Drawer.Content>
+      </Drawer.Portal>
+    </Drawer.Root>
+  )
+}
+
+function HubEmptyState({ onAction }: { onAction?: () => void }) {
+  return (
+    <div className="h-full flex items-center justify-center px-6 py-8 text-center">
+      <div className="space-y-3">
+        <div className="text-sm font-semibold uppercase text-muted-foreground">hub requires VTOP linking</div>
+        <p className="text-2xl font-light text-foreground">
+          link once to pull timetable, assignments, attendance and leave status directly inside chat.
+        </p>
+        <Button onClick={onAction} className="rounded-full px-6">
+          link VTOP
+        </Button>
+      </div>
+    </div>
+  )
 }

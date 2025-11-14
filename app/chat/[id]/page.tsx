@@ -3,6 +3,13 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getChat, getMessages } from '@/lib/db'
 import { ChatInterface } from '@/components/chat-interface'
+import {
+  loadPersonalHubState,
+  syncCoreHubSnapshots,
+  refreshVTOPSnapshotAction,
+  runHubToolAction,
+} from '@/app/actions/hub'
+import type { PersonalHubState } from '@/types/hub'
 
 interface ChatPageProps {
   params: Promise<{
@@ -24,7 +31,11 @@ export default async function ChatPage({ params }: ChatPageProps) {
     redirect('/')
   }
 
-  const messages = await getMessages(id)
+  const fallbackHubState: PersonalHubState = { isLinked: false, snapshots: [], lastSyncedAt: null }
+  const [messages, initialHubState] = await Promise.all([
+    getMessages(id),
+    loadPersonalHubState().catch(() => fallbackHubState),
+  ])
   return (
     <main id="main-content" className="flex min-h-screen flex-col bg-transparent">
       <div className="flex flex-1 overflow-hidden">
@@ -39,6 +50,13 @@ export default async function ChatPage({ params }: ChatPageProps) {
             }))}
             chatId={id}
             autoResume={true}
+            initialHubState={initialHubState}
+            hubActions={{
+              refreshState: loadPersonalHubState,
+              syncCore: syncCoreHubSnapshots,
+              refreshVTOP: refreshVTOPSnapshotAction,
+              runTool: runHubToolAction,
+            }}
           />
         </div>
       </div>

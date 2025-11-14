@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, memo, useCallback } from 'react'
+import { useState, useRef, useEffect, memo, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useChat, type Message as AIMessage } from '@ai-sdk/react'
 import { useRouter } from 'next/navigation'
@@ -16,7 +16,8 @@ import { FollowUpSuggestions } from '@/components/follow-up-suggestions'
 import { ChatHeader } from '@/components/chat-header'
 import { MobilePdfDockButton, DesktopPdfDockButton } from '@/components/pdf-dock'
 import { MultimodalInput } from '@/components/multimodal-input'
-import Hub from '@/components/hub/hub'
+import Hub, { type HubActionHandlers } from '@/components/hub/hub'
+import type { PersonalHubState } from '@/types/hub'
 import { extractTitleFromContent } from '@/lib/utils'
 import UpsellBanner from '@/components/upsell-banner'
 import { VTOPToolHandler } from '@/components/vtop-tool-handler'
@@ -108,17 +109,50 @@ function memoryToMessage(memory: MemoryWithId): Message {
   }
 }
 
+const EMPTY_HUB_STATE: PersonalHubState = {
+  isLinked: false,
+  snapshots: [],
+  lastSyncedAt: null,
+}
+
+const areHubActionsEqual = (a?: HubActionHandlers, b?: HubActionHandlers) => {
+  if (a === b) return true
+  if (!a || !b) return false
+  return (
+    a.refreshState === b.refreshState &&
+    a.syncCore === b.syncCore &&
+    a.refreshVTOP === b.refreshVTOP &&
+    a.runTool === b.runTool
+  )
+}
+
 interface ChatInterfaceProps {
   initialMessages?: Message[]
   chatId?: string
   autoResume?: boolean
+  initialHubState?: PersonalHubState
+  hubActions?: HubActionHandlers
 }
 
 const PureChatInterface = memo(
-  ({ initialMessages = [], chatId, autoResume = false }: ChatInterfaceProps) => {
+  ({ initialMessages = [], chatId, autoResume = false, initialHubState, hubActions }: ChatInterfaceProps) => {
     const [showFullChat, setShowFullChat] = useState(initialMessages.length > 0)
     const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebar()
     const [hubOpen, setHubOpen] = useState(false)
+    const hubSeed = initialHubState ?? EMPTY_HUB_STATE
+    const hubActionHandlers = useMemo<HubActionHandlers>(() => {
+      if (hubActions) return hubActions
+      return {
+        refreshState: async () => hubSeed,
+        syncCore: async () => hubSeed,
+        refreshVTOP: async () => {
+          throw new Error('hub actions are unavailable in this context')
+        },
+        runTool: async () => {
+          throw new Error('hub actions are unavailable in this context')
+        },
+      }
+    }, [hubActions, hubSeed])
     const [vtopLoading, setVtopLoading] = useState(false)
     const [errorMessage, setErrorMessage] = useState<string | null>(null)
     const [hasUserInitiatedConversation, setHasUserInitiatedConversation] = useState(false)
@@ -180,6 +214,17 @@ const PureChatInterface = memo(
         window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener)
         window.removeEventListener('appinstalled', onAppInstalled as EventListener)
       }
+    }, [])
+
+    useEffect(() => {
+      const handleShare = (event: Event) => {
+        const detail = (event as CustomEvent<{ text?: string }>).detail
+        if (!detail?.text) return
+        setShowFullChat(true)
+        setInput(detail.text)
+      }
+      window.addEventListener('hubShareToChat', handleShare as EventListener)
+      return () => window.removeEventListener('hubShareToChat', handleShare as EventListener)
     }, [])
 
     const handleInstallClick = async () => {
@@ -708,10 +753,20 @@ const PureChatInterface = memo(
     }
 
     const handleLoginClick = () => {
-      const triggerEvent = new CustomEvent('vtopLoginTrigger', {
-        detail: { command: 'attendance' },
-      })
-      window.dispatchEvent(triggerEvent)
+      const command = 'attendance'
+      window.dispatchEvent(
+        new CustomEvent('vtopLoginTrigger', {
+          detail: { command, linkOnly: true },
+        })
+      )
+      // Slight delay so the pending tool call gets registered before opening the dialog
+      window.setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent('vtopOpenCredentials', {
+            detail: { command },
+          })
+        )
+      }, 30)
     }
 
     const handlePlacementSearch = (company: string) => {
@@ -1194,6 +1249,9 @@ const PureChatInterface = memo(
           <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
           <Hub
             isOpen={hubOpen}
+            initialState={hubSeed}
+            actions={hubActionHandlers}
+            onLink={handleLoginClick}
             onClose={() => {
               setHubOpen(false)
             }}
@@ -1366,10 +1424,13 @@ const PureChatInterface = memo(
         <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
         <Hub
           isOpen={hubOpen}
+          initialState={hubSeed}
+          actions={hubActionHandlers}
+          onLink={handleLoginClick}
           onClose={() => {
             setHubOpen(false)
           }}
-        />{' '}
+        />
         <div
           ref={mainRef}
           className="flex flex-col h-[calc(var(--vh,1vh)*100)] bg-transparent text-foreground overflow-hidden mobile-viewport-fix"
@@ -1642,7 +1703,7 @@ const PureChatInterface = memo(
 )
 
 export const ChatInterface = memo(
-  ({ initialMessages = [], chatId, autoResume = true }: ChatInterfaceProps) => {
+  ({ initialMessages = [], chatId, autoResume = true, initialHubState, hubActions }: ChatInterfaceProps) => {
     return (
       <RateLimitProvider>
         <VTOPProvider>
@@ -1650,6 +1711,8 @@ export const ChatInterface = memo(
             initialMessages={initialMessages}
             chatId={chatId}
             autoResume={autoResume}
+            initialHubState={initialHubState}
+            hubActions={hubActions}
           />
         </VTOPProvider>
       </RateLimitProvider>
@@ -1659,6 +1722,8 @@ export const ChatInterface = memo(
     return (
       prevProps.chatId === nextProps.chatId &&
       prevProps.autoResume === nextProps.autoResume &&
+      prevProps.initialHubState === nextProps.initialHubState &&
+      areHubActionsEqual(prevProps.hubActions, nextProps.hubActions) &&
       prevProps.initialMessages?.length === nextProps.initialMessages?.length &&
       (prevProps.initialMessages?.every(
         (msg, index) => msg.id === nextProps.initialMessages?.[index]?.id

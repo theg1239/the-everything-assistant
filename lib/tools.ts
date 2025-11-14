@@ -2080,7 +2080,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       parameters: z.object({
         command: z
           .enum([
-            // 'profile',
+            'profile',
             'marks',
             'grades',
             'attendance',

@@ -68,6 +68,7 @@ model User {
   memorySettings MemorySettings?
   webAuthnCredentials WebAuthnCredential[]
   whatsappConversations WhatsAppConversation[]
+  vtopSnapshots VTOPSnapshot[]
 
   @@index([email])
   @@map("users")
@@ -292,6 +293,20 @@ model WhatsAppMessage {
   @@index([direction, createdAt])
   @@index([isCommand])
   @@map("whatsapp_messages")
+}
+
+model VTOPSnapshot {
+  id        String   @id @default(cuid())
+  userId    String
+  command   String
+  data      Json
+  fetchedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, command])
+  @@index([userId, fetchedAt(sort: Desc)])
+  @@map("vtop_snapshots")
 }
 
 enum crdb_internal_region {

@@ -281,7 +281,9 @@ export async function POST(req: Request) {
     if (!session?.user?.id) {
       return new Response('Unauthorized', { status: 401 })
     }
-    const { messages, id: chatId, directToolCall, preferredTool } = await req.json()
+    const payload = await req.json()
+    const { id: chatId, directToolCall, preferredTool } = payload
+    const messages: any[] = Array.isArray(payload?.messages) ? payload.messages : []
 
     let chat = chatId ? await getChat(chatId, session.user.id) : null
     if (!chat) {
@@ -428,8 +430,8 @@ export async function POST(req: Request) {
       )
     }
 
-    const userMessage = messages[messages.length - 1]
-    if (userMessage.role === 'user') {
+    const userMessage = messages.length > 0 ? messages[messages.length - 1] : null
+    if (userMessage?.role === 'user') {
       await saveMessage(chat.id, 'user', userMessage.content, undefined, userMessage.id)
     }
 
@@ -437,7 +439,7 @@ export async function POST(req: Request) {
     const isMemoryEnabled = memorySettings?.isEnabled ?? true
 
     let memoryContext = ''
-    if (isMemoryEnabled && userMessage.role === 'user') {
+    if (isMemoryEnabled && userMessage?.role === 'user') {
       try {
         const memories = await memoryService.getUserMemories(session.user.id, { pageSize: 100 })
 

@@ -42,7 +42,11 @@ export function VTOPToolHandler({
   }
   useEffect(() => {
     const handleVTOPLoginTrigger = (event: CustomEvent) => {
-      const { command: triggerCommand, toolCallId: triggerToolCallId } = event.detail
+      const {
+        command: triggerCommand,
+        toolCallId: triggerToolCallId,
+        linkOnly,
+      } = event.detail || {}
 
       if (hasVTOPCredentials()) {
         const savedCredentials = getFormattedVTOPCredentials()
@@ -58,6 +62,7 @@ export function VTOPToolHandler({
               args: { command: triggerCommand || 'attendance' },
               result: { requiresCredentials: true, command: triggerCommand || 'attendance' },
               toolCallId: triggerToolCallId || Date.now().toString(),
+              meta: { linkOnly: !!linkOnly },
             }
           }
 
@@ -88,37 +93,33 @@ export function VTOPToolHandler({
         )
       }
 
-      if (vtopToolCall) {
-        setCommand(
-          vtopToolCall.result.command ||
-            vtopToolCall.args?.command ||
-            triggerCommand ||
-            'attendance'
-        )
-        setPendingToolCall(vtopToolCall)
-        // Show disclaimer on chat before opening dialog
-        dispatchDisclaimer(
-          vtopToolCall,
-          vtopToolCall.result.command ||
-            vtopToolCall.args?.command ||
-            triggerCommand ||
-            'attendance'
-        )
-      } else {
-        setCommand(triggerCommand || 'attendance')
-        setPendingToolCall({
-          toolName: 'queryVTOP',
-          args: { command: triggerCommand || 'attendance' },
-          result: { requiresCredentials: true, command: triggerCommand || 'attendance' },
-          toolCallId: triggerToolCallId || Date.now().toString(),
-        })
-        // Show disclaimer for synthetic call
-        const synthetic = {
-          toolCallId: triggerToolCallId || Date.now().toString(),
-          args: { command: triggerCommand || 'attendance' },
-          result: { requiresCredentials: true, command: triggerCommand || 'attendance' },
-        }
-        dispatchDisclaimer(synthetic, triggerCommand || 'attendance')
+      const resolvedToolCall = vtopToolCall
+        ? {
+            ...vtopToolCall,
+            meta: {
+              ...(vtopToolCall.meta || {}),
+              linkOnly: vtopToolCall.meta?.linkOnly || !!linkOnly,
+            },
+          }
+        : {
+            toolName: 'queryVTOP',
+            args: { command: triggerCommand || 'attendance' },
+            result: { requiresCredentials: true, command: triggerCommand || 'attendance' },
+            toolCallId: triggerToolCallId || Date.now().toString(),
+            meta: { linkOnly: !!linkOnly },
+          }
+
+      const commandToRun =
+        resolvedToolCall.result.command ||
+        resolvedToolCall.args?.command ||
+        triggerCommand ||
+        'attendance'
+
+      setCommand(commandToRun)
+      setPendingToolCall(resolvedToolCall)
+      dispatchDisclaimer(resolvedToolCall, commandToRun)
+      if (linkOnly || resolvedToolCall.meta?.linkOnly) {
+        setShowCredentialsDialog(true)
       }
     }
 

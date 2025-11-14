@@ -1,16 +1,25 @@
 'use client'
 
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useCallback } from 'react'
+import type { ReactNode } from 'react'
+import { formatDistanceToNow } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
+  RefreshCcw,
+  Sparkles,
+  Clock3,
+  ClipboardCheck,
+  CalendarClock,
+  Award,
   GraduationCap,
   FileSearch,
   UtensilsCrossed,
   Briefcase,
   Users,
-  Home,
   Flame,
+  LockKeyhole,
+  ArrowRight,
 } from 'lucide-react'
 
 import VTOPPanel from './panels/vtop-panel'
@@ -20,71 +29,71 @@ import PlacementPanel from './panels/placement-panel'
 import FacultyPanel from './panels/faculty-panel'
 import RedditPanel from './panels/reddit-panel'
 import SyllabiPanel from './panels/syllabi-panel'
-import { hasVTOPCredentials } from '@/lib/vtop-credentials'
-import QuickActions from './quick-actions'
-import ResultViewer from './result-viewer'
+import { ResultBottomSheet } from './result-bottom-sheet'
+import { HubToolProvider } from './hub-tools-context'
+import type { PersonalHubState, PersonalHubSnapshot, HubVTOPCommand } from '@/types/hub'
+import type { HubActionHandlers } from './hub'
+import { listHubCapabilities, type HubCapability } from '@/lib/hub/capabilities'
 
-type Page = 'home' | 'vtop' | 'papers' | 'mess' | 'placements' | 'faculty' | 'reddit' | 'syllabi'
+const PINNED_COMMANDS: HubVTOPCommand[] = ['timetable', 'attendance', 'marks', 'cgpa', 'profile']
+const SNAPSHOT_ICONS: Partial<Record<HubVTOPCommand, ReactNode>> = {
+  attendance: <ClipboardCheck className="h-4 w-4" />,
+  timetable: <CalendarClock className="h-4 w-4" />,
+  marks: <Award className="h-4 w-4" />,
+  cgpa: <Award className="h-4 w-4" />,
+}
+const SYNC_SEQUENCE: HubVTOPCommand[] = ['profile', 'attendance', 'timetable', 'marks', 'cgpa', 'exams']
 
-export default function HubShell() {
-  const [page, setPage] = useState<Page>('home')
-  const [linked] = useState<boolean>(hasVTOPCredentials())
+type Page =
+  | 'briefing'
+  | 'vtop'
+  | 'papers'
+  | 'mess'
+  | 'placements'
+  | 'faculty'
+  | 'reddit'
+  | 'syllabi'
+
+type HubShellProps = {
+  initialState: PersonalHubState
+  actions: HubActionHandlers
+  syncing?: boolean
+  onLink?: () => void
+}
+
+export default function HubShell({
+  initialState,
+  actions,
+  syncing: externalSyncing = false,
+  onLink,
+}: HubShellProps) {
+  const [page, setPage] = useState<Page>('briefing')
+  const [hubState, setHubState] = useState(initialState)
   const [viewerOpen, setViewerOpen] = useState(false)
-  const [viewerTitle, setViewerTitle] = useState<string>('result')
+  const [viewerTitle, setViewerTitle] = useState('result')
   const [viewerData, setViewerData] = useState<any>(null)
   const [viewerMode, setViewerMode] = useState<'static' | 'stream'>('static')
-  const [viewerLoading, setViewerLoading] = useState<boolean>(false)
-  const [viewerStop, setViewerStop] = useState<(() => void) | undefined>(undefined)
+  const [viewerLoading, setViewerLoading] = useState(false)
+  const [syncing, setSyncing] = useState(externalSyncing)
+  const [syncCommand, setSyncCommand] = useState<HubVTOPCommand | null>(null)
+  const [capabilityLoading, setCapabilityLoading] = useState<HubVTOPCommand | null>(null)
+  const capabilities = useMemo(() => listHubCapabilities(), [])
 
-  // Keyboard shortcuts: 1=home, 2=vtop, 3=papers, 4=mess, 5=placements, 6=faculty, 7=reddit
+  useEffect(() => {
+    setSyncing(externalSyncing)
+  }, [externalSyncing])
+
+  useEffect(() => {
+    setHubState(initialState)
+  }, [initialState])
+
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.altKey || e.metaKey || e.ctrlKey) return
       const target = e.target as HTMLElement | null
-      const activeEl =
-        typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null
-      const isTypingContext = (el: HTMLElement | null) => {
-        if (!el) return false
-        if (el instanceof HTMLTextAreaElement) return true
-        if (el instanceof HTMLInputElement) {
-          if (el.readOnly || el.disabled) return false
-          const t = (el.type || '').toLowerCase()
-          const typingTypes = new Set([
-            'text',
-            'search',
-            'url',
-            'tel',
-            'email',
-            'password',
-            'number',
-            'date',
-            'time',
-            'datetime-local',
-            'month',
-            'week',
-          ])
-          return typingTypes.has(t)
-        }
-        if (el.isContentEditable) return true
-        const role = el.getAttribute('role')?.toLowerCase()
-        if (
-          role === 'textbox' ||
-          role === 'combobox' ||
-          role === 'searchbox' ||
-          role === 'spinbutton'
-        )
-          return true
-        return !!el.closest(
-          'input:not([disabled]):not([readonly]), textarea:not([disabled]):not([readonly]), select, [contenteditable=""], [contenteditable="true"], [role="textbox"], [role="combobox"], [role="searchbox"], [role="spinbutton"]'
-        )
-      }
-      const path: any[] = (e as any).composedPath?.() || []
-      const pathHasTyping = path.some(el => el instanceof HTMLElement && isTypingContext(el))
-      const activeIsBody = !activeEl || activeEl === document.body
-      if (isTypingContext(target) || isTypingContext(activeEl) || pathHasTyping || !activeIsBody)
-        return
+      if (target && target.closest('input, textarea, [contenteditable="true"], select')) return
       const map: Record<string, Page> = {
-        '1': 'home',
+        '1': 'briefing',
         '2': 'vtop',
         '3': 'papers',
         '4': 'mess',
@@ -102,29 +111,116 @@ export default function HubShell() {
     return () => window.removeEventListener('keydown', handleKey)
   }, [])
 
-  const title = useMemo(() => {
-    switch (page) {
-      case 'vtop':
-        return 'vtop'
-      case 'papers':
-        return 'past papers'
-      case 'mess':
-        return 'mess menu'
-      case 'placements':
-        return 'placements'
-      case 'faculty':
-        return 'faculty'
-      case 'reddit':
-        return 'reddit'
-      default:
-        return 'home'
+  const linked = hubState.isLinked
+
+  const updateSnapshot = useCallback((snapshot: PersonalHubSnapshot) => {
+    setHubState(prev => ({
+      ...prev,
+      lastSyncedAt: snapshot.fetchedAt,
+      snapshots: [snapshot, ...prev.snapshots.filter(s => s.command !== snapshot.command)],
+      isLinked: true,
+    }))
+  }, [])
+
+  const runVtopCommand = useCallback(
+    async (command: HubVTOPCommand, extras?: Record<string, any>) => {
+      const snapshot = await actions.refreshVTOP(command, extras)
+      updateSnapshot(snapshot)
+      return snapshot
+    },
+    [actions, updateSnapshot]
+  )
+
+  const toolExecutor = useCallback(
+    (toolName: string, args?: Record<string, any>) => {
+      return actions.runTool(toolName, args || {})
+    },
+    [actions]
+  )
+
+  const handleSync = useCallback(async () => {
+    if (!linked) {
+      onLink?.()
+      setPage('briefing')
+      return
     }
-  }, [page])
+    setSyncing(true)
+    try {
+      for (const command of SYNC_SEQUENCE) {
+        setSyncCommand(command)
+        try {
+          await runVtopCommand(command)
+        } catch (err) {
+          console.error('[hub] failed to sync command', command, err)
+        }
+      }
+      const finalState = await actions.refreshState()
+      setHubState(finalState)
+    } finally {
+      setSyncCommand(null)
+      setSyncing(false)
+    }
+  }, [actions, linked, onLink, runVtopCommand])
+
+  const handleRefreshState = useCallback(async () => {
+    setSyncing(true)
+    try {
+      const next = await actions.refreshState()
+      setHubState(next)
+    } finally {
+      setSyncing(false)
+    }
+  }, [actions])
+
+  const latestSnapshots = useMemo(() => {
+    const priority = ['attendance', 'timetable', 'marks', 'cgpa', 'profile']
+    const picked: PersonalHubSnapshot[] = []
+    for (const cmd of priority) {
+      const snap = hubState.snapshots.find(s => s.command === cmd)
+      if (snap) picked.push(snap)
+      if (picked.length >= 4) break
+    }
+    if (picked.length < 4) {
+      for (const snap of hubState.snapshots) {
+        if (!picked.includes(snap) && picked.length < 4) picked.push(snap)
+      }
+    }
+    return picked
+  }, [hubState.snapshots])
+
+  const lastSyncedLabel = hubState.lastSyncedAt
+    ? formatDistanceToNow(new Date(hubState.lastSyncedAt), { addSuffix: true })
+    : 'never'
+
+  const profileSnapshot = hubState.snapshots.find(s => s.command === 'profile')
+  const terseName = useMemo(() => {
+    const structuredName =
+      (profileSnapshot?.structured_data as any)?.student?.name || profileSnapshot?.title
+    if (!structuredName) return 'there'
+    const parts = structuredName.trim().split(' ')
+    return parts[0]?.toLowerCase() === 'hey' ? parts.slice(1).join(' ') : parts[0]
+  }, [profileSnapshot])
+
+  const openSnapshot = useCallback((snapshot: PersonalHubSnapshot) => {
+    setViewerTitle(snapshot.title || snapshot.command)
+    setViewerData(snapshot)
+    setViewerMode('static')
+    setViewerLoading(false)
+    setViewerOpen(true)
+  }, [])
 
   const Panel = useMemo(() => {
     switch (page) {
       case 'vtop':
-        return <VTOPPanel />
+        return (
+          <VTOPPanel
+            linked={linked}
+            runCommand={runVtopCommand}
+            onRequireLink={() => setPage('briefing')}
+            onLink={onLink}
+            onResult={openSnapshot}
+          />
+        )
       case 'papers':
         return <PastPapersPanel />
       case 'mess':
@@ -140,242 +236,480 @@ export default function HubShell() {
       default:
         return null
     }
-  }, [page])
+  }, [linked, openSnapshot, page, runVtopCommand])
+
+  const handleCapabilityRun = useCallback(
+    async (capability: HubCapability) => {
+      if (!linked) {
+        onLink?.()
+        return
+      }
+      setCapabilityLoading(capability.command)
+      try {
+        const snapshot = await runVtopCommand(capability.command)
+        openSnapshot(snapshot)
+      } catch (error) {
+        console.error('[hub] failed to execute capability', capability.command, error)
+      } finally {
+        setCapabilityLoading(null)
+      }
+    },
+    [linked, onLink, runVtopCommand, openSnapshot]
+  )
+
+  const timetableSnapshot = useMemo(
+    () => hubState.snapshots.find(s => s.command === 'timetable'),
+    [hubState.snapshots]
+  )
+  const assignmentsSnapshot = useMemo(
+    () => hubState.snapshots.find(s => s.command === 'da'),
+    [hubState.snapshots]
+  )
+  const attendanceSnapshot = useMemo(
+    () => hubState.snapshots.find(s => s.command === 'attendance'),
+    [hubState.snapshots]
+  )
+  const leaveSnapshot = useMemo(
+    () => hubState.snapshots.find(s => s.command === 'leave' || s.command === 'leave-status'),
+    [hubState.snapshots]
+  )
+  const examsSnapshot = useMemo(
+    () => hubState.snapshots.find(s => s.command === 'exams' || s.command === 'exam-schedule'),
+    [hubState.snapshots]
+  )
+
+  const nextClassInsight = useMemo(() => deriveNextClassInsight(timetableSnapshot), [timetableSnapshot])
+  const assignmentsInsight = useMemo(() => deriveAssignmentInsight(assignmentsSnapshot), [assignmentsSnapshot])
+  const attendanceInsight = useMemo(() => deriveAttendanceInsight(attendanceSnapshot), [attendanceSnapshot])
+  const leaveInsight = useMemo(() => deriveLeaveInsight(leaveSnapshot), [leaveSnapshot])
+  const examInsight = useMemo(() => deriveExamInsight(examsSnapshot), [examsSnapshot])
+
+  const quickCaps = useMemo(
+    () => capabilities.filter(cap => ['attendance', 'timetable', 'da', 'leave', 'exams'].includes(cap.command)),
+    [capabilities]
+  )
+  const daCapability = useMemo(() => capabilities.find(cap => cap.command === 'da'), [capabilities])
+
+  const renderBriefing = () => (
+    <div className="space-y-4 mt-2">
+      {linked ? (
+        <MinimalStatusCard
+          terseName={terseName}
+          syncing={syncing}
+          syncCommand={syncCommand}
+          lastSyncedLabel={lastSyncedLabel}
+          onSync={handleSync}
+          onRefresh={handleRefreshState}
+          quickCaps={quickCaps}
+          onCapability={handleCapabilityRun}
+          loadingCommand={capabilityLoading}
+          disabled={syncing}
+        />
+      ) : (
+        <HubOnboarding onLink={onLink} />
+      )}
+
+      {linked && (
+        <section className="grid gap-2 sm:grid-cols-2">
+          <InsightCard
+            label="next class"
+            headline={nextClassInsight?.headline || 'no class detected'}
+            supporting={nextClassInsight?.supporting}
+            meta={nextClassInsight?.meta || 'sync timetable to hydrate'}
+            onOpen={() => timetableSnapshot && openSnapshot(timetableSnapshot)}
+          />
+          <InsightCard
+            label="assignments"
+            headline={assignmentsInsight?.headline || 'all clear'}
+            supporting={assignmentsInsight?.supporting}
+            meta={assignmentsInsight?.meta || 'run digital assignments to update'}
+            onOpen={() => assignmentsSnapshot && openSnapshot(assignmentsSnapshot)}
+            onAction={daCapability ? () => handleCapabilityRun(daCapability) : undefined}
+            actionLabel={daCapability ? 'refresh' : undefined}
+            disabled={!daCapability}
+          />
+          <InsightCard
+            label="attendance"
+            headline={attendanceInsight?.headline || 'run sync to load'}
+            supporting={attendanceInsight?.supporting}
+            meta={attendanceInsight?.meta}
+            onOpen={() => attendanceSnapshot && openSnapshot(attendanceSnapshot)}
+          />
+          <InsightCard
+            label="leave status"
+            headline={leaveInsight?.headline || 'no requests'}
+            supporting={leaveInsight?.supporting}
+            meta={leaveInsight?.meta}
+            onOpen={() => leaveSnapshot && openSnapshot(leaveSnapshot)}
+          />
+          <InsightCard
+            label="exam schedule"
+            headline={examInsight?.headline || 'no upcoming exams'}
+            supporting={examInsight?.supporting}
+            meta={examInsight?.meta}
+            onOpen={() => examsSnapshot && openSnapshot(examsSnapshot)}
+          />
+        </section>
+      )}
+
+      {linked && latestSnapshots.length > 0 && (
+        <section className="space-y-2">
+          <div className="text-xs font-semibold text-muted-foreground">latest pulls</div>
+          <div className="space-y-1">
+            {latestSnapshots.map(snapshot => (
+              <SnapshotGlance key={snapshot.command} snapshot={snapshot} onOpen={openSnapshot} minimal />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  )
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="p-3 sm:p-4 border-b border-border/60 bg-card/60 sticky top-0">
-        <div className="max-w-6xl mx-auto">
-          {/* <div className="flex items-center justify-between gap-2">
-            <div className="px-1 text-base sm:text-lg font-semibold tracking-wide capitalize">{title}</div>
-            <div className="hidden md:flex items-center text-[11px] text-muted-foreground">press 1-7 to switch</div>
-            <div className="md:hidden">
-              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setPage('home')} aria-label="Go to home">
-                <Home className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </div> */}
-          {/* Tabs / sections (mobile + desktop) */}
-          <div
-            className="mt-3 overflow-x-auto no-scrollbar [-ms-overflow-style:none] [scrollbar-width:none]"
-            data-allow-touch-scroll
-            style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x' }}
-          >
-            <div className="flex gap-1.5 min-w-max">
-              {(
-                [
-                  { id: 'home', label: 'home', icon: <Home className="h-3.5 w-3.5" /> },
-                  { id: 'vtop', label: 'vtop', icon: <GraduationCap className="h-3.5 w-3.5" /> },
-                  {
-                    id: 'papers',
-                    label: 'past papers',
-                    icon: <FileSearch className="h-3.5 w-3.5" />,
-                  },
-                  {
-                    id: 'mess',
-                    label: 'mess menu',
-                    icon: <UtensilsCrossed className="h-3.5 w-3.5" />,
-                  },
-                  {
-                    id: 'placements',
-                    label: 'placements',
-                    icon: <Briefcase className="h-3.5 w-3.5" />,
-                  },
-                  { id: 'faculty', label: 'faculty', icon: <Users className="h-3.5 w-3.5" /> },
-                  { id: 'reddit', label: 'reddit', icon: <Flame className="h-3.5 w-3.5" /> },
-                  { id: 'syllabi', label: 'syllabi', icon: <FileSearch className="h-3.5 w-3.5" /> },
-                ] as { id: Page; label: string; icon: React.ReactNode }[]
-              ).map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setPage(tab.id)}
-                  aria-pressed={page === tab.id}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
-                    page === tab.id
-                      ? 'bg-primary/10 border-primary/30 text-primary shadow-sm'
-                      : 'bg-muted/30 border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                  }`}
-                >
-                  {tab.icon}
-                  <span className="whitespace-nowrap">{tab.label}</span>
-                </button>
-              ))}
+    <HubToolProvider value={toolExecutor}>
+      <div className="h-full flex flex-col">
+        <div className="p-3 sm:p-4 border-b border-border/60 bg-card/60 sticky top-0">
+          <div className="max-w-6xl mx-auto">
+            <div
+              className="mt-2 overflow-x-auto no-scrollbar [-ms-overflow-style:none] [scrollbar-width:none]"
+              data-allow-touch-scroll
+              style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x' }}
+            >
+              <div className="flex gap-1.5 min-w-max">
+                {(
+                  [
+                    { id: 'briefing', label: 'briefing', icon: <Sparkles className="h-3.5 w-3.5" /> },
+                    { id: 'vtop', label: 'vtop', icon: <GraduationCap className="h-3.5 w-3.5" /> },
+                    { id: 'papers', label: 'past papers', icon: <FileSearch className="h-3.5 w-3.5" /> },
+                    { id: 'mess', label: 'mess menu', icon: <UtensilsCrossed className="h-3.5 w-3.5" /> },
+                    { id: 'placements', label: 'placements', icon: <Briefcase className="h-3.5 w-3.5" /> },
+                    { id: 'faculty', label: 'faculty', icon: <Users className="h-3.5 w-3.5" /> },
+                    { id: 'reddit', label: 'reddit', icon: <Flame className="h-3.5 w-3.5" /> },
+                    { id: 'syllabi', label: 'syllabi', icon: <FileSearch className="h-3.5 w-3.5" /> },
+                ] as { id: Page; label: string; icon: ReactNode }[]
+                ).map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setPage(tab.id)}
+                    aria-pressed={page === tab.id}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+                      page === tab.id
+                        ? 'bg-primary/10 border-primary/30 text-primary shadow-sm'
+                        : 'bg-muted/30 border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    }`}
+                  >
+                    {tab.icon}
+                    <span className="whitespace-nowrap">{tab.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-          {page === 'home' && (
-            <div className="mt-3">
-              {/* Hero / Status */}
-              <div className="rounded-xl border border-border/60 bg-gradient-to-r from-primary/10 to-transparent p-3 sm:p-4 flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm sm:text-base font-semibold">welcome to your hub</div>
-                  <div className="text-xs sm:text-sm text-muted-foreground">
-                    quickly jump to tools and tasks
-                  </div>
-                </div>
-                <div className="hidden sm:flex items-center gap-2">
-                  <span
-                    className={`text-[11px] px-2 py-1 rounded-full border ${linked ? 'border-green-500/50 text-green-400' : 'border-yellow-500/40 text-yellow-400'}`}
-                  >
-                    vtop {linked ? 'linked' : 'not linked'}
-                  </span>
-                </div>
-              </div>
+        </div>
 
-              <Card className="mt-3 border border-border/60 bg-card/70">
-                <CardContent className="p-3 sm:p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-sm font-medium">quick actions</div>
-                    <div className="flex items-center gap-2">
-                      {!linked && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 px-2 text-[11px]"
-                          onClick={() => setPage('vtop')}
-                        >
-                          link vtop
-                        </Button>
-                      )}
-                      <div className="text-[11px] text-muted-foreground">common tasks at a tap</div>
-                    </div>
-                  </div>
-                  <QuickActions
-                    onShowResult={(t, r) => {
-                      setViewerTitle(t)
-                      setViewerData(r)
-                      setViewerMode('static')
-                      setViewerLoading(false)
-                      setViewerStop(undefined)
-                      setViewerOpen(true)
-                    }}
-                    onShowStream={(t, object, isLoading, stop) => {
-                      setViewerTitle(t)
-                      setViewerData(object || null)
-                      setViewerMode('stream')
-                      setViewerLoading(isLoading)
-                      setViewerStop(() => stop)
-                      setViewerOpen(true)
-                    }}
-                    goTo={p => setPage(p)}
-                  />
-                </CardContent>
-              </Card>
-            </div>
-          )}
+        <div className="flex-1 overflow-y-auto p-3 sm:p-5 [-webkit-overflow-scrolling:touch]" data-allow-touch-scroll>
+          <div className="max-w-6xl mx-auto">
+            {page === 'briefing' ? renderBriefing() : Panel}
+            <div className="h-2" />
+          </div>
+        </div>
+
+        <ResultBottomSheet
+          open={viewerOpen}
+          title={viewerTitle}
+          result={viewerData}
+          onClose={() => setViewerOpen(false)}
+        />
+     </div>
+   </HubToolProvider>
+ )
+}
+
+function MinimalStatusCard({
+  terseName,
+  syncing,
+  syncCommand,
+  lastSyncedLabel,
+  onSync,
+  onRefresh,
+  quickCaps,
+  onCapability,
+  loadingCommand,
+  disabled,
+}: {
+  terseName: string
+  syncing: boolean
+  syncCommand: HubVTOPCommand | null
+  lastSyncedLabel: string
+  onSync: () => void
+  onRefresh: () => void
+  quickCaps: HubCapability[]
+  onCapability: (capability: HubCapability) => void
+  loadingCommand: HubVTOPCommand | null
+  disabled: boolean
+}) {
+  return (
+    <div className="rounded-2xl border border-border/50 bg-[#06070b] p-4 sm:p-5 space-y-4">
+      <div className="text-xs font-semibold text-muted-foreground">hub status</div>
+      <div className="space-y-1">
+        <p className="text-sm text-muted-foreground">hey {terseName},</p>
+        <div className="text-2xl font-light text-foreground">
+          {syncing && syncCommand ? `syncing ${syncCommand.replace('-', ' ')}` : 'standing by'}
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {syncing ? 'streaming live' : `last synced ${lastSyncedLabel}`}
         </div>
       </div>
-
-      <div
-        className="flex-1 overflow-y-auto p-3 sm:p-5 [-webkit-overflow-scrolling:touch]"
-        data-allow-touch-scroll
-      >
-        <div className="max-w-6xl mx-auto">
-          {page === 'home' ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mt-2">
-              <HubTile
-                title="vtop"
-                description={
-                  linked
-                    ? 'access your attendance, marks, timetable, and more'
-                    : 'link credentials to access your personal data'
-                }
-                icon={<GraduationCap className="h-5 w-5" />}
-                onClick={() => setPage('vtop')}
-                cta={linked ? 'open' : 'link now'}
-              />
-              <HubTile
-                title="past papers"
-                description="find previous exam papers by course"
-                icon={<FileSearch className="h-5 w-5" />}
-                onClick={() => setPage('papers')}
-              />
-              <HubTile
-                title="syllabi"
-                description="find course syllabi by code or name"
-                icon={<FileSearch className="h-5 w-5" />}
-                onClick={() => setPage('syllabi')}
-              />
-              <HubTile
-                title="mess menu"
-                description="today's menu for your hostel"
-                icon={<UtensilsCrossed className="h-5 w-5" />}
-                onClick={() => setPage('mess')}
-              />
-              <HubTile
-                title="placements"
-                description="latest placement stats and info"
-                icon={<Briefcase className="h-5 w-5" />}
-                onClick={() => setPage('placements')}
-              />
-              <HubTile
-                title="faculty"
-                description="search faculty and their courses"
-                icon={<Users className="h-5 w-5" />}
-                onClick={() => setPage('faculty')}
-              />
-              <HubTile
-                title="reddit knowledge"
-                description="search community insights and trending topics"
-                icon={<Flame className="h-5 w-5" />}
-                onClick={() => setPage('reddit')}
-              />
-            </div>
-          ) : (
-            Panel
-          )}
-          <div className="h-2" />
-        </div>
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={onSync} disabled={syncing} className="rounded-full px-5">
+          <RefreshCcw className="h-4 w-4 mr-2" />
+          {syncing ? 'syncing…' : 'sync now'}
+        </Button>
+        <Button
+          variant="outline"
+          onClick={onRefresh}
+          disabled={syncing}
+          className="rounded-full px-5 border-border/60"
+        >
+          <Clock3 className="h-4 w-4 mr-2" />
+          reload cache
+        </Button>
       </div>
-      <ResultViewer
-        open={viewerOpen}
-        title={viewerTitle}
-        result={viewerData}
-        mode={viewerMode}
-        isLoading={viewerLoading}
-        onStop={viewerStop}
-        onClose={() => setViewerOpen(false)}
-      />
+      {quickCaps.length > 0 && (
+        <div className="flex flex-wrap gap-1 pt-1">
+          {quickCaps.map(cap => (
+            <button
+              key={cap.command}
+              onClick={() => onCapability(cap)}
+              disabled={disabled || loadingCommand === cap.command}
+              className="text-xs text-muted-foreground border border-border/40 rounded-full px-3 py-1 hover:text-foreground disabled:opacity-60"
+            >
+              {loadingCommand === cap.command ? 'running…' : cap.command}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
-function HubTile({
-  title,
-  description,
-  icon,
-  onClick,
+function InsightCard({
+  label,
+  headline,
+  supporting,
+  meta,
+  onOpen,
+  onAction,
+  actionLabel,
   disabled,
-  cta,
 }: {
-  title: string
-  description: string
-  icon: React.ReactNode
-  onClick: () => void
+  label: string
+  headline: string
+  supporting?: string
+  meta?: string
+  onOpen?: () => void
+  onAction?: () => void
+  actionLabel?: string
   disabled?: boolean
-  cta?: string
 }) {
   return (
-    <Card
-      className={`group transition-all border border-border/60 ${disabled ? 'opacity-70' : 'hover:border-primary/40 hover:shadow-lg hover:shadow-black/10'}`}
-    >
-      <button onClick={onClick} disabled={disabled} className="w-full text-left">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-md bg-gradient-to-br from-primary/20 to-transparent flex items-center justify-center ring-1 ring-border/50">
-              {icon}
-            </div>
-            <div className="flex-1">
-              <div className="text-sm font-medium tracking-wide">{title}</div>
-              <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{description}</div>
-            </div>
-            <div>
-              <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full border border-border/60 text-foreground/80 group-hover:border-primary/40 group-hover:text-primary/90 transition-colors">
-                {cta || 'open'}
-              </span>
-            </div>
+    <div className="rounded-2xl border border-border/40 bg-background/30 px-4 py-3 space-y-2">
+      <div className="text-xs font-semibold text-muted-foreground flex items-center justify-between">
+        <span>{label}</span>
+        {onOpen && (
+          <button className="text-muted-foreground hover:text-foreground" onClick={onOpen}>
+            view
+          </button>
+        )}
+      </div>
+      <div className="text-xl font-light tracking-tight text-foreground">{headline}</div>
+      {supporting && <p className="text-sm text-muted-foreground leading-relaxed">{supporting}</p>}
+      {meta && <div className="text-xs text-muted-foreground/80">{meta}</div>}
+      {onAction && actionLabel && (
+        <button
+          onClick={onAction}
+          disabled={disabled}
+          className="text-[10px] uppercase tracking-[0.35em] text-primary hover:text-primary/80"
+        >
+          {actionLabel}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function SnapshotCard({
+  snapshot,
+  onOpen,
+}: {
+  snapshot: PersonalHubSnapshot
+  onOpen: (snapshot: PersonalHubSnapshot) => void
+}) {
+  return (
+    <Card className="border border-border/50 bg-card/80">
+      <CardContent className="p-4 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">{snapshot.command}</p>
+            <p className="text-base font-semibold">{snapshot.title}</p>
           </div>
-        </CardContent>
-      </button>
+          <Button size="sm" variant="outline" onClick={() => onOpen(snapshot)}>
+            view
+          </Button>
+        </div>
+        <p className="text-sm text-muted-foreground line-clamp-3">{snapshot.summary}</p>
+      </CardContent>
     </Card>
   )
+}
+
+function SnapshotGlance({
+  snapshot,
+  onOpen,
+  minimal = false,
+}: {
+  snapshot: PersonalHubSnapshot
+  onOpen: (snapshot: PersonalHubSnapshot) => void
+  minimal?: boolean
+}) {
+  const icon = SNAPSHOT_ICONS[snapshot.command as HubVTOPCommand]
+  const summary = snapshot.summary?.split('\n').filter(Boolean).slice(0, 2).join(' ') || 'view details'
+  const updatedLabel = formatDistanceToNow(new Date(snapshot.fetchedAt), { addSuffix: true })
+
+  return (
+    <Card className={minimal ? 'border border-border/40 bg-background/30' : 'border border-border/50 bg-card/80'}>
+      <CardContent className={minimal ? 'p-3 space-y-1.5' : 'p-4 space-y-2'}>
+        <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+          {icon && <span className="text-primary">{icon}</span>}
+          <span>{snapshot.title}</span>
+        </div>
+        <p className="text-sm text-foreground line-clamp-2">{summary}</p>
+        <div className="flex items-center justify-between text-xs text-muted-foreground/80">
+          <span>updated {updatedLabel}</span>
+          <button onClick={() => onOpen(snapshot)} className="text-primary hover:text-primary/80">
+            open
+          </button>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function HubOnboarding({ onLink }: { onLink?: () => void }) {
+  return (
+    <div className="rounded-2xl border border-border/40 bg-[#06070b] p-5 space-y-4">
+      <div className="text-sm font-semibold text-muted-foreground">hub requires VTOP linking</div>
+      <p className="text-2xl font-light text-foreground">
+        connect once to pull timetable, assignments, attendance, leave status and exams without leaving chat.
+      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button onClick={() => onLink?.()} className="rounded-full px-6">
+          <span>link VTOP</span>
+          <ArrowRight className="h-4 w-4 ml-2" />
+        </Button>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <LockKeyhole className="h-4 w-4" />
+          credentials stay on-device
+        </div>
+      </div>
+    </div>
+  )
+}
+
+type Insight = {
+  headline: string
+  supporting?: string
+  meta?: string
+}
+
+function deriveNextClassInsight(snapshot?: PersonalHubSnapshot | null): Insight | null {
+  if (!snapshot?.structured_data) return null
+  const data: any = snapshot.structured_data
+  const candidates =
+    data?.upcomingClass || data?.upcoming || data?.nextClass || data?.next_session || data?.next
+  const pick = Array.isArray(data?.classes)
+    ? data.classes.find((cls: any) => cls?.startTime || cls?.start)
+    : Array.isArray(data?.schedule)
+      ? data.schedule.find((cls: any) => cls?.startTime || cls?.start)
+      : candidates
+  if (!pick) return null
+  const course = pick.course || pick.subject || pick.title || snapshot.title
+  const time = pick.startTime || pick.start || pick.slot || pick.time
+  const room = pick.location || pick.room || pick.venue
+  return {
+    headline: `${course || 'class'} @ ${time || 'unknown'}`.trim(),
+    supporting: room ? `room ${room}` : undefined,
+    meta: pick.faculty ? `with ${pick.faculty}` : undefined,
+  }
+}
+
+function deriveAssignmentInsight(snapshot?: PersonalHubSnapshot | null): Insight | null {
+  if (!snapshot?.structured_data) return null
+  const data: any = snapshot.structured_data
+  const list: any[] = data?.assignments || data?.due || data?.items || data?.upcoming
+  if (Array.isArray(list) && list.length > 0) {
+    const upcoming = list
+      .map(item => ({
+        title: item.title || item.course || item.assignment,
+        due: item.dueDate || item.deadline || item.due,
+      }))
+      .filter(item => item.title)
+    if (!upcoming.length) return null
+    const first = upcoming[0]
+    return {
+      headline: first.title,
+      supporting: first.due ? `due ${first.due}` : undefined,
+      meta: upcoming.length > 1 ? `${upcoming.length - 1} more` : undefined,
+    }
+  }
+  return null
+}
+
+function deriveAttendanceInsight(snapshot?: PersonalHubSnapshot | null): Insight | null {
+  if (!snapshot?.structured_data) return null
+  const stats = (snapshot.structured_data as any)?.stats
+  if (stats?.healthy !== undefined) {
+    return {
+      headline: `${stats.healthy} steady / ${stats.needsAttention} at risk`,
+      supporting: snapshot.summary,
+      meta: 'auto synced',
+    }
+  }
+  return snapshot.summary
+    ? {
+        headline: snapshot.summary,
+      }
+    : null
+}
+
+function deriveLeaveInsight(snapshot?: PersonalHubSnapshot | null): Insight | null {
+  if (!snapshot?.structured_data) return null
+  const data: any = snapshot.structured_data
+  const pending = (data.requests || data.leaves || []).find(
+    (req: any) => (req.status || req.state || '').toLowerCase().includes('pending')
+  )
+  if (pending) {
+    return {
+      headline: pending.title || pending.purpose || 'pending request',
+      supporting: pending.status,
+      meta: pending.from && pending.to ? `${pending.from} → ${pending.to}` : undefined,
+    }
+  }
+  return {
+    headline: 'no pending leave',
+  }
+}
+
+function deriveExamInsight(snapshot?: PersonalHubSnapshot | null): Insight | null {
+  if (!snapshot?.structured_data) return null
+  const data: any = snapshot.structured_data
+  const upcoming = (data.schedule || data.exams || []).find((exam: any) => exam.date || exam.day)
+  if (upcoming) {
+    return {
+      headline: `${upcoming.course || upcoming.title || 'exam'} on ${upcoming.date || upcoming.day}`,
+      supporting: upcoming.session ? `${upcoming.session} session` : undefined,
+      meta: upcoming.venue || upcoming.hall,
+    }
+  }
+  return null
 }

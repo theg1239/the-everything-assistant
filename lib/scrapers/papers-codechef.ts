@@ -430,9 +430,9 @@ async function tryBrowserScraping(
     dbg('launching puppeteer for browser scraping')
     browser = await puppeteer.launch({
       args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
-      defaultViewport: chromium.defaultViewport,
+      defaultViewport: { width: 1280, height: 1024 },
       executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
+      headless: true,
     })
 
     const page = await browser.newPage()
@@ -613,12 +613,12 @@ async function extractFinalUrlFromPaperPage(paperPageUrl: string): Promise<strin
     // Add small delay to prevent resource exhaustion
     await new Promise(resolve => setTimeout(resolve, 200)) // Reduced from 500ms
 
-    browser = await puppeteer.launch({
-      args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
-    })
+  browser = await puppeteer.launch({
+    args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
+    defaultViewport: { width: 1280, height: 1024 },
+    executablePath: await chromium.executablePath(),
+    headless: true,
+  })
 
     const page = await browser.newPage()
     await page.setUserAgent(

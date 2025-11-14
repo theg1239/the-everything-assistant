@@ -250,9 +250,9 @@ async function getOrCreateSharedBrowser(log?: Logger): Promise<any> {
       } else {
         sharedBrowser = await puppeteer.launch({
           args,
-          defaultViewport: chromium.defaultViewport,
+          defaultViewport: { width: 1280, height: 1024 },
           executablePath: await chromium.executablePath(),
-          headless: chromium.headless,
+          headless: true,
         })
       }
       sharedBrowserUsageCount = 0

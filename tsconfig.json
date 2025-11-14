@@ -43,6 +43,9 @@
   "exclude": [
     "node_modules",
     "ai-chatbot-main",
-    "services"
+    "services",
+    "lib/scrapers",
+    "lib/agents",
+    "scripts"
   ]
 }

@@ -130,13 +130,12 @@ export class RateLimitedAI {
     }
   }
 
-  getEmbeddingModel(
-    modelName: string = 'text-embedding-004'
-  ): () => Promise<EmbeddingModel<string>> {
+  getEmbeddingModel(modelName: string = 'text-embedding-004'): () => Promise<any> {
     return async () => {
       const key = await this.apiKeyManager.getCurrentKey()
       const google = createGoogleGenerativeAI({ apiKey: key })
-      return google.textEmbeddingModel(modelName)
+      // Cast for compatibility across ai SDK versions
+      return google.textEmbeddingModel(modelName) as any
     }
   }
 
@@ -199,7 +198,9 @@ export class RateLimitedAI {
   ): Promise<EmbedResult<string> | EmbedManyResult<string>> {
     return this.apiKeyManager.executeWithRateLimit(async key => {
       const google = createGoogleGenerativeAI({ apiKey: key })
-      const modelFn = google.textEmbeddingModel(options.model?.modelId || 'text-embedding-004')
+      const modelFn = google.textEmbeddingModel(
+        options.model?.modelId || 'text-embedding-004'
+      ) as unknown as EmbeddingModel<string>
 
       if (Array.isArray(options.values)) {
         return embedMany({

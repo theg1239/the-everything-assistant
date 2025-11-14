@@ -38,7 +38,8 @@ export default function Lanyard({
       <Canvas
         camera={{ position, fov }}
         gl={{ alpha: transparent }}
-        onCreated={({ gl }) => gl.setClearColor(new THREE.Color(0x000000), transparent ? 0 : 1)}
+        // Pass a number instead of THREE.Color to avoid cross-version @types/three identity issues
+        onCreated={({ gl }) => gl.setClearColor(0x000000, transparent ? 0 : 1)}
       >
         <ambientLight intensity={Math.PI} />
         <Physics gravity={gravity} timeStep={1 / 60}>
@@ -155,9 +156,11 @@ function Band({ maxSpeed = 50, minSpeed = 0 }: BandProps) {
 
   useFrame((state, delta) => {
     if (dragged && typeof dragged !== 'boolean') {
-      vec.set(state.pointer.x, state.pointer.y, 0.5).unproject(state.camera)
-      dir.copy(vec).sub(state.camera.position).normalize()
-      vec.add(dir.multiplyScalar(state.camera.position.length()))
+      // Cast camera to any to avoid cross-version @types/three identity issues
+      const cam = state.camera as any
+      vec.set(state.pointer.x, state.pointer.y, 0.5).unproject(cam)
+      dir.copy(vec).sub(cam.position).normalize()
+      vec.add(dir.multiplyScalar(cam.position.length()))
       ;[card, j1, j2, j3, fixed].forEach(ref => ref.current?.wakeUp())
       card.current?.setNextKinematicTranslation({
         x: vec.x - dragged.x,

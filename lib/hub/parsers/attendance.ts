@@ -20,6 +20,8 @@ export type RawVTOPResult = {
   output?: string
   raw?: boolean
   message?: string
+  structured_data?: any
+  meta?: any
 }
 
 const HEADER_KEYWORDS = ['SUBJECT', 'TYPE', 'FACULTY', 'CLASSES', 'PERCENTAGE']

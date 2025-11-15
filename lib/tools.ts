@@ -2248,7 +2248,9 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             if (faculty !== undefined) flags.faculty = faculty
             if (classGroup !== undefined) flags.classGroup = classGroup
             if (fuzzyIndex !== undefined) flags.fuzzyIndex = fuzzyIndex
-            if (courseQuery) flags.course = courseQuery
+            if (courseQuery) flags.courseQuery = courseQuery
+            if (facultyQuery) flags.facultyQuery = facultyQuery
+            if (materialQuery) flags.materialQuery = materialQuery
             if (debug) flags.debug = debug
             if (command === 'timetable') {
               flags.semesterQuery = 'latest'
@@ -2312,8 +2314,12 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 success: true,
                 command,
                 data: result.data || result.output,
-                message: `Successfully retrieved ${command} data from VTOP.`,
+                output: result.output || result.data,
+                structured_data: result.structured_data || null,
+                message:
+                  result.message || `Successfully retrieved ${command} data from VTOP.`,
                 raw: result.raw || false,
+                meta: result.meta || null,
               }
             } else {
               const errorMsg =

@@ -78,6 +78,7 @@ export default function HubShell({
   const [syncCommand, setSyncCommand] = useState<HubVTOPCommand | null>(null)
   const [capabilityLoading, setCapabilityLoading] = useState<HubVTOPCommand | null>(null)
   const capabilities = useMemo(() => listHubCapabilities(), [])
+  const nowTick = useNow(60000)
 
   useEffect(() => {
     setSyncing(externalSyncing)
@@ -293,11 +294,43 @@ export default function HubShell({
     [hubState.snapshots]
   )
 
-  const nextClassInsight = useMemo(() => deriveNextClassInsight(timetableSnapshot), [timetableSnapshot])
-  const assignmentsInsight = useMemo(() => deriveAssignmentInsight(assignmentsSnapshot), [assignmentsSnapshot])
+  const nextClassInsight = useMemo(
+    () => deriveNextClassInsight(timetableSnapshot, nowTick),
+    [timetableSnapshot, nowTick]
+  )
+  const assignmentsInsight = useMemo(
+    () => deriveAssignmentInsight(assignmentsSnapshot, nowTick),
+    [assignmentsSnapshot, nowTick]
+  )
   const attendanceInsight = useMemo(() => deriveAttendanceInsight(attendanceSnapshot), [attendanceSnapshot])
   const leaveInsight = useMemo(() => deriveLeaveInsight(leaveSnapshot), [leaveSnapshot])
-  const examInsight = useMemo(() => deriveExamInsight(examsSnapshot), [examsSnapshot])
+  const examInsight = useMemo(() => deriveExamInsight(examsSnapshot, nowTick), [examsSnapshot, nowTick])
+  const attendanceRisks = useMemo(() => {
+    const rows = ((attendanceSnapshot?.structured_data as any)?.rows || []) as any[]
+    return rows
+      .map(row => {
+        const numeric = typeof row.percentage === 'string' ? parseFloat(row.percentage) : Number(row.percentage)
+        return { ...row, numeric: Number.isFinite(numeric) ? numeric : null }
+      })
+      .filter(row => row.numeric !== null)
+      .sort((a, b) => (a.numeric ?? 0) - (b.numeric ?? 0))
+      .slice(0, 3)
+  }, [attendanceSnapshot])
+  const assignmentSubjects = useMemo(() => {
+    const now = nowTick ? new Date(nowTick) : new Date()
+    const subjects = normalizeAssignments(assignmentsSnapshot, now).sort((a, b) => {
+      if (a.dueDate && b.dueDate) return a.dueDate.getTime() - b.dueDate.getTime()
+      if (a.dueDate) return -1
+      if (b.dueDate) return 1
+      return 0
+    })
+    return subjects.slice(0, 3).map(subject => ({
+      ...subject,
+      displayDue: subject.dueDate
+        ? `${formatShortDate(subject.dueDate)} (${formatDistanceToNow(subject.dueDate, { addSuffix: true })})`
+        : subject.nextDue,
+    }))
+  }, [assignmentsSnapshot, nowTick])
 
   const quickCaps = useMemo(
     () => capabilities.filter(cap => ['attendance', 'timetable', 'da', 'leave', 'exams'].includes(cap.command)),
@@ -306,15 +339,18 @@ export default function HubShell({
   const daCapability = useMemo(() => capabilities.find(cap => cap.command === 'da'), [capabilities])
   const notifications = useMemo(
     () =>
-      deriveNotifications({
-        attendanceSnapshot,
-        assignmentsSnapshot,
-        leaveSnapshot,
-        examsSnapshot,
-        librarySnapshot,
-        gradesSnapshot,
-      }),
-    [attendanceSnapshot, assignmentsSnapshot, leaveSnapshot, examsSnapshot, librarySnapshot, gradesSnapshot]
+      deriveNotifications(
+        {
+          attendanceSnapshot,
+          assignmentsSnapshot,
+          leaveSnapshot,
+          examsSnapshot,
+          librarySnapshot,
+          gradesSnapshot,
+        },
+        nowTick
+      ),
+    [attendanceSnapshot, assignmentsSnapshot, leaveSnapshot, examsSnapshot, librarySnapshot, gradesSnapshot, nowTick]
   )
   const persona = useMemo(() => derivePersona(profileSnapshot, hostelSnapshot), [profileSnapshot, hostelSnapshot])
 
@@ -339,6 +375,43 @@ export default function HubShell({
 
       {persona && <PersonaStrip persona={persona} onLink={onLink} />}
 
+      {linked && timetableSnapshot && (
+        <TimetablePeek
+          snapshot={timetableSnapshot}
+          now={nowTick}
+          onOpen={() => openSnapshot(timetableSnapshot)}
+        />
+      )}
+
+      {linked && (attendanceRisks.length > 0 || assignmentSubjects.length > 0) && (
+        <section className="grid gap-3 sm:grid-cols-2">
+          {attendanceRisks.length > 0 && (
+            <MiniListCard
+              label="attendance watch"
+              items={attendanceRisks.map(item => ({
+                title: item.subject,
+                meta: item.percentage,
+                supporting: item.alert?.toLowerCase().includes('attend') ? item.alert : undefined,
+              }))}
+              fallback="all courses steady"
+              onOpen={() => attendanceSnapshot && openSnapshot(attendanceSnapshot)}
+            />
+          )}
+          {assignmentSubjects.length > 0 && (
+            <MiniListCard
+              label="due soon"
+              items={assignmentSubjects.map(item => ({
+                title: item.subject,
+                meta: item.displayDue || item.nextDue,
+                supporting: item.status,
+              }))}
+              fallback="no assignments found"
+              onOpen={() => assignmentsSnapshot && openSnapshot(assignmentsSnapshot)}
+            />
+          )}
+        </section>
+      )}
+
       {linked && notifications.length > 0 && (
         <NotificationStrip
           notifications={notifications}
@@ -348,39 +421,38 @@ export default function HubShell({
       )}
 
       {linked && (
-        <section className="grid gap-2 sm:grid-cols-2">
-          <InsightCard
+        <section className="rounded-3xl border border-border/40 bg-background/20 divide-y divide-border/40">
+          <CompactInsightRow
             label="next class"
             headline={nextClassInsight?.headline || 'no class detected'}
-            supporting={nextClassInsight?.supporting}
-            meta={nextClassInsight?.meta || 'sync timetable to hydrate'}
+            supporting={nextClassInsight?.supporting || 'sync timetable to hydrate'}
+            meta={nextClassInsight?.meta}
             onOpen={() => timetableSnapshot && openSnapshot(timetableSnapshot)}
           />
-          <InsightCard
+          <CompactInsightRow
             label="assignments"
             headline={assignmentsInsight?.headline || 'all clear'}
-            supporting={assignmentsInsight?.supporting}
-            meta={assignmentsInsight?.meta || 'run digital assignments to update'}
-            onOpen={() => assignmentsSnapshot && openSnapshot(assignmentsSnapshot)}
-            onAction={daCapability ? () => handleCapabilityRun(daCapability) : undefined}
+            supporting={assignmentsInsight?.supporting || 'run digital assignments to update'}
+            meta={assignmentsInsight?.meta}
             actionLabel={daCapability ? 'refresh' : undefined}
-            disabled={!daCapability}
+            onAction={daCapability ? () => handleCapabilityRun(daCapability) : undefined}
+            onOpen={() => assignmentsSnapshot && openSnapshot(assignmentsSnapshot)}
           />
-          <InsightCard
+          <CompactInsightRow
             label="attendance"
             headline={attendanceInsight?.headline || 'run sync to load'}
             supporting={attendanceInsight?.supporting}
             meta={attendanceInsight?.meta}
             onOpen={() => attendanceSnapshot && openSnapshot(attendanceSnapshot)}
           />
-          <InsightCard
+          <CompactInsightRow
             label="leave status"
             headline={leaveInsight?.headline || 'no requests'}
             supporting={leaveInsight?.supporting}
             meta={leaveInsight?.meta}
             onOpen={() => leaveSnapshot && openSnapshot(leaveSnapshot)}
           />
-          <InsightCard
+          <CompactInsightRow
             label="exam schedule"
             headline={examInsight?.headline || 'no upcoming exams'}
             supporting={examInsight?.supporting}
@@ -531,7 +603,7 @@ function MinimalStatusCard({
   )
 }
 
-function InsightCard({
+function CompactInsightRow({
   label,
   headline,
   supporting,
@@ -551,27 +623,32 @@ function InsightCard({
   disabled?: boolean
 }) {
   return (
-    <div className="rounded-2xl border border-border/40 bg-background/30 px-4 py-3 space-y-2">
-      <div className="text-xs font-semibold text-muted-foreground flex items-center justify-between">
-        <span>{label}</span>
+    <div className="flex flex-col gap-1 px-4 py-3 sm:px-5 sm:py-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground/80">{label}</p>
         {onOpen && (
-          <button className="text-muted-foreground hover:text-foreground" onClick={onOpen}>
+          <button
+            onClick={onOpen}
+            className="text-[11px] font-medium text-muted-foreground hover:text-foreground"
+          >
             view
           </button>
         )}
       </div>
-      <div className="text-xl font-light tracking-tight text-foreground">{headline}</div>
-      {supporting && <p className="text-sm text-muted-foreground leading-relaxed">{supporting}</p>}
-      {meta && <div className="text-xs text-muted-foreground/80">{meta}</div>}
-      {onAction && actionLabel && (
-        <button
-          onClick={onAction}
-          disabled={disabled}
-          className="text-[10px] uppercase tracking-[0.35em] text-primary hover:text-primary/80"
-        >
-          {actionLabel}
-        </button>
-      )}
+      <div className="text-lg font-medium text-foreground leading-tight">{headline}</div>
+      {supporting && <div className="text-sm text-muted-foreground/90">{supporting}</div>}
+      <div className="flex items-center justify-between text-xs text-muted-foreground/80">
+        <span>{meta || ''}</span>
+        {onAction && actionLabel && (
+          <button
+            onClick={onAction}
+            disabled={disabled}
+            className="text-[10px] uppercase tracking-[0.3em] text-primary hover:text-primary/80 disabled:opacity-60"
+          >
+            {actionLabel}
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -586,7 +663,7 @@ function NotificationStrip({
   onRun: (capability: HubCapability) => void
 }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="rounded-3xl border border-dashed border-border/50 bg-background/20 px-4 py-3 flex flex-wrap gap-2">
       {notifications.map(notification => {
         const capability = notification.command
           ? capabilities.find(cap => cap.command === notification.command)
@@ -597,7 +674,7 @@ function NotificationStrip({
             key={notification.id}
             onClick={() => capability && onRun(capability)}
             disabled={!clickable}
-            className={`rounded-full border border-border/50 px-3 py-1 text-sm text-foreground/80 hover:text-foreground hover:border-foreground/60 ${
+            className={`rounded-full border border-border/40 px-3 py-1 text-xs text-muted-foreground hover:text-foreground hover:border-foreground/60 transition-colors ${
               !clickable ? 'opacity-60 cursor-default' : ''
             }`}
           >
@@ -611,7 +688,7 @@ function NotificationStrip({
 
 function PersonaStrip({ persona, onLink }: { persona: Persona; onLink?: () => void }) {
   return (
-    <div className="rounded-2xl border border-border/40 bg-background/30 px-4 py-3 flex flex-wrap gap-3 text-sm text-muted-foreground">
+    <div className="rounded-3xl border border-border/40 bg-background/20 px-4 py-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
       {persona.registerNumber && <span>{persona.registerNumber}</span>}
       {persona.program && <span>{persona.program}</span>}
       {persona.school && <span>{persona.school}</span>}
@@ -623,6 +700,115 @@ function PersonaStrip({ persona, onLink }: { persona: Persona; onLink?: () => vo
           link hostel data
         </button>
       )}
+    </div>
+  )
+}
+
+function TimetablePeek({
+  snapshot,
+  onOpen,
+  now,
+}: {
+  snapshot: PersonalHubSnapshot
+  onOpen?: () => void
+  now?: number
+}) {
+  const data: any = snapshot.structured_data
+  const classes: any[] = Array.isArray(data?.classes) ? data.classes : []
+  if (!classes.length) return null
+  const reference = now ? new Date(now) : new Date()
+  const rolling = computeDynamicNextClass(data, reference)
+  const highlight = rolling?.classInfo || data?.nextClass || classes[0]
+  const rows = classes.slice(0, 4)
+
+  const formatTime = (cls: any) => {
+    if (cls?.startTime && cls?.endTime) return `${cls.startTime} – ${cls.endTime}`
+    if (cls?.startTime) return cls.startTime
+    if (cls?.slot) return cls.slot
+    return '—'
+  }
+
+  return (
+    <div className="rounded-3xl border border-border/40 bg-background/20 px-4 py-4 space-y-3">
+      <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
+        <span>coverage map</span>
+        {onOpen && (
+          <button className="text-muted-foreground hover:text-foreground" onClick={onOpen}>
+            view timetable
+          </button>
+        )}
+      </div>
+      {highlight && (
+        <div className="rounded-2xl border border-border/40 bg-background/40 p-3 text-sm leading-relaxed text-foreground">
+          <div className="text-[10px] uppercase tracking-[0.3em] text-primary/80">next</div>
+          <div className="text-base font-medium">{highlight.subject || highlight.slot || 'class'}</div>
+          <div className="text-xs text-muted-foreground">
+            {rolling?.startsAt
+              ? new Intl.DateTimeFormat(undefined, {
+                  weekday: 'short',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                }).format(rolling.startsAt)
+              : formatTime(highlight)}
+          </div>
+          <div className="text-[11px] text-muted-foreground/80">
+            {[
+              highlight.day,
+              rolling?.startsAt ? formatDistanceToNow(rolling.startsAt, { addSuffix: true }) : null,
+              highlight.venue,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </div>
+        </div>
+      )}
+      <div className="grid gap-2 sm:grid-cols-2">
+        {rows.map((cls, idx) => (
+          <div key={`${cls.day}-${cls.slot}-${idx}`} className="rounded-2xl border border-border/30 bg-background/10 p-3">
+            <div className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground/80">
+              {cls.day || 'day'}
+            </div>
+            <div className="text-sm font-medium text-foreground line-clamp-1">
+              {cls.subject || cls.slot || 'class'}
+            </div>
+            <div className="text-xs text-muted-foreground">{formatTime(cls)}</div>
+            {cls.venue && <div className="text-[11px] text-muted-foreground/80">{cls.venue}</div>}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function MiniListCard({
+  label,
+  items,
+  fallback,
+  onOpen,
+}: {
+  label: string
+  items: { title?: string; supporting?: string; meta?: string }[]
+  fallback: string
+  onOpen?: () => void
+}) {
+  return (
+    <div className="rounded-3xl border border-border/40 bg-background/20 px-4 py-3 space-y-2">
+      <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
+        <span>{label}</span>
+        {onOpen && (
+          <button className="text-muted-foreground hover:text-foreground" onClick={onOpen}>
+            view
+          </button>
+        )}
+      </div>
+      {items.length === 0 && <div className="text-sm text-muted-foreground/80">{fallback}</div>}
+      {items.map((item, idx) => (
+        <div key={`${label}-${idx}`} className="text-sm text-foreground">
+          <div className="font-medium line-clamp-1">{item.title || fallback}</div>
+          {item.supporting && <div className="text-xs text-muted-foreground">{item.supporting}</div>}
+          {item.meta && <div className="text-xs text-muted-foreground/80">{item.meta}</div>}
+        </div>
+      ))}
     </div>
   )
 }
@@ -728,47 +914,64 @@ type Persona = {
   mess?: string
 }
 
-function deriveNextClassInsight(snapshot?: PersonalHubSnapshot | null): Insight | null {
+function deriveNextClassInsight(
+  snapshot?: PersonalHubSnapshot | null,
+  nowTick?: number
+): Insight | null {
   if (!snapshot?.structured_data) return null
+  const reference = nowTick ? new Date(nowTick) : new Date()
+  const rolling = computeDynamicNextClass(snapshot.structured_data, reference)
   const data: any = snapshot.structured_data
-  const candidates =
-    data?.upcomingClass || data?.upcoming || data?.nextClass || data?.next_session || data?.next
-  const pick = Array.isArray(data?.classes)
-    ? data.classes.find((cls: any) => cls?.startTime || cls?.start)
-    : Array.isArray(data?.schedule)
-      ? data.schedule.find((cls: any) => cls?.startTime || cls?.start)
-      : candidates
-  if (!pick) return null
-  const course = pick.course || pick.subject || pick.title || snapshot.title
-  const time = pick.startTime || pick.start || pick.slot || pick.time
-  const room = pick.location || pick.room || pick.venue
+  const fallback =
+    rolling?.classInfo ||
+    data?.upcomingClass ||
+    data?.upcoming ||
+    data?.nextClass ||
+    data?.next_session ||
+    data?.next ||
+    (Array.isArray(data?.classes) ? data.classes[0] : null)
+
+  if (!fallback) return null
+
+  const course = fallback.course || fallback.subject || fallback.title || snapshot.title
+  const room = fallback.location || fallback.room || fallback.venue
+  const timeStamp = rolling?.startsAt
+    ? new Intl.DateTimeFormat(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(
+        rolling.startsAt
+      )
+    : fallback.startTime || fallback.start || fallback.slot || fallback.time
+
+  const supportingParts = [
+    fallback.day,
+    rolling?.startsAt ? formatDistanceToNow(rolling.startsAt, { addSuffix: true }) : null,
+    room ? `room ${room}` : null,
+  ].filter(Boolean)
+
   return {
-    headline: `${course || 'class'} @ ${time || 'unknown'}`.trim(),
-    supporting: room ? `room ${room}` : undefined,
-    meta: pick.faculty ? `with ${pick.faculty}` : undefined,
+    headline: `${course || 'class'} @ ${timeStamp || 'unknown'}`.trim(),
+    supporting: supportingParts.length ? supportingParts.join(' · ') : undefined,
+    meta: fallback.faculty ? `with ${fallback.faculty}` : undefined,
   }
 }
 
-function deriveAssignmentInsight(snapshot?: PersonalHubSnapshot | null): Insight | null {
+function deriveAssignmentInsight(
+  snapshot?: PersonalHubSnapshot | null,
+  nowTick?: number
+): Insight | null {
   if (!snapshot?.structured_data) return null
-  const data: any = snapshot.structured_data
-  const list: any[] = data?.assignments || data?.due || data?.items || data?.upcoming
-  if (Array.isArray(list) && list.length > 0) {
-    const upcoming = list
-      .map(item => ({
-        title: item.title || item.course || item.assignment,
-        due: item.dueDate || item.deadline || item.due,
-      }))
-      .filter(item => item.title)
-    if (!upcoming.length) return null
-    const first = upcoming[0]
-    return {
-      headline: first.title,
-      supporting: first.due ? `due ${first.due}` : undefined,
-      meta: upcoming.length > 1 ? `${upcoming.length - 1} more` : undefined,
-    }
+  const now = nowTick ? new Date(nowTick) : new Date()
+  const subjects = normalizeAssignments(snapshot, now)
+  if (!subjects.length) return null
+  const upcoming = pickUpcomingAssignment(subjects, now) || subjects[0]
+  if (!upcoming) return null
+  const absolute = upcoming.dueDate ? formatShortDate(upcoming.dueDate) : upcoming.nextDue
+  const relative = upcoming.dueDate ? formatDistanceToNow(upcoming.dueDate, { addSuffix: true }) : undefined
+
+  return {
+    headline: upcoming.subject || 'assignment',
+    supporting: absolute ? [absolute, relative].filter(Boolean).join(' · ') : undefined,
+    meta: upcoming.status,
   }
-  return null
 }
 
 function deriveAttendanceInsight(snapshot?: PersonalHubSnapshot | null): Insight | null {
@@ -806,24 +1009,25 @@ function deriveLeaveInsight(snapshot?: PersonalHubSnapshot | null): Insight | nu
   }
 }
 
-function deriveExamInsight(snapshot?: PersonalHubSnapshot | null): Insight | null {
+function deriveExamInsight(snapshot?: PersonalHubSnapshot | null, nowTick?: number): Insight | null {
   if (!snapshot?.structured_data) return null
-  const data: any = snapshot.structured_data
-  const upcoming = (data.schedule || data.exams || []).find((exam: any) => exam.date || exam.day)
-  if (upcoming) {
-    return {
-      headline: `${upcoming.course || upcoming.title || 'exam'} on ${upcoming.date || upcoming.day}`,
-      supporting: upcoming.session ? `${upcoming.session} session` : undefined,
-      meta: upcoming.venue || upcoming.hall,
-    }
-  }
-  return null
-}
+  const now = nowTick ? new Date(nowTick) : new Date()
+  const schedule = normalizeExamSchedule(snapshot, now)
+  if (!schedule.length) return null
+  const upcoming = pickUpcomingExam(schedule, now) || schedule[0]
+  if (!upcoming || !upcoming.examDateObj) return null
 
-const extractNumber = (value?: string) => {
-  if (!value) return null
-  const match = value.match(/-?\d+/)
-  return match ? parseInt(match[0], 10) : null
+  const absolute = formatDateWithTime(upcoming.examDateObj)
+  const relative = formatDistanceToNow(upcoming.examDateObj, { addSuffix: true })
+  const headline = `${upcoming.title || upcoming.course || upcoming.code || 'exam'} on ${formatShortDate(
+    upcoming.examDateObj
+  )}`
+
+  return {
+    headline,
+    supporting: [upcoming.examTime, relative].filter(Boolean).join(' · ') || undefined,
+    meta: upcoming.venue || upcoming.hall || upcoming.slot,
+  }
 }
 
 function derivePersona(profileSnapshot?: PersonalHubSnapshot | null, hostelSnapshot?: PersonalHubSnapshot | null): Persona | null {
@@ -847,22 +1051,26 @@ function derivePersona(profileSnapshot?: PersonalHubSnapshot | null, hostelSnaps
   return persona
 }
 
-function deriveNotifications({
-  attendanceSnapshot,
-  assignmentsSnapshot,
-  leaveSnapshot,
-  examsSnapshot,
-  librarySnapshot,
-  gradesSnapshot,
-}: {
-  attendanceSnapshot?: PersonalHubSnapshot | null
-  assignmentsSnapshot?: PersonalHubSnapshot | null
-  leaveSnapshot?: PersonalHubSnapshot | null
-  examsSnapshot?: PersonalHubSnapshot | null
-  librarySnapshot?: PersonalHubSnapshot | null
-  gradesSnapshot?: PersonalHubSnapshot | null
-}): HubNotification[] {
+function deriveNotifications(
+  {
+    attendanceSnapshot,
+    assignmentsSnapshot,
+    leaveSnapshot,
+    examsSnapshot,
+    librarySnapshot,
+    gradesSnapshot,
+  }: {
+    attendanceSnapshot?: PersonalHubSnapshot | null
+    assignmentsSnapshot?: PersonalHubSnapshot | null
+    leaveSnapshot?: PersonalHubSnapshot | null
+    examsSnapshot?: PersonalHubSnapshot | null
+    librarySnapshot?: PersonalHubSnapshot | null
+    gradesSnapshot?: PersonalHubSnapshot | null
+  },
+  nowTick?: number
+): HubNotification[] {
   const notifications: HubNotification[] = []
+  const now = nowTick ? new Date(nowTick) : new Date()
 
   const attendanceStats = (attendanceSnapshot?.structured_data as any)?.stats
   if (attendanceStats?.needsAttention > 0) {
@@ -873,11 +1081,13 @@ function deriveNotifications({
     })
   }
 
-  const upcomingDA = (assignmentsSnapshot?.structured_data as any)?.upcoming
-  if (upcomingDA?.subject && upcomingDA?.nextDue && upcomingDA.nextDue !== 'N/A') {
+  const assignmentList = normalizeAssignments(assignmentsSnapshot, now)
+  const upcomingDA = pickUpcomingAssignment(assignmentList, now)
+  if (upcomingDA?.subject) {
+    const relative = upcomingDA.dueDate ? formatDistanceToNow(upcomingDA.dueDate, { addSuffix: true }) : upcomingDA.nextDue
     notifications.push({
       id: 'da-due',
-      text: `${upcomingDA.subject} due ${upcomingDA.nextDue}`,
+      text: `${upcomingDA.subject} due ${relative}`,
       command: 'da',
     })
   }
@@ -891,16 +1101,15 @@ function deriveNotifications({
     })
   }
 
-  const upcomingExam = (examsSnapshot?.structured_data as any)?.upcoming
-  if (upcomingExam?.examDate) {
-    const daysLeft = extractNumber(upcomingExam.daysLeft)
-    if (daysLeft !== null && daysLeft <= 3) {
-      notifications.push({
-        id: 'exam-soon',
-        text: `${upcomingExam.title || upcomingExam.code} in ${daysLeft === 0 ? 'today' : `${daysLeft} day${daysLeft === 1 ? '' : 's'}`}`,
-        command: 'exams',
-      })
-    }
+  const normalizedExams = normalizeExamSchedule(examsSnapshot, now)
+  const upcomingExam = pickUpcomingExam(normalizedExams, now)
+  if (upcomingExam?.examDateObj) {
+    const relative = formatDistanceToNow(upcomingExam.examDateObj, { addSuffix: true })
+    notifications.push({
+      id: 'exam-soon',
+      text: `${upcomingExam.title || upcomingExam.code} ${relative}`,
+      command: 'exams',
+    })
   }
 
   const libraryTotal = (librarySnapshot?.structured_data as any)?.total
@@ -922,4 +1131,339 @@ function deriveNotifications({
   }
 
   return notifications.slice(0, 4)
+}
+
+type NormalizedAssignment = {
+  subject?: string
+  status?: string
+  nextDue?: string
+  dueDate?: Date | null
+  [key: string]: any
+}
+
+function normalizeAssignments(snapshot: PersonalHubSnapshot | null | undefined, reference: Date): NormalizedAssignment[] {
+  if (!snapshot?.structured_data) return []
+  const payload: any = snapshot.structured_data
+  const subjects =
+    (Array.isArray(payload?.subjects) && payload.subjects) ||
+    (Array.isArray(payload?.assignments) && payload.assignments) ||
+    (Array.isArray(payload?.items) && payload.items) ||
+    []
+
+  return subjects.map((item: any) => {
+    const subject = item.subject || item.title || item.course || item.assignment
+    const status = item.status || item.state
+    const dueLabel = item.nextDue || item.next_due || item.dueDate || item.deadline || item.due
+    return {
+      ...item,
+      subject,
+      status,
+      nextDue: dueLabel,
+      dueDate: parseDateString(dueLabel, reference),
+    }
+  })
+}
+
+function pickUpcomingAssignment(list: NormalizedAssignment[], now: Date): NormalizedAssignment | null {
+  const dated = list
+    .filter(item => item.dueDate && item.subject)
+    .sort((a, b) => (a.dueDate!.getTime() || 0) - (b.dueDate!.getTime() || 0))
+
+  const future = dated.find(item => item.dueDate && item.dueDate >= now)
+  return future || dated[0] || null
+}
+
+type NormalizedExamEntry = {
+  examDateObj?: Date | null
+  examDate?: string
+  examTime?: string
+  session?: string
+  title?: string
+  code?: string
+  course?: string
+  venue?: string
+  hall?: string
+  [key: string]: any
+}
+
+function normalizeExamSchedule(
+  snapshot: PersonalHubSnapshot | null | undefined,
+  reference: Date
+): NormalizedExamEntry[] {
+  if (!snapshot?.structured_data) return []
+  const payload: any = snapshot.structured_data
+  const schedule: any[] =
+    (Array.isArray(payload?.schedule) && payload.schedule) ||
+    (Array.isArray(payload?.exams) && payload.exams) ||
+    []
+
+  return schedule.map(entry => {
+    const date = parseDateString(entry.examDate || entry.date, reference)
+    if (date) {
+      const timeParts = parseStartTime(entry.examTime || entry.time || entry.session)
+      if (timeParts) {
+        date.setHours(timeParts.hour, timeParts.minute ?? 0, 0, 0)
+      }
+    }
+    return {
+      ...entry,
+      examDateObj: date,
+    }
+  })
+}
+
+function pickUpcomingExam(list: NormalizedExamEntry[], now: Date): NormalizedExamEntry | null {
+  const dated = list
+    .filter(entry => entry.examDateObj)
+    .sort((a, b) => (a.examDateObj!.getTime() || 0) - (b.examDateObj!.getTime() || 0))
+
+  const future = dated.find(entry => entry.examDateObj && entry.examDateObj >= now)
+  return future || dated[0] || null
+}
+
+function formatShortDate(date: Date) {
+  return new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).format(date)
+}
+
+function formatDateWithTime(date: Date) {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date)
+}
+
+const MONTH_INDEX_MAP: Record<string, number> = {
+  jan: 0,
+  january: 0,
+  feb: 1,
+  february: 1,
+  mar: 2,
+  march: 2,
+  apr: 3,
+  april: 3,
+  may: 4,
+  jun: 5,
+  june: 5,
+  jul: 6,
+  july: 6,
+  aug: 7,
+  august: 7,
+  sep: 8,
+  sept: 8,
+  september: 8,
+  oct: 9,
+  october: 9,
+  nov: 10,
+  november: 10,
+  dec: 11,
+  december: 11,
+}
+
+function parseDateString(value?: string, referenceDate: Date = new Date()): Date | null {
+  if (!value || typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const lower = trimmed.toLowerCase()
+
+  if (lower.includes('today')) {
+    return new Date(referenceDate)
+  }
+  if (lower.includes('tomorrow')) {
+    const tomorrow = new Date(referenceDate)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    return tomorrow
+  }
+
+  const parsed = Date.parse(trimmed)
+  if (!Number.isNaN(parsed)) {
+    return new Date(parsed)
+  }
+
+  let match = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/)
+  if (match) {
+    const day = parseInt(match[1], 10)
+    const month = parseInt(match[2], 10) - 1
+    const year = parseInt(match[3], 10)
+    if (month >= 0 && month < 12) {
+      return new Date(year < 100 ? 2000 + year : year, month, day)
+    }
+  }
+
+  match = trimmed.match(/^(\d{1,2})\s+([A-Za-z]+)(?:\s+(\d{2,4}))?$/)
+  if (match) {
+    const day = parseInt(match[1], 10)
+    const monthKey = match[2].toLowerCase()
+    const month = MONTH_INDEX_MAP[monthKey]
+    if (month !== undefined) {
+      let year = match[3] ? parseInt(match[3], 10) : referenceDate.getFullYear()
+      if (year < 100) year += 2000
+      const date = new Date(year, month, day)
+      if (!match[3] && date < referenceDate) {
+        date.setFullYear(date.getFullYear() + 1)
+      }
+      return date
+    }
+  }
+
+  return null
+}
+
+type NextClassComputation = {
+  classInfo: any
+  startsAt?: Date
+}
+
+const DAY_INDEX_MAP: Record<string, number> = {
+  monday: 0,
+  tuesday: 1,
+  wednesday: 2,
+  thursday: 3,
+  friday: 4,
+  saturday: 5,
+  sunday: 6,
+}
+
+const DAY_ALIAS_MAP: Record<string, string> = {
+  mon: 'monday',
+  monday: 'monday',
+  tue: 'tuesday',
+  tues: 'tuesday',
+  tuesday: 'tuesday',
+  wed: 'wednesday',
+  weds: 'wednesday',
+  wednesday: 'wednesday',
+  thu: 'thursday',
+  thur: 'thursday',
+  thurs: 'thursday',
+  thursday: 'thursday',
+  fri: 'friday',
+  friday: 'friday',
+  sat: 'saturday',
+  saturday: 'saturday',
+  sun: 'sunday',
+  sunday: 'sunday',
+}
+
+function computeDynamicNextClass(
+  structuredData: any,
+  referenceDate: Date = new Date()
+): NextClassComputation | null {
+  const candidates = extractTimetableCandidates(structuredData)
+  if (!candidates.length) return null
+
+  const now = referenceDate
+  const currentDayIndex = (now.getDay() + 6) % 7
+  let winner: NextClassComputation | null = null
+  let bestDelta = Infinity
+
+  candidates.forEach(candidate => {
+    const dayValue = candidate.day || candidate.dayName || candidate.weekday || candidate.Day
+    const dayIndex = resolveDayIndex(dayValue)
+    if (dayIndex === null) return
+
+    const timeSource =
+      candidate.startTime ||
+      candidate.start ||
+      candidate.start_time ||
+      candidate.time ||
+      candidate.slotTime ||
+      candidate.slot
+    const timeParts = parseStartTime(timeSource)
+    if (!timeParts) return
+
+    const start = new Date(now)
+    start.setHours(timeParts.hour, timeParts.minute ?? 0, 0, 0)
+
+    let diff = dayIndex - currentDayIndex
+    if (diff < 0) diff += 7
+    if (diff === 0 && start <= now) {
+      diff = 7
+    }
+    start.setDate(start.getDate() + diff)
+
+    const delta = start.getTime() - now.getTime()
+    if (delta < bestDelta) {
+      bestDelta = delta
+      winner = { classInfo: candidate, startsAt: start }
+    }
+  })
+
+  return winner
+}
+
+function extractTimetableCandidates(structuredData: any): any[] {
+  if (!structuredData) return []
+  const pools = ['classes', 'schedule', 'sessions']
+  const result: any[] = []
+  const push = (entry: any) => {
+    if (entry && typeof entry === 'object') {
+      result.push(entry)
+    }
+  }
+  pools.forEach(key => {
+    const collection = structuredData[key]
+    if (Array.isArray(collection)) {
+      collection.forEach(push)
+    }
+  })
+  return result
+}
+
+function resolveDayIndex(dayValue?: string): number | null {
+  if (!dayValue || typeof dayValue !== 'string') return null
+  const normalized = dayValue.trim().toLowerCase().replace(/\./g, '')
+  const alias =
+    DAY_ALIAS_MAP[normalized] ||
+    DAY_ALIAS_MAP[normalized.slice(0, 3)] ||
+    normalized
+  const index = DAY_INDEX_MAP[alias]
+  return typeof index === 'number' ? index : null
+}
+
+function parseStartTime(value?: string): { hour: number; minute: number } | null {
+  if (!value || typeof value !== 'string') return null
+  const lower = value.toLowerCase()
+  if (lower.includes('fn') || lower.includes('forenoon')) {
+    return { hour: 9, minute: 0 }
+  }
+  if (lower.includes('an') || lower.includes('afternoon')) {
+    return { hour: 13, minute: 30 }
+  }
+  const primary = value.split(/-|–|—|to/i)[0]?.trim() || ''
+  if (!primary) return null
+  const sanitized = primary.replace(/(hrs|hours)/gi, '').trim()
+  const match = sanitized.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i)
+  if (match) {
+    let hour = parseInt(match[1], 10)
+    const minute = match[2] ? parseInt(match[2], 10) : 0
+    const suffix = match[3]?.toLowerCase()
+    if (suffix === 'pm' && hour < 12) hour += 12
+    if (suffix === 'am' && hour === 12) hour = 0
+    if (hour >= 24 || minute >= 60) return null
+    return { hour, minute }
+  }
+
+  const digitsOnly = sanitized.replace(/\D/g, '')
+  if (digitsOnly.length === 4) {
+    const hour = parseInt(digitsOnly.slice(0, 2), 10)
+    const minute = parseInt(digitsOnly.slice(2), 10)
+    if (hour >= 24 || minute >= 60) return null
+    return { hour, minute }
+  }
+
+  return null
+}
+
+function useNow(intervalMs = 60000) {
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), intervalMs)
+    return () => clearInterval(id)
+  }, [intervalMs])
+
+  return now
 }

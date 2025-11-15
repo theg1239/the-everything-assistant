@@ -70,6 +70,7 @@ export default function Hub({
       <Drawer.Portal>
         <Drawer.Overlay className="fixed inset-0 bg-black/55 backdrop-blur-sm z-40" />
         <Drawer.Content className="fixed inset-x-0 bottom-0 mx-auto h-[96vh] max-w-6xl rounded-t-3xl border border-border bg-background shadow-2xl z-50 flex flex-col overflow-hidden">
+          <Drawer.Title className="sr-only">Hub</Drawer.Title>
           <Drawer.Handle className="mx-auto mt-2 mb-1 h-1 w-16 rounded-full bg-border" />
           <div className="flex items-center justify-between px-3 pb-3 border-b border-border/60">
             <div className="text-sm font-semibold uppercase text-muted-foreground">hub</div>

@@ -174,7 +174,7 @@ export function VTOPCredentialsDialog({
                 />
                 <button
                   type="button"
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+                  className="absolute inset-y-0 right-3 my-auto text-slate-400 hover:text-slate-200 transition-colors focus:outline-none h-8 w-8 flex items-center justify-center p-0 cursor-pointer select-none"
                   onClick={() => setShowPassword(!showPassword)}
                 >
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}

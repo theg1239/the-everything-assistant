@@ -4,6 +4,7 @@ const fs = require('fs')
 const helmet = require('helmet')
 const rateLimit = require('express-rate-limit')
 const { randomUUID } = require('crypto')
+const NodeCache = require('node-cache')
 const {
   capabilityManifest,
   COMMAND_MAPPING,
@@ -29,6 +30,12 @@ const {
 require('dotenv').config()
 
 const app = express()
+
+// Per-username VTOP call limiter to guard against repeated CLI panics
+// Defaults: 15 calls per 5 minutes per username when MCP OAuth is enabled.
+const PER_USER_VTOP_LIMIT = parseInt(process.env.VTOP_USER_LIMIT || '15', 10)
+const PER_USER_VTOP_WINDOW_MS = parseInt(process.env.VTOP_USER_WINDOW_MS || String(5 * 60 * 1000), 10)
+const userVtopCache = new NodeCache({ stdTTL: PER_USER_VTOP_WINDOW_MS / 1000, checkperiod: 60 })
 
 const maskIdentifier = value => {
   if (!value || typeof value !== 'string') return 'unknown'
@@ -98,6 +105,17 @@ const vtopLimiter = rateLimit({
   message: { error: 'Too many requests' },
 })
 
+function checkPerUserVtopLimit(username) {
+  if (!username || !PER_USER_VTOP_LIMIT || PER_USER_VTOP_LIMIT <= 0) return { allowed: true }
+  const key = `user:${username.toLowerCase()}`
+  const current = userVtopCache.get(key) || 0
+  if (current >= PER_USER_VTOP_LIMIT) {
+    return { allowed: false, remainingMs: userVtopCache.getTtl(key) ? userVtopCache.getTtl(key) - Date.now() : 0 }
+  }
+  userVtopCache.set(key, current + 1)
+  return { allowed: true }
+}
+
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString()
   console.log(`[${timestamp}] ${req.method} ${req.path} - ${req.ip}`)
@@ -132,6 +150,14 @@ app.post('/vtop', vtopLimiter, async (req, res) => {
     return res.status(400).json({
       error: 'Unsupported command',
       supportedCommands: SUPPORTED_COMMANDS,
+    })
+  }
+
+  const perUser = checkPerUserVtopLimit(username)
+  if (!perUser.allowed) {
+    return res.status(429).json({
+      error: 'VTOP rate limit reached for this user. Please try again in a few minutes.',
+      username: maskIdentifier(username),
     })
   }
 

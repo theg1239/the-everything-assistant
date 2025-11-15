@@ -86,13 +86,21 @@ function registerTools(targetServer) {
       return value
     }, z.record(z.any()))
 
-  const baseFields = {
-    username: z.string().min(1, 'username required').optional(),
-    password: z.string().optional(),
-    encryptedPassword: z.string().optional(),
-    sessionKey: z.string().optional(),
-    flags: flagsSchema.optional(),
-  }
+  const oauthEnabled = process.env.MCP_OAUTH_ENABLED !== 'false'
+
+  const baseFields = oauthEnabled
+    ? {
+        // When OAuth is enabled, credentials come from the bearer token only.
+        flags: flagsSchema.optional(),
+      }
+    : {
+        // Legacy/debug mode: allow passing credentials directly in the tool call.
+        username: z.string().min(1, 'username required'),
+        password: z.string().optional(),
+        encryptedPassword: z.string().optional(),
+        sessionKey: z.string().optional(),
+        flags: flagsSchema.optional(),
+      }
 
   const baseObjectSchema = z.object(baseFields)
   const baseInputSchema = baseObjectSchema

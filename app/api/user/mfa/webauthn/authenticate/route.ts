@@ -144,8 +144,8 @@ async function verifyAuthCredential(credential: any, userEmail: string, request:
   }
 
   const credentialPublicKey = Buffer.isBuffer(stored.publicKey)
-    ? stored.publicKey
-    : Buffer.from(stored.publicKey)
+    ? new Uint8Array(stored.publicKey)
+    : new Uint8Array(Buffer.from(stored.publicKey))
 
   const prevCounter = typeof stored.counter === 'bigint' ? Number(stored.counter) : stored.counter
 

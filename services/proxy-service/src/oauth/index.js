@@ -46,6 +46,43 @@ function renderErrorPage(message) {
 </html>`
 }
 
+function renderSuccessRedirectPage(redirectUrl) {
+  const safeUrl = redirectUrl.replace(/"/g, '&quot;')
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="refresh" content="0;url=${safeUrl}" />
+    <title>Completing authorization…</title>
+    <style>
+      body { font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #020617; color: #e2e8f0; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+      .card { text-align: center; padding: 2rem; border-radius: 24px; background: rgba(15,23,42,0.92); border: 1px solid rgba(99,102,241,0.2); box-shadow: 0 16px 45px rgba(2,6,23,0.7); width: min(420px, 90%); }
+      .spinner { width: 48px; height: 48px; border: 4px solid rgba(148,163,184,0.2); border-top-color: #818cf8; border-radius: 50%; margin: 0 auto 1rem; animation: spin 1s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      p { line-height: 1.6; }
+      a { color: #93c5fd; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="spinner"></div>
+      <h1>Completing authorization…</h1>
+      <p>Hang tight! We&apos;re sending you back to your MCP client.</p>
+      <p>If nothing happens, <a href="${safeUrl}">click here</a>.</p>
+    </div>
+    <script>
+      setTimeout(() => {
+        try {
+          window.location.replace('${safeUrl}')
+        } catch (error) {
+          window.location.href = '${safeUrl}'
+        }
+      }, 100)
+    </script>
+  </body>
+</html>`
+}
+
 function setupMcpOAuth(app) {
   const enabled = process.env.MCP_OAUTH_ENABLED !== 'false'
   if (!enabled) {
@@ -87,7 +124,7 @@ function setupMcpOAuth(app) {
     async (req, res) => {
       try {
         const result = await provider.handleConsentSubmission(req.body || {})
-        res.redirect(302, result.redirectUrl)
+        res.status(200).send(renderSuccessRedirectPage(result.redirectUrl))
       } catch (error) {
         console.error('[oauth] consent error:', error)
         if (error.redirectUrl) {

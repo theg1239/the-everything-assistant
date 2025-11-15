@@ -19,10 +19,10 @@ export type HubActionHandlers = {
   syncCore: () => Promise<PersonalHubState>
   refreshVTOP: (
     command: HubVTOPCommand,
-    extras?: Record<string, any>,
+    extras?: Record<string, unknown>,
     credentials?: VTOPCredentialPayload
   ) => Promise<PersonalHubSnapshot>
-  runTool: (toolName: string, args?: Record<string, any>) => Promise<any>
+  runTool: (toolName: string, args?: Record<string, unknown>) => Promise<unknown>
 }
 
 interface HubProps {
@@ -32,7 +32,7 @@ interface HubProps {
   onClose?: () => void
   onLink?: () => void
   actions: HubActionHandlers
-  preferences?: Record<string, any>
+  preferences?: Record<string, unknown>
 }
 
 export default function Hub({

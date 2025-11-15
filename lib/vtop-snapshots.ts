@@ -1,4 +1,5 @@
 import { prisma } from './prisma'
+import type { VTOPSnapshot } from '@prisma/client'
 
 export type VTOPSnapshotPayload = {
   command: string
@@ -6,7 +7,10 @@ export type VTOPSnapshotPayload = {
   fetchedAt: Date
 }
 
-export async function listVTOPSnapshots(userId: string, commands?: string[]) {
+export async function listVTOPSnapshots(
+  userId: string,
+  commands?: string[]
+): Promise<VTOPSnapshot[]> {
   return prisma.vTOPSnapshot.findMany({
     where: {
       userId,

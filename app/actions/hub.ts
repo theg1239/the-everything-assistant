@@ -41,7 +41,8 @@ async function requireUser() {
 
 async function buildHubState(userId: string): Promise<PersonalHubState> {
   const [linked, rows] = await Promise.all([hasVTOPCredentials(), listVTOPSnapshots(userId)])
-  const snapshots: PersonalHubSnapshot[] = rows.map(row => {
+''
+  const snapshots: PersonalHubSnapshot[] = rows.map((row: any) => {
     const data = row.data as VTOPFormattedResult | null
     return {
       command: row.command,
@@ -90,11 +91,18 @@ async function executeVTOPCommand(
 
   const creds = await resolveVTOPCredentials(credentials)
 
-  const args = {
+  const args: Record<string, any> = {
     command,
     username: creds.username,
-    password: creds.encryptedPassword,
     ...extras,
+  }
+
+  if (creds.encryptedPassword?.includes(':::')) {
+    const [encryptedPassword, sessionKey] = creds.encryptedPassword.split(':::')
+    args.encryptedPassword = encryptedPassword
+    args.sessionKey = sessionKey
+  } else {
+    args.password = creds.encryptedPassword
   }
 
   const raw = await vtop.execute(args, { toolCallId: `vtop-${Date.now()}`, messages: [] })

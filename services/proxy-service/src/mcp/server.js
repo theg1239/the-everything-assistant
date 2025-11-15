@@ -94,7 +94,8 @@ function registerTools(targetServer) {
     flags: flagsSchema.optional(),
   }
 
-  const baseInputSchema = z.object(baseFields)
+  const baseObjectSchema = z.object(baseFields)
+  const baseInputSchema = baseObjectSchema
 
   manifest.forEach(capability => {
     targetServer.registerTool(

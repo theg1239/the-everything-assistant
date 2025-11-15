@@ -107,44 +107,45 @@ function getCliExecutablePath() {
 const BINARY_PATH = getCliExecutablePath()
 const CLI_TIMEOUT = parseInt(process.env.CLI_TIMEOUT) || 120000
 
-const COMMAND_MAPPING = {
-  profile: 'profile',
-  marks: 'marks',
-  grades: 'grades',
-  attendance: 'attendance',
-  timetable: 'timetable',
-  receipts: 'receipts',
-  hostel: 'hostel',
-  cgpa: 'cgpa',
-  exams: 'exams',
-  'exam-schedule': 'exams',
-  'course-page': 'course-page',
-  'library-dues': 'library-dues',
-  calendar: 'calendar',
-  nightslip: 'nightslip',
-  leave: 'leave',
-  'leave-status': 'leave',
-  msg: 'msg',
-  'class-message': 'msg',
-  da: 'da',
-  facility: 'facility',
-  syllabus: 'syllabus',
+const capabilityManifestPath = path.resolve(__dirname, '../../hub-capabilities.json')
+let capabilityManifest = []
+function loadCapabilityManifest() {
+  try {
+    capabilityManifest = JSON.parse(fs.readFileSync(capabilityManifestPath, 'utf-8'))
+  } catch (error) {
+    console.error('Failed to load hub-capabilities manifest:', error)
+    capabilityManifest = []
+  }
 }
+loadCapabilityManifest()
 
-const INTERACTIVE_COMMANDS = {
-  marks: { requiresSemester: true },
-  grades: { requiresSemester: true },
-  attendance: { requiresSemester: true },
-  timetable: { requiresSemester: true },
-  exams: { requiresSemester: true },
-  calendar: { requiresSemester: true, requiresClassGroup: true },
-  'course-page': { requiresSemester: true, requiresCourse: true, requiresFaculty: true },
-  syllabus: { requiresCourse: true },
-  da: { autoCtrlC: true },
-  facility: { autoCtrlC: true },
-}
+const COMMAND_MAPPING = capabilityManifest.reduce((acc, capability) => {
+  acc[capability.command] = capability.cliCommand || capability.command
+  return acc
+}, {})
+
+const INTERACTIVE_COMMANDS = capabilityManifest.reduce((acc, capability) => {
+  if (capability.interactive) {
+    const key = capability.cliCommand || capability.command
+    acc[key] = capability.interactive
+  }
+  return acc
+}, {})
 
 const SUPPORTED_COMMANDS = Object.keys(COMMAND_MAPPING)
+
+app.get('/health', (req, res) => {
+  const binaryExists = fs.existsSync(BINARY_PATH)
+  res.json({
+    status: binaryExists ? 'ok' : 'missing-binary',
+    binary: BINARY_PATH,
+    commands: SUPPORTED_COMMANDS.length,
+  })
+})
+
+app.get('/commands', (req, res) => {
+  res.json({ capabilities: capabilityManifest })
+})
 
 async function executeVTOPCommand(username, password, command, flags) {
   return new Promise((resolve, reject) => {

@@ -192,7 +192,10 @@ export default function HubShell({
     ? formatDistanceToNow(new Date(hubState.lastSyncedAt), { addSuffix: true })
     : 'never'
 
-  const profileSnapshot = hubState.snapshots.find(s => s.command === 'profile')
+  const profileSnapshot = useMemo(
+    () => hubState.snapshots.find(s => s.command === 'profile'),
+    [hubState.snapshots]
+  )
   const terseName = useMemo(() => {
     const structuredName =
       (profileSnapshot?.structured_data as any)?.student?.name || profileSnapshot?.title
@@ -269,6 +272,18 @@ export default function HubShell({
     () => hubState.snapshots.find(s => s.command === 'attendance'),
     [hubState.snapshots]
   )
+  const hostelSnapshot = useMemo(
+    () => hubState.snapshots.find(s => s.command === 'hostel'),
+    [hubState.snapshots]
+  )
+  const librarySnapshot = useMemo(
+    () => hubState.snapshots.find(s => s.command === 'library-dues'),
+    [hubState.snapshots]
+  )
+  const gradesSnapshot = useMemo(
+    () => hubState.snapshots.find(s => s.command === 'grades'),
+    [hubState.snapshots]
+  )
   const leaveSnapshot = useMemo(
     () => hubState.snapshots.find(s => s.command === 'leave' || s.command === 'leave-status'),
     [hubState.snapshots]
@@ -289,6 +304,19 @@ export default function HubShell({
     [capabilities]
   )
   const daCapability = useMemo(() => capabilities.find(cap => cap.command === 'da'), [capabilities])
+  const notifications = useMemo(
+    () =>
+      deriveNotifications({
+        attendanceSnapshot,
+        assignmentsSnapshot,
+        leaveSnapshot,
+        examsSnapshot,
+        librarySnapshot,
+        gradesSnapshot,
+      }),
+    [attendanceSnapshot, assignmentsSnapshot, leaveSnapshot, examsSnapshot, librarySnapshot, gradesSnapshot]
+  )
+  const persona = useMemo(() => derivePersona(profileSnapshot, hostelSnapshot), [profileSnapshot, hostelSnapshot])
 
   const renderBriefing = () => (
     <div className="space-y-4 mt-2">
@@ -307,6 +335,16 @@ export default function HubShell({
         />
       ) : (
         <HubOnboarding onLink={onLink} />
+      )}
+
+      {persona && <PersonaStrip persona={persona} onLink={onLink} />}
+
+      {linked && notifications.length > 0 && (
+        <NotificationStrip
+          notifications={notifications}
+          capabilities={capabilities}
+          onRun={handleCapabilityRun}
+        />
       )}
 
       {linked && (
@@ -538,6 +576,57 @@ function InsightCard({
   )
 }
 
+function NotificationStrip({
+  notifications,
+  capabilities,
+  onRun,
+}: {
+  notifications: HubNotification[]
+  capabilities: HubCapability[]
+  onRun: (capability: HubCapability) => void
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {notifications.map(notification => {
+        const capability = notification.command
+          ? capabilities.find(cap => cap.command === notification.command)
+          : null
+        const clickable = Boolean(capability)
+        return (
+          <button
+            key={notification.id}
+            onClick={() => capability && onRun(capability)}
+            disabled={!clickable}
+            className={`rounded-full border border-border/50 px-3 py-1 text-sm text-foreground/80 hover:text-foreground hover:border-foreground/60 ${
+              !clickable ? 'opacity-60 cursor-default' : ''
+            }`}
+          >
+            {notification.text}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function PersonaStrip({ persona, onLink }: { persona: Persona; onLink?: () => void }) {
+  return (
+    <div className="rounded-2xl border border-border/40 bg-background/30 px-4 py-3 flex flex-wrap gap-3 text-sm text-muted-foreground">
+      {persona.registerNumber && <span>{persona.registerNumber}</span>}
+      {persona.program && <span>{persona.program}</span>}
+      {persona.school && <span>{persona.school}</span>}
+      {persona.hostelBlock && <span>{persona.hostelBlock}</span>}
+      {persona.room && <span>Room {persona.room}</span>}
+      {persona.mess && <span>Mess: {persona.mess}</span>}
+      {!persona.hostelBlock && onLink && (
+        <button className="text-primary" onClick={onLink}>
+          link hostel data
+        </button>
+      )}
+    </div>
+  )
+}
+
 function SnapshotCard({
   snapshot,
   onOpen,
@@ -620,6 +709,23 @@ type Insight = {
   headline: string
   supporting?: string
   meta?: string
+}
+
+type HubNotification = {
+  id: string
+  text: string
+  command?: HubVTOPCommand
+}
+
+type Persona = {
+  name?: string
+  registerNumber?: string
+  program?: string
+  school?: string
+  email?: string
+  hostelBlock?: string
+  room?: string
+  mess?: string
 }
 
 function deriveNextClassInsight(snapshot?: PersonalHubSnapshot | null): Insight | null {
@@ -712,4 +818,108 @@ function deriveExamInsight(snapshot?: PersonalHubSnapshot | null): Insight | nul
     }
   }
   return null
+}
+
+const extractNumber = (value?: string) => {
+  if (!value) return null
+  const match = value.match(/-?\d+/)
+  return match ? parseInt(match[0], 10) : null
+}
+
+function derivePersona(profileSnapshot?: PersonalHubSnapshot | null, hostelSnapshot?: PersonalHubSnapshot | null): Persona | null {
+  const persona: Persona = {}
+  const profileData = (profileSnapshot?.structured_data as any)?.persona
+  if (profileData) {
+    persona.registerNumber = profileData.registerNumber
+    persona.program = profileData.program
+    persona.email = profileData.email
+    persona.school = profileData.school
+  }
+  const hostelInfo = (hostelSnapshot?.structured_data as any)?.info
+  if (hostelInfo) {
+    persona.hostelBlock = hostelInfo['hostel name'] || hostelInfo['hostel block']
+    persona.room = hostelInfo['room no'] || hostelInfo['room number']
+    persona.mess = hostelInfo['mess type'] || hostelInfo['mess']
+  }
+  if (Object.values(persona).every(value => !value)) {
+    return null
+  }
+  return persona
+}
+
+function deriveNotifications({
+  attendanceSnapshot,
+  assignmentsSnapshot,
+  leaveSnapshot,
+  examsSnapshot,
+  librarySnapshot,
+  gradesSnapshot,
+}: {
+  attendanceSnapshot?: PersonalHubSnapshot | null
+  assignmentsSnapshot?: PersonalHubSnapshot | null
+  leaveSnapshot?: PersonalHubSnapshot | null
+  examsSnapshot?: PersonalHubSnapshot | null
+  librarySnapshot?: PersonalHubSnapshot | null
+  gradesSnapshot?: PersonalHubSnapshot | null
+}): HubNotification[] {
+  const notifications: HubNotification[] = []
+
+  const attendanceStats = (attendanceSnapshot?.structured_data as any)?.stats
+  if (attendanceStats?.needsAttention > 0) {
+    notifications.push({
+      id: 'attendance-risk',
+      text: `${attendanceStats.needsAttention} course${attendanceStats.needsAttention === 1 ? '' : 's'} below 75%`,
+      command: 'attendance',
+    })
+  }
+
+  const upcomingDA = (assignmentsSnapshot?.structured_data as any)?.upcoming
+  if (upcomingDA?.subject && upcomingDA?.nextDue && upcomingDA.nextDue !== 'N/A') {
+    notifications.push({
+      id: 'da-due',
+      text: `${upcomingDA.subject} due ${upcomingDA.nextDue}`,
+      command: 'da',
+    })
+  }
+
+  const pendingLeave = (leaveSnapshot?.structured_data as any)?.pending
+  if (pendingLeave?.status && pendingLeave.status.toLowerCase().includes('pending')) {
+    notifications.push({
+      id: 'leave-pending',
+      text: `Leave pending: ${pendingLeave.reason || pendingLeave.status}`,
+      command: 'leave',
+    })
+  }
+
+  const upcomingExam = (examsSnapshot?.structured_data as any)?.upcoming
+  if (upcomingExam?.examDate) {
+    const daysLeft = extractNumber(upcomingExam.daysLeft)
+    if (daysLeft !== null && daysLeft <= 3) {
+      notifications.push({
+        id: 'exam-soon',
+        text: `${upcomingExam.title || upcomingExam.code} in ${daysLeft === 0 ? 'today' : `${daysLeft} day${daysLeft === 1 ? '' : 's'}`}`,
+        command: 'exams',
+      })
+    }
+  }
+
+  const libraryTotal = (librarySnapshot?.structured_data as any)?.total
+  if (libraryTotal && libraryTotal > 0) {
+    notifications.push({
+      id: 'library-dues',
+      text: `Library dues: ₹${libraryTotal.toFixed(2)}`,
+      command: 'library-dues',
+    })
+  }
+
+  const gradeRisk = ((gradesSnapshot?.structured_data as any)?.risk || []) as any[]
+  if (gradeRisk.length > 0) {
+    notifications.push({
+      id: 'grade-risk',
+      text: `${gradeRisk.length} grade${gradeRisk.length === 1 ? '' : 's'} need attention`,
+      command: 'grades',
+    })
+  }
+
+  return notifications.slice(0, 4)
 }

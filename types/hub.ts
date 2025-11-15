@@ -25,6 +25,7 @@ export type HubVTOPCommand =
   | 'cgpa'
   | 'exams'
   | 'exam-schedule'
+  | 'calendar'
   | 'library-dues'
   | 'nightslip'
   | 'leave'

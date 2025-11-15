@@ -104,9 +104,9 @@ function setupMcpOAuth(app) {
     res.status(400).send(renderErrorPage('Consent session missing or expired. Restart the OAuth authorization flow.'))
   })
 
-  oauthRouter.use('/', mcpAuthRouter(sharedOptions))
-
   app.use('/oauth', oauthRouter)
+
+  app.use('/', mcpAuthRouter(sharedOptions))
 
   app.use(
     mcpAuthMetadataRouter({

@@ -33,6 +33,9 @@ All MCP transports (`/mcp` + `/mcp/messages`) now require OAuth 2.0 with PKCE. T
 - **Token endpoint**: `https://<host>/oauth/token` exchanges the code (with PKCE) for access + refresh tokens.
 - **Consent handler**: the login form posts to `/oauth/consent`. You usually hit it indirectly via the authorize page, but it is helpful to know when debugging.
 - **Dynamic client registration**: `https://<host>/register` accepts OAuth client metadata so IDEs can self-register. Registered clients are persisted to `mcp-oauth-clients.json` in the project root (or the path provided via `MCP_OAUTH_CLIENTS_PATH`), so restarts won’t invalidate issued `client_id`s. Delete that file if you need a clean slate.
+- **Static clients**: set `MCP_OAUTH_STATIC_CLIENTS` to a JSON array (e.g., `[{"client_id":"abc","redirect_uris":["https://chatgpt.com/..."],"grant_types":["authorization_code"],"token_endpoint_auth_method":"none"}]`) if you need to pre-authorize well-known connector IDs that can’t call `/register`.
+- **Auto-register unknown `/authorize` callers**: leave `MCP_OAUTH_AUTO_REGISTER` unset (default) and the proxy will create a client record on-the-fly the first time a new `client_id` hits `/authorize` (as long as it provides `redirect_uri`). Set it to `false` if you prefer a strict allowlist-only flow.
+- **Default client shortcut**: provide `MCP_OAUTH_DEFAULT_CLIENT_ID` and `MCP_OAUTH_DEFAULT_REDIRECT_URI`. If set, the proxy ensures that client exists on boot without waiting for the first `/authorize` request.
 
 Because the OAuth token now carries the encrypted VTOP credential blob, MCP clients should **not** send `password`/`encryptedPassword` inside tool arguments anymore—only the command + flags are required. The proxy injects the linked credentials from the bearer token before invoking the CLI workflow.
 

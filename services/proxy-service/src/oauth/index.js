@@ -1,4 +1,5 @@
 const express = require('express')
+const path = require('path')
 const {
   mcpAuthRouter,
   mcpAuthMetadataRouter,
@@ -18,6 +19,22 @@ function parseUrl(value, fallback) {
   } catch (error) {
     if (fallback) return new URL(fallback)
     throw error
+  }
+}
+
+function loadStaticClients() {
+  const raw = process.env.MCP_OAUTH_STATIC_CLIENTS
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      return parsed
+    }
+    console.warn('[oauth] MCP_OAUTH_STATIC_CLIENTS must be a JSON array')
+    return []
+  } catch (error) {
+    console.error('[oauth] Failed to parse MCP_OAUTH_STATIC_CLIENTS:', error.message)
+    return []
   }
 }
 
@@ -95,6 +112,10 @@ function setupMcpOAuth(app) {
   const serviceDocsUrl = process.env.MCP_OAUTH_SERVICE_DOCS_URL
     ? parseUrl(process.env.MCP_OAUTH_SERVICE_DOCS_URL)
     : undefined
+  const staticClients = loadStaticClients()
+  const clientsFilePath =
+    process.env.MCP_OAUTH_CLIENTS_PATH ||
+    path.resolve(process.cwd(), 'mcp-oauth-clients.json')
 
   const provider = new VtopOAuthProvider({
     strictResource: process.env.MCP_OAUTH_STRICT_RESOURCE !== 'false',
@@ -102,7 +123,34 @@ function setupMcpOAuth(app) {
     refreshTokenTtlSeconds: parseInt(process.env.MCP_OAUTH_REFRESH_TOKEN_TTL || '1209600', 10),
     codeTtlSeconds: parseInt(process.env.MCP_OAUTH_CODE_TTL || '300', 10),
     consentTtlSeconds: parseInt(process.env.MCP_OAUTH_CONSENT_TTL || '300', 10),
+    staticClients,
+    clientsFilePath,
   })
+
+  ;(async () => {
+    const defaultClientId = process.env.MCP_OAUTH_DEFAULT_CLIENT_ID
+    const defaultRedirectUri = process.env.MCP_OAUTH_DEFAULT_REDIRECT_URI
+    if (!defaultClientId || !defaultRedirectUri) {
+      return
+    }
+    try {
+      const existing = await provider.clientsStore.getClient(defaultClientId)
+      if (!existing) {
+        const client = {
+          client_id: defaultClientId,
+          redirect_uris: [defaultRedirectUri],
+          grant_types: ['authorization_code', 'refresh_token'],
+          response_types: ['code'],
+          token_endpoint_auth_method: 'none',
+          application_type: 'native',
+        }
+        await provider.clientsStore.registerClient(client)
+        console.log('[oauth] Registered default client', defaultClientId)
+      }
+    } catch (error) {
+      console.error('[oauth] Failed to ensure default client:', error)
+    }
+  })()
 
   const oauthRouter = express.Router()
 
@@ -141,9 +189,49 @@ function setupMcpOAuth(app) {
     res.status(400).send(renderErrorPage('Consent session missing or expired. Restart the OAuth authorization flow.'))
   })
 
+  const autoRegisterEnabled = process.env.MCP_OAUTH_AUTO_REGISTER === 'false' ? false : true
+
+  const authorizeBodyParser = express.urlencoded({ extended: false })
+
+  const autoRegisterMiddleware = async (req, res, next) => {
+    if (!autoRegisterEnabled) return next()
+    const isAuthorizePath = req.path === '/authorize' || req.path === '/oauth/authorize'
+    const methodAllowed = req.method === 'GET' || req.method === 'POST'
+    if (!isAuthorizePath || !methodAllowed) {
+      return next()
+    }
+
+    const params = req.method === 'POST' ? req.body || {} : req.query || {}
+    const clientId = params.client_id
+    const redirectUri = params.redirect_uri
+    if (!clientId || !redirectUri) {
+      return next()
+    }
+
+    try {
+      const existing = await provider.clientsStore.getClient(clientId)
+      if (!existing) {
+        const client = {
+          client_id: clientId,
+          redirect_uris: [redirectUri],
+          grant_types: ['authorization_code', 'refresh_token'],
+          response_types: ['code'],
+          token_endpoint_auth_method: 'none',
+          application_type: 'native',
+        }
+        await provider.clientsStore.registerClient(client)
+        console.log('[oauth] Auto-registered client during /authorize:', clientId)
+      }
+    } catch (error) {
+      console.error('[oauth] Failed auto-registering client:', error)
+    }
+    next()
+  }
+
+  app.use(['/authorize', '/oauth/authorize'], authorizeBodyParser)
   app.use('/oauth', oauthRouter)
-  app.use('/oauth', mcpAuthRouter(sharedOptions))
-  app.use('/', mcpAuthRouter(sharedOptions))
+  app.use('/oauth', autoRegisterMiddleware, mcpAuthRouter(sharedOptions))
+  app.use('/', autoRegisterMiddleware, mcpAuthRouter(sharedOptions))
 
   app.use(
     mcpAuthMetadataRouter({

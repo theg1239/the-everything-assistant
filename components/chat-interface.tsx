@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, memo, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, memo, useCallback, useMemo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useChat, type Message as AIMessage } from '@ai-sdk/react'
 import { useRouter } from 'next/navigation'
@@ -17,6 +17,7 @@ import { ChatHeader } from '@/components/chat-header'
 import { MobilePdfDockButton, DesktopPdfDockButton } from '@/components/pdf-dock'
 import { MultimodalInput } from '@/components/multimodal-input'
 import Hub, { type HubActionHandlers } from '@/components/hub/hub'
+import { HubStoreProvider } from '@/components/hub/hub-store'
 import type { PersonalHubState } from '@/types/hub'
 import { extractTitleFromContent } from '@/lib/utils'
 import UpsellBanner from '@/components/upsell-banner'
@@ -1239,8 +1240,10 @@ const PureChatInterface = memo(
       }
     }, [messages, updateToolResult])
 
+    let hubLayout: ReactNode
+
     if (!showFullChat) {
-      return (
+      hubLayout = (
         <VTOPToolHandler
           toolInvocations={messages[messages.length - 1]?.toolInvocations}
           onCredentialsSubmit={handleVTOPCredentials}
@@ -1249,7 +1252,6 @@ const PureChatInterface = memo(
           <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
           <Hub
             isOpen={hubOpen}
-            initialState={hubSeed}
             actions={hubActionHandlers}
             onLink={handleLoginClick}
             onClose={() => {
@@ -1414,22 +1416,21 @@ const PureChatInterface = memo(
           </div>
         </VTOPToolHandler>
       )
-    }
-    return (
-      <VTOPToolHandler
-        toolInvocations={messages[messages.length - 1]?.toolInvocations}
-        onCredentialsSubmit={handleVTOPCredentials}
-      >
+    } else {
+      hubLayout = (
+        <VTOPToolHandler
+          toolInvocations={messages[messages.length - 1]?.toolInvocations}
+          onCredentialsSubmit={handleVTOPCredentials}
+        >
         <UpsellBanner />
         <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
-        <Hub
-          isOpen={hubOpen}
-          initialState={hubSeed}
-          actions={hubActionHandlers}
-          onLink={handleLoginClick}
-          onClose={() => {
-            setHubOpen(false)
-          }}
+          <Hub
+            isOpen={hubOpen}
+            actions={hubActionHandlers}
+            onLink={handleLoginClick}
+            onClose={() => {
+              setHubOpen(false)
+            }}
         />
         <div
           ref={mainRef}
@@ -1699,6 +1700,9 @@ const PureChatInterface = memo(
           )}
       </VTOPToolHandler>
     )
+    }
+
+    return <HubStoreProvider initialState={hubSeed}>{hubLayout}</HubStoreProvider>
   }
 )
 

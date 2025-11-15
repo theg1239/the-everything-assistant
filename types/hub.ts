@@ -36,3 +36,8 @@ export type HubVTOPCommand =
   | 'facility'
   | 'syllabus'
   | 'course-page'
+
+export type VTOPCredentialPayload = {
+  username: string
+  encryptedPassword: string
+}

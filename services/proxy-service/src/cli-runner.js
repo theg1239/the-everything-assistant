@@ -7,6 +7,21 @@ const { record } = require('./metrics')
 
 let binaryReady = false
 
+const snippet = text => {
+  if (!text) return ''
+  const lines = text.toString().split('\n').slice(-4)
+  const compact = lines.join(' ').trim()
+  return compact.length > 160 ? compact.slice(-160) : compact
+}
+
+const logInteractive = (command, detail, meta) => {
+  if (meta) {
+    console.log(`[cli-runner:${command}] ${detail}`, meta)
+  } else {
+    console.log(`[cli-runner:${command}] ${detail}`)
+  }
+}
+
 function ensureBinaryReady() {
   if (binaryReady) return
 
@@ -203,27 +218,65 @@ function ensureInteractiveResolution({ child, stdout, mappedCommand, resolve }) 
   }
 }
 
+function parseLastOptionIndex(promptText) {
+  const matches = [...promptText.matchAll(/^\s*(\d+)[.)]/gm)]
+  if (!matches.length) return null
+  const last = matches[matches.length - 1]
+  return last?.[1] ? parseInt(last[1], 10) : null
+}
+
 function handleInteractivePrompt(buffer, command, flags) {
   if (!buffer) return null
+  const normalized = buffer.toLowerCase()
+  const respond = value => {
+    logInteractive(command, `auto-response -> ${value}`, { prompt: snippet(buffer) })
+    return value
+  }
   if (command === 'course-page') {
-    if (buffer.toLowerCase().includes('enter the semester number')) {
-      return String(flags.semester || flags.semesterQuery || 1)
+    if (normalized.includes('enter the semester number')) {
+      if (flags?.semester) return respond(String(flags.semester))
+      if (flags?.semesterQuery) {
+        if (typeof flags.semesterQuery === 'number') {
+          return respond(String(flags.semesterQuery))
+        }
+        const query = String(flags.semesterQuery).toLowerCase().trim()
+        if (['latest', 'last', 'current'].includes(query)) {
+          const idx = parseLastOptionIndex(buffer)
+          if (idx) return respond(String(idx))
+        }
+        const numeric = parseInt(flags.semesterQuery, 10)
+        if (!Number.isNaN(numeric)) return respond(String(numeric))
+      }
+      return respond('1')
     }
     if (buffer.toLowerCase().includes('enter the course number')) {
-      return String(flags.course || 1)
+      return respond(String(flags.course || 1))
     }
     if (buffer.toLowerCase().includes('enter the faculty number')) {
-      return String(flags.faculty || 1)
+      return respond(String(flags.faculty || 1))
     }
     if (buffer.toLowerCase().includes('enter the material number')) {
-      return 'all'
+      return respond('all')
     }
   }
-  if (command === 'calendar' && buffer.toLowerCase().includes('enter class group')) {
-    return String(flags.classGroup || 1)
+  if (normalized.includes('choose a semester') || normalized.includes('enter the semester number')) {
+    if (flags?.semester) return respond(String(flags.semester))
+    if (flags?.semesterQuery) {
+      const query = String(flags.semesterQuery).toLowerCase().trim()
+      if (['latest', 'last', 'current'].includes(query)) {
+        const idx = parseLastOptionIndex(buffer)
+        if (idx) return respond(String(idx))
+      }
+      const numeric = parseInt(flags.semesterQuery, 10)
+      if (!Number.isNaN(numeric)) return respond(String(numeric))
+    }
+    return respond('1')
   }
-  if (buffer.toLowerCase().includes('username or password incorrect')) {
-    return '\x03'
+  if (command === 'calendar' && normalized.includes('enter class group')) {
+    return respond(String(flags.classGroup || 1))
+  }
+  if (normalized.includes('username or password incorrect')) {
+    return respond('\x03')
   }
   return null
 }

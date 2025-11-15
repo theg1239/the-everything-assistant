@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useEffect, useCallback } from 'react'
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { Button } from '@/components/ui/button'
@@ -31,9 +31,41 @@ import RedditPanel from './panels/reddit-panel'
 import SyllabiPanel from './panels/syllabi-panel'
 import { ResultBottomSheet } from './result-bottom-sheet'
 import { HubToolProvider } from './hub-tools-context'
-import type { PersonalHubState, PersonalHubSnapshot, HubVTOPCommand } from '@/types/hub'
+import { DailyBriefingOverlay } from './daily-briefing-overlay'
+import { MinimalStatusCard } from './minimal-status-card'
+import type { PersonalHubSnapshot, HubVTOPCommand, VTOPCredentialPayload } from '@/types/hub'
 import type { HubActionHandlers } from './hub'
 import { listHubCapabilities, type HubCapability } from '@/lib/hub/capabilities'
+import {
+  hasVTOPCredentials as clientHasVTOPCredentials,
+  getFormattedVTOPCredentials as clientGetFormattedVTOPCredentials,
+} from '@/lib/vtop-credentials'
+import { useHubStore, type HubPage, type DailyHydrationState } from './hub-store'
+import { shallow } from 'zustand/shallow'
+import {
+  DailyBriefingMessage,
+  DailyBriefingAction,
+  ExamPrompt,
+  Persona,
+  NextClassComputation,
+  buildDailyBriefingContext,
+  deriveNextClassInsight,
+  deriveAssignmentInsight,
+  deriveAttendanceInsight,
+  deriveLeaveInsight,
+  deriveExamInsight,
+  derivePersona,
+  deriveNotifications,
+  normalizeAssignments,
+  buildGreeting,
+  deriveTerseName,
+  computeDynamicNextClass,
+  formatLocalDateKey,
+  parsePreferenceTime,
+  formatPreferenceTimeLabel,
+  formatShortDate,
+} from '@/lib/hub/daily-briefing'
+import { toast } from 'sonner'
 
 const PINNED_COMMANDS: HubVTOPCommand[] = ['timetable', 'attendance', 'marks', 'cgpa', 'profile']
 const SNAPSHOT_ICONS: Partial<Record<HubVTOPCommand, ReactNode>> = {
@@ -43,50 +75,112 @@ const SNAPSHOT_ICONS: Partial<Record<HubVTOPCommand, ReactNode>> = {
   cgpa: <Award className="h-4 w-4" />,
 }
 const SYNC_SEQUENCE: HubVTOPCommand[] = ['profile', 'attendance', 'timetable', 'marks', 'cgpa', 'exams']
+const DAILY_BRIEFING_COMMANDS: HubVTOPCommand[] = Array.from(
+  new Set<HubVTOPCommand>([
+    ...SYNC_SEQUENCE,
+    'da',
+    'library-dues',
+    'leave',
+    'hostel',
+    'grades',
+    'msg',
+  ])
+)
+const DAILY_BRIEFING_STORAGE_KEY = 'ea.hub.daily-briefing-date'
+const DAILY_REVEAL_DELAY_MS = 2000
+const HUB_SURFACE_CLASS = 'rounded-[32px] border border-white/10 bg-[rgba(7,8,18,0.65)] backdrop-blur-xl shadow-[0_25px_80px_rgba(0,0,0,0.55)]'
+const HUB_LABEL_CLASS = 'text-[11px] uppercase tracking-[0.3em] text-white/60'
 
-type Page =
-  | 'briefing'
-  | 'vtop'
-  | 'papers'
-  | 'mess'
-  | 'placements'
-  | 'faculty'
-  | 'reddit'
-  | 'syllabi'
+type Page = HubPage
+
+const NAV_ITEMS: { id: Page; label: string; icon: ReactNode }[] = [
+  { id: 'briefing', label: 'briefing', icon: <Sparkles className="h-3.5 w-3.5" /> },
+  { id: 'vtop', label: 'vtop', icon: <GraduationCap className="h-3.5 w-3.5" /> },
+  { id: 'papers', label: 'past papers', icon: <FileSearch className="h-3.5 w-3.5" /> },
+  { id: 'mess', label: 'mess menu', icon: <UtensilsCrossed className="h-3.5 w-3.5" /> },
+  { id: 'placements', label: 'placements', icon: <Briefcase className="h-3.5 w-3.5" /> },
+  { id: 'faculty', label: 'faculty', icon: <Users className="h-3.5 w-3.5" /> },
+  { id: 'reddit', label: 'reddit', icon: <Flame className="h-3.5 w-3.5" /> },
+  { id: 'syllabi', label: 'syllabi', icon: <FileSearch className="h-3.5 w-3.5" /> },
+]
 
 type HubShellProps = {
-  initialState: PersonalHubState
   actions: HubActionHandlers
   syncing?: boolean
   onLink?: () => void
+  preferences?: Record<string, any>
 }
 
+type DailyExamAction = 'syllabus' | 'papers' | 'materials' | 'skip'
+
 export default function HubShell({
-  initialState,
   actions,
   syncing: externalSyncing = false,
   onLink,
+  preferences,
 }: HubShellProps) {
-  const [page, setPage] = useState<Page>('briefing')
-  const [hubState, setHubState] = useState(initialState)
-  const [viewerOpen, setViewerOpen] = useState(false)
-  const [viewerTitle, setViewerTitle] = useState('result')
-  const [viewerData, setViewerData] = useState<any>(null)
-  const [viewerMode, setViewerMode] = useState<'static' | 'stream'>('static')
-  const [viewerLoading, setViewerLoading] = useState(false)
-  const [syncing, setSyncing] = useState(externalSyncing)
-  const [syncCommand, setSyncCommand] = useState<HubVTOPCommand | null>(null)
-  const [capabilityLoading, setCapabilityLoading] = useState<HubVTOPCommand | null>(null)
+  const store = useHubStore(state => state, shallow)
+  const {
+    page,
+    hubState,
+    viewerOpen,
+    viewerTitle,
+    viewerData,
+    viewerMode,
+    viewerLoading,
+    syncing,
+    syncCommand,
+    capabilityLoading,
+    dailyBriefingActive,
+    dailyBriefingTriggered,
+    dailyBriefingReady,
+    dailyGreeting,
+    dailyMessages,
+    dailyMessagesPrepared,
+    dailyRevealedCount,
+    dailyExamPrompt,
+    dailyBriefingActions,
+    hydrationCurrentCommand,
+    dailyHydration,
+    hydrationQueue,
+    overlayMode,
+    unlinkedOverlayDismissed,
+    sendingBriefingEmail,
+    setState,
+    setHubState,
+  } = store
+  const emailSentRef = useRef(false)
+  const emailPlanRef = useRef<string | null>(null)
   const capabilities = useMemo(() => listHubCapabilities(), [])
   const nowTick = useNow(60000)
+  const hydratableCommands = useMemo(() => {
+    return DAILY_BRIEFING_COMMANDS.filter(cmd => {
+      if (cmd === 'profile') {
+        return !hubState.snapshots.some(snapshot => snapshot.command === 'profile')
+      }
+      return true
+    })
+  }, [hubState.snapshots])
+  const briefingPrefs = useMemo(() => {
+    const base = preferences?.dailyBriefing || {}
+    return {
+      dismissTime: base.dismissTime || '07:30',
+      emailEnabled: base.emailEnabled ?? false,
+      emailTime: base.emailTime || base.dismissTime || '07:30',
+    }
+  }, [preferences])
 
   useEffect(() => {
-    setSyncing(externalSyncing)
-  }, [externalSyncing])
+    setState({ syncing: externalSyncing })
+  }, [externalSyncing, setState])
 
   useEffect(() => {
-    setHubState(initialState)
-  }, [initialState])
+    if (dailyBriefingActive) {
+      emailSentRef.current = false
+      emailPlanRef.current = null
+      setState({ hydrationCurrentCommand: null })
+    }
+  }, [dailyBriefingActive, setState])
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -105,7 +199,7 @@ export default function HubShell({
       const next = map[e.key]
       if (next) {
         e.preventDefault()
-        setPage(next)
+        setState({ page: next })
       }
     }
     window.addEventListener('keydown', handleKey)
@@ -123,9 +217,26 @@ export default function HubShell({
     }))
   }, [])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (hubState.isLinked) return
+    if (clientHasVTOPCredentials()) {
+      setHubState(prev => ({ ...prev, isLinked: true }))
+    }
+  }, [hubState.isLinked, setHubState])
+
   const runVtopCommand = useCallback(
     async (command: HubVTOPCommand, extras?: Record<string, any>) => {
-      const snapshot = await actions.refreshVTOP(command, extras)
+      let credentials: VTOPCredentialPayload | undefined
+      try {
+        const formatted = clientGetFormattedVTOPCredentials()
+        if (formatted) {
+          credentials = formatted
+        }
+      } catch (error) {
+        console.warn('[hub] failed to read cached VTOP credentials', error)
+      }
+      const snapshot = await actions.refreshVTOP(command, extras, credentials)
       updateSnapshot(snapshot)
       return snapshot
     },
@@ -139,16 +250,58 @@ export default function HubShell({
     [actions]
   )
 
+  const handleRefreshState = useCallback(async () => {
+    setState({ syncing: true })
+    try {
+      const next = await actions.refreshState()
+      setHubState(next)
+    } finally {
+      setState({ syncing: false })
+    }
+  }, [actions, setHubState, setState])
+
+  const persistDailyBriefingSeen = useCallback(() => {
+    if (typeof window === 'undefined') return
+    const reference = nowTick ? new Date(nowTick) : new Date()
+    try {
+      window.localStorage.setItem(DAILY_BRIEFING_STORAGE_KEY, formatLocalDateKey(reference))
+    } catch (error) {
+      console.warn('[hub] failed to persist briefing seen flag', error)
+    }
+  }, [nowTick])
+
+  const dismissDailyBriefing = useCallback(
+    (options?: { persist?: boolean }) => {
+      setState(current => ({
+        dailyBriefingActive: false,
+        overlayMode: null,
+        unlinkedOverlayDismissed:
+          current.overlayMode === 'onboarding'
+            ? true
+            : current.unlinkedOverlayDismissed,
+      }))
+      if (options?.persist ?? overlayMode === 'briefing') {
+        persistDailyBriefingSeen()
+      }
+    },
+    [overlayMode, persistDailyBriefingSeen, setState]
+  )
+
+  const handleLinkIntent = useCallback(() => {
+    dismissDailyBriefing({ persist: false })
+    onLink?.()
+  }, [dismissDailyBriefing, onLink])
+
   const handleSync = useCallback(async () => {
     if (!linked) {
-      onLink?.()
-      setPage('briefing')
+      handleLinkIntent()
+      setState({ page: 'briefing' })
       return
     }
-    setSyncing(true)
+    setState({ syncing: true })
     try {
       for (const command of SYNC_SEQUENCE) {
-        setSyncCommand(command)
+        setState({ syncCommand: command })
         try {
           await runVtopCommand(command)
         } catch (err) {
@@ -158,20 +311,62 @@ export default function HubShell({
       const finalState = await actions.refreshState()
       setHubState(finalState)
     } finally {
-      setSyncCommand(null)
-      setSyncing(false)
+      setState({ syncCommand: null, syncing: false })
     }
-  }, [actions, linked, onLink, runVtopCommand])
+  }, [actions, linked, handleLinkIntent, runVtopCommand, setHubState, setState])
 
-  const handleRefreshState = useCallback(async () => {
-    setSyncing(true)
-    try {
-      const next = await actions.refreshState()
-      setHubState(next)
-    } finally {
-      setSyncing(false)
-    }
-  }, [actions])
+  const handleExamAction = useCallback(
+    (action: DailyExamAction) => {
+      switch (action) {
+        case 'syllabus':
+          setState({ page: 'syllabi' })
+          break
+        case 'papers':
+          setState({ page: 'papers' })
+          break
+        case 'materials':
+          setState({ page: 'vtop' })
+          break
+        default:
+          break
+      }
+      dismissDailyBriefing()
+    },
+    [dismissDailyBriefing]
+  )
+
+  const openSnapshot = useCallback(
+    (snapshot: PersonalHubSnapshot) => {
+      setState({
+        viewerTitle: snapshot.title || snapshot.command,
+        viewerData: snapshot,
+        viewerMode: 'static',
+        viewerLoading: false,
+        viewerOpen: true,
+      })
+    },
+    [setState]
+  )
+
+  const handleBriefingAction = useCallback(
+    async (command: HubVTOPCommand) => {
+      if (!linked) {
+        handleLinkIntent()
+        return
+      }
+      dismissDailyBriefing()
+      try {
+        const snapshot = await runVtopCommand(command)
+        openSnapshot(snapshot)
+      } catch (error) {
+        console.error('[hub] failed to execute briefing action', command, error)
+        if (isCredentialError(error)) {
+          handleLinkIntent()
+        }
+      }
+    },
+    [dismissDailyBriefing, handleLinkIntent, linked, runVtopCommand, openSnapshot]
+  )
 
   const latestSnapshots = useMemo(() => {
     const priority = ['attendance', 'timetable', 'marks', 'cgpa', 'profile']
@@ -197,33 +392,363 @@ export default function HubShell({
     () => hubState.snapshots.find(s => s.command === 'profile'),
     [hubState.snapshots]
   )
-  const terseName = useMemo(() => {
-    const structuredName =
-      (profileSnapshot?.structured_data as any)?.student?.name || profileSnapshot?.title
-    if (!structuredName) return 'there'
-    const parts = structuredName.trim().split(' ')
-    return parts[0]?.toLowerCase() === 'hey' ? parts.slice(1).join(' ') : parts[0]
-  }, [profileSnapshot])
+  const terseName = useMemo(() => deriveTerseName(profileSnapshot), [profileSnapshot])
 
-  const openSnapshot = useCallback((snapshot: PersonalHubSnapshot) => {
-    setViewerTitle(snapshot.title || snapshot.command)
-    setViewerData(snapshot)
-    setViewerMode('static')
-    setViewerLoading(false)
-    setViewerOpen(true)
-  }, [])
+  type BriefingEmailPayload = {
+    greeting: string
+    messages: DailyBriefingMessage[]
+    actions: DailyBriefingAction[]
+  }
+
+  type BriefingEmailRequest = BriefingEmailPayload & {
+    scheduledAt?: string
+  }
+
+  const buildEmailPayload = useCallback((): BriefingEmailPayload => {
+    const reference = nowTick ? new Date(nowTick) : new Date()
+    if (dailyMessages.length) {
+      return {
+        greeting: dailyGreeting || buildGreeting(reference, terseName),
+        messages: dailyMessages,
+        actions: dailyBriefingActions,
+      }
+    }
+    const fallback = buildDailyBriefingContext(hubState.snapshots, reference)
+    return {
+      greeting: dailyGreeting || buildGreeting(reference, terseName),
+      messages: fallback.messages,
+      actions: fallback.actions,
+    }
+  }, [dailyMessages, dailyBriefingActions, dailyGreeting, hubState.snapshots, nowTick, terseName])
+
+  const sendBriefingEmail = useCallback(
+    async ({
+      force = false,
+      silent = false,
+      scheduledAt,
+    }: {
+      force?: boolean
+      silent?: boolean
+      scheduledAt?: string | Date
+    } = {}) => {
+      const scheduleToken =
+        scheduledAt instanceof Date
+          ? scheduledAt.toISOString()
+          : typeof scheduledAt === 'string' && scheduledAt.trim().length
+          ? scheduledAt
+          : undefined
+
+      if (scheduleToken && emailPlanRef.current === scheduleToken && !force) {
+        if (!silent) toast.message('briefing email already scheduled')
+        return false
+      }
+
+      if (emailSentRef.current && !force && !scheduleToken) {
+        if (!silent) toast.message('briefing already sent')
+        return false
+      }
+
+      const emailPayload = buildEmailPayload()
+      if (!emailPayload.messages.length) {
+        if (!silent) toast.error('briefing not ready — wait for sync to finish')
+        return false
+      }
+
+      const payload: BriefingEmailRequest = scheduleToken
+        ? { ...emailPayload, scheduledAt: scheduleToken }
+        : emailPayload
+
+      try {
+        const response: Response = await fetch('/api/hub/daily-briefing-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        })
+        const responseBody = await response
+          .json()
+          .catch(() => ({ error: `status ${response.status}` }))
+        if (!response.ok) {
+          throw new Error(responseBody?.error || `status ${response.status}`)
+        }
+        if (scheduleToken) {
+          emailPlanRef.current = scheduleToken
+          emailSentRef.current = true
+        } else {
+          emailSentRef.current = true
+          emailPlanRef.current = null
+        }
+        if (!silent) toast.success('briefing emailed to your inbox')
+        return true
+      } catch (error) {
+        console.error('[hub/daily-briefing] email dispatch failed', error)
+        if (!silent) toast.error('failed to send briefing email')
+        return false
+      }
+    },
+    [buildEmailPayload]
+  )
+
+  const handleSendEmailNow = useCallback(async () => {
+    if (sendingBriefingEmail) return
+    setState({ sendingBriefingEmail: true })
+    try {
+      await sendBriefingEmail({ force: true })
+    } finally {
+      setState({ sendingBriefingEmail: false })
+    }
+  }, [sendBriefingEmail, sendingBriefingEmail, setState])
+
+  const launchDailyBriefing = useCallback(
+    (options?: { force?: boolean }) => {
+      if (!linked) return
+      if (typeof window === 'undefined') return
+      const reference = nowTick ? new Date(nowTick) : new Date()
+      const todayKey = formatLocalDateKey(reference)
+      if (!options?.force) {
+        if (dailyBriefingTriggered) return
+        const lastSeen = window.localStorage.getItem(DAILY_BRIEFING_STORAGE_KEY)
+        if (lastSeen === todayKey) {
+          setState({ dailyBriefingTriggered: true })
+          return
+        }
+      }
+      const queue = hydratableCommands.length ? [...hydratableCommands] : []
+      setState({
+        dailyGreeting: buildGreeting(reference, terseName),
+        dailyBriefingTriggered: true,
+        dailyBriefingActive: true,
+        dailyBriefingReady: false,
+        dailyMessagesPrepared: false,
+        dailyMessages: [],
+        dailyExamPrompt: null,
+        dailyBriefingActions: [],
+        dailyRevealedCount: 0,
+        hydrationQueue: queue,
+        dailyHydration: { running: queue.length > 0, completed: 0, total: queue.length },
+        page: 'briefing',
+        overlayMode: 'briefing',
+      })
+    },
+    [linked, dailyBriefingTriggered, nowTick, terseName, hydratableCommands.length, setState]
+  )
+
+  useEffect(() => {
+    launchDailyBriefing()
+  }, [launchDailyBriefing])
+
+  useEffect(() => {
+    if (linked) {
+      if (overlayMode === 'onboarding' && dailyBriefingActive) {
+        setState({ dailyBriefingActive: false, overlayMode: null })
+      }
+      if (unlinkedOverlayDismissed) {
+        setState({ unlinkedOverlayDismissed: false })
+      }
+      return
+    }
+    if (overlayMode === 'briefing' || dailyBriefingActive || unlinkedOverlayDismissed) return
+    const reference = nowTick ? new Date(nowTick) : new Date()
+    const greeting = buildGreeting(reference, deriveTerseName(profileSnapshot))
+    setState({
+      dailyGreeting: greeting,
+      dailyMessages: [
+        {
+          id: 'link-vtop',
+          primary: 'link VTOP to let us pull your briefing.',
+          supporting: 'we will pull attendance, timetable, assignments, and exam snapshots in seconds.',
+        },
+      ],
+      dailyMessagesPrepared: true,
+      dailyBriefingReady: true,
+      dailyExamPrompt: null,
+      dailyBriefingActions: [],
+      dailyRevealedCount: 1,
+      dailyHydration: { running: false, completed: 0, total: 1 },
+      dailyBriefingActive: true,
+      overlayMode: 'onboarding',
+    })
+  }, [
+    linked,
+    overlayMode,
+    dailyBriefingActive,
+    unlinkedOverlayDismissed,
+    nowTick,
+    profileSnapshot,
+    setState,
+  ])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handleLinked = () => {
+      try {
+        window.localStorage.removeItem(DAILY_BRIEFING_STORAGE_KEY)
+      } catch (error) {
+        console.warn('[hub] failed to reset daily briefing storage', error)
+      }
+      setState({ dailyBriefingTriggered: false })
+      launchDailyBriefing({ force: true })
+      handleRefreshState()
+    }
+    window.addEventListener('vtopCredentialsLinked', handleLinked as EventListener)
+    return () => window.removeEventListener('vtopCredentialsLinked', handleLinked as EventListener)
+  }, [handleRefreshState, launchDailyBriefing, setState])
+
+  useEffect(() => {
+    if (!dailyBriefingActive || !linked || overlayMode !== 'briefing') return
+    if (!hydrationQueue.length) {
+      setState({ dailyBriefingReady: true })
+      return
+    }
+    let cancelled = false
+    setState({ dailyHydration: { running: true, completed: 0, total: hydrationQueue.length } })
+    setState({ hydrationCurrentCommand: null })
+    ;(async () => {
+      for (let idx = 0; idx < hydrationQueue.length; idx++) {
+        if (cancelled) break
+        const command = hydrationQueue[idx]
+        setState({ hydrationCurrentCommand: command })
+        try {
+          console.info('[hub/daily-briefing] hydrating', command)
+          await runVtopCommand(command)
+        } catch (error) {
+          console.error('[hub/daily-briefing] auto hydration failed', command, error)
+          if (isCredentialError(error)) {
+            console.warn('[hub/daily-briefing] credentials required, prompting relink')
+            cancelled = true
+            handleLinkIntent()
+            break
+          }
+        }
+        if (cancelled) break
+        setState(state => ({
+          dailyHydration: { ...state.dailyHydration, completed: idx + 1 },
+        }))
+      }
+      if (!cancelled) {
+        setState(state => ({
+          dailyHydration: { ...state.dailyHydration, running: false, completed: state.dailyHydration.total },
+          hydrationCurrentCommand: null,
+          dailyBriefingReady: true,
+        }))
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [
+    dailyBriefingActive,
+    linked,
+    overlayMode,
+    hydrationQueue,
+    runVtopCommand,
+    handleLinkIntent,
+    setState,
+  ])
+
+  useEffect(() => {
+    if (!dailyBriefingActive || overlayMode !== 'briefing' || !dailyBriefingReady || dailyMessagesPrepared) return
+    const reference = nowTick ? new Date(nowTick) : new Date()
+    const context = buildDailyBriefingContext(hubState.snapshots, reference)
+    setState({
+      dailyMessages: context.messages,
+      dailyExamPrompt: context.examPrompt || null,
+      dailyBriefingActions: context.actions,
+      dailyMessagesPrepared: true,
+      dailyRevealedCount: 0,
+    })
+  }, [
+    dailyBriefingActive,
+    overlayMode,
+    dailyBriefingReady,
+    dailyMessagesPrepared,
+    hubState.snapshots,
+    nowTick,
+    setState,
+  ])
+
+  useEffect(() => {
+    if (!dailyBriefingActive || overlayMode !== 'briefing' || !dailyMessagesPrepared) return
+    if (!dailyMessages.length) return
+    if (dailyRevealedCount >= dailyMessages.length) return
+    const timeout = window.setTimeout(() => {
+      setState(current => ({
+        dailyRevealedCount: Math.min(current.dailyRevealedCount + 1, dailyMessages.length),
+      }))
+    }, dailyRevealedCount === 0 ? DAILY_REVEAL_DELAY_MS : 1600)
+    return () => window.clearTimeout(timeout)
+  }, [dailyBriefingActive, overlayMode, dailyMessagesPrepared, dailyMessages.length, dailyRevealedCount])
+
+  useEffect(() => {
+    if (!dailyBriefingActive || overlayMode !== 'briefing') return
+    if (!dailyMessagesPrepared) return
+    if (dailyHydration.running) return
+    if (!dailyMessages.length) return
+    if (dailyRevealedCount < dailyMessages.length) return
+    const timeout = window.setTimeout(() => {
+      dismissDailyBriefing()
+    }, 2000)
+    return () => window.clearTimeout(timeout)
+  }, [dailyBriefingActive, overlayMode, dailyMessagesPrepared, dailyHydration.running, dailyMessages.length, dailyRevealedCount, dismissDailyBriefing])
+
+  useEffect(() => {
+    if (!dailyBriefingActive || overlayMode !== 'briefing') return
+    const dismissTime = briefingPrefs.dismissTime
+    if (!dismissTime) return
+    const reference = nowTick ? new Date(nowTick) : new Date()
+    const target = parsePreferenceTime(dismissTime, reference)
+    if (!target) return
+    const diff = target.getTime() - reference.getTime()
+    if (diff <= 0) {
+      dismissDailyBriefing()
+      return
+    }
+    const timeout = window.setTimeout(() => dismissDailyBriefing(), diff)
+    return () => window.clearTimeout(timeout)
+  }, [dailyBriefingActive, overlayMode, briefingPrefs.dismissTime, nowTick, dismissDailyBriefing])
+
+  useEffect(() => {
+    if (!dailyBriefingActive || overlayMode !== 'briefing') return
+    if (!briefingPrefs.emailEnabled) return
+    const payload = buildEmailPayload()
+    if (!payload.messages.length) return
+    const timeValue = briefingPrefs.emailTime || briefingPrefs.dismissTime
+    if (!timeValue) return
+    const reference = nowTick ? new Date(nowTick) : new Date()
+    const target = parsePreferenceTime(timeValue, reference)
+    if (!target) return
+    if (target.getTime() <= reference.getTime()) {
+      void sendBriefingEmail({ silent: true })
+      return
+    }
+    const iso = target.toISOString()
+    if (emailPlanRef.current === iso) return
+    void sendBriefingEmail({ silent: true, scheduledAt: iso })
+  }, [
+    dailyBriefingActive,
+    overlayMode,
+    briefingPrefs.emailEnabled,
+    briefingPrefs.emailTime,
+    briefingPrefs.dismissTime,
+    buildEmailPayload,
+    sendBriefingEmail,
+    nowTick,
+  ])
+
+  
 
   const Panel = useMemo(() => {
     switch (page) {
       case 'vtop':
         return (
-          <VTOPPanel
-            linked={linked}
-            runCommand={runVtopCommand}
-            onRequireLink={() => setPage('briefing')}
-            onLink={onLink}
-            onResult={openSnapshot}
-          />
+            <VTOPPanel
+              linked={linked}
+              runCommand={runVtopCommand}
+              onRequireLink={() => setState({ page: 'briefing' })}
+              onLink={handleLinkIntent}
+              onResult={openSnapshot}
+            />
         )
       case 'papers':
         return <PastPapersPanel />
@@ -245,20 +770,23 @@ export default function HubShell({
   const handleCapabilityRun = useCallback(
     async (capability: HubCapability) => {
       if (!linked) {
-        onLink?.()
+        handleLinkIntent()
         return
       }
-      setCapabilityLoading(capability.command)
+      setState({ capabilityLoading: capability.command })
       try {
         const snapshot = await runVtopCommand(capability.command)
         openSnapshot(snapshot)
       } catch (error) {
         console.error('[hub] failed to execute capability', capability.command, error)
+        if (isCredentialError(error)) {
+          handleLinkIntent()
+        }
       } finally {
-        setCapabilityLoading(null)
+        setState({ capabilityLoading: null })
       }
     },
-    [linked, onLink, runVtopCommand, openSnapshot]
+    [linked, handleLinkIntent, runVtopCommand, openSnapshot, setState]
   )
 
   const timetableSnapshot = useMemo(
@@ -353,9 +881,14 @@ export default function HubShell({
     [attendanceSnapshot, assignmentsSnapshot, leaveSnapshot, examsSnapshot, librarySnapshot, gradesSnapshot, nowTick]
   )
   const persona = useMemo(() => derivePersona(profileSnapshot, hostelSnapshot), [profileSnapshot, hostelSnapshot])
+  const emailSummaryLabel = briefingPrefs.emailEnabled
+    ? `email briefing scheduled ${formatPreferenceTimeLabel(
+        briefingPrefs.emailTime || briefingPrefs.dismissTime
+      )}`
+    : undefined
 
   const renderBriefing = () => (
-    <div className="space-y-4 mt-2">
+    <div className="space-y-5 text-white">
       {linked ? (
         <MinimalStatusCard
           terseName={terseName}
@@ -368,60 +901,64 @@ export default function HubShell({
           onCapability={handleCapabilityRun}
           loadingCommand={capabilityLoading}
           disabled={syncing}
+          linked={linked}
+          onLink={onLink}
+          emailEnabled={briefingPrefs.emailEnabled}
+          emailLabel={emailSummaryLabel}
+          onSendEmail={briefingPrefs.emailEnabled ? handleSendEmailNow : undefined}
+          sendingEmail={sendingBriefingEmail}
         />
       ) : (
-        <HubOnboarding onLink={onLink} />
+        <HubOnboarding onLink={handleLinkIntent} />
       )}
 
-      {persona && <PersonaStrip persona={persona} onLink={onLink} />}
+      {persona && <PersonaStrip persona={persona} onLink={handleLinkIntent} />}
 
-      {linked && timetableSnapshot && (
-        <TimetablePeek
-          snapshot={timetableSnapshot}
-          now={nowTick}
-          onOpen={() => openSnapshot(timetableSnapshot)}
-        />
-      )}
-
-      {linked && (attendanceRisks.length > 0 || assignmentSubjects.length > 0) && (
-        <section className="grid gap-3 sm:grid-cols-2">
-          {attendanceRisks.length > 0 && (
-            <MiniListCard
-              label="attendance watch"
-              items={attendanceRisks.map(item => ({
-                title: item.subject,
-                meta: item.percentage,
-                supporting: item.alert?.toLowerCase().includes('attend') ? item.alert : undefined,
-              }))}
-              fallback="all courses steady"
-              onOpen={() => attendanceSnapshot && openSnapshot(attendanceSnapshot)}
-            />
+      {linked && (
+        <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+          {timetableSnapshot && (
+            <TimetablePeek snapshot={timetableSnapshot} now={nowTick} onOpen={() => openSnapshot(timetableSnapshot)} />
           )}
-          {assignmentSubjects.length > 0 && (
-            <MiniListCard
-              label="due soon"
-              items={assignmentSubjects.map(item => ({
-                title: item.subject,
-                meta: item.displayDue || item.nextDue,
-                supporting: item.status,
-              }))}
-              fallback="no assignments found"
-              onOpen={() => assignmentsSnapshot && openSnapshot(assignmentsSnapshot)}
-            />
+          {(attendanceRisks.length > 0 || assignmentSubjects.length > 0) && (
+            <HubSurface className="space-y-4">
+              <div className={HUB_LABEL_CLASS}>focus zones</div>
+              <div className="space-y-4">
+                {attendanceRisks.length > 0 && (
+                  <MiniListCard
+                    label="attendance"
+                    items={attendanceRisks.map(item => ({
+                      title: item.subject,
+                      meta: item.percentage,
+                      supporting: item.alert?.toLowerCase().includes('attend') ? item.alert : undefined,
+                    }))}
+                    fallback="all courses steady"
+                    onOpen={() => attendanceSnapshot && openSnapshot(attendanceSnapshot)}
+                  />
+                )}
+                {assignmentSubjects.length > 0 && (
+                  <MiniListCard
+                    label="assignments"
+                    items={assignmentSubjects.map(item => ({
+                      title: item.subject,
+                      meta: item.displayDue || item.nextDue,
+                      supporting: item.status,
+                    }))}
+                    fallback="no assignments found"
+                    onOpen={() => assignmentsSnapshot && openSnapshot(assignmentsSnapshot)}
+                  />
+                )}
+              </div>
+            </HubSurface>
           )}
-        </section>
+        </div>
       )}
 
       {linked && notifications.length > 0 && (
-        <NotificationStrip
-          notifications={notifications}
-          capabilities={capabilities}
-          onRun={handleCapabilityRun}
-        />
+        <NotificationStrip notifications={notifications} capabilities={capabilities} onRun={handleCapabilityRun} />
       )}
 
       {linked && (
-        <section className="rounded-3xl border border-border/40 bg-background/20 divide-y divide-border/40">
+        <HubSurface className="divide-y divide-white/5 p-0">
           <CompactInsightRow
             label="next class"
             headline={nextClassInsight?.headline || 'no class detected'}
@@ -459,57 +996,53 @@ export default function HubShell({
             meta={examInsight?.meta}
             onOpen={() => examsSnapshot && openSnapshot(examsSnapshot)}
           />
-        </section>
+        </HubSurface>
       )}
 
       {linked && latestSnapshots.length > 0 && (
-        <section className="space-y-2">
-          <div className="text-xs font-semibold text-muted-foreground">latest pulls</div>
-          <div className="space-y-1">
+        <div className="space-y-3">
+          <div className={HUB_LABEL_CLASS}>latest pulls</div>
+          <div className="space-y-2">
             {latestSnapshots.map(snapshot => (
               <SnapshotGlance key={snapshot.command} snapshot={snapshot} onOpen={openSnapshot} minimal />
             ))}
           </div>
-        </section>
+        </div>
       )}
     </div>
   )
 
   return (
     <HubToolProvider value={toolExecutor}>
-      <div className="h-full flex flex-col">
-        <div className="p-3 sm:p-4 border-b border-border/60 bg-card/60 sticky top-0">
-          <div className="max-w-6xl mx-auto">
-            <div
-              className="mt-2 overflow-x-auto no-scrollbar [-ms-overflow-style:none] [scrollbar-width:none]"
-              data-allow-touch-scroll
-              style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x' }}
-            >
-              <div className="flex gap-1.5 min-w-max">
-                {(
-                  [
-                    { id: 'briefing', label: 'briefing', icon: <Sparkles className="h-3.5 w-3.5" /> },
-                    { id: 'vtop', label: 'vtop', icon: <GraduationCap className="h-3.5 w-3.5" /> },
-                    { id: 'papers', label: 'past papers', icon: <FileSearch className="h-3.5 w-3.5" /> },
-                    { id: 'mess', label: 'mess menu', icon: <UtensilsCrossed className="h-3.5 w-3.5" /> },
-                    { id: 'placements', label: 'placements', icon: <Briefcase className="h-3.5 w-3.5" /> },
-                    { id: 'faculty', label: 'faculty', icon: <Users className="h-3.5 w-3.5" /> },
-                    { id: 'reddit', label: 'reddit', icon: <Flame className="h-3.5 w-3.5" /> },
-                    { id: 'syllabi', label: 'syllabi', icon: <FileSearch className="h-3.5 w-3.5" /> },
-                ] as { id: Page; label: string; icon: ReactNode }[]
-                ).map(tab => (
+      <div className="h-full relative overflow-hidden bg-[#05060c] text-foreground">
+        <div className="pointer-events-none absolute inset-0 opacity-[0.8]">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.08),_transparent_60%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,6,12,0.85),rgba(3,4,8,0.92))]" />
+        </div>
+        <div className="relative h-full flex flex-col">
+          <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-6 sm:py-6" data-allow-touch-scroll>
+            <div className="max-w-5xl w-full mx-auto space-y-5">
+              {page === 'briefing' ? renderBriefing() : <HubSurface>{Panel}</HubSurface>}
+            </div>
+          </div>
+          <div className="relative border-t border-white/10 px-4 py-3">
+            <div className="max-w-5xl w-full mx-auto">
+              <div className="flex flex-wrap justify-center gap-1.5" role="tablist" aria-label="hub navigation">
+                {NAV_ITEMS.map(item => (
                   <button
-                    key={tab.id}
-                    onClick={() => setPage(tab.id)}
-                    aria-pressed={page === tab.id}
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
-                      page === tab.id
-                        ? 'bg-primary/10 border-primary/30 text-primary shadow-sm'
-                        : 'bg-muted/30 border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    key={item.id}
+                    role="tab"
+                    aria-pressed={page === item.id}
+                    aria-selected={page === item.id}
+                    onClick={() => setState({ page: item.id })}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[10px] uppercase tracking-[0.25em] transition-all border ${
+                      page === item.id
+                        ? 'bg-white/15 border-white/40 text-white shadow-[0_10px_30px_rgba(0,0,0,0.35)]'
+                        : 'bg-transparent border-white/15 text-white/60 hover:text-white hover:border-white/35'
                     }`}
                   >
-                    {tab.icon}
-                    <span className="whitespace-nowrap">{tab.label}</span>
+                    {item.icon}
+                    <span>{item.label}</span>
                   </button>
                 ))}
               </div>
@@ -517,90 +1050,49 @@ export default function HubShell({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3 sm:p-5 [-webkit-overflow-scrolling:touch]" data-allow-touch-scroll>
-          <div className="max-w-6xl mx-auto">
-            {page === 'briefing' ? renderBriefing() : Panel}
-            <div className="h-2" />
-          </div>
-        </div>
+        {dailyBriefingActive && (
+          <DailyBriefingOverlay
+            mode={overlayMode || (linked ? 'briefing' : 'onboarding')}
+            greeting={dailyGreeting || buildGreeting(nowTick ? new Date(nowTick) : new Date(), terseName)}
+            messages={dailyMessages}
+            revealedCount={dailyRevealedCount}
+            hydration={dailyHydration}
+            hydrationCommand={hydrationCurrentCommand}
+            messagesReady={dailyMessagesPrepared}
+            onDismiss={() => dismissDailyBriefing()}
+            onLinkRequest={handleLinkIntent}
+            actions={dailyBriefingActions}
+            onAction={handleBriefingAction}
+            emailScheduleLabel={
+              briefingPrefs.emailEnabled
+                ? `emailing summary at ${formatPreferenceTimeLabel(
+                    briefingPrefs.emailTime || briefingPrefs.dismissTime
+                  )}`
+                : undefined
+            }
+            emailEnabled={briefingPrefs.emailEnabled}
+            onEmailNow={briefingPrefs.emailEnabled ? handleSendEmailNow : undefined}
+            sendingEmail={sendingBriefingEmail}
+            examPrompt={dailyExamPrompt}
+            onExamAction={handleExamAction}
+          />
+        )}
 
         <ResultBottomSheet
           open={viewerOpen}
           title={viewerTitle}
           result={viewerData}
-          onClose={() => setViewerOpen(false)}
+          loading={viewerLoading}
+          mode={viewerMode}
+          onClose={() => setState({ viewerOpen: false })}
         />
-     </div>
-   </HubToolProvider>
- )
+      </div>
+    </HubToolProvider>
+  )
 }
 
-function MinimalStatusCard({
-  terseName,
-  syncing,
-  syncCommand,
-  lastSyncedLabel,
-  onSync,
-  onRefresh,
-  quickCaps,
-  onCapability,
-  loadingCommand,
-  disabled,
-}: {
-  terseName: string
-  syncing: boolean
-  syncCommand: HubVTOPCommand | null
-  lastSyncedLabel: string
-  onSync: () => void
-  onRefresh: () => void
-  quickCaps: HubCapability[]
-  onCapability: (capability: HubCapability) => void
-  loadingCommand: HubVTOPCommand | null
-  disabled: boolean
-}) {
-  return (
-    <div className="rounded-2xl border border-border/50 bg-[#06070b] p-4 sm:p-5 space-y-4">
-      <div className="text-xs font-semibold text-muted-foreground">hub status</div>
-      <div className="space-y-1">
-        <p className="text-sm text-muted-foreground">hey {terseName},</p>
-        <div className="text-2xl font-light text-foreground">
-          {syncing && syncCommand ? `syncing ${syncCommand.replace('-', ' ')}` : 'standing by'}
-        </div>
-        <div className="text-xs text-muted-foreground">
-          {syncing ? 'streaming live' : `last synced ${lastSyncedLabel}`}
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={onSync} disabled={syncing} className="rounded-full px-5">
-          <RefreshCcw className="h-4 w-4 mr-2" />
-          {syncing ? 'syncing…' : 'sync now'}
-        </Button>
-        <Button
-          variant="outline"
-          onClick={onRefresh}
-          disabled={syncing}
-          className="rounded-full px-5 border-border/60"
-        >
-          <Clock3 className="h-4 w-4 mr-2" />
-          reload cache
-        </Button>
-      </div>
-      {quickCaps.length > 0 && (
-        <div className="flex flex-wrap gap-1 pt-1">
-          {quickCaps.map(cap => (
-            <button
-              key={cap.command}
-              onClick={() => onCapability(cap)}
-              disabled={disabled || loadingCommand === cap.command}
-              className="text-xs text-muted-foreground border border-border/40 rounded-full px-3 py-1 hover:text-foreground disabled:opacity-60"
-            >
-              {loadingCommand === cap.command ? 'running…' : cap.command}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
+function HubSurface({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <div className={`${HUB_SURFACE_CLASS} p-5 sm:p-6 ${className}`}>{children}</div>
 }
 
 function CompactInsightRow({
@@ -623,27 +1115,24 @@ function CompactInsightRow({
   disabled?: boolean
 }) {
   return (
-    <div className="flex flex-col gap-1 px-4 py-3 sm:px-5 sm:py-4">
+    <div className="flex flex-col gap-1 px-5 py-4">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground/80">{label}</p>
+        <p className={HUB_LABEL_CLASS}>{label}</p>
         {onOpen && (
-          <button
-            onClick={onOpen}
-            className="text-[11px] font-medium text-muted-foreground hover:text-foreground"
-          >
+          <button onClick={onOpen} className="text-[11px] text-white/70 hover:text-white">
             view
           </button>
         )}
       </div>
-      <div className="text-lg font-medium text-foreground leading-tight">{headline}</div>
-      {supporting && <div className="text-sm text-muted-foreground/90">{supporting}</div>}
-      <div className="flex items-center justify-between text-xs text-muted-foreground/80">
+      <div className="text-lg font-medium text-white leading-tight">{headline}</div>
+      {supporting && <div className="text-sm text-white/70">{supporting}</div>}
+      <div className="flex items-center justify-between text-xs text-white/60">
         <span>{meta || ''}</span>
         {onAction && actionLabel && (
           <button
             onClick={onAction}
             disabled={disabled}
-            className="text-[10px] uppercase tracking-[0.3em] text-primary hover:text-primary/80 disabled:opacity-60"
+            className="text-[10px] uppercase tracking-[0.3em] text-white/70 hover:text-white disabled:opacity-60"
           >
             {actionLabel}
           </button>
@@ -663,7 +1152,8 @@ function NotificationStrip({
   onRun: (capability: HubCapability) => void
 }) {
   return (
-    <div className="rounded-3xl border border-dashed border-border/50 bg-background/20 px-4 py-3 flex flex-wrap gap-2">
+    <HubSurface className="flex flex-wrap gap-2">
+      <div className={`${HUB_LABEL_CLASS} w-full`}>alerts</div>
       {notifications.map(notification => {
         const capability = notification.command
           ? capabilities.find(cap => cap.command === notification.command)
@@ -674,7 +1164,7 @@ function NotificationStrip({
             key={notification.id}
             onClick={() => capability && onRun(capability)}
             disabled={!clickable}
-            className={`rounded-full border border-border/40 px-3 py-1 text-xs text-muted-foreground hover:text-foreground hover:border-foreground/60 transition-colors ${
+            className={`rounded-full border border-white/15 px-3 py-1 text-xs text-white/70 hover:text-white hover:border-white/40 transition-colors ${
               !clickable ? 'opacity-60 cursor-default' : ''
             }`}
           >
@@ -682,13 +1172,13 @@ function NotificationStrip({
           </button>
         )
       })}
-    </div>
+    </HubSurface>
   )
 }
 
 function PersonaStrip({ persona, onLink }: { persona: Persona; onLink?: () => void }) {
   return (
-    <div className="rounded-3xl border border-border/40 bg-background/20 px-4 py-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
+    <HubSurface className="flex flex-wrap gap-3 text-xs text-white/70">
       {persona.registerNumber && <span>{persona.registerNumber}</span>}
       {persona.program && <span>{persona.program}</span>}
       {persona.school && <span>{persona.school}</span>}
@@ -696,11 +1186,11 @@ function PersonaStrip({ persona, onLink }: { persona: Persona; onLink?: () => vo
       {persona.room && <span>Room {persona.room}</span>}
       {persona.mess && <span>Mess: {persona.mess}</span>}
       {!persona.hostelBlock && onLink && (
-        <button className="text-primary" onClick={onLink}>
+        <button className="text-white hover:text-white/80" onClick={onLink}>
           link hostel data
         </button>
       )}
-    </div>
+    </HubSurface>
   )
 }
 
@@ -717,7 +1207,7 @@ function TimetablePeek({
   const classes: any[] = Array.isArray(data?.classes) ? data.classes : []
   if (!classes.length) return null
   const reference = now ? new Date(now) : new Date()
-  const rolling = computeDynamicNextClass(data, reference)
+  const rolling: NextClassComputation = computeDynamicNextClass(data, reference)
   const highlight = rolling?.classInfo || data?.nextClass || classes[0]
   const rows = classes.slice(0, 4)
 
@@ -729,20 +1219,20 @@ function TimetablePeek({
   }
 
   return (
-    <div className="rounded-3xl border border-border/40 bg-background/20 px-4 py-4 space-y-3">
-      <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
-        <span>coverage map</span>
+    <HubSurface className="space-y-4">
+      <div className="flex items-center justify-between">
+        <span className={HUB_LABEL_CLASS}>coverage map</span>
         {onOpen && (
-          <button className="text-muted-foreground hover:text-foreground" onClick={onOpen}>
-            view timetable
+          <button className="text-white/70 hover:text-white" onClick={onOpen}>
+            open timetable
           </button>
         )}
       </div>
       {highlight && (
-        <div className="rounded-2xl border border-border/40 bg-background/40 p-3 text-sm leading-relaxed text-foreground">
-          <div className="text-[10px] uppercase tracking-[0.3em] text-primary/80">next</div>
-          <div className="text-base font-medium">{highlight.subject || highlight.slot || 'class'}</div>
-          <div className="text-xs text-muted-foreground">
+        <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm leading-relaxed text-white/90">
+          <div className={`${HUB_LABEL_CLASS} text-white/70`}>next</div>
+          <div className="text-lg font-medium text-white">{highlight.subject || highlight.slot || 'class'}</div>
+          <div className="text-xs text-white/70">
             {rolling?.startsAt
               ? new Intl.DateTimeFormat(undefined, {
                   weekday: 'short',
@@ -751,7 +1241,7 @@ function TimetablePeek({
                 }).format(rolling.startsAt)
               : formatTime(highlight)}
           </div>
-          <div className="text-[11px] text-muted-foreground/80">
+          <div className="text-[11px] text-white/60">
             {[
               highlight.day,
               rolling?.startsAt ? formatDistanceToNow(rolling.startsAt, { addSuffix: true }) : null,
@@ -762,21 +1252,19 @@ function TimetablePeek({
           </div>
         </div>
       )}
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2">
         {rows.map((cls, idx) => (
-          <div key={`${cls.day}-${cls.slot}-${idx}`} className="rounded-2xl border border-border/30 bg-background/10 p-3">
-            <div className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground/80">
-              {cls.day || 'day'}
-            </div>
-            <div className="text-sm font-medium text-foreground line-clamp-1">
+          <div key={`${cls.day}-${cls.slot}-${idx}`} className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3">
+            <div className={HUB_LABEL_CLASS}>{cls.day || 'day'}</div>
+            <div className="text-sm font-medium text-white line-clamp-1">
               {cls.subject || cls.slot || 'class'}
             </div>
-            <div className="text-xs text-muted-foreground">{formatTime(cls)}</div>
-            {cls.venue && <div className="text-[11px] text-muted-foreground/80">{cls.venue}</div>}
+            <div className="text-xs text-white/70">{formatTime(cls)}</div>
+            {cls.venue && <div className="text-[11px] text-white/60">{cls.venue}</div>}
           </div>
         ))}
       </div>
-    </div>
+    </HubSurface>
   )
 }
 
@@ -792,21 +1280,21 @@ function MiniListCard({
   onOpen?: () => void
 }) {
   return (
-    <div className="rounded-3xl border border-border/40 bg-background/20 px-4 py-3 space-y-2">
-      <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
-        <span>{label}</span>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <span className={HUB_LABEL_CLASS}>{label}</span>
         {onOpen && (
-          <button className="text-muted-foreground hover:text-foreground" onClick={onOpen}>
-            view
+          <button className="text-white/70 hover:text-white" onClick={onOpen}>
+            open
           </button>
         )}
       </div>
-      {items.length === 0 && <div className="text-sm text-muted-foreground/80">{fallback}</div>}
+      {items.length === 0 && <div className="text-sm text-white/60">{fallback}</div>}
       {items.map((item, idx) => (
-        <div key={`${label}-${idx}`} className="text-sm text-foreground">
+        <div key={`${label}-${idx}`} className="text-sm text-white">
           <div className="font-medium line-clamp-1">{item.title || fallback}</div>
-          {item.supporting && <div className="text-xs text-muted-foreground">{item.supporting}</div>}
-          {item.meta && <div className="text-xs text-muted-foreground/80">{item.meta}</div>}
+          {item.supporting && <div className="text-xs text-white/70">{item.supporting}</div>}
+          {item.meta && <div className="text-xs text-white/60">{item.meta}</div>}
         </div>
       ))}
     </div>
@@ -852,29 +1340,27 @@ function SnapshotGlance({
   const updatedLabel = formatDistanceToNow(new Date(snapshot.fetchedAt), { addSuffix: true })
 
   return (
-    <Card className={minimal ? 'border border-border/40 bg-background/30' : 'border border-border/50 bg-card/80'}>
-      <CardContent className={minimal ? 'p-3 space-y-1.5' : 'p-4 space-y-2'}>
-        <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-          {icon && <span className="text-primary">{icon}</span>}
-          <span>{snapshot.title}</span>
-        </div>
-        <p className="text-sm text-foreground line-clamp-2">{summary}</p>
-        <div className="flex items-center justify-between text-xs text-muted-foreground/80">
-          <span>updated {updatedLabel}</span>
-          <button onClick={() => onOpen(snapshot)} className="text-primary hover:text-primary/80">
-            open
-          </button>
-        </div>
-      </CardContent>
-    </Card>
+    <HubSurface className="space-y-2">
+      <div className="flex items-center gap-2 text-xs text-white/70">
+        {icon && <span className="text-white/80">{icon}</span>}
+        <span className="uppercase tracking-[0.25em]">{snapshot.title}</span>
+      </div>
+      <p className="text-sm text-white line-clamp-2">{summary}</p>
+      <div className="flex items-center justify-between text-xs text-white/60">
+        <span>updated {updatedLabel}</span>
+        <button onClick={() => onOpen(snapshot)} className="text-white/80 hover:text-white">
+          open
+        </button>
+      </div>
+    </HubSurface>
   )
 }
 
 function HubOnboarding({ onLink }: { onLink?: () => void }) {
   return (
-    <div className="rounded-2xl border border-border/40 bg-[#06070b] p-5 space-y-4">
-      <div className="text-sm font-semibold text-muted-foreground">hub requires VTOP linking</div>
-      <p className="text-2xl font-light text-foreground">
+    <HubSurface className="space-y-4 text-white">
+      <div className={HUB_LABEL_CLASS}>hub requires VTOP linking</div>
+      <p className="text-2xl font-light">
         connect once to pull timetable, assignments, attendance, leave status and exams without leaving chat.
       </p>
       <div className="flex flex-wrap items-center gap-3">
@@ -882,12 +1368,12 @@ function HubOnboarding({ onLink }: { onLink?: () => void }) {
           <span>link VTOP</span>
           <ArrowRight className="h-4 w-4 ml-2" />
         </Button>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 text-sm text-white/70">
           <LockKeyhole className="h-4 w-4" />
           credentials stay on-device
         </div>
       </div>
-    </div>
+    </HubSurface>
   )
 }
 
@@ -903,558 +1389,15 @@ type HubNotification = {
   command?: HubVTOPCommand
 }
 
-type Persona = {
-  name?: string
-  registerNumber?: string
-  program?: string
-  school?: string
-  email?: string
-  hostelBlock?: string
-  room?: string
-  mess?: string
-}
-
-function deriveNextClassInsight(
-  snapshot?: PersonalHubSnapshot | null,
-  nowTick?: number
-): Insight | null {
-  if (!snapshot?.structured_data) return null
-  const reference = nowTick ? new Date(nowTick) : new Date()
-  const rolling = computeDynamicNextClass(snapshot.structured_data, reference)
-  const data: any = snapshot.structured_data
-  const fallback =
-    rolling?.classInfo ||
-    data?.upcomingClass ||
-    data?.upcoming ||
-    data?.nextClass ||
-    data?.next_session ||
-    data?.next ||
-    (Array.isArray(data?.classes) ? data.classes[0] : null)
-
-  if (!fallback) return null
-
-  const course = fallback.course || fallback.subject || fallback.title || snapshot.title
-  const room = fallback.location || fallback.room || fallback.venue
-  const timeStamp = rolling?.startsAt
-    ? new Intl.DateTimeFormat(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(
-        rolling.startsAt
-      )
-    : fallback.startTime || fallback.start || fallback.slot || fallback.time
-
-  const supportingParts = [
-    fallback.day,
-    rolling?.startsAt ? formatDistanceToNow(rolling.startsAt, { addSuffix: true }) : null,
-    room ? `room ${room}` : null,
-  ].filter(Boolean)
-
-  return {
-    headline: `${course || 'class'} @ ${timeStamp || 'unknown'}`.trim(),
-    supporting: supportingParts.length ? supportingParts.join(' · ') : undefined,
-    meta: fallback.faculty ? `with ${fallback.faculty}` : undefined,
-  }
-}
-
-function deriveAssignmentInsight(
-  snapshot?: PersonalHubSnapshot | null,
-  nowTick?: number
-): Insight | null {
-  if (!snapshot?.structured_data) return null
-  const now = nowTick ? new Date(nowTick) : new Date()
-  const subjects = normalizeAssignments(snapshot, now)
-  if (!subjects.length) return null
-  const upcoming = pickUpcomingAssignment(subjects, now) || subjects[0]
-  if (!upcoming) return null
-  const absolute = upcoming.dueDate ? formatShortDate(upcoming.dueDate) : upcoming.nextDue
-  const relative = upcoming.dueDate ? formatDistanceToNow(upcoming.dueDate, { addSuffix: true }) : undefined
-
-  return {
-    headline: upcoming.subject || 'assignment',
-    supporting: absolute ? [absolute, relative].filter(Boolean).join(' · ') : undefined,
-    meta: upcoming.status,
-  }
-}
-
-function deriveAttendanceInsight(snapshot?: PersonalHubSnapshot | null): Insight | null {
-  if (!snapshot?.structured_data) return null
-  const stats = (snapshot.structured_data as any)?.stats
-  if (stats?.healthy !== undefined) {
-    return {
-      headline: `${stats.healthy} steady / ${stats.needsAttention} at risk`,
-      supporting: snapshot.summary,
-      meta: 'auto synced',
-    }
-  }
-  return snapshot.summary
-    ? {
-        headline: snapshot.summary,
-      }
-    : null
-}
-
-function deriveLeaveInsight(snapshot?: PersonalHubSnapshot | null): Insight | null {
-  if (!snapshot?.structured_data) return null
-  const data: any = snapshot.structured_data
-  const pending = (data.requests || data.leaves || []).find(
-    (req: any) => (req.status || req.state || '').toLowerCase().includes('pending')
-  )
-  if (pending) {
-    return {
-      headline: pending.title || pending.purpose || 'pending request',
-      supporting: pending.status,
-      meta: pending.from && pending.to ? `${pending.from} → ${pending.to}` : undefined,
-    }
-  }
-  return {
-    headline: 'no pending leave',
-  }
-}
-
-function deriveExamInsight(snapshot?: PersonalHubSnapshot | null, nowTick?: number): Insight | null {
-  if (!snapshot?.structured_data) return null
-  const now = nowTick ? new Date(nowTick) : new Date()
-  const schedule = normalizeExamSchedule(snapshot, now)
-  if (!schedule.length) return null
-  const upcoming = pickUpcomingExam(schedule, now) || schedule[0]
-  if (!upcoming || !upcoming.examDateObj) return null
-
-  const absolute = formatDateWithTime(upcoming.examDateObj)
-  const relative = formatDistanceToNow(upcoming.examDateObj, { addSuffix: true })
-  const headline = `${upcoming.title || upcoming.course || upcoming.code || 'exam'} on ${formatShortDate(
-    upcoming.examDateObj
-  )}`
-
-  return {
-    headline,
-    supporting: [upcoming.examTime, relative].filter(Boolean).join(' · ') || undefined,
-    meta: upcoming.venue || upcoming.hall || upcoming.slot,
-  }
-}
-
-function derivePersona(profileSnapshot?: PersonalHubSnapshot | null, hostelSnapshot?: PersonalHubSnapshot | null): Persona | null {
-  const persona: Persona = {}
-  const profileData = (profileSnapshot?.structured_data as any)?.persona
-  if (profileData) {
-    persona.registerNumber = profileData.registerNumber
-    persona.program = profileData.program
-    persona.email = profileData.email
-    persona.school = profileData.school
-  }
-  const hostelInfo = (hostelSnapshot?.structured_data as any)?.info
-  if (hostelInfo) {
-    persona.hostelBlock = hostelInfo['hostel name'] || hostelInfo['hostel block']
-    persona.room = hostelInfo['room no'] || hostelInfo['room number']
-    persona.mess = hostelInfo['mess type'] || hostelInfo['mess']
-  }
-  if (Object.values(persona).every(value => !value)) {
-    return null
-  }
-  return persona
-}
-
-function deriveNotifications(
-  {
-    attendanceSnapshot,
-    assignmentsSnapshot,
-    leaveSnapshot,
-    examsSnapshot,
-    librarySnapshot,
-    gradesSnapshot,
-  }: {
-    attendanceSnapshot?: PersonalHubSnapshot | null
-    assignmentsSnapshot?: PersonalHubSnapshot | null
-    leaveSnapshot?: PersonalHubSnapshot | null
-    examsSnapshot?: PersonalHubSnapshot | null
-    librarySnapshot?: PersonalHubSnapshot | null
-    gradesSnapshot?: PersonalHubSnapshot | null
-  },
-  nowTick?: number
-): HubNotification[] {
-  const notifications: HubNotification[] = []
-  const now = nowTick ? new Date(nowTick) : new Date()
-
-  const attendanceStats = (attendanceSnapshot?.structured_data as any)?.stats
-  if (attendanceStats?.needsAttention > 0) {
-    notifications.push({
-      id: 'attendance-risk',
-      text: `${attendanceStats.needsAttention} course${attendanceStats.needsAttention === 1 ? '' : 's'} below 75%`,
-      command: 'attendance',
-    })
-  }
-
-  const assignmentList = normalizeAssignments(assignmentsSnapshot, now)
-  const upcomingDA = pickUpcomingAssignment(assignmentList, now)
-  if (upcomingDA?.subject) {
-    const relative = upcomingDA.dueDate ? formatDistanceToNow(upcomingDA.dueDate, { addSuffix: true }) : upcomingDA.nextDue
-    notifications.push({
-      id: 'da-due',
-      text: `${upcomingDA.subject} due ${relative}`,
-      command: 'da',
-    })
-  }
-
-  const pendingLeave = (leaveSnapshot?.structured_data as any)?.pending
-  if (pendingLeave?.status && pendingLeave.status.toLowerCase().includes('pending')) {
-    notifications.push({
-      id: 'leave-pending',
-      text: `Leave pending: ${pendingLeave.reason || pendingLeave.status}`,
-      command: 'leave',
-    })
-  }
-
-  const normalizedExams = normalizeExamSchedule(examsSnapshot, now)
-  const upcomingExam = pickUpcomingExam(normalizedExams, now)
-  if (upcomingExam?.examDateObj) {
-    const relative = formatDistanceToNow(upcomingExam.examDateObj, { addSuffix: true })
-    notifications.push({
-      id: 'exam-soon',
-      text: `${upcomingExam.title || upcomingExam.code} ${relative}`,
-      command: 'exams',
-    })
-  }
-
-  const libraryTotal = (librarySnapshot?.structured_data as any)?.total
-  if (libraryTotal && libraryTotal > 0) {
-    notifications.push({
-      id: 'library-dues',
-      text: `Library dues: ₹${libraryTotal.toFixed(2)}`,
-      command: 'library-dues',
-    })
-  }
-
-  const gradeRisk = ((gradesSnapshot?.structured_data as any)?.risk || []) as any[]
-  if (gradeRisk.length > 0) {
-    notifications.push({
-      id: 'grade-risk',
-      text: `${gradeRisk.length} grade${gradeRisk.length === 1 ? '' : 's'} need attention`,
-      command: 'grades',
-    })
-  }
-
-  return notifications.slice(0, 4)
-}
-
-type NormalizedAssignment = {
-  subject?: string
-  status?: string
-  nextDue?: string
-  dueDate?: Date | null
-  [key: string]: any
-}
-
-function normalizeAssignments(snapshot: PersonalHubSnapshot | null | undefined, reference: Date): NormalizedAssignment[] {
-  if (!snapshot?.structured_data) return []
-  const payload: any = snapshot.structured_data
-  const subjects =
-    (Array.isArray(payload?.subjects) && payload.subjects) ||
-    (Array.isArray(payload?.assignments) && payload.assignments) ||
-    (Array.isArray(payload?.items) && payload.items) ||
-    []
-
-  return subjects.map((item: any) => {
-    const subject = item.subject || item.title || item.course || item.assignment
-    const status = item.status || item.state
-    const dueLabel = item.nextDue || item.next_due || item.dueDate || item.deadline || item.due
-    return {
-      ...item,
-      subject,
-      status,
-      nextDue: dueLabel,
-      dueDate: parseDateString(dueLabel, reference),
-    }
-  })
-}
-
-function pickUpcomingAssignment(list: NormalizedAssignment[], now: Date): NormalizedAssignment | null {
-  const dated = list
-    .filter(item => item.dueDate && item.subject)
-    .sort((a, b) => (a.dueDate!.getTime() || 0) - (b.dueDate!.getTime() || 0))
-
-  const future = dated.find(item => item.dueDate && item.dueDate >= now)
-  return future || dated[0] || null
-}
-
-type NormalizedExamEntry = {
-  examDateObj?: Date | null
-  examDate?: string
-  examTime?: string
-  session?: string
-  title?: string
-  code?: string
-  course?: string
-  venue?: string
-  hall?: string
-  [key: string]: any
-}
-
-function normalizeExamSchedule(
-  snapshot: PersonalHubSnapshot | null | undefined,
-  reference: Date
-): NormalizedExamEntry[] {
-  if (!snapshot?.structured_data) return []
-  const payload: any = snapshot.structured_data
-  const schedule: any[] =
-    (Array.isArray(payload?.schedule) && payload.schedule) ||
-    (Array.isArray(payload?.exams) && payload.exams) ||
-    []
-
-  return schedule.map(entry => {
-    const date = parseDateString(entry.examDate || entry.date, reference)
-    if (date) {
-      const timeParts = parseStartTime(entry.examTime || entry.time || entry.session)
-      if (timeParts) {
-        date.setHours(timeParts.hour, timeParts.minute ?? 0, 0, 0)
-      }
-    }
-    return {
-      ...entry,
-      examDateObj: date,
-    }
-  })
-}
-
-function pickUpcomingExam(list: NormalizedExamEntry[], now: Date): NormalizedExamEntry | null {
-  const dated = list
-    .filter(entry => entry.examDateObj)
-    .sort((a, b) => (a.examDateObj!.getTime() || 0) - (b.examDateObj!.getTime() || 0))
-
-  const future = dated.find(entry => entry.examDateObj && entry.examDateObj >= now)
-  return future || dated[0] || null
-}
-
-function formatShortDate(date: Date) {
-  return new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).format(date)
-}
-
-function formatDateWithTime(date: Date) {
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date)
-}
-
-const MONTH_INDEX_MAP: Record<string, number> = {
-  jan: 0,
-  january: 0,
-  feb: 1,
-  february: 1,
-  mar: 2,
-  march: 2,
-  apr: 3,
-  april: 3,
-  may: 4,
-  jun: 5,
-  june: 5,
-  jul: 6,
-  july: 6,
-  aug: 7,
-  august: 7,
-  sep: 8,
-  sept: 8,
-  september: 8,
-  oct: 9,
-  october: 9,
-  nov: 10,
-  november: 10,
-  dec: 11,
-  december: 11,
-}
-
-function parseDateString(value?: string, referenceDate: Date = new Date()): Date | null {
-  if (!value || typeof value !== 'string') return null
-  const trimmed = value.trim()
-  if (!trimmed) return null
-  const lower = trimmed.toLowerCase()
-
-  if (lower.includes('today')) {
-    return new Date(referenceDate)
-  }
-  if (lower.includes('tomorrow')) {
-    const tomorrow = new Date(referenceDate)
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    return tomorrow
-  }
-
-  const parsed = Date.parse(trimmed)
-  if (!Number.isNaN(parsed)) {
-    return new Date(parsed)
-  }
-
-  let match = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/)
-  if (match) {
-    const day = parseInt(match[1], 10)
-    const month = parseInt(match[2], 10) - 1
-    const year = parseInt(match[3], 10)
-    if (month >= 0 && month < 12) {
-      return new Date(year < 100 ? 2000 + year : year, month, day)
-    }
-  }
-
-  match = trimmed.match(/^(\d{1,2})\s+([A-Za-z]+)(?:\s+(\d{2,4}))?$/)
-  if (match) {
-    const day = parseInt(match[1], 10)
-    const monthKey = match[2].toLowerCase()
-    const month = MONTH_INDEX_MAP[monthKey]
-    if (month !== undefined) {
-      let year = match[3] ? parseInt(match[3], 10) : referenceDate.getFullYear()
-      if (year < 100) year += 2000
-      const date = new Date(year, month, day)
-      if (!match[3] && date < referenceDate) {
-        date.setFullYear(date.getFullYear() + 1)
-      }
-      return date
-    }
-  }
-
-  return null
-}
-
-type NextClassComputation = {
-  classInfo: any
-  startsAt?: Date
-}
-
-const DAY_INDEX_MAP: Record<string, number> = {
-  monday: 0,
-  tuesday: 1,
-  wednesday: 2,
-  thursday: 3,
-  friday: 4,
-  saturday: 5,
-  sunday: 6,
-}
-
-const DAY_ALIAS_MAP: Record<string, string> = {
-  mon: 'monday',
-  monday: 'monday',
-  tue: 'tuesday',
-  tues: 'tuesday',
-  tuesday: 'tuesday',
-  wed: 'wednesday',
-  weds: 'wednesday',
-  wednesday: 'wednesday',
-  thu: 'thursday',
-  thur: 'thursday',
-  thurs: 'thursday',
-  thursday: 'thursday',
-  fri: 'friday',
-  friday: 'friday',
-  sat: 'saturday',
-  saturday: 'saturday',
-  sun: 'sunday',
-  sunday: 'sunday',
-}
-
-function computeDynamicNextClass(
-  structuredData: any,
-  referenceDate: Date = new Date()
-): NextClassComputation | null {
-  const candidates = extractTimetableCandidates(structuredData)
-  if (!candidates.length) return null
-
-  const now = referenceDate
-  const currentDayIndex = (now.getDay() + 6) % 7
-  let winner: NextClassComputation | null = null
-  let bestDelta = Infinity
-
-  candidates.forEach(candidate => {
-    const dayValue = candidate.day || candidate.dayName || candidate.weekday || candidate.Day
-    const dayIndex = resolveDayIndex(dayValue)
-    if (dayIndex === null) return
-
-    const timeSource =
-      candidate.startTime ||
-      candidate.start ||
-      candidate.start_time ||
-      candidate.time ||
-      candidate.slotTime ||
-      candidate.slot
-    const timeParts = parseStartTime(timeSource)
-    if (!timeParts) return
-
-    const start = new Date(now)
-    start.setHours(timeParts.hour, timeParts.minute ?? 0, 0, 0)
-
-    let diff = dayIndex - currentDayIndex
-    if (diff < 0) diff += 7
-    if (diff === 0 && start <= now) {
-      diff = 7
-    }
-    start.setDate(start.getDate() + diff)
-
-    const delta = start.getTime() - now.getTime()
-    if (delta < bestDelta) {
-      bestDelta = delta
-      winner = { classInfo: candidate, startsAt: start }
-    }
-  })
-
-  return winner
-}
-
-function extractTimetableCandidates(structuredData: any): any[] {
-  if (!structuredData) return []
-  const pools = ['classes', 'schedule', 'sessions']
-  const result: any[] = []
-  const push = (entry: any) => {
-    if (entry && typeof entry === 'object') {
-      result.push(entry)
-    }
-  }
-  pools.forEach(key => {
-    const collection = structuredData[key]
-    if (Array.isArray(collection)) {
-      collection.forEach(push)
-    }
-  })
-  return result
-}
-
-function resolveDayIndex(dayValue?: string): number | null {
-  if (!dayValue || typeof dayValue !== 'string') return null
-  const normalized = dayValue.trim().toLowerCase().replace(/\./g, '')
-  const alias =
-    DAY_ALIAS_MAP[normalized] ||
-    DAY_ALIAS_MAP[normalized.slice(0, 3)] ||
-    normalized
-  const index = DAY_INDEX_MAP[alias]
-  return typeof index === 'number' ? index : null
-}
-
-function parseStartTime(value?: string): { hour: number; minute: number } | null {
-  if (!value || typeof value !== 'string') return null
-  const lower = value.toLowerCase()
-  if (lower.includes('fn') || lower.includes('forenoon')) {
-    return { hour: 9, minute: 0 }
-  }
-  if (lower.includes('an') || lower.includes('afternoon')) {
-    return { hour: 13, minute: 30 }
-  }
-  const primary = value.split(/-|–|—|to/i)[0]?.trim() || ''
-  if (!primary) return null
-  const sanitized = primary.replace(/(hrs|hours)/gi, '').trim()
-  const match = sanitized.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i)
-  if (match) {
-    let hour = parseInt(match[1], 10)
-    const minute = match[2] ? parseInt(match[2], 10) : 0
-    const suffix = match[3]?.toLowerCase()
-    if (suffix === 'pm' && hour < 12) hour += 12
-    if (suffix === 'am' && hour === 12) hour = 0
-    if (hour >= 24 || minute >= 60) return null
-    return { hour, minute }
-  }
-
-  const digitsOnly = sanitized.replace(/\D/g, '')
-  if (digitsOnly.length === 4) {
-    const hour = parseInt(digitsOnly.slice(0, 2), 10)
-    const minute = parseInt(digitsOnly.slice(2), 10)
-    if (hour >= 24 || minute >= 60) return null
-    return { hour, minute }
-  }
-
-  return null
+function isCredentialError(error: any) {
+  if (!error) return false
+  const message =
+    (typeof error === 'string' && error) ||
+    (typeof error?.message === 'string' && error.message) ||
+    (typeof error?.cause === 'string' && error.cause)
+  if (!message) return false
+  const lower = message.toLowerCase()
+  return lower.includes('credential') || lower.includes('login')
 }
 
 function useNow(intervalMs = 60000) {

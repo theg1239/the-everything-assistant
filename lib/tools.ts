@@ -2252,7 +2252,17 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             if (facultyQuery) flags.facultyQuery = facultyQuery
             if (materialQuery) flags.materialQuery = materialQuery
             if (debug) flags.debug = debug
-            if (command === 'timetable') {
+            const DEFAULT_LATEST_SEMESTER = new Set([
+              'timetable',
+              'marks',
+              'grades',
+              'cgpa',
+              'exam-schedule',
+              'exams',
+              'calendar',
+              'attendance',
+            ])
+            if (DEFAULT_LATEST_SEMESTER.has(command) && !flags.semester && !flags.semesterQuery) {
               flags.semesterQuery = 'latest'
             }
 

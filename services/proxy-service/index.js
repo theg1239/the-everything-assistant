@@ -3,6 +3,7 @@ const path = require('path')
 const fs = require('fs')
 const helmet = require('helmet')
 const rateLimit = require('express-rate-limit')
+const { randomUUID } = require('crypto')
 const {
   capabilityManifest,
   COMMAND_MAPPING,
@@ -27,6 +28,34 @@ const {
 require('dotenv').config()
 
 const app = express()
+
+const maskIdentifier = value => {
+  if (!value || typeof value !== 'string') return 'unknown'
+  if (value.length <= 4) return value
+  return `${value.slice(0, 2)}***${value.slice(-2)}`
+}
+
+const scrubFlags = flags => {
+  if (!flags) return {}
+  const copy = { ...flags }
+  if (copy.password) copy.password = '***'
+  if (copy.encryptedPassword) copy.encryptedPassword = '***'
+  return copy
+}
+
+const logRequest = (scope, id, message, meta = undefined) => {
+  const prefix = `[${scope}:${id}]`
+  if (meta !== undefined) {
+    console.log(prefix, message, meta)
+  } else {
+    console.log(prefix, message)
+  }
+}
+
+const logError = (scope, id, message, error) => {
+  const prefix = `[${scope}:${id}]`
+  console.error(prefix, message, error)
+}
 
 app.use(
   helmet({
@@ -86,6 +115,8 @@ app.get('/health', (req, res) => {
 })
 
 app.post('/vtop', vtopLimiter, async (req, res) => {
+  const requestId = randomUUID().slice(0, 8)
+  const startedAt = Date.now()
   const { command, username, password, encryptedPassword, sessionKey, flags } = req.body
 
   if (!command || !username) {
@@ -111,10 +142,23 @@ app.post('/vtop', vtopLimiter, async (req, res) => {
   }
 
   const { sanitizedFlags } = normalizeFlagsForCommand(command, flags || {})
+  logRequest(
+    'vtop',
+    requestId,
+    `command=${command} user=${maskIdentifier(username)} flags=${JSON.stringify(scrubFlags(
+      sanitizedFlags
+    ))} encrypted=${Boolean(encryptedPassword)} password=${Boolean(password)}`
+  )
 
   try {
     const result = await runCommand(username, finalPassword, command, sanitizedFlags)
     const shaped = normalizeResultPayload(result, command, sanitizedFlags)
+    logRequest(
+      'vtop',
+      requestId,
+      `success command=${command} duration=${Date.now() - startedAt}ms`,
+      { keys: Object.keys(shaped) }
+    )
 
     if (!shaped.success) {
       const statusCode = shaped.requiresCredentials ? 401 : 400
@@ -123,13 +167,15 @@ app.post('/vtop', vtopLimiter, async (req, res) => {
 
     res.json(shaped)
   } catch (error) {
-    console.error('VTOP command execution failed:', error.error || error.message)
+    logError('vtop', requestId, `failed command=${command}`, error.error || error.message || error)
     const sanitizedError = sanitizeErrorForResponse(error, command)
     return res.status(500).json(sanitizedError)
   }
 })
 
 app.post('/vtop-interactive', vtopLimiter, async (req, res) => {
+  const requestId = randomUUID().slice(0, 8)
+  const startedAt = Date.now()
   const { command, step, username, password, encryptedPassword, sessionKey, flags, sessionData } =
     req.body
 
@@ -148,10 +194,13 @@ app.post('/vtop-interactive', vtopLimiter, async (req, res) => {
     })
   }
 
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`Executing interactive VTOP workflow: ${command}, step: ${step}`)
-    console.log('Request flags:', flags)
-  }
+  logRequest(
+    'vtop-interactive',
+    requestId,
+    `command=${command} step=${step} user=${maskIdentifier(username)} flags=${JSON.stringify(
+      scrubFlags(flags)
+    )}`
+  )
 
   try {
     const { sanitizedFlags } = normalizeFlagsForCommand(command, flags || {})
@@ -162,15 +211,27 @@ app.post('/vtop-interactive', vtopLimiter, async (req, res) => {
       sanitizedFlags,
       sessionData
     )
+    logRequest(
+      'vtop-interactive',
+      requestId,
+      `success command=${command} step=${step} duration=${Date.now() - startedAt}ms`
+    )
     res.json(result)
   } catch (error) {
-    console.error('Interactive VTOP workflow failed:', error.error || error.message)
+    logError(
+      'vtop-interactive',
+      requestId,
+      `failed command=${command} step=${step}`,
+      error.error || error.message || error
+    )
     const sanitizedError = sanitizeErrorForResponse(error, `${command}-${step}`)
     return res.status(500).json(sanitizedError)
   }
 })
 
 app.post('/vtop-interactive-continue', vtopLimiter, async (req, res) => {
+  const requestId = randomUUID().slice(0, 8)
+  const startedAt = Date.now()
   const { sessionData, selection, step } = req.body
 
   if (!sessionData || !selection || !step) {
@@ -215,11 +276,13 @@ app.post('/vtop-interactive-continue', vtopLimiter, async (req, res) => {
     })
   }
 
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(
-      `Continuing interactive workflow from ${step} to ${nextStep} with selection: ${selection}`
-    )
-  }
+  logRequest(
+    'vtop-interactive',
+    requestId,
+    `continue from ${step} -> ${nextStep} selection=${selection} user=${maskIdentifier(
+      parsedSession.username
+    )}`
+  )
 
   try {
     const result = await executeInteractiveCoursePageWorkflow(
@@ -229,9 +292,19 @@ app.post('/vtop-interactive-continue', vtopLimiter, async (req, res) => {
       updatedFlags,
       JSON.stringify(parsedSession)
     )
+    logRequest(
+      'vtop-interactive',
+      requestId,
+      `continue success step=${step} duration=${Date.now() - startedAt}ms`
+    )
     res.json(result)
   } catch (error) {
-    console.error('Interactive VTOP workflow continuation failed:', error.error || error.message)
+    logError(
+      'vtop-interactive',
+      requestId,
+      `continue failed step=${step}`,
+      error.error || error.message || error
+    )
     const sanitizedError = sanitizeErrorForResponse(error, `${step}-continue`)
     return res.status(500).json(sanitizedError)
   }

@@ -4,15 +4,23 @@ import { useEffect, useState } from 'react'
 import { X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import HubShell from './hub-shell'
-import type { PersonalHubState, HubVTOPCommand, PersonalHubSnapshot } from '@/types/hub'
+import type {
+  PersonalHubState,
+  HubVTOPCommand,
+  PersonalHubSnapshot,
+  VTOPCredentialPayload,
+} from '@/types/hub'
 import { Drawer } from 'vaul'
+import { useHubStore } from './hub-store'
+import { shallow } from 'zustand/shallow'
 
 export type HubActionHandlers = {
   refreshState: () => Promise<PersonalHubState>
   syncCore: () => Promise<PersonalHubState>
   refreshVTOP: (
     command: HubVTOPCommand,
-    extras?: Record<string, any>
+    extras?: Record<string, any>,
+    credentials?: VTOPCredentialPayload
   ) => Promise<PersonalHubSnapshot>
   runTool: (toolName: string, args?: Record<string, any>) => Promise<any>
 }
@@ -23,8 +31,8 @@ interface HubProps {
   syncing?: boolean
   onClose?: () => void
   onLink?: () => void
-  initialState: PersonalHubState
   actions: HubActionHandlers
+  preferences?: Record<string, any>
 }
 
 export default function Hub({
@@ -33,10 +41,12 @@ export default function Hub({
   syncing = false,
   onClose,
   onLink,
-  initialState,
   actions,
+  preferences,
 }: HubProps) {
   const [mounted, setMounted] = useState(false)
+  const hubSyncing = useHubStore(state => state.syncing, shallow)
+  const isSyncing = syncing || hubSyncing
   useEffect(() => {
     setMounted(true)
   }, [])
@@ -67,41 +77,41 @@ export default function Hub({
 
   return (
     <Drawer.Root open={isOpen} onOpenChange={next => !next && onClose?.()} modal dismissible>
-      <Drawer.Portal>
-        <Drawer.Overlay className="fixed inset-0 bg-black/55 backdrop-blur-sm z-40" />
-        <Drawer.Content className="fixed inset-x-0 bottom-0 mx-auto h-[96vh] max-w-6xl rounded-t-3xl border border-border bg-background shadow-2xl z-50 flex flex-col overflow-hidden">
-          <Drawer.Title className="sr-only">Hub</Drawer.Title>
-          <Drawer.Handle className="mx-auto mt-2 mb-1 h-1 w-16 rounded-full bg-border" />
-          <div className="flex items-center justify-between px-3 pb-3 border-b border-border/60">
-            <div className="text-sm font-semibold uppercase text-muted-foreground">hub</div>
-            <div className="flex items-center gap-2">
-              {syncing && !locked && (
-                <span className="text-xs px-2 py-0.5 rounded-full border border-border/50 text-muted-foreground flex items-center gap-1">
-                  <Loader2 className="h-3 w-3 animate-spin" /> syncing
-                </span>
-              )}
-              <Drawer.Close asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 rounded-full hover:bg-muted"
-                  aria-label="Close hub"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </Drawer.Close>
+        <Drawer.Portal>
+          <Drawer.Overlay className="fixed inset-0 bg-black/55 backdrop-blur-sm z-40" />
+          <Drawer.Content className="fixed inset-x-0 bottom-0 mx-auto h-[96vh] max-w-6xl rounded-t-3xl border border-border bg-background shadow-2xl z-50 flex flex-col overflow-hidden">
+            <Drawer.Title className="sr-only">Hub</Drawer.Title>
+            <Drawer.Handle className="mx-auto mt-2 mb-1 h-1 w-16 rounded-full bg-border" />
+            <div className="flex items-center justify-between px-3 pb-3 border-b border-border/60">
+              <div className="text-sm font-semibold uppercase text-muted-foreground">hub</div>
+              <div className="flex items-center gap-2">
+                {isSyncing && !locked && (
+                  <span className="text-xs px-2 py-0.5 rounded-full border border-border/50 text-muted-foreground flex items-center gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin" /> syncing
+                  </span>
+                )}
+                <Drawer.Close asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 rounded-full hover:bg-muted"
+                    aria-label="Close hub"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </Drawer.Close>
+              </div>
             </div>
-          </div>
-          <div className="flex-1 min-h-0">
-            {locked ? (
-              <HubEmptyState onAction={onLink} />
-            ) : (
-              <HubShell initialState={initialState} actions={actions} syncing={syncing} onLink={onLink} />
-            )}
-          </div>
-        </Drawer.Content>
-      </Drawer.Portal>
-    </Drawer.Root>
+            <div className="flex-1 min-h-0">
+              {locked ? (
+                <HubEmptyState onAction={onLink} />
+              ) : (
+                <HubShell actions={actions} syncing={isSyncing} onLink={onLink} preferences={preferences} />
+              )}
+            </div>
+          </Drawer.Content>
+        </Drawer.Portal>
+      </Drawer.Root>
   )
 }
 

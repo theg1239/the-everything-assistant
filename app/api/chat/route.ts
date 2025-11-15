@@ -708,11 +708,18 @@ CRITICAL TOOL CONTINUATION RULES:
 
     let finalMessages: any[] = [{ role: 'system', content: combinedSystemPrompt }]
     if (!attachmentAware) {
-      finalMessages.push(...enhancedMessages)
+      for (const m of enhancedMessages) {
+        if (!m?.content || typeof m.content !== 'string' || m.content.trim().length === 0) {
+          continue
+        }
+        finalMessages.push({ role: m.role, content: m.content })
+      }
     } else {
       for (const m of enhancedMessages) {
         if (!m.attachments || m.attachments.length === 0) {
-          finalMessages.push({ role: m.role, content: m.content })
+          if (m.content && m.content.trim().length > 0) {
+            finalMessages.push({ role: m.role, content: m.content })
+          }
           continue
         }
         const parts: any[] = []
@@ -753,8 +760,51 @@ CRITICAL TOOL CONTINUATION RULES:
             }
           }
         }
+        if (parts.length === 0) {
+          continue
+        }
         finalMessages.push({ role: m.role, content: parts })
       }
+    }
+
+    finalMessages = finalMessages.filter(msg => {
+      if (!msg) return false
+      if (typeof msg.content === 'string') {
+        return msg.content.trim().length > 0
+      }
+      if (Array.isArray(msg.content)) {
+        return msg.content.length > 0
+      }
+      return Boolean(msg.content)
+    })
+
+    const hasConversationContent = finalMessages.some(msg => msg.role !== 'system')
+
+    if (!hasConversationContent) {
+      const fallbackText =
+        "i'm on standby — ask a question or run a tool so i know what to do."
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode(`0:"${fallbackText.replace(/"/g, '\\"')}"\n`)
+          )
+          controller.enqueue(
+            encoder.encode(
+              'e:{"finishReason":"stop","usage":{"promptTokens":0,"completionTokens":0},"isContinued":false}\n'
+            )
+          )
+          controller.close()
+        },
+      })
+
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'X-Chat-Id': chat.id,
+          'X-Chat-Path': chat.path,
+        },
+      })
     }
 
     let savedFinalStepUsage = false

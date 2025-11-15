@@ -10,9 +10,11 @@ interface ResultBottomSheetProps {
   title?: string
   onClose: () => void
   result?: any | null
+  loading?: boolean
+  mode?: 'static' | 'stream'
 }
 
-export function ResultBottomSheet({ open, onClose, result, title }: ResultBottomSheetProps) {
+export function ResultBottomSheet({ open, onClose, result, title, loading = false, mode = 'static' }: ResultBottomSheetProps) {
   const [tab, setTab] = useState<'insights' | 'details' | 'raw'>('insights')
 
   useEffect(() => {
@@ -23,6 +25,9 @@ export function ResultBottomSheet({ open, onClose, result, title }: ResultBottom
   }, [open, result])
 
   const renderContent = useMemo(() => {
+    if (loading) {
+      return <div className="text-sm text-muted-foreground">loading latest pull…</div>
+    }
     if (!result) return <div className="text-xs text-muted-foreground">no data</div>
     if (tab === 'insights' && result.formatted_content) {
       return (
@@ -40,7 +45,7 @@ export function ResultBottomSheet({ open, onClose, result, title }: ResultBottom
         {safeStringify(result)}
       </pre>
     )
-  }, [tab, result])
+  }, [tab, result, loading])
 
   const handleShare = () => {
     const text = result?.summary || stripHtml(result?.formatted_content) || safeStringify(result)
@@ -62,6 +67,9 @@ export function ResultBottomSheet({ open, onClose, result, title }: ResultBottom
             <Drawer.Handle className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-border/60" />
             <div className="flex items-center justify-between gap-2 text-base font-semibold">
               <span className="truncate">{title || 'result'}</span>
+              <span className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground/70">
+                {mode === 'stream' ? 'live' : 'snapshot'}
+              </span>
               <Button variant="ghost" size="sm" onClick={handleShare} className="h-8 px-2">
                 <Share2 className="h-4 w-4" /> share
               </Button>

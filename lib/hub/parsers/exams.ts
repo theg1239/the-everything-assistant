@@ -1,6 +1,65 @@
 import type { HubVTOPCommand } from '@/types/hub'
 import { extractCliTables } from './utils'
 
+type RawExamRow = {
+  code?: string
+  daysLeft?: string
+  examDate?: string
+  examTime?: string
+  venue?: string
+  seat?: string
+  seatNo?: string
+  slot?: string
+  title?: string
+}
+
+function normalizeExamRow(row: any[]): RawExamRow {
+  const [
+    code,
+    title,
+    slot,
+    examDate,
+    examTime,
+    venue,
+    seat,
+    seatNo,
+    daysLeft,
+    ...rest
+  ] = row
+
+  // handle CLI that nests multiple tables (e.g., lab + theory) into a single row chunk
+  if (rest && rest.length >= 8 && !seatNo) {
+    const secondary = normalizeExamRow(rest)
+    return [primaryExam(code, title, slot, examDate, examTime, venue, seat, seatNo, daysLeft), secondary]
+  }
+
+  return primaryExam(code, title, slot, examDate, examTime, venue, seat, seatNo, daysLeft)
+}
+
+function primaryExam(
+  code?: string,
+  title?: string,
+  slot?: string,
+  examDate?: string,
+  examTime?: string,
+  venue?: string,
+  seat?: string,
+  seatNo?: string,
+  daysLeft?: string
+) {
+  return {
+    code,
+    title,
+    slot,
+    examDate,
+    examTime,
+    venue,
+    seat,
+    seatNo,
+    daysLeft,
+  }
+}
+
 export function parseExams(raw: any) {
   const text = typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
   if (!text.trim()) return null
@@ -8,18 +67,15 @@ export function parseExams(raw: any) {
   if (!tables.length) return null
 
   const sections = tables.map(table => {
-    const exams = table.rows.map(row => {
-      const [code, title, slot, examDate, examTime, venue, seat, seatNo, daysLeft] = row
-      return {
-        code,
-        title,
-        slot,
-        examDate,
-        examTime,
-        venue,
-        seat,
-        seatNo,
-        daysLeft,
+    const exams: RawExamRow[] = []
+    table.rows.forEach(row => {
+      const normalized = normalizeExamRow(row)
+      if (Array.isArray(normalized)) {
+        normalized.forEach(item => {
+          if (item?.title || item?.code) exams.push(item)
+        })
+      } else if (normalized?.title || normalized?.code) {
+        exams.push(normalized)
       }
     })
     return {

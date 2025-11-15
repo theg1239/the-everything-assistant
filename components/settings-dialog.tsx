@@ -71,6 +71,14 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     enabled: true,
   })
   const [theme, setTheme] = useState('system')
+  const [dailyBriefingSettings, setDailyBriefingSettings] = useState({
+    dismissTime: '07:30',
+    emailEnabled: false,
+    emailTime: '07:30',
+  })
+  const [updatingBriefing, setUpdatingBriefing] = useState(false)
+  const [currentPreferences, setCurrentPreferences] = useState<any>({})
+  const [sendingTestBriefing, setSendingTestBriefing] = useState(false)
 
   const [touchStartY, setTouchStartY] = useState(0)
   const [touchStartScrollTop, setTouchStartScrollTop] = useState(0)
@@ -190,10 +198,14 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
         // Load user preferences
         const response = await fetch('/api/user/preferences')
-        if (response.ok) {
-          const data = await response.json()
-          const prefs = data.preferences
-          setFollowUpSuggestions(prefs.followUpSuggestions ?? true)
+      if (response.ok) {
+        const data = await response.json()
+        const prefs = data.preferences
+        setCurrentPreferences(prefs)
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('userPreferencesUpdated', { detail: prefs }) as any)
+        }
+        setFollowUpSuggestions(prefs.followUpSuggestions ?? true)
 
           // Handle both legacy aurora and new background config
           if (prefs.backgroundConfig) {
@@ -203,6 +215,14 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
             setBackgroundConfig({
               type: 'aurora',
               enabled: prefs.auroraBackground,
+            })
+          }
+
+          if (prefs.dailyBriefing) {
+            setDailyBriefingSettings({
+              dismissTime: prefs.dailyBriefing.dismissTime || '07:30',
+              emailEnabled: prefs.dailyBriefing.emailEnabled ?? false,
+              emailTime: prefs.dailyBriefing.emailTime || prefs.dailyBriefing.dismissTime || '07:30',
             })
           }
         }
@@ -269,17 +289,22 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     if (!session?.user?.id) return
 
     try {
+      const payload = { ...currentPreferences, ...newPreferences }
       const response = await fetch('/api/user/preferences', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          preferences: newPreferences,
+          preferences: payload,
         }),
       })
 
       if (response.ok) {
+        setCurrentPreferences(payload)
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('userPreferencesUpdated', { detail: payload }) as any)
+        }
         toast.success('Preferences saved successfully')
       } else {
         throw new Error('Failed to save preferences')
@@ -292,10 +317,68 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
   const handleFollowUpSuggestionsChange = async (checked: boolean) => {
     setFollowUpSuggestions(checked)
-    await savePreferences({
-      followUpSuggestions: checked,
-      backgroundConfig,
-    })
+    await savePreferences({ followUpSuggestions: checked })
+  }
+
+  const handleBriefingSettingsUpdate = async (updates: Partial<typeof dailyBriefingSettings>) => {
+    const previous = dailyBriefingSettings
+    const next = { ...dailyBriefingSettings, ...updates }
+    setDailyBriefingSettings(next)
+    setUpdatingBriefing(true)
+    try {
+      const response = await fetch('/api/user/preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dailyBriefing: {
+            dismissTime: next.dismissTime,
+            emailEnabled: next.emailEnabled,
+            emailTime: next.emailTime,
+          },
+        }),
+      })
+      if (!response.ok) throw new Error('Failed to update daily briefing preferences')
+
+      const updatedPrefs = {
+        ...currentPreferences,
+        dailyBriefing: {
+          ...(currentPreferences.dailyBriefing || {}),
+          dismissTime: next.dismissTime,
+          emailEnabled: next.emailEnabled,
+          emailTime: next.emailTime,
+        },
+      }
+      setCurrentPreferences(updatedPrefs)
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('userPreferencesUpdated', { detail: updatedPrefs }) as any)
+      }
+      toast.success('daily briefing updated')
+    } catch (error) {
+      console.error('Error updating daily briefing preferences:', error)
+      toast.error('failed to update daily briefing')
+      setDailyBriefingSettings(previous)
+    } finally {
+      setUpdatingBriefing(false)
+    }
+  }
+
+  const handleSendTestBriefing = async () => {
+    setSendingTestBriefing(true)
+    try {
+      const response = await fetch('/api/hub/daily-briefing-email/test', {
+        method: 'POST',
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to send test briefing')
+      }
+      toast.success('daily briefing sent to your inbox')
+    } catch (error: any) {
+      console.error('Error sending test briefing:', error)
+      toast.error(error?.message || 'failed to send daily briefing email')
+    } finally {
+      setSendingTestBriefing(false)
+    }
   }
 
   const handleMemoryToggle = async (checked: boolean) => {
@@ -920,6 +1003,78 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                       checked={memoryEnabled}
                       onCheckedChange={handleMemoryToggle}
                     />
+                  </div>
+                </div>
+
+                <div className="space-y-4 p-4 rounded-lg border border-border bg-muted/10">
+                  <h4 className="font-semibold text-base">daily briefing</h4>
+                  <div className="flex flex-col gap-2 rounded-lg border border-border bg-background p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <Label htmlFor="briefing-time" className="text-sm md:text-base">
+                          auto end time
+                        </Label>
+                        <p className="text-xs md:text-sm text-muted-foreground">
+                          briefing closes automatically after this time every morning
+                        </p>
+                      </div>
+                      <input
+                        id="briefing-time"
+                        type="time"
+                        value={dailyBriefingSettings.dismissTime}
+                        onChange={e => handleBriefingSettingsUpdate({ dismissTime: e.target.value })}
+                        disabled={updatingBriefing}
+                        className="h-10 rounded-md border border-border bg-muted/40 px-3 text-sm text-foreground"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-background">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="briefing-email" className="text-sm md:text-base">
+                        email summary
+                      </Label>
+                      <p className="text-xs md:text-sm text-muted-foreground">
+                        send the briefing to your inbox when it ends
+                      </p>
+                    </div>
+                    <Switch
+                      id="briefing-email"
+                      checked={dailyBriefingSettings.emailEnabled}
+                      disabled={updatingBriefing}
+                      onCheckedChange={checked => handleBriefingSettingsUpdate({ emailEnabled: checked })}
+                    />
+                  </div>
+                  {dailyBriefingSettings.emailEnabled && (
+                    <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-background">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="briefing-email-time" className="text-sm md:text-base">
+                          email send time
+                        </Label>
+                        <p className="text-xs md:text-sm text-muted-foreground">
+                          usually the same as dismiss time, customize if needed
+                        </p>
+                      </div>
+                      <input
+                        id="briefing-email-time"
+                        type="time"
+                        value={dailyBriefingSettings.emailTime}
+                        onChange={e => handleBriefingSettingsUpdate({ emailTime: e.target.value })}
+                        disabled={updatingBriefing}
+                        className="h-10 rounded-md border border-border bg-muted/40 px-3 text-sm text-foreground"
+                      />
+                    </div>
+                  )}
+                  <div className="flex justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!dailyBriefingSettings.emailEnabled || sendingTestBriefing}
+                      onClick={handleSendTestBriefing}
+                      className="rounded-full"
+                    >
+                      {sendingTestBriefing && <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />}
+                      send test briefing
+                    </Button>
                   </div>
                 </div>
               </div>

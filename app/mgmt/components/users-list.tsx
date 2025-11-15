@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Search } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { Search, Send } from 'lucide-react'
+import { toast } from 'sonner'
 
 export default function UsersList({ onSelectUser }: any) {
   const [query, setQuery] = useState('')
@@ -12,6 +12,7 @@ export default function UsersList({ onSelectUser }: any) {
   const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
+  const [sendingId, setSendingId] = useState<string | null>(null)
 
   useEffect(() => {
     // initial load
@@ -34,6 +35,34 @@ export default function UsersList({ onSelectUser }: any) {
       // ignore
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleSendBriefing = async (user: any) => {
+    if (!user?.id && !user?.email) {
+      toast.error('user record missing id/email')
+      return
+    }
+    setSendingId(user.id || user.email)
+    try {
+      const res = await fetch('/api/(mgmt)/hub/send-briefing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, email: user.email }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(json.error || 'failed to send briefing')
+      }
+      toast.success(
+        json.briefing?.scheduledAt
+          ? `briefing scheduled for ${json.briefing.scheduledAt}`
+          : 'briefing email sent'
+      )
+    } catch (error: any) {
+      toast.error(error?.message || 'failed to send briefing')
+    } finally {
+      setSendingId(null)
     }
   }
 
@@ -83,6 +112,21 @@ export default function UsersList({ onSelectUser }: any) {
               <div className="flex gap-2">
                 <Button variant="ghost" size="sm" onClick={() => onSelectUser?.(u)}>
                   view messages
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleSendBriefing(u)}
+                  disabled={sendingId === (u.id || u.email)}
+                  className="gap-1"
+                >
+                  {sendingId === (u.id || u.email) ? (
+                    'sending…'
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" /> send briefing
+                    </>
+                  )}
                 </Button>
               </div>
             </div>

@@ -12,7 +12,12 @@ import { parseHubCommandResult } from '@/lib/hub/parsers'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { saveTokenUsage } from '@/lib/db'
 import { listVTOPSnapshots, upsertVTOPSnapshot } from '@/lib/vtop-snapshots'
-import type { HubVTOPCommand, PersonalHubState, PersonalHubSnapshot } from '@/types/hub'
+import type {
+  HubVTOPCommand,
+  PersonalHubState,
+  PersonalHubSnapshot,
+  VTOPCredentialPayload,
+} from '@/types/hub'
 import type { z } from 'zod'
 
 type VTOPFormattedResult = z.infer<typeof vtopResultSchema>
@@ -58,10 +63,24 @@ async function buildHubState(userId: string): Promise<PersonalHubState> {
   }
 }
 
+async function resolveVTOPCredentials(
+  provided?: VTOPCredentialPayload
+): Promise<VTOPCredentialPayload> {
+  if (provided?.username && provided?.encryptedPassword) {
+    return provided
+  }
+  const fallback = await getServerFormattedVTOPCredentials()
+  if (!fallback) {
+    throw new Error('VTOP credentials are not linked')
+  }
+  return fallback
+}
+
 async function executeVTOPCommand(
   userId: string,
   command: HubVTOPCommand,
-  extras: Record<string, any> = {}
+  extras: Record<string, any> = {},
+  credentials?: VTOPCredentialPayload
 ): Promise<VTOPFormattedResult> {
   const tools = createVITTools(userId)
   const vtop = (tools as any)['queryVTOP']
@@ -69,10 +88,7 @@ async function executeVTOPCommand(
     throw new Error('VTOP tool is unavailable')
   }
 
-  const creds = await getServerFormattedVTOPCredentials()
-  if (!creds) {
-    throw new Error('VTOP credentials are not linked')
-  }
+  const creds = await resolveVTOPCredentials(credentials)
 
   const args = {
     command,
@@ -134,10 +150,11 @@ async function executeVTOPCommand(
 
 export async function refreshVTOPSnapshotAction(
   command: HubVTOPCommand,
-  extras: Record<string, any> = {}
+  extras: Record<string, any> = {},
+  credentials?: VTOPCredentialPayload
 ): Promise<PersonalHubSnapshot> {
   const userId = await requireUser()
-  const snapshot = await executeVTOPCommand(userId, command, extras)
+  const snapshot = await executeVTOPCommand(userId, command, extras, credentials)
   return {
     command,
     title: snapshot.title,

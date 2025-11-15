@@ -1,4 +1,6 @@
 const { randomUUID, createHmac, timingSafeEqual } = require('crypto')
+const path = require('path')
+const { createClientsStore } = require('./client-store')
 const CryptoJS = require('crypto-js')
 const {
   InvalidRequestError,
@@ -7,36 +9,6 @@ const {
   AccessDeniedError,
   ServerError,
 } = require('@modelcontextprotocol/sdk/server/auth/errors.js')
-
-class InMemoryClientsStore {
-  constructor(initialClients = []) {
-    this.clients = new Map()
-    initialClients.forEach(client => {
-      if (client?.client_id) {
-        this.clients.set(client.client_id, client)
-      }
-    })
-  }
-
-  async getClient(clientId) {
-    return this.clients.get(clientId)
-  }
-
-  async registerClient(clientMetadata) {
-    if (!clientMetadata.redirect_uris || clientMetadata.redirect_uris.length === 0) {
-      throw new InvalidRequestError('Client registration requires at least one redirect_uri')
-    }
-
-    const clientId = clientMetadata.client_id || randomUUID()
-    const registered = {
-      ...clientMetadata,
-      client_id: clientId,
-    }
-
-    this.clients.set(clientId, registered)
-    return registered
-  }
-}
 
 function escapeHtml(value = '') {
   return value
@@ -59,7 +31,13 @@ function buildRedirectUrl(base, params) {
 
 class VtopOAuthProvider {
   constructor(options = {}) {
-    this.clientsStore = new InMemoryClientsStore(options.staticClients || [])
+    this.clientsStore =
+      options.clientsStore ||
+      createClientsStore({
+        staticClients: options.staticClients || [],
+        clientsFilePath:
+          options.clientsFilePath || process.env.MCP_OAUTH_CLIENTS_PATH || path.resolve(process.cwd(), 'mcp-oauth-clients.json'),
+      })
     this.codes = new Map()
     this.tokens = new Map()
     this.refreshTokens = new Map()

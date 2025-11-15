@@ -32,6 +32,7 @@ All MCP transports (`/mcp` + `/mcp/messages`) now require OAuth 2.0 with PKCE. T
 - **Authorization endpoint**: `https://<host>/oauth/authorize` hosts the consent/login UI. The page encrypts the VTOP password per session key and stores only the cipher alongside the token context.
 - **Token endpoint**: `https://<host>/oauth/token` exchanges the code (with PKCE) for access + refresh tokens.
 - **Consent handler**: the login form posts to `/oauth/consent`. You usually hit it indirectly via the authorize page, but it is helpful to know when debugging.
+- **Dynamic client registration**: `https://<host>/register` accepts OAuth client metadata so IDEs can self-register. Registered clients are persisted to `mcp-oauth-clients.json` in the project root (or the path provided via `MCP_OAUTH_CLIENTS_PATH`), so restarts won’t invalidate issued `client_id`s. Delete that file if you need a clean slate.
 
 Because the OAuth token now carries the encrypted VTOP credential blob, MCP clients should **not** send `password`/`encryptedPassword` inside tool arguments anymore—only the command + flags are required. The proxy injects the linked credentials from the bearer token before invoking the CLI workflow.
 

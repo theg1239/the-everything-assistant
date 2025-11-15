@@ -912,7 +912,7 @@ export default function HubShell({
         <HubOnboarding onLink={handleLinkIntent} />
       )}
 
-      {persona && <PersonaStrip persona={persona} onLink={handleLinkIntent} />}
+      {persona && linked && <PersonaStrip persona={persona} onLink={handleLinkIntent} />}
 
       {linked && (
         <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
@@ -1028,7 +1028,7 @@ export default function HubShell({
           <div className="relative border-t border-white/10 px-4 py-3">
             <div className="max-w-5xl w-full mx-auto">
               <div className="flex flex-wrap justify-center gap-1.5" role="tablist" aria-label="hub navigation">
-                {NAV_ITEMS.map(item => (
+                {NAV_ITEMS.filter(item => linked || item.id === 'briefing').map(item => (
                   <button
                     key={item.id}
                     role="tab"
@@ -1040,6 +1040,7 @@ export default function HubShell({
                         ? 'bg-white/15 border-white/40 text-white shadow-[0_10px_30px_rgba(0,0,0,0.35)]'
                         : 'bg-transparent border-white/15 text-white/60 hover:text-white hover:border-white/35'
                     }`}
+                    disabled={!linked && item.id !== 'briefing'}
                   >
                     {item.icon}
                     <span>{item.label}</span>

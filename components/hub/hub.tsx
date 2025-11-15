@@ -47,6 +47,21 @@ export default function Hub({
   const [mounted, setMounted] = useState(false)
   const hubSyncing = useHubStore(state => state.syncing, shallow)
   const isSyncing = syncing || hubSyncing
+  const [forceClose, setForceClose] = useState(false)
+  const effectiveOpen = isOpen && !forceClose
+  useEffect(() => {
+    if (!isOpen) {
+      setForceClose(false)
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    const handleLinked = () => {
+      setForceClose(false)
+    }
+    window.addEventListener('vtopCredentialsLinked', handleLinked as EventListener)
+    return () => window.removeEventListener('vtopCredentialsLinked', handleLinked as EventListener)
+  }, [])
   useEffect(() => {
     setMounted(true)
   }, [])
@@ -76,7 +91,7 @@ export default function Hub({
   if (!mounted) return null
 
   return (
-    <Drawer.Root open={isOpen} onOpenChange={next => !next && onClose?.()} modal dismissible>
+    <Drawer.Root open={effectiveOpen} onOpenChange={next => !next && onClose?.()} modal dismissible>
         <Drawer.Portal>
           <Drawer.Overlay className="fixed inset-0 bg-black/55 backdrop-blur-sm z-40" />
           <Drawer.Content className="fixed inset-x-0 bottom-0 mx-auto h-[96vh] max-w-6xl rounded-t-3xl border border-border bg-background shadow-2xl z-50 flex flex-col overflow-hidden">
@@ -106,7 +121,16 @@ export default function Hub({
               {locked ? (
                 <HubEmptyState onAction={onLink} />
               ) : (
-                <HubShell actions={actions} syncing={isSyncing} onLink={onLink} preferences={preferences} />
+                <HubShell
+                  actions={actions}
+                  syncing={isSyncing}
+                  onLink={() => {
+                    setForceClose(true)
+                    onClose?.()
+                    onLink?.()
+                  }}
+                  preferences={preferences}
+                />
               )}
             </div>
           </Drawer.Content>

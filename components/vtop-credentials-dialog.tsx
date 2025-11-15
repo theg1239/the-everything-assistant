@@ -114,7 +114,7 @@ export function VTOPCredentialsDialog({
 
   if (!isOpen) return null
   const modalContent = (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
+    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black bg-opacity-70">
       <div className="mx-4 w-full max-w-sm overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white shadow-xl border border-slate-700">
         <div className="flex justify-end px-4 pt-4">
           <Button

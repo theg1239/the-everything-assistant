@@ -44,6 +44,7 @@ import { useMemo } from 'react'
 import { FeedbackSection } from '@/components/feedback-section'
 import { MemoryManagement } from '@/components/memory-management'
 import { VTOPSettings } from '@/components/vtop-settings'
+import { deleteAccountAction } from '@/app/actions/account'
 
 const Aurora = dynamic(() => import('@/components/backgrounds/aurora'), {
   ssr: false,
@@ -961,6 +962,29 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     }
   }
 
+  const [deletingAccount, setDeletingAccount] = useState(false)
+  const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false)
+
+  const handleDeleteAccount = async () => {
+    if (!confirmDeleteAccount) {
+      setConfirmDeleteAccount(true)
+      setTimeout(() => setConfirmDeleteAccount(false), 3000)
+      return
+    }
+    setDeletingAccount(true)
+    setConfirmDeleteAccount(false)
+    try {
+      await deleteAccountAction()
+      toast.success('account deleted — signing you out')
+      await signOut({ callbackUrl: '/login' })
+    } catch (error: any) {
+      console.error('failed to delete account', error)
+      toast.error(error?.message || 'failed to delete account')
+    } finally {
+      setDeletingAccount(false)
+    }
+  }
+
   const renderContent = () => {
     switch (activeSection) {
       case 'general':
@@ -1074,6 +1098,42 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                     >
                       {sendingTestBriefing && <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />}
                       send test briefing
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-4 p-4 rounded-lg border border-border bg-muted/10">
+                  <h4 className="font-semibold text-base">account</h4>
+                  <div className="flex flex-col gap-2 rounded-lg border border-border bg-background p-3">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-full bg-destructive/10 text-destructive p-3">
+                        <Trash2 className="h-4 w-4" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="font-semibold text-sm md:text-base">delete account</p>
+                        <p className="text-xs md:text-sm text-muted-foreground">
+                          permanently delete your account and all data
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      disabled={deletingAccount}
+                      onClick={handleDeleteAccount}
+                      className={cn(
+                        'w-full sm:w-auto',
+                        confirmDeleteAccount ? 'bg-red-600 hover:bg-red-700' : ''
+                      )}
+                    >
+                      {deletingAccount ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> deleting…
+                        </>
+                      ) : confirmDeleteAccount ? (
+                        'confirm delete?'
+                      ) : (
+                        'delete my account'
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -1350,6 +1410,11 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
             type: 'dither' as BackgroundType,
             name: 'dither',
             description: 'retro dithered waves with pixel art aesthetics',
+          },
+          {
+            type: 'floating-lines' as BackgroundType,
+            name: 'floating lines',
+            description: 'high-energy neon lines with parallax and bend effects',
           },
           {
             type: 'gradient' as BackgroundType,

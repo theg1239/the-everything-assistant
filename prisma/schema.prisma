@@ -155,9 +155,10 @@ model SecurityLog {
   ipAddress  String?
   userAgent  String?
   created_at DateTime @default(now())
-  
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId, created_at(sort: Desc)])
   @@map("security_logs")
 }
 
@@ -251,6 +252,9 @@ model TokenUsage {
   createdAt        DateTime @default(now())
 
   @@index([createdAt])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([chatId, createdAt(sort: Desc)])
+  @@index([model])
   @@map("token_usage")
 }
 
@@ -288,10 +292,10 @@ model WhatsAppMessage {
   createdAt      DateTime @default(now())
   
   conversation   WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  
+
   @@index([conversationId, createdAt])
   @@index([direction, createdAt])
-  @@index([isCommand])
+  @@index([isCommand, createdAt])
   @@map("whatsapp_messages")
 }
 

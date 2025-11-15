@@ -20,7 +20,19 @@ const Dither = dynamic(() => import('@/components/backgrounds/dither'), {
   loading: () => null,
 })
 
-export type BackgroundType = 'aurora' | 'beams' | 'dither' | 'gradient' | 'solid' | 'null'
+const FloatingLines = dynamic(() => import('@/components/backgrounds/floating-lines'), {
+  ssr: false,
+  loading: () => null,
+})
+
+export type BackgroundType =
+  | 'aurora'
+  | 'beams'
+  | 'dither'
+  | 'floating-lines'
+  | 'gradient'
+  | 'solid'
+  | 'null'
 
 export interface BackgroundConfig {
   type: BackgroundType
@@ -51,6 +63,12 @@ export interface BackgroundConfig {
     disableAnimation?: boolean
     enableMouseInteraction?: boolean
     mouseRadius?: number
+  }
+  floatingLines?: {
+    linesGradient?: string[]
+    enabledWaves?: Array<'top' | 'middle' | 'bottom'>
+    animationSpeed?: number
+    parallaxStrength?: number
   }
   gradient?: {
     colors: string[]
@@ -90,6 +108,12 @@ const defaultBackgroundConfig: BackgroundConfig = {
     disableAnimation: false,
     enableMouseInteraction: true,
     mouseRadius: 1,
+  },
+  floatingLines: {
+    linesGradient: ['#8b5cf6', '#0ea5e9', '#14b8a6'],
+    enabledWaves: ['top', 'middle', 'bottom'],
+    animationSpeed: 1.2,
+    parallaxStrength: 0.35,
   },
   gradient: {
     colors: ['#1a1a2e', '#16213e', '#0f3460'],
@@ -266,6 +290,28 @@ export default function CustomBackground() {
             }
             mouseRadius={
               backgroundConfig.dither?.mouseRadius || defaultBackgroundConfig.dither!.mouseRadius!
+            }
+          />
+        )
+
+      case 'floating-lines':
+        return (
+          <FloatingLines
+            linesGradient={
+              backgroundConfig.floatingLines?.linesGradient ||
+              defaultBackgroundConfig.floatingLines!.linesGradient!
+            }
+            enabledWaves={
+              backgroundConfig.floatingLines?.enabledWaves ||
+              defaultBackgroundConfig.floatingLines!.enabledWaves!
+            }
+            animationSpeed={
+              backgroundConfig.floatingLines?.animationSpeed ||
+              defaultBackgroundConfig.floatingLines!.animationSpeed!
+            }
+            parallaxStrength={
+              backgroundConfig.floatingLines?.parallaxStrength ||
+              defaultBackgroundConfig.floatingLines!.parallaxStrength!
             }
           />
         )

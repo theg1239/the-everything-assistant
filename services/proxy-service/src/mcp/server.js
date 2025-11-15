@@ -40,7 +40,14 @@ const SSE_MESSAGES_PATH = '/mcp/messages'
 function registerTools(targetServer) {
   const manifest = capabilityManifest()
 
-  const flagsSchema = z.union([z.record(z.any()), z.array(z.any())])
+  const flagsSchema = z
+    .preprocess(value => {
+      if (!value) return value
+      if (Array.isArray(value)) {
+        return {}
+      }
+      return value
+    }, z.record(z.any()))
 
   const baseFields = {
     username: z.string().min(1, 'username required'),

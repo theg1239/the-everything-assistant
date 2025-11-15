@@ -115,7 +115,7 @@
     "command": "course-page",
     "cliCommand": "course-page",
     "title": "course materials",
-    "description": "CLI-TOP downloader for notes, slides, DAs.",
+    "description": "Dnloader for notes, slides, DAs.",
     "group": "documents",
     "autoSync": false,
     "flags": {

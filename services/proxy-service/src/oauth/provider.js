@@ -147,126 +147,200 @@ class VtopOAuthProvider {
     <style>
       :root {
         color-scheme: dark;
-        --ea-surface: #050818;
-        --ea-panel: rgba(9, 12, 26, 0.85);
-        --ea-glow: linear-gradient(135deg, #6366f1 0%, #8b5cf6 40%, #ec4899 100%);
+        --bg: #020617;
+        --surface: #070b1b;
+        --border: rgba(255,255,255,0.07);
+        --subtle: #c7d2fe;
+        --muted: #8b95c5;
+        --primary: #7c3aed;
+        --primary-soft: rgba(124,58,237,0.18);
       }
       * { box-sizing: border-box; }
       body {
-        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         margin: 0;
         min-height: 100vh;
-        background: radial-gradient(circle at top, rgba(99,102,241,0.35), transparent 45%), var(--ea-surface);
+        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: var(--bg);
         color: #f8fafc;
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 2rem;
+        padding: clamp(1.5rem, 4vw, 3rem);
       }
-      .glass {
-        width: min(480px, 100%);
-        border-radius: 32px;
-        padding: 2.75rem;
-        background: var(--ea-panel);
-        border: 1px solid rgba(99,102,241,0.25);
-        box-shadow: 0 25px 70px rgba(5,8,24,0.8);
-        position: relative;
+      .shell {
+        width: min(900px, 100%);
+        min-height: min(520px, 90vh);
+        border-radius: 28px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        box-shadow: 0 30px 80px rgba(0,0,0,0.45);
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
         overflow: hidden;
       }
-      .glass::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: radial-gradient(circle at 20% -10%, rgba(99,102,241,0.5), transparent 55%);
-        opacity: 0.8;
-        pointer-events: none;
-      }
-      .header { position: relative; z-index: 1; }
-      .logo {
-        width: 54px;
-        height: 54px;
-        border-radius: 16px;
-        background: var(--ea-glow);
+      .panel {
+        padding: clamp(2rem, 5vw, 3rem);
         display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #0b1120;
-        margin-bottom: 1rem;
+        flex-direction: column;
+        gap: 1rem;
       }
-      h1 { margin: 0; font-size: 2rem; }
-      .summary { margin-top: 0.75rem; color: #cbd5f5; line-height: 1.7; }
-      form { margin-top: 2.25rem; display: flex; flex-direction: column; gap: 1.35rem; position: relative; z-index: 1; }
-      label { font-size: 0.95rem; color: #c7d2fe; text-transform: uppercase; letter-spacing: 0.08em; }
+      .panel.info {
+        background: rgba(4,7,19,0.6);
+        border-right: 1px solid rgba(255,255,255,0.05);
+      }
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.4rem 1rem;
+        border-radius: 999px;
+        background: var(--primary-soft);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-size: 0.78rem;
+        color: var(--subtle);
+        width: fit-content;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(1.9rem, 3.6vw, 2.4rem);
+      }
+      .summary {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+      .pill-stack {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .pill {
+        padding: 0.4rem 0.9rem;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.09);
+        font-size: 0.82rem;
+        color: #e2e8f0;
+      }
+      .scope-card {
+        margin-top: auto;
+        padding: 1rem;
+        border-radius: 20px;
+        border: 1px solid rgba(255,255,255,0.06);
+        background: rgba(5,8,20,0.75);
+      }
+      .scope-card ul {
+        margin: 0.6rem 0 0 1rem;
+        color: var(--muted);
+        line-height: 1.45;
+        padding: 0;
+      }
+      form {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      label {
+        font-size: 0.82rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--subtle);
+      }
       input {
+        margin-top: 0.35rem;
         width: 100%;
-        padding: 0.95rem 1.1rem;
-        border-radius: 16px;
-        border: 1px solid rgba(99,102,241,0.4);
-        background: rgba(5,8,24,0.8);
+        padding: 0.9rem 1rem;
+        border-radius: 18px;
+        border: 1px solid rgba(255,255,255,0.09);
+        background: rgba(0,0,0,0.35);
         color: #f8fafc;
         font-size: 1rem;
-        transition: border 0.2s ease, box-shadow 0.2s ease;
+        transition: border 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
       }
       input:focus {
         outline: none;
-        border-color: #818cf8;
-        box-shadow: 0 0 0 2px rgba(129,140,248,0.3);
+        border-color: var(--primary);
+        background: rgba(0,0,0,0.55);
+        box-shadow: 0 0 0 2px rgba(124,58,237,0.25);
       }
-      .scopes {
-        margin-top: 1.5rem;
-        padding: 1.25rem;
-        border-radius: 22px;
-        background: rgba(12,16,35,0.85);
-        border: 1px solid rgba(148,163,184,0.35);
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-top: 0.25rem;
       }
-      .scopes h3 { margin: 0 0 0.4rem 0; font-size: 0.95rem; color: #cbd5f5; }
-      .scopes p { margin: 0; font-size: 0.9rem; color: #a5b4fc; }
-      .actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.9rem; margin-top: 0.75rem; }
       button {
+        flex: 1;
         border: none;
-        padding: 0.95rem 1.1rem;
         border-radius: 999px;
+        padding: 0.95rem 1rem;
+        font-size: 1rem;
         font-weight: 600;
         cursor: pointer;
-        font-size: 1rem;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
       }
-      .primary { background: var(--ea-glow); color: #0b1120; }
-      .secondary { background: rgba(148,163,184,0.18); color: #cbd5f5; }
-      .help { margin-top: 1.25rem; font-size: 0.85rem; color: #94a3b8; line-height: 1.5; }
+      button:hover { transform: translateY(-1px); }
+      .primary {
+        background: var(--primary);
+        color: #050816;
+        box-shadow: 0 15px 35px rgba(124,58,237,0.35);
+      }
+      .secondary {
+        background: rgba(148,163,184,0.12);
+        color: #e2e8f0;
+      }
+      .help {
+        margin-top: auto;
+        font-size: 0.85rem;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      @media (max-width: 900px) {
+        .shell { grid-template-columns: 1fr; min-height: unset; }
+        .panel.info { border-right: none; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .help { margin-top: 1.5rem; }
+      }
     </style>
   </head>
   <body>
-    <div class="glass">
-      <div class="header">
-        <div class="logo">EA</div>
-        <div class="badge" style="display:inline-flex;align-items:center;padding:0.35rem 0.9rem;border-radius:999px;background:rgba(99,102,241,0.15);color:#c7d2fe;letter-spacing:0.08em;font-size:0.75rem;text-transform:uppercase;">VTOP secure authorization</div>
+    <div class="shell">
+      <section class="panel info">
+        <span class="eyebrow">VTOP secure authorization</span>
         <h1>Authorize ${appName}</h1>
         <p class="summary">
-          ${appName} is requesting permission to run VTOP tools via the Everything Assistant proxy.
-          We never share your raw credentials with the client—everything stays encrypted inside the proxy session.
+          Grant this client secure access to Everything Assistant&apos;s VTOP proxy. We encrypt your credentials locally and only store the cipher inside this OAuth session.
         </p>
-      </div>
-      <form method="post" action="/oauth/consent">
-        <input type="hidden" name="consent_token" value="${consentId}" />
-        <label for="username">VTOP Username</label>
-        <input id="username" name="username" type="text" autocomplete="username" required placeholder="e.g. 22BCE0000" />
-        <label for="password">VTOP Password</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Enter your password" />
-        <div class="actions">
-          <button type="submit" class="primary">Authorize & Continue</button>
-          <button type="submit" name="cancel" value="true" class="secondary">Cancel</button>
+        <div class="pill-stack">
+          <div class="pill">Scope · ${escapeHtml(scopeList)}</div>
+          <div class="pill">Callback · ${escapeHtml(redirectHost || 'custom')}</div>
         </div>
-      </form>
-      <div class="scopes">
-        <h3>Requested scope</h3>
-        <p>${escapeHtml(scopeList)}</p>
-        <p style="margin-top:0.6rem; color:#94a3b8;">Callback: ${escapeHtml(redirectHost || 'unknown')}</p>
-      </div>
-      <p class="help">
-        Credentials are encrypted with a session key and bound to this OAuth token only. Revoke access anytime from your MCP client or settings → VTOP integration.
-      </p>
+        <div class="scope-card">
+          <strong style="color:#e2e8f0;">This client can:</strong>
+          <ul>
+            <li>Run VTOP-safe commands through Everything Assistant</li>
+            <li>Download attendance, grades, timetable & materials</li>
+            <li>Display the results directly in your MCP UI</li>
+          </ul>
+        </div>
+      </section>
+      <section class="panel">
+        <form method="post" action="/oauth/consent">
+          <input type="hidden" name="consent_token" value="${consentId}" />
+          <label for="username">VTOP username
+            <input id="username" name="username" type="text" autocomplete="username" required placeholder="e.g. 23BCE0000" />
+          </label>
+          <label for="password">VTOP password
+            <input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Enter your password" />
+          </label>
+          <div class="actions">
+            <button type="submit" class="primary">Authorize & Continue</button>
+            <button type="submit" name="cancel" value="true" class="secondary">Cancel</button>
+          </div>
+        </form>
+        <p class="help">
+          We generate a one-time session key, encrypt your password on this screen, and only forward the cipher to the proxy. You can revoke access any time from your MCP client or Everything Assistant settings → VTOP integration.
+        </p>
+      </section>
     </div>
   </body>
 </html>`

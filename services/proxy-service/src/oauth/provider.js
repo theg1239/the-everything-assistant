@@ -1,4 +1,4 @@
-const { randomUUID } = require('crypto')
+const { randomUUID, createHmac, timingSafeEqual } = require('crypto')
 const CryptoJS = require('crypto-js')
 const {
   InvalidRequestError,
@@ -60,7 +60,6 @@ function buildRedirectUrl(base, params) {
 class VtopOAuthProvider {
   constructor(options = {}) {
     this.clientsStore = new InMemoryClientsStore(options.staticClients || [])
-    this.pendingConsents = new Map()
     this.codes = new Map()
     this.tokens = new Map()
     this.refreshTokens = new Map()
@@ -72,15 +71,15 @@ class VtopOAuthProvider {
     this.codeTtlMs = (options.codeTtlSeconds || 300) * 1000
     this.consentTtlMs = (options.consentTtlSeconds || 300) * 1000
     this.strictResource = options.strictResource !== false
+    this.consentSecret =
+      options.consentSecret ||
+      process.env.MCP_OAUTH_CONSENT_SECRET ||
+      process.env.SESSION_SECRET ||
+      'everything-assistant-consent-secret'
   }
 
   cleanupExpiredEntries() {
     const now = Date.now()
-    for (const [id, data] of this.pendingConsents.entries()) {
-      if (data.expiresAt <= now) {
-        this.pendingConsents.delete(id)
-      }
-    }
     for (const [code, data] of this.codes.entries()) {
       if (data.expiresAt <= now) {
         this.codes.delete(code)
@@ -98,20 +97,56 @@ class VtopOAuthProvider {
     }
   }
 
-  createConsentSession(client, params) {
-    const consentId = randomUUID()
-    this.pendingConsents.set(consentId, {
+  createConsentPayload(client, params) {
+    return {
       clientId: client.client_id,
-      client,
       state: params.state,
       scopes: params.scopes || [],
       redirectUri: params.redirectUri,
       codeChallenge: params.codeChallenge,
-      resource: params.resource,
-      createdAt: Date.now(),
-      expiresAt: Date.now() + this.consentTtlMs,
-    })
-    return consentId
+      resource: params.resource ? params.resource.href : undefined,
+      issuedAt: Date.now(),
+      nonce: randomUUID(),
+    }
+  }
+
+  encodeConsentToken(payload) {
+    const serialized = JSON.stringify(payload)
+    const body = Buffer.from(serialized).toString('base64url')
+    const signature = createHmac('sha256', this.consentSecret).update(body).digest('base64url')
+    return `${body}.${signature}`
+  }
+
+  decodeConsentToken(token) {
+    if (!token || typeof token !== 'string') {
+      throw new InvalidRequestError('Missing consent token')
+    }
+
+    const [body, signature] = token.split('.')
+    if (!body || !signature) {
+      throw new InvalidRequestError('Invalid consent token format')
+    }
+
+    const expectedSignature = createHmac('sha256', this.consentSecret).update(body).digest('base64url')
+    const provided = Buffer.from(signature, 'base64url')
+    const expected = Buffer.from(expectedSignature, 'base64url')
+    if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+      throw new InvalidRequestError('Invalid consent token signature')
+    }
+
+    let payload
+    try {
+      const json = Buffer.from(body, 'base64url').toString('utf8')
+      payload = JSON.parse(json)
+    } catch (error) {
+      throw new InvalidRequestError('Malformed consent payload')
+    }
+
+    if (!payload?.issuedAt || payload.issuedAt + this.consentTtlMs < Date.now()) {
+      throw new InvalidRequestError('Consent session expired or invalid')
+    }
+
+    return payload
   }
 
   renderConsentPage({ consentId, client, params }) {
@@ -132,40 +167,111 @@ class VtopOAuthProvider {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Authorize ${appName}</title>
     <style>
-      body { font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 0; }
-      .container { max-width: 480px; margin: 4rem auto; background: rgba(15, 23, 42, 0.9); border-radius: 24px; padding: 2.5rem; box-shadow: 0 25px 65px rgba(15,23,42,0.7); border: 1px solid rgba(148,163,184,0.2); }
-      .badge { display: inline-flex; align-items: center; padding: 0.4rem 0.9rem; border-radius: 999px; font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; background: rgba(96,165,250,0.15); color: #93c5fd; }
-      h1 { margin-top: 1.5rem; font-size: 1.9rem; }
-      .summary { margin-top: 0.5rem; color: #cbd5f5; line-height: 1.6; }
-      form { margin-top: 2rem; display: flex; flex-direction: column; gap: 1.25rem; }
-      label { font-size: 0.9rem; color: #c7d2fe; }
-      input { width: 100%; padding: 0.85rem 1rem; border-radius: 12px; border: 1px solid rgba(99,102,241,0.3); background: rgba(15,23,42,0.75); color: #f8fafc; font-size: 1rem; }
-      input:focus { outline: none; border-color: #60a5fa; box-shadow: 0 0 0 2px rgba(96,165,250,0.35); }
-      .actions { display: flex; gap: 0.75rem; margin-top: 0.5rem; flex-wrap: wrap; }
-      button { flex: 1; padding: 0.95rem 1rem; font-weight: 600; border-radius: 14px; border: none; cursor: pointer; font-size: 1rem; }
-      .primary { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; }
-      .secondary { background: rgba(148,163,184,0.15); color: #cbd5f5; }
-      .help { margin-top: 1.5rem; font-size: 0.85rem; color: #94a3b8; line-height: 1.4; }
-      .scopes { margin-top: 1.5rem; padding: 1rem; border-radius: 16px; background: rgba(15,23,42,0.7); border: 1px solid rgba(148,163,184,0.2); }
-      .scopes h3 { margin: 0 0 0.35rem 0; font-size: 0.95rem; color: #cbd5f5; }
-      .scopes p { margin: 0; font-size: 0.85rem; color: #a5b4fc; }
+      :root {
+        color-scheme: dark;
+        --ea-surface: #050818;
+        --ea-panel: rgba(9, 12, 26, 0.85);
+        --ea-glow: linear-gradient(135deg, #6366f1 0%, #8b5cf6 40%, #ec4899 100%);
+      }
+      * { box-sizing: border-box; }
+      body {
+        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        margin: 0;
+        min-height: 100vh;
+        background: radial-gradient(circle at top, rgba(99,102,241,0.35), transparent 45%), var(--ea-surface);
+        color: #f8fafc;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+      }
+      .glass {
+        width: min(480px, 100%);
+        border-radius: 32px;
+        padding: 2.75rem;
+        background: var(--ea-panel);
+        border: 1px solid rgba(99,102,241,0.25);
+        box-shadow: 0 25px 70px rgba(5,8,24,0.8);
+        position: relative;
+        overflow: hidden;
+      }
+      .glass::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(circle at 20% -10%, rgba(99,102,241,0.5), transparent 55%);
+        opacity: 0.8;
+        pointer-events: none;
+      }
+      .header { position: relative; z-index: 1; }
+      .logo {
+        width: 54px;
+        height: 54px;
+        border-radius: 16px;
+        background: var(--ea-glow);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #0b1120;
+        margin-bottom: 1rem;
+      }
+      h1 { margin: 0; font-size: 2rem; }
+      .summary { margin-top: 0.75rem; color: #cbd5f5; line-height: 1.7; }
+      form { margin-top: 2.25rem; display: flex; flex-direction: column; gap: 1.35rem; position: relative; z-index: 1; }
+      label { font-size: 0.95rem; color: #c7d2fe; text-transform: uppercase; letter-spacing: 0.08em; }
+      input {
+        width: 100%;
+        padding: 0.95rem 1.1rem;
+        border-radius: 16px;
+        border: 1px solid rgba(99,102,241,0.4);
+        background: rgba(5,8,24,0.8);
+        color: #f8fafc;
+        font-size: 1rem;
+        transition: border 0.2s ease, box-shadow 0.2s ease;
+      }
+      input:focus {
+        outline: none;
+        border-color: #818cf8;
+        box-shadow: 0 0 0 2px rgba(129,140,248,0.3);
+      }
+      .scopes {
+        margin-top: 1.5rem;
+        padding: 1.25rem;
+        border-radius: 22px;
+        background: rgba(12,16,35,0.85);
+        border: 1px solid rgba(148,163,184,0.35);
+      }
+      .scopes h3 { margin: 0 0 0.4rem 0; font-size: 0.95rem; color: #cbd5f5; }
+      .scopes p { margin: 0; font-size: 0.9rem; color: #a5b4fc; }
+      .actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.9rem; margin-top: 0.75rem; }
+      button {
+        border: none;
+        padding: 0.95rem 1.1rem;
+        border-radius: 999px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 1rem;
+      }
+      .primary { background: var(--ea-glow); color: #0b1120; }
+      .secondary { background: rgba(148,163,184,0.18); color: #cbd5f5; }
+      .help { margin-top: 1.25rem; font-size: 0.85rem; color: #94a3b8; line-height: 1.5; }
     </style>
   </head>
   <body>
-    <div class="container">
-      <div class="badge">VTOP secure authorization</div>
-      <h1>Authorize ${appName}</h1>
-      <p class="summary">
-        ${appName} is requesting permission to run VTOP tools via the Everything Assistant proxy.
-        Your credentials stay encrypted here and are never shared with the client.
-      </p>
-      <div class="scopes">
-        <h3>Requested scope</h3>
-        <p>${escapeHtml(scopeList)}</p>
-        <p style="margin-top:0.6rem; color:#94a3b8;">Callback: ${escapeHtml(redirectHost || 'unknown')}</p>
+    <div class="glass">
+      <div class="header">
+        <div class="logo">EA</div>
+        <div class="badge" style="display:inline-flex;align-items:center;padding:0.35rem 0.9rem;border-radius:999px;background:rgba(99,102,241,0.15);color:#c7d2fe;letter-spacing:0.08em;font-size:0.75rem;text-transform:uppercase;">VTOP secure authorization</div>
+        <h1>Authorize ${appName}</h1>
+        <p class="summary">
+          ${appName} is requesting permission to run VTOP tools via the Everything Assistant proxy.
+          We never share your raw credentials with the client—everything stays encrypted inside the proxy session.
+        </p>
       </div>
       <form method="post" action="/oauth/consent">
-        <input type="hidden" name="consent_id" value="${consentId}" />
+        <input type="hidden" name="consent_token" value="${consentId}" />
         <label for="username">VTOP Username</label>
         <input id="username" name="username" type="text" autocomplete="username" required placeholder="e.g. 22BCE0000" />
         <label for="password">VTOP Password</label>
@@ -175,9 +281,13 @@ class VtopOAuthProvider {
           <button type="submit" name="cancel" value="true" class="secondary">Cancel</button>
         </div>
       </form>
+      <div class="scopes">
+        <h3>Requested scope</h3>
+        <p>${escapeHtml(scopeList)}</p>
+        <p style="margin-top:0.6rem; color:#94a3b8;">Callback: ${escapeHtml(redirectHost || 'unknown')}</p>
+      </div>
       <p class="help">
-        We AES-encrypt your password per session key and only store the encrypted blob tied to this OAuth token.
-        You can revoke access anytime by unlinking credentials in your MCP client.
+        Credentials are encrypted with a session key and bound to this OAuth token only. Revoke access anytime from your MCP client or settings → VTOP integration.
       </p>
     </div>
   </body>
@@ -186,23 +296,20 @@ class VtopOAuthProvider {
 
   async authorize(client, params, res) {
     this.cleanupExpiredEntries()
-    const consentId = this.createConsentSession(client, params)
-    res.status(200).send(this.renderConsentPage({ consentId, client, params }))
+    const payload = this.createConsentPayload(client, params)
+    const consentToken = this.encodeConsentToken(payload)
+    res.status(200).send(this.renderConsentPage({ consentId: consentToken, client, params }))
   }
 
   async handleConsentSubmission(payload) {
     this.cleanupExpiredEntries()
-    const consentId = payload?.consent_id
-    if (!consentId) {
-      throw new InvalidRequestError('Missing consent identifier')
-    }
+    const token = payload?.consent_token || payload?.consent_id
+    const consent = this.decodeConsentToken(token)
 
-    const consent = this.pendingConsents.get(consentId)
-    if (!consent) {
-      throw new InvalidRequestError('Consent session expired or invalid')
+    const client = await this.clientsStore.getClient(consent.clientId)
+    if (!client) {
+      throw new InvalidRequestError('Client no longer registered')
     }
-
-    this.pendingConsents.delete(consentId)
 
     if (payload?.cancel) {
       const error = new AccessDeniedError('User cancelled authorization')
@@ -224,6 +331,7 @@ class VtopOAuthProvider {
 
     const sessionKey = CryptoJS.lib.WordArray.random(256 / 8).toString()
     const encryptedPassword = CryptoJS.AES.encrypt(password, sessionKey).toString()
+    const resourceUrl = consent.resource ? new URL(consent.resource) : undefined
 
     const code = randomUUID()
     this.codes.set(code, {
@@ -231,7 +339,7 @@ class VtopOAuthProvider {
       scopes: consent.scopes,
       codeChallenge: consent.codeChallenge,
       redirectUri: consent.redirectUri,
-      resource: consent.resource,
+      resource: resourceUrl,
       state: consent.state,
       credentials: {
         username,
@@ -266,7 +374,8 @@ class VtopOAuthProvider {
     if (!requested) {
       throw new InvalidGrantError('Resource indicator required for this server')
     }
-    if (requested.href !== stored.href) {
+    const storedUrl = typeof stored === 'string' ? new URL(stored) : stored
+    if (requested.href !== storedUrl.href) {
       throw new InvalidGrantError('Mismatched resource indicator')
     }
   }
@@ -275,11 +384,16 @@ class VtopOAuthProvider {
     const accessToken = randomUUID()
     const refreshToken = randomUUID()
     const now = Date.now()
+    const normalizedResource = resource
+      ? typeof resource === 'string'
+        ? new URL(resource)
+        : resource
+      : undefined
 
     const tokenPayload = {
       clientId,
       scopes,
-      resource,
+      resource: normalizedResource,
       credentials,
       expiresAt: now + this.accessTokenTtlMs,
     }
@@ -288,7 +402,7 @@ class VtopOAuthProvider {
     this.refreshTokens.set(refreshToken, {
       clientId,
       scopes,
-      resource,
+      resource: normalizedResource,
       credentials,
       expiresAt: now + this.refreshTokenTtlMs,
     })

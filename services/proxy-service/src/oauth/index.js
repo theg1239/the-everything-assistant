@@ -105,7 +105,7 @@ function setupMcpOAuth(app) {
   })
 
   app.use('/oauth', oauthRouter)
-
+  app.use('/oauth', mcpAuthRouter(sharedOptions))
   app.use('/', mcpAuthRouter(sharedOptions))
 
   app.use(

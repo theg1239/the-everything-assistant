@@ -11,30 +11,11 @@ type RawExamRow = {
   seatNo?: string
   slot?: string
   title?: string
+  extra?: RawExamRow | null
 }
 
-function normalizeExamRow(row: any[]): RawExamRow {
-  const [
-    code,
-    title,
-    slot,
-    examDate,
-    examTime,
-    venue,
-    seat,
-    seatNo,
-    daysLeft,
-    ...rest
-  ] = row
-
-  // handle CLI that nests multiple tables (e.g., lab + theory) into a single row chunk
-  if (rest && rest.length >= 8 && !seatNo) {
-    const secondary = normalizeExamRow(rest)
-    return [primaryExam(code, title, slot, examDate, examTime, venue, seat, seatNo, daysLeft), secondary]
-  }
-
-  return primaryExam(code, title, slot, examDate, examTime, venue, seat, seatNo, daysLeft)
-}
+const clean = (value?: string) =>
+  value && value.trim().length > 0 ? value.trim() : undefined
 
 function primaryExam(
   code?: string,
@@ -46,18 +27,32 @@ function primaryExam(
   seat?: string,
   seatNo?: string,
   daysLeft?: string
-) {
+): RawExamRow {
   return {
-    code,
-    title,
-    slot,
-    examDate,
-    examTime,
-    venue,
-    seat,
-    seatNo,
-    daysLeft,
+    code: clean(code),
+    title: clean(title),
+    slot: clean(slot),
+    examDate: clean(examDate),
+    examTime: clean(examTime),
+    venue: clean(venue),
+    seat: clean(seat),
+    seatNo: clean(seatNo),
+    daysLeft: clean(daysLeft),
   }
+}
+
+function normalizeExamRow(row: any[] = []): RawExamRow | null {
+  if (!row.length) return null
+  const [code, title, slot, examDate, examTime, venue, seat, seatNo, daysLeft, ...rest] = row
+  const payload = primaryExam(code, title, slot, examDate, examTime, venue, seat, seatNo, daysLeft)
+  if (rest && rest.length >= 6) {
+    const extra = primaryExam(...(rest as any[]))
+    if (extra && (extra.title || extra.code)) {
+      payload.extra = extra
+    }
+  }
+  if (!payload.title && !payload.code) return payload.extra || null
+  return payload
 }
 
 export function parseExams(raw: any) {
@@ -70,12 +65,12 @@ export function parseExams(raw: any) {
     const exams: RawExamRow[] = []
     table.rows.forEach(row => {
       const normalized = normalizeExamRow(row)
-      if (Array.isArray(normalized)) {
-        normalized.forEach(item => {
-          if (item?.title || item?.code) exams.push(item)
-        })
-      } else if (normalized?.title || normalized?.code) {
+      if (!normalized) return
+      if (normalized.title || normalized.code) {
         exams.push(normalized)
+      }
+      if (normalized.extra && (normalized.extra.title || normalized.extra.code)) {
+        exams.push(normalized.extra)
       }
     })
     return {

@@ -24,6 +24,19 @@ npm run dev
 
 ## API Endpoints
 
+### MCP OAuth (new)
+
+All MCP transports (`/mcp` + `/mcp/messages`) now require OAuth 2.0 with PKCE. The proxy exposes an authorization server under `/oauth` so MCP-native clients can discover metadata, register dynamically, and run the standard `authorization_code` + `refresh_token` grants.
+
+- **Discovery**: `https://<host>/.well-known/oauth-authorization-server` and `https://<host>/.well-known/oauth-protected-resource/mcp` advertise issuer + resource metadata.
+- **Authorization endpoint**: `https://<host>/oauth/authorize` hosts the consent/login UI. The page encrypts the VTOP password per session key and stores only the cipher alongside the token context.
+- **Token endpoint**: `https://<host>/oauth/token` exchanges the code (with PKCE) for access + refresh tokens.
+- **Consent handler**: the login form posts to `/oauth/consent`. You usually hit it indirectly via the authorize page, but it is helpful to know when debugging.
+
+Because the OAuth token now carries the encrypted VTOP credential blob, MCP clients should **not** send `password`/`encryptedPassword` inside tool arguments anymore—only the command + flags are required. The proxy injects the linked credentials from the bearer token before invoking the CLI workflow.
+
+> 🔧 **Local debugging**: set `MCP_OAUTH_ENABLED=false` in `.env` to fall back to the legacy “inline credentials” behavior. Keep OAuth enabled everywhere else so credentials never appear in tool payloads.
+
 ### POST /vtop
 
 Execute a VTOP CLI command.
@@ -66,7 +79,7 @@ Submit the user’s selection for an existing workflow session. Send `{ sessionD
 
 ### POST /mcp
 
-Streamable MCP endpoint that exposes every capability (including the interactive tools) to MCP clients. Each MCP request envelope should include a `toolCall` describing which capability to run, for example:
+Streamable MCP endpoint that exposes every capability (including the interactive tools) to MCP clients. Include `Authorization: Bearer <ACCESS_TOKEN>` on every request (see the OAuth section above). Each MCP request envelope should include a `toolCall` describing which capability to run, for example:
 
 ```json
 {
@@ -76,8 +89,6 @@ Streamable MCP endpoint that exposes every capability (including the interactive
   "params": {
     "name": "course-page-interactive",
     "arguments": {
-      "username": "24BCE1234",
-      "password": "p@ssw0rd",
       "step": "semester",
       "flags": { "semesterQuery": "current" }
     }
@@ -85,15 +96,17 @@ Streamable MCP endpoint that exposes every capability (including the interactive
 }
 ```
 
-The response mirrors the HTTP payload (structured JSON + session metadata) so the MCP client can render prompts or continue workflows.
+When a valid OAuth token is present you can omit `username`/`password` entirely—the proxy injects the linked credentials before executing the CLI. The response mirrors the HTTP payload (structured JSON + session metadata) so the MCP client can render prompts or continue workflows.
 
 #### Quick MCP sanity check
 
 1. `npm run dev` (or `npm start`) in this folder.
-2. In a separate shell:
+2. Register a client (most IDEs do this automatically) and complete the PKCE flow by visiting `http://localhost:3001/oauth/authorize?...` in a browser. Exchange the returned authorization code against `POST http://localhost:3001/oauth/token` to obtain an `access_token`.
+3. Call `/mcp` with that bearer token:
 
 ```bash
 curl -X POST http://localhost:3001/mcp \
+  -H 'Authorization: Bearer <ACCESS_TOKEN>' \
   -H 'Content-Type: application/json' \
   -d '{
         "jsonrpc": "2.0",
@@ -102,15 +115,13 @@ curl -X POST http://localhost:3001/mcp \
         "params": {
           "name": "course-page-interactive",
           "arguments": {
-            "username": "VTOP_ID",
-            "password": "VTOP_PASS",
             "step": "semester"
           }
         }
       }'
 ```
 
-3. Paste the returned `sessionData` + `options` into your client UI. To advance from step `semester` with choice `2`, call `course-page-interactive-continue` and pass `{ sessionData, selection: "2", step: "semester" }`.
+4. Paste the returned `sessionData` + `options` into your client UI. To advance from step `semester` with choice `2`, call `course-page-interactive-continue` and pass `{ sessionData, selection: "2", step: "semester" }` using the **same** bearer token.
 
 Or run the helper script:
 
@@ -118,7 +129,7 @@ Or run the helper script:
 VTOP_USERNAME=... VTOP_PASSWORD=... npm run demo:mcp
 ```
 
-It will issue the first MCP request, print the options, and automatically continue with the first selection so you can see the entire JSON envelope.
+It will issue the first MCP request, print the options, and automatically continue with the first selection so you can see the entire JSON envelope. (The demo bypasses OAuth—use it only for local smoke tests.)
 
 ### MCP transports (Streamable HTTP + SSE fallback)
 

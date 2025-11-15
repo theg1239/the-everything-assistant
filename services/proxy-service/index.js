@@ -20,6 +20,7 @@ const { normalizeResultPayload } = require('./src/utils/shape')
 const { normalizeFlagsForCommand } = require('./src/utils/flags')
 const { resolvePassword } = require('./src/utils/credentials')
 const { handleMcpRequest, handleSseMessagePost } = require('./src/mcp/server')
+const { setupMcpOAuth } = require('./src/oauth')
 const {
   executeInteractiveCoursePageWorkflow,
   getNextStep,
@@ -102,6 +103,8 @@ app.use((req, res, next) => {
   console.log(`[${timestamp}] ${req.method} ${req.path} - ${req.ip}`)
   next()
 })
+
+const oauthSetup = setupMcpOAuth(app)
 
 const SUPPORTED_COMMANDS = capabilityManifest().map(capability => capability.command)
 
@@ -371,7 +374,9 @@ app.get('/commands', (req, res) => {
   })
 })
 
-app.all('/mcp', async (req, res) => {
+const protectMcp = oauthSetup?.authMiddleware ? [oauthSetup.authMiddleware] : []
+
+app.all('/mcp', ...protectMcp, async (req, res) => {
   try {
     await handleMcpRequest(req, res)
   } catch (error) {
@@ -382,7 +387,7 @@ app.all('/mcp', async (req, res) => {
   }
 })
 
-app.post('/mcp/messages', async (req, res) => {
+app.post('/mcp/messages', ...protectMcp, async (req, res) => {
   try {
     await handleSseMessagePost(req, res)
   } catch (error) {

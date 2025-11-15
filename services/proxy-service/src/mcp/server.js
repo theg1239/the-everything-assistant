@@ -22,6 +22,43 @@ function coerceFlags(flags) {
   return {}
 }
 
+function normalizeEncryptedPayload(encryptedPassword, sessionKey) {
+  if (typeof encryptedPassword === 'string' && encryptedPassword.includes(':::')) {
+    const [enc, embeddedKey] = encryptedPassword.split(':::')
+    return {
+      encryptedPassword: enc,
+      sessionKey: sessionKey || embeddedKey,
+    }
+  }
+  return { encryptedPassword, sessionKey }
+}
+
+function resolveCredentialBundle(input, extra, fallbackUsername) {
+  const authCredentials = extra?.authInfo?.credentials
+  let username = input.username || fallbackUsername || authCredentials?.username
+  let { password } = input
+  let { encryptedPassword, sessionKey } = normalizeEncryptedPayload(input.encryptedPassword, input.sessionKey)
+
+  if (!password && (!encryptedPassword || !sessionKey) && authCredentials) {
+    ;({ encryptedPassword, sessionKey } = normalizeEncryptedPayload(
+      authCredentials.encryptedPassword,
+      authCredentials.sessionKey
+    ))
+  }
+
+  if (!username) {
+    throw new Error('username required: supply one in the request or link credentials via OAuth')
+  }
+
+  if (!password && !(encryptedPassword && sessionKey)) {
+    throw new Error(
+      'Missing credentials: provide password or encryptedPassword + sessionKey, or complete the OAuth credential linking flow.'
+    )
+  }
+
+  return { username, password, encryptedPassword, sessionKey }
+}
+
 function createServer() {
   const instance = new McpServer({
     name: 'vtop-mcp',
@@ -50,17 +87,14 @@ function registerTools(targetServer) {
     }, z.record(z.any()))
 
   const baseFields = {
-    username: z.string().min(1, 'username required'),
+    username: z.string().min(1, 'username required').optional(),
     password: z.string().optional(),
     encryptedPassword: z.string().optional(),
     sessionKey: z.string().optional(),
     flags: flagsSchema.optional(),
   }
 
-  const ensurePassword = data => Boolean(data.password || (data.encryptedPassword && data.sessionKey))
-
-  const baseObjectSchema = z.object(baseFields)
-  const baseInputSchema = baseObjectSchema.refine(ensurePassword, 'Provide password or encryptedPassword + sessionKey')
+  const baseInputSchema = z.object(baseFields)
 
   manifest.forEach(capability => {
     targetServer.registerTool(
@@ -70,11 +104,16 @@ function registerTools(targetServer) {
         description: capability.description || `Execute ${capability.command} via VTOP proxy`,
         inputSchema: baseInputSchema,
       },
-      async ({ username, password, encryptedPassword, sessionKey, flags }) => {
-        const finalPassword = resolvePassword({ password, encryptedPassword, sessionKey })
+      async ({ username, password, encryptedPassword, sessionKey, flags }, extra) => {
+        const credentials = resolveCredentialBundle({ username, password, encryptedPassword, sessionKey }, extra)
+        const finalPassword = resolvePassword({
+          password: credentials.password,
+          encryptedPassword: credentials.encryptedPassword,
+          sessionKey: credentials.sessionKey,
+        })
         const normalizedFlagsInput = coerceFlags(flags)
         const { sanitizedFlags } = normalizeFlagsForCommand(capability.command, normalizedFlagsInput)
-        const result = await runCommand(username, finalPassword, capability.command, sanitizedFlags)
+        const result = await runCommand(credentials.username, finalPassword, capability.command, sanitizedFlags)
         const shaped = normalizeResultPayload(result, capability.command, sanitizedFlags)
 
         if (!shaped.success) {
@@ -89,17 +128,16 @@ function registerTools(targetServer) {
     )
   })
 
-  registerInteractiveTools(targetServer, baseObjectSchema, ensurePassword)
+  registerInteractiveTools(targetServer, baseObjectSchema)
 }
 
-function registerInteractiveTools(targetServer, baseSchema, ensurePassword) {
+function registerInteractiveTools(targetServer, baseSchema) {
   const workflowSteps = ['semester', 'course', 'faculty', 'materials', 'download']
   const interactiveInput = baseSchema
     .extend({
       step: z.enum(workflowSteps).optional(),
       sessionData: z.string().optional(),
     })
-    .refine(ensurePassword, 'Provide password or encryptedPassword + sessionKey')
 
   const continueInput = z
     .object({
@@ -110,7 +148,6 @@ function registerInteractiveTools(targetServer, baseSchema, ensurePassword) {
       encryptedPassword: z.string().optional(),
       sessionKey: z.string().optional(),
     })
-    .refine(ensurePassword, 'Provide password or encryptedPassword + sessionKey')
 
   targetServer.registerTool(
     'course-page-interactive',
@@ -119,20 +156,28 @@ function registerInteractiveTools(targetServer, baseSchema, ensurePassword) {
       description: 'Run the multi-step course materials workflow with automatic prompts.',
       inputSchema: interactiveInput,
     },
-    async ({
-      username,
-      password,
-      encryptedPassword,
-      sessionKey,
-      step = 'semester',
-      flags,
-      sessionData,
-    }) => {
-      const finalPassword = resolvePassword({ password, encryptedPassword, sessionKey })
+    async (
+      {
+        username,
+        password,
+        encryptedPassword,
+        sessionKey,
+        step = 'semester',
+        flags,
+        sessionData,
+      },
+      extra
+    ) => {
+      const credentials = resolveCredentialBundle({ username, password, encryptedPassword, sessionKey }, extra)
+      const finalPassword = resolvePassword({
+        password: credentials.password,
+        encryptedPassword: credentials.encryptedPassword,
+        sessionKey: credentials.sessionKey,
+      })
       const normalizedFlagsInput = coerceFlags(flags)
       const { sanitizedFlags } = normalizeFlagsForCommand('course-page', normalizedFlagsInput)
       const result = await executeInteractiveCoursePageWorkflow(
-        username,
+        credentials.username,
         finalPassword,
         step,
         sanitizedFlags,
@@ -153,7 +198,7 @@ function registerInteractiveTools(targetServer, baseSchema, ensurePassword) {
       description: 'Advance the interactive workflow after the user selects an option.',
       inputSchema: continueInput,
     },
-    async ({ sessionData, selection, step, password, encryptedPassword, sessionKey }) => {
+    async ({ sessionData, selection, step, password, encryptedPassword, sessionKey }, extra) => {
       let parsedSession
       try {
         parsedSession = JSON.parse(sessionData)
@@ -165,7 +210,16 @@ function registerInteractiveTools(targetServer, baseSchema, ensurePassword) {
         throw new Error('Session missing username')
       }
 
-      const finalPassword = resolvePassword({ password, encryptedPassword, sessionKey })
+      const credentials = resolveCredentialBundle(
+        { password, encryptedPassword, sessionKey },
+        extra,
+        parsedSession.username
+      )
+      const finalPassword = resolvePassword({
+        password: credentials.password,
+        encryptedPassword: credentials.encryptedPassword,
+        sessionKey: credentials.sessionKey,
+      })
       const updatedFlags = { ...(parsedSession.flags || {}) }
       let nextStep = getNextStep(step)
 
@@ -181,7 +235,7 @@ function registerInteractiveTools(targetServer, baseSchema, ensurePassword) {
       }
 
       const result = await executeInteractiveCoursePageWorkflow(
-        parsedSession.username,
+        credentials.username || parsedSession.username,
         finalPassword,
         nextStep,
         updatedFlags,

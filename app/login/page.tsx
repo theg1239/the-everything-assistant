@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { LoginForm } from '@/components/login-form'
+import { LoginFloatingBackground } from '@/components/login-floating-background'
 
 export default async function LoginPage() {
   const session = await getServerSession(authOptions)
@@ -11,8 +12,8 @@ export default async function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-transparent flex items-center justify-center p-4">
+    <LoginFloatingBackground>
       <LoginForm />
-    </div>
+    </LoginFloatingBackground>
   )
 }

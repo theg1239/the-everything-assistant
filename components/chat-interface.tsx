@@ -431,15 +431,28 @@ function PureChatInterfaceComponent({
       return new DefaultChatTransport<AppUIMessage>({
         api: '/api/chat',
         credentials: 'same-origin',
-        prepareSendMessagesRequest: ({ messages: outgoingMessages, body, ...rest }) => ({
-          ...rest,
-          body: {
-            ...(body || {}),
-            messages: outgoingMessages,
-            id: resolvedChatId,
-            ...(selectedTool ? { preferredTool: selectedTool } : {}),
-          },
-        }),
+        prepareSendMessagesRequest: ({ messages: outgoingMessages, body, ...rest }) => {
+          const messagesWithMetadata =
+            selectedTool && outgoingMessages.length > 0
+              ? outgoingMessages.map((msg, index, array) =>
+                  index === array.length - 1
+                    ? {
+                        ...msg,
+                        metadata: { ...(msg.metadata || {}), preferredTool: selectedTool },
+                      }
+                    : msg
+                )
+              : outgoingMessages
+          return {
+            ...rest,
+            body: {
+              ...(body || {}),
+              messages: messagesWithMetadata,
+              id: resolvedChatId,
+              ...(selectedTool ? { preferredTool: selectedTool } : {}),
+            },
+          }
+        },
       })
     }, [resolvedChatId, selectedTool])
 

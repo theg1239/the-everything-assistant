@@ -293,6 +293,12 @@ export async function POST(req: Request) {
     const { id: requestedChatId, directToolCall, preferredTool } = payload
     const uiMessages: AppUIMessage[] = Array.isArray(payload?.messages) ? payload.messages : []
     const messages: any[] = uiMessagesToLegacyMessages(uiMessages)
+    const metadataPreferredTool =
+      uiMessages.length > 0
+        ? ((uiMessages[uiMessages.length - 1]?.metadata || {}) as Record<string, any>)
+            ?.preferredTool
+        : undefined
+    const effectivePreferredTool = preferredTool || metadataPreferredTool
 
     const normalizedChatId =
       typeof requestedChatId === 'string' && requestedChatId.trim().length > 0
@@ -478,33 +484,30 @@ ${memories
     }
 
     const baseTools = createVITTools(session.user.id)
-    const prefersWebSearch = preferredTool === 'web-search'
+    const prefersWebSearch = effectivePreferredTool === 'web-search'
     let tools: Record<string, any> = baseTools
 
     if (prefersWebSearch) {
       try {
-        const googleSearchTool = await rateLimitedAI.google.tools.google_search()
-        if (googleSearchTool) {
-          tools = { google_search: googleSearchTool }
-        }
+        const googleSearchTool = rateLimitedAI.google.tools.google_search()
+        tools = googleSearchTool ? { google_search: googleSearchTool } : {}
       } catch (error) {
         console.error('Failed to initialize Google Search tool:', error)
-        tools = baseTools
+        tools = {}
       }
     }
 
-    const toolPreferenceGuidance = preferredTool
+    const toolPreferenceGuidance = !prefersWebSearch && effectivePreferredTool
       ? `
 
-IMPORTANT: The user has specifically selected the "${preferredTool}" tool. When responding to their query, you should prioritize using this tool if it's relevant to their question. Available tools and their purposes:
+IMPORTANT: The user has specifically selected the "${effectivePreferredTool}" tool. When responding to their query, you should prioritize using this tool if it's relevant to their question. Available tools and their purposes:
 
 - reddit-search: Use searchRedditKnowledge or searchRedditWithContext for student discussions and academic advice
 - vtop-query: Use queryVTOP for personal VTOP data like grades, attendance, timetable  
 - past-papers: Use findPastPapers for examination papers and course materials
 - mess-menu: Use getMessMenu for hostel dining information
-- web-search: Use google_search for up-to-date answers from the public web
 
-If the user's query is relevant to the selected tool "${preferredTool}", use it even if other tools might also be applicable.`
+If the user's query is relevant to the selected tool "${effectivePreferredTool}", use it even if other tools might also be applicable.`
       : ''
 
     const memoryGuidance =
@@ -512,7 +515,11 @@ If the user's query is relevant to the selected tool "${preferredTool}", use it 
         ? `\n\n<memory_context>\n  <instructions>Use the following information to provide more personalized and relevant responses.</instructions>\n  ${memoryContext}\n</memory_context>`
         : ''
 
-    const combinedSystemPrompt = `${VIT_SYSTEM_PROMPT}  
+    const webSearchPrompt = `You are a VIT assistant that uses the web search tool to gather the latest information before answering. Search when the user asks for facts, current events, or details you are unsure about. Summarize findings in a friendly, trustworthy tone and cite the retrieved information in natural language.`
+
+    const combinedSystemPrompt = prefersWebSearch
+      ? webSearchPrompt
+      : `${VIT_SYSTEM_PROMPT}  
 
 ${toolPreferenceGuidance}${memoryGuidance}
 
@@ -745,7 +752,9 @@ CRITICAL TOOL CONTINUATION RULES:
       modelName = 'gemini-flash-latest'
     }
 
-    let finalMessages: any[] = [{ role: 'system', content: combinedSystemPrompt }]
+    let finalMessages: any[] = prefersWebSearch
+      ? []
+      : [{ role: 'system', content: combinedSystemPrompt }]
     if (!attachmentAware) {
       for (const m of enhancedMessages) {
         if (!m?.content || typeof m.content !== 'string' || m.content.trim().length === 0) {

@@ -61,6 +61,10 @@ const Dither = dynamic(() => import('@/components/backgrounds/dither'), {
   loading: () => null,
 })
 
+const FloatingLines = dynamic(() => import('@/components/backgrounds/floating-lines'), {
+  ssr: false,
+  loading: () => null,
+})
 export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any) {
   const { data: session } = useSession()
   const { setBackgroundType, toggleBackground } = useCustomBackground()
@@ -101,6 +105,19 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       ),
       []
     )
+    const floatingLinesComponent = useMemo(
+      () => (
+        <FloatingLines
+          lineCount={[10, 8, 6]}
+          lineDistance={[6, 5, 4]}
+          animationSpeed={0.45}
+          interactive={false}
+          parallax={false}
+          bendStrength={0}
+        />
+      ),
+      []
+    )
 
     switch (type) {
       case 'aurora':
@@ -118,6 +135,12 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         return (
           <div className="relative w-full h-16 rounded-md overflow-hidden bg-black">
             {beamsComponent}
+          </div>
+        )
+      case 'floating-lines':
+        return (
+          <div className="relative w-full h-16 rounded-md overflow-hidden bg-black">
+            {floatingLinesComponent}
           </div>
         )
       case 'dither':

@@ -65,6 +65,16 @@ const FloatingLines = dynamic(() => import('@/components/backgrounds/floating-li
   ssr: false,
   loading: () => null,
 })
+
+const ColorBands = dynamic(() => import('@/components/backgrounds/color-bands'), {
+  ssr: false,
+  loading: () => null,
+})
+
+const TerminalPreview = dynamic(() => import('@/components/backgrounds/terminal'), {
+  ssr: false,
+  loading: () => null,
+})
 export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any) {
   const { data: session } = useSession()
   const { setBackgroundType, toggleBackground } = useCustomBackground()
@@ -118,6 +128,47 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       ),
       []
     )
+    const colorBandsComponent = useMemo(
+      () => (
+        <ColorBands
+          colors={['#22d3ee', '#3b82f6', '#a855f7', '#f97316']}
+          transparent
+          rotation={28}
+          speed={0.3}
+          autoRotate={10}
+          scale={1.1}
+          frequency={1}
+          warpStrength={1.2}
+          mouseInfluence={0}
+          parallax={0}
+          noise={0.05}
+        />
+      ),
+      []
+    )
+    const terminalComponent = useMemo(
+      () => (
+        <TerminalPreview
+          scale={1}
+          gridMul={[2, 1]}
+          digitSize={1.4}
+          timeScale={0.3}
+          scanlineIntensity={0.25}
+          glitchAmount={0.85}
+          flickerAmount={0.35}
+          noiseAmp={0.45}
+          chromaticAberration={0.001}
+          dither={0.35}
+          curvature={0.1}
+          tint="#2fd4c8"
+          mouseReact={false}
+          brightness={0.9}
+          backgroundColor="#030712"
+          overlayOpacity={0.45}
+        />
+      ),
+      []
+    )
 
     switch (type) {
       case 'aurora':
@@ -157,6 +208,18 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
               enableMouseInteraction={false}
               mouseRadius={1}
             />
+          </div>
+        )
+      case 'color-bands':
+        return (
+          <div className="relative w-full h-16 rounded-md overflow-hidden bg-black">
+            {colorBandsComponent}
+          </div>
+        )
+      case 'terminal':
+        return (
+          <div className="relative w-full h-16 rounded-md overflow-hidden bg-black">
+            {terminalComponent}
           </div>
         )
       case 'gradient':
@@ -1438,6 +1501,16 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
             type: 'floating-lines' as BackgroundType,
             name: 'floating lines',
             description: 'high-energy neon lines with parallax and bend effects',
+          },
+          {
+            type: 'terminal' as BackgroundType,
+            name: 'faulty terminal',
+            description: 'retro CRT matrix with scanlines and glitches',
+          },
+          {
+            type: 'color-bands' as BackgroundType,
+            name: 'color bands',
+            description: 'shimmering ribbon gradients with warp and parallax',
           },
           {
             type: 'gradient' as BackgroundType,

@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import React, { type CSSProperties } from 'react'
 import { Resend } from 'resend'
 import type { DailyBriefingMessage, DailyBriefingAction } from '@/lib/hub/daily-briefing'
 import {

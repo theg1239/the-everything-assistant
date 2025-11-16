@@ -1,6 +1,7 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google' // Google provider
 import { createGroq } from '@ai-sdk/groq' // Groq provider
-import { cerebras, createCerebras } from '@ai-sdk/cerebras' // Cerebras provider
+import { createCerebras } from '@ai-sdk/cerebras' // Cerebras provider
+import { createOpenRouter } from '@openrouter/ai-sdk-provider' // OpenRouter provider
 import { ApiKeyManager, ApiKeyConfig, DEFAULT_API_KEY_CONFIG } from './api-key-manager'
 import { UserRateLimiter, UserRateLimitConfig, loadUserRateLimitConfig } from './user-rate-limiter'
 import {
@@ -14,7 +15,7 @@ import {
 } from 'ai'
 import type { EmbeddingModel } from 'ai'
 
-type Provider = 'google' | 'groq' | 'cerebras'
+type Provider = 'google' | 'groq' | 'cerebras' | 'openrouter'
 
 export class RateLimitedAI {
   private apiKeyManager: ApiKeyManager
@@ -47,45 +48,50 @@ export class RateLimitedAI {
   private loadApiKeysFromEnvironment(): string[] {
     const keys: string[] = []
 
-    if (this.provider === 'google') {
-      if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-        keys.push(process.env.GOOGLE_GENERATIVE_AI_API_KEY)
+    switch (this.provider) {
+      case 'google': {
+        if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+          keys.push(process.env.GOOGLE_GENERATIVE_AI_API_KEY)
+        }
+        for (let i = 2; i <= 10; i++) {
+          const k = process.env[`GOOGLE_GENERATIVE_AI_API_KEY_${i}`]
+          if (k) keys.push(k)
+        }
+        if (keys.length === 0 && process.env.GOOGLE_AI_API_KEYS) {
+          keys.push(
+            ...process.env.GOOGLE_AI_API_KEYS.split(',')
+              .map(x => x.trim())
+              .filter(Boolean)
+          )
+        }
+        if (keys.length === 0) {
+          throw new Error(
+            'No Google AI API keys found. Please set GOOGLE_GENERATIVE_AI_API_KEY or GOOGLE_AI_API_KEYS.'
+          )
+        }
+        break
       }
-      for (let i = 2; i <= 10; i++) {
-        const k = process.env[`GOOGLE_GENERATIVE_AI_API_KEY_${i}`]
-        if (k) keys.push(k)
+      case 'groq': {
+        if (process.env.GROQ_API_KEY) {
+          keys.push(process.env.GROQ_API_KEY)
+        }
+        for (let i = 2; i <= 10; i++) {
+          const k = process.env[`GROQ_API_KEY_${i}`]
+          if (k) keys.push(k)
+        }
+        if (keys.length === 0 && process.env.GROQ_API_KEYS) {
+          keys.push(
+            ...process.env.GROQ_API_KEYS.split(',')
+              .map(x => x.trim())
+              .filter(Boolean)
+          )
+        }
+        if (keys.length === 0) {
+          throw new Error('No Groq API keys found. Please set GROQ_API_KEY or GROQ_API_KEYS.')
+        }
+        break
       }
-      if (keys.length === 0 && process.env.GOOGLE_AI_API_KEYS) {
-        keys.push(
-          ...process.env.GOOGLE_AI_API_KEYS.split(',')
-            .map(x => x.trim())
-            .filter(Boolean)
-        )
-      }
-      if (keys.length === 0) {
-        throw new Error(
-          'No Google AI API keys found. Please set GOOGLE_GENERATIVE_AI_API_KEY or GOOGLE_AI_API_KEYS.'
-        )
-      }
-    } else {
-      if (process.env.GROQ_API_KEY) {
-        keys.push(process.env.GROQ_API_KEY)
-      }
-      for (let i = 2; i <= 10; i++) {
-        const k = process.env[`GROQ_API_KEY_${i}`]
-        if (k) keys.push(k)
-      }
-      if (keys.length === 0 && process.env.GROQ_API_KEYS) {
-        keys.push(
-          ...process.env.GROQ_API_KEYS.split(',')
-            .map(x => x.trim())
-            .filter(Boolean)
-        )
-      }
-      if (keys.length === 0) {
-        throw new Error('No Groq API keys found. Please set GROQ_API_KEY or GROQ_API_KEYS.')
-      }
-      if (this.provider === 'cerebras') {
+      case 'cerebras': {
         if (process.env.CEREBRAS_API_KEY) {
           keys.push(process.env.CEREBRAS_API_KEY)
         }
@@ -105,6 +111,32 @@ export class RateLimitedAI {
             'No Cerebras API keys found. Please set CEREBRAS_API_KEY or CEREBRAS_API_KEYS.'
           )
         }
+        break
+      }
+      case 'openrouter': {
+        if (process.env.OPENROUTER_API_KEY) {
+          keys.push(process.env.OPENROUTER_API_KEY)
+        }
+        for (let i = 2; i <= 10; i++) {
+          const k = process.env[`OPENROUTER_API_KEY_${i}`]
+          if (k) keys.push(k)
+        }
+        if (keys.length === 0 && process.env.OPENROUTER_API_KEYS) {
+          keys.push(
+            ...process.env.OPENROUTER_API_KEYS.split(',')
+              .map(x => x.trim())
+              .filter(Boolean)
+          )
+        }
+        if (keys.length === 0) {
+          throw new Error(
+            'No OpenRouter API keys found. Please set OPENROUTER_API_KEY or OPENROUTER_API_KEYS.'
+          )
+        }
+        break
+      }
+      default: {
+        throw new Error(`Unsupported provider: ${this.provider}`)
       }
     }
 
@@ -118,6 +150,9 @@ export class RateLimitedAI {
     }
     if (this.provider === 'groq') {
       return createGroq({ apiKey })
+    }
+    if (this.provider === 'openrouter') {
+      return createOpenRouter({ apiKey })
     }
     return createCerebras({ apiKey })
   }
@@ -340,6 +375,24 @@ export const rateLimitedAI = {
     getUserConfig: () => getRateLimitedAI('cerebras').getUserConfig(),
     updateUserConfig: (c: any) => getRateLimitedAI('cerebras').updateUserConfig(c),
     getFullStatus: (u?: string) => getRateLimitedAI('cerebras').getFullStatus(u),
+  },
+  openrouter: {
+    model: (n = 'openrouter/sherlock-think-alpha') => getModel('openrouter', n),
+    embedding: (n = 'text-embedding-004') => getEmbeddingModel('google', n),
+    streamText: (o: any, u?: string) => getRateLimitedAI('openrouter').streamText(o, u),
+    generateText: (o: any, u?: string) => getRateLimitedAI('openrouter').generateText(o, u),
+    generateObject: (o: any, u?: string) => getRateLimitedAI('openrouter').generateObject(o, u),
+    embed: (o: any, u?: string) => getRateLimitedAI('openrouter').embed(o, u),
+    getUsageStats: () => getRateLimitedAI('openrouter').getUsageStats(),
+    rotateKey: () => getRateLimitedAI('openrouter').rotateKey(),
+    resetRateLimits: () => getRateLimitedAI('openrouter').resetRateLimits(),
+    updateConfig: (c: Partial<ApiKeyConfig>) => getRateLimitedAI('openrouter').updateConfig(c),
+    getUserUsageStats: (u: string) => getRateLimitedAI('openrouter').getUserUsageStats(u),
+    checkUserRateLimit: (u: string) => getRateLimitedAI('openrouter').checkUserRateLimit(u),
+    resetUserRateLimits: (u: string) => getRateLimitedAI('openrouter').resetUserRateLimits(u),
+    getUserConfig: () => getRateLimitedAI('openrouter').getUserConfig(),
+    updateUserConfig: (c: any) => getRateLimitedAI('openrouter').updateUserConfig(c),
+    getFullStatus: (u?: string) => getRateLimitedAI('openrouter').getFullStatus(u),
   },
 }
 

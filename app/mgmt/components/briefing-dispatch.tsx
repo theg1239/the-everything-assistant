@@ -1,16 +1,26 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
 import { Mail, CalendarClock, Send } from 'lucide-react'
+import { triggerDailyBriefingWorkflowAction } from '@/app/actions/workflows'
 
 export default function BriefingDispatch() {
   const [email, setEmail] = useState('')
   const [userId, setUserId] = useState('')
   const [scheduledAt, setScheduledAt] = useState('')
   const [loading, setLoading] = useState(false)
+  const [workflowDryRun, setWorkflowDryRun] = useState(true)
+  const [workflowStatus, setWorkflowStatus] = useState<null | {
+    runId: string
+    dryRun: boolean
+    userIds?: string[]
+    startedAt: string
+  }>(null)
+  const [workflowPending, startWorkflowTransition] = useTransition()
   const [lastResult, setLastResult] = useState<null | {
     email: string
     greeting: string
@@ -59,6 +69,28 @@ export default function BriefingDispatch() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleWorkflowRun = () => {
+    startWorkflowTransition(async () => {
+      try {
+        const result = await triggerDailyBriefingWorkflowAction({ dryRun: workflowDryRun })
+        setWorkflowStatus({
+          runId: result.runId,
+          dryRun: workflowDryRun,
+          userIds: result.input?.userIds,
+          startedAt: new Date().toISOString(),
+        })
+        toast.success(
+          workflowDryRun
+            ? 'daily briefing dry run queued'
+            : 'daily briefing workflow started'
+        )
+      } catch (error: any) {
+        console.error('[mgmt] workflow trigger failed', error)
+        toast.error(error?.message || 'failed to trigger workflow')
+      }
+    })
   }
 
   return (
@@ -133,6 +165,43 @@ export default function BriefingDispatch() {
           </p>
         </div>
       )}
+
+      <div className="mt-8 border-t border-white/10 pt-6">
+        <div className="flex items-center gap-2 text-lg font-semibold lowercase mb-2">
+          <Send className="h-5 w-5" /> run global workflow
+        </div>
+        <p className="text-sm text-muted-foreground mb-4">
+          queue the UseWorkflow daily briefing job. it hydrates stored snapshots, builds insights,
+          and sends everyone who enabled email briefings their update. optionally leave it in dry run
+          mode to verify logs before delivering.
+        </p>
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <Switch checked={workflowDryRun} onCheckedChange={setWorkflowDryRun} id="workflow-dry-run" />
+          <label htmlFor="workflow-dry-run">dry run (no emails, logs only)</label>
+        </div>
+        <div className="flex justify-end mt-4">
+          <Button onClick={handleWorkflowRun} disabled={workflowPending} className="rounded-full">
+            {workflowPending ? 'queuing…' : 'queue daily briefing run'}
+          </Button>
+        </div>
+        {workflowStatus && (
+          <div className="mt-4 rounded-lg border border-white/10 bg-black/30 p-4 text-xs text-muted-foreground">
+            <div className="flex items-center justify-between">
+              <span>run id</span>
+              <code className="text-[11px] text-white/80">{workflowStatus.runId}</code>
+            </div>
+            <div className="flex items-center justify-between mt-1">
+              <span>mode</span>
+              <span className="text-white">{workflowStatus.dryRun ? 'dry run' : 'live delivery'}</span>
+            </div>
+            <div className="flex items-center justify-between mt-1">
+              <span>targeted users</span>
+              <span>{workflowStatus.userIds?.length ? workflowStatus.userIds.length : 'all opted-in'}</span>
+            </div>
+            <div className="mt-1">queued at {new Date(workflowStatus.startedAt).toLocaleString()}</div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

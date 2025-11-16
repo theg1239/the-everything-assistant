@@ -165,7 +165,7 @@ export class RateLimitedAI {
     }
   }
 
-  getEmbeddingModel(modelName: string = 'text-embedding-004'): () => Promise<any> {
+  getEmbeddingModel(modelName: string = 'gemini-embedding-001	'): () => Promise<any> {
     return async () => {
       const key = await this.apiKeyManager.getCurrentKey()
       const google = createGoogleGenerativeAI({ apiKey: key })
@@ -234,7 +234,7 @@ export class RateLimitedAI {
     return this.apiKeyManager.executeWithRateLimit(async key => {
       const google = createGoogleGenerativeAI({ apiKey: key })
       const modelFn = google.textEmbeddingModel(
-        options.model?.modelId || 'text-embedding-004'
+        options.model?.modelId || 'gemini-embedding-001'
       ) as unknown as EmbeddingModel<string>
 
       if (Array.isArray(options.values)) {
@@ -323,8 +323,8 @@ export async function getEmbeddingModel(provider: Provider, modelName: string) {
 
 export const rateLimitedAI = {
   google: {
-    model: (n = 'gemini-2.5-flash') => getModel('google', n),
-    embedding: (n = 'text-embedding-004') => getEmbeddingModel('google', n),
+    model: (n = 'gemini-flash-latest') => getModel('google', n),
+    embedding: (n = 'gemini-embedding-001') => getEmbeddingModel('google', n),
     streamText: (o: any, u?: string) => getRateLimitedAI('google').streamText(o, u),
     generateText: (o: any, u?: string) => getRateLimitedAI('google').generateText(o, u),
     generateObject: (o: any, u?: string) => getRateLimitedAI('google').generateObject(o, u),
@@ -342,7 +342,7 @@ export const rateLimitedAI = {
   },
   groq: {
     model: (n = 'gemma2-9b-it') => getModel('groq', n),
-    embedding: (n = 'text-embedding-004') => getEmbeddingModel('google', n),
+    embedding: (n = 'gemini-embedding-001') => getEmbeddingModel('google', n),
     streamText: (o: any, u?: string) => getRateLimitedAI('groq').streamText(o, u),
     generateText: (o: any, u?: string) => getRateLimitedAI('groq').generateText(o, u),
     generateObject: (o: any, u?: string) => getRateLimitedAI('groq').generateObject(o, u),
@@ -360,7 +360,7 @@ export const rateLimitedAI = {
   },
   cerebras: {
     model: (n = 'llama-3.3-70b') => getModel('cerebras', n),
-    embedding: (n = 'text-embedding-004') => getEmbeddingModel('google', n),
+    embedding: (n = 'gemini-embedding-001') => getEmbeddingModel('google', n),
     streamText: (o: any, u?: string) => getRateLimitedAI('cerebras').streamText(o, u),
     generateText: (o: any, u?: string) => getRateLimitedAI('cerebras').generateText(o, u),
     generateObject: (o: any, u?: string) => getRateLimitedAI('cerebras').generateObject(o, u),
@@ -378,7 +378,7 @@ export const rateLimitedAI = {
   },
   openrouter: {
     model: (n = 'openrouter/sherlock-think-alpha') => getModel('openrouter', n),
-    embedding: (n = 'text-embedding-004') => getEmbeddingModel('google', n),
+    embedding: (n = 'gemini-embedding-001') => getEmbeddingModel('google', n),
     streamText: (o: any, u?: string) => getRateLimitedAI('openrouter').streamText(o, u),
     generateText: (o: any, u?: string) => getRateLimitedAI('openrouter').generateText(o, u),
     generateObject: (o: any, u?: string) => getRateLimitedAI('openrouter').generateObject(o, u),

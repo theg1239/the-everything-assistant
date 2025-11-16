@@ -696,14 +696,14 @@ CRITICAL TOOL CONTINUATION RULES:
         )
     )
 
-    let modelName = 'gemini-2.5-flash'
+    let modelName = 'gemini-flash-latest'
     const hasPdf =
       attachmentAware &&
       enhancedMessages.some((m: any) =>
         m.attachments?.some((a: any) => a?.contentType === 'application/pdf')
       )
     if (hasPdf) {
-      modelName = 'gemini-2.5-flash'
+      modelName = 'gemini-flash-latest'
     }
 
     let finalMessages: any[] = [{ role: 'system', content: combinedSystemPrompt }]

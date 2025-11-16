@@ -236,7 +236,7 @@ export async function parsePlacementData(rawData: any, userContext: string = '',
 
     const result = await rateLimitedAI.google.generateObject(
       {
-        model: await rateLimitedAI.google.model('gemini-2.5-flash-lite-preview-06-17'),
+        model: await rateLimitedAI.google.model('gemini-flash-latest'),
         schema: placementParseSchema,
         prompt: `You are a friendly and insightful university career advisor. Your goal is to summarize placement data in a clear, engaging, and easy-to-understand way for students.
 

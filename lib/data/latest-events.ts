@@ -2,58 +2,44 @@ import { ContextData } from './index'
 
 /**
  * Latest Events, Announcements and Campus Happenings
- * Recent announcements, ongoing events, deadlines, and campus buzz
+ * FAT status, Winter Semester prep, and campus buzz
  */
 export const latestEvents: ContextData = {
   section: 'latest-events',
   title: 'Latest Events & Campus Updates',
-  lastUpdated: '2025-09-04',
+  lastUpdated: '2025-11-16',
   priority: 'medium',
   content: `
-TRENDING NOW AT VIT:
+WHAT'S HAPPENING NOW (Nov 16, 2025)
+- FAT examinations have begun: laboratories wrapped up this week and theory slots start Nov 17.
+- Hostel quiet hours enforced; movement requires hall ticket/ID.
+- Winter Semester 2025-26 timetable dry-run underway; classrooms will be reassigned by Dec 4 night.
 
-Academic Events:
-- CAT-1 examinations concluded (Aug 23, 2025)
-- Expo-1 assessments concluded
+UPCOMING HIGHLIGHTS
+- Dec 5: Winter Semester commencement immediately after FAT.
+- Dec 5-7: Add/drop portal for timetable corrections.
+- Dec 13: Re-registration payment deadline.
+- Feb 26 – Mar 1: Riviera 2026 (plan travel + stage rehearsals well ahead).
 
-Upcoming Events:
-- GRAVITAS'25: Sept 26–28, 2025 — Registrations live at https://gravitas.vit.ac.in
+REMINDERS
+- Upload any pending projects before vacating campus.
+- Wish list submissions from Oct 13-14 remain locked; only add/drop edits allowed Dec 5-7.
+- Watch out for holiday stretches (Winter Vacation Dec 21-Jan 4, Pongal Jan 14-18).
 
-Placement & Career Events:
-- Pre-placement Talks: Ongoing
-- Internship Opportunities: Ongoing off campus/on campus
-- Industry Mentorship Programs: Applications opening for new academic year
+CAMPUS LIFE
+- Clubs operating in low-power mode until FAT ends; Riviera core teams recruiting volunteers post exams.
+- Library and labs open extra hours 7 AM–10 PM for FAT; from Dec 5 they revert to semester schedule.
 
-Campus Life Updates:
-- Regular classes resumed post CAT-1
-- Pre-GRAVITAS activities across clubs and chapters
-
-Special Initiatives:
-- Green Campus Drive: Tree plantation and sustainability initiatives
-- Digital Learning: New online learning platforms being integrated
-- Industry Collaborations: New partnerships with tech companies announced
-- Alumni Connect: Enhanced alumni networking programs launching
-
-This Week's Highlights:
-- GRAVITAS'25 registrations live
-- Expo-1 completed
-- Classes resumed; prepare for CAT-2 (Oct 5–11)
-
-Where to Get Updates:
-- VTOP Portal: VTOP Spotlight board
-- GRAVITAS Website: https://gravitas.vit.ac.in
-- Your personal vitstudent.ac.in email address
-
-Action Items for Students:
-- Register for GRAVITAS'25 events of interest
-- Maintain attendance and start prep for CAT-2
+WHERE TO CHECK UPDATES
+- VTOP > Announcements > “Winter Semester 2025-26” board for slotting + hall tickets.
+- CoE circulars emailed nightly for any FAT timetable tweaks.
+- Hostel notice boards for checkout/vacation logistics.
 `,
   metadata: {
-    trendingEvent: 'GRAVITAS 2025 Registrations Live',
-    nextBigEvent: "GRAVITAS'25 (Sep 26–28, 2025)",
-    urgentDeadline: "GRAVITAS'25 Registration - Open Now",
-    campusLife: 'Pre-GRAVITAS Week',
-    lastMajorAnnouncement: "GRAVITAS'25 registrations live",
-    updateFrequency: 'Weekly',
+    trendingEvent: 'FAT exams in progress',
+    nextBigEvent: 'Winter Semester 2025-26 Opening on 2025-12-05',
+    urgentDeadline: 'Re-registration fee by 2025-12-13',
+    campusLife: 'Exam mode + Riviera planning',
+    updateFrequency: 'Daily during FAT',
   },
 }

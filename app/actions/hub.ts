@@ -34,7 +34,7 @@ const HUB_CORE_COMMANDS: HubVTOPCommand[] = [
 ]
 
 const VTOP_PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001'
-const MODEL_NAME = 'gemini-2.5-flash'
+const MODEL_NAME = 'gemini-flash-latest'
 
 async function requireUser() {
   const session = await getServerSession(authOptions)

@@ -820,9 +820,9 @@ async function downloadPdf(
 }
 
 function pickGeminiModel(opts: { pdf?: boolean; ocr?: boolean; fast?: boolean } = {}) {
-  if (opts.ocr || opts.pdf) return 'gemini-2.5-flash'
-  if (opts.fast) return 'gemini-2.5-flash'
-  return 'gemini-2.5-flash'
+  if (opts.ocr || opts.pdf) return 'gemini-flash-latest'
+  if (opts.fast) return 'gemini-flash-latest'
+  return 'gemini-flash-latest'
 }
 
 async function extractTextFromPdf(

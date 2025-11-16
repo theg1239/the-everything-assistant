@@ -37,7 +37,7 @@ export async function POST(req: Request) {
 
     const raw = await vtop.execute(args, { toolCallId: `vtop-${Date.now()}`, messages: [] })
 
-    const modelName = 'gemini-2.5-flash'
+    const modelName = 'gemini-flash-latest'
     const model = (await rateLimitedAI.google.model(modelName)) as LanguageModelV1
     const result = streamObject({
       model,

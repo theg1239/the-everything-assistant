@@ -684,7 +684,7 @@ Please provide:
 5. Relevance to students (high/medium/low)`
 
       const { object } = await generateObject({
-        model: google('gemini-2.5-flash-lite-preview-06-17'),
+        model: google('gemini-flash-latest'),
         prompt,
         schema: contentAnalysisSchema,
         maxTokens: 1000,

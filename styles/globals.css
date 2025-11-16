@@ -173,6 +173,32 @@
     letter-spacing: 0.01em;
   }
 
+  .markdown-table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    margin: 0.75rem 0;
+  }
+
+  .markdown-table-wrapper table {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: collapse;
+  }
+
+  .markdown-table-wrapper th,
+  .markdown-table-wrapper td {
+    padding: 0.5rem;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .markdown-table-wrapper thead {
+    background: rgba(148, 163, 184, 0.12);
+  }
+
   @keyframes fadeInUp {
     from {
       opacity: 0;

@@ -8,6 +8,7 @@ import 'katex/dist/katex.min.css'
 
 // ---------- helpers ----------
 const renderer = new marked.Renderer()
+const defaultTableRenderer = renderer.table?.bind(renderer)
 
 function escapeHtml(s: string) {
   return (s || '')
@@ -34,6 +35,13 @@ renderer.code = ({ text, lang }) => {
 renderer.codespan = ({ text }) => {
   const safe = escapeHtml(text as string)
   return `<code class="bg-muted px-1 py-0.5 rounded text-sm">${safe}</code>`
+}
+
+if (defaultTableRenderer) {
+  renderer.table = function overrideTable(token: any) {
+    const tableHtml = defaultTableRenderer(token)
+    return `<div class="markdown-table-wrapper" data-allow-touch-scroll>${tableHtml}</div>`
+  }
 }
 
 // ---------- KaTeX / Math extensions for marked ----------
@@ -211,7 +219,7 @@ export const MarkdownBlock = memo(function PureMarkdownBlock({
       'annotation',
       'annotation-xml',
     ],
-    ADD_ATTR: ['style', 'display', 'xmlns', 'mathvariant', 'aria-hidden', 'role', 'focusable'],
+    ADD_ATTR: ['style', 'display', 'xmlns', 'mathvariant', 'aria-hidden', 'role', 'focusable', 'data-allow-touch-scroll'],
   })
 
   return (

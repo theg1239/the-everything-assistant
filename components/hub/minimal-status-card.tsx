@@ -44,11 +44,11 @@ export const MinimalStatusCard = memo(function MinimalStatusCard({
   sendingEmail,
 }: MinimalStatusCardProps) {
   return (
-    <div className="rounded-[32px] border border-white/10 bg-white/5 bg-[rgba(7,8,16,0.65)] backdrop-blur-xl p-5 sm:p-6 space-y-5 shadow-[0_25px_80px_rgba(0,0,0,0.55)]">
-      <div className="text-[11px] uppercase tracking-[0.3em] text-white/60">hub status</div>
+    <div className="rounded-3xl sm:rounded-[32px] border border-white/10 bg-[rgba(7,8,16,0.8)] backdrop-blur-xl p-4 sm:p-6 space-y-4 sm:space-y-5 shadow-[0_15px_50px_rgba(0,0,0,0.45)] sm:shadow-[0_25px_80px_rgba(0,0,0,0.55)]">
+      <div className="text-[10px] uppercase tracking-[0.2em] text-white/60 sm:text-[11px] sm:tracking-[0.3em]">hub status</div>
       <div className="space-y-2">
         <p className="text-sm text-white/70">hey {terseName},</p>
-        <div className="text-3xl font-light text-white">
+        <div className="text-2xl sm:text-3xl font-light text-white leading-snug">
           {syncing && syncCommand ? `syncing ${syncCommand.replace('-', ' ')}` : 'standing by'}
         </div>
         <div className="text-xs text-white/60">
@@ -70,7 +70,7 @@ export const MinimalStatusCard = memo(function MinimalStatusCard({
           reload cache
         </Button>
       </div>
-      <div className="flex items-center gap-2 text-xs text-white/70">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-white/70">
         <span className={linked ? 'text-emerald-300' : 'text-amber-300'}>
           {linked ? 'vtop linked' : 'vtop not linked'}
         </span>
@@ -95,8 +95,8 @@ export const MinimalStatusCard = memo(function MinimalStatusCard({
         </div>
       )}
       {emailEnabled && emailLabel && (
-        <div className="flex items-center justify-between gap-2 rounded-[24px] border border-white/10 bg-white/5 px-4 py-3 text-xs text-white/70">
-          <span>{emailLabel}</span>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-[24px] border border-white/10 bg-white/5 px-4 py-3 text-xs text-white/70">
+          <span className="text-left">{emailLabel}</span>
           <Button
             variant="secondary"
             size="sm"

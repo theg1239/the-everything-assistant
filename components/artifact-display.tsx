@@ -109,6 +109,289 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [expandedSubject, setExpandedSubject] = useState<number | null>(null)
 
+  const formatKeyLabel = (label?: string) =>
+    (label || '')
+      .replace(/[_-]+/g, ' ')
+      .replace(/([a-z\d])([A-Z])/g, '$1 $2')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/^./, str => str.toUpperCase()) || 'Details'
+
+  const slugifyKey = (label?: string, fallback = 'col') => {
+    const slug = (label || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+    return slug || fallback
+  }
+
+  const isPlainObject = (value: any): value is Record<string, any> =>
+    value !== null && typeof value === 'object' && !Array.isArray(value)
+
+  const isCliTable = (value: any) =>
+    isPlainObject(value) && Array.isArray(value.headers) && Array.isArray(value.rows)
+
+  const formatTableCell = (value: any) => {
+    if (value === null || value === undefined) return '—'
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No'
+    if (typeof value === 'number') return String(value)
+    if (typeof value === 'string') return value.trim() === '' ? '—' : value
+    if (Array.isArray(value)) {
+      if (!value.length) return '—'
+      if (value.every(item => typeof item !== 'object' || item === null)) {
+        return value.map(item => (item === null || item === undefined ? '—' : String(item))).join(', ')
+      }
+      return `${value.length} items`
+    }
+    return JSON.stringify(value)
+  }
+
+  const renderPrimitiveValue = (value: any) => {
+    if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) {
+      return <span className="text-xs text-muted-foreground">—</span>
+    }
+
+    if (typeof value === 'boolean') {
+      return (
+        <Badge
+          variant={value ? 'secondary' : 'outline'}
+          className="text-[10px] uppercase tracking-wide px-2 py-0.5"
+        >
+          {value ? 'Yes' : 'No'}
+        </Badge>
+      )
+    }
+
+    return (
+      <span className="text-xs text-card-foreground whitespace-pre-wrap break-words">
+        {String(value)}
+      </span>
+    )
+  }
+
+  const renderCliTables = (tables: any[]) => {
+    const validTables = tables.filter(isCliTable)
+    if (!validTables.length) {
+      return <span className="text-xs text-muted-foreground">No structured rows found.</span>
+    }
+
+    return (
+      <div className="space-y-4">
+        {validTables.map((table, tableIdx) => {
+          const headers = Array.isArray(table.headers) ? table.headers : []
+          const rows = Array.isArray(table.rows) ? table.rows : []
+          if (!headers.length || !rows.length) {
+            return (
+              <div key={`table-${tableIdx}`} className="text-xs text-muted-foreground">
+                No data in table.
+              </div>
+            )
+          }
+
+          type ColumnDef = { key: string; header: string; accessor: number }
+          const columns: ColumnDef[] = headers.map((header: string, headerIdx: number) => ({
+            key: `${slugifyKey(header, `column-${headerIdx}`)}-${tableIdx}-${headerIdx}`,
+            header: formatKeyLabel(header || `Column ${headerIdx + 1}`),
+            accessor: headerIdx,
+          }))
+
+          const dataRows = rows.map((row: any[]) => {
+            const rowObj: Record<string, any> = {}
+            columns.forEach((column: ColumnDef, columnIdx: number) => {
+              rowObj[column.key] = formatTableCell(row[columnIdx])
+            })
+            return rowObj
+          })
+
+          return (
+            <div key={`table-${tableIdx}`} className="space-y-2">
+              {(table.heading || table.title) && (
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
+                  <Calendar className="h-3 w-3 text-blue-500" />
+                  {(table.heading || table.title) as string}
+                </div>
+              )}
+              <ResponsiveTable
+                data={dataRows}
+                columns={columns.map((column: ColumnDef) => ({
+                  key: column.key,
+                  header: column.header,
+                }))}
+                maxMobileColumns={Math.min(3, columns.length)}
+              />
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  const renderSectionsArray = (sections: any[], depth: number) => (
+    <div className="space-y-3">
+      {sections.map((section, idx) => (
+        <div
+          key={`${section?.title || 'section'}-${idx}`}
+          className="rounded-lg border border-border/40 bg-card/30 p-3 space-y-2"
+        >
+          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <Calendar className="h-3 w-3 text-blue-500" />
+            {section?.title || `Section ${idx + 1}`}
+          </div>
+          {section?.note && (
+            <p className="text-xs text-muted-foreground">{section.note}</p>
+          )}
+          {Array.isArray(section?.exams) && section.exams.length > 0 ? (
+            <div className="mt-2">
+              {renderStructuredArray(`${section?.title || 'section'}-exams`, section.exams, depth + 1)}
+            </div>
+          ) : Array.isArray(section?.schedule) && section.schedule.length > 0 ? (
+            <div className="mt-2">
+              {renderStructuredArray(`${section?.title || 'section'}-schedule`, section.schedule, depth + 1)}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">No entries found.</p>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+
+  const renderObjectArray = (arrayKey: string, rows: any[], depth: number) => {
+    const objectRows = rows.filter(isPlainObject)
+    if (!objectRows.length) {
+      return (
+        <span className="text-xs text-card-foreground">
+          {rows.map(value => formatTableCell(value)).join(', ')}
+        </span>
+      )
+    }
+
+    const candidateKeys = Array.from(
+      new Set(
+        objectRows.flatMap(row =>
+          Object.keys(row).filter(key => {
+            const val = row[key]
+            return (
+              val === null ||
+              typeof val === 'string' ||
+              typeof val === 'number' ||
+              typeof val === 'boolean' ||
+              (Array.isArray(val) && val.every(item => typeof item !== 'object'))
+            )
+          })
+        )
+      )
+    )
+
+    if (candidateKeys.length) {
+      type ObjectColumnDef = { key: string; header: string; accessor: string }
+      const columnDefs: ObjectColumnDef[] = candidateKeys.slice(0, 8).map((columnKey, idx) => ({
+        key: `${slugifyKey(columnKey, `col-${idx}`)}-${idx}`,
+        header: formatKeyLabel(columnKey),
+        accessor: columnKey,
+      }))
+
+      const dataRows = objectRows.map(row => {
+        const rowObj: Record<string, any> = {}
+        columnDefs.forEach((column: ObjectColumnDef) => {
+          rowObj[column.key] = formatTableCell(row[column.accessor])
+        })
+        return rowObj
+      })
+
+      if (dataRows.length) {
+        return (
+          <ResponsiveTable
+            data={dataRows}
+            columns={columnDefs.map((column: ObjectColumnDef) => ({
+              key: column.key,
+              header: column.header,
+            }))}
+            maxMobileColumns={Math.min(3, columnDefs.length)}
+          />
+        )
+      }
+    }
+
+    return (
+      <div className="space-y-2">
+        {objectRows.map((row, idx) => (
+          <div
+            key={`${arrayKey}-${idx}`}
+            className="rounded-md border border-border/30 bg-card/40 p-2"
+          >
+            {renderStructuredObject(row, depth + 1)}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  const renderStructuredArray = (arrayKey: string, value: any[], depth: number): React.ReactNode => {
+    if (!value.length) {
+      return <span className="text-xs text-muted-foreground">—</span>
+    }
+
+    const normalizedKey = (arrayKey || '').toLowerCase()
+    const tableCandidates = value.filter(isCliTable)
+
+    if (tableCandidates.length && (tableCandidates.length === value.length || normalizedKey.includes('table'))) {
+      return renderCliTables(tableCandidates)
+    }
+
+    const looksLikeSections = value.every(
+      item =>
+        isPlainObject(item) && (Array.isArray(item.exams) || Array.isArray(item.schedule))
+    )
+
+    if (looksLikeSections) {
+      return renderSectionsArray(value, depth)
+    }
+
+    const hasObjectEntries = value.some(isPlainObject)
+    if (hasObjectEntries) {
+      return renderObjectArray(arrayKey, value, depth)
+    }
+
+    return (
+      <span className="text-xs text-card-foreground whitespace-pre-wrap break-words">
+        {value.map(item => formatTableCell(item)).join(', ')}
+      </span>
+    )
+  }
+
+  const renderStructuredObject = (obj: Record<string, any>, depth: number): React.ReactNode => {
+    const entries = Object.entries(obj)
+    if (!entries.length) {
+      return <span className="text-xs text-muted-foreground">—</span>
+    }
+
+    return (
+      <div className={cn('space-y-2', depth > 0 ? 'pl-3 border-l border-border/40' : undefined)}>
+        {entries.map(([childKey, childValue]) => (
+          <div key={childKey} className="space-y-1">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {formatKeyLabel(childKey)}
+            </span>
+            <div>{renderStructuredValue(childKey, childValue, depth + 1)}</div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  function renderStructuredValue(key: string, value: any, depth = 0): React.ReactNode {
+    if (Array.isArray(value)) {
+      return renderStructuredArray(key, value, depth)
+    }
+
+    if (isPlainObject(value)) {
+      return renderStructuredObject(value, depth)
+    }
+
+    return renderPrimitiveValue(value)
+  }
+
   // Always show VTOP artifacts, even if credentials are required
   if (success === false || error) {
     let errorMessage = error || message || ''
@@ -751,19 +1034,24 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
             Object.keys(finalStructuredData).length > 0 && (
               <div className="space-y-3">
                 <h4 className="text-sm font-medium text-card-foreground">Structured Details:</h4>
-                {Object.entries(finalStructuredData).map(([key, value]) => (
-                  <div key={key} className="flex items-start gap-3">
-                    <User className="h-3 w-3 text-blue-400 shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <span className="text-xs font-medium text-card-foreground block">
-                        {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
-                      </span>
-                      <span className="text-xs text-muted-foreground break-words">
-                        {Array.isArray(value) ? value.join(', ') : String(value)}
-                      </span>
+                <div className="space-y-3">
+                  {Object.entries(finalStructuredData).map(([key, value]) => (
+                    <div
+                      key={key}
+                      className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        <User className="h-3 w-3 text-blue-400 shrink-0" />
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          {formatKeyLabel(key)}
+                        </span>
+                      </div>
+                      <div className="text-xs text-card-foreground">
+                        {renderStructuredValue(key, value)}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
         </div>

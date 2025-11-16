@@ -90,8 +90,10 @@ const DAILY_BRIEFING_COMMANDS: HubVTOPCommand[] = Array.from(
 )
 const DAILY_BRIEFING_STORAGE_KEY = 'ea.hub.daily-briefing-date'
 const DAILY_REVEAL_DELAY_MS = 2000
-const HUB_SURFACE_CLASS = 'rounded-[32px] border border-white/10 bg-[rgba(7,8,18,0.65)] backdrop-blur-xl shadow-[0_25px_80px_rgba(0,0,0,0.55)]'
-const HUB_LABEL_CLASS = 'text-[11px] uppercase tracking-[0.3em] text-white/60'
+const HUB_SURFACE_CLASS =
+  'rounded-3xl sm:rounded-[32px] border border-white/10 bg-[rgba(7,8,18,0.78)] backdrop-blur-xl shadow-[0_15px_50px_rgba(0,0,0,0.45)] sm:shadow-[0_25px_80px_rgba(0,0,0,0.55)]'
+const HUB_LABEL_CLASS =
+  'text-[10px] uppercase tracking-[0.2em] text-white/60 sm:text-[11px] sm:tracking-[0.3em]'
 
 type Page = HubPage
 
@@ -1001,7 +1003,7 @@ export default function HubShell({
       {persona && linked && <PersonaStrip persona={persona} onLink={handleLinkIntent} />}
 
       {linked && (
-        <div className="flex justify-end">
+        <div className="flex justify-start sm:justify-end">
           <Button
             size="sm"
             variant="outline"
@@ -1125,17 +1127,26 @@ export default function HubShell({
               {page === 'briefing' ? renderBriefing() : <HubSurface>{Panel}</HubSurface>}
             </div>
           </div>
-          <div className="relative border-t border-white/10 px-4 py-3">
+          <div
+            className="relative border-t border-white/10 px-2 sm:px-4 py-2 sm:py-3 bg-[#05060c]/90 backdrop-blur supports-[backdrop-filter]:backdrop-blur-lg"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)' }}
+          >
             <div className="max-w-5xl w-full mx-auto">
-              <div className="flex flex-wrap justify-center gap-1.5" role="tablist" aria-label="hub navigation">
+              <div
+                className="flex flex-nowrap md:flex-wrap justify-start md:justify-center items-center gap-1.5 overflow-x-auto md:overflow-visible scrollbar-hide touch-pan-x"
+                data-allow-touch-scroll
+                role="tablist"
+                aria-label="hub navigation"
+              >
                 {NAV_ITEMS.filter(item => linked || item.id === 'briefing').map(item => (
                   <button
                     key={item.id}
+                    type="button"
                     role="tab"
                     aria-pressed={page === item.id}
                     aria-selected={page === item.id}
                     onClick={() => setState({ page: item.id })}
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[10px] uppercase tracking-[0.25em] transition-all border ${
+                    className={`flex flex-shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] sm:px-3.5 sm:text-[11px] sm:tracking-[0.25em] transition-all border ${
                       page === item.id
                         ? 'bg-white/15 border-white/40 text-white shadow-[0_10px_30px_rgba(0,0,0,0.35)]'
                         : 'bg-transparent border-white/15 text-white/60 hover:text-white hover:border-white/35'
@@ -1195,7 +1206,7 @@ export default function HubShell({
 }
 
 function HubSurface({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`${HUB_SURFACE_CLASS} p-5 sm:p-6 ${className}`}>{children}</div>
+  return <div className={`${HUB_SURFACE_CLASS} p-4 sm:p-6 ${className}`}>{children}</div>
 }
 
 function CompactInsightRow({
@@ -1218,7 +1229,7 @@ function CompactInsightRow({
   disabled?: boolean
 }) {
   return (
-    <div className="flex flex-col gap-1 px-5 py-4">
+    <div className="flex flex-col gap-1 px-4 py-3 sm:px-5 sm:py-4">
       <div className="flex items-center justify-between gap-2">
         <p className={HUB_LABEL_CLASS}>{label}</p>
         {onOpen && (

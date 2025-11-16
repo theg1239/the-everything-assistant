@@ -29,10 +29,10 @@
     "papers:index": "tsx scripts/papers.ts"
   },
   "dependencies": {
-    "@ai-sdk/cerebras": "^0.2.15",
-    "@ai-sdk/google": "^1.2.22",
-    "@ai-sdk/groq": "^1.2.9",
-    "@ai-sdk/react": "^1.2.12",
+    "@ai-sdk/cerebras": "latest",
+    "@ai-sdk/google": "latest",
+    "@ai-sdk/groq": "latest",
+    "@ai-sdk/react": "latest",
     "@dqbd/tiktoken": "^1.0.21",
     "@emotion/is-prop-valid": "^1.2.1",
     "@langchain/core": "^0.3.61",
@@ -66,7 +66,7 @@
     "@upstash/redis": "^1.35.0",
     "@workflow/world-local": "5.0.0-beta.8",
     "@workflow/world-vercel": "4.0.1-beta.8",
-    "ai": "^4.3.19",
+    "ai": "latest",
     "bcryptjs": "^3.0.2",
     "botid": "^1.4.1",
     "class-variance-authority": "^0.7.1",

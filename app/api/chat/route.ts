@@ -1,4 +1,10 @@
-import { smoothStream, extractReasoningMiddleware } from 'ai'
+import {
+  smoothStream,
+  extractReasoningMiddleware,
+  createUIMessageStream,
+  createUIMessageStreamResponse,
+  generateId,
+} from 'ai'
 import { inspect } from 'util'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { createVITTools } from '@/lib/tools'
@@ -7,8 +13,9 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getChat, createChat, saveMessage, updateChat } from '@/lib/db'
 import { memoryService } from '@/lib/memory/memory-service'
-import { generateChatPath, extractTitleFromContent } from '@/lib/utils'
+import { extractTitleFromContent } from '@/lib/utils'
 import { sanitizeToolInvocations } from '@/lib/sanitize-tools'
+import { uiMessagesToLegacyMessages, type AppUIMessage } from '@/lib/ai-message-conversion'
 import { z } from 'zod'
 
 async function generateChatTitle(userMessage: string, userId?: string): Promise<string> {
@@ -282,14 +289,20 @@ export async function POST(req: Request) {
       return new Response('Unauthorized', { status: 401 })
     }
     const payload = await req.json()
-    const { id: chatId, directToolCall, preferredTool } = payload
-    const messages: any[] = Array.isArray(payload?.messages) ? payload.messages : []
+    const { id: requestedChatId, directToolCall, preferredTool } = payload
+    const uiMessages: AppUIMessage[] = Array.isArray(payload?.messages) ? payload.messages : []
+    const messages: any[] = uiMessagesToLegacyMessages(uiMessages)
 
-    let chat = chatId ? await getChat(chatId, session.user.id) : null
+    const normalizedChatId =
+      typeof requestedChatId === 'string' && requestedChatId.trim().length > 0
+        ? requestedChatId
+        : generateId()
+
+    let chat = normalizedChatId ? await getChat(normalizedChatId, session.user.id) : null
     if (!chat) {
       const tempTitle = extractTitleFromContent(messages[0]?.content || 'New Chat')
-      const path = generateChatPath()
-      chat = await createChat(session.user.id, tempTitle, path)
+      const path = `/chat/${normalizedChatId}`
+      chat = await createChat(session.user.id, tempTitle, path, normalizedChatId)
 
       const userMessage = messages[0]?.content || ''
       if (userMessage.trim()) {
@@ -655,35 +668,45 @@ CRITICAL TOOL CONTINUATION RULES:
         console.error('Failed to save direct tool call message:', error)
       }
 
-      const encoder = new TextEncoder()
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(
-            encoder.encode(
-              `9:{"toolCallId":"${directToolCallResult.toolCallId}","toolName":"${directToolCallResult.toolName}","args":${JSON.stringify(directToolCallResult.args)}}\n`
-            )
-          )
-          controller.enqueue(
-            encoder.encode(
-              `a:{"toolCallId":"${directToolCallResult.toolCallId}","result":${JSON.stringify(directToolCallResult.result)}}\n`
-            )
-          )
-          controller.enqueue(encoder.encode(`0:"${responseText.replace(/"/g, '\\"')}"\n`))
-          controller.enqueue(
-            encoder.encode(
-              `e:{"finishReason":"stop","usage":{"promptTokens":100,"completionTokens":50},"isContinued":false}\n`
-            )
-          )
-          controller.close()
+      const stream = createUIMessageStream<AppUIMessage>({
+        originalMessages: uiMessages,
+        generateId,
+        execute: ({ writer }) => {
+          const messageId = generateId()
+          const textPartId = generateId()
+
+          writer.write({ type: 'start', messageId })
+          writer.write({
+            type: 'tool-input-available',
+            toolCallId: directToolCallResult.toolCallId,
+            toolName: directToolCallResult.toolName,
+            input: directToolCallResult.args,
+          })
+          writer.write({
+            type: 'tool-output-available',
+            toolCallId: directToolCallResult.toolCallId,
+            output: directToolCallResult.result,
+          })
+          writer.write({ type: 'text-start', id: textPartId })
+          writer.write({ type: 'text-delta', id: textPartId, delta: responseText })
+          writer.write({ type: 'text-end', id: textPartId })
+          writer.write({
+            type: 'finish',
+            finishReason: 'stop',
+            messageMetadata: {
+              chatId: chat.id,
+              chatPath: chat.path,
+            },
+          })
         },
       })
 
-      return new Response(stream, {
+      return createUIMessageStreamResponse({
         headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
           'X-Chat-Id': chat.id,
           'X-Chat-Path': chat.path,
         },
+        stream,
       })
     }
 
@@ -802,7 +825,7 @@ CRITICAL TOOL CONTINUATION RULES:
         headers: {
           'Content-Type': 'text/plain; charset=utf-8',
           'X-Chat-Id': chat.id,
-          'X-Chat-Path': chat.path,
+          'X-Chat-Path': `/chat/${chat.id}`,
         },
       })
     }
@@ -1090,11 +1113,22 @@ CRITICAL TOOL CONTINUATION RULES:
       session.user.id
     )
 
-    return resultStream.toDataStreamResponse({
+    return resultStream.toUIMessageStreamResponse({
+      originalMessages: uiMessages,
+      generateMessageId: generateId,
       headers: {
         'X-Chat-Id': chat.id,
-        'X-Chat-Path': chat.path,
+        'X-Chat-Path': `/chat/${chat.id}`,
       },
+      messageMetadata: ({ part }) => {
+        if (part.type === 'finish') {
+          return {
+            chatId: chat.id,
+            chatPath: `/chat/${chat.id}`,
+          }
+        }
+      },
+      onError: () => 'An error occurred while processing your request.',
     })
   } catch (error: any) {
     console.error('Chat API error:', error)

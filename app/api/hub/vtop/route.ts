@@ -2,7 +2,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createVITTools } from '@/lib/tools'
 import { getFormattedVTOPCredentials as getServerFormatted } from '@/lib/server-vtop-credentials'
-import { streamObject, type LanguageModelV1 } from 'ai'
+import { streamObject, type LanguageModel } from 'ai'
 import { vtopResultSchema } from './schema'
 import { saveTokenUsage } from '@/lib/db'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     const raw = await vtop.execute(args, { toolCallId: `vtop-${Date.now()}`, messages: [] })
 
     const modelName = 'gemini-flash-latest'
-    const model = (await rateLimitedAI.google.model(modelName)) as LanguageModelV1
+    const model = (await rateLimitedAI.google.model(modelName)) as LanguageModel
     const result = streamObject({
       model,
       schema: vtopResultSchema,

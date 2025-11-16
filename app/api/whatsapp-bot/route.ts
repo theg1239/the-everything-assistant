@@ -241,12 +241,12 @@ CRITICAL TOOL CONTINUATION RULES:
     )
 
     // Return the streaming response
-    return resultStream.toDataStreamResponse({
+    return resultStream.toTextStreamResponse({
       headers: {
         'X-Source': requestSource,
         'X-User-Id': user.id,
-        'X-Bot-User-Id': userInfo.userId
-      }
+        'X-Bot-User-Id': userInfo.userId,
+      },
     })
 
   } catch (error: any) {

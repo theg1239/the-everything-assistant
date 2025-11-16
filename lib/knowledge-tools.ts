@@ -15,22 +15,26 @@ export async function getRagPool() {
   return _ragPool
 }
 
+const knowledgeBaseInputSchema = z.object({
+  query: z.string().describe('User query requiring university knowledge'),
+  max_chunks: z
+    .number()
+    .int()
+    .min(1)
+    .max(8)
+    .default(4)
+    .describe('Maximum number of context chunks to return (1-8)')
+    .optional(),
+})
+
+type KnowledgeBaseInput = z.infer<typeof knowledgeBaseInputSchema>
+
 export function createKnowledgeTools() {
   const knowledgeBase = tool({
     description:
       'Retrieve the most relevant chunks from the VIT knowledge base. Use this when you need information about VIT policies, facilities, or general university information. After calling this tool, you MUST continue with a comprehensive response using the retrieved information - do not stop at the tool call.',
-    parameters: z.object({
-      query: z.string().describe('User query requiring university knowledge'),
-      max_chunks: z
-        .number()
-        .int()
-        .min(1)
-        .max(8)
-        .default(4)
-        .describe('Maximum number of context chunks to return (1-8)')
-        .optional(),
-    }),
-    execute: async ({ query, max_chunks = 4 }) => {
+    inputSchema: knowledgeBaseInputSchema,
+    execute: async ({ query, max_chunks = 4 }: KnowledgeBaseInput) => {
       console.info('[knowledgeBase] incoming query:', query)
       console.debug('[knowledgeBase] max_chunks:', max_chunks)
       try {

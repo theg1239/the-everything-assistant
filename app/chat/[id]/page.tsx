@@ -49,7 +49,8 @@ export default async function ChatPage({ params }: ChatPageProps) {
               createdAt: msg.created_at,
             }))}
             chatId={id}
-            autoResume={true}
+            key={id}
+            autoResume={false}
             initialHubState={initialHubState}
             hubActions={{
               refreshState: loadPersonalHubState,

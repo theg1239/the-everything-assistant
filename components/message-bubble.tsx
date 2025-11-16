@@ -1,16 +1,16 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import type { Message } from 'ai'
 import { cn } from '@/lib/utils'
 import ReactMarkdown from 'react-markdown'
 import { OptimizedMarkdown } from './optimized-markdown'
 import { ToolCallDisplay } from './tool-call-display'
 import { MessageActions } from './message-actions'
 import { memo, useMemo } from 'react'
+import type { LegacyMessage } from '@/lib/ai-message-conversion'
 
 interface MessageBubbleProps {
-  message: Message
+  message: LegacyMessage
   chatId?: string
   isLoading?: boolean
   onCreateCanvas?: (content: string) => void

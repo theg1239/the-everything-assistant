@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { ChatInterface } from '@/components/chat-interface'
+import { generateUUID } from '@/lib/utils'
 import {
   loadPersonalHubState,
   syncCoreHubSnapshots,
@@ -32,6 +33,7 @@ export default async function Home() {
     redirect('/login')
   }
 
+  const initialChatId = generateUUID()
   const fallbackHubState: PersonalHubState = { isLinked: false, snapshots: [], lastSyncedAt: null }
   const [latestBroadcast, initialHubState] = await Promise.all([
     getLatestBroadcast(),
@@ -43,6 +45,8 @@ export default async function Home() {
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex flex-1 flex-col overflow-hidden">
           <ChatInterface
+            chatId={initialChatId}
+            key={initialChatId}
             autoResume={false}
             initialHubState={initialHubState}
             hubActions={{

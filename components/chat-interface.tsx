@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect, memo, useCallback, useMemo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { useChat, type Message as AIMessage } from '@ai-sdk/react'
+import { useChat } from '@ai-sdk/react'
+import { DefaultChatTransport } from 'ai'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useMemory } from '@/contexts/memory-context'
@@ -20,7 +21,7 @@ import Hub, { type HubActionHandlers } from '@/components/hub/hub'
 import { HubStoreProvider } from '@/components/hub/hub-store'
 import { HUB_COMMANDS } from '@/types/hub'
 import type { PersonalHubState, HubVTOPCommand } from '@/types/hub'
-import { extractTitleFromContent } from '@/lib/utils'
+import { extractTitleFromContent, generateUUID } from '@/lib/utils'
 import UpsellBanner from '@/components/upsell-banner'
 import { VTOPToolHandler } from '@/components/vtop-tool-handler'
 import { VTOPProvider, useVTOP } from '@/contexts/vtop-context'
@@ -42,6 +43,9 @@ import {
   HUB_BRIEFING_TRIGGER_PARAM,
   HUB_BRIEFING_TRIGGER_VALUE,
 } from '@/lib/hub/constants'
+import { useChatStore } from '@/hooks/use-chat-store'
+
+type Message = LegacyMessage
 
 const useViewportHeight = () => {
   const mainRef = useRef<HTMLDivElement>(null)
@@ -94,14 +98,14 @@ const useViewportHeight = () => {
 }
 
 import { MemoryWithId } from '@/hooks/use-memories'
-
-interface Message extends AIMessage {
-  metadata?: Record<string, any> & {
-    memory?: boolean
-    importance?: number
-    tags?: string[]
-  }
-}
+import {
+  legacyMessageToUiMessage,
+  legacyMessagesToUiMessages,
+  uiMessageToLegacyMessage,
+  uiMessagesToLegacyMessages,
+  type LegacyMessage,
+  type AppUIMessage,
+} from '@/lib/ai-message-conversion'
 
 function memoryToMessage(memory: MemoryWithId): Message {
   return {
@@ -153,7 +157,15 @@ function PureChatInterfaceComponent({
   initialHubState,
   hubActions,
 }: ChatInterfaceProps) {
-    const [showFullChat, setShowFullChat] = useState(initialMessages.length > 0)
+    const input = useChatStore(state => state.input)
+    const setInput = useChatStore(state => state.setInput)
+    const showFullChat = useChatStore(state => state.showFullChat)
+    const setShowFullChat = useChatStore(state => state.setShowFullChat)
+    const selectedTool = useChatStore(state => state.selectedTool)
+    const setSelectedTool = useChatStore(state => state.setSelectedTool)
+    const lastUserMessage = useChatStore(state => state.lastUserMessage)
+    const setLastUserMessage = useChatStore(state => state.setLastUserMessage)
+    const resetChatStore = useChatStore(state => state.reset)
     const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebar()
     const [hubOpen, setHubOpen] = useState(false)
     const [pendingBriefingAction, setPendingBriefingAction] = useState<HubVTOPCommand | null>(null)
@@ -181,9 +193,7 @@ function PureChatInterfaceComponent({
     const [isZoomed, setIsZoomed] = useState(false)
     const [showFollowUpSuggestions, setShowFollowUpSuggestions] = useState(false)
     const [lastAssistantMessage, setLastAssistantMessage] = useState<string>('')
-    const [lastUserMessage, setLastUserMessage] = useState<string>('')
     const [userPreferences, setUserPreferences] = useState<any>({ followUpSuggestions: true })
-    const [selectedTool, setSelectedTool] = useState<string>('')
     const [chatCreatedEventDispatched, setChatCreatedEventDispatched] = useState(false)
     const [maximizedArtifact, setMaximizedArtifact] = useState<any>(null)
     const [isAtBottom, setIsAtBottom] = useState(true)
@@ -198,6 +208,19 @@ function PureChatInterfaceComponent({
     const pathname = usePathname()
     const searchParams = useSearchParams()
     const [optimisticChatId, setOptimisticChatId] = useState<string | undefined>(chatId)
+    const fallbackChatIdRef = useRef<string>(chatId ?? generateUUID())
+    useEffect(() => {
+      if (chatId) {
+        fallbackChatIdRef.current = chatId
+      }
+    }, [chatId])
+    useEffect(() => {
+      if (!chatId && optimisticChatId) {
+        fallbackChatIdRef.current = optimisticChatId
+      }
+    }, [chatId, optimisticChatId])
+    const persistedChatId = chatId ?? optimisticChatId
+    const resolvedChatId = persistedChatId ?? fallbackChatIdRef.current
     const currentChatIdRef = useRef<string | undefined>(chatId)
     const { updateToolResult, clearToolResult } = useVTOP()
     const { rateLimitError, clearRateLimitError, checkForRateLimitError } = useRateLimit()
@@ -206,6 +229,10 @@ function PureChatInterfaceComponent({
     const { showOnboarding, closeOnboarding } = useOnboarding()
 
     const mainRef = useViewportHeight()
+
+    useEffect(() => {
+      setShowFullChat(initialMessages.length > 0)
+    }, [initialMessages.length, setShowFullChat])
 
     const [vtopDisclaimer, setVtopDisclaimer] = useState<{
       toolCallId: string
@@ -370,8 +397,8 @@ function PureChatInterfaceComponent({
     }, [isMobile, isZoomed])
 
     useEffect(() => {
-      currentChatIdRef.current = optimisticChatId || chatId
-    }, [optimisticChatId, chatId])
+      currentChatIdRef.current = resolvedChatId
+    }, [resolvedChatId])
     useEffect(() => {
       const hasUser = initialMessages.some(m => m.role === 'user')
       setHasUserInitiatedConversation(hasUser)
@@ -396,88 +423,97 @@ function PureChatInterfaceComponent({
       }
     }, [session?.user?.email])
 
-    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-      e.preventDefault()
-      if (!input.trim()) return
+    const initialUiMessages = useMemo(
+      () => legacyMessagesToUiMessages(initialMessages),
+      [initialMessages]
+    )
 
-      try {
-        setShowFollowUpSuggestions(false)
-        setLastUserMessage(input)
-
-        if (!showFullChat) {
-          setShowFullChat(true)
-        }
-
-        setErrorMessage(null)
-        clearRateLimitError()
-        originalHandleSubmit(e)
-      } catch (error) {
-        console.error('Error submitting message:', error)
-        setErrorMessage('Failed to send message. Please try again.')
-      }
-    }
+    const chatTransport = useMemo(() => {
+      return new DefaultChatTransport<AppUIMessage>({
+        api: '/api/chat',
+        credentials: 'same-origin',
+        prepareSendMessagesRequest: ({ messages: outgoingMessages, body, ...rest }) => ({
+          ...rest,
+          body: {
+            ...(body || {}),
+            messages: outgoingMessages,
+            id: resolvedChatId,
+            ...(selectedTool ? { preferredTool: selectedTool } : {}),
+          },
+        }),
+      })
+    }, [resolvedChatId, selectedTool])
 
     const {
-      messages = [],
-      input,
-      handleInputChange,
-      handleSubmit: originalHandleSubmit,
-      isLoading,
-      error,
-      append,
-      reload,
+      messages: uiMessages = [],
+      sendMessage,
       stop,
-      setMessages,
-      setInput,
-      experimental_resume,
-      data,
-    } = useChat({
-      api: '/api/chat',
-      initialMessages: initialMessages,
+      setMessages: setUiMessages,
+      error,
+      status,
+      resumeStream,
+    } = useChat<AppUIMessage>({
+      id: resolvedChatId,
+      messages: initialUiMessages,
       experimental_throttle: 25,
-      body: {
-        ...(optimisticChatId ? { id: optimisticChatId } : chatId ? { id: chatId } : {}),
-        ...(selectedTool ? { preferredTool: selectedTool } : {}),
-      },
-      onResponse: res => {
-        if (!showFullChat) setShowFullChat(true)
-        setErrorMessage(null)
-        clearRateLimitError()
-        const newId = res.headers.get('X-Chat-Id')
-        const newPath = res.headers.get('X-Chat-Path')
-        if (newId && !chatId && !chatCreatedEventDispatched) {
-          setOptimisticChatId(newId)
-          currentChatIdRef.current = newId
+      transport: chatTransport,
+      resume: autoResume ?? true,
+      onFinish: ({ message }) => {
+        const currentChatId = currentChatIdRef.current
+        const metadata = (message.metadata || {}) as Record<string, any>
+
+        const metadataChatId = (metadata.chatId as string) || resolvedChatId
+        const metadataChatPath =
+          (typeof metadata.chatPath === 'string' && metadata.chatPath.length > 0
+            ? metadata.chatPath
+            : metadataChatId
+              ? `/chat/${metadataChatId}`
+              : undefined)
+
+        const shouldNavigate =
+          Boolean(metadataChatPath) && metadataChatPath !== pathname && !chatCreatedEventDispatched
+
+        if (metadataChatId && shouldNavigate) {
+          setOptimisticChatId(metadataChatId)
+          fallbackChatIdRef.current = metadataChatId
+          currentChatIdRef.current = metadataChatId
           setChatCreatedEventDispatched(true)
-          const chatPath = `/chat/${newId}`
-          router.push(chatPath)
-          window.history.replaceState({}, '', chatPath)
+          const targetPath = metadataChatPath!
+          router.push(targetPath)
+          window.history.replaceState({}, '', targetPath)
           window.dispatchEvent(
             new CustomEvent('newChatCreated', {
               detail: {
-                id: newId,
+                id: metadataChatId,
                 title: extractTitleFromContent(messages[0]?.content || 'New Chat'),
-                path: chatPath,
+                path: targetPath,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
               },
             })
           )
+        } else if (!shouldNavigate && metadataChatId && !chatCreatedEventDispatched) {
+          setOptimisticChatId(metadataChatId)
+          fallbackChatIdRef.current = metadataChatId
+          currentChatIdRef.current = metadataChatId
+          setChatCreatedEventDispatched(true)
         }
-      },
-      onFinish: message => {
-        const currentChatId = currentChatIdRef.current
-        if (message.role === 'assistant' && message.content) {
-          setLastAssistantMessage(message.content)
-          if (userPreferences.followUpSuggestions !== false) {
-            setShowFollowUpSuggestions(true)
+
+        if (message.role === 'assistant') {
+          const legacyMessage = uiMessageToLegacyMessage(message)
+          if (legacyMessage.content) {
+            setLastAssistantMessage(legacyMessage.content)
+            if (userPreferences.followUpSuggestions !== false) {
+              setShowFollowUpSuggestions(true)
+            }
           }
         }
-        if (currentChatId && isFirstMessageInNewChat) {
+        if ((currentChatId || metadata.chatId) && isFirstMessageInNewChat) {
           setIsFirstMessageInNewChat(false)
           const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
             try {
-              const response = await fetch(`/api/chats/${currentChatId}`)
+              const targetChatId = currentChatId || metadata.chatId
+              const response = await fetch(`/api/chats/${targetChatId}`)
               if (response.ok) {
                 const chatData = await response.json()
                 if (chatData.title && chatData.title !== 'New Chat') {
@@ -527,7 +563,6 @@ function PureChatInterfaceComponent({
         const contextRateLimit = !!rateLimitError?.isRateLimit
 
         try {
-          // debug logging
           // eslint-disable-next-line no-console
           //console.debug('[Chat] onError - localRateLimitDetected:', localRateLimitDetected, 'isRateLimit:', isRateLimit, 'contextRateLimit:', contextRateLimit, 'isGeminiStreamingError:', isGeminiStreamingError, 'error:', err)
         } catch {}
@@ -543,12 +578,25 @@ function PureChatInterfaceComponent({
       },
     })
 
+    const messages = useMemo(() => uiMessagesToLegacyMessages(uiMessages), [uiMessages])
+
+    const setMessages = useCallback(
+      (next: Message[] | ((prev: Message[]) => Message[])) => {
+        setUiMessages(prevUi => {
+          const prevLegacy = uiMessagesToLegacyMessages(prevUi)
+          const resolved = typeof next === 'function' ? next(prevLegacy) : next
+          return legacyMessagesToUiMessages(resolved)
+        })
+      },
+      [setUiMessages]
+    )
+
+    const isLoading = status === 'submitted' || status === 'streaming'
+
     useAutoResume({
       autoResume: autoResume ?? true,
       initialMessages,
-      experimental_resume,
-      data,
-      setMessages,
+      resumeStream,
     })
 
     const scrollToBottom = useCallback(() => {
@@ -737,12 +785,13 @@ function PureChatInterfaceComponent({
     }, [error, checkForRateLimitError])
 
     const handleFormSubmit = useCallback(
-      (e: React.FormEvent<HTMLFormElement>) => {
+      async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
-        if (!input.trim()) return
+        const trimmed = input.trim()
+        if (!trimmed) return
 
         setShowFollowUpSuggestions(false)
-        setLastUserMessage(input.trim())
+        setLastUserMessage(trimmed)
 
         if (!showFullChat) {
           setShowFullChat(true)
@@ -752,17 +801,23 @@ function PureChatInterfaceComponent({
         clearRateLimitError()
         setHasUserInitiatedConversation(true)
 
-        originalHandleSubmit(e)
+        try {
+          await sendMessage({ text: trimmed })
+          setInput('')
+        } catch (err) {
+          console.error('Error submitting message:', err)
+          setErrorMessage('Failed to send message. Please try again.')
+        }
       },
       [
         input,
         showFullChat,
         clearRateLimitError,
-        originalHandleSubmit,
         setShowFollowUpSuggestions,
         setLastUserMessage,
         setErrorMessage,
         setHasUserInitiatedConversation,
+        sendMessage,
       ]
     )
 
@@ -780,20 +835,22 @@ function PureChatInterfaceComponent({
         clearRateLimitError()
         setHasUserInitiatedConversation(true)
 
-        await append({
-          role: 'user',
-          content: question,
-        })
+        try {
+          await sendMessage({ text: question })
+        } catch (err) {
+          console.error('Error sending suggested question:', err)
+          setErrorMessage('Failed to send message. Please try again.')
+        }
       },
       [
         showFullChat,
         clearRateLimitError,
         setInput,
-        append,
         setShowFollowUpSuggestions,
         setLastUserMessage,
         setErrorMessage,
         setHasUserInitiatedConversation,
+        sendMessage,
       ]
     )
 
@@ -805,13 +862,11 @@ function PureChatInterfaceComponent({
       if (window.location.pathname !== '/') {
         router.push('/')
         setMessages([])
-        setInput('')
-        setShowFullChat(false)
+        resetChatStore()
         setHasUserInitiatedConversation(false)
         setIsFirstMessageInNewChat(false)
         setShowFollowUpSuggestions(false)
         setLastAssistantMessage('')
-        setLastUserMessage('')
         setOptimisticChatId(undefined)
         setChatCreatedEventDispatched(false)
         setErrorMessage(null)
@@ -844,9 +899,9 @@ function PureChatInterfaceComponent({
     }
 
     const handlePlacementSearch = (company: string) => {
-      append({
-        role: 'user',
-        content: `Get placement information for ${company}`,
+      sendMessage({ text: `Get placement information for ${company}` }).catch(error => {
+        console.error('Error sending placement search request:', error)
+        setErrorMessage('Failed to send message. Please try again.')
       })
     }
 
@@ -932,7 +987,7 @@ function PureChatInterfaceComponent({
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            messages: messages,
+            messages: legacyMessagesToUiMessages(messages),
             directToolCall: {
               toolName: 'queryVTOP',
               args: {
@@ -943,7 +998,7 @@ function PureChatInterfaceComponent({
               },
               toolCallId: toolCallId,
             },
-            id: chatId || optimisticChatId,
+            id: resolvedChatId,
           }),
         })
 
@@ -1257,17 +1312,17 @@ function PureChatInterfaceComponent({
     }
 
     useEffect(() => {
-      if (chatId || optimisticChatId) {
+      if (persistedChatId) {
         window.scrollTo(0, 0)
 
         setTimeout(() => {
           window.scrollTo(0, 0)
         }, 100)
       }
-    }, [chatId, optimisticChatId])
+    }, [persistedChatId])
 
     useEffect(() => {
-      if (chatId || optimisticChatId) {
+      if (persistedChatId) {
         const forceScrollToTop = () => {
           window.scrollTo(0, 0)
         }
@@ -1280,7 +1335,7 @@ function PureChatInterfaceComponent({
           clearTimeout(timeoutId)
         }
       }
-    }, [chatId, optimisticChatId])
+    }, [persistedChatId])
 
     useEffect(() => {
       if (showFullChat && isMobile && isFirstMessageInNewChat) {
@@ -1291,10 +1346,10 @@ function PureChatInterfaceComponent({
     }, [showFullChat, isMobile, isFirstMessageInNewChat])
 
     useEffect(() => {
-      if (!chatId && !optimisticChatId) {
+      if (!persistedChatId) {
         setChatCreatedEventDispatched(false)
       }
-    }, [chatId, optimisticChatId])
+    }, [persistedChatId])
 
     useEffect(() => {
       if (messages && messages.length > 0) {
@@ -1697,7 +1752,7 @@ function PureChatInterfaceComponent({
                     }
                     return true
                   })}
-                  chatId={optimisticChatId}
+                  chatId={persistedChatId ?? resolvedChatId}
                   isLoading={isLoading}
                   onCreateCanvas={createCanvasFromMessage}
                   onLoginClick={handleLoginClick}
@@ -1705,7 +1760,11 @@ function PureChatInterfaceComponent({
                   maximizedItem={maximizedArtifact}
                   setMaximizedItem={setMaximizedArtifact}
                 />
-                <DynamicLoadingIndicator messages={messages} isLoading={isLoading || vtopLoading} />
+                <DynamicLoadingIndicator
+                  messages={messages}
+                  isLoading={isLoading || vtopLoading}
+                  isAssistantStreaming={status === 'streaming'}
+                />
                 <div
                   ref={messagesEndRef}
                   className={isLoading ? 'h-20' : 'h-0'}

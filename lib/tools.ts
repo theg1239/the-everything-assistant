@@ -820,7 +820,7 @@ export function createVITTools(userId: string) {
       },
     }),
 
-    gravitasEventRegistration: tool({
+    /* gravitasEventRegistration: tool({
       description:
         'Resolve a Gravitas event by name (or id) and return the direct registration page URL (https://gravitas.vit.ac.in/events/[id]). Use when the user asks to register for an event.',
       parameters: z.object({
@@ -1193,6 +1193,7 @@ export function createVITTools(userId: string) {
       },
     }),
 
+    /*
     ffcs_planner: tool({
       description:
         'Launch the FFCS (Fully Flexible Credit System) course planner. Use this tool to help the user plan their courses for the upcoming semester. This tool provides an interactive UI for searching, selecting, and visualizing a timetable.',
@@ -1203,8 +1204,9 @@ export function createVITTools(userId: string) {
           ui: 'ffcs_planner',
         }
       },
-    }),
+    }), */
 
+    /*
     getCourseInfo: tool({
       description:
         'Get information about courses from the FFCS dataset (supports all schools: SMEC, SCORE, SCOPE, SBST, SCE, SCHEME, SELECT, SENSE). Returns faculty names, slots, venue, etc.',
@@ -1279,6 +1281,7 @@ export function createVITTools(userId: string) {
         }
       },
     }),
+    */
 
     getFacultyInfo: tool({
       description: `Get current faculty information from a local JSON file (public/faculty.json). NEVER return all faculty members at once—ALWAYS require at least a department or faculty name filter. If no filter is provided, ask the user to specify a department or faculty name. Returns school, department, and faculty info. Do NOT provide a full list of all faculty.
@@ -2633,7 +2636,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
         }
       },
     }),
-
+    /*
     gravitasEvents: tool({
       description:
         'Get information about Gravitas events at VIT, including event details, schedules, registration status, and seat availability. Can fetch all events or specific event details by ID.',
@@ -2990,7 +2993,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           }
         }
       },
-    }),
+    }),*/
   }
 }
 

@@ -33,6 +33,7 @@ import { ResultBottomSheet } from './result-bottom-sheet'
 import { HubToolProvider } from './hub-tools-context'
 import { DailyBriefingOverlay } from './daily-briefing-overlay'
 import { MinimalStatusCard } from './minimal-status-card'
+import { HUB_COMMANDS } from '@/types/hub'
 import type { PersonalHubSnapshot, HubVTOPCommand, VTOPCredentialPayload } from '@/types/hub'
 import type { HubActionHandlers } from './hub'
 import { listHubCapabilities, type HubCapability } from '@/lib/hub/capabilities'
@@ -66,6 +67,7 @@ import {
   formatShortDate,
 } from '@/lib/hub/daily-briefing'
 import { toast } from 'sonner'
+import { HUB_BRIEFING_ACTION_EVENT } from '@/lib/hub/constants'
 
 const PINNED_COMMANDS: HubVTOPCommand[] = ['timetable', 'attendance', 'marks', 'cgpa', 'profile']
 const SNAPSHOT_ICONS: Partial<Record<HubVTOPCommand, ReactNode>> = {
@@ -74,7 +76,7 @@ const SNAPSHOT_ICONS: Partial<Record<HubVTOPCommand, ReactNode>> = {
   marks: <Award className="h-4 w-4" />,
   cgpa: <Award className="h-4 w-4" />,
 }
-const SYNC_SEQUENCE: HubVTOPCommand[] = ['profile', 'attendance', 'timetable', 'marks', 'cgpa', 'exams']
+const SYNC_SEQUENCE: HubVTOPCommand[] = ['profile', 'attendance', 'timetable', 'marks', 'cgpa', 'exams', 'da']
 const DAILY_BRIEFING_COMMANDS: HubVTOPCommand[] = Array.from(
   new Set<HubVTOPCommand>([
     ...SYNC_SEQUENCE,
@@ -94,7 +96,7 @@ const HUB_LABEL_CLASS = 'text-[11px] uppercase tracking-[0.3em] text-white/60'
 type Page = HubPage
 
 const NAV_ITEMS: { id: Page; label: string; icon: ReactNode }[] = [
-  { id: 'briefing', label: 'briefing', icon: <Sparkles className="h-3.5 w-3.5" /> },
+  { id: 'briefing', label: 'daily briefing', icon: <Sparkles className="h-3.5 w-3.5" /> },
   { id: 'vtop', label: 'vtop', icon: <GraduationCap className="h-3.5 w-3.5" /> },
   { id: 'papers', label: 'past papers', icon: <FileSearch className="h-3.5 w-3.5" /> },
   { id: 'mess', label: 'mess menu', icon: <UtensilsCrossed className="h-3.5 w-3.5" /> },
@@ -109,6 +111,7 @@ type HubShellProps = {
   syncing?: boolean
   onLink?: () => void
   preferences?: Record<string, any>
+  visible?: boolean
 }
 
 type DailyExamAction = 'syllabus' | 'papers' | 'materials' | 'skip'
@@ -118,6 +121,7 @@ export default function HubShell({
   syncing: externalSyncing = false,
   onLink,
   preferences,
+  visible = true,
 }: HubShellProps) {
   const store = useHubStore(state => state, shallow)
   const {
@@ -151,16 +155,23 @@ export default function HubShell({
   } = store
   const emailSentRef = useRef(false)
   const emailPlanRef = useRef<string | null>(null)
+  const pendingBriefingResetRef = useRef(false)
+  const manualBriefingRef = useRef(false)
   const capabilities = useMemo(() => listHubCapabilities(), [])
   const nowTick = useNow(60000)
-  const hydratableCommands = useMemo(() => {
-    return DAILY_BRIEFING_COMMANDS.filter(cmd => {
-      if (cmd === 'profile') {
-        return !hubState.snapshots.some(snapshot => snapshot.command === 'profile')
-      }
-      return true
+  const snapshotMap = useMemo(() => {
+    const map = new Map<HubVTOPCommand, PersonalHubSnapshot>()
+    hubState.snapshots.forEach(snapshot => {
+      const cmd = snapshot.command as HubVTOPCommand
+      map.set(cmd, snapshot)
     })
+    return map
   }, [hubState.snapshots])
+
+  const needsHydration = useCallback(
+    (command: HubVTOPCommand) => !snapshotMap.has(command),
+    [snapshotMap]
+  )
   const briefingPrefs = useMemo(() => {
     const base = preferences?.dailyBriefing || {}
     return {
@@ -265,6 +276,11 @@ export default function HubShell({
     const reference = nowTick ? new Date(nowTick) : new Date()
     try {
       window.localStorage.setItem(DAILY_BRIEFING_STORAGE_KEY, formatLocalDateKey(reference))
+      window.dispatchEvent(
+        new CustomEvent('ea.dailyBriefingSeen', {
+          detail: { date: formatLocalDateKey(reference) },
+        })
+      )
     } catch (error) {
       console.warn('[hub] failed to persist briefing seen flag', error)
     }
@@ -272,6 +288,7 @@ export default function HubShell({
 
   const dismissDailyBriefing = useCallback(
     (options?: { persist?: boolean }) => {
+      manualBriefingRef.current = false
       setState(current => ({
         dailyBriefingActive: false,
         overlayMode: null,
@@ -298,22 +315,17 @@ export default function HubShell({
       setState({ page: 'briefing' })
       return
     }
-    setState({ syncing: true })
+
+    setState({ syncing: true, syncCommand: null })
     try {
-      for (const command of SYNC_SEQUENCE) {
-        setState({ syncCommand: command })
-        try {
-          await runVtopCommand(command)
-        } catch (err) {
-          console.error('[hub] failed to sync command', command, err)
-        }
-      }
-      const finalState = await actions.refreshState()
-      setHubState(finalState)
+      const nextState = await actions.syncCore()
+      setHubState(nextState)
+    } catch (error) {
+      console.error('[hub] failed to run sync batch', error)
     } finally {
       setState({ syncCommand: null, syncing: false })
     }
-  }, [actions, linked, handleLinkIntent, runVtopCommand, setHubState, setState])
+  }, [actions, linked, handleLinkIntent, setHubState, setState])
 
   const handleExamAction = useCallback(
     (action: DailyExamAction) => {
@@ -367,6 +379,25 @@ export default function HubShell({
     },
     [dismissDailyBriefing, handleLinkIntent, linked, runVtopCommand, openSnapshot]
   )
+
+  useEffect(() => {
+    const handleExternalBriefingAction = (event: Event) => {
+      const detail = (event as CustomEvent<{ command?: string }>).detail
+      if (!detail?.command) return
+      const inbound = detail.command as HubVTOPCommand
+      if (!HUB_COMMANDS.includes(inbound)) return
+      handleBriefingAction(inbound)
+    }
+    window.addEventListener(
+      HUB_BRIEFING_ACTION_EVENT,
+      handleExternalBriefingAction as EventListener
+    )
+    return () =>
+      window.removeEventListener(
+        HUB_BRIEFING_ACTION_EVENT,
+        handleExternalBriefingAction as EventListener
+      )
+  }, [handleBriefingAction])
 
   const latestSnapshots = useMemo(() => {
     const priority = ['attendance', 'timetable', 'marks', 'cgpa', 'profile']
@@ -506,15 +537,24 @@ export default function HubShell({
       if (typeof window === 'undefined') return
       const reference = nowTick ? new Date(nowTick) : new Date()
       const todayKey = formatLocalDateKey(reference)
-      if (!options?.force) {
-        if (dailyBriefingTriggered) return
-        const lastSeen = window.localStorage.getItem(DAILY_BRIEFING_STORAGE_KEY)
-        if (lastSeen === todayKey) {
+      const lastSeen = window.localStorage.getItem(DAILY_BRIEFING_STORAGE_KEY)
+      const alreadySeen = lastSeen === todayKey
+      manualBriefingRef.current = Boolean(options?.force)
+      if (!options?.force && alreadySeen) {
+        if (!dailyBriefingTriggered) {
           setState({ dailyBriefingTriggered: true })
-          return
         }
+        return
       }
-      const queue = hydratableCommands.length ? [...hydratableCommands] : []
+      if (!options?.force && dailyBriefingTriggered && alreadySeen) {
+        return
+      }
+      try {
+        window.localStorage.removeItem(DAILY_BRIEFING_STORAGE_KEY)
+      } catch (error) {
+        console.warn('[hub] failed to reset briefing storage', error)
+      }
+      const queue = DAILY_BRIEFING_COMMANDS.filter(cmd => needsHydration(cmd))
       setState({
         dailyGreeting: buildGreeting(reference, terseName),
         dailyBriefingTriggered: true,
@@ -531,12 +571,47 @@ export default function HubShell({
         overlayMode: 'briefing',
       })
     },
-    [linked, dailyBriefingTriggered, nowTick, terseName, hydratableCommands.length, setState]
+    [linked, dailyBriefingTriggered, nowTick, terseName, snapshotMap, needsHydration, setState]
   )
 
+  const forceDailyBriefing = useCallback(() => {
+    setState({ dailyBriefingTriggered: false })
+    launchDailyBriefing({ force: true })
+  }, [launchDailyBriefing, setState])
+
   useEffect(() => {
+    if (typeof window === 'undefined') return
+    const reference = nowTick ? new Date(nowTick) : new Date()
+    const todayKey = formatLocalDateKey(reference)
+    const lastSeen = window.localStorage.getItem(DAILY_BRIEFING_STORAGE_KEY)
+    if (lastSeen !== todayKey && dailyBriefingTriggered) {
+      setState({ dailyBriefingTriggered: false })
+    }
+  }, [nowTick, dailyBriefingTriggered, setState])
+
+  useEffect(() => {
+    if (!visible) return
+    if (pendingBriefingResetRef.current) {
+      pendingBriefingResetRef.current = false
+      forceDailyBriefing()
+      return
+    }
     launchDailyBriefing()
-  }, [launchDailyBriefing])
+  }, [visible, launchDailyBriefing, forceDailyBriefing])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handleReset = () => {
+      if (!visible) {
+        pendingBriefingResetRef.current = true
+        setState({ dailyBriefingTriggered: false })
+        return
+      }
+      forceDailyBriefing()
+    }
+    window.addEventListener('ea.dailyBriefingReset', handleReset as EventListener)
+    return () => window.removeEventListener('ea.dailyBriefingReset', handleReset as EventListener)
+  }, [forceDailyBriefing, visible, setState])
 
   useEffect(() => {
     if (linked) {
@@ -588,12 +663,16 @@ export default function HubShell({
         console.warn('[hub] failed to reset daily briefing storage', error)
       }
       setState({ dailyBriefingTriggered: false })
-      launchDailyBriefing({ force: true })
+      if (!visible) {
+        pendingBriefingResetRef.current = true
+      } else {
+        launchDailyBriefing({ force: true })
+      }
       handleRefreshState()
     }
     window.addEventListener('vtopCredentialsLinked', handleLinked as EventListener)
     return () => window.removeEventListener('vtopCredentialsLinked', handleLinked as EventListener)
-  }, [handleRefreshState, launchDailyBriefing, setState])
+  }, [handleRefreshState, launchDailyBriefing, setState, visible])
 
   useEffect(() => {
     if (!dailyBriefingActive || !linked || overlayMode !== 'briefing') return
@@ -610,7 +689,6 @@ export default function HubShell({
         const command = hydrationQueue[idx]
         setState({ hydrationCurrentCommand: command })
         try {
-          console.info('[hub/daily-briefing] hydrating', command)
           await runVtopCommand(command)
         } catch (error) {
           console.error('[hub/daily-briefing] auto hydration failed', command, error)
@@ -682,18 +760,6 @@ export default function HubShell({
 
   useEffect(() => {
     if (!dailyBriefingActive || overlayMode !== 'briefing') return
-    if (!dailyMessagesPrepared) return
-    if (dailyHydration.running) return
-    if (!dailyMessages.length) return
-    if (dailyRevealedCount < dailyMessages.length) return
-    const timeout = window.setTimeout(() => {
-      dismissDailyBriefing()
-    }, 2000)
-    return () => window.clearTimeout(timeout)
-  }, [dailyBriefingActive, overlayMode, dailyMessagesPrepared, dailyHydration.running, dailyMessages.length, dailyRevealedCount, dismissDailyBriefing])
-
-  useEffect(() => {
-    if (!dailyBriefingActive || overlayMode !== 'briefing') return
     const dismissTime = briefingPrefs.dismissTime
     if (!dismissTime) return
     const reference = nowTick ? new Date(nowTick) : new Date()
@@ -701,12 +767,21 @@ export default function HubShell({
     if (!target) return
     const diff = target.getTime() - reference.getTime()
     if (diff <= 0) {
+      if (manualBriefingRef.current) {
+        return
+      }
       dismissDailyBriefing()
       return
     }
     const timeout = window.setTimeout(() => dismissDailyBriefing(), diff)
     return () => window.clearTimeout(timeout)
-  }, [dailyBriefingActive, overlayMode, briefingPrefs.dismissTime, nowTick, dismissDailyBriefing])
+  }, [
+    dailyBriefingActive,
+    overlayMode,
+    briefingPrefs.dismissTime,
+    nowTick,
+    dismissDailyBriefing,
+  ])
 
   useEffect(() => {
     if (!dailyBriefingActive || overlayMode !== 'briefing') return
@@ -913,6 +988,20 @@ export default function HubShell({
       )}
 
       {persona && linked && <PersonaStrip persona={persona} onLink={handleLinkIntent} />}
+
+      {linked && (
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              forceDailyBriefing()
+            }}
+          >
+            rerun daily briefing
+          </Button>
+        </div>
+      )}
 
       {linked && (
         <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">

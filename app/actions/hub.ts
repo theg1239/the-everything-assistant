@@ -9,6 +9,7 @@ import {
 } from '@/lib/server-vtop-credentials'
 import { vtopResultSchema } from '@/app/api/hub/vtop/schema'
 import { parseHubCommandResult } from '@/lib/hub/parsers'
+import type { RawVTOPResult } from '@/lib/hub/parsers/attendance'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { saveTokenUsage } from '@/lib/db'
 import { listVTOPSnapshots, upsertVTOPSnapshot } from '@/lib/vtop-snapshots'
@@ -29,7 +30,11 @@ const HUB_CORE_COMMANDS: HubVTOPCommand[] = [
   'marks',
   'cgpa',
   'exams',
+  'da',
 ]
+
+const VTOP_PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001'
+const MODEL_NAME = 'gemini-2.5-flash'
 
 async function requireUser() {
   const session = await getServerSession(authOptions)
@@ -77,39 +82,25 @@ async function resolveVTOPCredentials(
   return fallback
 }
 
-async function executeVTOPCommand(
-  userId: string,
-  command: HubVTOPCommand,
-  extras: Record<string, any> = {},
-  credentials?: VTOPCredentialPayload
-): Promise<VTOPFormattedResult> {
-  const tools = createVITTools(userId)
-  const vtop = (tools as any)['queryVTOP']
-  if (!vtop || typeof vtop.execute !== 'function') {
-    throw new Error('VTOP tool is unavailable')
-  }
-
-  const creds = await resolveVTOPCredentials(credentials)
-
-  const args: Record<string, any> = {
-    command,
-    username: creds.username,
-    ...extras,
-  }
-
+function buildCredentialPayload(creds: VTOPCredentialPayload) {
+  const payload: Record<string, any> = { username: creds.username }
   if (creds.encryptedPassword?.includes(':::')) {
     const [encryptedPassword, sessionKey] = creds.encryptedPassword.split(':::')
-    args.encryptedPassword = encryptedPassword
-    args.sessionKey = sessionKey
+    payload.encryptedPassword = encryptedPassword
+    payload.sessionKey = sessionKey
   } else {
-    args.password = creds.encryptedPassword
+    payload.password = creds.encryptedPassword
   }
+  return payload
+}
 
-  const raw = await vtop.execute(args, { toolCallId: `vtop-${Date.now()}`, messages: [] })
-
+async function formatAndPersistVTOPResult(
+  userId: string,
+  command: HubVTOPCommand,
+  raw: RawVTOPResult
+): Promise<VTOPFormattedResult> {
   let object: z.infer<typeof vtopResultSchema> | null = parseHubCommandResult(command, raw)
   let usage: any = null
-  const MODEL_NAME = 'gemini-2.5-flash'
 
   if (!object) {
     const prompt = [
@@ -147,13 +138,38 @@ async function executeVTOPCommand(
       stepIndex: null,
       promptTokens: usage.promptTokens || 0,
       completionTokens: usage.completionTokens || 0,
-      totalTokens:
-        usage.totalTokens || (usage.promptTokens || 0) + (usage.completionTokens || 0),
+      totalTokens: usage.totalTokens || (usage.promptTokens || 0) + (usage.completionTokens || 0),
       meta: { type: 'hub-vtop', command },
     })
   }
 
   return object as VTOPFormattedResult
+}
+
+async function executeVTOPCommand(
+  userId: string,
+  command: HubVTOPCommand,
+  extras: Record<string, any> = {},
+  credentials?: VTOPCredentialPayload
+): Promise<VTOPFormattedResult> {
+  const tools = createVITTools(userId)
+  const vtop = (tools as any)['queryVTOP']
+  if (!vtop || typeof vtop.execute !== 'function') {
+    throw new Error('VTOP tool is unavailable')
+  }
+
+  const creds = await resolveVTOPCredentials(credentials)
+
+  const args: Record<string, any> = {
+    command,
+    username: creds.username,
+    ...extras,
+  }
+
+  Object.assign(args, buildCredentialPayload(creds))
+
+  const raw = await vtop.execute(args, { toolCallId: `vtop-${Date.now()}`, messages: [] })
+  return formatAndPersistVTOPResult(userId, command, raw)
 }
 
 export async function refreshVTOPSnapshotAction(
@@ -174,15 +190,66 @@ export async function refreshVTOPSnapshotAction(
   }
 }
 
+type ProxySyncResultEntry = {
+  command: string
+  success: boolean
+  result?: RawVTOPResult
+  error?: any
+}
+
+async function runProxySyncBatch(commands: HubVTOPCommand[], creds: VTOPCredentialPayload) {
+  const body = {
+    ...buildCredentialPayload(creds),
+    commands,
+  }
+
+  const response = await fetch(`${VTOP_PROXY_URL}/sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+
+  if (!response.ok) {
+    throw new Error(`proxy sync failed: ${response.status}`)
+  }
+
+  const payload = await response.json()
+  const results = Array.isArray(payload?.results) ? payload.results : []
+  return results as ProxySyncResultEntry[]
+}
+
 export async function syncCoreHubSnapshots(commands: HubVTOPCommand[] = [...HUB_CORE_COMMANDS]) {
   const userId = await requireUser()
-  for (const command of commands) {
-    try {
-      await executeVTOPCommand(userId, command)
-    } catch (error) {
-      console.error('[hub/actions] failed to refresh', command, error)
+  const creds = await resolveVTOPCredentials()
+
+  try {
+    const entries = await runProxySyncBatch(commands, creds)
+    for (const entry of entries) {
+      const command = entry.command as HubVTOPCommand
+      if (!commands.includes(command)) continue
+      if (!entry.success || !entry.result) {
+        console.error('[hub/actions] sync skipped', command, entry.error || 'unknown error')
+        continue
+      }
+      try {
+        await formatAndPersistVTOPResult(userId, command, entry.result)
+      } catch (error) {
+        console.error('[hub/actions] failed to store sync result', command, error)
+      }
     }
+  } catch (error) {
+    console.error('[hub/actions] batch sync failed, falling back to sequential refresh:', error)
+    await Promise.allSettled(
+      commands.map(async command => {
+        try {
+          await executeVTOPCommand(userId, command, {}, creds)
+        } catch (fallbackError) {
+          console.error('[hub/actions] fallback refresh failed', command, fallbackError)
+        }
+      })
+    )
   }
+
   return buildHubState(userId)
 }
 

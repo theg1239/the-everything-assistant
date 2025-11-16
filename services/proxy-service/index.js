@@ -34,6 +34,8 @@ const VERBOSE_LOG =
 
 const app = express()
 
+const DEFAULT_SYNC_COMMANDS = ['profile', 'timetable', 'attendance', 'marks', 'cgpa', 'exams', 'da']
+
 // Per-username VTOP call limiter to guard against repeated CLI panics
 // Defaults: 15 calls per 5 minutes per username when MCP OAuth is enabled.
 const PER_USER_VTOP_LIMIT = parseInt(process.env.VTOP_USER_LIMIT || '15', 10)
@@ -67,6 +69,8 @@ const logError = (scope, id, message, error) => {
   const prefix = `[${scope}:${id}]`
   console.error(prefix, message, error)
 }
+
+const isPlainObject = value => value && typeof value === 'object' && !Array.isArray(value)
 
 app.use(
   helmet({
@@ -215,6 +219,51 @@ app.post('/vtop', vtopLimiter, async (req, res) => {
     logError('vtop', requestId, `failed command=${command}`, error.error || error.message || error)
     const sanitizedError = sanitizeErrorForResponse(error, command)
     return res.status(500).json(sanitizedError)
+  }
+})
+
+app.post('/sync', vtopLimiter, async (req, res) => {
+  const startedAt = Date.now()
+  const { username, password, encryptedPassword, sessionKey, commands, flags } = req.body || {}
+
+  if (!username) {
+    return res.status(400).json({ error: 'Missing required field: username' })
+  }
+
+  const commandList = Array.isArray(commands) && commands.length ? commands : DEFAULT_SYNC_COMMANDS
+  const unsupported = commandList.filter(cmd => !SUPPORTED_COMMANDS.includes(cmd))
+  if (unsupported.length) {
+    return res.status(400).json({ error: `Unsupported commands: ${unsupported.join(', ')}`, supportedCommands: SUPPORTED_COMMANDS })
+  }
+
+  let resolvedPassword
+  try {
+    resolvedPassword = resolvePassword({ password, encryptedPassword, sessionKey })
+  } catch (error) {
+    return res.status(400).json({ error: error.message || 'Failed to resolve credentials' })
+  }
+
+  const mergedFlags = {
+    ...(isPlainObject(flags) ? flags : {}),
+    commands: commandList.join(','),
+  }
+
+  try {
+    const raw = await runCommand(username, resolvedPassword, 'sync', mergedFlags)
+    const shaped = normalizeResultPayload(raw, 'sync', mergedFlags)
+    const structured = isPlainObject(shaped?.structured_data) ? shaped.structured_data : {}
+    const results = Array.isArray(structured?.results) ? structured.results : []
+
+    res.json({
+      success: shaped.success !== false,
+      startedAt: new Date(startedAt).toISOString(),
+      durationMs: Date.now() - startedAt,
+      results,
+      raw: shaped,
+    })
+  } catch (error) {
+    const sanitized = sanitizeErrorForResponse(error, 'sync')
+    res.status(500).json(sanitized)
   }
 })
 

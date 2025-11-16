@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, memo, useCallback, useMemo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useChat, type Message as AIMessage } from '@ai-sdk/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useMemory } from '@/contexts/memory-context'
 import { VirtualizedMessages } from '@/components/virtualized-messages'
@@ -18,7 +18,8 @@ import { MobilePdfDockButton, DesktopPdfDockButton } from '@/components/pdf-dock
 import { MultimodalInput } from '@/components/multimodal-input'
 import Hub, { type HubActionHandlers } from '@/components/hub/hub'
 import { HubStoreProvider } from '@/components/hub/hub-store'
-import type { PersonalHubState } from '@/types/hub'
+import { HUB_COMMANDS } from '@/types/hub'
+import type { PersonalHubState, HubVTOPCommand } from '@/types/hub'
 import { extractTitleFromContent } from '@/lib/utils'
 import UpsellBanner from '@/components/upsell-banner'
 import { VTOPToolHandler } from '@/components/vtop-tool-handler'
@@ -35,6 +36,12 @@ import { useAutoResume } from '@/hooks/use-auto-resume'
 import { useSidebar } from '@/contexts/sidebar-context'
 import { StreamingErrorDisplay } from '@/components/streaming-error-display'
 import { DynamicLoadingIndicator } from '@/components/dynamic-loading-indicator'
+import {
+  HUB_BRIEFING_ACTION_EVENT,
+  HUB_BRIEFING_ACTION_PARAM,
+  HUB_BRIEFING_TRIGGER_PARAM,
+  HUB_BRIEFING_TRIGGER_VALUE,
+} from '@/lib/hub/constants'
 
 const useViewportHeight = () => {
   const mainRef = useRef<HTMLDivElement>(null)
@@ -116,6 +123,8 @@ const EMPTY_HUB_STATE: PersonalHubState = {
   lastSyncedAt: null,
 }
 
+const HUB_COMMAND_LOOKUP = new Set<HubVTOPCommand>(HUB_COMMANDS)
+
 const areHubActionsEqual = (a?: HubActionHandlers, b?: HubActionHandlers) => {
   if (a === b) return true
   if (!a || !b) return false
@@ -135,11 +144,20 @@ interface ChatInterfaceProps {
   hubActions?: HubActionHandlers
 }
 
-const PureChatInterface = memo(
-  ({ initialMessages = [], chatId, autoResume = false, initialHubState, hubActions }: ChatInterfaceProps) => {
+const DAILY_BRIEFING_STORAGE_KEY = 'ea.hub.daily-briefing-date'
+
+function PureChatInterfaceComponent({
+  initialMessages = [],
+  chatId,
+  autoResume = false,
+  initialHubState,
+  hubActions,
+}: ChatInterfaceProps) {
     const [showFullChat, setShowFullChat] = useState(initialMessages.length > 0)
     const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebar()
     const [hubOpen, setHubOpen] = useState(false)
+    const [pendingBriefingAction, setPendingBriefingAction] = useState<HubVTOPCommand | null>(null)
+    const [showDailyBriefingLabel, setShowDailyBriefingLabel] = useState(false)
     const hubSeed = initialHubState ?? EMPTY_HUB_STATE
     const hubActionHandlers = useMemo<HubActionHandlers>(() => {
       if (hubActions) return hubActions
@@ -177,6 +195,8 @@ const PureChatInterface = memo(
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const contentRef = useRef<HTMLDivElement>(null)
     const router = useRouter()
+    const pathname = usePathname()
+    const searchParams = useSearchParams()
     const [optimisticChatId, setOptimisticChatId] = useState<string | undefined>(chatId)
     const currentChatIdRef = useRef<string | undefined>(chatId)
     const { updateToolResult, clearToolResult } = useVTOP()
@@ -227,6 +247,59 @@ const PureChatInterface = memo(
       window.addEventListener('hubShareToChat', handleShare as EventListener)
       return () => window.removeEventListener('hubShareToChat', handleShare as EventListener)
     }, [])
+
+    useEffect(() => {
+      if (typeof window === 'undefined') return
+      const updateLabel = () => {
+        const now = new Date()
+        const todayKey = `${now.getFullYear()}-${`${now.getMonth() + 1}`.padStart(2, '0')}-${`${now
+          .getDate()
+          .toString()
+          .padStart(2, '0')}`}`
+        const lastSeen = window.localStorage.getItem(DAILY_BRIEFING_STORAGE_KEY)
+        setShowDailyBriefingLabel(!lastSeen || lastSeen !== todayKey)
+      }
+      updateLabel()
+      const seenListener = () => updateLabel()
+      const resetListener = () => updateLabel()
+      window.addEventListener('ea.dailyBriefingSeen', seenListener)
+      window.addEventListener('ea.dailyBriefingReset', resetListener)
+      return () => {
+        window.removeEventListener('ea.dailyBriefingSeen', seenListener)
+        window.removeEventListener('ea.dailyBriefingReset', resetListener)
+      }
+    }, [])
+
+    useEffect(() => {
+      if (!searchParams) return
+      const trigger = searchParams.get(HUB_BRIEFING_TRIGGER_PARAM)
+      const actionValue = searchParams.get(HUB_BRIEFING_ACTION_PARAM)
+      const shouldOpen = trigger === HUB_BRIEFING_TRIGGER_VALUE || Boolean(actionValue)
+      if (!shouldOpen) return
+      setHubOpen(true)
+      if (actionValue && HUB_COMMAND_LOOKUP.has(actionValue as HubVTOPCommand)) {
+        setPendingBriefingAction(actionValue as HubVTOPCommand)
+      }
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete(HUB_BRIEFING_TRIGGER_PARAM)
+      params.delete(HUB_BRIEFING_ACTION_PARAM)
+      const next = params.toString()
+      const nextUrl = next ? `${pathname}?${next}` : pathname
+      router.replace(nextUrl, { scroll: false })
+    }, [searchParams, pathname, router])
+
+    useEffect(() => {
+      if (!pendingBriefingAction || !hubOpen) return
+      const timeout = window.setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent(HUB_BRIEFING_ACTION_EVENT, {
+            detail: { command: pendingBriefingAction },
+          })
+        )
+        setPendingBriefingAction(null)
+      }, 400)
+      return () => window.clearTimeout(timeout)
+    }, [pendingBriefingAction, hubOpen])
 
     const handleInstallClick = async () => {
       if (deferredPrompt && deferredPrompt.prompt) {
@@ -1291,14 +1364,27 @@ const PureChatInterface = memo(
                     transition={{ duration: 0.6, delay: 0.2, ease: 'easeOut' }}
                   >
                     <button
-                      onClick={() => setHubOpen(true)}
+                      onClick={() => {
+                        setHubOpen(true)
+                        if (showDailyBriefingLabel && typeof window !== 'undefined') {
+                          window.setTimeout(() => {
+                            try {
+                              window.localStorage.removeItem(DAILY_BRIEFING_STORAGE_KEY)
+                              window.dispatchEvent(new CustomEvent('ea.dailyBriefingReset'))
+                            } catch (error) {
+                              console.warn('failed to reset daily briefing flag', error)
+                            }
+                          }, 50)
+                        }
+                        setShowDailyBriefingLabel(false)
+                      }}
                       aria-label="Open hub"
                       className="hub-gradient-btn"
                       style={{ minWidth: '320px', paddingLeft: '32px', paddingRight: '32px' }}
                     >
                       <span className="hub-gradient-inner">
                         <GraduationCap className="h-4 w-4 mr-2" />
-                        <span>hub</span>
+                        <span>{showDailyBriefingLabel ? 'daily briefing' : 'hub'}</span>
                       </span>
                     </button>
                   </motion.div>
@@ -1703,8 +1789,21 @@ const PureChatInterface = memo(
     }
 
     return <HubStoreProvider initialState={hubSeed}>{hubLayout}</HubStoreProvider>
-  }
-)
+}
+
+const PureChatInterface = memo(PureChatInterfaceComponent, (prevProps, nextProps) => {
+  return (
+    prevProps.chatId === nextProps.chatId &&
+    prevProps.autoResume === nextProps.autoResume &&
+    prevProps.initialHubState === nextProps.initialHubState &&
+    areHubActionsEqual(prevProps.hubActions, nextProps.hubActions) &&
+    prevProps.initialMessages?.length === nextProps.initialMessages?.length &&
+    (prevProps.initialMessages?.every(
+      (msg, index) => msg.id === nextProps.initialMessages?.[index]?.id
+    ) ??
+      true)
+  )
+})
 
 export const ChatInterface = memo(
   ({ initialMessages = [], chatId, autoResume = true, initialHubState, hubActions }: ChatInterfaceProps) => {

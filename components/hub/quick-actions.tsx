@@ -59,6 +59,20 @@ export default function QuickActions({ linked, onShowResult, goTo, runVtop, onLi
     }
   }
 
+  const runAssignments = async () => {
+    if (!linked) {
+      onLink?.()
+      return goTo('briefing')
+    }
+    try {
+      setPendingAction('assignments')
+      const snapshot = await runVtop('da')
+      onShowResult(snapshot.title || 'digital assignments', snapshot)
+    } finally {
+      setPendingAction(null)
+    }
+  }
+
   const runPlacements = async () => {
     const res = await placements.run({})
     onShowResult('placements overview', res)
@@ -82,6 +96,15 @@ export default function QuickActions({ linked, onShowResult, goTo, runVtop, onLi
             icon: <CalendarClock className="h-3.5 w-3.5" />,
             onClick: runTimetable,
             loading: pendingAction === 'timetable',
+          }
+        : null,
+      linked
+        ? {
+            id: 'assignments',
+            label: 'my assignments',
+            icon: <ClipboardCheck className="h-3.5 w-3.5" />,
+            onClick: runAssignments,
+            loading: pendingAction === 'assignments',
           }
         : null,
       {

@@ -16,6 +16,14 @@
     }
   },
   {
+    "command": "sync",
+    "cliCommand": "sync",
+    "title": "hub sync",
+    "description": "Batch refresh personal hub snapshots.",
+    "group": "hub",
+    "autoSync": false
+  },
+  {
     "command": "timetable",
     "cliCommand": "timetable",
     "title": "timetable pulse",

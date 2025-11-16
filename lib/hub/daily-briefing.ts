@@ -1,4 +1,4 @@
-import { formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow, differenceInCalendarDays } from 'date-fns'
 import type { PersonalHubSnapshot, HubVTOPCommand } from '@/types/hub'
 
 export type DailyBriefingMessage = {
@@ -174,6 +174,20 @@ export function buildDailyBriefingContext(
     messages.push({ id: 'mood-balanced', primary: 'today looks balanced. pace yourself.' })
   }
 
+  const todaysClasses = timetableData ? deriveClassesForDay(timetableData, referenceDate) : []
+  if (todaysClasses.length > 0) {
+    const scheduleNarrative = buildClassScheduleNarrative(todaysClasses, referenceDate)
+    if (scheduleNarrative) {
+      messages.push(scheduleNarrative)
+    }
+  } else if (timetable) {
+    messages.push({
+      id: 'classes-today',
+      primary: 'no classes scheduled on the timetable today.',
+      tone: 'calm',
+    })
+  }
+
   if (examPhrase) {
     messages.push({ id: 'exam-heads-up', primary: `FAT exams are ${examPhrase}.`, tone: 'alert' })
     examSchedule.slice(0, 3).forEach((entry, index) => {
@@ -184,6 +198,21 @@ export function buildDailyBriefingContext(
         primary: entry.title || entry.course || entry.code || 'exam',
         supporting: when,
       })
+    })
+  }
+
+  if (typeof examDaysAway === 'number' && examDaysAway <= 0 && todaysClasses.length > 0) {
+    const earliestClass = todaysClasses.find(cls => cls.startMinutes != null)
+    const lastClassWithTime = [...todaysClasses].reverse().find(cls => cls.startMinutes != null)
+    const windowLabel =
+      earliestClass && lastClassWithTime
+        ? `${formatMinutesLabel(earliestClass.startMinutes!)} → ${formatMinutesLabel(lastClassWithTime.startMinutes!)}`
+        : null
+    messages.push({
+      id: 'exam-class-balance',
+      primary: `exam today plus ${todaysClasses.length} class${todaysClasses.length === 1 ? '' : 'es'} to juggle`,
+      supporting: windowLabel ? `${windowLabel} timetable window—plan buffers` : 'plan buffers between exam blocks and class slots',
+      tone: 'alert',
     })
   }
 
@@ -398,15 +427,21 @@ export function deriveExamInsight(snapshot?: PersonalHubSnapshot | null, nowTick
   const upcoming = pickUpcomingExam(schedule, now) || schedule[0]
   if (!upcoming || !upcoming.examDateObj) return null
 
-  const absolute = formatDateWithTime(upcoming.examDateObj)
   const relative = formatDistanceToNow(upcoming.examDateObj, { addSuffix: true })
-  const headline = `${upcoming.title || upcoming.course || upcoming.code || 'exam'} on ${formatShortDate(
-    upcoming.examDateObj
-  )}`
+  const daysUntil = differenceInCalendarDays(upcoming.examDateObj, now)
+  const nearby = daysUntil >= 0 && daysUntil <= 7
+  const baseLabel = upcoming.title || upcoming.course || upcoming.code || 'exam'
+  const countdownLabel =
+    daysUntil === 0 ? 'today' : daysUntil === 1 ? 'in 1 day' : `in ${daysUntil} days`
+  const headline = nearby
+    ? `${baseLabel} ${countdownLabel}`
+    : `${baseLabel} on ${formatShortDate(upcoming.examDateObj)}`
 
   return {
     headline,
-    supporting: [upcoming.examTime, relative].filter(Boolean).join(' · ') || undefined,
+    supporting: [upcoming.examTime, relative, nearby ? 'nearby exam' : undefined]
+      .filter(Boolean)
+      .join(' · ') || undefined,
     meta: upcoming.venue || upcoming.hall || upcoming.slot,
   }
 }
@@ -762,6 +797,151 @@ export function computeDynamicNextClass(
   return winner
 }
 
+type DayClassSummary = {
+  subject: string
+  timeLabel?: string
+  venue?: string
+  sortValue: number
+  startMinutes?: number | null
+}
+
+function deriveClassesForDay(structuredData: any, referenceDate: Date): DayClassSummary[] {
+  const candidates = extractTimetableCandidates(structuredData)
+  if (!candidates.length) return []
+  const targetIndex = (referenceDate.getDay() + 6) % 7
+  const results: DayClassSummary[] = []
+
+  candidates.forEach(candidate => {
+    const dayValue =
+      candidate.day ||
+      candidate.Day ||
+      candidate.dayName ||
+      candidate.dayname ||
+      candidate.weekday ||
+      candidate.DayName
+    const dayIndex = resolveDayIndex(typeof dayValue === 'string' ? dayValue : undefined)
+    if (dayIndex === null || dayIndex !== targetIndex) return
+
+    const subject =
+      candidate.subject ||
+      candidate.course ||
+      candidate.title ||
+      candidate.code ||
+      candidate.slot ||
+      candidate.className
+    if (!subject || typeof subject !== 'string') return
+
+    const timeSource =
+      candidate.startTime ||
+      candidate.time ||
+      candidate.slotTime ||
+      candidate.start ||
+      candidate.slot ||
+      candidate.timeRange
+    const timeLabel =
+      typeof timeSource === 'string'
+        ? timeSource
+            .replace(/[\u2013\u2014]/g, '-')
+            .replace(/\s+/g, ' ')
+            .trim()
+        : undefined
+    const parsed = typeof timeSource === 'string' ? parseStartTime(timeSource) : null
+    const sortValue = parsed ? parsed.hour * 60 + (parsed.minute ?? 0) : 24 * 60 + results.length
+
+    results.push({
+      subject: subject.trim(),
+      timeLabel,
+      venue: candidate.venue || candidate.room || candidate.location || candidate.hall,
+      sortValue,
+      startMinutes: parsed ? sortValue : null,
+    })
+  })
+
+  return results.sort((a, b) => a.sortValue - b.sortValue)
+}
+
+function buildClassScheduleNarrative(classes: DayClassSummary[], referenceDate: Date): DailyBriefingMessage | null {
+  if (!classes.length) return null
+  const sorted = [...classes].sort((a, b) => a.sortValue - b.sortValue)
+  const withTime = sorted.filter(cls => typeof cls.startMinutes === 'number')
+  const totalCount = sorted.length
+
+  const fallbackPreview = sorted
+    .slice(0, 3)
+    .map(cls => {
+      const detail = [cls.timeLabel, cls.venue].filter(Boolean).join(' · ')
+      return detail ? `${cls.subject} (${detail})` : cls.subject
+    })
+    .join(' · ')
+
+  if (!withTime.length) {
+    return {
+      id: 'classes-today',
+      primary: `${totalCount} class${totalCount === 1 ? '' : 'es'} on the calendar today`,
+      supporting: fallbackPreview || undefined,
+    }
+  }
+
+  const first = withTime[0]
+  const last = withTime[withTime.length - 1]
+  const nowMinutes = referenceDate.getHours() * 60 + referenceDate.getMinutes()
+  const upcoming = withTime.find(cls => (cls.startMinutes as number) >= nowMinutes) || first
+  const windowLabel = `${formatMinutesLabel(first.startMinutes!)} → ${formatMinutesLabel(last.startMinutes!)}`
+  const spanMinutes = Math.max(0, (last.startMinutes ?? 0) - (first.startMinutes ?? 0))
+  const longestGap = computeLongestGap(withTime)
+
+  const supportingBits = [windowLabel]
+  if (spanMinutes >= 180) {
+    supportingBits.push(`≈${formatDurationLabel(spanMinutes)} on campus`)
+  }
+  if (longestGap && longestGap.minutes >= 90) {
+    supportingBits.push(
+      `gap ${formatDurationLabel(longestGap.minutes)} between ${longestGap.from.subject} and ${longestGap.to.subject}`
+    )
+  }
+  if (fallbackPreview) {
+    supportingBits.push(fallbackPreview)
+  }
+
+  return {
+    id: 'classes-today',
+    primary: `${upcoming.subject} at ${formatMinutesLabel(upcoming.startMinutes!)} is next of ${totalCount} class${
+      totalCount === 1 ? '' : 'es'
+    } today`,
+    supporting: supportingBits.filter(Boolean).join(' · ') || undefined,
+  }
+}
+
+function computeLongestGap(classes: DayClassSummary[]) {
+  let longest: { minutes: number; from: DayClassSummary; to: DayClassSummary } | null = null
+  for (let i = 0; i < classes.length - 1; i += 1) {
+    const current = classes[i]
+    const next = classes[i + 1]
+    if (current.startMinutes == null || next.startMinutes == null) continue
+    const diff = next.startMinutes - current.startMinutes
+    if (!longest || diff > longest.minutes) {
+      longest = { minutes: diff, from: current, to: next }
+    }
+  }
+  return longest
+}
+
+function formatMinutesLabel(minutes: number) {
+  const base = new Date()
+  base.setHours(0, 0, 0, 0)
+  base.setMinutes(minutes)
+  return new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(base)
+}
+
+function formatDurationLabel(minutes: number) {
+  const hours = Math.floor(minutes / 60)
+  const mins = Math.round(minutes % 60)
+  const parts: string[] = []
+  if (hours > 0) parts.push(`${hours}h`)
+  if (mins > 0) parts.push(`${mins}m`)
+  return parts.length ? parts.join(' ') : '0m'
+}
+
 function extractTimetableCandidates(structuredData: any): any[] {
   if (!structuredData) return []
   const pools = ['classes', 'schedule', 'sessions']
@@ -856,9 +1036,9 @@ export function formatPreferenceTimeLabel(timeValue?: string) {
   }).format(date)
 }
 
-function differenceInCalendarDays(dateLeft: Date, dateRight: Date) {
-  const startOfDayLeft = new Date(dateLeft.getFullYear(), dateLeft.getMonth(), dateLeft.getDate())
-  const startOfDayRight = new Date(dateRight.getFullYear(), dateRight.getMonth(), dateRight.getDate())
-  const diffTime = startOfDayLeft.getTime() - startOfDayRight.getTime()
-  return Math.round(diffTime / (24 * 60 * 60 * 1000))
-}
+// function differenceInCalendarDays(dateLeft: Date, dateRight: Date) {
+//   const startOfDayLeft = new Date(dateLeft.getFullYear(), dateLeft.getMonth(), dateLeft.getDate())
+//   const startOfDayRight = new Date(dateRight.getFullYear(), dateRight.getMonth(), dateRight.getDate())
+//   const diffTime = startOfDayLeft.getTime() - startOfDayRight.getTime()
+//   return Math.round(diffTime / (24 * 60 * 60 * 1000))
+// }

@@ -36,6 +36,32 @@ export type HubVTOPCommand =
   | 'facility'
   | 'syllabus'
   | 'course-page'
+  | 'sync'
+
+export const HUB_COMMANDS = [
+  'profile',
+  'marks',
+  'grades',
+  'attendance',
+  'timetable',
+  'receipts',
+  'hostel',
+  'cgpa',
+  'exams',
+  'exam-schedule',
+  'calendar',
+  'library-dues',
+  'nightslip',
+  'leave',
+  'leave-status',
+  'msg',
+  'class-message',
+  'da',
+  'facility',
+  'syllabus',
+  'course-page',
+  'sync',
+] as const satisfies HubVTOPCommand[]
 
 export type VTOPCredentialPayload = {
   username: string

@@ -130,6 +130,7 @@ export default function Hub({
                     onLink?.()
                   }}
                   preferences={preferences}
+                  visible={effectiveOpen}
                 />
               )}
             </div>

@@ -397,6 +397,8 @@ function getShortFlag(flagName) {
       return 'i'
     case 'debug':
       return 'd'
+    case 'commands':
+      return 'x'
     default:
       return flagName.charAt(0)
   }

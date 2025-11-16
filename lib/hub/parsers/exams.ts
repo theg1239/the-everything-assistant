@@ -43,7 +43,12 @@ function primaryExam(
 
 function normalizeExamRow(row: any[] = []): RawExamRow | null {
   if (!row.length) return null
-  const [code, title, slot, examDate, examTime, venue, seat, seatNo, daysLeft, ...rest] = row
+  const cells = [...row]
+  const firstCell = cells[0]
+  if (typeof firstCell === 'string' && /^(\d+)$/.test(firstCell.trim()) && cells.length > 9) {
+    cells.shift()
+  }
+  const [code, title, slot, examDate, examTime, venue, seat, seatNo, daysLeft, ...rest] = cells
   const payload = primaryExam(code, title, slot, examDate, examTime, venue, seat, seatNo, daysLeft)
   if (rest && rest.length >= 6) {
     const extra = primaryExam(...(rest as any[]))
@@ -56,14 +61,23 @@ function normalizeExamRow(row: any[] = []): RawExamRow | null {
 }
 
 export function parseExams(raw: any) {
+  const structuredTables = Array.isArray(raw?.structured_data?.tables) ? raw.structured_data.tables : []
   const text = typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
-  if (!text.trim()) return null
-  const tables = extractCliTables(text)
-  if (!tables.length) return null
+  const fallbackTables = text.trim() ? extractCliTables(text) : []
+  if (!structuredTables.length && !fallbackTables.length) return null
 
-  const sections = tables.map(table => {
+  const sourceTables = structuredTables.length
+    ? structuredTables.map((table: any) => ({
+        heading: table.heading || table.title || 'schedule',
+        rows: Array.isArray(table.rows) ? table.rows : [],
+      }))
+    : fallbackTables
+
+  const sections = sourceTables.map((table: { heading: string; rows: any[][] }) => {
+    const heading = table.heading || 'schedule'
+    const normalizedHeading = /[\u2500-\u257f]/.test(heading) ? 'FAT exams' : heading
     const exams: RawExamRow[] = []
-    table.rows.forEach(row => {
+    table.rows.forEach((row: any[]) => {
       const normalized = normalizeExamRow(row)
       if (!normalized) return
       if (normalized.title || normalized.code) {
@@ -74,21 +88,21 @@ export function parseExams(raw: any) {
       }
     })
     return {
-      title: table.heading || 'schedule',
+      title: normalizedHeading,
       exams,
     }
   })
 
-  const allExams = sections.flatMap(section => section.exams)
+  const allExams = sections.flatMap((section: { exams: RawExamRow[] }) => section.exams)
   if (!allExams.length) return null
 
   const upcoming = allExams
-    .map(exam => ({
+    .map((exam: RawExamRow) => ({
       ...exam,
       parsedDate: exam.examDate ? Date.parse(exam.examDate) : NaN,
     }))
-    .filter(exam => !Number.isNaN(exam.parsedDate))
-    .sort((a, b) => a.parsedDate - b.parsedDate)[0]
+    .filter((exam: RawExamRow & { parsedDate: number }) => !Number.isNaN(exam.parsedDate))
+    .sort((a: RawExamRow & { parsedDate: number }, b: RawExamRow & { parsedDate: number }) => (a.parsedDate ?? 0) - (b.parsedDate ?? 0))[0]
 
   const summary = upcoming
     ? `${upcoming.title || upcoming.code} on ${upcoming.examDate}`

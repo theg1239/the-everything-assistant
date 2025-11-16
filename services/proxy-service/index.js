@@ -29,6 +29,9 @@ const {
 } = require('./src/workflows/course-page')
 require('dotenv').config()
 
+const VERBOSE_LOG =
+  process.env.PROXY_VERBOSE_LOGS === '1' || (process.env.NODE_ENV || '').toLowerCase() !== 'production'
+
 const app = express()
 
 // Per-username VTOP call limiter to guard against repeated CLI panics
@@ -182,6 +185,19 @@ app.post('/vtop', vtopLimiter, async (req, res) => {
   try {
     const result = await runCommand(username, finalPassword, command, sanitizedFlags)
     const shaped = normalizeResultPayload(result, command, sanitizedFlags)
+    if (VERBOSE_LOG) {
+      const outputSnippet =
+        typeof shaped.output === 'string' ? shaped.output.slice(0, 400) : null
+      logRequest(
+        'vtop',
+        requestId,
+        `debug result command=${command} success=${shaped.success}`,
+        {
+          outputSnippet,
+          meta: shaped.meta || null,
+        }
+      )
+    }
     logRequest(
       'vtop',
       requestId,

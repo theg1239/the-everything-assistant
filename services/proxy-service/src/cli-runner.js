@@ -5,6 +5,24 @@ const { cleanVTOPOutput } = require('./utils/text')
 const { sanitizeErrorForResponse } = require('./utils/errors')
 const { record } = require('./metrics')
 
+const VERBOSE_LOG =
+  process.env.PROXY_VERBOSE_LOGS === '1' || (process.env.NODE_ENV || '').toLowerCase() !== 'production'
+
+const maskIdentifier = value => {
+  if (!value || typeof value !== 'string') return 'unknown'
+  if (value.length <= 4) return value
+  return `${value.slice(0, 2)}***${value.slice(-2)}`
+}
+
+const redactCliArgs = args => {
+  if (!Array.isArray(args)) return args
+  return args.map((arg, idx) => {
+    if (idx === 1) return maskIdentifier(arg) // username
+    if (idx === 2) return '***' // password
+    return arg
+  })
+}
+
 let binaryReady = false
 
 const snippet = text => {
@@ -58,6 +76,17 @@ function runCommand(username, password, command, flags = {}) {
     }
 
     const cliArgs = buildCliArgs(username, password, mappedCommand, flags)
+    if (VERBOSE_LOG) {
+      console.log('[cli-runner] starting command', {
+        command,
+        mappedCommand,
+        username: maskIdentifier(username),
+        flags,
+        binary: BINARY_PATH,
+        args: redactCliArgs(cliArgs),
+        timeoutMs: CLI_TIMEOUT,
+      })
+    }
     const options = { timeout: CLI_TIMEOUT, cwd: __dirname + '/..' }
 
     const interactiveConfig = INTERACTIVE_COMMANDS().get(mappedCommand)
@@ -66,6 +95,15 @@ function runCommand(username, password, command, flags = {}) {
     }
 
     execFile(BINARY_PATH, cliArgs, options, (err, stdout, stderr) => {
+      if (VERBOSE_LOG) {
+        console.log('[cli-runner] completed (non-interactive)', {
+          command: mappedCommand,
+          exitCode: err && typeof err.code !== 'undefined' ? err.code : 0,
+          signal: err && err.signal ? err.signal : null,
+          stdoutSnippet: snippet(stdout),
+          stderrSnippet: snippet(stderr),
+        })
+      }
       if (err) {
         const errorPayload = sanitizeErrorForResponse(
           {
@@ -96,6 +134,16 @@ function runCommand(username, password, command, flags = {}) {
 }
 
 function executeInteractiveCommand({ mappedCommand, cliArgs, username, flags, resolve, reject }) {
+  if (VERBOSE_LOG) {
+    console.log('[cli-runner] starting interactive command', {
+      command: mappedCommand,
+      username: maskIdentifier(username),
+      flags,
+      binary: BINARY_PATH,
+      args: redactCliArgs(cliArgs),
+      timeoutMs: CLI_TIMEOUT,
+    })
+  }
   try {
     ensureBinaryReady()
   } catch (error) {
@@ -122,6 +170,9 @@ function executeInteractiveCommand({ mappedCommand, cliArgs, username, flags, re
 
   child.stdout.on('data', data => {
     const output = data.toString()
+    if (VERBOSE_LOG) {
+      console.log(`[cli-runner:${mappedCommand}] stdout chunk`, { snippet: snippet(output) })
+    }
     stdout += output
     currentPrompt += output
 
@@ -155,10 +206,22 @@ function executeInteractiveCommand({ mappedCommand, cliArgs, username, flags, re
 
   child.stderr.on('data', data => {
     stderr += data.toString()
+    if (VERBOSE_LOG) {
+      console.log(`[cli-runner:${mappedCommand}] stderr chunk`, { snippet: snippet(data.toString()) })
+    }
   })
 
   child.on('close', code => {
     processingComplete = true
+    if (VERBOSE_LOG) {
+      console.log('[cli-runner] interactive command exited', {
+        command: mappedCommand,
+        exitCode: code,
+        stdoutSnippet: snippet(stdout),
+        stderrSnippet: snippet(stderr),
+        interactions: interactionCount,
+      })
+    }
     if (code === 130 || code === null) {
       if (mappedCommand === 'da' || mappedCommand === 'facility') {
         return ensureInteractiveResolution({ child, stdout, mappedCommand, resolve })
@@ -203,9 +266,22 @@ function executeInteractiveCommand({ mappedCommand, cliArgs, username, flags, re
 function ensureInteractiveResolution({ child, stdout, mappedCommand, resolve }) {
   try {
     const jsonOutput = JSON.parse(stdout)
+    if (VERBOSE_LOG) {
+      console.log('[cli-runner] ensureInteractiveResolution parsed JSON', {
+        command: mappedCommand,
+        stdoutSnippet: snippet(stdout),
+      })
+    }
     record(mappedCommand, 'success')
     resolve(jsonOutput)
   } catch (parseErr) {
+    if (VERBOSE_LOG) {
+      console.log('[cli-runner] ensureInteractiveResolution JSON parse failed, falling back to text', {
+        command: mappedCommand,
+        error: parseErr.message,
+        stdoutSnippet: snippet(stdout),
+      })
+    }
     record(mappedCommand, 'success')
     resolve({
       success: true,

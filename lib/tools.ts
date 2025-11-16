@@ -1054,7 +1054,7 @@ export function createVITTools(userId: string) {
         }
       },
     }),
-
+    */
     indexPastPapers: tool({
       description:
         'Download, OCR/extract, embed, and index past papers for a course so the user can ask detailed questions about them. Returns an indexId to use with askPaperQuestion.',
@@ -1204,9 +1204,8 @@ export function createVITTools(userId: string) {
           ui: 'ffcs_planner',
         }
       },
-    }), */
-
-    /*
+    }),
+    */
     getCourseInfo: tool({
       description:
         'Get information about courses from the FFCS dataset (supports all schools: SMEC, SCORE, SCOPE, SBST, SCE, SCHEME, SELECT, SENSE). Returns faculty names, slots, venue, etc.',
@@ -1281,7 +1280,7 @@ export function createVITTools(userId: string) {
         }
       },
     }),
-    */
+  
 
     getFacultyInfo: tool({
       description: `Get current faculty information from a local JSON file (public/faculty.json). NEVER return all faculty members at once—ALWAYS require at least a department or faculty name filter. If no filter is provided, ask the user to specify a department or faculty name. Returns school, department, and faculty info. Do NOT provide a full list of all faculty.

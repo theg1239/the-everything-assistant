@@ -75,6 +75,11 @@ const TerminalPreview = dynamic(() => import('@/components/backgrounds/terminal'
   ssr: false,
   loading: () => null,
 })
+
+const GridPreview = dynamic(() => import('@/components/backgrounds/grid'), {
+  ssr: false,
+  loading: () => null,
+})
 export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any) {
   const { data: session } = useSession()
   const { setBackgroundType, toggleBackground } = useCustomBackground()
@@ -169,6 +174,29 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       ),
       []
     )
+    const gridComponent = useMemo(
+      () => (
+        <GridPreview
+          className="absolute inset-0"
+          lineThickness={1.1}
+          linesColor="#2dd4ff"
+          scanColor="#f472b6"
+          scanOpacity={0.45}
+          gridScale={0.12}
+          lineStyle="dashed"
+          lineJitter={0.08}
+          scanDirection="pingpong"
+          noiseIntensity={0.02}
+          scanGlow={0.6}
+          scanSoftness={2}
+          scanPhaseTaper={0.85}
+          scanDuration={2.5}
+          scanDelay={2.5}
+          enablePost={false}
+        />
+      ),
+      []
+    )
 
     switch (type) {
       case 'aurora':
@@ -214,6 +242,12 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         return (
           <div className="relative w-full h-16 rounded-md overflow-hidden bg-black">
             {colorBandsComponent}
+          </div>
+        )
+      case 'grid':
+        return (
+          <div className="relative w-full h-16 rounded-md overflow-hidden bg-black">
+            {gridComponent}
           </div>
         )
       case 'terminal':
@@ -1506,6 +1540,11 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
             type: 'terminal' as BackgroundType,
             name: 'faulty terminal',
             description: 'retro CRT matrix with scanlines and glitches',
+          },
+          {
+            type: 'grid' as BackgroundType,
+            name: 'reactive grid',
+            description: '3D neon scanning grid with motion parallax',
           },
           {
             type: 'color-bands' as BackgroundType,

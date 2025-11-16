@@ -73,6 +73,7 @@
     "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",
     "dotenv": "^16.6.0",
+    "face-api.js": "^0.22.2",
     "framer-motion": "latest",
     "isomorphic-dompurify": "^2.26.0",
     "katex": "^0.16.22",

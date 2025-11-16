@@ -35,9 +35,9 @@ export function createKnowledgeTools() {
       console.debug('[knowledgeBase] max_chunks:', max_chunks)
       try {
         const { embedding: vector } = await rateLimitedAI.google.embed({
-          model: { modelId: 'text-embedding-004' },
+          model: { modelId: 'gemini-embedding-001' },
           value: query,
-        })
+        })  
 
         const pool = await getRagPool()
         const client = await pool.connect()

@@ -35,12 +35,18 @@ const ColorBands = dynamic(() => import('@/components/backgrounds/color-bands'),
   loading: () => null,
 })
 
+const GridBackground = dynamic(() => import('@/components/backgrounds/grid'), {
+  ssr: false,
+  loading: () => null,
+})
+
 export type BackgroundType =
   | 'aurora'
   | 'beams'
   | 'dither'
   | 'floating-lines'
   | 'terminal'
+  | 'grid'
   | 'color-bands'
   | 'gradient'
   | 'solid'
@@ -100,6 +106,23 @@ export interface BackgroundConfig {
     brightness?: number
     backgroundColor?: string
     overlayOpacity?: number
+  }
+  grid?: {
+    lineThickness?: number
+    linesColor?: string
+    scanColor?: string
+    scanOpacity?: number
+    gridScale?: number
+    lineStyle?: 'solid' | 'dashed' | 'dotted'
+    lineJitter?: number
+    noiseIntensity?: number
+    scanDirection?: 'forward' | 'backward' | 'pingpong'
+    scanGlow?: number
+    scanSoftness?: number
+    scanPhaseTaper?: number
+    scanDuration?: number
+    scanDelay?: number
+    enablePost?: boolean
   }
   colorBands?: {
     colors?: string[]
@@ -190,6 +213,23 @@ const defaultBackgroundConfig: BackgroundConfig = {
     mouseInfluence: 0.5,
     parallax: 0.4,
     noise: 0.08,
+  },
+  grid: {
+    lineThickness: 1.1,
+    linesColor: '#2dd4ff',
+    scanColor: '#f472b6',
+    scanOpacity: 0.45,
+    gridScale: 0.12,
+    lineStyle: 'dashed',
+    lineJitter: 0.08,
+    noiseIntensity: 0.02,
+    scanDirection: 'pingpong',
+    scanGlow: 0.6,
+    scanSoftness: 2,
+    scanPhaseTaper: 0.85,
+    scanDuration: 2.5,
+    scanDelay: 2.5,
+    enablePost: true,
   },
   gradient: {
     colors: ['#1a1a2e', '#16213e', '#0f3460'],
@@ -477,6 +517,42 @@ export default function CustomBackground() {
               backgroundConfig.colorBands?.parallax ?? defaultBackgroundConfig.colorBands!.parallax
             }
             noise={backgroundConfig.colorBands?.noise ?? defaultBackgroundConfig.colorBands!.noise}
+          />
+        )
+
+      case 'grid':
+        return (
+          <GridBackground
+            className="absolute inset-0"
+            lineThickness={
+              backgroundConfig.grid?.lineThickness ?? defaultBackgroundConfig.grid!.lineThickness
+            }
+            linesColor={backgroundConfig.grid?.linesColor ?? defaultBackgroundConfig.grid!.linesColor}
+            scanColor={backgroundConfig.grid?.scanColor ?? defaultBackgroundConfig.grid!.scanColor}
+            scanOpacity={backgroundConfig.grid?.scanOpacity ?? defaultBackgroundConfig.grid!.scanOpacity}
+            gridScale={backgroundConfig.grid?.gridScale ?? defaultBackgroundConfig.grid!.gridScale}
+            lineStyle={backgroundConfig.grid?.lineStyle ?? defaultBackgroundConfig.grid!.lineStyle}
+            lineJitter={backgroundConfig.grid?.lineJitter ?? defaultBackgroundConfig.grid!.lineJitter}
+            noiseIntensity={
+              backgroundConfig.grid?.noiseIntensity ?? defaultBackgroundConfig.grid!.noiseIntensity
+            }
+            scanDirection={
+              backgroundConfig.grid?.scanDirection ?? defaultBackgroundConfig.grid!.scanDirection
+            }
+            scanGlow={backgroundConfig.grid?.scanGlow ?? defaultBackgroundConfig.grid!.scanGlow}
+            scanSoftness={
+              backgroundConfig.grid?.scanSoftness ?? defaultBackgroundConfig.grid!.scanSoftness
+            }
+            scanPhaseTaper={
+              backgroundConfig.grid?.scanPhaseTaper ?? defaultBackgroundConfig.grid!.scanPhaseTaper
+            }
+            scanDuration={
+              backgroundConfig.grid?.scanDuration ?? defaultBackgroundConfig.grid!.scanDuration
+            }
+            scanDelay={backgroundConfig.grid?.scanDelay ?? defaultBackgroundConfig.grid!.scanDelay}
+            enablePost={backgroundConfig.grid?.enablePost ?? defaultBackgroundConfig.grid!.enablePost}
+            enableWebcam={false}
+            showPreview={false}
           />
         )
 

@@ -96,7 +96,7 @@ const HUB_LABEL_CLASS = 'text-[11px] uppercase tracking-[0.3em] text-white/60'
 type Page = HubPage
 
 const NAV_ITEMS: { id: Page; label: string; icon: ReactNode }[] = [
-  { id: 'briefing', label: 'daily briefing', icon: <Sparkles className="h-3.5 w-3.5" /> },
+  { id: 'briefing', label: 'hub', icon: <Sparkles className="h-3.5 w-3.5" /> },
   { id: 'vtop', label: 'vtop', icon: <GraduationCap className="h-3.5 w-3.5" /> },
   { id: 'papers', label: 'past papers', icon: <FileSearch className="h-3.5 w-3.5" /> },
   { id: 'mess', label: 'mess menu', icon: <UtensilsCrossed className="h-3.5 w-3.5" /> },
@@ -962,6 +962,17 @@ export default function HubShell({
       )}`
     : undefined
 
+  const handleAdvanceBriefing = useCallback(() => {
+    setState(state => {
+      if (!state.dailyMessagesPrepared) return {}
+      const total = state.dailyMessages.length
+      if (!total) return {}
+      const next = Math.min(total, state.dailyRevealedCount + 1)
+      if (next === state.dailyRevealedCount) return {}
+      return { dailyRevealedCount: next }
+    })
+  }, [setState])
+
   const renderBriefing = () => (
     <div className="space-y-5 text-white">
       {linked ? (
@@ -1165,6 +1176,8 @@ export default function HubShell({
             sendingEmail={sendingBriefingEmail}
             examPrompt={dailyExamPrompt}
             onExamAction={handleExamAction}
+            onAdvance={handleAdvanceBriefing}
+            onContinue={() => dismissDailyBriefing()}
           />
         )}
 

@@ -284,7 +284,7 @@ export function buildDailyBriefingContext(
   if (attendanceStats?.needsAttention > 0) {
     messages.push({
       id: 'attendance-status',
-      primary: `${attendanceStats.needsAttention} course${attendanceStats.needsAttention === 1 ? '' : 's'} under watch`,
+      primary: `${attendanceStats.needsAttention} course${attendanceStats.needsAttention === 1 ? '' : 's'} have low attendance`,
       supporting: attendanceStats.worstSubject ? `${attendanceStats.worstSubject} at ${attendanceStats.worstPercentage}%` : undefined,
       tone: 'alert',
     })

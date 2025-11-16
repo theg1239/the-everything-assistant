@@ -207,18 +207,6 @@ export const DailyBriefingOverlay = memo(function DailyBriefingOverlay({
                   {insightsReleased < messages.length && (
                     <p className="text-[11px] uppercase tracking-[0.4em] text-muted-foreground">tap to continue</p>
                   )}
-                  {previousMessages.length > 0 && (
-                    <div className="space-y-1 text-left">
-                      <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">earlier today</p>
-                      <ul className="space-y-1 text-xs text-white/70">
-                        {previousMessages.map(message => (
-                          <li key={message.id} className="line-clamp-1">
-                            • {message.primary}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
                 </div>
               )}
               {!currentMessage && stage === 'briefing' && (

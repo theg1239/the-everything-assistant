@@ -1459,9 +1459,9 @@ Please provide:
   }
 
   async analyzeVideoFrames(framePaths, postContext = {}, videoData = {}) {
+    const frameImages = []
     try {
       // Convert frame images to base64 for Gemini
-      const frameImages = []
       const maxFramesToAnalyze = 8 // Limit to avoid token limits
 
       for (let i = 0; i < Math.min(framePaths.length, maxFramesToAnalyze); i++) {

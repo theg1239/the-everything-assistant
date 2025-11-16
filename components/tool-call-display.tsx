@@ -35,11 +35,18 @@ interface ToolCallDisplayProps {
   setMaximizedItem?: (item: any) => void
 }
 
+const VTOP_ARTIFACT_BLACKLIST = new Set(['exams', 'exam-schedule'])
+
 const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) => {
+
   if (toolName === 'queryVTOP') {
     if (result.data || result.output) {
       const vtopData = result.data || result.output
       const command = result.command || 'unknown'
+
+      if (VTOP_ARTIFACT_BLACKLIST.has(command)) {
+        return null
+      }
 
       let parsedData = vtopData
       if (typeof vtopData === 'string') {
@@ -1143,6 +1150,29 @@ const ToolCallResultsSummary = ({
         </motion.div>
       )
     }
+    const hasSuppressedVtopSuccess = completedTools.some(tool => {
+      if (tool.toolName !== 'queryVTOP') return false
+      const command =
+        tool.result?.command ||
+        tool.args?.command ||
+        tool.function?.arguments?.command ||
+        (typeof tool.function?.arguments === 'string'
+          ? (() => {
+              try {
+                return JSON.parse(tool.function.arguments || '{}')?.command
+              } catch (error) {
+                return null
+              }
+            })()
+          : null) ||
+        'unknown'
+      return tool.result && tool.result.success !== false && VTOP_ARTIFACT_BLACKLIST.has(command)
+    })
+
+    if (hasSuppressedVtopSuccess) {
+      return null
+    }
+
     return (
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3">
         <Card className="w-full border-orange-500/20 bg-orange-500/5">

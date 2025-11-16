@@ -1,4 +1,5 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google' // Google provider
+import { googleTools } from '@ai-sdk/google/internal'
 import { createGroq } from '@ai-sdk/groq' // Groq provider
 import { createCerebras } from '@ai-sdk/cerebras' // Cerebras provider
 import { createOpenRouter } from '@openrouter/ai-sdk-provider' // OpenRouter provider
@@ -17,6 +18,12 @@ import type { EmbeddingModel } from 'ai'
 
 type Provider = 'google' | 'groq' | 'cerebras' | 'openrouter'
 
+type GoogleProvider = ReturnType<typeof createGoogleGenerativeAI>
+type GoogleToolset = GoogleProvider['tools']
+type GoogleSearchToolOptions = Parameters<GoogleToolset['googleSearch']>[0]
+type GoogleUrlContextOptions = Parameters<GoogleToolset['urlContext']>[0]
+type GoogleFileSearchOptions = Parameters<GoogleToolset['fileSearch']>[0]
+type GoogleCodeExecutionOptions = Parameters<GoogleToolset['codeExecution']>[0]
 export class RateLimitedAI {
   private apiKeyManager: ApiKeyManager
   private userRateLimiter: UserRateLimiter
@@ -163,6 +170,12 @@ export class RateLimitedAI {
       const provider = this.createProviderInstance(key)
       return provider(modelName)
     }
+  }
+
+  async withProvider<T>(fn: (provider: any) => T | Promise<T>) {
+    const key = await this.apiKeyManager.getCurrentKey()
+    const provider = this.createProviderInstance(key)
+    return fn(provider)
   }
 
   getEmbeddingModel(modelName: string = 'gemini-embedding-001	'): () => Promise<any> {
@@ -339,6 +352,15 @@ export const rateLimitedAI = {
     getUserConfig: () => getRateLimitedAI('google').getUserConfig(),
     updateUserConfig: (c: any) => getRateLimitedAI('google').updateUserConfig(c),
     getFullStatus: (u?: string) => getRateLimitedAI('google').getFullStatus(u),
+    tools: {
+      google_search: (options?: GoogleSearchToolOptions) =>
+        googleTools.googleSearch(options ?? {}),
+      urlContext: (options?: GoogleUrlContextOptions) =>
+        googleTools.urlContext(options ?? {}),
+      fileSearch: (options: GoogleFileSearchOptions) => googleTools.fileSearch(options),
+      codeExecution: (options?: GoogleCodeExecutionOptions) =>
+        googleTools.codeExecution(options ?? {}),
+    },
   },
   groq: {
     model: (n = 'gemma2-9b-it') => getModel('groq', n),

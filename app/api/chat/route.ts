@@ -4,6 +4,7 @@ import {
   createUIMessageStream,
   createUIMessageStreamResponse,
   generateId,
+  stepCountIs,
 } from 'ai'
 import { inspect } from 'util'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
@@ -476,7 +477,21 @@ ${memories
       } catch (error) {}
     }
 
-    const tools = createVITTools(session.user.id)
+    const baseTools = createVITTools(session.user.id)
+    const prefersWebSearch = preferredTool === 'web-search'
+    let tools: Record<string, any> = baseTools
+
+    if (prefersWebSearch) {
+      try {
+        const googleSearchTool = await rateLimitedAI.google.tools.google_search()
+        if (googleSearchTool) {
+          tools = { google_search: googleSearchTool }
+        }
+      } catch (error) {
+        console.error('Failed to initialize Google Search tool:', error)
+        tools = baseTools
+      }
+    }
 
     const toolPreferenceGuidance = preferredTool
       ? `
@@ -487,6 +502,7 @@ IMPORTANT: The user has specifically selected the "${preferredTool}" tool. When 
 - vtop-query: Use queryVTOP for personal VTOP data like grades, attendance, timetable  
 - past-papers: Use findPastPapers for examination papers and course materials
 - mess-menu: Use getMessMenu for hostel dining information
+- web-search: Use google_search for up-to-date answers from the public web
 
 If the user's query is relevant to the selected tool "${preferredTool}", use it even if other tools might also be applicable.`
       : ''
@@ -853,8 +869,7 @@ CRITICAL TOOL CONTINUATION RULES:
         },
         experimental_transform: smoothStream({ chunking: 'word' }),
         middleware: [reasoningMiddleware],
-        maxSteps: 5,
-        experimental_continueSteps: true,
+        stopWhen: stepCountIs(5),
         onError: async (error: any) => {
           console.error('Streaming error occurred:', error)
 

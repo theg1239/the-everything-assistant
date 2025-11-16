@@ -157,8 +157,7 @@ function PureChatInterfaceComponent({
   initialHubState,
   hubActions,
 }: ChatInterfaceProps) {
-    const input = useChatStore(state => state.input)
-    const setInput = useChatStore(state => state.setInput)
+    const [input, setInput] = useState('')
     const showFullChat = useChatStore(state => state.showFullChat)
     const setShowFullChat = useChatStore(state => state.setShowFullChat)
     const selectedTool = useChatStore(state => state.selectedTool)
@@ -863,6 +862,7 @@ function PureChatInterfaceComponent({
         router.push('/')
         setMessages([])
         resetChatStore()
+        setInput('')
         setHasUserInitiatedConversation(false)
         setIsFirstMessageInNewChat(false)
         setShowFollowUpSuggestions(false)

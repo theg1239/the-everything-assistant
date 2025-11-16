@@ -71,6 +71,8 @@ const PureMultimodalInput = ({
     if (!selectedTool) return placeholder || 'ask anything...'
 
     switch (selectedTool) {
+      case 'web-search':
+        return 'search the web for the latest info'
       case 'reddit-search':
         return 'search related subreddits'
       case 'vtop-query':

@@ -1143,143 +1143,143 @@ export function createVITTools(userId: string) {
       },
     }),
     */
-    indexPastPapers: tool({
-      description:
-        'Download, OCR/extract, embed, and index past papers for a course so the user can ask detailed questions about them. Returns an indexId to use with askPaperQuestion.',
-      inputSchema: z.object({
-        course: z.string().describe('Course code or name'),
-        examType: z.string().optional(),
-        year: z.string().optional(),
-        maxPapers: z.number().int().min(1).max(12).optional(),
-        questionFocus: z
-          .string()
-          .optional()
-          .describe(
-            'Optional natural language focus (e.g. "recurrence relations") to bias relevance'
-          ),
-        debug: z.boolean().optional().describe('Enable verbose paper-agent logging'),
-      }),
-      execute: async ({ course, examType, year, maxPapers, questionFocus, debug }) => {
-        try {
-          const res = await indexPastPapers({
-            course,
-            examType,
-            year,
-            maxPapers,
-            questionFocus,
-            debug,
-          })
-          return res
-        } catch (e: any) {
-          return { success: false, error: e.message || 'Indexing failed' }
-        }
-      },
-    }),
+    // indexPastPapers: tool({
+    //   description:
+    //     'Download, OCR/extract, embed, and index past papers for a course so the user can ask detailed questions about them. Returns an indexId to use with askPaperQuestion.',
+    //   inputSchema: z.object({
+    //     course: z.string().describe('Course code or name'),
+    //     examType: z.string().optional(),
+    //     year: z.string().optional(),
+    //     maxPapers: z.number().int().min(1).max(12).optional(),
+    //     questionFocus: z
+    //       .string()
+    //       .optional()
+    //       .describe(
+    //         'Optional natural language focus (e.g. "recurrence relations") to bias relevance'
+    //       ),
+    //     debug: z.boolean().optional().describe('Enable verbose paper-agent logging'),
+    //   }),
+    //   execute: async ({ course, examType, year, maxPapers, questionFocus, debug }) => {
+    //     try {
+    //       const res = await indexPastPapers({
+    //         course,
+    //         examType,
+    //         year,
+    //         maxPapers,
+    //         questionFocus,
+    //         debug,
+    //       })
+    //       return res
+    //     } catch (e: any) {
+    //       return { success: false, error: e.message || 'Indexing failed' }
+    //     }
+    //   },
+    // }),
 
-    askPaperQuestion: tool({
-      description:
-        'Ask a question about already indexed past papers. Requires indexId from indexPastPapers tool.',
-      inputSchema: z.object({
-        indexId: z.string().describe('Index ID returned by indexPastPapers'),
-        question: z.string().describe('User question'),
-        debug: z.boolean().optional().describe('Enable verbose logging'),
-      }),
-      execute: async ({ indexId, question, debug }) => {
-        try {
-          const meta = getPaperIndexMeta(indexId)
-          if (!meta) return { success: false, error: 'Index not found. Re-run indexPastPapers.' }
-          const ans = await askIndexedPaperQuestion(indexId, question, debug)
-          return { ...ans, indexMeta: meta }
-        } catch (e: any) {
-          return { success: false, error: e.message || 'Failed to answer question' }
-        }
-      },
-    }),
+    // askPaperQuestion: tool({
+    //   description:
+    //     'Ask a question about already indexed past papers. Requires indexId from indexPastPapers tool.',
+    //   inputSchema: z.object({
+    //     indexId: z.string().describe('Index ID returned by indexPastPapers'),
+    //     question: z.string().describe('User question'),
+    //     debug: z.boolean().optional().describe('Enable verbose logging'),
+    //   }),
+    //   execute: async ({ indexId, question, debug }) => {
+    //     try {
+    //       const meta = getPaperIndexMeta(indexId)
+    //       if (!meta) return { success: false, error: 'Index not found. Re-run indexPastPapers.' }
+    //       const ans = await askIndexedPaperQuestion(indexId, question, debug)
+    //       return { ...ans, indexMeta: meta }
+    //     } catch (e: any) {
+    //       return { success: false, error: e.message || 'Failed to answer question' }
+    //     }
+    //   },
+    // }),
 
-    smartPaperSearch: tool({
-      description:
-        'Search for relevant past papers by providing a natural language question (semantic). Returns ranked papers and an indexId for deeper Q&A.',
-      inputSchema: z.object({
-        course: z.string().describe('Course code or name'),
-        question: z.string().describe('Question to find in past papers'),
-        examType: z.string().optional(),
-        year: z.string().optional(),
-        maxPapers: z.number().int().min(1).max(12).optional(),
-        debug: z.boolean().optional().describe('Enable verbose logging'),
-        runId: z
-          .string()
-          .optional()
-          .describe('Client-provided run/session id for streaming progress UI'),
-      }),
-      execute: async ({ course, question, examType, year, maxPapers, debug, runId }) => {
-        try {
-          if (!runId) {
-            const params = `${course}-${question}`.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
-            runId = `smartpaper_${params}`.slice(0, 60)
-          }
+    // smartPaperSearch: tool({
+    //   description:
+    //     'Search for relevant past papers by providing a natural language question (semantic). Returns ranked papers and an indexId for deeper Q&A.',
+    //   inputSchema: z.object({
+    //     course: z.string().describe('Course code or name'),
+    //     question: z.string().describe('Question to find in past papers'),
+    //     examType: z.string().optional(),
+    //     year: z.string().optional(),
+    //     maxPapers: z.number().int().min(1).max(12).optional(),
+    //     debug: z.boolean().optional().describe('Enable verbose logging'),
+    //     runId: z
+    //       .string()
+    //       .optional()
+    //       .describe('Client-provided run/session id for streaming progress UI'),
+    //   }),
+    //   execute: async ({ course, question, examType, year, maxPapers, debug, runId }) => {
+    //     try {
+    //       if (!runId) {
+    //         const params = `${course}-${question}`.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+    //         runId = `smartpaper_${params}`.slice(0, 60)
+    //       }
 
-          console.log(
-            `[smartPaperSearch] Using runId: ${runId} for course: ${course}, question: ${question}`
-          )
+    //       console.log(
+    //         `[smartPaperSearch] Using runId: ${runId} for course: ${course}, question: ${question}`
+    //       )
 
-          // Always fire a start event to establish connection
-          try {
-            const { paperProgress } = await import('./progress/paper-progress')
-            paperProgress.emitStep(runId, 'start', { course, question })
-            console.log(`[smartPaperSearch] Emitted start event for runId: ${runId}`)
-          } catch (e) {
-            console.error(`[smartPaperSearch] Failed to emit start event:`, e)
-          }
+    //       // Always fire a start event to establish connection
+    //       try {
+    //         const { paperProgress } = await import('./progress/paper-progress')
+    //         paperProgress.emitStep(runId, 'start', { course, question })
+    //         console.log(`[smartPaperSearch] Emitted start event for runId: ${runId}`)
+    //       } catch (e) {
+    //         console.error(`[smartPaperSearch] Failed to emit start event:`, e)
+    //       }
 
-          const res = await smartPaperSearchByQuestion({
-            course,
-            question,
-            examType,
-            year,
-            maxPapers,
-            debug,
-            runId,
-          })
-          if (res && (res as any).rankedPapers && !(res as any).papers) {
-            return { ...(res as any), papers: (res as any).rankedPapers, runId }
-          }
-          return { ...res, runId }
-        } catch (e: any) {
-          console.error(`[smartPaperSearch] Error:`, e)
-          return { success: false, error: e.message || 'Smart search failed', runId }
-        }
-      },
-    }),
+    //       const res = await smartPaperSearchByQuestion({
+    //         course,
+    //         question,
+    //         examType,
+    //         year,
+    //         maxPapers,
+    //         debug,
+    //         runId,
+    //       })
+    //       if (res && (res as any).rankedPapers && !(res as any).papers) {
+    //         return { ...(res as any), papers: (res as any).rankedPapers, runId }
+    //       }
+    //       return { ...res, runId }
+    //     } catch (e: any) {
+    //       console.error(`[smartPaperSearch] Error:`, e)
+    //       return { success: false, error: e.message || 'Smart search failed', runId }
+    //     }
+    //   },
+    // }),
 
-    analyzeQuestionPatterns: tool({
-      description:
-        'Analyze past papers and report the most repeated or common question patterns for a course and exam type. Returns top repeated patterns with counts and sample questions.',
-      inputSchema: z.object({
-        course: z.string().describe('Course code or name (e.g., BMAT201L or "Complex Variables")'),
-        examType: z
-          .string()
-          .optional()
-          .describe(
-            'Exam type filter: CAT-1, CAT-2, FAT, Quiz (case-insensitive, hyphen optional).'
-          ),
-        topN: z
-          .number()
-          .int()
-          .min(3)
-          .max(50)
-          .optional()
-          .describe('How many top repeated patterns to return (default 12).'),
-        debug: z.boolean().optional(),
-      }),
-      execute: async ({ course, examType, topN, debug }) => {
-        try {
-          const res = await analyzeQuestionFrequencies({ course, examType, topN, debug })
-          return res
-        } catch (e: any) {
-          return { success: false, error: e?.message || 'Failed to analyze question patterns' }
-        }
-      },
-    }),
+    // analyzeQuestionPatterns: tool({
+    //   description:
+    //     'Analyze past papers and report the most repeated or common question patterns for a course and exam type. Returns top repeated patterns with counts and sample questions.',
+    //   inputSchema: z.object({
+    //     course: z.string().describe('Course code or name (e.g., BMAT201L or "Complex Variables")'),
+    //     examType: z
+    //       .string()
+    //       .optional()
+    //       .describe(
+    //         'Exam type filter: CAT-1, CAT-2, FAT, Quiz (case-insensitive, hyphen optional).'
+    //       ),
+    //     topN: z
+    //       .number()
+    //       .int()
+    //       .min(3)
+    //       .max(50)
+    //       .optional()
+    //       .describe('How many top repeated patterns to return (default 12).'),
+    //     debug: z.boolean().optional(),
+    //   }),
+    //   execute: async ({ course, examType, topN, debug }) => {
+    //     try {
+    //       const res = await analyzeQuestionFrequencies({ course, examType, topN, debug })
+    //       return res
+    //     } catch (e: any) {
+    //       return { success: false, error: e?.message || 'Failed to analyze question patterns' }
+    //     }
+    //   },
+    // }),
 
     /*
     ffcs_planner: tool({

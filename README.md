@@ -123,6 +123,10 @@ This project follows a modular Next.js monorepo structure with several key direc
   - `logs/`: Log files
   - `public/`: Static files for the service
 
+## Documentation
+
+Need the full tour? The `docs/` directory contains living documentation for every part of the repo—product UX, platform architecture, tool catalog, companion services, and operational playbooks. Start with `docs/README.md` for the table of contents.
+
 ## Contributing
 
 We welcome contributions! If you'd like to contribute, please follow these steps:

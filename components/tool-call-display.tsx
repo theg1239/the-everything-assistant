@@ -38,6 +38,10 @@ interface ToolCallDisplayProps {
 const VTOP_ARTIFACT_BLACKLIST = new Set(['exams', 'exam-schedule'])
 
 const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) => {
+  if (toolName === 'resolveCourseCode') {
+    return null
+  }
+
   if (toolName === 'queryVTOP') {
     if (result.data || result.output) {
       const vtopData = result.data || result.output
@@ -1329,6 +1333,7 @@ const PureToolCallDisplay = ({
       if (
         tc.toolName === 'knowledgeBase' ||
         tc.toolName === 'saveMemory' ||
+        tc.toolName === 'resolveCourseCode' ||
         (tc.result && tc.result.hidden)
       ) {
         continue
@@ -1453,6 +1458,7 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
       if (
         tc.toolName === 'knowledgeBase' ||
         tc.toolName === 'saveMemory' ||
+        tc.toolName === 'resolveCourseCode' ||
         (tc.result && tc.result.hidden)
       ) {
         continue

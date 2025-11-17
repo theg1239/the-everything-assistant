@@ -6,7 +6,7 @@ import ReactMarkdown from 'react-markdown'
 import { OptimizedMarkdown } from './optimized-markdown'
 import { ToolCallDisplay } from './tool-call-display'
 import { MessageActions } from './message-actions'
-import { memo, useMemo, useState, useEffect } from 'react'
+import { memo, useMemo, useState, useEffect, useId } from 'react'
 import type { LegacyMessage } from '@/lib/ai-message-conversion'
 import { ChevronDown } from 'lucide-react'
 import { generateId } from 'ai'
@@ -121,6 +121,7 @@ const ReasoningPanel = memo(function ReasoningPanel({
   const [duration, setDuration] = useState(0)
   const [startTime, setStartTime] = useState<number | null>(null)
   const [manuallyToggled, setManuallyToggled] = useState(false)
+  const panelId = useId()
 
   useEffect(() => {
     if (isStreaming) {
@@ -143,28 +144,42 @@ const ReasoningPanel = memo(function ReasoningPanel({
   const headerLabel = isStreaming ? 'Thinking…' : duration > 0 ? `Thought for ${duration}s` : 'Thoughts'
 
   return (
-    <div className="rounded-2xl border border-border/50 bg-muted/40 text-xs text-muted-foreground">
+    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-background/40 text-xs text-muted-foreground shadow-[0_15px_35px_rgba(0,0,0,0.25)] backdrop-blur-md">
+      <div className="pointer-events-none absolute inset-0 opacity-70">
+        <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-white/0" />
+      </div>
       <button
-        className="flex w-full items-center justify-between gap-2 px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-foreground/80 transition-colors hover:text-foreground"
+        className="relative z-[1] flex w-full items-center justify-between gap-3 px-4 py-1 mt-3 text-left text-[11px] font-semibold uppercase tracking-wide text-foreground/80 transition-colors hover:text-foreground"
         onClick={() => {
           setIsOpen(prev => !prev)
           setManuallyToggled(true)
         }}
+        aria-expanded={isOpen}
+        aria-controls={panelId}
         type="button"
       >
-        <span className="flex items-center gap-2">
-          <span className="inline-flex h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+        <span className="flex items-center gap-2 text-[12px] text-foreground">
+          <span className="inline-flex h-2 w-2 rounded-full bg-blue-500" />
           {headerLabel}
         </span>
-        <ChevronDown className={cn('h-4 w-4 transition-transform', isOpen ? 'rotate-180' : '')} />
+        <div className="ml-auto flex items-center gap-2 text-[11px] text-muted-foreground">
+          <span className="rounded-full border border-border/60 bg-muted/40 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/90">
+            {isStreaming ? 'streaming' : duration > 0 ? `${duration}s` : 'ready'}
+          </span>
+          <ChevronDown
+            className={cn('h-4 w-4 text-foreground/70 transition-transform', isOpen ? 'rotate-180' : '')}
+          />
+        </div>
       </button>
       <div
+        id={panelId}
         className={cn(
-          'overflow-hidden px-3 pb-3 transition-[max-height,opacity] duration-200',
+          'relative z-[1] overflow-hidden px-4 pb-4 transition-[max-height,opacity] duration-300 ease-out',
           isOpen ? 'max-h-[420px] opacity-100' : 'max-h-0 opacity-0'
         )}
       >
-        <div className="max-h-[360px] overflow-y-auto pr-1 text-muted-foreground">
+        <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-3 text-muted-foreground max-h-64 overflow-y-auto">
           <div className="prose prose-sm dark:prose-invert leading-relaxed">
             <ReactMarkdown>{text}</ReactMarkdown>
           </div>

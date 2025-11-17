@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import { MessageBubble } from '@/components/message-bubble'
 
 interface VirtualizedMessagesProps {

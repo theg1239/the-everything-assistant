@@ -1,0 +1,302 @@
+{
+  "repo_notes": [
+    {
+      "content": ""
+    }
+  ],
+  "pages": [
+    {
+      "title": "Overview",
+      "purpose": "Introduce the-everything-assistant system, explaining its purpose as a comprehensive AI assistant for VIT students with VTOP integration, chat interface, and various academic tools",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Architecture",
+      "purpose": "High-level system architecture, explaining the main components, their relationships, and how data flows through the system",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Authentication & Security",
+      "purpose": "Explain the authentication system (NextAuth, MFA, WebAuthn), credential encryption, and security measures throughout the application",
+      "parent": "Architecture",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "External Services",
+      "purpose": "Overview of external microservices architecture including VTOP proxy, WhatsApp bot, Reddit scraper, and how they integrate with the main application",
+      "parent": "Architecture",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Chat System",
+      "purpose": "Deep dive into the core chat system, its components, and how it orchestrates AI interactions, tool calls, and message handling",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Chat Interface Component",
+      "purpose": "Detailed documentation of the ChatInterface component, its state management, event handlers, and integration with the AI SDK",
+      "parent": "Chat System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Message Input & Tool Selection",
+      "purpose": "Explain the MultimodalInput component, ToolsDropdown, and how users select and interact with different tools",
+      "parent": "Chat System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Message Rendering & Artifacts",
+      "purpose": "Document how messages are rendered, including MessageBubble, artifact display (VTOP cards, papers), and tool call results",
+      "parent": "Chat System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Sidebar & Chat History",
+      "purpose": "Explain the sidebar component, chat list management, infinite scroll pagination, and chat operations (delete, archive)",
+      "parent": "Chat System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "AI Provider Integration",
+      "purpose": "Document the AI provider abstraction layer, rate limiting, model selection, and how streaming responses work",
+      "parent": "Chat System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Hub System",
+      "purpose": "Overview of the Hub system - a personalized student dashboard for VTOP data, daily briefings, and quick actions",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Hub Architecture & State Management",
+      "purpose": "Explain Hub's architecture, the HubShell component, panel navigation, and state management with Zustand",
+      "parent": "Hub System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Daily Briefing Intelligence",
+      "purpose": "Deep dive into the daily briefing system, including data hydration, insight derivation, and progressive message reveal",
+      "parent": "Hub System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "VTOP Data Synchronization",
+      "purpose": "Explain how Hub syncs VTOP data, stores snapshots, and provides real-time student information",
+      "parent": "Hub System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Tool System",
+      "purpose": "Overview of the tool system architecture, how tools are registered, executed, and how results are formatted",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Tool Registry & Execution",
+      "purpose": "Document createVITTools function, tool schema definitions, and the execution pipeline for various tool types",
+      "parent": "Tool System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "VTOP Tools",
+      "purpose": "Explain queryVTOP tool, VTOP commands (attendance, timetable, grades), and credential handling",
+      "parent": "Tool System",
+      "page_notes": [
+        {
+          "content": "Credentials are never stored in a database, they are kept locally encrypted on localStorage"
+        }
+      ]
+    },
+    {
+      "title": "Paper Search Tools",
+      "purpose": "Document paper search functionality, multi-source scraping, and how papers are indexed and retrieved",
+      "parent": "Tool System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Reddit Knowledge Base",
+      "purpose": "Explain Reddit scraping, RAG service, and how community knowledge is made searchable",
+      "parent": "Tool System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Other Data Tools",
+      "purpose": "Document mess menu, placement info, faculty directory, and other utility tools",
+      "parent": "Tool System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Background Services",
+      "purpose": "Overview of independent microservices that run separately from the main Next.js application",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "VTOP Proxy Service",
+      "purpose": "Detailed documentation of the VTOP proxy service (:3001), CLI runner, command execution, and response caching",
+      "parent": "Background Services",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "OAuth & MCP Server",
+      "purpose": "Explain the OAuth 2.0 server implementation, MCP protocol support, and how credentials are securely embedded in tokens",
+      "parent": "Background Services",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "WhatsApp Bot Service",
+      "purpose": "Document the WhatsApp bot architecture, message handling, conversation context, and integration with the main chat API",
+      "parent": "Background Services",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Reddit Scraper Service",
+      "purpose": "Explain Reddit scraping, embedding generation, vector storage, and the agentic RAG service",
+      "parent": "Background Services",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Paper Indexing Pipeline",
+      "purpose": "Document the paper indexing agent, PDF processing, OCR, text chunking, and embedding generation",
+      "parent": "Background Services",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "User Interface",
+      "purpose": "Overview of UI components, styling system, and user experience design decisions",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Layout & Global Styles",
+      "purpose": "Document RootLayout, global CSS, theme system, mobile viewport fixes, and responsive design patterns",
+      "parent": "User Interface",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Settings & Personalization",
+      "purpose": "Explain SettingsDialog, preference management, MFA setup, background customization, and data controls",
+      "parent": "User Interface",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Background Visual Effects",
+      "purpose": "Document the CustomBackground system, WebGL effects (Aurora, Beams, Terminal, etc.), and dynamic rendering",
+      "parent": "User Interface",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    }
+  ]
+}

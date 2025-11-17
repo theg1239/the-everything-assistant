@@ -311,13 +311,11 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
       setLoadingPreferences(true)
       try {
-        // Load memory settings
         const memorySettings = await fetch('/api/memories/settings').then(res =>
           res.ok ? res.json() : null
         )
         setMemoryEnabled(memorySettings?.isEnabled ?? true)
 
-        // Load user preferences
         const response = await fetch('/api/user/preferences')
         if (response.ok) {
           const data = await response.json()
@@ -330,11 +328,9 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
           }
           setFollowUpSuggestions(prefs.followUpSuggestions ?? true)
 
-          // Handle both legacy aurora and new background config
           if (prefs.backgroundConfig) {
             setBackgroundConfig(prefs.backgroundConfig)
           } else if (prefs.auroraBackground !== undefined) {
-            // Legacy aurora preference
             setBackgroundConfig({
               type: 'aurora',
               enabled: prefs.auroraBackground,
@@ -351,7 +347,6 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
           }
         }
 
-        // Load MFA status
         let loadedMfaMethod: 'email' | 'authenticator' | 'security_key' = 'email'
         const mfaResponse = await fetch('/api/user/mfa')
         if (mfaResponse.ok) {
@@ -364,23 +359,19 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                 ? 'authenticator'
                 : 'email'
           setMfaMethod(loadedMfaMethod)
-          // Set backup codes count (we don't get the actual codes for security)
           setBackupCodes(new Array(mfaData.backupCodesCount || 0).fill('••••••••'))
         }
 
-        // Load MFA availability
         const availabilityResponse = await fetch('/api/user/mfa/availability')
         if (availabilityResponse.ok) {
           const availabilityData = await availabilityResponse.json()
 
-          // Check for WebAuthn browser support for security keys
           const hasWebAuthnSupport = !!(
             window.navigator.credentials &&
             typeof window.navigator.credentials.create === 'function' &&
             window.PublicKeyCredential
           )
 
-          // Update availability based on browser support
           const updatedAvailability = {
             ...availabilityData.availability,
             security_key: availabilityData.availability.security_key && hasWebAuthnSupport,
@@ -388,7 +379,6 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
           setMfaAvailability(updatedAvailability)
 
-          // If email is not available and current method is email, switch to authenticator
           if (!updatedAvailability.email && loadedMfaMethod === 'email') {
             if (updatedAvailability.security_key) {
               setMfaMethod('security_key')
@@ -530,7 +520,6 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
     const success = await setBackgroundType(type, backgroundConfig.enabled)
     if (!success) {
-      // Revert on failure
       setBackgroundConfig(backgroundConfig)
       toast.error('Failed to update background preference')
     }
@@ -542,7 +531,6 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
     const success = await toggleBackground(enabled)
     if (!success) {
-      // Revert on failure
       setBackgroundConfig(backgroundConfig)
       toast.error('Failed to update background preference')
     }
@@ -626,12 +614,10 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     setLoadingMfa(true)
     try {
       if (mfaMethod === 'security_key') {
-        // Handle WebAuthn credential creation for security keys
         if (!window.navigator.credentials) {
           throw new Error('WebAuthn is not supported in this browser')
         }
 
-        // Check for specific WebAuthn support
         if (!window.PublicKeyCredential) {
           throw new Error('PublicKeyCredential is not supported in this browser')
         }
@@ -641,7 +627,6 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         console.log('Is HTTPS:', window.location.protocol === 'https:')
         console.log('Is localhost:', window.location.hostname === 'localhost')
 
-        // Check platform authenticator availability
         let isPlatformAvailable = false
         try {
           isPlatformAvailable =
@@ -651,7 +636,6 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
           console.warn('Could not check platform authenticator availability:', checkError)
         }
 
-        // First, get the credential creation options from the server
         const optionsResponse = await fetch('/api/user/mfa/webauthn/register', {
           method: 'POST',
           headers: {
@@ -673,9 +657,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         )
         console.log('User ID type:', typeof options.user.id, 'Length:', options.user.id?.length)
 
-        // Helper function to decode base64url to Uint8Array
         function base64urlToUint8Array(base64url: string): Uint8Array {
-          // Add padding if needed
           const padding = '='.repeat((4 - (base64url.length % 4)) % 4)
           const base64 = (base64url + padding).replace(/-/g, '+').replace(/_/g, '/')
           const rawData = window.atob(base64)
@@ -686,7 +668,6 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
           return outputArray
         }
 
-        // Prepare the credential request - properly decode base64url encoded values
         const credentialCreationOptions: PublicKeyCredentialCreationOptions = {
           rp: options.rp,
           user: {
@@ -712,14 +693,12 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
         console.log('Final credential creation options:', credentialCreationOptions)
 
-        // Show a more helpful toast before attempting WebAuthn
         const methodName = 'security key'
         const instructionText =
           "Please use Windows Hello, Touch ID, external key, or your device's built-in authenticator when prompted"
 
         toast.info(`Setting up ${methodName}. ${instructionText}`, { duration: 5000 })
 
-        // Create the credential with improved error handling
         let credential: PublicKeyCredential | null = null
 
         try {
@@ -732,7 +711,6 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         } catch (webauthnError: any) {
           console.error('WebAuthn credential creation failed:', webauthnError)
 
-          // Provide more specific error messages
           if (webauthnError.name === 'NotAllowedError') {
             throw new Error(
               'Security key registration was cancelled, timed out, or blocked. This could be due to Windows Hello setup issues, an unconnected security key, or browser restrictions. Please ensure your authenticator is ready and try again.'
@@ -756,14 +734,12 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
         const response = credential.response as AuthenticatorAttestationResponse
 
-        // Helper function to encode Uint8Array to base64url
         function uint8ArrayToBase64url(buffer: Uint8Array): string {
           const base64 = btoa(String.fromCharCode(...buffer))
           return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
         }
 
         console.log('Sending credential to server for verification...')
-        // Send the credential to the server for verification
         const verifyResponse = await fetch('/api/user/mfa/webauthn/verify', {
           method: 'POST',
           headers: {
@@ -797,7 +773,6 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
           throw new Error(errorData.error || 'Failed to register security key')
         }
       } else {
-        // Handle traditional verification codes for email and authenticator
         const response = await fetch('/api/user/mfa/verify', {
           method: 'POST',
           headers: {
@@ -823,7 +798,6 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     } catch (error: any) {
       console.error('Error verifying MFA setup:', error)
 
-      // More specific error handling - the error messages are now coming from our improved logic above
       toast.error(error.message || 'Failed to verify setup')
     } finally {
       setLoadingMfa(false)
@@ -920,9 +894,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       if (response.ok) {
         const data = await response.json()
 
-        // Handle WebAuthn methods differently
         if (data.requiresRegistration && method === 'security_key') {
-          // Set the method and trigger the registration flow
           setMfaMethod(method)
           setShowMfaSetup(true)
           setSetupStep('verify') // Skip method selection, go straight to verification
@@ -945,10 +917,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
   const menuItems = [
     { id: 'general', label: 'general', icon: Settings },
-    // { id: 'notifications', label: 'notifications', icon: Bell },
     { id: 'personalization', label: 'personalization', icon: User },
-    // { id: 'appearance', label: 'appearance', icon: Palette },
-    // { id: 'language', label: 'language', icon: Globe },
     { id: 'vtop', label: 'VTOP integration', icon: Key },
     { id: 'data', label: 'data controls', icon: Archive },
     { id: 'security', label: 'security', icon: Shield },
@@ -1771,7 +1740,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                             </div>
                           </div>
 
-                          {/* Backup Codes Management */}
+
                           <div className="space-y-3 p-3 rounded-lg border border-orange-200 bg-orange-50/50 dark:border-orange-800 dark:bg-orange-950/20">
                             <div className="flex items-center justify-between">
                               <div>
@@ -2168,7 +2137,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                   )}
                 </div>
 
-                {/* Sign Out */}
+
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
                   <div className="flex items-start sm:items-center gap-3">
                     <LogOut className="w-4 h-4 flex-shrink-0 mt-0.5 sm:mt-0" />
@@ -2254,7 +2223,6 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     }
   }
 
-  // Touch handlers for mobile scrolling
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     const touch = e.touches[0]
     const scrollContainer = e.currentTarget
@@ -2264,7 +2232,6 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
   }
   const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
     if (!isDragging) return
-    // Allow native scrolling; avoid preventDefault.
   }
 
   const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {

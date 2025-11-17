@@ -17,7 +17,6 @@ async function testVideoAnalysis(redditUrl = null) {
     console.log('   (Without URL: tests with random video from r/videos)\n')
   }
 
-  // Check environment setup
   console.log('1. Checking environment setup...')
 
   if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
@@ -33,7 +32,6 @@ async function testVideoAnalysis(redditUrl = null) {
 
   console.log('✅ Environment variables configured')
 
-  // Check yt-dlp availability
   console.log('\n2. Checking yt-dlp availability...')
   try {
     await new Promise((resolve, reject) => {
@@ -56,7 +54,6 @@ async function testVideoAnalysis(redditUrl = null) {
     process.exit(1)
   }
 
-  // Check ffmpeg availability
   console.log('\n3. Checking ffmpeg availability...')
   try {
     await new Promise((resolve, reject) => {
@@ -80,13 +77,11 @@ async function testVideoAnalysis(redditUrl = null) {
     process.exit(1)
   }
 
-  // Test scraper initialization
   console.log('\n4. Initializing Reddit scraper...')
   const scraper = new RedditScraper()
   console.log('✅ Scraper initialized')
 
   if (redditUrl) {
-    // Parse Reddit URL to extract subreddit and post ID
     console.log('\n5. Parsing Reddit URL...')
     const urlMatch = redditUrl.match(/reddit\.com\/r\/([^\/]+)\/comments\/([^\/]+)/)
 
@@ -100,15 +95,12 @@ async function testVideoAnalysis(redditUrl = null) {
     console.log(`📝 Subreddit: r/${subreddit}`)
     console.log(`🆔 Post ID: ${postId}`)
 
-    // Initialize session for the subreddit
     await scraper.initializeSession(subreddit)
 
-    // Fetch the specific post
     console.log('\n6. Fetching post data...')
     let targetPost = await scraper.fetchSpecificPost(subreddit, postId)
 
     if (!targetPost) {
-      // Fallback: try searching in recent posts
       console.log('⚠️  Direct fetch failed, searching in recent posts...')
       const posts = await scraper.fetchPosts(subreddit, {
         limit: 100,
@@ -133,7 +125,6 @@ async function testVideoAnalysis(redditUrl = null) {
     if (targetPost.postType !== 'video') {
       console.log(`⚠️  This post is not a video post (type: ${targetPost.postType})`)
 
-      // Still try to analyze if it has video content
       if (targetPost.videoSrc || targetPost.contentHref) {
         console.log(`🎥 But found video URL, proceeding with analysis...`)
       } else {
@@ -150,7 +141,6 @@ async function testVideoAnalysis(redditUrl = null) {
 
     console.log(`🎥 Video URL: ${videoUrl}`)
 
-    // Test video analysis on the specific post
     console.log(`\n7. Analyzing video content...`)
 
     const videoAnalysis = await scraper.downloadAndAnalyzeVideo(
@@ -197,7 +187,6 @@ async function testVideoAnalysis(redditUrl = null) {
       console.log('❌ Video analysis failed')
     }
   } else {
-    // Original behavior - test with random video from r/videos
     console.log('\n5. Testing video post scraping from r/videos...')
     try {
       const posts = await scraper.scrapeSubreddit('videos', {
@@ -216,7 +205,6 @@ async function testVideoAnalysis(redditUrl = null) {
         return
       }
 
-      // Test video analysis on first video post
       const testPost = videoPosts[0]
       console.log(`\n6. Testing video analysis on: "${testPost.title}"`)
       console.log(`   Video URL: ${testPost.videoSrc || testPost.contentHref}`)

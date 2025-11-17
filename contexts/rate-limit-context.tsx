@@ -27,13 +27,11 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const trySet = useCallback((info: Partial<RateLimitError>) => {
-    // Normalize resetTime to an ISO string when possible
     let normalizedReset: string | undefined = undefined
     const raw = info.resetTime as any
     if (raw !== undefined && raw !== null) {
       try {
         if (typeof raw === 'number') {
-          // If it's likely seconds (10-digit), convert to ms
           const ms = raw < 1e12 ? raw * 1000 : raw
           normalizedReset = new Date(ms).toISOString()
         } else if (typeof raw === 'string') {
@@ -55,7 +53,6 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
 
     let estimated = false
 
-    // If there's no normalized reset but message suggests transient overload, infer a small estimate.
     if (!normalizedReset) {
       const msg = String(info.message || '').toLowerCase()
       const overloadedHint =
@@ -64,7 +61,6 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
         msg.includes('overloaded') ||
         msg.includes('temporarily')
       if (overloadedHint) {
-        // Look for a numeric hint like '2 minutes' or '10 sec'
         const numericHint = msg.match(
           /(\d+)\s*(seconds|second|secs|sec|minutes|minute|mins|min|hours|hour|hrs|hr)/i
         )
@@ -79,7 +75,6 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
             normalizedReset = new Date(Date.now() + ms).toISOString()
             estimated = true
           } else {
-            // numeric hint present but unknown unit; do not estimate
             try {
               // eslint-disable-next-line no-console
               console.debug(
@@ -107,14 +102,12 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
       estimated,
     }
     try {
-      //console.debug('[RateLimit] setting rate limit error in context:', payload)
     } catch {}
     setRateLimitError(payload)
   }, [])
   const checkForRateLimitError = useCallback((error: any): boolean => {
     if (!error) return false
 
-    // console.debug('[RateLimit] checkForRateLimitError received:', error)
 
     const status = error?.status || error?.statusCode || error?.response?.status
     if (status === 429) {
@@ -138,7 +131,6 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
             message: msg,
           })
           try {
-            // console.debug('[RateLimit] parsed 429 body (checkForRateLimitError); userLimit=', userLimit, 'msg=', String(msg).slice(0, 200))
           } catch {}
           return true
         } catch {
@@ -173,7 +165,6 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
               userPattern.test(String(msg || ''))
             trySet({ resetTime: parsed.resetTime || parsed.reset_at, userLimit, message: msg })
             try {
-              //console.debug('[RateLimit] parsed responseBody JSON; userLimit=', userLimit)
             } catch {}
             return true
           } catch {
@@ -261,7 +252,6 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
               trySet({ resetTime: reset, userLimit: json.type === 'user_rate_limit', message: msg })
               try {
                 // eslint-disable-next-line no-console
-                //console.debug('[RateLimit] parsed JSON 429 body; reset sourced from', reset ? 'body/header' : 'none', 'reset=', reset)
               } catch {}
             } else {
               const bodyText = await clone.text()
@@ -283,7 +273,6 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
                 })
                 try {
                   // eslint-disable-next-line no-console
-                  //console.debug('[RateLimit] parsed text 429 body JSON; reset sourced from', reset ? 'body/header' : 'none', 'reset=', reset)
                 } catch {}
               } catch {
                 const ra =
@@ -309,10 +298,8 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
                 }
               }
             }
-            // debug log
             try {
               // eslint-disable-next-line no-console
-              //console.debug('[RateLimit] intercepted 429 for', String(input).slice(0, 200))
             } catch {}
           } catch (e) {
             trySet({ message: 'rate limit exceeded. please try again later.' })
@@ -328,7 +315,6 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
       ;(window as any).fetch = newFetch
       wrapped = true
     } catch (e) {
-      // ignore
     }
 
     return () => {
@@ -348,7 +334,6 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
         if (checkForRateLimitError(reason)) {
         }
       } catch (e) {
-        // ignore
       }
     }
 

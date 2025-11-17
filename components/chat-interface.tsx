@@ -196,7 +196,6 @@ function PureChatInterfaceComponent({
   const [chatCreatedEventDispatched, setChatCreatedEventDispatched] = useState(false)
   const [maximizedArtifact, setMaximizedArtifact] = useState<any>(null)
   const [isAtBottom, setIsAtBottom] = useState(true)
-  // PWA install handling
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
   const [canInstall, setCanInstall] = useState(false)
   const [isInstalled, setIsInstalled] = useState(false)
@@ -569,14 +568,12 @@ function PureChatInterfaceComponent({
       try {
         isRateLimit = checkForRateLimitError(err)
       } catch (e) {
-        // ignore
       }
 
       const contextRateLimit = !!rateLimitError?.isRateLimit
 
       try {
         // eslint-disable-next-line no-console
-        //console.debug('[Chat] onError - localRateLimitDetected:', localRateLimitDetected, 'isRateLimit:', isRateLimit, 'contextRateLimit:', contextRateLimit, 'isGeminiStreamingError:', isGeminiStreamingError, 'error:', err)
       } catch {}
 
       if (!localRateLimitDetected && !isRateLimit && !contextRateLimit && !isGeminiStreamingError) {
@@ -705,14 +702,12 @@ function PureChatInterfaceComponent({
   const throttledScrollToBottom = useThrottle(scrollToBottom, 50)
 
   useEffect(() => {
-    // Global keyboard shortcuts: focus composer with '/', blur with Escape
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null
       const isTypingField =
         target &&
         (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
 
-      // Focus chat input with '/'
       if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
         if (!isTypingField) {
           e.preventDefault()
@@ -723,7 +718,6 @@ function PureChatInterfaceComponent({
         }
       }
 
-      // Blur input on Escape
       if (e.key === 'Escape') {
         const active = document.activeElement as HTMLElement | null
         if (active && active.tagName === 'TEXTAREA') {
@@ -929,7 +923,6 @@ function PureChatInterfaceComponent({
         detail: { command, linkOnly: true },
       })
     )
-    // Slight delay so the pending tool call gets registered before opening the dialog
     window.setTimeout(() => {
       window.dispatchEvent(
         new CustomEvent('vtopOpenCredentials', {
@@ -982,7 +975,6 @@ function PureChatInterfaceComponent({
         return message
       })
 
-      // Ensure there's a trailing assistant message with the pending VTOP tool call
       setMessages(prev => {
         const base = [...updatedMessagesForLoading]
         if (base.length === 0) return base
@@ -1002,7 +994,6 @@ function PureChatInterfaceComponent({
               toolInvocations: [...(last.toolInvocations || []), toolInvocationPayload],
             }
           } else {
-            // make sure its state is call
             base[base.length - 1] = {
               ...last,
               toolInvocations: last.toolInvocations.map((t: any) =>
@@ -1011,7 +1002,6 @@ function PureChatInterfaceComponent({
             }
           }
         } else {
-          // Append a new assistant shell to surface loading state
           base.push({
             id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
             role: 'assistant',
@@ -1053,17 +1043,13 @@ function PureChatInterfaceComponent({
 
           const trimmed = raw.trim()
 
-          // Fast path: entire body is a single JSON doc
           if (/^[\[{]/.test(trimmed)) {
             try {
               return JSON.parse(trimmed)
             } catch (e: any) {
-              // keep going; might be framed
             }
           }
 
-          // Tokenize into frames. A frame looks like: "<prefix>:<payload...>"
-          // Payload can span multiple lines until the next "<prefix>:"
           const lines = raw.replace(/\r/g, '').split('\n')
           const frameHeader = /^([a-z0-9]):(.*)$/i
 
@@ -1074,7 +1060,6 @@ function PureChatInterfaceComponent({
 
           const flush = () => {
             if (current) {
-              // trim only trailing newlines; keep inner newlines
               current.payload = current.payload.replace(/\n$/, '')
               frames.push(current)
               current = null
@@ -1087,30 +1072,24 @@ function PureChatInterfaceComponent({
             const m = line.match(frameHeader)
 
             if (m) {
-              // New frame starts; flush the previous one
               flush()
               current = { prefix: m[1], payload: m[2] ?? '' }
               if (i < lines.length - 1) current.payload += '\n' // preserve newline after first line
             } else {
-              // Continuation of current frame’s payload (if any)
               if (current) {
                 current.payload += line + (i < lines.length - 1 ? '\n' : '')
               } else {
-                // Orphan line — ignore; not part of a frame
               }
             }
           }
           flush()
 
-          // Helpers
           const safeParseJSON = (s: string) => {
             const t = s.trim()
-            // If payload contains multiple JSON docs concatenated, try to take the largest {...} or [...]
             if (!/^[\[{]/.test(t)) throw new Error('Not JSON')
             try {
               return JSON.parse(t)
             } catch (_) {
-              // Try to extract the outermost JSON block
               const firstBrace = t.indexOf('{')
               const lastBrace = t.lastIndexOf('}')
               const firstBracket = t.indexOf('[')
@@ -1131,22 +1110,18 @@ function PureChatInterfaceComponent({
 
           const decodePossibleJSONString = (s: string) => {
             const t = s.trim()
-            // If it looks like a *single-line* quoted JSON string, try JSON.parse
             if (t.startsWith('"') && t.endsWith('"') && !t.includes('\n')) {
               try {
                 return JSON.parse(t) // unescapes \n, \", etc.
               } catch {
-                // fall through to raw
               }
             }
-            // Otherwise treat as raw text. If it’s multi-line and starts/ends with a bare quote, strip it.
             if (t.startsWith('"') && t.endsWith('"')) {
               return t.slice(1, -1)
             }
             return s
           }
 
-          // Collect frames
           const toolFrames: any[] = []
           const textChunks: string[] = []
 
@@ -1154,25 +1129,18 @@ function PureChatInterfaceComponent({
             const payload = f.payload ?? ''
 
             if (f.prefix === 'a' || f.prefix === '9' || f.prefix === 'e') {
-              // JSON-ish frames
-              // Some backends sometimes include leading noise; be forgiving
               const trimmedPayload = payload.trim()
               try {
                 const parsed = safeParseJSON(trimmedPayload)
                 if (f.prefix === 'a') toolFrames.push(parsed)
-                // we rarely need '9' or 'e' here, but keeping parity with your original logic
               } catch {
-                // ignore unparseable diagnostic lines (e.g., "still")
               }
             } else if (f.prefix === '0') {
-              // Text frame: keep all lines; do not JSON.parse unless it's clearly a single-line JSON string
               textChunks.push(decodePossibleJSONString(payload))
             } else {
-              // Unknown prefix; ignore
             }
           }
 
-          // Prefer the last a: frame that has a "result"
           const chosen =
             [...toolFrames].reverse().find(x => x && typeof x === 'object' && 'result' in x) ??
             [...toolFrames].reverse().find(x => x) // fallback to any 'a' frame
@@ -1187,7 +1155,6 @@ function PureChatInterfaceComponent({
             return { result: { success: true, output: textChunks.join('\n') } }
           }
 
-          // Nothing usable found
           throw new Error('No parsable tool frames found in streaming response')
         }
 
@@ -1247,7 +1214,6 @@ function PureChatInterfaceComponent({
         })
         setMessages([...updatedMessages])
 
-        // Inject formatted/summary content into the assistant message if absent so UI reflects parsed result promptly
         try {
           const formattedContent =
             (result.result && (result.result.formatted_content || result.result.summary)) || ''
@@ -1264,7 +1230,6 @@ function PureChatInterfaceComponent({
                 if (!target.content || (target.content as string).trim() === '') {
                   clone[idx] = { ...target, content: formattedContent }
                 } else if (!target.content.includes(formattedContent.slice(0, 30))) {
-                  // Append if it's distinct (rudimentary duplicate guard)
                   clone[idx] = {
                     ...target,
                     content: `${target.content}\n\n${formattedContent}`.trim(),
@@ -1272,7 +1237,6 @@ function PureChatInterfaceComponent({
                 }
                 return clone
               }
-              // If no existing assistant container, create one
               const newAssistantMsg = {
                 id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
                 role: 'assistant',
@@ -1289,7 +1253,6 @@ function PureChatInterfaceComponent({
               } as any
               return [...prev, newAssistantMsg]
             })
-            // Track last assistant message text for follow-up suggestions
             try {
               setLastAssistantMessage(
                 formattedContent.length > 400 ? formattedContent.slice(0, 400) : formattedContent
@@ -1297,7 +1260,6 @@ function PureChatInterfaceComponent({
             } catch {}
           }
           if (!showFullChat) setShowFullChat(true)
-          // Attempt scroll to bottom shortly after DOM updates
           setTimeout(() => {
             try {
               const container = contentRef.current?.parentElement
@@ -1698,67 +1660,7 @@ function PureChatInterfaceComponent({
                   </motion.div>
                 )}
                 <RateLimitErrorDisplay />{' '}
-                {/* {vtopDisclaimer && (
-                  (() => {
-                    const formatCommandName = (cmd: string) => {
-                      const map: Record<string, string> = {
-                        'class-message': 'Class Message',
-                        'exam-schedule': 'Exam Schedule',
-                        'library-dues': 'Library Dues',
-                        'leave-status': 'Leave Status',
-                        nightslip: 'Night Slip',
-                        da: 'Digital Assignment',
-                        'course-page': 'Course Page',
-                        attendance: 'Attendance',
-                        timetable: 'Timetable',
-                        grades: 'Grades',
-                        profile: 'Profile',
-                      }
-                      return map[cmd] || (cmd ? cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ') : 'VTOP data')
-                    }
-                    const prettyCmd = formatCommandName(vtopDisclaimer.command)
-                    return (
-                      <motion.div
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="rounded-xl border border-blue-500/30 bg-blue-500/5 px-4 py-3 text-sm flex flex-col sm:flex-row sm:items-center gap-3"
-                      >
-                        <div className="flex items-start gap-3 flex-1 min-w-0">
-                          <div className="mt-0.5">
-                            <GraduationCap className="h-5 w-5 text-blue-500" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-foreground truncate">Authentication Required</div>
-                            <div className="text-xs text-muted-foreground mt-1 truncate">
-                              Please log in to VTOP to access your {prettyCmd} data.
-                            </div>
-                            <div className="text-[11px] text-muted-foreground/80 mt-2">
-                              Privacy notice: Your credentials are encrypted and stored locally in your browser. They are used only to log into VTOP to fetch your data.
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              window.dispatchEvent(
-                                new CustomEvent('vtopLoginTrigger', {
-                                  detail: { command: vtopDisclaimer.command, toolCallId: vtopDisclaimer.toolCallId },
-                                })
-                              )
-                            }}
-                            className="bg-blue-500 hover:bg-blue-600 text-white"
-                          >
-                            Login
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setVtopDisclaimer(null)}>
-                            Dismiss
-                          </Button>
-                        </div>
-                      </motion.div>
-                    )
-                  })()
-                )} */}
+
                 <VirtualizedMessages
                   messages={messages.filter((msg: any) => {
                     if (msg.role === 'assistant') {

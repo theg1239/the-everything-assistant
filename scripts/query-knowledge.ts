@@ -1,16 +1,5 @@
 #!/usr/bin/env ts-node
-/**
- * scripts/query-knowledge.ts
- *
- * Simple CLI utility to interactively query the RAG knowledge base.
- * It leverages the `knowledgeBase` tool returned by `createKnowledgeTools()`
- * and prints the retrieved chunks to the console so that you can inspect
- * whether seeding & similarity search are working as expected.
- *
- * Usage:
- *   npx tsx scripts/query-knowledge.ts "When does Riviera happen?"
- *   # or run without arguments to enter an interactive REPL
- */
+
 
 import 'dotenv/config'
 import readline from 'readline'

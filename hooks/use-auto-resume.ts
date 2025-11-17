@@ -21,7 +21,6 @@ export function useAutoResume({ autoResume, initialMessages, resumeStream }: Use
         console.error('Failed to resume chat stream:', error)
       })
     }
-    // run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 }

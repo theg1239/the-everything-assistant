@@ -276,7 +276,6 @@ export async function archiveAllChats(userId: string): Promise<number> {
   return result.count
 }
 
-// --- Token usage logging ---
 export async function saveTokenUsage(params: {
   userId?: string | null
   chatId?: string | null
@@ -360,7 +359,6 @@ export async function getTokenUsageAllTimeSummary(): Promise<{
       count: agg._count?._all || 0,
     }
   } catch {
-    // Fallback if aggregate not supported
     const rows = await prisma.tokenUsage.findMany({
       select: { promptTokens: true, completionTokens: true, totalTokens: true },
     })

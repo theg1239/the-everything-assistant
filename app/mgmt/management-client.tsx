@@ -142,7 +142,6 @@ export default function ManagementClient() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
-  // details should always be visible by default per user request
   const [showSensitiveData, setShowSensitiveData] = useState(true)
   const [broadcastSlides, setBroadcastSlides] = useState([{ title: '', text: '', image: '' }])
   const [pastBroadcasts, setPastBroadcasts] = useState<PastBroadcast[]>([])
@@ -190,7 +189,6 @@ export default function ManagementClient() {
     }
   }, [])
 
-  // users panel state
   const [selectedUser, setSelectedUser] = useState<any | null>(null)
   const [usersOpen, setUsersOpen] = useState(false)
 
@@ -257,12 +255,9 @@ export default function ManagementClient() {
     if (status === 'authenticated') {
       fetchData()
       fetchPastBroadcasts()
-      // prefetch users data when authenticated
-      // no-op here; UsersList will fetch when mounted
     }
   }, [status, router, fetchData, fetchPastBroadcasts])
 
-  // Default collapse heavy tables on mobile
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const isMobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches
@@ -427,7 +422,7 @@ export default function ManagementClient() {
       subtitle="monitor system health, tokens, broadcasts, and keys"
       nav={<MgmtTabBar active={activeTab} onChange={(t: any) => setActiveTab(t)} />}
     >
-      {/* error / loading */}
+
       {error && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
           <div className="rounded-lg bg-destructive/10 backdrop-blur-sm border border-destructive/20 p-4">
@@ -586,7 +581,7 @@ export default function ManagementClient() {
                 </div>
               </motion.div>
 
-              {/* user messages drawer/modal */}
+
               {usersOpen && selectedUser && (
                 <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4">
                   <div
@@ -612,7 +607,7 @@ export default function ManagementClient() {
         </div>
       )}
 
-      {/* Preview Modals */}
+
       <BroadcastDialog
         isOpen={showPreview}
         onClose={() => setShowPreview(false)}

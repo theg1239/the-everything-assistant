@@ -8,11 +8,9 @@ class APIClient {
 
   async sendChatRequest(userQuestion, userContext = {}, conversationHistory = []) {
     try {
-      // Build messages array with conversation history
       const messages = []
 
-      // Add conversation history (limit to prevent token overflow)
-      const recentHistory = conversationHistory.slice(-5) // Only last 5 messages
+      const recentHistory = conversationHistory.slice(-5)
       for (const historyItem of recentHistory) {
         messages.push({
           role: historyItem.role,
@@ -21,7 +19,6 @@ class APIClient {
         })
       }
 
-      // Add current user question
       messages.push({
         role: 'user',
         content: userQuestion,
@@ -53,7 +50,6 @@ class APIClient {
 
       const result = await this.parseStreamingResponse(response)
 
-      // If we got an empty response and we included history, try without history
       if (
         (!result.text || result.text.includes("couldn't generate a proper response")) &&
         recentHistory.length > 0
@@ -89,9 +85,7 @@ class APIClient {
             line.substring(0, 100) + (line.length > 100 ? '...' : '')
           )
 
-          // Handle different streaming response formats
           if (line.startsWith('0:')) {
-            // Text content - handle both quoted and unquoted formats
             let content = line.slice(2)
             if (content.startsWith('"') && content.endsWith('"')) {
               content = content.slice(1, -1)
@@ -99,7 +93,6 @@ class APIClient {
             content = content.replace(/\\"/g, '"').replace(/\\n/g, '\n')
             finalText += content
           } else if (line.startsWith('1:')) {
-            // Alternative text format
             let content = line.slice(2)
             if (content.startsWith('"') && content.endsWith('"')) {
               content = content.slice(1, -1)
@@ -107,25 +100,20 @@ class APIClient {
             content = content.replace(/\\"/g, '"').replace(/\\n/g, '\n')
             finalText += content
           } else if (line.startsWith('f:')) {
-            // Function/metadata response format
             const metadata = JSON.parse(line.slice(2))
             console.log('📋 Received metadata:', metadata)
           } else if (line.startsWith('9:')) {
-            // Tool call
             const toolCall = JSON.parse(line.slice(2))
             console.log('🔧 Tool call detected:', toolCall.toolName)
           } else if (line.startsWith('a:')) {
-            // Tool result
             const toolResult = JSON.parse(line.slice(2))
             toolResults.push(toolResult)
           } else if (line.startsWith('e:')) {
-            // End of stream
             const endData = JSON.parse(line.slice(2))
             if (endData.finishReason !== 'stop') {
               console.warn('⚠️ Stream ended unexpectedly:', endData.finishReason)
             }
           } else if (line.startsWith('d:')) {
-            // Data chunk format
             try {
               const data = JSON.parse(line.slice(2))
               if (data.text) {
@@ -136,14 +124,12 @@ class APIClient {
                 finalText += data
               }
             } catch (e) {
-              // Not JSON, treat as raw text
               const rawContent = line.slice(2)
               if (rawContent && rawContent !== '{}') {
                 finalText += rawContent
               }
             }
           } else if (line.startsWith('2:') || line.startsWith('3:') || line.startsWith('4:')) {
-            // Additional text content formats
             let content = line.slice(2)
             if (content.startsWith('"') && content.endsWith('"')) {
               content = content.slice(1, -1)
@@ -158,7 +144,6 @@ class APIClient {
         }
       }
 
-      // If no direct text found, try to extract from tool results
       if (!finalText.trim()) {
         console.log('⚠️ No text content found, checking tool results...')
         for (const result of toolResults) {
@@ -170,7 +155,6 @@ class APIClient {
         }
       }
 
-      // If still no content and we have completion stats, this might be an API issue
       if (!finalText.trim() && lines.some(line => line.includes('completionTokens'))) {
         console.warn('⚠️ API completed successfully but returned no text content')
         console.log('📋 Full response for debugging:', text)
@@ -178,7 +162,6 @@ class APIClient {
           'I processed your request but the response was empty. This might be a temporary issue with the AI service. Please try again.'
       }
 
-      // Clean up the final text
       finalText = finalText.trim()
 
       console.log('✅ Parsed response length:', finalText.length)

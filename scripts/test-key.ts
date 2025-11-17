@@ -180,7 +180,6 @@ async function main() {
 
   console.log('\nAll providers tested.')
 
-  // Summary
   console.log('\n================ Summary ================')
   for (const r of results) {
     if (!r) continue

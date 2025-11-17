@@ -91,10 +91,7 @@ export function ResponsiveCard({
               )}
             </Button>
 
-            {/* <Button variant="outline" size="sm" onClick={() => setShowFullContent(true)} className="text-xs ml-2">
-              <ExternalLink className="h-3 w-3 mr-1" />
-              View Full
-            </Button> */}
+
           </div>
         )}
 

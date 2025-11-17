@@ -86,7 +86,6 @@ class AgenticRAGService {
     const attempts = []
     const queriesUsed = [originalQuery]
 
-    // Track if we've had too many refinements that didn't help
     let failedRefinements = 0
     const MAX_FAILED_REFINEMENTS = 1 // Allow only 1 failed refinement before giving up
 
@@ -96,7 +95,6 @@ class AgenticRAGService {
       if (i === 0) {
         currentQuery = originalQuery
       } else {
-        // Only refine if we haven't had too many failed refinements
         if (failedRefinements >= MAX_FAILED_REFINEMENTS) {
           logger.info('Too many failed refinements, using best results so far')
           break
@@ -195,10 +193,8 @@ class AgenticRAGService {
     if (!query || typeof query !== 'string') return []
 
     try {
-      // First remove any punctuation and make lowercase
       const cleaned = query.toLowerCase().replace(/[^\w\s]|_/g, '')
 
-      // Define common words to exclude
       const stopWords = new Set([
         'about',
         'what',
@@ -297,7 +293,6 @@ class AgenticRAGService {
         'd',
       ])
 
-      // Extract words, filter out stop words and short words
       const terms = cleaned
         .split(/\s+/)
         .filter(
@@ -305,7 +300,6 @@ class AgenticRAGService {
         )
         .slice(0, 5) // Limit to 5 key terms
 
-      // If we filtered out everything, fall back to original words (except very short ones)
       if (terms.length === 0) {
         return cleaned
           .split(/\s+/)
@@ -316,7 +310,6 @@ class AgenticRAGService {
       return terms
     } catch (error) {
       logger.error('Error extracting key terms:', error)
-      // Fallback to simple word extraction
       return (query || '')
         .toLowerCase()
         .split(/\s+/)
@@ -496,11 +489,6 @@ Context: ${context}`
   calculateConfidence(searchResults, maxRelevanceScore) {
     if (searchResults.length === 0) return 0
 
-    // Calculate confidence based on:
-    // 1. Number of relevant results
-    // 2. Average relevance score
-    // 3. Average upvotes/score
-    // 4. Diversity of sources
 
     const relevanceScores = searchResults.map(r => r.relevanceScore || 0)
     const avgRelevance = relevanceScores.reduce((sum, s) => sum + s, 0) / relevanceScores.length
@@ -614,7 +602,6 @@ class QueryRefinementAgent {
               .join(', ')
           : 'No relevant results found'
 
-      // Extract key terms from original query to ensure they're preserved
       const keyTerms = AgenticRAGService.extractKeyTerms(originalQuery)
 
       const prompt = `You are a search query refinement expert. Your task is to IMPROVE the search query while PRESERVING the original intent.
@@ -648,7 +635,6 @@ Respond with ONLY the improved search query, no explanation or formatting.`
 
       const refinedQuery = result.text.trim().replace(/['"]/g, '')
 
-      // Ensure key terms are preserved in the refined query
       const missingTerms = keyTerms.filter(
         term => !refinedQuery.toLowerCase().includes(term.toLowerCase())
       )
@@ -663,7 +649,6 @@ Respond with ONLY the improved search query, no explanation or formatting.`
       return refinedQuery
     } catch (error) {
       logger.error('Error refining query:', error)
-      // Fallback refinement strategy
       const keywords = originalQuery.split(' ').filter(word => word.length > 3)
       return keywords.slice(0, 3).join(' ')
     }

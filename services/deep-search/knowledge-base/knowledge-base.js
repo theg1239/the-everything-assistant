@@ -31,7 +31,6 @@ class KnowledgeBase {
 
   async migrateVideoColumn() {
     try {
-      // Check if video column exists
       const checkVideoColumnSQL = `
         SELECT column_name 
         FROM information_schema.columns 
@@ -261,7 +260,6 @@ class KnowledgeBase {
     return res.rows[0].id
   }
 
-  // Add or update a Reddit comment in the database
   async upsertRedditComment(comment) {
     const {
       id: reddit_id,
@@ -902,7 +900,6 @@ class KnowledgeBase {
         LIMIT $4
       `
 
-      // Search comments
       const commentSQL = `
         SELECT 'comment' as type, reddit_id, subreddit, content as title, content, author,
                score, upvotes, created_utc, NULL as url, tags, 0.7 as similarity

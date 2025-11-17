@@ -167,7 +167,6 @@ export default function UploadForm({ onUploadSuccess }: UploadFormProps) {
               e.preventDefault()
               if (selectedFiles.length > 0 && !isUploading) {
                 const formData = new FormData()
-                // Append each file as 'file' (adjust to 'files' or 'files[]' if needed by backend)
                 selectedFiles.forEach(file => formData.append('file', file))
                 handleSubmit(formData)
               }

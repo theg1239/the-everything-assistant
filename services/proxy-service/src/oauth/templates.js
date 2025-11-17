@@ -50,7 +50,32 @@ const BASE_STYLES = `
   }
 `
 
+const HTML_ESCAPE = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+}
+
+function escapeHtml(value = '') {
+  return String(value).replace(/[&<>"']/g, ch => HTML_ESCAPE[ch] || ch)
+}
+
+function sanitizeRedirectUrl(url) {
+  try {
+    const parsed = new URL(String(url))
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return 'about:blank'
+    }
+    return parsed.toString()
+  } catch {
+    return 'about:blank'
+  }
+}
+
 function renderErrorPage(message) {
+  const safeMessage = escapeHtml(message || 'Something went wrong')
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -65,7 +90,7 @@ ${BASE_STYLES}
   <body>
     <div class="card">
       <h1>Authorization failed</h1>
-      <p class="muted">${message}</p>
+      <p class="muted">${safeMessage}</p>
       <p style="margin-top:1rem;"><a href="javascript:window.close()">Close this window</a></p>
     </div>
   </body>
@@ -73,12 +98,14 @@ ${BASE_STYLES}
 }
 
 function renderSuccessRedirectPage(redirectUrl) {
-  const safeUrl = redirectUrl.replace(/"/g, '&quot;')
+  const safeUrl = sanitizeRedirectUrl(redirectUrl)
+  const safeUrlAttr = escapeHtml(safeUrl)
+  const safeUrlJs = JSON.stringify(safeUrl)
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="refresh" content="0;url=${safeUrl}" />
+    <meta http-equiv="refresh" content="0;url=${safeUrlAttr}" />
     <title>Completing authorization…</title>
     <style>
 ${BASE_STYLES}
@@ -100,11 +127,11 @@ ${BASE_STYLES}
       <div class="spinner"></div>
       <h1>Completing authorization…</h1>
       <p class="muted">We&apos;re sending you back to your MCP client.</p>
-      <p style="margin-top:0.75rem; font-size:0.9rem;">If nothing happens, <a href="${safeUrl}">click here</a>.</p>
+      <p style="margin-top:0.75rem; font-size:0.9rem;">If nothing happens, <a href="${safeUrlAttr}">click here</a>.</p>
     </div>
     <script>
       setTimeout(() => {
-        try { window.location.replace('${safeUrl}'); } catch (e) { window.location.href = '${safeUrl}'; }
+        try { window.location.replace(${safeUrlJs}); } catch (e) { window.location.href = ${safeUrlJs}; }
       }, 100);
     </script>
   </body>
@@ -112,12 +139,16 @@ ${BASE_STYLES}
 }
 
 function renderConsentPage({ consentToken, appName, scopeList, redirectHost }) {
+  const safeAppName = escapeHtml(appName || 'this client')
+  const safeScope = escapeHtml(scopeList || 'requested')
+  const safeRedirectHost = escapeHtml(redirectHost || 'verified callback')
+  const safeToken = escapeHtml(consentToken || '')
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Authorize ${appName}</title>
+    <title>Authorize ${safeAppName}</title>
     <style>
 ${BASE_STYLES}
       .label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: #9ca3af; margin-bottom: 0.25rem; }
@@ -158,14 +189,14 @@ ${BASE_STYLES}
   </head>
   <body>
     <div class="card">
-      <h1>Authorize ${appName}</h1>
+      <h1>Authorize ${safeAppName}</h1>
       <p class="muted">Let this client run VTOP actions through Everything Assistant.</p>
       <div class="meta">
-        <span>Scope: ${scopeList}</span>
-        <span>Callback: ${redirectHost}</span>
+        <span>Scope: ${safeScope}</span>
+        <span>Callback: ${safeRedirectHost}</span>
       </div>
       <form method="post" action="/oauth/consent" style="margin-top:1rem;">
-        <input type="hidden" name="consent_token" value="${consentToken}" />
+        <input type="hidden" name="consent_token" value="${safeToken}" />
         <div class="field">
           <div class="label">VTOP username</div>
           <input id="username" name="username" type="text" autocomplete="username" required placeholder="e.g. 23BCE0000" />

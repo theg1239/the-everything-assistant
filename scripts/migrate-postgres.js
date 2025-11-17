@@ -91,7 +91,6 @@ function resolveCrdbTargetName(table, models) {
   return null
 }
 
-// ---- parse Prisma (FK order + arrays/bytes)
 const src = fs.readFileSync(PRISMA_SCHEMA, 'utf8')
 function extractModels(src) {
   const models = []
@@ -255,7 +254,6 @@ for (const m of models) {
 }
 
 function parseCsvFilename(fn) {
-  // Support public.users.csv, public.users_1.csv, users.csv, users_1.csv
   let m = fn.match(/^([A-Za-z0-9]+)\.([A-Za-z0-9_]+)_(\d+)\.csv$/)
   if (m) return { schema: m[1], table: m[2], part: +m[3] }
   m = fn.match(/^([A-Za-z0-9]+)\.([A-Za-z0-9_]+)\.csv$/)

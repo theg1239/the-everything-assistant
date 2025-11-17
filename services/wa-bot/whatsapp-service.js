@@ -24,9 +24,7 @@ class WhatsAppService extends EventEmitter {
     }
   }
 
-  /**
-   * Get Chrome executable path, preferring system Chrome over bundled Chromium
-   */
+
   getChromePath() {
     const fs = require('fs')
     const chromePaths = [
@@ -46,7 +44,6 @@ class WhatsAppService extends EventEmitter {
           return path
         }
       } catch (error) {
-        // Continue to next path
       }
     }
 
@@ -54,9 +51,7 @@ class WhatsAppService extends EventEmitter {
     return undefined // Let Puppeteer use its bundled Chromium
   }
 
-  /**
-   * Initialize WhatsApp client
-   */
+
   async initialize() {
     try {
       console.log('🚀 Initializing WhatsApp client...')
@@ -91,9 +86,7 @@ class WhatsAppService extends EventEmitter {
     }
   }
 
-  /**
-   * Add a message to conversation context
-   */
+
   addToContext(phoneNumber, message, isBot = false) {
     if (!this.conversationContext.has(phoneNumber)) {
       this.conversationContext.set(phoneNumber, [])
@@ -109,7 +102,6 @@ class WhatsAppService extends EventEmitter {
       role: isBot ? 'assistant' : 'user',
     })
 
-    // Keep only the most recent messages
     while (context.length > this.contextConfig.maxMessages) {
       context.shift()
     }
@@ -117,9 +109,7 @@ class WhatsAppService extends EventEmitter {
     this.conversationContext.set(phoneNumber, context)
   }
 
-  /**
-   * Get conversation context for a user
-   */
+
   getContext(phoneNumber) {
     if (!this.conversationContext.has(phoneNumber)) {
       return []
@@ -128,25 +118,19 @@ class WhatsAppService extends EventEmitter {
     const context = this.conversationContext.get(phoneNumber)
     const now = Date.now()
 
-    // Filter out messages older than maxAge
     const validContext = context.filter(msg => now - msg.timestamp < this.contextConfig.maxAge)
 
-    // Update stored context to remove old messages
     this.conversationContext.set(phoneNumber, validContext)
 
     return validContext
   }
 
-  /**
-   * Clear context for a user
-   */
+
   clearContext(phoneNumber) {
     this.conversationContext.delete(phoneNumber)
   }
 
-  /**
-   * Cleanup old conversation contexts
-   */
+
   cleanupContexts() {
     const now = Date.now()
     for (const [phoneNumber, context] of this.conversationContext.entries()) {
@@ -160,27 +144,21 @@ class WhatsAppService extends EventEmitter {
     }
   }
 
-  /**
-   * Start context cleanup interval
-   */
+
   startContextCleanup() {
     setInterval(() => {
       this.cleanupContexts()
     }, this.contextConfig.cleanupInterval)
   }
 
-  /**
-   * Setup event handlers for WhatsApp client
-   */
+
   setupEventHandlers() {
-    // QR Code generation
     this.client.on('qr', qr => {
       console.log('📱 Scan the QR code below to connect WhatsApp:')
       qrcode.generate(qr, { small: true })
       this.emit('qr', qr)
     })
 
-    // Client ready
     this.client.on('ready', () => {
       console.log('✅ WhatsApp client is ready!')
       console.log('📱 Client info:', this.client.info)
@@ -189,26 +167,22 @@ class WhatsAppService extends EventEmitter {
       this.emit('ready')
     })
 
-    // Authentication success
     this.client.on('authenticated', () => {
       console.log('🔐 WhatsApp client authenticated successfully')
       this.emit('authenticated')
     })
 
-    // Authentication failure
     this.client.on('auth_failure', msg => {
       console.error('❌ WhatsApp authentication failed:', msg)
       this.emit('auth_failure', msg)
     })
 
-    // Disconnection
     this.client.on('disconnected', reason => {
       console.log('🔌 WhatsApp client disconnected:', reason)
       this.isReady = false
       this.emit('disconnected', reason)
     })
 
-    // Incoming messages
     this.client.on('message', async message => {
       try {
         console.log(`🔍 Raw message received:`, {
@@ -228,7 +202,6 @@ class WhatsAppService extends EventEmitter {
       }
     })
 
-    // Message creation (catches ALL messages including ones you send)
     this.client.on('message_create', async message => {
       try {
         console.log(`🔍 Message created:`, {
@@ -240,7 +213,6 @@ class WhatsAppService extends EventEmitter {
           deviceType: message.deviceType,
         })
 
-        // Only process if it's your own message and it's a command
         if (message.fromMe && message.body.startsWith('!')) {
           console.log('🎯 Processing your own command via message_create')
           await this.handleIncomingMessage(message)
@@ -250,12 +222,10 @@ class WhatsAppService extends EventEmitter {
       }
     })
 
-    // Message acknowledgment
     this.client.on('message_ack', (msg, ack) => {
       this.emit('message_ack', msg, ack)
     })
 
-    // Group join/leave events
     this.client.on('group_join', notification => {
       console.log('👥 Group join:', notification)
     })
@@ -264,25 +234,20 @@ class WhatsAppService extends EventEmitter {
       console.log('👋 Group leave:', notification)
     })
 
-    // Message revoked (deleted)
     this.client.on('message_revoke_everyone', (after, before) => {
       console.log('🗑️ Message deleted for everyone')
     })
 
-    // Message revoked for me
     this.client.on('message_revoke_me', message => {
       console.log('🗑️ Message deleted for me')
     })
 
-    // Catch any other message events
     this.client.on('change_state', state => {
       console.log('🔄 Client state changed:', state)
     })
   }
 
-  /**
-   * Normalize contact identifiers, handling Linked Device (LID) suffixes used in communities.
-   */
+
   getNormalizedContactId(message) {
     if (!message) {
       return null
@@ -310,9 +275,7 @@ class WhatsAppService extends EventEmitter {
     return candidate
   }
 
-  /**
-   * Extract the contact/user portion from a WhatsApp identifier.
-   */
+
   extractUserFromId(contactId) {
     if (!contactId) {
       return null
@@ -327,9 +290,7 @@ class WhatsAppService extends EventEmitter {
     return sanitizedUser || null
   }
 
-  /**
-   * Build minimal contact information when WhatsApp does not expose full contact details.
-   */
+
   buildFallbackContact(message, normalizedId) {
     if (message && message.fromMe && this.client?.info?.wid) {
       const { wid, pushname } = this.client.info
@@ -371,9 +332,7 @@ class WhatsAppService extends EventEmitter {
     }
   }
 
-  /**
-   * Resolve the contact for a message, adding fallbacks for community (LID) identifiers.
-   */
+
   async resolveContact(message, normalizedId = null) {
     if (!normalizedId) {
       normalizedId = this.getNormalizedContactId(message)
@@ -412,9 +371,7 @@ class WhatsAppService extends EventEmitter {
     return this.buildFallbackContact(message, normalizedId)
   }
 
-  /**
-   * Resolve a contact directly via the WhatsApp client by ID, normalizing LID identifiers.
-   */
+
   async resolveContactById(contactId) {
     if (!contactId || !this.client) {
       return null
@@ -452,9 +409,7 @@ class WhatsAppService extends EventEmitter {
     return contact
   }
 
-  /**
-   * Parse arguments for the !context command, extracting optional limit and question.
-   */
+
   parseContextCommandArgs(rawArgs) {
     if (!rawArgs) {
       return { question: '', limit: null }
@@ -467,7 +422,6 @@ class WhatsAppService extends EventEmitter {
 
     let limit = null
 
-    // Support "limit=500" or "limit:500" anywhere in the string
     const limitRegex = /\blimit\s*[:=]\s*(\d+)\b/i
     const labeledMatch = working.match(limitRegex)
     if (labeledMatch) {
@@ -477,13 +431,11 @@ class WhatsAppService extends EventEmitter {
         working.slice(labeledMatch.index + labeledMatch[0].length)
       ).trim()
     } else {
-      // Support "limit 500 ..." syntax
       const limitWordMatch = working.match(/^limit\s+(\d+)(?:\s+([\s\S]*))?$/i)
       if (limitWordMatch) {
         limit = parseInt(limitWordMatch[1], 10)
         working = (limitWordMatch[2] || '').trim()
       } else {
-        // Support leading numeric value e.g., "500 summarize the chat"
         const leadingMatch = working.match(/^(\d+)(?:\s+([\s\S]*))?$/)
         if (leadingMatch) {
           limit = parseInt(leadingMatch[1], 10)
@@ -502,9 +454,7 @@ class WhatsAppService extends EventEmitter {
     }
   }
 
-  /**
-   * Fetch chat history in batches until the desired size is reached.
-   */
+
   async fetchAllChatMessages(chat, options = {}) {
     const { batchSize = 200, maxMessages = 800, yieldToLoop = false } = options
 
@@ -522,7 +472,6 @@ class WhatsAppService extends EventEmitter {
         fetchOptions.before = cursor
       }
 
-      // Fetch a batch of messages
       const batch = await chat.fetchMessages(fetchOptions)
       if (!batch || batch.length === 0) {
         break
@@ -559,19 +508,8 @@ class WhatsAppService extends EventEmitter {
     return messages
   }
 
-  /**
-   * Handle incoming WhatsApp messages
-   *
-   * This method processes ALL messages, including:
-   * - User messages (for commands and logging)
-   * - Bot's own messages (for logging and potential self-interaction)
-   * - Group messages (if group support is enabled)
-   *
-   * Rate limiting is only applied to non-bot messages to prevent
-   * the bot from rate limiting itself.
-   */
+
   async handleIncomingMessage(message) {
-    // Skip if not ready or if message is from status broadcast
     if (!this.isReady || message.isStatus) {
       return
     }
@@ -601,7 +539,6 @@ class WhatsAppService extends EventEmitter {
         (message.fromMe && this.client?.info?.pushname) ||
         contactNumber
 
-      // Debug logging
       console.log(`🔍 Debug - Message details:`, {
         fromMe: message.fromMe,
         body: messageBody.substring(0, 50),
@@ -611,23 +548,18 @@ class WhatsAppService extends EventEmitter {
         isCommand: messageBody.startsWith('!'),
       })
 
-      // Don't skip self messages - we want to process all messages including our own responses
-      // This ensures proper logging and potential self-interaction features
       const messageType = message.fromMe ? '🤖 Self' : '👤 User'
       console.log(`📨 ${messageType} message from ${contactName}: ${messageBody}`)
 
-      // Check rate limiting (but don't rate limit self messages)
       if (!message.fromMe && this.isRateLimited(contactNumber)) {
         console.log(`🚫 Rate limited user: ${contactNumber}`)
         return
       }
 
-      // Update rate limiting (but only for non-self messages)
       if (!message.fromMe) {
         this.updateRateLimit(contactNumber)
       }
 
-      // Process the message
       const messageData = {
         id: message.id._serialized,
         from: contactNumber,
@@ -642,16 +574,11 @@ class WhatsAppService extends EventEmitter {
         fromMe: message.fromMe, // Track if message is from the bot itself
       }
 
-      // Store only command messages and bot responses in conversation context
       if (!message.isStatus && messageBody && messageBody.trim().length > 0) {
-        // Only store messages that are:
-        // 1. Commands (start with !)
-        // 2. Bot responses (fromMe = true)
         const isCommand = messageBody.startsWith('!')
         const isBotResponse = message.fromMe
 
         if (isCommand || isBotResponse) {
-          // For group messages, use individual user number; for DMs, use chat ID
           const contextKey = chat.isGroup ? contactNumber : chat.id._serialized
           this.addToContext(contextKey, messageBody, message.fromMe)
 
@@ -662,13 +589,9 @@ class WhatsAppService extends EventEmitter {
         }
       }
 
-      // Emit message event for external handling
       this.emit('message', messageData)
 
-      // Handle commands - allow commands from users AND from self (for testing)
-      // But prevent bot from responding to its own automated responses
       if (messageBody.startsWith('!')) {
-        // Check if this might be the bot's own automated response
         const isBotResponse =
           message.fromMe &&
           (messageBody.includes('*The Everything Assistant*') ||
@@ -686,13 +609,10 @@ class WhatsAppService extends EventEmitter {
       }
     } catch (error) {
       console.error('❌ Error handling incoming message:', error)
-      // Continue processing despite the error
     }
   }
 
-  /**
-   * Handle bot commands
-   */
+
   async handleCommand(messageData, originalMessage) {
     const { body, from, fromName, chatId, isGroup } = messageData
     const command = body.toLowerCase().split(' ')[0]
@@ -702,7 +622,6 @@ class WhatsAppService extends EventEmitter {
 
     console.log(`🤖 Processing command: ${command} from ${fromName}`)
 
-    // Get both the original chat and user's personal chat
     const originalChat = await originalMessage.getChat()
     const userChat = await this.getUserPersonalChat(from)
 
@@ -714,19 +633,16 @@ class WhatsAppService extends EventEmitter {
     switch (command) {
       case '!ask':
         if (!args) {
-          // Short response - send in current chat
           await this.sendMessageToChat(
             originalChat,
             'please provide a question after !ask\n\nexample: !ask what is the mess menu today?'
           )
           return
         }
-        // Pass both chats to handleAskCommand for smart routing
         await this.handleAskCommand(originalChat, userChat, from, fromName, args, messageData)
         break
 
       case '!context':
-        // Analyze chat context from recent messages - available to all users
         const { question, limit } = this.parseContextCommandArgs(args)
         const questionText = question || 'what has been happening in this chat recently?'
         await this.handleContextCommand(
@@ -741,7 +657,6 @@ class WhatsAppService extends EventEmitter {
         break
 
       case '!help':
-        // Help is moderately long - always send to DM with notification
         if (isGroup) {
           await this.sendMessageToChat(originalChat, `sent help info to ${fromName} in dm`)
         }
@@ -749,12 +664,10 @@ class WhatsAppService extends EventEmitter {
         break
 
       case '!status':
-        // Status is short - send in current chat
         await this.sendStatusMessage(originalChat)
         break
 
       case '!everyone':
-        // Manual @everyone tag - only works in groups and only for bot owner
         if (!isGroup) {
           await this.sendMessageToChat(
             originalChat,
@@ -773,7 +686,6 @@ class WhatsAppService extends EventEmitter {
         break
 
       default:
-        // Error messages are short - send in current chat
         await this.sendMessageToChat(
           originalChat,
           `unknown command: ${command}\n\ntype !help to see available commands`
@@ -782,14 +694,11 @@ class WhatsAppService extends EventEmitter {
     }
   }
 
-  /**
-   * Handle !ask command - main AI interaction with smart routing
-   */
+
   async handleAskCommand(originalChat, userChat, phoneNumber, userName, question, messageData) {
     try {
       console.log(`🧠 Processing AI request from ${userName}: ${question}`)
 
-      // Get conversation context for this user
       const contextKey = messageData.isGroup ? phoneNumber : originalChat.id._serialized
       const conversationHistory = this.getContext(contextKey)
 
@@ -812,7 +721,6 @@ class WhatsAppService extends EventEmitter {
 
       if (isVtopQuery) {
         const vtopMessage = `for vtop features like checking grades, attendance, timetable, and other academic information, please use the web interface at:\n\nhttps://the-everything-assistant.vercel.app\n\nthe website provides full access to all vtop features with a better user experience for academic data.`
-        // VTOP messages are medium length - send to DM if in group, otherwise current chat
         const targetChat = messageData.isGroup ? userChat : originalChat
         if (messageData.isGroup) {
           await this.sendMessageToChat(originalChat, `sent vtop info to ${userName} in dm`)
@@ -846,9 +754,7 @@ class WhatsAppService extends EventEmitter {
     }
   }
 
-  /**
-   * Handle !context command - analyze chat history
-   */
+
   async handleContextCommand(
     originalChat,
     userChat,
@@ -882,7 +788,6 @@ class WhatsAppService extends EventEmitter {
 
       await this.sendTypingToChat(originalChat)
 
-      // Determine how many messages to fetch
       const defaultLimit = 150
       const maxAutoLimit = 800
       const fetchAllThreshold = 220 // avoid large single fetches without explicit limit
@@ -913,10 +818,8 @@ class WhatsAppService extends EventEmitter {
         return
       }
 
-      // Format the chat history for AI analysis
       const contextText = this.formatChatHistoryForAI(recentMessages)
 
-      // Create a comprehensive prompt for AI analysis
       const analysisPrompt = `You are analyzing a WhatsApp chat history to answer the user's question.
 
 Question: "${questionText}"
@@ -955,9 +858,7 @@ Keep the response concise but informative.`
     }
   }
 
-  /**
-   * Get recent chat history
-   */
+
   async getChatHistory(chat, limit = 100, options = {}) {
     try {
       const {
@@ -994,7 +895,6 @@ Keep the response concise but informative.`
         return []
       }
 
-      // Ensure chronological order (oldest first)
       const chronologicalMessages = messages.slice().reverse()
 
       const processedMessages = []
@@ -1064,9 +964,7 @@ Keep the response concise but informative.`
     }
   }
 
-  /**
-   * Format chat history for AI analysis
-   */
+
   formatChatHistoryForAI(messages) {
     if (!messages || messages.length === 0) {
       return 'No messages found.'
@@ -1082,9 +980,7 @@ Keep the response concise but informative.`
     return formatted
   }
 
-  /**
-   * Handle AI response with smart routing based on response length
-   */
+
   async handleAIResponseSmart(originalChat, userChat, response, startTime, messageData) {
     try {
       const endTime = Date.now()
@@ -1102,7 +998,6 @@ Keep the response concise but informative.`
         return
       }
 
-      // Check if response should trigger @everyone tags
       const shouldTagEveryone = this.shouldTagEveryone(response, messageData)
 
       const formattedResponse = await this.formatResponseWithTags(
@@ -1119,11 +1014,9 @@ Keep the response concise but informative.`
       )
 
       if (isLongResponse && messageData.isGroup && !isBotOwner) {
-        // Long responses in groups go to DM (but not for bot owner)
         await this.sendMessageToChat(originalChat, `sent a detailed response in dm`)
         await this.sendMessageToChat(userChat, formattedResponse)
       } else {
-        // Short responses, DM conversations, or bot owner messages stay in current chat
         await this.sendMessageToChat(originalChat, formattedResponse)
       }
     } catch (error) {
@@ -1135,23 +1028,17 @@ Keep the response concise but informative.`
     }
   }
 
-  /**
-   * Determine if response should trigger @everyone tags
-   */
+
   shouldTagEveryone(response, messageData) {
-    // Only tag everyone in group chats
     if (!messageData.isGroup) {
       return false
     }
 
-    // Only allow if the message is from you (the bot owner)
-    // Replace with your actual phone number
     const botOwnerNumber = '917975100121' // Your phone number
     if (messageData.from !== botOwnerNumber) {
       return false
     }
 
-    // Check if the original user message contains @everyone
     const userMessage = messageData.body.toLowerCase()
     const hasEveryoneTrigger = userMessage.includes('@everyone')
 
@@ -1255,9 +1142,7 @@ Keep the response concise but informative.`
     }
   }
 
-  /**
-   * Get all participants in a group chat
-   */
+
   async getGroupParticipants(chat) {
     try {
       if (!chat.isGroup) {
@@ -1273,9 +1158,7 @@ Keep the response concise but informative.`
     }
   }
 
-  /**
-   * Format response with @everyone tags for group chats
-   */
+
   async formatResponseWithTags(response, chat, shouldTagEveryone = false) {
     let formatted = this.formatResponseForWhatsApp(response)
 
@@ -1283,30 +1166,25 @@ Keep the response concise but informative.`
       try {
         const participants = await this.getGroupParticipants(chat)
 
-        // Create mention data for WhatsApp
         const mentions = []
         const mentionText = []
 
         for (const participant of participants) {
-          // Skip if it's the bot's own number
           if (participant.id._serialized === this.client.info.wid._serialized) {
             continue
           }
 
           mentions.push(participant.id._serialized)
-          // Use participant name or phone number for display
           const displayName = participant.pushname || participant.id.user
           mentionText.push(`@${displayName}`)
         }
 
         if (mentions.length > 0) {
-          // Add mention tags at the beginning of the message
           const tagLine = `🔔 ${mentionText.join(' ')}\n\n`
           formatted = tagLine + formatted
 
           console.log(`🏷️ Prepared ${mentions.length} mentions for group response`)
 
-          // Return both the formatted text and mention data
           return {
             text: formatted,
             mentions: mentions,
@@ -1317,7 +1195,6 @@ Keep the response concise but informative.`
       }
     }
 
-    // Return just text if no mentions
     return {
       text: formatted,
       mentions: [],
@@ -1401,14 +1278,12 @@ all systems running normally`
     try {
       let sentMessage
 
-      // Handle both string and object with mentions
       if (typeof messageData === 'string') {
         sentMessage = await chat.sendMessage(messageData)
         console.log(
           `Message sent to chat ${chat.name || chat.id.user}: ${messageData.substring(0, 50)}...`
         )
       } else if (messageData && messageData.text) {
-        // Send message with mentions if provided
         if (messageData.mentions && messageData.mentions.length > 0) {
           sentMessage = await chat.sendMessage(messageData.text, {
             mentions: messageData.mentions,

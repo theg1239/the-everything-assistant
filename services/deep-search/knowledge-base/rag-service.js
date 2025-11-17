@@ -30,7 +30,6 @@ class RAGService {
           }
         }
       }
-      // If no faculty-specific results found, do general search
       if (searchResults.length === 0) {
         searchResults = await this.knowledgeBase.search(query, 40)
       }
@@ -55,7 +54,6 @@ class RAGService {
           fallbackResults = fallbackResults.concat(topicResults)
         }
 
-        // Diversify results by ensuring we get different types and sources
         const diverseResults = this.diversifyResults(fallbackResults)
 
         if (diverseResults.length === 0) {
@@ -376,10 +374,6 @@ Context: ${context}`
   calculateConfidence(searchResults) {
     if (searchResults.length === 0) return 0
 
-    // Calculate confidence based on:
-    // 1. Number of results
-    // 2. Average similarity score
-    // 3. Average upvotes/score
 
     logger.info(`Calculating confidence for ${searchResults.length} results`)
 

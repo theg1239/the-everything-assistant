@@ -1,9 +1,6 @@
 import { ContextData } from './index'
 
-/**
- * Latest Events, Announcements and Campus Happenings
- * FAT status, Winter Semester prep, and campus buzz
- */
+
 export const latestEvents: ContextData = {
   section: 'latest-events',
   title: 'Latest Events & Campus Updates',

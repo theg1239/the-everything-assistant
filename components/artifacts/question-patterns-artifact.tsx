@@ -111,7 +111,6 @@ export default function QuestionPatternsArtifact({ data }: { data: any }) {
             const copyKey = `pattern-${i}`
             const isCopied = copiedStates[copyKey]
 
-            // De-duplicate sample questions by normalized content, preserving order
             const seenQ = new Set<string>()
             const uniqueSampleQs: string[] = []
             for (const q of sampleQs) {
@@ -123,7 +122,6 @@ export default function QuestionPatternsArtifact({ data }: { data: any }) {
               }
             }
 
-            // De-duplicate sample papers by URL or normalized metadata
             const seenP = new Set<string>()
             const uniqueSamplePapers: any[] = []
             for (const sp of samplePapers) {

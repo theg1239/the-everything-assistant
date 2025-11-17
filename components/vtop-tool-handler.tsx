@@ -125,10 +125,8 @@ export function VTOPToolHandler({
 
     window.addEventListener('vtopLoginTrigger', handleVTOPLoginTrigger as EventListener)
     const handleOpenCredentials = (e: CustomEvent) => {
-      // Optionally ensure the pending tool call matches
       const requestedId = e.detail?.toolCallId
       if (requestedId && pendingToolCall && requestedId !== pendingToolCall.toolCallId) {
-        // If user explicitly opened a different tool call, attempt to locate it
         if (toolInvocations) {
           const match = toolInvocations.find(t => t.toolCallId === requestedId)
           if (match) setPendingToolCall(match)

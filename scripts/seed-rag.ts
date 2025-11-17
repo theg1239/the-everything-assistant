@@ -1,16 +1,5 @@
 #!/usr/bin/env ts-node
-/**
- * scripts/seed-rag.ts
- *
- * Splits your combined context + VIT comprehensive KB into ~800-token chunks,
- * then upserts embeddings into PostgreSQL/pgvector.
- *
- * Usage:
- *   ts-node scripts/seed-rag.ts                   # normal seed (append)
- *   ts-node scripts/seed-rag.ts --fresh           # clear vit_rag_chunks and reseed
- *   ts-node scripts/seed-rag.ts --chunk 400       # custom chunk size (default 200)
- *   ts-node scripts/seed-rag.ts --custom "your custom text"   # add a custom chunk
- */
+
 
 import { getContextForAIPrompt } from '../lib/data/context-integration'
 import { VIT_COMPREHENSIVE_KNOWLEDGE } from '../lib/knowledge-base'
@@ -49,7 +38,6 @@ async function main() {
     const parsed = parseInt(process.argv[chunkArgIndex + 1], 10)
     if (!isNaN(parsed)) chunkSize = parsed
   } else {
-    // Prompt user for chunk size if not provided
     chunkSize = await promptForChunkSize(chunkSize)
   }
 
@@ -90,7 +78,6 @@ async function main() {
     );
   `)
 
-  // Insert custom chunk if provided
   if (customText) {
     console.log('Inserting custom chunk:', customText)
     try {

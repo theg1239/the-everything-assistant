@@ -63,10 +63,8 @@ export default function MobileViewportFix() {
       }
     }
 
-    // Initial setup
     setAppHeight()
 
-    // Event listeners
     window.addEventListener('resize', setAppHeight)
     const viewport = window.visualViewport
     if (viewport) {
@@ -78,7 +76,6 @@ export default function MobileViewportFix() {
     window.addEventListener('orientationchange', () => setTimeout(setAppHeight, 100))
     document.addEventListener('touchmove', preventOverscroll, { passive: false })
 
-    // Cleanup
     return () => {
       window.removeEventListener('resize', setAppHeight)
       if (viewport) {

@@ -1,20 +1,4 @@
 #!/usr/bin/env node
-// scripts/papers.ts
-// Self-contained TypeScript CLI that indexes VIT past papers.
-// Default: processes **all** discovered papers unless you pass --max.
-//
-// Run examples:
-//   npx tsx scripts/papers.ts --course BMAT101L --all --no-headless-only --debug
-//   node --import tsx ./scripts/papers.ts -c BMAT101L --all
-//
-// Requires these deps in your project:
-//   npm i -D tsx
-//   npm i puppeteer-core @sparticuz/chromium pdf-lib pdf-parse pdfjs-dist dotenv
-//
-// Environment (optional):
-//   PAPER_AGENT_USE_SYSTEM_BROWSER=1      # prefer local Chrome/Edge
-//   PAPER_AGENT_BROWSER_PATH="C:\Path\to\chrome.exe"
-//   DATABASE_URL2=...                     # enable DB persistence paths in your existing lib
 
 import 'dotenv/config'
 import puppeteer, { type Browser, type Page } from 'puppeteer-core'
@@ -26,7 +10,6 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { execSync } from 'child_process'
 
-// --- Project-local modules (import the TS files directly) ---
 import { scrapePapersService } from '../lib/scrapers/papers-scraper'
 import { scrapePapersCodeChef } from '../lib/scrapers/papers-codechef'
 import { scrapeVITPaperVault } from '../lib/scrapers/vit-papervault'
@@ -52,7 +35,6 @@ import {
 } from '../lib/papers-db'
 import { paperProgress } from '../lib/progress/paper-progress'
 
-// ------------------------ Types ------------------------
 type Logger = ((msg: string, data?: any) => void) & { getLogs(): string[] }
 
 interface RawPaperMeta {
@@ -93,7 +75,6 @@ interface PaperIndexMeta {
   chunkCount: number
 }
 
-// ------------------------ Small utilities ------------------------
 function safeJson(v: any) {
   try {
     return JSON.stringify(v, (k, val) =>
@@ -149,13 +130,11 @@ async function computeHash(buf: Buffer | Uint8Array): Promise<string> {
   }
 }
 
-// ------------------------ Browser lifecycle ------------------------
 let sharedBrowser: Browser | null = null
 let sharedBrowserUsageCount = 0
 const MAX_SHARED_BROWSER_USAGE = 10
 let launchingBrowserPromise: Promise<Browser> | null = null
 
-// Puppeteer-compatible init script injector (Playwright-safe too)
 async function installPageHelperShims(page: Page) {
   const init = () => {
     // @ts-ignore – we run inside the page context
@@ -313,7 +292,6 @@ async function cleanupSharedBrowser(log?: Logger): Promise<void> {
   }
 }
 
-// ------------------------ Fetch + parse helpers ------------------------
 function toDirectDrive(url: string): string {
   const m = url.match(/https:\/\/drive\.google\.com\/file\/d\/([^/]+)\//)
   if (m) return `https://drive.google.com/uc?export=download&id=${m[1]}`
@@ -715,7 +693,6 @@ async function downloadPdf(
   }
 }
 
-// ------------------------ Text extraction + chunking ------------------------
 function pickGeminiModel(opts: { pdf?: boolean; ocr?: boolean; fast?: boolean } = {}) {
   if (opts.ocr || opts.pdf) return 'gemini-flash-latest'
   if (opts.fast) return 'gemini-flash-latest'
@@ -898,7 +875,6 @@ function cosine(a: number[], b: number[]): number {
   return dot / (Math.sqrt(as) * Math.sqrt(bs) + 1e-8)
 }
 
-// ------------------------ Paper discovery ------------------------
 async function fetchAllPapers(courseCode: string, examType?: string, year?: string, log?: Logger) {
   log?.('Fetching papers from all sources', { courseCode, examType, year })
   const started = Date.now()
@@ -1008,7 +984,6 @@ async function resolveCourseCode(input: string, log?: Logger): Promise<string | 
   return null
 }
 
-// ------------------------ Indexer ------------------------
 const paperIndexes: Map<string, PaperIndexMeta> = new Map()
 
 export async function indexPastPapers(options: {
@@ -1055,7 +1030,6 @@ export async function indexPastPapers(options: {
     logEmit(options.runId, `Found ${all.length} papers across all sources`, { count: all.length })
   log('Total papers after fetch', { count: all.length })
 
-  // DEFAULT: process everything unless user limits
   const maxPapers = options.maxPapers ?? Number.MAX_SAFE_INTEGER
   const selected = all.slice(0, maxPapers)
   if (options.runId)
@@ -1096,7 +1070,6 @@ export async function indexPastPapers(options: {
       return
     }
 
-    // Do not bail early; continue trying more papers in case some sources fail intermittently
 
     if (options.runId)
       logEmit(options.runId, `Processing: ${p.title}`, { title: p.title, url: p.url })
@@ -1141,7 +1114,6 @@ export async function indexPastPapers(options: {
       }
     }
 
-    // Headless-first path (safer when PDFs block download)
     if (options.headlessOnly ?? true) {
       try {
         const cap = /drive\.google\.com/i.test(p.url)
@@ -1264,7 +1236,6 @@ export async function indexPastPapers(options: {
       }
     }
 
-    // Direct bytes first, then fallback to headless OCR
     const PAPER_TIMEOUT = 20000
     let download: { pdf: Buffer | null; images?: Buffer[] }
     try {
@@ -1296,7 +1267,6 @@ export async function indexPastPapers(options: {
       })
     }
 
-    // Optionally persist PDFs locally for inspection
     if (download.pdf && (options as any).saveDir) {
       try {
         const dir = String((options as any).saveDir)
@@ -1363,7 +1333,6 @@ export async function indexPastPapers(options: {
           log('Headless capture/OCR fallback failed', { error: e?.message })
         }
       } else if (/res\.cloudinary\.com\/.*\.pdf/i.test(p.url)) {
-        // Cloudinary: try direct page images via transformations, then generic viewer screenshots
         const imgs: Buffer[] = []
         try {
           const direct = toCloudinaryPageImageUrls(p.url, 8) || []
@@ -1603,7 +1572,6 @@ export async function indexPastPapers(options: {
   }
 }
 
-// ------------------------ (Optional) Q&A helper ------------------------
 export async function askIndexedPaperQuestion(
   indexId: string,
   question: string,

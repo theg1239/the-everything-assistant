@@ -426,7 +426,6 @@ export async function POST(req: Request) {
               directToolCallExecuted = true
             }
           } else {
-            // For non-VTOP tools, store the result for streaming
             directToolCallResult = {
               toolCallId: directToolCall.toolCallId || Date.now().toString(),
               toolName: directToolCall.toolName,
@@ -560,7 +559,6 @@ CRITICAL TOOL CONTINUATION RULES:
 - The conversation flow is: [user question] → [tool call] → [YOUR RESPONSE USING TOOL RESULTS]
 - NEVER end the conversation at a tool call - always synthesize and respond`
 
-    // console.log('Memory stuff:', memoryGuidance)
 
     const enhancedMessages = messages.map((message: any, index: number) => {
       if (message.role === 'user' && index === messages.length - 1) {
@@ -988,10 +986,6 @@ CRITICAL TOOL CONTINUATION RULES:
             console.warn('Failed to log full model response:', e)
           }
 
-          // Collect reasoning from multiple possible locations for robustness:
-          // 1) middleware-provided `reasoning` argument
-          // 2) result.response.messages -> message.content parts with type === 'reasoning'
-          // 3) Google-style candidates[].content.parts where part.thought === true
           try {
             const reasoningParts: string[] = []
 

@@ -90,11 +90,6 @@ export async function POST(request: NextRequest) {
       if (user.mfaMethod === 'authenticator' && user.mfaSecret) {
         isValidCode = verifyTOTP(code, user.mfaSecret)
       } else if (user.mfaMethod === 'email') {
-        // For email MFA, we would need to implement a flow where:
-        // 1. User requests login email verification
-        // 2. System sends code to email
-        // 3. User enters code here
-        // For now, return error asking user to set up proper MFA
         return NextResponse.json(
           {
             error:

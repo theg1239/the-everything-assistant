@@ -1,9 +1,6 @@
 import { ContextData } from './index'
 
-/**
- * Holiday Calendar and Leave Information
- * Upcoming official holidays, semester breaks, and policy reminders
- */
+
 export const holidays: ContextData = {
   section: 'holidays',
   title: 'Holiday Calendar (Nov 2025 – Jul 2026)',

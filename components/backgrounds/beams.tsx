@@ -338,8 +338,6 @@ const MergedPlanes = forwardRef<
   useFrame((_, delta) => {
     mesh.current.material.uniforms.time.value += 0.1 * delta
   })
-  // Note: temporary cast to avoid type identity conflicts between multiple versions of @types/three.
-  // See repo README / instructions for deduping @types/three across the workspace.
   return <mesh ref={mesh as unknown as any} geometry={geometry as any} material={material as any} />
 })
 MergedPlanes.displayName = 'MergedPlanes'

@@ -306,7 +306,7 @@ const PureMultimodalInput = ({
               />
 
             <div className="flex items-end gap-2 p-2">
-              {/* Tools Dropdown */}
+
               <ToolsDropdown onToolSelect={onToolSelect} selectedTool={selectedTool} />
 
               <AnimatePresence mode="wait">
@@ -366,7 +366,7 @@ const PureMultimodalInput = ({
               </AnimatePresence>
             </div>
           </div>
-          {/* Footer: shortcuts + character count */}
+
           <div className="flex items-center justify-between px-3 pb-2">
             <p className="hidden sm:block text-[10px] text-muted-foreground">
               Enter to send • Shift+Enter for newline • / to focus
@@ -383,7 +383,7 @@ const PureMultimodalInput = ({
             </div>
           </div>
         </motion.div>
-        {/* Safe-area spacer for iOS home indicator */}
+
         <div className="h-0" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} aria-hidden />
       </form>
     </motion.div>

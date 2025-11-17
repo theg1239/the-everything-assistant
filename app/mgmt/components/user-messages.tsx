@@ -24,7 +24,6 @@ export default function UserMessages({ user, onClose }: any) {
     setLoading(true)
     try {
       const off = reset ? 0 : offset
-      // fetch next page; searches are performed client-side on loaded messages
       const res = await fetch(
         `/api/user-messages?userId=${encodeURIComponent(user.id)}&limit=${limit}&offset=${off}`
       )
@@ -35,7 +34,6 @@ export default function UserMessages({ user, onClose }: any) {
       setHasMore(items.length === limit)
       setOffset(reset ? limit : off + items.length)
     } catch (e) {
-      // ignore
     } finally {
       setLoading(false)
     }

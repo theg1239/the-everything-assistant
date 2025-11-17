@@ -37,8 +37,6 @@ const app = express()
 
 const DEFAULT_SYNC_COMMANDS = ['profile', 'timetable', 'attendance', 'marks', 'cgpa', 'exams', 'da']
 
-// Per-username VTOP call limiter to guard against repeated CLI panics
-// Defaults: 15 calls per 5 minutes per username when MCP OAuth is enabled.
 const PER_USER_VTOP_LIMIT = parseInt(process.env.VTOP_USER_LIMIT || '15', 10)
 const PER_USER_VTOP_WINDOW_MS = parseInt(
   process.env.VTOP_USER_WINDOW_MS || String(5 * 60 * 1000),

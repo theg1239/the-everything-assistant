@@ -23,7 +23,6 @@ export default function Heatmap({ rows = [], max = 0 }: { rows: HeatmapRow[]; ma
 
   const onCellLeave = () => setTip(null)
 
-  // clamp helper
   const clamp = (v: number, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, v))
 
   return (
@@ -34,7 +33,7 @@ export default function Heatmap({ rows = [], max = 0 }: { rows: HeatmapRow[]; ma
       </div>
 
       <div ref={containerRef} className="overflow-auto">
-        {/* header: hours */}
+
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground mb-1">
           <div className="w-20">day</div>
           <div className="flex-1 grid grid-cols-24 gap-[2px]">
@@ -46,7 +45,7 @@ export default function Heatmap({ rows = [], max = 0 }: { rows: HeatmapRow[]; ma
           </div>
         </div>
 
-        {/* rows */}
+
         <div className="space-y-1">
           {rows.length === 0 && (
             <div className="text-xs text-muted-foreground">no heatmap rows</div>
@@ -80,7 +79,7 @@ export default function Heatmap({ rows = [], max = 0 }: { rows: HeatmapRow[]; ma
         </div>
       </div>
 
-      {/* legend and tooltip */}
+
       <div className="mt-2 flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs text-muted-foreground lowercase">
           <span>0</span>

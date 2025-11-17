@@ -115,7 +115,6 @@ class WABotServer {
       }
     })
 
-    // Webhook for receiving updates from main app (removed broadcast functionality)
     this.app.post('/api/webhook', (req, res) => {
       try {
         const { type, data } = req.body
@@ -215,7 +214,6 @@ class WABotServer {
       }
     })
 
-    // 404 handler
     this.app.use('*', (req, res) => {
       res.status(404).json({
         error: 'Endpoint not found',
@@ -224,7 +222,6 @@ class WABotServer {
       })
     })
 
-    // Error handler
     this.app.use((error, req, res, next) => {
       console.error('❌ Express error:', error)
       res.status(500).json({
@@ -339,7 +336,6 @@ class WABotServer {
 
   async handleSystemMessage(data) {
     console.log('System message received:', data)
-    // Handle individual system notifications only
   }
 
   async start() {

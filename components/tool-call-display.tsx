@@ -102,10 +102,6 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
               })
               let processedRows = rows
               if (command === 'attendance' && Array.isArray(processedRows)) {
-                if (process.env.NODE_ENV !== 'production') {
-                  // eslint-disable-next-line no-console
-                  //console.log('[VTOP parser] raw attendance row', processedRows)
-                }
                 processedRows = processedRows.map((row: any) => {
                   const clean = (val: any) => (typeof val === 'string' ? val.trim() : val)
                   return {
@@ -197,8 +193,6 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
       }
     }
 
-    // When credentials are required, do not return an artifact here.
-    // This allows the Authentication Required UI to render instead.
     if (result.requiresCredentials === true) {
       return null
     }
@@ -260,7 +254,6 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         errorMessage.includes('authentication') ||
         errorMessage.includes('Login failed or session could not be established')
 
-      // For credential-required cases, suppress artifact so Auth UI can show
       if (isCredentialError) {
         return null
       }
@@ -849,9 +842,7 @@ const ToolCallLoadingState = ({ toolCalls }: { toolCalls: any[] }) => {
               <div className="text-sm font-medium text-foreground break-words">
                 Searching for data...
               </div>
-              {/* <div className="text-xs text-muted-foreground mt-1">
-                Running {toolCalls.length} tool{toolCalls.length > 1 ? 's' : ''}
-              </div> */}
+
             </div>
             <Sparkles className="h-4 w-4 text-muted-foreground" />
           </div>
@@ -977,7 +968,6 @@ const ToolCallResultsSummary = ({
     return false
   })
 
-  // Detect VTOP credential requirement regardless of artifacts presence
   const vtopCredentialTools = enrichedToolCalls.filter(
     tool =>
       tool.toolName === 'queryVTOP' &&
@@ -1105,7 +1095,6 @@ const ToolCallResultsSummary = ({
         }
         return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ')
       }
-      // Always show the Authentication Required UI in the tool call display
       return (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3">
           <Card className="w-full overflow-hidden border-blue-500/30 bg-blue-500/5">

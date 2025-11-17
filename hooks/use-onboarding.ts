@@ -12,7 +12,6 @@ export function useOnboarding() {
     setHasSeenOnboarding(hasSeenBefore)
 
     const handleTriggerOnboarding = () => {
-      //console.log('triggerOnboarding event received!')
       setShowOnboarding(true)
     }
 
@@ -39,11 +38,9 @@ export function useOnboarding() {
   }
 
   const closeOnboarding = () => {
-    //console.log('closeOnboarding called')
     setShowOnboarding(false)
   }
 
-  //console.log('useOnboarding hook state:', { showOnboarding, hasSeenOnboarding })
 
   const resetOnboarding = () => {
     localStorage.removeItem('onboarding-completed')

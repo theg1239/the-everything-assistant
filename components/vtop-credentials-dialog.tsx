@@ -135,10 +135,7 @@ export function VTOPCredentialsDialog({
           </div>
 
           <h4 className="mb-2 text-2xl font-medium text-white">VTOP Authentication</h4>
-          {/* <p className="mb-6 text-slate-300">
-            To execute the <code className="bg-slate-700 px-2 py-1 rounded text-sm">{command}</code> command, 
-            please enter your VTOP credentials.
-          </p> */}
+
 
           <form onSubmit={handleSubmit} className="space-y-4 text-left">
             <div className="space-y-2">
@@ -183,28 +180,11 @@ export function VTOPCredentialsDialog({
             </div>
 
             <div className="space-y-3">
-              {/* <div className="flex items-center space-x-3">
-                <input
-                  type="checkbox"
-                  id="remember"
-                  checked={rememberCredentials}
-                  onChange={e => setRememberCredentials(e.target.checked)}
-                  className="rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 h-4 w-4"
-                />
-                <label htmlFor="remember" className="text-sm text-slate-300">
-                  Remember username
-                </label>
-              </div> */}
 
-              {/* <div className="flex items-center space-x-3">
-              <span className="text-sm text-slate-300 flex items-center">
-                Credentials will be linked for auto-login
-              </span>
-            </div> */}
 
-              {/* <p className="text-xs text-slate-400 ml-6">
-              Your credentials will be encrypted and stored for automatic VTOP access
-            </p> */}
+
+
+
             </div>
 
             <div className="bg-slate-800 p-3 rounded-xl border border-slate-600">

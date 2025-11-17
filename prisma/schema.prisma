@@ -51,14 +51,13 @@ model User {
   created_at    DateTime  @default(now())
   updated_at    DateTime  @default(now()) @updatedAt
   
-  // MFA fields
   mfaEnabled     Boolean   @default(false)
-  mfaMethod      String?   // 'email' or 'authenticator'
-  mfaSecret      String?   // For authenticator app
+  mfaMethod      String?
+  mfaSecret      String?
   backupCodes    String[]  @default([])
-  tempMfaSecret  String?   // Temporary during setup
-  tempMfaMethod  String?   // Temporary during setup
-  tempMfaExpires DateTime? // Temporary during setup
+  tempMfaSecret  String?
+  tempMfaMethod  String?
+  tempMfaExpires DateTime?
   
   accounts    Account[]
   sessions    Session[]
@@ -150,8 +149,8 @@ model Vote {
 model SecurityLog {
   id         String   @id @default(cuid())
   userId     String
-  event      String   // 'MFA_ENABLED', 'MFA_DISABLED', 'MFA_BACKUP_CODES_REGENERATED', etc.
-  method     String?  // 'email', 'authenticator'
+  event      String
+  method     String?
   ipAddress  String?
   userAgent  String?
   created_at DateTime @default(now())
@@ -175,7 +174,7 @@ model Memory {
   userId      String
   content     String
   tags        String[] @default([])
-  importance  Int      @default(1) // 1-5 scale, 5 being most important
+  importance  Int      @default(1)
   lastUsedAt  DateTime @default(now())
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -193,7 +192,7 @@ model MemorySettings {
   isEnabled      Boolean  @default(true)
   maxTokens      Int      @default(2000)
   autoSave       Boolean  @default(true)
-  autoSaveFilter String   @default("medium") // 'low', 'medium', 'high' importance threshold
+  autoSaveFilter String   @default("medium")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   
@@ -262,7 +261,7 @@ model WhatsAppConversation {
   id          String   @id @default(cuid())
   phoneNumber String   @unique
   userName    String?
-  userId      String?  // Link to User if they sign up later
+  userId      String?
   isActive    Boolean  @default(true)
   lastMessageAt DateTime @default(now())
   createdAt   DateTime @default(now())
@@ -280,11 +279,11 @@ model WhatsAppConversation {
 model WhatsAppMessage {
   id             String   @id @default(cuid())
   conversationId String
-  messageId      String   @unique // WhatsApp message ID
-  direction      String   // 'inbound' or 'outbound'
+  messageId      String   @unique
+  direction      String
   content        String
-  messageType    String   @default("text") // 'text', 'image', 'document', etc.
-  status         String   @default("sent") // 'sent', 'delivered', 'read', 'failed'
+  messageType    String   @default("text")
+  status         String   @default("sent")
   isCommand      Boolean  @default(false)
   command        String?
   aiResponse     String?

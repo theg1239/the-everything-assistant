@@ -302,10 +302,7 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
                 <X className="h-3 w-3 text-muted-foreground" />
               </button>
 
-              {/* <div className="flex items-center gap-2 mb-2">
-                <Lightbulb className="h-4 w-4 text-yellow-500" />
-                <span className="text-sm font-medium text-foreground">follow up questions</span>
-              </div> */}
+
 
               <div className="flex flex-wrap gap-2">
                 {suggestions.map((suggestion, index) => (

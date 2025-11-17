@@ -462,7 +462,6 @@ class RedditScraper {
               }
             }
           } else if (post.postType === 'video') {
-            // Look for shreddit-player-2 (new Reddit player)
             const vid = $post.find('shreddit-player-2')
             if (vid.length) {
               post.videoSrc = vid.attr('src')
@@ -475,7 +474,6 @@ class RedditScraper {
               }
             }
 
-            // Look for shreddit-media-ui (another video player)
             const mediaUi = $post.find('shreddit-media-ui')
             if (mediaUi.length) {
               const preview = mediaUi.attr('preview')
@@ -488,14 +486,12 @@ class RedditScraper {
               }
             }
 
-            // Look for any video elements
             const videoEl = $post.find('video')
             if (videoEl.length && !post.videoSrc) {
               post.videoSrc = videoEl.attr('src')
               post.poster = videoEl.attr('poster')
             }
 
-            // If we still don't have a video source, check contentHref for v.redd.it
             if (!post.videoSrc && post.contentHref && post.contentHref.includes('v.redd.it')) {
               post.videoSrc = post.contentHref
             }
@@ -663,7 +659,6 @@ class RedditScraper {
 
   async analyzeContent(content) {
     try {
-      // Define Zod schema for content analysis
       const contentAnalysisSchema = z.object({
         topics: z.array(z.string()).describe('Key topics and themes'),
         sentiment: z.enum(['positive', 'negative', 'neutral']).describe('Overall sentiment'),
@@ -695,7 +690,6 @@ Please provide:
     } catch (error) {
       logger.error('Error analyzing content:', error.message)
 
-      // Return a fallback object with the correct schema structure
       return {
         topics: [],
         sentiment: 'neutral',
@@ -793,7 +787,6 @@ Please provide:
           tags: post.flair ? [post.flair] : [],
         }
 
-        // Handle video posts
         if (post.postType === 'video' && (post.videoSrc || post.contentHref)) {
           logger.info(`Processing video post ${post.id}: ${post.title}`)
 
@@ -805,7 +798,6 @@ Please provide:
           }
 
           try {
-            // Prepare rich context for video analysis
             const videoContext = {
               title: post.title,
               subreddit: subredditName,
@@ -838,7 +830,6 @@ Please provide:
               }
               postData.url = videoUrl
 
-              // Add video analysis to extracted text
               const videoText = [
                 videoAnalysis.description,
                 videoAnalysis.visible_text,
@@ -870,7 +861,6 @@ Please provide:
             }
           }
 
-          // If there's a poster/thumbnail image, we can still analyze that
           if (post.poster && this.imageAnalysisEnabled) {
             try {
               logger.info(`Analyzing video thumbnail for post ${post.id}: ${post.poster}`)
@@ -888,7 +878,6 @@ Please provide:
                   type: 'video_thumbnail',
                 })
 
-                // Add thumbnail analysis to extracted text if video analysis failed
                 if (!postData.video?.analysis) {
                   const thumbnailText = [
                     thumbnailAnalysis.description,
@@ -915,7 +904,6 @@ Please provide:
             }
           }
         }
-        // Handle image posts
         else if (post.postType === 'image' && post.imageUrl) {
           const isValidImageUrl =
             post.imageUrl &&
@@ -1127,26 +1115,22 @@ Please provide:
     try {
       logger.info(`Downloading and analyzing video: ${videoUrl}`)
 
-      // Create videos directory if it doesn't exist
       const videosDir = path.join(process.cwd(), 'services', 'deep-search', 'temp', 'videos')
       const framesDir = path.join(videosDir, 'frames')
       await fs.mkdir(videosDir, { recursive: true })
       await fs.mkdir(framesDir, { recursive: true })
 
-      // Generate unique filename
       const videoId = postContext.postId || Date.now().toString()
       const videoFilename = `${videoId}.%(ext)s`
       const videoTemplate = path.join(videosDir, videoFilename)
 
       let downloadedFile = null
 
-      // Try yt-dlp first
       try {
         downloadedFile = await this.downloadVideoWithYtDlp(videoUrl, videoTemplate)
       } catch (ytDlpError) {
         logger.warn(`yt-dlp failed: ${ytDlpError.message}`)
 
-        // Try manual Reddit video extraction as fallback
         logger.info('Attempting manual Reddit video download as fallback...')
         downloadedFile = await this.downloadRedditVideoManually(videoUrl, videosDir, videoId)
       }
@@ -1159,34 +1143,27 @@ Please provide:
       const stats = await fs.stat(downloadedFile)
       logger.info(`Video downloaded: ${stats.size} bytes`)
 
-      // Check if we actually got video data
       if (stats.size < 1000) {
         logger.warn(`Downloaded file too small (${stats.size} bytes), likely not a video file`)
         await fs.unlink(downloadedFile).catch(() => {})
         return null
       }
 
-      // Check file size limit (50MB)
       if (stats.size > 50 * 1024 * 1024) {
         logger.warn(`Video too large (${stats.size} bytes), skipping analysis`)
         await fs.unlink(downloadedFile).catch(() => {})
         return null
       }
 
-      // Extract frames using ffmpeg
       const frames = await this.extractVideoFrames(downloadedFile, framesDir, videoId)
 
       if (frames.length === 0) {
         logger.warn('No frames extracted from video')
-        // await this.cleanupVideoFiles(downloadedFile, framesDir) // Commented out to preserve videos and frames
         return null
       }
 
-      // Analyze frames with Gemini
       const videoAnalysis = await this.analyzeVideoFrames(frames, postContext, videoData)
 
-      // Cleanup temporary files
-      // await this.cleanupVideoFiles(downloadedFile, framesDir) // Commented out to preserve videos and frames
 
       return {
         ...videoAnalysis,
@@ -1208,7 +1185,6 @@ Please provide:
 
   async downloadRedditVideoManually(originalUrl, videosDir, videoId) {
     try {
-      // Extract video ID from Reddit URL
       const videoIdMatch = originalUrl.match(/v\.redd\.it\/([^\/\?]+)/)
       if (!videoIdMatch) {
         logger.warn('Could not extract video ID from Reddit URL')
@@ -1218,7 +1194,6 @@ Please provide:
       const redditVideoId = videoIdMatch[1]
       logger.info(`Extracted Reddit video ID: ${redditVideoId}`)
 
-      // Try common Reddit video URLs
       const possibleUrls = [
         `https://v.redd.it/${redditVideoId}/DASH_720.mp4`,
         `https://v.redd.it/${redditVideoId}/DASH_480.mp4`,
@@ -1436,7 +1411,6 @@ Please provide:
         }
 
         try {
-          // Get list of extracted frames
           const files = await fs.readdir(framesDir)
           const frameFiles = files
             .filter(file => file.startsWith(`${videoId}_frame_`) && file.endsWith('.jpg'))
@@ -1461,13 +1435,11 @@ Please provide:
   async analyzeVideoFrames(framePaths, postContext = {}, videoData = {}) {
     const frameImages = []
     try {
-      // Convert frame images to base64 for Gemini
       const maxFramesToAnalyze = 8 // Limit to avoid token limits
 
       for (let i = 0; i < Math.min(framePaths.length, maxFramesToAnalyze); i++) {
         try {
           const frameBuffer = await fs.readFile(framePaths[i])
-          // Resize image to reduce token usage
           const resizedBuffer = await sharp(frameBuffer)
             .resize(512, 384, { fit: 'inside' })
             .jpeg({ quality: 80 })
@@ -1489,7 +1461,6 @@ Please provide:
         return null
       }
 
-      // Prepare context information for better analysis
       const contextInfo = {
         post: {
           title: postContext.title || 'Unknown',
@@ -1502,7 +1473,6 @@ Please provide:
         comments: postContext.comments || [],
       }
 
-      // Build additional context from comments
       let commentsContext = ''
       if (contextInfo.comments.length > 0) {
         const topComments = contextInfo.comments
@@ -1519,7 +1489,6 @@ Please provide:
         }
       }
 
-      // Define Zod schema for structured output
       const videoAnalysisSchema = z.object({
         description: z.string().describe('Detailed description of what happens in the video'),
         educational_content: z
@@ -1586,7 +1555,6 @@ Based on the post context, comments, and video frames, please analyze the video 
         temperature: 0.3,
       })
 
-      // Add frame count to the analysis
       analysis.frame_count = frameImages.length
 
       logger.info(`Video analysis completed: ${analysis.description?.substring(0, 100)}...`)
@@ -1596,7 +1564,6 @@ Based on the post context, comments, and video frames, please analyze the video 
     } catch (error) {
       logger.error('Error analyzing video frames:', error.message)
 
-      // Return a fallback object with the correct schema structure
       return {
         description: 'Failed to analyze video content',
         educational_content: '',
@@ -1613,10 +1580,8 @@ Based on the post context, comments, and video frames, please analyze the video 
 
   async cleanupVideoFiles(videoPath, framesDir) {
     try {
-      // Remove video file
       await fs.unlink(videoPath).catch(() => {})
 
-      // Remove frame files
       const files = await fs.readdir(framesDir).catch(() => [])
       for (const file of files) {
         await fs.unlink(path.join(framesDir, file)).catch(() => {})

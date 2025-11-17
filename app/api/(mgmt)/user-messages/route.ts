@@ -24,7 +24,6 @@ export async function GET(request: NextRequest) {
 
     if (!userId) return NextResponse.json({ error: 'missing userId' }, { status: 400 })
 
-    // find chats for user
     const chats = await prisma.chat.findMany({ where: { userId }, select: { id: true } })
     const chatIds = chats.map(c => c.id)
 
@@ -39,7 +38,6 @@ export async function GET(request: NextRequest) {
       select: { id: true, chatId: true, role: true, content: true, created_at: true },
     })
 
-    // normalize field names to match frontend expectations
     const mapped = messages.map(m => ({
       id: m.id,
       chatId: m.chatId,

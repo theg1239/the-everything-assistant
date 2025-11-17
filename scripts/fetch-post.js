@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// scripts/scrape-reddit-post.js
 
 require('dotenv').config()
 const path = require('path')
@@ -15,7 +14,6 @@ async function main() {
     process.exit(1)
   }
 
-  // ensure we hit the JSON endpoint
   const jsonUrl = url.endsWith('/') ? `${url}.json` : `${url}/.json`
 
   const kb = new KnowledgeBase()
@@ -32,12 +30,10 @@ async function main() {
 
   const [postListing, commentsListing] = await res.json()
 
-  // upsert the main post
   const postData = postListing.data.children[0].data
   const postRowId = await kb.upsertRedditPost(postData)
   console.log(`✔ Stored post ${postData.id} as row ${postRowId}`)
 
-  // recurse through comments
   async function recurse(list) {
     for (const node of list) {
       if (node.kind !== 't1') continue

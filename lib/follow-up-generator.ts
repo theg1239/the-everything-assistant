@@ -8,17 +8,10 @@ export async function generateFollowUpSuggestions(
   userMessage?: string
 ): Promise<string[]> {
   try {
-    // console.log('generateFollowUpSuggestions called with:', {
-    //   assistantLength: assistantMessage.length,
-    //   userLength: userMessage?.length || 0,
-    //   assistantPreview: assistantMessage.substring(0, 100)
-    // })
 
     const session = await getServerSession(authOptions)
     const userId = session?.user?.id
-    // console.log('User ID:', userId)
 
-    // console.log('Proceeding with AI generation...')
 
     const contextPrompt = userMessage
       ? `User asked: "${userMessage}"\nAssistant replied: "${assistantMessage}"`
@@ -92,7 +85,6 @@ Generate exactly 3 follow-up questions that:
 
 Output exactly 3 questions, one per line, without numbering or bullet points.`
 
-    // console.log('Calling AI model with prompt length:', prompt.length)
     const result = await rateLimitedAI.google.generateText(
       {
         model: await rateLimitedAI.google.model('gemini-flash-lite-latest'),
@@ -103,7 +95,6 @@ Output exactly 3 questions, one per line, without numbering or bullet points.`
       userId
     )
 
-    // console.log('AI model raw response:', result.text)
 
     const suggestions = result.text
       .split('\n')
@@ -116,24 +107,15 @@ Output exactly 3 questions, one per line, without numbering or bullet points.`
       )
       .slice(0, 3)
 
-    // console.log('Processed suggestions:', suggestions)
-    // console.log('Validation check:', {
-    //   length: suggestions.length,
-    //   hasValidLength: suggestions.length >= 2,
-    //   allLongEnough: suggestions.every(s => s.length >= 5),
-    //   shortOnes: suggestions.filter(s => s.length < 5)
-    // })
 
     if (suggestions.length < 2 || suggestions.some(s => s.length < 5)) {
       console.warn('Generated suggestions were invalid, falling back to static ones')
       return getStaticFollowUpSuggestions(assistantMessage)
     }
 
-    // console.log('Using AI-generated suggestions:', suggestions)
     return suggestions
   } catch (error) {
     console.error('Error generating follow-up suggestions:', error)
-    // console.log('Falling back to static suggestions')
     return getStaticFollowUpSuggestions(assistantMessage)
   }
 }

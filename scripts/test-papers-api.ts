@@ -1,10 +1,5 @@
 #!/usr/bin/env tsx
-/**
- * Test script for papers scrapers API approach
- * Tests CodeChef, PaperVault, and ExamCooker APIs with a course name query
- *
- * Run with: pnpm tsx scripts/test-papers-api.ts
- */
+
 
 async function testPapersAPIs() {
   console.log('='.repeat(80))
@@ -15,12 +10,10 @@ async function testPapersAPIs() {
   console.log('2. Browser scraping only triggers on API failure')
   console.log('3. All scrapers return success: true even with 0 papers\n')
 
-  // Dynamic import to handle ESM/CommonJS
   const { scrapePapersCodeChef } = await import('../lib/scrapers/papers-codechef.js')
   const { scrapeVITPaperVault } = await import('../lib/scrapers/vit-papervault.js')
   const { scrapeExamCooker } = await import('../lib/scrapers/examcooker.js')
 
-  // Test with common courses
   const testCourses = [
     { code: 'BMAT201L', name: 'Complex Variables and Linear Algebra' },
     { code: 'BCSE302L', name: 'Database Systems' },
@@ -31,7 +24,6 @@ async function testPapersAPIs() {
     console.log(`Testing: ${testCourse.code} (${testCourse.name})`)
     console.log('-'.repeat(80))
 
-    // Test CodeChef Papers API
     console.log('\n📚 Testing papers.codechefvit.com API...')
     const startCodeChef = Date.now()
     try {
@@ -55,7 +47,6 @@ async function testPapersAPIs() {
         })
       }
 
-      // Check if API was used (fast response)
       if (duration < 5000) {
         console.log(`   ✓ Fast response → API approach used ✓`)
       } else {
@@ -65,7 +56,6 @@ async function testPapersAPIs() {
       console.error(`   ❌ Failed: ${error.message}`)
     }
 
-    // Test VIT PaperVault API
     console.log('\n📚 Testing vitpapervault.in API...')
     const startVault = Date.now()
     try {
@@ -89,7 +79,6 @@ async function testPapersAPIs() {
         })
       }
 
-      // Check if API was used (fast response)
       if (duration < 5000) {
         console.log(`   ✓ Fast response → API approach used ✓`)
       } else {
@@ -115,9 +104,7 @@ async function testPapersAPIs() {
   console.log('='.repeat(80))
 }
 
-// Run test
 testPapersAPIs().catch(console.error)
-// Test ExamCooker API
 console.log('\n📚 Testing examcooker.acmvit.in API...')
 const startExamCooker = Date.now()
 try {

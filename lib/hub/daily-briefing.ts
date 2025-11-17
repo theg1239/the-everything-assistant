@@ -1074,9 +1074,3 @@ export function formatPreferenceTimeLabel(timeValue?: string) {
   }).format(date)
 }
 
-// function differenceInCalendarDays(dateLeft: Date, dateRight: Date) {
-//   const startOfDayLeft = new Date(dateLeft.getFullYear(), dateLeft.getMonth(), dateLeft.getDate())
-//   const startOfDayRight = new Date(dateRight.getFullYear(), dateRight.getMonth(), dateRight.getDate())
-//   const diffTime = startOfDayLeft.getTime() - startOfDayRight.getTime()
-//   return Math.round(diffTime / (24 * 60 * 60 * 1000))
-// }

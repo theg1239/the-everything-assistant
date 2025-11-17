@@ -28,10 +28,8 @@ export async function GET(request: NextRequest) {
       sortBy: 'createdAt' as const,
     }
 
-    // Call the search function
     const result = await searchPapers(filters, pagination)
 
-    // Transform the result to match the expected API format
     const response = {
       success: true,
       papers: result.papers.map(paper => ({

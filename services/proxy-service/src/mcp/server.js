@@ -91,11 +91,9 @@ function registerTools(targetServer) {
 
   const baseFields = oauthEnabled
     ? {
-        // When OAuth is enabled, credentials come from the bearer token only.
         flags: flagsSchema.optional(),
       }
     : {
-        // Legacy/debug mode: allow passing credentials directly in the tool call.
         username: z.string().min(1, 'username required'),
         password: z.string().optional(),
         encryptedPassword: z.string().optional(),

@@ -20,7 +20,6 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
   const [showHeatmap, setShowHeatmap] = useState(false)
   const [showPeakHour, setShowPeakHour] = useState(false)
   const chartData = useMemo(() => {
-    // Prefer aggregated lifetime buckets if available for trend chart
     if (
       usage?.lifetimeBuckets &&
       Array.isArray(usage.lifetimeBuckets) &&
@@ -32,7 +31,6 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
       }))
     }
     if (!usage?.recent) return []
-    // reduce to hourly buckets or keep as-is; keep the last 24 points if available
     return usage.recent
       .slice()
       .reverse()
@@ -44,13 +42,11 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
       }))
   }, [usage])
 
-  // build a heatmap matrix (days x 24 hours) from hourlyHeatmap data
   const heatmap: any = useMemo(() => {
     const rows: any[] = []
     const hh = usage?.detailedStats?.hourlyHeatmap || []
     if (!Array.isArray(hh) || hh.length === 0) return { rows, max: 0 }
 
-    // group by day (UTC YYYY-MM-DD)
     const map: Record<string, number[]> = {}
     let max = 0
     for (const h of hh) {
@@ -155,7 +151,7 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
             aggregated peak hour: {usage?.detailedStats?.dailyPeaks?.aggregatedPeakHour ?? '—'}
           </div>
           <div className="mt-2 text-sm">
-            {/* show last 7 days peak hour list */}
+
             {(Array.isArray(usage?.detailedStats?.dailyPeaks?.perDay)
               ? usage.detailedStats.dailyPeaks.perDay.slice(-7)
               : []
@@ -170,7 +166,7 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
             ))}
           </div>
 
-          {/* small aggregated hour-bar using hourlyHeatmap */}
+
           {Array.isArray(usage?.detailedStats?.hourlyHeatmap) && (
             <div className="mt-3">
               <div className="text-xs text-muted-foreground mb-1 lowercase">
@@ -205,7 +201,7 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
         </div>
       )}
 
-      {/* moving average sparkline (if available) */}
+
       {Array.isArray(usage?.detailedStats?.movingAverages) && (
         <div className="mt-4 p-3 rounded-md bg-black/10">
           <div className="text-sm font-medium lowercase mb-2">moving average (7d)</div>

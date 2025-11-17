@@ -35,7 +35,6 @@ interface SidebarProps {
   [key: string]: any
 }
 
-// Optimized animation variants for better mobile performance
 const sidebarVariants = {
   open: {
     x: 0,
@@ -89,7 +88,6 @@ export const Sidebar = memo(
     const [touchStartScrollTop, setTouchStartScrollTop] = useState(0)
     const [isDragging, setIsDragging] = useState(false)
 
-    // Swipe gesture state for opening sidebar
     const [swipeStartX, setSwipeStartX] = useState(0)
     const [swipeStartY, setSwipeStartY] = useState(0)
     const [isSwipeGesture, setIsSwipeGesture] = useState(false)
@@ -432,7 +430,7 @@ export const Sidebar = memo(
                   touchAction: 'pan-y',
                 }}
               >
-                {/* Header */}
+
                 <div className="p-4 border-b border-border flex items-center justify-between bg-transparent">
                   <div className="flex items-center space-x-2">
                     {loading ? (
@@ -454,7 +452,7 @@ export const Sidebar = memo(
                   </Button>
                 </div>
 
-                {/* New Chat Button */}
+
                 <div className="p-4 border-b border-border bg-transparent">
                   {loading ? (
                     <div className="h-10 bg-muted/60 rounded-lg animate-pulse"></div>
@@ -469,7 +467,7 @@ export const Sidebar = memo(
                   )}
                 </div>
 
-                {/* Chat List */}
+
                 <div className="flex-1 min-h-0 flex flex-col">
                   <div
                     className="p-4 overflow-auto flex-1 min-h-0"
@@ -480,7 +478,6 @@ export const Sidebar = memo(
                     style={{
                       WebkitOverflowScrolling: 'touch',
                       overscrollBehavior: 'contain',
-                      // Let flexbox control height to avoid viewport math issues
                       transform: 'translate3d(0, 0, 0)',
                       willChange: 'scroll-position',
                     }}
@@ -575,7 +572,7 @@ export const Sidebar = memo(
                   </div>
                 </div>
 
-                {/* User Section */}
+
                 <div
                   className="p-4 border-t border-border bg-transparent"
                   style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}

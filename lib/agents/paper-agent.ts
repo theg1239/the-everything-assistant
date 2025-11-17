@@ -230,7 +230,6 @@ async function getOrCreateSharedBrowser(log?: Logger): Promise<any> {
         return null
       }
 
-      // Hardened args for serverless environments
       let args = [
         ...chromium.args,
         '--no-sandbox',
@@ -265,7 +264,6 @@ async function getOrCreateSharedBrowser(log?: Logger): Promise<any> {
         throw e
       })
       .finally(() => {
-        // allow next launch attempt if needed
         launchingBrowserPromise = null
       })
   }
@@ -290,11 +288,7 @@ async function cleanupSharedBrowser(log?: Logger): Promise<void> {
   }
 }
 
-/**
- * Cloudinary PDF page image derivation
- * Example raw PDF: https://res.cloudinary.com/<cloud>/raw/upload/v12345/folder/file.pdf
- * Page image URL:  https://res.cloudinary.com/<cloud>/image/upload/pg_1/v12345/folder/file.png
- */
+
 function toCloudinaryPageImageUrls(pdfUrl: string, pages = 4): string[] | null {
   try {
     const m = pdfUrl.match(
@@ -322,7 +316,6 @@ function toCloudinaryFetchPageImageUrls(pdfUrl: string, pages = 4): string[] | n
     const encoded = encodeURIComponent(pdfUrl)
     const urls: string[] = []
     for (let i = 1; i <= pages; i++) {
-      // Request Cloudinary to fetch the remote PDF and render page i as PNG
       urls.push(`https://res.cloudinary.com/${cloud}/image/fetch/f_png,pg_${i}/${encoded}`)
     }
     return urls
@@ -347,7 +340,7 @@ async function fetchAsBuffer(
   }
 }
 
-/** Headless capture that always produces images (canvas/img first; else viewport scroll screenshots). */
+
 async function genericHeadlessPdfToImages(
   url: string,
   log?: Logger,
@@ -368,7 +361,6 @@ async function genericHeadlessPdfToImages(
     )
     let targetUrl = url
     if (/\.pdf($|\?|#)/i.test(url) && !/drive\.google\.com/i.test(url)) {
-      // Use Google Docs viewer to render the PDF when direct view is not ideal
       targetUrl = `https://docs.google.com/gview?embedded=1&url=${encodeURIComponent(url)}`
     }
     await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 20000 })
@@ -859,14 +851,11 @@ async function extractTextFromPdf(
         error: err?.message,
       })
       if (runId) logEmit(runId, 'Switching extraction strategy', { error: err?.message })
-      // Fallback 1: Use pdfjs-dist (legacy build) to extract text in Node (avoids OCR + browser)
       try {
-        // Provide minimal DOM polyfills to satisfy pdfjs-dist in Node
         const g: any = globalThis as any
         if (!g.DOMMatrix) g.DOMMatrix = class {} as any
         if (!g.ImageData) g.ImageData = class {} as any
         if (!g.Path2D) g.Path2D = class {} as any
-        // Use pdfjs-dist legacy ESM build which is compatible with Node
         const pdfjs: any = await import('pdfjs-dist/legacy/build/pdf.mjs')
         const getDocument = (pdfjs as any).getDocument || (pdfjs as any).default?.getDocument
         if (!getDocument) throw new Error('pdfjs-dist getDocument not available')
@@ -899,7 +888,6 @@ async function extractTextFromPdf(
       } catch (e: any) {
         log?.('pdfjs-dist extraction failed', { error: e?.message })
       }
-      // Fallback 2: OCR below
       if (runId)
         logEmit(runId, 'Switching to advanced text recognition', {
           note: 'pdfjs-dist fallback did not yield enough text',
@@ -907,7 +895,6 @@ async function extractTextFromPdf(
     }
   }
 
-  // OCR path (only if we have images)
   if (pageImages && pageImages.length) {
     try {
       if (runId)
@@ -1152,7 +1139,6 @@ export async function indexPastPapers(options: {
       }
     }
 
-    // Headless-only path: capture screenshots via browser and OCR them, skipping direct PDF parsing.
     if (options.headlessOnly) {
       try {
         const cap = await driveHeadlessFallback(p.url, log, options.runId)
@@ -1316,12 +1302,10 @@ export async function indexPastPapers(options: {
       log('Hash computation failed (continuing)', { error: e?.message })
     }
 
-    // --- try to read text ---
     let text = download.pdf
       ? await extractTextFromPdf(download.pdf, log, options.runId, download.images)
       : await extractTextFromPdf(Buffer.alloc(0), log, options.runId, download.images)
 
-    // *** SECOND-CHANCE FALLBACK ***
     if (!text || text.length < 50) {
       if (/drive\.google\.com/i.test(p.url)) {
         log('Primary parse produced little text — attempting headless capture + OCR', {
@@ -1349,7 +1333,6 @@ export async function indexPastPapers(options: {
           log('Headless capture/OCR fallback failed', { error: e?.message })
         }
       } else if (/res\.cloudinary\.com\/.*\/raw\/upload\/.*\.pdf/i.test(p.url)) {
-        // Cloudinary-specific lightweight OCR: request page images directly via Cloudinary transformations
         try {
           log('Attempting cloudinary direct page images + OCR', { url: p.url })
           const images: Buffer[] = []
@@ -1408,7 +1391,6 @@ export async function indexPastPapers(options: {
           }
         }
       } else {
-        // Non-Drive/Non-Cloudinary: generic headless OCR
         try {
           log('Attempting generic headless capture + OCR', { url: p.url })
           const cap = await genericHeadlessPdfToImages(p.url, log, options.runId)
@@ -1523,7 +1505,6 @@ export async function indexPastPapers(options: {
     })
   }
 
-  // Limit concurrency to avoid multiple simultaneous headless/ocr fallbacks in serverless
   const CONCURRENCY = Math.min(1, selected.length)
   let idx = 0
   const workers = Array.from({ length: CONCURRENCY }, async () => {
@@ -1935,11 +1916,8 @@ export function _debug_listPaperIndexes() {
   }))
 }
 
-// --- CLI entrypoint (standalone usage) ---
-// Allows running this file directly: `tsx lib/agents/paper-agent.ts --course CSE1001 --all`
 const __maybeCli = (async () => {
   try {
-    // Only run when executed directly, not when imported (robust under tsx + Windows)
     let isMain = false
     try {
       const { fileURLToPath } = await import('url')
@@ -1948,22 +1926,18 @@ const __maybeCli = (async () => {
           .replace(/\\/g, '/')
           .toLowerCase()
         const argvNorm = (process.argv || []).map(a => (a || '').replace(/\\/g, '/').toLowerCase())
-        // tsx keeps the target file path in argv; detect presence
         if (argvNorm.some(a => a.endsWith('/lib/agents/paper-agent.ts'))) {
           isMain = true
         }
-        // Fallback: tsx may pass absolute path to this file at argv[2]
         if (!isMain && argvNorm.includes(thisFile)) isMain = true
       }
     } catch {}
     if (!isMain) return
 
-    // Load env if present
     try {
       ;(await import('dotenv')).config()
     } catch {}
 
-    // Prefer system browser for local runs
     process.env.PAPER_AGENT_USE_SYSTEM_BROWSER = process.env.PAPER_AGENT_USE_SYSTEM_BROWSER || '1'
 
     const args = process.argv.slice(2)
@@ -2015,7 +1989,6 @@ const __maybeCli = (async () => {
           process.exit(0)
         default:
           if (a.startsWith('-')) {
-            // ignore unknown flag
           } else {
             positionals.push(a)
           }
@@ -2026,7 +1999,6 @@ const __maybeCli = (async () => {
       opts.course = positionals[0]
     }
 
-    // Default to headless-only for CLI runs unless explicitly disabled
     if (opts.headlessOnly === undefined) opts.headlessOnly = true
 
     if (!opts.course) {

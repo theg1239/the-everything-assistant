@@ -15,7 +15,6 @@ export default function UsersList({ onSelectUser }: any) {
   const [sendingId, setSendingId] = useState<string | null>(null)
 
   useEffect(() => {
-    // initial load
     fetchUsers(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -32,7 +31,6 @@ export default function UsersList({ onSelectUser }: any) {
       setHasMore(items.length === 25)
       setPage(reset ? 1 : page + 1)
     } catch (e) {
-      // ignore
     } finally {
       setLoading(false)
     }
@@ -76,7 +74,6 @@ export default function UsersList({ onSelectUser }: any) {
         />
         <Button
           onClick={() => {
-            // client-side search over loaded users
           }}
         >
           <Search className="w-4 h-4" />

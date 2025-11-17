@@ -208,7 +208,6 @@ export class MemoryService {
 
     const memoryContent = relevantSentences.join('. ').trim()
 
-    // Check for duplicate using the new helper method
     const existingMemory = await this.findSimilarMemory(userId, memoryContent)
     if (existingMemory) return null
 

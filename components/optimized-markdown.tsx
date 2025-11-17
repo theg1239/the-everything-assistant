@@ -6,7 +6,6 @@ import DOMPurify from 'isomorphic-dompurify'
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 
-// ---------- helpers ----------
 const renderer = new marked.Renderer()
 const defaultTableRenderer = renderer.table?.bind(renderer)
 
@@ -19,10 +18,7 @@ function escapeHtml(s: string) {
     .replaceAll("'", '&#39;')
 }
 
-// Only adjust escapes inside math content (not global text)
 function normalizeMath(s: string) {
-  // turn \" into " (sometimes appears in JSONified strings)
-  // and \\ into \ for LaTeX commands
   return s.replace(/\\+"/g, '"').replace(/\\\\/g, '\\')
 }
 
@@ -44,7 +40,6 @@ if (defaultTableRenderer) {
   }
 }
 
-// ---------- KaTeX / Math extensions for marked ----------
 function renderMathToHtml(src: string, displayMode: boolean) {
   const cleaned = normalizeMath(src)
   try {
@@ -59,7 +54,6 @@ function renderMathToHtml(src: string, displayMode: boolean) {
   }
 }
 
-// $$ ... $$
 const mathBlockDollar = {
   name: 'mathBlockDollar',
   level: 'block' as const,
@@ -78,7 +72,6 @@ const mathBlockDollar = {
   },
 }
 
-// \[ ... \]
 const mathBlockBracket = {
   name: 'mathBlockBracket',
   level: 'block' as const,
@@ -97,7 +90,6 @@ const mathBlockBracket = {
   },
 }
 
-// \begin{...} ... \end{...}  (common environments like cases, align*, etc.)
 const mathBlockEnv = {
   name: 'mathBlockEnv',
   level: 'block' as const,
@@ -122,7 +114,6 @@ const mathBlockEnv = {
   },
 }
 
-// $ ... $
 const mathInlineDollar = {
   name: 'mathInlineDollar',
   level: 'inline' as const,
@@ -141,7 +132,6 @@ const mathInlineDollar = {
   },
 }
 
-// \( ... \)
 const mathInlineParen = {
   name: 'mathInlineParen',
   level: 'inline' as const,
@@ -159,7 +149,6 @@ const mathInlineParen = {
   },
 }
 
-// Register marked with our renderer + extensions
 marked.setOptions({ gfm: true, breaks: true, silent: true, renderer })
 marked.use({
   extensions: [
@@ -171,7 +160,6 @@ marked.use({
   ],
 })
 
-// ---------- Components ----------
 interface MarkdownBlockProps {
   id: string
   index: number
@@ -275,7 +263,6 @@ export const OptimizedMarkdown = memo(
   (prev, next) => prev.content === next.content && prev.id === next.id
 )
 
-// ---------- Cached lexer ----------
 const lexer = (() => {
   let lastText = ''
   let lastResult: string[] = []

@@ -1,9 +1,6 @@
 #!/usr/bin/env npx tsx
 
-/**
- * Migration script to convert users with "passkey" MFA method to "security_key"
- * This consolidates WebAuthn authentication under a single method name
- */
+
 
 import { PrismaClient } from '@prisma/client'
 

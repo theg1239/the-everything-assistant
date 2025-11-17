@@ -56,7 +56,7 @@ const MEAL_TYPES = {
   4: 'Dinner',
 }
 
-/* ────────────────⟡  PUBLIC ENTRY  ⟡─────────────── */
+
 
 export async function getMessMenu(
   hostelType?: 'mens' | 'ladies',

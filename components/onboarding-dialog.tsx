@@ -137,7 +137,6 @@ export function OnboardingDialog({ isOpen, onClose }: OnboardingDialogProps) {
   const [touchStart, setTouchStart] = useState<number | null>(null)
   const [touchEnd, setTouchEnd] = useState<number | null>(null)
 
-  // Reset to first step when dialog opens
   useEffect(() => {
     if (isOpen) {
       setCurrentStep(0)
@@ -169,13 +168,11 @@ export function OnboardingDialog({ isOpen, onClose }: OnboardingDialogProps) {
   const handleFinish = () => {
     localStorage.setItem('onboarding-completed', 'true')
 
-    // Dispatch event to notify other components
     window.dispatchEvent(new CustomEvent('onboardingCompleted'))
 
     onClose()
   }
 
-  // Touch handlers for swipe support
   const onTouchStart = (e: React.TouchEvent) => {
     setTouchEnd(null)
     setTouchStart(e.targetTouches[0].clientX)
@@ -284,9 +281,7 @@ export function OnboardingDialog({ isOpen, onClose }: OnboardingDialogProps) {
             <div className="h-full flex flex-col px-5 py-2 sm:px-8 sm:py-4">
               <div className="flex-1 min-h-0 overflow-y-auto">
                 <div className="flex items-center space-x-3 mb-3">
-                  {/* <div className={`p-2 rounded-lg bg-gradient-to-r ${currentStepData.gradient} shadow-md`}>
-                <IconComponent className="w-5 h-5 text-white" />
-              </div> */}
+
                   <h2 className="text-lg sm:text-xl font-semibold text-slate-900 dark:text-white">
                     {currentStepData.title}
                   </h2>

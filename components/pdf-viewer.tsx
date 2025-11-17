@@ -7,8 +7,6 @@ import { createPortal } from 'react-dom'
 
 interface PdfViewerProps {}
 
-// PdfViewer is event-driven to avoid passing non-serializable function props into a "use client" entry.
-// It listens for custom events: `pdfViewerOpen` with detail { url, title } and `pdfViewerClose` to close.
 export default function PdfViewer(_: PdfViewerProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [embedUrl, setEmbedUrl] = useState<string | null>(null)
@@ -132,7 +130,7 @@ export default function PdfViewer(_: PdfViewerProps) {
           )}
         </div>
 
-        {/* resize handle */}
+
         {!isMaximized && (
           <div
             onMouseDown={startDrag}

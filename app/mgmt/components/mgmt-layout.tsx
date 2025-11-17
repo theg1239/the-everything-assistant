@@ -33,14 +33,14 @@ export default function MgmtLayout({
                       <p className="text-muted-foreground mt-0.5 lowercase text-sm">{subtitle}</p>
                     )}
                   </div>
-                  {/* last updated removed per request - details will be shown by default */}
+
                 </div>
               </div>
 
-              {/* header actions intentionally removed: controls like show details / auto refresh / load data are handled elsewhere or removed */}
+
             </div>
 
-            {/* nav slot integrated here for better visual flow */}
+
             <div className="mt-4">{nav}</div>
           </motion.div>
         </div>

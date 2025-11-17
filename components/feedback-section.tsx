@@ -41,7 +41,6 @@ export function FeedbackSection() {
       }
       const data = await response.json()
       setKnowledgeChunks(data)
-      // Initialize the combined text when chunks are loaded
       const combinedText = data
         .map((chunk: KnowledgeChunk) => chunk.chunk.trim())
         .join('\n\n---\n\n')
@@ -59,7 +58,6 @@ export function FeedbackSection() {
     setEditedChunks(prev => ({ ...prev, [id]: content }))
   }
 
-  // Debounced function to update edited chunks from combined text
   const updateEditedChunksFromText = useCallback(
     (text: string) => {
       const chunks = text
@@ -84,7 +82,6 @@ export function FeedbackSection() {
       const newText = e.target.value
       setAllChunksText(newText)
 
-      // Use a timeout to debounce the parsing and state update
       const timeoutId = setTimeout(() => {
         updateEditedChunksFromText(newText)
       }, 300) // 300ms debounce
@@ -214,7 +211,7 @@ export function FeedbackSection() {
             transition={{ duration: 0.2 }}
             className="w-full"
           >
-            {/* Header */}
+
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
               <h3 className="text-xl sm:text-2xl font-semibold">contribute to knowledge base</h3>
               <div className="flex flex-col xs:flex-row gap-2">
@@ -244,7 +241,7 @@ export function FeedbackSection() {
             </div>
 
             <div className="space-y-8">
-              {/* New Knowledge Section */}
+
               <div className="space-y-4">
                 <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-3">
                   <h4 className="font-medium text-base sm:text-lg">suggest new knowledge</h4>
@@ -290,7 +287,7 @@ export function FeedbackSection() {
                 ))}
               </div>
 
-              {/* Existing Knowledge Section */}
+
               {knowledgeChunks.length > 0 && (
                 <div className="space-y-4">
                   <h4 className="font-medium text-base sm:text-lg">edit existing knowledge</h4>
@@ -322,7 +319,7 @@ export function FeedbackSection() {
             transition={{ duration: 0.2 }}
             className="w-full"
           >
-            {/* Header */}
+
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
               <h3 className="text-xl sm:text-2xl font-semibold">submit feedback</h3>
               <div className="flex flex-col xs:flex-row gap-2">
@@ -391,7 +388,7 @@ export function FeedbackSection() {
               <div>
                 <h3 className="text-xl sm:text-2xl font-semibold mb-6">feedback & contributions</h3>
                 <div className="space-y-4">
-                  {/* Contribute Option */}
+
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
                     <div className="flex items-start sm:items-center gap-3">
                       <MessageSquarePlus className="w-4 h-4 flex-shrink-0 mt-0.5 sm:mt-0" />
@@ -423,7 +420,7 @@ export function FeedbackSection() {
                     </Button>
                   </div>
 
-                  {/* Feedback Option */}
+
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
                     <div className="flex items-start sm:items-center gap-3">
                       <MessageSquarePlus className="w-4 h-4 flex-shrink-0 mt-0.5 sm:mt-0" />

@@ -126,7 +126,7 @@ export default function RedditPanel() {
           </div>
         )}
 
-        {/* Results */}
+
         {loading && (
           <div className="p-6 rounded-md border border-border/40 bg-muted/20 animate-pulse">
             <div className="h-4 w-2/3 bg-muted rounded" />

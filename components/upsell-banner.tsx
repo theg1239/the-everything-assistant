@@ -78,7 +78,7 @@ const UpsellBanner: React.FC = () => {
             <X className="h-5 w-5" />
           </Button>
 
-          {/* Artwork section for mobile */}
+
           <div className="relative h-16 overflow-hidden">
             <Image
               src={
@@ -152,11 +152,7 @@ const UpsellBanner: React.FC = () => {
           <div className="h-full flex flex-col px-5 py-2 sm:px-8 sm:py-4">
             <div className="flex-1 min-h-0">
               <div className="flex items-center space-x-3 mb-3">
-                {/* {showFeedback && (
-                  <div className="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 shadow-md">
-                    <MessageSquarePlus className="w-5 h-5 text-white" />
-                  </div>
-                )} */}
+
                 <h2 className="text-lg sm:text-xl font-semibold text-slate-900 dark:text-white">
                   {showFeedback ? 'help us improve' : 'research preview'}
                 </h2>

@@ -203,7 +203,6 @@ function calculateFuzzyMatchScore(query, description) {
 }
 
 async function executeInteractiveCoursePageWorkflow(username, password, step, flags, sessionData) {
-  // Ensure default behavior matches the updated binary: default to latest semester
   try {
     const needsSemester = ['semester', 'course', 'faculty', 'materials', 'download'].includes(step)
     if (needsSemester) {
@@ -385,16 +384,7 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
     )
   }
 
-  /*
-    // ...resolveSemesterQuery → semesterChoice
-    if (semesterChoice) {
-      flags.semester = semesterChoice
-      delete flags.semesterQuery
-  
-      // Advance to next logical step
-      
-    }
-  */
+
 
   if (step === 'course' && (!flags || !flags.semester)) {
     console.log('Course step requested but no semester selected. Getting semester options first.')
@@ -662,20 +652,17 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
 
   const cliBaseArgs = ['proxy', username, password, 'course-page']
   const flagArgs = []
-  // Build flagArgs for non-interactive overrides
   if (flags && typeof flags === 'object') {
     if (flags.semester && flags.semester > 0) flagArgs.push('-s', flags.semester.toString())
     if (flags.course && flags.course > 0) flagArgs.push('-c', flags.course.toString())
     if (flags.faculty && flags.faculty > 0) flagArgs.push('-f', flags.faculty.toString())
   }
-  // Final CLI argument array that will be executed
   const cliArgs = [...cliBaseArgs, ...flagArgs]
 
   if (flags && flags.semesterQuery && !flags.semester) {
     console.log(`Resolving semesterQuery: ${flags.semesterQuery}`)
   }
 
-  // console.log(`CLI args will be: ${cliArgs.join(' ')}`)
 
   return new Promise((resolve, reject) => {
     if (!fs.existsSync(BINARY_PATH)) {
@@ -752,7 +739,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
 
           console.log(`Course selection prompt detected with ${courseOptions.length} options`)
 
-          // Auto-select if there's only one course option
           if (courseOptions.length === 1) {
             console.log(
               `Only one course option available: ${courseOptions[0].description}. Auto-selecting.`
@@ -928,7 +914,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           selection = flags.course.toString()
           shouldAutoProgress = true
         } else if (promptData.type === 'faculty' && flags.faculty) {
-          // After faculty is chosen, default to downloading all materials (selection "0")
           if (!flags.materialSelection) {
             flags.materialSelection = '0'
           }
@@ -1029,7 +1014,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           interactiveState: 'waiting_for_input',
         })
       } else if (code === 0) {
-        // Always check for download path in stdout, even if step is not 'materials'
         const downloadPathMatch = stdout.match(/Download path:\s*(.*)/i)
         const hasDownloadPath = !!(downloadPathMatch && downloadPathMatch[1])
         const shouldParseDownloadInfo =
@@ -1045,7 +1029,6 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
           if (hasDownloadPath) console.log('Detected download path:', downloadPathMatch[1])
         }
 
-        // If download path found, inject into downloadInfo
         let downloadInfo = shouldParseDownloadInfo
           ? parseDownloadInfo(stdout)
           : {
@@ -1283,7 +1266,6 @@ function parseFacultyOptions(output) {
   }
 
   let startParsingIndex = -1
-  // Find the header row for faculty (not course codes)
   for (let i = 0; i < lines.length; i++) {
     if (
       lines[i].includes('INDEX │ FACULTY') ||
@@ -1295,7 +1277,6 @@ function parseFacultyOptions(output) {
   }
 
   if (startParsingIndex === -1) {
-    // Fallback: look for the prompt line
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].includes('Enter a search term or number for Faculty')) {
         startParsingIndex = i
@@ -1308,13 +1289,11 @@ function parseFacultyOptions(output) {
     return options
   }
 
-  // Only parse lines that look like faculty names, not course codes
   for (let i = startParsingIndex + 1; i < lines.length; i++) {
     const line = lines[i]
     if (line.includes('─') || line.trim() === '') {
       continue
     }
-    // Stop parsing if we hit another table or unrelated prompt
     if (
       line.includes('INDEX │ COURSE') ||
       line.includes('Choose a Course') ||
@@ -1322,11 +1301,9 @@ function parseFacultyOptions(output) {
     ) {
       break
     }
-    // Faculty table: "  1 │ RACHNA BHATIA"
     const facultyMatch = line.match(/^\s*(\d+)\s*│\s*([A-Z .'-]+)$/i)
     if (facultyMatch) {
       const description = facultyMatch[2].trim()
-      // Ignore lines that look like course codes (e.g., BMAT201L)
       if (!/^[A-Z]{4}\d{3}[A-Z]?$/.test(description)) {
         options.push({
           number: parseInt(facultyMatch[1]),
@@ -1707,7 +1684,6 @@ function parseDownloadInfo(output) {
     downloadInfo.totalFiles = downloadInfo.files.length
   }
 
-  // Only log in development and when there's actual download activity
   if (
     process.env.NODE_ENV !== 'production' &&
     (downloadInfo.filesDownloaded > 0 ||

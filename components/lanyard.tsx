@@ -38,7 +38,6 @@ export default function Lanyard({
       <Canvas
         camera={{ position, fov }}
         gl={{ alpha: transparent }}
-        // Pass a number instead of THREE.Color to avoid cross-version @types/three identity issues
         onCreated={({ gl }) => gl.setClearColor(0x000000, transparent ? 0 : 1)}
       >
         <ambientLight intensity={Math.PI} />
@@ -86,7 +85,6 @@ interface BandProps {
 }
 
 function Band({ maxSpeed = 50, minSpeed = 0 }: BandProps) {
-  // Using "any" for refs since the exact types depend on Rapier's internals
   const band = useRef<any>(null)
   const fixed = useRef<any>(null)
   const j1 = useRef<any>(null)
@@ -156,7 +154,6 @@ function Band({ maxSpeed = 50, minSpeed = 0 }: BandProps) {
 
   useFrame((state, delta) => {
     if (dragged && typeof dragged !== 'boolean') {
-      // Cast camera to any to avoid cross-version @types/three identity issues
       const cam = state.camera as any
       vec.set(state.pointer.x, state.pointer.y, 0.5).unproject(cam)
       dir.copy(vec).sub(cam.position).normalize()

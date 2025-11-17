@@ -142,9 +142,9 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
       transition={{ duration: 0.8, delay: 0.4 }}
       className="mx-auto max-w-7xl space-y-8"
     >
-      {/* Search and Filters Section */}
+
       <div className="space-y-6">
-        {/* Search Bar */}
+
         <div className="search-container">
           <div className="relative">
             <Search className="absolute left-6 top-1/2 h-6 w-6 -translate-y-1/2 text-gray-400" />
@@ -157,7 +157,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
           </div>
         </div>
 
-        {/* Filter Controls */}
+
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Button
@@ -212,7 +212,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
           </div>
         </div>
 
-        {/* Advanced Filters */}
+
         <AnimatePresence>
           {showFilters && (
             <motion.div
@@ -285,7 +285,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
         </AnimatePresence>
       </div>
 
-      {/* Papers Grid */}
+
       <AnimatePresence mode="wait">
         {loading ? (
           <motion.div
@@ -346,7 +346,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
                 transition={{ duration: 0.5, delay: index * 0.05 }}
                 className="modern-card group"
               >
-                {/* Thumbnail */}
+
                 <div className="relative aspect-[3/4] overflow-hidden rounded-t-3xl bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700">
                   <img
                     src={paper.thumbnailUrl || '/placeholder.svg?height=400&width=300'}
@@ -354,7 +354,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
                     className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
                   />
 
-                  {/* Overlay Actions */}
+
                   <div className="absolute inset-0 flex items-center justify-center gap-3 bg-black/0 opacity-0 transition-all duration-500 group-hover:bg-black/20 group-hover:opacity-100">
                     <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
                       <Button
@@ -380,7 +380,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
                     </motion.div>
                   </div>
 
-                  {/* Favorite Button */}
+
                   <div className="absolute right-4 top-4">
                     <Button
                       size="sm"
@@ -392,13 +392,13 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
                   </div>
                 </div>
 
-                {/* Content */}
+
                 <CardContent className="p-6 space-y-4">
                   <h3 className="line-clamp-2 text-lg font-bold leading-tight text-gray-900 dark:text-white min-h-[3.5rem]">
                     {paper.title}
                   </h3>
 
-                  {/* Course Code */}
+
                   {paper.courseCode && (
                     <div className="flex items-center gap-2">
                       <div className="rounded-lg bg-blue-100 p-2 dark:bg-blue-900/30">
@@ -410,7 +410,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
                     </div>
                   )}
 
-                  {/* Metadata Badges */}
+
                   <div className="flex flex-wrap gap-2">
                     {paper.year && (
                       <Badge
@@ -440,7 +440,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
                     )}
                   </div>
 
-                  {/* Footer */}
+
                   <div className="flex items-center justify-between pt-2 text-xs text-gray-500 dark:text-gray-400">
                     <div className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
@@ -457,7 +457,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
         )}
       </AnimatePresence>
 
-      {/* Pagination */}
+
       {totalPages > 1 && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}

@@ -10,7 +10,6 @@ async function testVideoAnalysisSchema() {
   console.log('Testing video analysis Zod schema...')
 
   try {
-    // Define the same schema as in the Reddit scraper
     const videoAnalysisSchema = z.object({
       description: z.string().describe('Detailed description of what happens in the video'),
       educational_content: z
@@ -59,13 +58,11 @@ Please analyze and provide structured information about this educational video c
       temperature: 0.3,
     })
 
-    // Add frame count
     object.frame_count = 5
 
     console.log('✅ Video analysis schema test passed!')
     console.log('Generated object:', JSON.stringify(object, null, 2))
 
-    // Validate the object matches our schema
     const validatedObject = videoAnalysisSchema.parse(object)
     console.log('✅ Schema validation passed!')
 
@@ -101,7 +98,6 @@ async function testContentAnalysisSchema() {
     console.log('✅ Content analysis schema test passed!')
     console.log('Generated object:', JSON.stringify(object, null, 2))
 
-    // Validate the object matches our schema
     const validatedObject = contentAnalysisSchema.parse(object)
     console.log('✅ Schema validation passed!')
 

@@ -2,9 +2,7 @@ import ManagementClient from './management-client'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
-/* ────────────────────────────────────────────────────────────────
-   Types (kept so your file compiles if imported elsewhere)
-────────────────────────────────────────────────────────────────── */
+
 type UsageLog = {
   id: string
   userId?: string | null
@@ -77,9 +75,7 @@ interface PastBroadcast {
   sentBy: string
 }
 
-/* ────────────────────────────────────────────────────────────────
-   Goofy visual helpers (SSR-only, zero client JS)
-────────────────────────────────────────────────────────────────── */
+
 const EMOJI_SET_NEAR = ['🤡', '🦄', '🪄', '🌈', '🥳', '🍩', '☕', '🛸', '👾', '🧪']
 const EMOJI_SET_FAR = ['🐄', '🐥', '💥', '🍕', '🧃', '🍌', '🧨', '🌀', '🐸', '🪅']
 
@@ -155,7 +151,7 @@ function EmojiRain({ countNear = 38, countFar = 26 }: { countNear?: number; coun
         }
       `}</style>
 
-      {/* FAR LAYER */}
+
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
         {far.map((d, idx) => (
           <span
@@ -177,7 +173,7 @@ function EmojiRain({ countNear = 38, countFar = 26 }: { countNear?: number; coun
         ))}
       </div>
 
-      {/* NEAR LAYER */}
+
       <div className="pointer-events-none fixed inset-0 z-10 overflow-hidden">
         {near.map((d, idx) => (
           <span
@@ -427,9 +423,7 @@ function Wall({
   )
 }
 
-/* ────────────────────────────────────────────────────────────────
-   Page (auth logic unchanged)
-────────────────────────────────────────────────────────────────── */
+
 export default async function ManagementPage() {
   const session = await getServerSession(authOptions)
   const adminEmail = process.env.RATE_LIMIT_ADMIN_EMAIL ?? 'admin@example.com'

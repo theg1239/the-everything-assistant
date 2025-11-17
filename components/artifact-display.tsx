@@ -410,7 +410,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
     return renderPrimitiveValue(value)
   }
 
-  // Always show VTOP artifacts, even if credentials are required
   if (success === false || error) {
     let errorMessage = error || message || ''
 
@@ -440,7 +439,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
       errorMessage.includes('session could not be established') ||
       errorMessage.includes('incorrect username/password')
 
-    // Keep visible: show error UI below instead of hiding
   }
 
   const formatCommandName = (cmd: string) => {
@@ -458,14 +456,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
   const renderCustomVTOPCommand = (command: string, content: any) => {
     switch (command) {
       case 'attendance':
-        // Debug logs - remove in production if unnecessary
-        // if (process.env.NODE_ENV !== 'production') {
-        //   // eslint-disable-next-line no-console
-        //   console.log('[VTOP] raw attendance content', content)
-        //   console.log('[VTOP] raw attendance rawOutput', rawOutput)
-        //   console.log('[VTOP] full vtopData', vtopData)
-        // }
-
         let attendanceData = []
 
         if (Array.isArray(content) && content.length > 0) {
@@ -488,7 +478,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                 /^\s*\d+\s*│/.test(line)
             )
 
-            //console.log('[VTOP] Found', dataLines.length, 'data lines to parse from rawOutput');
 
             attendanceData = dataLines
               .map(line => {
@@ -507,19 +496,16 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
 
                   return result
                 } else {
-                  //console.log('[VTOP] Insufficient columns:', allColumns.length, 'for line:', line);
                   return null
                 }
               })
               .filter(Boolean)
           } catch (error) {
-            //console.error('Error parsing attendance data from rawOutput:', error);
             attendanceData = []
           }
         }
 
         if (!Array.isArray(attendanceData) || attendanceData.length === 0) {
-          //console.log('[VTOP] Parsing failed, checking for formatted content:', vtopData.formatted_content);
 
           if (vtopData.formatted_content) {
             return (
@@ -548,7 +534,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
         }
 
         if (Array.isArray(attendanceData) && attendanceData.length > 0) {
-          //console.log('[VTOP] Successfully parsed', attendanceData.length, 'attendance records');
 
           const validSubjects = attendanceData.filter((subject: any) => {
             const subjectName = subject.SUBJECT || subject.subject || subject.name || ''
@@ -559,17 +544,11 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
               subject['CLASSES ATTENDED'] || subject.attended || subject.classesAttended || '0'
             const total = subject['TOTAL CLASSES'] || subject.total || subject.totalClasses || '0'
 
-            // More lenient validation - just check if subject name exists and isn't a placeholder
             const isValid =
               subjectName && subjectName.trim() !== '' && !subjectName.match(/^Subject \d+$/i)
 
             return isValid
           })
-
-          if (process.env.NODE_ENV !== 'production') {
-            // eslint-disable-next-line no-console
-            //console.log('[VTOP] validSubjects length', validSubjects.length)
-          }
 
           if (validSubjects.length === 0) {
             return (
@@ -773,7 +752,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
           )
         }
 
-        // Fallback: show formatted content if available
         if (vtopData.formatted_content) {
           return (
             <div className="space-y-3">
@@ -787,7 +765,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
           )
         }
 
-        // Final fallback: show raw data
         if (data && typeof data === 'string') {
           return (
             <div className="space-y-3">
@@ -963,7 +940,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
         }
       }
 
-      // Always show VTOP artifacts, even when credentials/auth errors occur
 
       return (
         <div className="space-y-3">
@@ -1151,7 +1127,6 @@ const PaperCard = ({
     try {
       onViewPdf(urlToView, paper.title)
     } finally {
-      // Keep loading state for a brief moment to show feedback
       setTimeout(() => setIsLoading(false), 1000)
     }
   }
@@ -1226,23 +1201,7 @@ const PaperCard = ({
               <span>Relevance: {(paper.score * 100).toFixed(1)}%</span>
             </div>
           )}
-          {/* {(typeof paper.displayContentPct === 'number' || typeof paper.displayQuestionPct === 'number') && (
-            <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground/80">
-              {typeof paper.displayContentPct === 'number' && (
-                <span title={`Content similarity (raw ${(paper._rawChunkScore*100).toFixed(1)}%)`}>
-                  Content {paper.displayContentPct}%
-                </span>
-              )}
-              {paper.hasQuestionSignal && typeof paper.displayQuestionPct === 'number' && (
-                <span title={`Question embedding match (raw ${(paper._rawQuestionScore*100).toFixed(1)}%)`}>
-                  Question {paper.displayQuestionPct}%
-                </span>
-              )}
-              {!paper.hasQuestionSignal && typeof paper.displayQuestionPct === 'undefined' && (
-                <span title="No question-level signals extracted">Question —</span>
-              )}
-            </div>
-          )} */}
+
           {Array.isArray(paper.matchedQuestions) && paper.matchedQuestions.length > 0 && (
             <div className="mt-1 space-y-1">
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
@@ -1378,7 +1337,7 @@ const SyllabusCard = ({
               </Badge>
             </div>
           )}
-          {/* {syllabus.title && <div className="text-xs text-muted-foreground">{syllabus.title}</div>} */}
+
         </div>
 
         <div className="flex-shrink-0 pt-1">
@@ -2769,7 +2728,6 @@ const PureArtifactDisplay = ({
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [isPdfLoading, setIsPdfLoading] = useState(false)
   const [pdfTitle, setPdfTitle] = useState<string>('')
-  // Papers-specific UI state
   const [paperSort, setPaperSort] = useState<string>('year_desc')
   const [paperExamFilter, setPaperExamFilter] = useState<string>('all')
   const [paperYearFilter, setPaperYearFilter] = useState<string>('all')
@@ -2812,10 +2770,8 @@ const PureArtifactDisplay = ({
     minimizeByUrl = (ctx as any).minimizeByUrl
     removeByUrl = (ctx as any).removeByUrl
   } catch (e) {
-    // provider not available; fall back to local behavior
   }
 
-  // Listen for dock open events so clicking a title in the dock opens the viewer
   useEffect(() => {
     const onOpenById = (ev: Event) => {
       try {
@@ -2829,7 +2785,6 @@ const PureArtifactDisplay = ({
           setIsPdfLoading(false)
         }
       } catch (e) {
-        // ignore
       }
     }
 
@@ -2838,13 +2793,11 @@ const PureArtifactDisplay = ({
         const detail = (ev as CustomEvent)?.detail
         const url = detail?.url
         if (!url) return
-        // prefer a matching dock item for title, otherwise use generic
         const found = items.find((p: any) => p.url === url)
         setPdfTitle((found && found.title) || 'PDF Document')
         setPdfUrl(url)
         setIsPdfLoading(false)
       } catch (e) {
-        // ignore
       }
     }
 
@@ -2866,7 +2819,6 @@ const PureArtifactDisplay = ({
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
       if (addPdf) {
         addPdf({ id, url: embedUrl, title: title || 'PDF Document' })
-        // ensure it's opened
         openPdf && openPdf(id)
         setPdfUrl(embedUrl)
       } else {
@@ -2920,10 +2872,6 @@ const PureArtifactDisplay = ({
       return <PlacementInfoCard data={data} />
     }
 
-    // eslint-disable-next-line no-console
-    //console.log('ArtifactDisplay rendered', { type, data });
-    // eslint-disable-next-line no-console
-    //console.log('ArtifactDisplay type:', type);
     if (!data || (Array.isArray(data) && data.length === 0)) {
       return (
         <div className="text-center py-8 text-muted-foreground">
@@ -2935,13 +2883,7 @@ const PureArtifactDisplay = ({
 
     const isFacultyType = type === 'faculty'
     const facultyList = isFacultyType && data && Array.isArray(data.faculty) ? data.faculty : null
-    if (isFacultyType) {
-      // eslint-disable-next-line no-console
-      //console.log('ArtifactDisplay faculty debug:', { data, facultyList })
-    }
     if (isFacultyType && facultyList && facultyList.length === 0) {
-      // eslint-disable-next-line no-console
-      //console.log('ArtifactDisplay: Showing pretty empty state for faculty')
       return (
         <div className="text-center py-8 text-muted-foreground">
           <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -2957,7 +2899,6 @@ const PureArtifactDisplay = ({
     const items: any[] =
       isFacultyType && facultyList ? facultyList : Array.isArray(data) ? data : [data]
 
-    // Derive per-paper relative metrics to avoid identical displayed percentages when raw scores are very close.
     let processedItems = items
     if (type === 'papers' && items.length) {
       const chunkScores = items.map(p => (typeof p.chunkScore === 'number' ? p.chunkScore : 0))
@@ -2997,7 +2938,6 @@ const PureArtifactDisplay = ({
       })
     }
 
-    // Papers: apply filtering and sorting
     if (type === 'papers') {
       const normalizeExam = (e?: string) =>
         (e || '')
@@ -3011,7 +2951,6 @@ const PureArtifactDisplay = ({
         if (!m || m.length === 0) return -Infinity
         return Math.max(...m.map(s => parseInt(s, 10)))
       }
-      // Filter
       processedItems = processedItems.filter(p => {
         const okExam =
           paperExamFilter === 'all' ||
@@ -3019,7 +2958,6 @@ const PureArtifactDisplay = ({
         const okYear = paperYearFilter === 'all' || String(p.year || '').includes(paperYearFilter)
         return okExam && okYear
       })
-      // Sort
       const examOrder: Record<string, number> = { FAT: 1, CAT2: 2, CAT1: 3, QUIZ: 4 }
       processedItems = [...processedItems].sort((a, b) => {
         switch (paperSort) {
@@ -3321,7 +3259,7 @@ const PureArtifactDisplay = ({
                         <X className="h-4 w-4" />
                       </Button>
 
-                      {/* Minimize to dock - only shown when minimizePdf exists */}
+
                       {(minimizeByUrl || minimizePdf) && (
                         <Button
                           variant="ghost"
@@ -3336,7 +3274,6 @@ const PureArtifactDisplay = ({
                                 if (found) minimizePdf(found.id)
                               }
                             } catch (e) {
-                              // ignore
                             }
 
                             handleClosePdf()
@@ -3400,7 +3337,7 @@ const PureArtifactDisplay = ({
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {/* Minimize button visible on mobile header */}
+
                     {(minimizeByUrl || minimizePdf) && (
                       <Button
                         variant="ghost"
@@ -3414,7 +3351,6 @@ const PureArtifactDisplay = ({
                               const found = items.find((p: any) => p.url === pdfUrl)
                               if (found) minimizePdf(found.id)
                             } else if (items && items.length > 0) {
-                              // fallback: minimize most recent
                               const mostRecent = items[items.length - 1]
                               if (mostRecent) minimizePdf && minimizePdf(mostRecent.id)
                             }

@@ -37,7 +37,6 @@ export function withQueryTimer<T>(operation: string, queryFn: () => Promise<T>):
   return queryFn().finally(() => {
     const duration = Date.now() - start
     if (duration > 1000) {
-      // Log slow queries (>1s)
       console.warn(`Slow query detected: ${operation} took ${duration}ms`)
     }
   })

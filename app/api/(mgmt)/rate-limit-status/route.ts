@@ -107,7 +107,6 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { action } = body
 
-    // use Groq provider
     const rateLimited = getRateLimitedAI('groq')
 
     switch (action) {

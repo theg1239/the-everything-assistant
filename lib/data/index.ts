@@ -23,7 +23,6 @@ export function getAllContextData(): ContextData[] {
     latestEvents,
     holidays,
   ].filter(Boolean)
-  // console.log('[getAllContextData] Loaded sections:', allData.map(d => d.section))
   return allData
 }
 
@@ -98,6 +97,4 @@ export function checkForOutdatedData(maxDaysOld: number = 30): {
 }
 
 export // Individual exports for direct access
-// Note: These should be imported directly from their respective files
-// e.g., import { academicCalendar } from '@/lib/data/academic-calendar'
  {}

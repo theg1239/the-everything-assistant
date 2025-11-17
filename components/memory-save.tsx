@@ -26,7 +26,6 @@ export const MemorySaveIndicator = ({ toolCalls }: MemorySaveIndicatorProps) => 
           setIsComplete(true)
           setSavedMemories(completedMemories)
 
-          // Auto-hide after 8 seconds if not expanded
           setTimeout(() => {
             if (!isExpanded) {
               setShowIndicator(false)
@@ -47,7 +46,6 @@ export const MemorySaveIndicator = ({ toolCalls }: MemorySaveIndicatorProps) => 
   }
 
   const getMemoryContent = (memory: any) => {
-    // Extract content from the tool call
     const args = memory.function?.arguments || memory.args
     let content = ''
 
@@ -74,7 +72,6 @@ export const MemorySaveIndicator = ({ toolCalls }: MemorySaveIndicatorProps) => 
         const parsed = JSON.parse(args)
         type = parsed.type || parsed.category || 'general'
       } catch {
-        // ignore
       }
     } else if (args) {
       type = args.type || args.category || 'general'
@@ -99,7 +96,7 @@ export const MemorySaveIndicator = ({ toolCalls }: MemorySaveIndicatorProps) => 
           className="fixed bottom-4 right-4 z-50 max-w-sm"
         >
           <div className="bg-background/95 backdrop-blur-md border border-border/50 rounded-xl shadow-xl overflow-hidden">
-            {/* Header */}
+
             <div className="px-4 py-3 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-b border-border/30">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -180,7 +177,7 @@ export const MemorySaveIndicator = ({ toolCalls }: MemorySaveIndicatorProps) => 
               </div>
             </div>
 
-            {/* Expanded Content */}
+
             <AnimatePresence>
               {isExpanded && savedMemories.length > 0 && (
                 <motion.div

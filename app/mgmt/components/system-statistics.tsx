@@ -4,7 +4,6 @@ import React from 'react'
 import { Database, Users, Clock } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts'
 
-// Detailed stats (optional) may be provided under stats.detailedStats
 
 export default function SystemStatistics({ stats }: any) {
   return (
@@ -52,7 +51,7 @@ export default function SystemStatistics({ stats }: any) {
         </div>
       </div>
 
-      {/* Detailed stats section (if available) */}
+
       {stats.detailedStats && (
         <div className="mt-6">
           <h4 className="font-semibold mb-2">detailed stats</h4>
@@ -93,7 +92,7 @@ export default function SystemStatistics({ stats }: any) {
             </div>
           </div>
 
-          {/* top models bar chart */}
+
           <div className="mt-4">
             <h5 className="font-medium mb-2">top models (by tokens)</h5>
             {stats.detailedStats.topModels && stats.detailedStats.topModels.length ? (

@@ -20,7 +20,11 @@ export async function POST(req: NextRequest) {
     }
     paperProgress.emitStep(runId, step, detail)
     return new Response(JSON.stringify({ ok: true }), { status: 200 })
-  } catch (e: any) {
-    return new Response(JSON.stringify({ error: e?.message || 'failed' }), { status: 500 })
+  } catch (error) {
+    console.error('[paper-progress/push] failed:', error)
+    return new Response(
+      JSON.stringify({ error: 'failed', message: 'Unable to record paper progress at this time.' }),
+      { status: 500 }
+    )
   }
 }

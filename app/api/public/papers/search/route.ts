@@ -8,8 +8,6 @@ import { getAllCourseMatches } from '@/lib/course-map'
 
 export const runtime = 'nodejs'
 
-// Scraping + aggregation search endpoint (GET only)
-// Params: course|courseCode (required), exam|examType (optional), year (optional)
 export async function GET(req: NextRequest) {
   const started = Date.now()
   try {
@@ -87,7 +85,6 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    // Deduplicate by URL (simple)
     const seen = new Set<string>()
     const deduped = papers.filter(p => {
       if (!p.url) return false
@@ -130,9 +127,14 @@ export async function GET(req: NextRequest) {
       elapsedMs,
       message: `Found ${deduped.length} paper(s) for ${resolvedCourseCode}${examType ? ' (' + examType + ')' : ''}${year ? ' ' + year : ''}.`,
     })
-  } catch (e: any) {
+  } catch (error) {
+    console.error('[public/papers/search] failed:', error)
     return NextResponse.json(
-      { success: false, error: e?.message || 'internal_error' },
+      {
+        success: false,
+        error: 'internal_error',
+        message: 'Unable to complete the search safely. Please try again later.',
+      },
       { status: 500 }
     )
   }

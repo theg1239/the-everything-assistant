@@ -95,7 +95,6 @@ export function MemoryManagement() {
 
   const handleDeleteMemory = async (id: string) => {
     if (deletingMemoryId === id) {
-      // Confirm delete
       try {
         setIsLoading(true)
         const response = await fetch(`/api/memories/${id}`, {
@@ -115,9 +114,7 @@ export function MemoryManagement() {
         setIsLoading(false)
       }
     } else {
-      // Show confirmation
       setDeletingMemoryId(id)
-      // Auto-cancel confirmation after 3 seconds
       setTimeout(() => {
         setDeletingMemoryId(null)
       }, 3000)
@@ -214,7 +211,6 @@ export function MemoryManagement() {
     return labels[level as keyof typeof labels]
   }
 
-  // Render list view
   if (view === 'list') {
     return (
       <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -224,7 +220,7 @@ export function MemoryManagement() {
           transition={{ duration: 0.2 }}
           className="space-y-6"
         >
-          {/* Header */}
+
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h2 className="text-xl sm:text-2xl font-semibold">your memories</h2>
@@ -242,7 +238,7 @@ export function MemoryManagement() {
             </Button>
           </div>
 
-          {/* Search */}
+
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -253,7 +249,7 @@ export function MemoryManagement() {
             />
           </div>
 
-          {/* Content */}
+
           {isLoading ? (
             <div className="flex justify-center py-12">
               <div className="flex flex-col items-center gap-3">
@@ -313,14 +309,14 @@ export function MemoryManagement() {
                     className="border border-border/50 rounded-lg p-4 sm:p-6 bg-background/30 hover:bg-background/50 transition-all duration-200"
                   >
                     <div className="flex flex-col gap-4">
-                      {/* Content */}
+
                       <div className="flex-1">
                         <p className="text-sm sm:text-base leading-relaxed whitespace-pre-wrap">
                           {memory.content}
                         </p>
                       </div>
 
-                      {/* Tags */}
+
                       {memory.tags.length > 0 && (
                         <div className="flex flex-wrap gap-2">
                           {memory.tags.map(tag => (
@@ -335,7 +331,7 @@ export function MemoryManagement() {
                         </div>
                       )}
 
-                      {/* Footer */}
+
                       <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-3 pt-2 border-t border-border/50">
                         <div className="flex flex-col xs:flex-row xs:items-center gap-3">
                           <div className="flex items-center gap-2">
@@ -389,7 +385,6 @@ export function MemoryManagement() {
     )
   }
 
-  // Render edit/new form
   return (
     <div className="w-full max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
       <motion.div
@@ -398,7 +393,7 @@ export function MemoryManagement() {
         transition={{ duration: 0.2 }}
         className="space-y-6"
       >
-        {/* Header */}
+
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h2 className="text-xl sm:text-2xl font-semibold">
@@ -420,9 +415,9 @@ export function MemoryManagement() {
           </Button>
         </div>
 
-        {/* Form */}
+
         <div className="space-y-6">
-          {/* Content */}
+
           <div className="space-y-3">
             <Label htmlFor="content" className="text-sm font-medium">
               content
@@ -437,7 +432,7 @@ export function MemoryManagement() {
             />
           </div>
 
-          {/* Importance */}
+
           <div className="space-y-3">
             <Label className="text-sm font-medium">importance level</Label>
             <div className="space-y-3">
@@ -457,7 +452,7 @@ export function MemoryManagement() {
             </div>
           </div>
 
-          {/* Tags */}
+
           <div className="space-y-3">
             <Label htmlFor="tags" className="text-sm font-medium">
               tags
@@ -475,7 +470,7 @@ export function MemoryManagement() {
           </div>
         </div>
 
-        {/* Actions */}
+
         <div className="flex flex-col xs:flex-row gap-3 pt-6 border-t border-border">
           <Button
             onClick={handleSaveMemory}

@@ -207,9 +207,9 @@ function CanvasContent({ isOpen, onClose, chatId, initialDocument }: CanvasProps
             className="bg-background border border-border rounded-xl w-full max-w-4xl h-[95vh] md:h-[90vh] flex flex-col overflow-hidden shadow-2xl my-2 md:my-0"
             onClick={e => e.stopPropagation()}
           >
-            {/* Mobile-First Header */}
+
             <div className="flex-shrink-0 p-3 sm:p-4 border-b border-border bg-card">
-              {/* Top Row - Close and Actions */}
+
               <div className="flex items-center justify-between mb-3">
                 <Button
                   variant="ghost"
@@ -258,7 +258,7 @@ function CanvasContent({ isOpen, onClose, chatId, initialDocument }: CanvasProps
                 </div>
               </div>
 
-              {/* Title Input */}
+
               <div className="mb-3">
                 <Input
                   value={document.title}
@@ -272,7 +272,7 @@ function CanvasContent({ isOpen, onClose, chatId, initialDocument }: CanvasProps
                 </p>
               </div>
 
-              {/* View Mode Tabs */}
+
               <div className="flex items-center space-x-1 bg-muted/50 rounded-lg p-1">
                 <Button
                   variant={viewMode === 'edit' ? 'default' : 'ghost'}
@@ -303,7 +303,7 @@ function CanvasContent({ isOpen, onClose, chatId, initialDocument }: CanvasProps
                 </Button>
               </div>
 
-              {/* Markdown Toolbar - Only show in edit mode */}
+
               {(viewMode === 'edit' || viewMode === 'split') && (
                 <div className="flex items-center space-x-1 mt-3 flex-wrap gap-1">
                   <Button
@@ -364,7 +364,7 @@ function CanvasContent({ isOpen, onClose, chatId, initialDocument }: CanvasProps
               )}
             </div>
 
-            {/* Content Area */}
+
             <div className="flex-1 overflow-hidden">
               {viewMode === 'edit' && (
                 <Textarea

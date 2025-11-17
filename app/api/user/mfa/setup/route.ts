@@ -55,7 +55,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'MFA already enabled' }, { status: 400 })
     }
     if (method === 'email') {
-      // Check if SMTP is configured
       if (!isSMTPConfigured()) {
         return NextResponse.json(
           {

@@ -215,8 +215,6 @@ export class ApiKeyManager {
     return null
   }
 
-  // ——————————————————————————————————————————————
-  // rewrite recordKeyUsage to store numeric timestamp and avoid 'Never' strings
   private async recordKeyUsage(keyHash: string): Promise<void> {
     const statsKey = `stats:${keyHash}`
     const now = Date.now()
@@ -242,7 +240,6 @@ export class ApiKeyManager {
     })
     await this.redis.expire(statsKey, 86400 * 30)
 
-    // detailed event log (optional)
     const eventKey = `rate_limit_event:${keyHash}:${ts}`
     await this.redis.hset(eventKey, {
       timestamp: ts,
@@ -251,7 +248,6 @@ export class ApiKeyManager {
     })
     await this.redis.expire(eventKey, 86400)
   }
-  // ——————————————————————————————————————————————
 
   async getCurrentKey(): Promise<string> {
     if (this.initPromise) {
@@ -278,7 +274,6 @@ export class ApiKeyManager {
       await this.performHealthCheck()
       this.lastHealthCheck = now
     }
-    // If current key is rate limited, rotate
     if ((await this.isKeyRateLimited(this.hashKey(current))) && this.config.rotateOnRateLimit) {
       const next = await this.findNextAvailableKey()
       if (next) {

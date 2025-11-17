@@ -84,7 +84,6 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
     const maxFileSize = 10 * 1024 * 1024
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
 
-    // Validate all files
     for (const file of files) {
       if (file.size > maxFileSize) {
         return {
@@ -108,7 +107,6 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
     let combinedFilename: string
 
     if (files.length === 1) {
-      // Single file - process as before
       const file = files[0]
       finalBuffer = Buffer.from(await file.arrayBuffer())
       finalMimeType = file.type
@@ -117,7 +115,6 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
         `Processing single file: ${file.name}, size: ${file.size} bytes, type: ${file.type}`
       )
     } else {
-      // Multiple files - combine into PDF
       console.log(`Combining ${files.length} files into a single PDF`)
       const pdfDoc = await PDFDocument.create()
 
@@ -126,19 +123,16 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
         console.log(`Processing file: ${file.name}, size: ${file.size} bytes, type: ${file.type}`)
 
         if (file.type === 'application/pdf') {
-          // If it's a PDF, merge its pages
           const existingPdf = await PDFDocument.load(buffer)
           const pages = await pdfDoc.copyPages(existingPdf, existingPdf.getPageIndices())
           pages.forEach(page => pdfDoc.addPage(page))
         } else {
-          // If it's an image, add it as a new page
           let image
           if (file.type === 'image/png') {
             image = await pdfDoc.embedPng(buffer)
           } else if (file.type === 'image/jpeg') {
             image = await pdfDoc.embedJpg(buffer)
           } else {
-            // Convert WebP to PNG using Sharp
             const pngBuffer = await sharp(buffer).png().toBuffer()
             image = await pdfDoc.embedPng(pngBuffer)
           }
@@ -146,7 +140,6 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
           const page = pdfDoc.addPage()
           const { width, height } = image.scale(1)
 
-          // Scale image to fit page while maintaining aspect ratio
           const pageWidth = page.getWidth()
           const pageHeight = page.getHeight()
           const scale = Math.min(pageWidth / width, pageHeight / height)
@@ -186,7 +179,6 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
 
       const base64Pdf = finalBuffer.toString('base64')
 
-      // Generate metadata and OCR text using Gemini in a single call
       try {
         const { object: extractedData } = await generateObject({
           model: google('gemini-2.0-flash'),
@@ -214,7 +206,6 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
             'You are an AI that extracts metadata from VIT university exam papers with high accuracy. Follow these extraction rules:\n\n1. TITLE: Extract the full course name exactly as written (e.g., "Computer Programming", "Digital Logic Design", "Mathematics for Engineers")\n2. COURSE CODE: Find the exact alphanumeric course code (e.g., CSE1001, MAT1011, ECE2025, CHE1007)\n3. EXAM TYPE: Identify the assessment type - CAT-1 (Continuous Assessment Test 1), CAT-2 (Continuous Assessment Test 2), FAT (Final Assessment Test), Quiz, Assignment, or Lab\n4. SLOT: Extract the exact slot designation (A1, A2, B1, B2, C1, C2, D1, D2, E1, E2, F1, F2, G1, G2, or L1-L60 for lab slots)\n5. YEAR: Extract the academic year (e.g., 2023, 2024)\n6. SEMESTER: Identify the semester (Fall, Winter, Summer, Spring)\n\nLook for these details in headers, footers, and throughout the document. Be precise and only extract information that is clearly visible. ALL FIELDS ARE REQUIRED - if you cannot find a field, make your best educated guess based on the document content.',
         })
 
-        // Validate the extracted metadata
         const validationResult = PaperMetadataSchema.safeParse(extractedData.metadata)
         if (!validationResult.success) {
           console.error('Schema validation failed for PDF:', validationResult.error.issues)
@@ -265,7 +256,6 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
             'You are an AI that extracts metadata from VIT university exam papers with high accuracy. Follow these extraction rules:\n\n1. TITLE: Extract the full course name exactly as written (e.g., "Computer Programming", "Digital Logic Design", "Mathematics for Engineers")\n2. COURSE CODE: Find the exact alphanumeric course code (e.g., CSE1001, MAT1011, ECE2025, CHE1007)\n3. EXAM TYPE: Identify the assessment type - CAT-1 (Continuous Assessment Test 1), CAT-2 (Continuous Assessment Test 2), FAT (Final Assessment Test), Quiz, Assignment, or Lab\n4. SLOT: Extract the exact slot designation (A1, A2, B1, B2, C1, C2, D1, D2, E1, E2, F1, F2, G1, G2, or L1-L60 for lab slots)\n5. YEAR: Extract the academic year (e.g., 2023, 2024)\n6. SEMESTER: Identify the semester (Fall, Winter, Summer, Spring)\n\nLook for these details in headers, footers, and throughout the document. Be precise and only extract information that is clearly visible. ALL FIELDS ARE REQUIRED - if you cannot find a field, make your best educated guess based on the document content.',
         })
 
-        // Validate the extracted metadata
         const validationResult = PaperMetadataSchema.safeParse(extractedData.metadata)
         if (!validationResult.success) {
           console.error('Schema validation failed for image:', validationResult.error.issues)

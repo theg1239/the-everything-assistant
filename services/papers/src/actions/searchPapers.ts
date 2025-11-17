@@ -157,7 +157,6 @@ export async function searchPapers(
         fileSize: paper.fileSize || undefined,
         mimeType: paper.mimeType || undefined,
         ocrText: paper.ocrText || undefined,
-        // URL already includes extension since we upload with extension
         fileUrl: paper.fileUrl,
       })),
       totalCount,

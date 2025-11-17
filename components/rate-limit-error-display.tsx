@@ -99,7 +99,7 @@ export function RateLimitErrorDisplay() {
             </p>
           </div>
 
-          {/* Reset Time and Tips Footer */}
+
           <div className="overflow-hidden rounded-b-2xl">
             {rateLimitError.resetTime && (
               <div className="px-6 py-3 bg-muted/30">

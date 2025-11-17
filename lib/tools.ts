@@ -424,13 +424,6 @@ async function handleIntelligentCoursePage(params: {
 
   let step = interactiveStep
   if (!step) {
-    // console.log('Determining step - semester:', semester, 'course:', course, 'faculty:', faculty)
-    // console.log(
-    //   'Contextual queries - semester:',
-    //   contextualSemesterQuery,
-    //   'course:',
-    //   contextualCourseQuery
-    // )
 
     if (
       (contextualCourseQuery || courseQuery) &&
@@ -444,7 +437,6 @@ async function handleIntelligentCoursePage(params: {
       step = 'semester'
     } else {
       if (contextualSemesterQuery && !semester) {
-        // console.log('Have semesterQuery but no semester number, staying on semester step')
         step = 'semester'
       } else if (!semester) {
         step = 'semester'
@@ -466,20 +458,10 @@ async function handleIntelligentCoursePage(params: {
           previousStepType === 'semester' &&
           /^\s*\d+\s*$/.test(messages[messages.length - 1]?.content || '')
 
-        // console.log('Semester selection debug:')
-        // console.log('- previousStepType:', previousStepType)
-        // console.log('- last message content:', messages?.[messages.length - 1]?.content)
-        // console.log('- shouldCompleteSemesterSelection:', shouldCompleteSemesterSelection)
-        // console.log('- userJustSelectedSemester:', userJustSelectedSemester)
-        // console.log('- semesterAutoResolved:', semesterAutoResolved)
 
         if (shouldCompleteSemesterSelection || userJustSelectedSemester) {
-          // console.log('Completing semester selection, staying on semester step')
           step = 'semester'
         } else if (semesterAutoResolved) {
-          // console.log(
-          //   'Semester was auto-resolved from query, staying on semester step to show selection'
-          // )
           step = 'semester'
         } else {
           step = 'course'
@@ -490,7 +472,6 @@ async function handleIntelligentCoursePage(params: {
         step = 'materials'
       }
     }
-    // console.log('Determined step:', step)
   }
 
   const PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001'
@@ -511,11 +492,9 @@ async function handleIntelligentCoursePage(params: {
   }
   if (contextualSemesterQuery) {
     requestBody.flags.semesterQuery = contextualSemesterQuery
-    // console.log('Using contextual semester query:', contextualSemesterQuery)
   }
   if (contextualCourseQuery) {
     requestBody.flags.courseQuery = contextualCourseQuery
-    // console.log('Using contextual course query:', contextualCourseQuery)
   }
   if (contextualFacultyQuery || facultyQuery) {
     requestBody.flags.facultyQuery = contextualFacultyQuery || facultyQuery
@@ -580,7 +559,6 @@ async function handleIntelligentCoursePage(params: {
   }
 }
 
-// --- Department acronym and robust matching helper ---
 const DEPARTMENT_ACRONYMS: Record<string, string[]> = {
   cse: [
     'computer science and engineering',
@@ -617,24 +595,20 @@ function matchesDepartment(deptName: string, filter: string): boolean {
   const normDept = normalizeString(deptName)
   const normFilter = normalizeString(filter)
 
-  // Direct substring or equality match
   if (normDept.includes(normFilter) || normFilter.includes(normDept)) return true
 
-  // Check if filter is a known acronym, and dept matches any mapped name
   if (DEPARTMENT_ACRONYMS[normFilter]) {
     if (DEPARTMENT_ACRONYMS[normFilter].some(full => normDept.includes(normalizeString(full)))) {
       return true
     }
   }
 
-  // Check if dept is a known acronym, and filter matches any mapped name
   if (DEPARTMENT_ACRONYMS[normDept]) {
     if (DEPARTMENT_ACRONYMS[normDept].some(full => normFilter.includes(normalizeString(full)))) {
       return true
     }
   }
 
-  // Check if filter matches any acronym by partial/full name
   for (const [acronym, names] of Object.entries(DEPARTMENT_ACRONYMS)) {
     if (
       names.some(
@@ -656,7 +630,6 @@ function matchesDepartment(deptName: string, filter: string): boolean {
     }
   }
 
-  // Token-based partial match (e.g., 'computer' matches 'computer science')
   const deptTokens = normDept.split(' ')
   const filterTokens = normFilter.split(' ')
   if (filterTokens.every(f => deptTokens.some(d => d.startsWith(f) || d === f))) return true
@@ -908,392 +881,15 @@ export function createVITTools(userId: string) {
       },
     }),
 
-    /* gravitasEventRegistration: tool({
-      description:
-        'Resolve a Gravitas event by name (or id) and return the direct registration page URL (https://gravitas.vit.ac.in/events/[id]). Use when the user asks to register for an event.',
-      inputSchema: z.object({
-        searchQuery: z
-          .string()
-          .optional()
-          .describe('Event name or keywords, e.g. "code2create" or "hackathon"'),
-        eventId: z
-          .string()
-          .optional()
-          .describe('Known event UUID, if provided'),
-      }),
-      execute: async ({ searchQuery, eventId }) => {
-        const baseUrl = 'https://gravitas.vit.ac.in'
-        const buildRegUrl = (id: string) => `${baseUrl}/events/${id}`
 
-        try {
-          // If eventId is provided, validate and return the direct link
-          if (eventId && typeof eventId === 'string' && eventId.trim().length > 0) {
-            try {
-              const res = await fetch(`${baseUrl}/api/events/${eventId}`)
-              if (res.ok) {
-                const json = await res.json()
-                const ev = json?.data?.event
-                const slots = json?.data?.eventSlots || []
 
-                let totalSeatsLeft = 0
-                let registrationStatus = 'Closed'
-                for (const slot of slots) {
-                  const left =
-                    slot?.seats_left ??
-                    slot?.available_entries ??
-                    slot?.entries_left ??
-                    slot?.remaining ??
-                    slot?.remaining_entries ??
-                    slot?.total_entries ??
-                    0
-                  totalSeatsLeft += Number(left) || 0
-                  if (slot?.is_registrable) registrationStatus = 'Open'
-                }
 
-                return {
-                  success: true,
-                  event: ev
-                    ? {
-                        id: ev.id,
-                        name: ev.name,
-                        type: ev.type,
-                        category: ev.category,
-                        club: ev.club,
-                        tagline: ev.tagline,
-                        startDate: ev.start_date,
-                        endDate: ev.end_date,
-                      }
-                    : undefined,
-                  registrationUrl: buildRegUrl(eventId),
-                  seats: slots.length
-                    ? {
-                        totalRegistrations: totalSeatsLeft,
-                        registrationStatus,
-                      }
-                    : undefined,
-                  message: `Registration link for event ${ev?.name ? '"' + ev.name + '" ' : ''}is ready.`,
-                }
-              }
-            } catch (_) {
-              // Fall through to return the constructed URL even if validation fails
-            }
 
-            return {
-              success: true,
-              registrationUrl: buildRegUrl(eventId),
-              message: 'Direct registration link constructed from the provided event id.',
-            }
-          }
 
-          // Otherwise, search by name
-          if (!searchQuery || !searchQuery.trim()) {
-            return {
-              success: false,
-              message:
-                'Please provide an event name (searchQuery) or a known eventId to get the registration link.',
-            }
-          }
 
-          const q = searchQuery.trim()
-          const qNorm = normalizeString(q)
 
-          // Try backend name filtering first
-          const params = new URLSearchParams()
-          params.set('limit', '50')
-          params.set('name', q)
 
-          let events: any[] = []
-          let usedNameParam = true
-          try {
-            const res = await fetch(`${baseUrl}/api/events?${params.toString()}`)
-            if (res.ok) {
-              const json = await res.json()
-              events = json?.data?.events || []
-            } else {
-              usedNameParam = false
-            }
-          } catch {
-            usedNameParam = false
-          }
 
-          // Fallback: fetch many and filter client-side if name param failed
-          if (!usedNameParam) {
-            try {
-              const res = await fetch(`${baseUrl}/api/events?limit=500`)
-              if (res.ok) {
-                const json = await res.json()
-                const all: any[] = json?.data?.events || []
-                events = all.filter(ev => {
-                  const hay = normalizeString(
-                    [ev?.name || '', ev?.tagline || '', ev?.short_description || '', ev?.club || ''].join(' ')
-                  )
-                  return hay.includes(qNorm)
-                })
-              }
-            } catch {
-              // ignore
-            }
-          }
-
-          if (!events || events.length === 0) {
-            return {
-              success: false,
-              message: `No Gravitas events found matching "${searchQuery}".`,
-              suggestions: [
-                'Try a different spelling or keyword',
-                'Use a more specific event name',
-                'If you know the event id, provide it directly',
-              ],
-            }
-          }
-
-          // If exactly one, return its registration link directly
-          if (events.length === 1) {
-            const ev = events[0]
-            const id = ev?.id
-            if (id) {
-              return {
-                success: true,
-                event: {
-                  id,
-                  name: ev.name,
-                  type: ev.type,
-                  category: ev.category,
-                  club: ev.club,
-                  tagline: ev.tagline,
-                  startDate: ev.start_date,
-                  endDate: ev.end_date,
-                },
-                registrationUrl: buildRegUrl(id),
-                message: `Found one match for "${searchQuery}". Registration link ready.`,
-              }
-            }
-          }
-
-          // Multiple matches: pick best by simple similarity, but also return choices
-          type Candidate = { ev: any; score: number }
-          const candidates: Candidate[] = events.map(ev => {
-            const name = normalizeString(ev?.name || '')
-            const tag = normalizeString(ev?.tagline || '')
-            const dName = name ? getLevenshteinDistance(name, qNorm) : 99
-            const dTag = tag ? getLevenshteinDistance(tag, qNorm) : 99
-            let score = Math.min(dName, dTag)
-            if (name && name.includes(qNorm)) score -= 5
-            if (tag && tag.includes(qNorm)) score -= 3
-            if (name === qNorm) score -= 10
-            return { ev, score }
-          })
-
-          candidates.sort((a, b) => a.score - b.score)
-          const top = candidates[0]
-
-          // If the top candidate looks like a strong match, provide its link and also list alternatives
-          if (top && top.ev?.id && (top.score <= 2 || normalizeString(top.ev.name || '') === qNorm)) {
-            const id = top.ev.id
-            return {
-              success: true,
-              event: {
-                id,
-                name: top.ev.name,
-                type: top.ev.type,
-                category: top.ev.category,
-                club: top.ev.club,
-                tagline: top.ev.tagline,
-                startDate: top.ev.start_date,
-                endDate: top.ev.end_date,
-              },
-              registrationUrl: buildRegUrl(id),
-              ambiguous: events.length > 1,
-              alternatives: candidates.slice(1, 5).map(c => ({
-                id: c.ev.id,
-                name: c.ev.name,
-                type: c.ev.type,
-                category: c.ev.category,
-                startDate: c.ev.start_date,
-              })),
-              message:
-                events.length > 1
-                  ? `Best match selected for "${searchQuery}". If this isn’t right, choose one of the alternatives.`
-                  : `Registration link ready for "${searchQuery}".`,
-            }
-          }
-
-          // Otherwise, ask the user to disambiguate
-          const choices = candidates.slice(0, 8).map(c => ({
-            id: c.ev.id,
-            name: c.ev.name,
-            type: c.ev.type,
-            category: c.ev.category,
-            startDate: c.ev.start_date,
-          }))
-
-          return {
-            success: true,
-            ambiguous: true,
-            matches: choices,
-            message: `Found ${events.length} events matching "${searchQuery}". Please pick one to get the registration link.`,
-          }
-        } catch (error: any) {
-          return {
-            success: false,
-            message: 'Failed to resolve event registration link',
-            error: error?.message || 'Network error',
-          }
-        }
-      },
-    }),
-    */
-    // indexPastPapers: tool({
-    //   description:
-    //     'Download, OCR/extract, embed, and index past papers for a course so the user can ask detailed questions about them. Returns an indexId to use with askPaperQuestion.',
-    //   inputSchema: z.object({
-    //     course: z.string().describe('Course code or name'),
-    //     examType: z.string().optional(),
-    //     year: z.string().optional(),
-    //     maxPapers: z.number().int().min(1).max(12).optional(),
-    //     questionFocus: z
-    //       .string()
-    //       .optional()
-    //       .describe(
-    //         'Optional natural language focus (e.g. "recurrence relations") to bias relevance'
-    //       ),
-    //     debug: z.boolean().optional().describe('Enable verbose paper-agent logging'),
-    //   }),
-    //   execute: async ({ course, examType, year, maxPapers, questionFocus, debug }) => {
-    //     try {
-    //       const res = await indexPastPapers({
-    //         course,
-    //         examType,
-    //         year,
-    //         maxPapers,
-    //         questionFocus,
-    //         debug,
-    //       })
-    //       return res
-    //     } catch (e: any) {
-    //       return { success: false, error: e.message || 'Indexing failed' }
-    //     }
-    //   },
-    // }),
-
-    // askPaperQuestion: tool({
-    //   description:
-    //     'Ask a question about already indexed past papers. Requires indexId from indexPastPapers tool.',
-    //   inputSchema: z.object({
-    //     indexId: z.string().describe('Index ID returned by indexPastPapers'),
-    //     question: z.string().describe('User question'),
-    //     debug: z.boolean().optional().describe('Enable verbose logging'),
-    //   }),
-    //   execute: async ({ indexId, question, debug }) => {
-    //     try {
-    //       const meta = getPaperIndexMeta(indexId)
-    //       if (!meta) return { success: false, error: 'Index not found. Re-run indexPastPapers.' }
-    //       const ans = await askIndexedPaperQuestion(indexId, question, debug)
-    //       return { ...ans, indexMeta: meta }
-    //     } catch (e: any) {
-    //       return { success: false, error: e.message || 'Failed to answer question' }
-    //     }
-    //   },
-    // }),
-
-    // smartPaperSearch: tool({
-    //   description:
-    //     'Search for relevant past papers by providing a natural language question (semantic). Returns ranked papers and an indexId for deeper Q&A.',
-    //   inputSchema: z.object({
-    //     course: z.string().describe('Course code or name'),
-    //     question: z.string().describe('Question to find in past papers'),
-    //     examType: z.string().optional(),
-    //     year: z.string().optional(),
-    //     maxPapers: z.number().int().min(1).max(12).optional(),
-    //     debug: z.boolean().optional().describe('Enable verbose logging'),
-    //     runId: z
-    //       .string()
-    //       .optional()
-    //       .describe('Client-provided run/session id for streaming progress UI'),
-    //   }),
-    //   execute: async ({ course, question, examType, year, maxPapers, debug, runId }) => {
-    //     try {
-    //       if (!runId) {
-    //         const params = `${course}-${question}`.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
-    //         runId = `smartpaper_${params}`.slice(0, 60)
-    //       }
-
-    //       console.log(
-    //         `[smartPaperSearch] Using runId: ${runId} for course: ${course}, question: ${question}`
-    //       )
-
-    //       // Always fire a start event to establish connection
-    //       try {
-    //         const { paperProgress } = await import('./progress/paper-progress')
-    //         paperProgress.emitStep(runId, 'start', { course, question })
-    //         console.log(`[smartPaperSearch] Emitted start event for runId: ${runId}`)
-    //       } catch (e) {
-    //         console.error(`[smartPaperSearch] Failed to emit start event:`, e)
-    //       }
-
-    //       const res = await smartPaperSearchByQuestion({
-    //         course,
-    //         question,
-    //         examType,
-    //         year,
-    //         maxPapers,
-    //         debug,
-    //         runId,
-    //       })
-    //       if (res && (res as any).rankedPapers && !(res as any).papers) {
-    //         return { ...(res as any), papers: (res as any).rankedPapers, runId }
-    //       }
-    //       return { ...res, runId }
-    //     } catch (e: any) {
-    //       console.error(`[smartPaperSearch] Error:`, e)
-    //       return { success: false, error: e.message || 'Smart search failed', runId }
-    //     }
-    //   },
-    // }),
-
-    // analyzeQuestionPatterns: tool({
-    //   description:
-    //     'Analyze past papers and report the most repeated or common question patterns for a course and exam type. Returns top repeated patterns with counts and sample questions.',
-    //   inputSchema: z.object({
-    //     course: z.string().describe('Course code or name (e.g., BMAT201L or "Complex Variables")'),
-    //     examType: z
-    //       .string()
-    //       .optional()
-    //       .describe(
-    //         'Exam type filter: CAT-1, CAT-2, FAT, Quiz (case-insensitive, hyphen optional).'
-    //       ),
-    //     topN: z
-    //       .number()
-    //       .int()
-    //       .min(3)
-    //       .max(50)
-    //       .optional()
-    //       .describe('How many top repeated patterns to return (default 12).'),
-    //     debug: z.boolean().optional(),
-    //   }),
-    //   execute: async ({ course, examType, topN, debug }) => {
-    //     try {
-    //       const res = await analyzeQuestionFrequencies({ course, examType, topN, debug })
-    //       return res
-    //     } catch (e: any) {
-    //       return { success: false, error: e?.message || 'Failed to analyze question patterns' }
-    //     }
-    //   },
-    // }),
-
-    /*
-    ffcs_planner: tool({
-      description:
-        'Launch the FFCS (Fully Flexible Credit System) course planner. Use this tool to help the user plan their courses for the upcoming semester. This tool provides an interactive UI for searching, selecting, and visualizing a timetable.',
-      inputSchema: z.object({}),
-      execute: async () => {
-        return {
-          status: 'requires_user_interface',
-          ui: 'ffcs_planner',
-        }
-      },
-    }),
-    */
     getCourseInfo: tool({
       description:
         'Get information about courses from the FFCS dataset (supports all schools: SMEC, SCORE, SCOPE, SBST, SCE, SCHEME, SELECT, SENSE). Returns faculty names, slots, venue, etc.',
@@ -1395,13 +991,6 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           .describe('Course code or title to filter faculty who teach a specific course.'),
       }),
       execute: async ({ department, facultyName, includeCourses = false, school, courseQuery }) => {
-        // if (!department && !facultyName) {
-        //   return {
-        //     success: false,
-        //     requiresFilter: true,
-        //     message: 'Please specify at least a department or facultyName to filter faculty results.',
-        //   }
-        // }
         try {
           const res = await fetch(
             typeof window === 'undefined'
@@ -1591,7 +1180,6 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 } else if (facultyFilter && !faculty.name) {
                   continue
                 }
-                // Course filtering logic
                 let facultyEntry: any = {
                   name: faculty.name,
                   department: faculty.department || schoolName,
@@ -1905,7 +1493,6 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               console.debug('[getSyllabus] top candidates (string):', scored.slice(0, 5))
               if (scored.length > 0 && scored[0].score > 0) {
                 const topScore = scored[0].score
-                // include candidates with score > 0 and close to top score (within 5 points) — adjust as needed
                 const topMatches = scored
                   .filter((s: any) => s.score > 0 && s.score >= Math.max(1, topScore - 5))
                   .slice(0, 8)
@@ -2015,7 +1602,6 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               }
             }
             if (bestIndex >= 0) {
-              // Gather all items that include the query substring (to present possible multiple matches)
               const matchesFound: any[] = []
               for (let i = 0; i < lowered.length; i++) {
                 if (lowered[i].includes(q)) {
@@ -2178,7 +1764,6 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             'exams',
             'exam-schedule',
             'library-dues',
-            // 'calendar',
             'nightslip',
             'leave',
             'leave-status',
@@ -2455,7 +2040,6 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             continue
           }
         }
-        // If all retries failed, return last error
         return (
           lastError || {
             success: false,
@@ -2719,364 +2303,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
         }
       },
     }),
-    /*
-    gravitasEvents: tool({
-      description:
-        'Get information about Gravitas events at VIT, including event details, schedules, registration status, and seat availability. Can fetch all events or specific event details by ID.',
-      inputSchema: z.object({
-        eventId: z
-          .string()
-          .optional()
-          .describe('Specific event ID to get detailed information for a single event'),
-        searchQuery: z
-          .string()
-          .optional()
-          .describe('Search term to filter events by name, type, or description'),
-        eventType: z
-          .string()
-          .optional()
-          .describe('Filter by event type (e.g., Hackathon, Workshop, Competition)'),
-        category: z
-          .string()
-          .optional()
-          .describe('Filter by event category (e.g., General, Premium)'),
-        limit: z
-          .number()
-          .int()
-          .min(1)
-          .max(1000)
-          .optional()
-          .describe(
-            'Optional: limit number of events returned by API (default 500; 50 when searching).'
-          ),
-      }),
-      execute: async ({ eventId, searchQuery, eventType, category, limit }) => {
-        try {
-          if (eventId) {
-            // Fetch specific event details with seat information
-            const response = await fetch(`https://gravitas.vit.ac.in/api/events/${eventId}`)
-            if (!response.ok) {
-              return {
-                success: false,
-                message: `Failed to fetch event details for ID: ${eventId}`,
-                error: `HTTP ${response.status}`,
-              }
-            }
 
-            const data = await response.json()
-            if (!data.success || !data.data?.event) {
-              return {
-                success: false,
-                message: `Event not found for ID: ${eventId}`,
-                error: data.message || 'Event not found',
-              }
-            }
-
-            const event = data.data.event
-            const eventSlots = data.data.eventSlots || []
-
-            // Calculate seats remaining and registration status
-            let totalSeatsLeft = 0
-            let totalSeatsAvailable = 0
-            let totalCurrentRegistrations = 0
-            let registrationStatus = 'Closed'
-            
-            if (eventSlots.length > 0) {
-              eventSlots.forEach((slot: any) => {
-                const seatsLeft = Number(slot.total_entries) || 0  // total_entries = seats left
-                const maxSeats = Number(slot.overall_entries) || 0  // overall_entries = total seats
-                const currentRegistrations = Math.max(0, maxSeats - seatsLeft)  // registrations = max - left
-                
-                totalSeatsLeft += seatsLeft
-                totalSeatsAvailable += maxSeats
-                totalCurrentRegistrations += currentRegistrations
-                
-                if (slot.is_registrable) registrationStatus = 'Open'
-              })
-            }
-
-            return {
-              success: true,
-              event: {
-                id: event.id,
-                name: event.name,
-                type: event.type,
-                category: event.category,
-                description: event.description,
-                club: event.club,
-                tagline: event.tagline,
-                startDate: event.start_date,
-                endDate: event.end_date,
-                teamSize: event.team_size,
-                price: event.price_per_ticket,
-                scope: event.scope,
-                image: event.image,
-                judgementCriteria: event.judgement_criteria,
-                rules: event.rules_and_regulations,
-                prizes: event.prize_distribution,
-              },
-              seats: {
-                totalSeatsAvailable: totalSeatsAvailable,
-                currentRegistrations: totalCurrentRegistrations,
-                seatsLeft: totalSeatsLeft,
-                registrationStatus,
-                slots: eventSlots.map((slot: any) => ({
-                  id: slot.id,
-                  venue: slot.venue,
-                  startDate: slot.start_date,
-                  endDate: slot.end_date,
-                  totalSeats: slot.overall_entries || 0,
-                  currentRegistrations: Math.max(0, (slot.overall_entries || 0) - (slot.total_entries || 0)),
-                  seatsLeft: slot.total_entries || 0,
-                  isRegistrable: slot.is_registrable,
-                })),
-              },
-              message: `Found event: ${event.name} by ${event.club}. ${registrationStatus === 'Open' ? `Registration is open! ${totalSeatsLeft} seats left out of ${totalSeatsAvailable}.` : 'Check registration status.'}`,
-            }
-          } else {
-            // Fetch events list using query params (limit, name)
-            // Resolve aliases for name param (e.g., c2c -> Code2Create)
-            const NAME_ALIASES: Record<string, string> = {
-              c2c: 'Code2Create',
-              code2create: 'Code2Create',
-              'code 2 create': 'Code2Create',
-              'code to create': 'Code2Create',
-              // Additional common variations
-              'code 2create': 'Code2Create',
-              'code tocreate': 'Code2Create',
-              'code2 create': 'Code2Create',
-              'ch':'cryptic hunt'
-            }
-
-            const qNorm = searchQuery ? normalizeString(searchQuery) : null
-            const resolvedName = qNorm && NAME_ALIASES[qNorm] ? NAME_ALIASES[qNorm] : searchQuery
-            const effectiveLimit = typeof limit === 'number' ? limit : searchQuery ? 50 : 500
-            const params = new URLSearchParams()
-            params.set('limit', String(effectiveLimit))
-            if (resolvedName && resolvedName.trim().length > 0) {
-              params.set('name', resolvedName)
-            }
-
-            const response = await fetch(
-              `https://gravitas.vit.ac.in/api/events?${params.toString()}`
-            )
-            if (!response.ok) {
-              return {
-                success: false,
-                message: 'Failed to fetch Gravitas events',
-                error: `HTTP ${response.status}`,
-              }
-            }
-
-            const data = await response.json()
-            if (!data.data?.events) {
-              return {
-                success: false,
-                message: 'No events data found',
-                error: 'Invalid API response',
-              }
-            }
-
-            let events = data.data.events
-
-            // Apply filters
-            // If we already used the backend name filter, avoid over-filtering here.
-            const usedNameParam = Boolean(resolvedName && resolvedName.trim().length > 0)
-            if (searchQuery && !usedNameParam) {
-              // Normalize and expand aliases (e.g., c2c -> Code2Create)
-              const ALIASES: Record<string, string[]> = {
-                c2c: ['code2create', 'code 2 create', 'code to create'],
-                code2create: ['code2create', 'code 2 create', 'code to create', 'c2c'],
-                'code 2 create': ['code2create', 'code 2 create', 'code to create', 'c2c'],
-                'code to create': ['code2create', 'code 2 create', 'code to create', 'c2c'],
-                'code 2create': ['code2create', 'code 2 create', 'code to create', 'c2c'],
-                'code tocreate': ['code2create', 'code 2 create', 'code to create', 'c2c'],
-                'code2 create': ['code2create', 'code 2 create', 'code to create', 'c2c'],
-              }
-
-              const qNorm = normalizeString(searchQuery)
-              const tokens = qNorm.split(' ').filter(Boolean)
-              const seen = new Set<string>()
-              const expandedTerms: string[] = []
-
-              function addTerm(t: string) {
-                const tt = normalizeString(t)
-                if (tt && !seen.has(tt)) {
-                  seen.add(tt)
-                  expandedTerms.push(tt)
-                }
-              }
-
-              // Add the full query and its aliases
-              addTerm(qNorm)
-              if (ALIASES[qNorm]) {
-                ALIASES[qNorm].forEach(addTerm)
-              }
-
-              // Add token-level aliases too
-              for (const t of tokens) {
-                addTerm(t)
-                if (ALIASES[t]) {
-                  ALIASES[t].forEach(addTerm)
-                }
-              }
-
-              const matchesEvent = (ev: any) => {
-                const fields = [
-                  ev.name || '',
-                  ev.short_description || '',
-                  ev.description || '',
-                  ev.club || '',
-                  ev.type || '',
-                  ev.tagline || '',
-                ]
-                const hay = normalizeString(fields.join(' '))
-
-                // Direct substring match on any expanded term
-                if (expandedTerms.some(t => t && hay.includes(t))) return true
-
-                // Fallback: simple fuzzy check against event name/tagline
-                const name = normalizeString(ev.name || '')
-                const tag = normalizeString(ev.tagline || '')
-                return expandedTerms.some(t => {
-                  if (!t) return false
-                  // Levenshtein within small edit distance or prefix
-                  const dName = name && t ? getLevenshteinDistance(name, t) : 99
-                  const dTag = tag && t ? getLevenshteinDistance(tag, t) : 99
-                  return (
-                    (name && (name.includes(t) || t.includes(name) || dName <= 2)) ||
-                    (tag && (tag.includes(t) || t.includes(tag) || dTag <= 2))
-                  )
-                })
-              }
-
-              // Secondary client-side filter if backend did not use name param
-              events = events.filter((event: any) => matchesEvent(event))
-            }
-
-            if (eventType) {
-              const type = eventType.toLowerCase()
-              events = events.filter((event: any) => event.type.toLowerCase().includes(type))
-            }
-
-            if (category) {
-              const cat = category.toLowerCase()
-              events = events.filter((event: any) => event.category.toLowerCase().includes(cat))
-            }
-
-            const eventSummary = events.map((event: any) => ({
-              id: event.id,
-              name: event.name,
-              type: event.type,
-              category: event.category,
-              club: event.club,
-              tagline: event.tagline,
-              startDate: event.start_date,
-              endDate: event.end_date,
-              teamSize: event.team_size,
-              price: event.price_per_ticket,
-              scope: event.scope,
-              shortDescription: event.short_description,
-            }))
-
-            // If the API name param was used and we have exactly one match, fetch detailed info via /events/[id]
-            if (usedNameParam && eventSummary.length === 1) {
-              try {
-                const singleId = eventSummary[0].id
-                const det = await fetch(`https://gravitas.vit.ac.in/api/events/${singleId}`)
-                if (det.ok) {
-                  const dj = await det.json()
-                  const ev = dj?.data?.event
-                  const slots = dj?.data?.eventSlots || []
-                  if (ev) {
-                    let totalSeatsLeft = 0
-                    let registrationStatus = 'Closed'
-                    slots.forEach((slot: any) => {
-                      const left =
-                        slot.seats_left ??
-                        slot.available_entries ??
-                        slot.entries_left ??
-                        slot.remaining ??
-                        slot.remaining_entries ??
-                        slot.total_entries ??
-                        0
-                      totalSeatsLeft += Number(left) || 0
-                      if (slot.is_registrable) registrationStatus = 'Open'
-                    })
-
-                    return {
-                      success: true,
-                      event: {
-                        id: ev.id,
-                        name: ev.name,
-                        type: ev.type,
-                        category: ev.category,
-                        description: ev.description,
-                        club: ev.club,
-                        tagline: ev.tagline,
-                        startDate: ev.start_date,
-                        endDate: ev.end_date,
-                        teamSize: ev.team_size,
-                        price: ev.price_per_ticket,
-                        scope: ev.scope,
-                        image: ev.image,
-                        judgementCriteria: ev.judgement_criteria,
-                        rules: ev.rules_and_regulations,
-                        prizes: ev.prize_distribution,
-                      },
-                      seats: {
-                        totalRegistrations: totalSeatsLeft,
-                        registrationStatus,
-                        slots: slots.map((slot: any) => ({
-                          id: slot.id,
-                          venue: slot.venue,
-                          startDate: slot.start_date,
-                          endDate: slot.end_date,
-                          totalEntries: slot.total_entries,
-                          isRegistrable: slot.is_registrable,
-                          seatsLeft:
-                            slot.seats_left ??
-                            slot.available_entries ??
-                            slot.entries_left ??
-                            slot.remaining ??
-                            slot.remaining_entries ??
-                            slot.total_entries ??
-                            0,
-                        })),
-                      },
-                      totalEvents: 1,
-                      message: `Found 1 Gravitas event${searchQuery ? ` matching "${searchQuery}"` : ''}.`,
-                      filters: { searchQuery, eventType, category },
-                    }
-                  }
-                }
-              } catch (e) {
-                // fall back to summary return below
-              }
-            }
-
-            return {
-              success: true,
-              events: eventSummary,
-              totalEvents: eventSummary.length,
-              message: `Found ${eventSummary.length} Gravitas events${searchQuery ? ` matching "${searchQuery}"` : ''}${eventType ? ` of type "${eventType}"` : ''}${category ? ` in category "${category}"` : ''}.`,
-              filters: {
-                searchQuery,
-                eventType,
-                category,
-              },
-            }
-          }
-        } catch (error: any) {
-          return {
-            success: false,
-            message: 'Failed to fetch Gravitas events',
-            error: error.message || 'Network error',
-            suggestion: 'Check your internet connection and try again.',
-          }
-        }
-      },
-    }),*/
   }
 }
 

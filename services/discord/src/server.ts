@@ -53,7 +53,6 @@ class DiscordBotServer {
   }
 
   private setupRoutes(): void {
-    // Health check endpoint
     this.app.get('/health', (req, res) => {
       res.json({
         status: 'ok',
@@ -97,7 +96,6 @@ class DiscordBotServer {
           })
         }
 
-        // This would need to be implemented in the Discord service
         res.json({
           success: true,
           message: 'Message sent successfully',
@@ -111,7 +109,6 @@ class DiscordBotServer {
       }
     })
 
-    // Webhook endpoint for receiving updates from main app
     this.app.post('/api/webhook', (req, res) => {
       try {
         const { type, data } = req.body
@@ -136,7 +133,6 @@ class DiscordBotServer {
       }
     })
 
-    // Restart endpoint
     this.app.post('/api/discord/restart', async (req, res) => {
       try {
         console.log('Restarting Discord service...')
@@ -160,7 +156,6 @@ class DiscordBotServer {
       }
     })
 
-    // 404 handler
     this.app.use((req, res) => {
       res.status(404).json({
         error: 'Endpoint not found',
@@ -169,7 +164,6 @@ class DiscordBotServer {
       })
     })
 
-    // Error handler
     this.app.use(
       (error: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
         console.error('❌ Express error:', error)
@@ -278,7 +272,6 @@ class DiscordBotServer {
 
   private async handleSystemMessage(data: any): Promise<void> {
     console.log('System message received:', data)
-    // Handle system notifications here
   }
 
   async start(): Promise<void> {

@@ -1,17 +1,11 @@
 #!/usr/bin/env node
-/*
-  Dump every user table in the database to CSV files.
-  - Reads connection string from DATABASE_URL in .env
-  - Outputs to scripts/dump/<schema>.<table>.csv
-  - Uses CommonJS (require) and const
-*/
+
 
 const fs = require('fs')
 const path = require('path')
 const { Client } = require('pg')
 const dotenv = require('dotenv')
 
-// Load environment variables from .env at repository root
 dotenv.config({ path: path.resolve(process.cwd(), '.env') })
 
 const DATABASE_URL = process.env.DATABASE_URL
@@ -34,7 +28,6 @@ function csvEscape(value) {
   if (value instanceof Date) return value.toISOString()
   if (typeof value === 'object') {
     try {
-      // JSON encode objects/arrays
       value = JSON.stringify(value)
     } catch (e) {
       value = String(value)

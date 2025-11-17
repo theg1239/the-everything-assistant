@@ -15,9 +15,7 @@ import {
 } from 'recharts'
 
 export default function Overview({ stats, usage }: any) {
-  // Build a lifetime sparkline from available usage data. Prefer `usage.summaryAllTime` or fall back to recent history.
   const sparkData = useMemo(() => {
-    // Prefer server-provided lifetime buckets (aggregated daily/monthly)
     if (
       usage?.lifetimeBuckets &&
       Array.isArray(usage.lifetimeBuckets) &&
@@ -29,7 +27,6 @@ export default function Overview({ stats, usage }: any) {
         v: p.totalTokens,
       }))
     }
-    // If caller provided an aggregated history field, use it.
     if (usage?.summaryAllTime && Array.isArray(usage.summaryAllTime)) {
       return usage.summaryAllTime.map((p: any) => ({
         t: new Date(p.ts).toLocaleDateString(),
@@ -37,7 +34,6 @@ export default function Overview({ stats, usage }: any) {
       }))
     }
     if (!usage?.recent) return []
-    // Use entire recent history as a proxy for lifetime, reversed chronologically to show older -> newer
     return usage.recent
       .slice()
       .reverse()
@@ -55,7 +51,6 @@ export default function Overview({ stats, usage }: any) {
       .slice(0, 5)
   }, [usage])
 
-  // Derived statistics: avg, median, peak, 7-day trend (if we have daily buckets)
   const derived = useMemo(() => {
     const vals = (sparkData || [])
       .map((d: any) => Number(d.v || 0))
@@ -70,7 +65,6 @@ export default function Overview({ stats, usage }: any) {
     const peak = Math.max(...vals)
     const peakIndex = (sparkData || []).findIndex((d: any) => Number(d.v || 0) === peak)
     const peakTs = peakIndex >= 0 ? sparkData[peakIndex].ts : undefined
-    // last7d: compare last 7 points average vs previous 7 (if available)
     const last7 = vals.slice(-7)
     const prev7 = vals.slice(-14, -7)
     const last7Avg = last7.length

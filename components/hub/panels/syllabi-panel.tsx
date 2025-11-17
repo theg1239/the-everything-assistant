@@ -17,14 +17,10 @@ export default function SyllabiPanel() {
     await run({ query })
   }
 
-  // Support the new ambiguous result shape from getSyllabus:
-  // - single result: { filename, code, title, url }
-  // - ambiguous: { ambiguous: true, matches: [{ filename, code, title, url, score }, ...] }
   const syllabi = (() => {
     if (!result) return []
     if (Array.isArray(result.syllabi) && result.syllabi.length > 0) return result.syllabi
     if (result.ambiguous && Array.isArray(result.matches)) return result.matches
-    // some callers return the result object directly as a single syllabus
     if (result.filename || result.url || result.code || result.title) return [result]
     return []
   })()

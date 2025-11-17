@@ -25,7 +25,6 @@ const memoryKeys = {
   settings: () => ['memorySettings'] as const,
 }
 
-// Cache memories for 5 minutes
 const MEMORIES_STALE_TIME = 1000 * 60 * 5 // 5 minutes
 const MEMORIES_GC_TIME = 1000 * 60 * 15 // 15 minutes
 
@@ -161,7 +160,6 @@ interface MemorySettings {
   maxTokens: number
 }
 
-// Cache memory settings for 10 minutes
 const MEMORY_SETTINGS_STALE_TIME = 1000 * 60 * 10 // 10 minutes
 const MEMORY_SETTINGS_GC_TIME = 1000 * 60 * 30 // 30 minutes
 
@@ -181,11 +179,8 @@ export function useMemorySettings() {
     enabled: hasSession,
     staleTime: MEMORY_SETTINGS_STALE_TIME,
     gcTime: MEMORY_SETTINGS_GC_TIME,
-    // Only refetch when the window regains focus if data is stale
     refetchOnWindowFocus: false,
-    // Don't retry failed fetches too aggressively
     retry: 1,
-    // Keep previous data while refetching
     placeholderData: previousData => previousData,
   })
 }

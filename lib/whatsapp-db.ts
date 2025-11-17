@@ -266,7 +266,6 @@ export async function getWhatsAppStats(days: number = 7): Promise<{
         },
       }),
 
-      // Daily message counts
       prisma.$queryRaw`
         SELECT DATE(created_at) as date, COUNT(*) as count
         FROM whatsapp_messages 

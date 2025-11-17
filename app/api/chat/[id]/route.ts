@@ -24,7 +24,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         role: msg.role,
         content: msg.content,
         toolInvocations: msg.toolInvocations,
-        // Convert toolInvocations to parts format for new API compatibility
         parts:
           msg.toolInvocations && msg.toolInvocations.length > 0
             ? [

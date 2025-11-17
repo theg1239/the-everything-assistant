@@ -50,7 +50,7 @@ export function ResponsiveTable({
 
   return (
     <div className={cn('w-full overflow-hidden', className)}>
-      {/* Desktop view - full table */}
+
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
@@ -91,7 +91,7 @@ export function ResponsiveTable({
         </table>
       </div>
 
-      {/* Mobile view - card-based layout */}
+
       <div className="md:hidden space-y-3">
         {data.map((row, rowIndex) => {
           const isExpanded = expandedRows[rowIndex] || false

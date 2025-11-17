@@ -159,7 +159,6 @@ export class DbOptimizations {
         },
       }),
 
-      // Archive very old chats with no recent activity
       prisma.chat.updateMany({
         where: {
           updated_at: { lt: cutoffDate },

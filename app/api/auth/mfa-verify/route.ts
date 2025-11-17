@@ -19,12 +19,6 @@ export async function POST(request: Request) {
     }
 
     const { code, backupCode } = await request.json()
-    // console.log('MFA Verify Request:', {
-    //   hasCode: !!code,
-    //   hasBackupCode: !!backupCode,
-    //   codeLength: code?.length,
-    //   backupCodeLength: backupCode?.length,
-    // })
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
@@ -36,12 +30,6 @@ export async function POST(request: Request) {
         backupCodes: true,
       },
     })
-    // console.log('User MFA Status:', {
-    //   mfaEnabled: user?.mfaEnabled,
-    //   mfaMethod: user?.mfaMethod,
-    //   hasSecret: !!user?.mfaSecret,
-    //   backupCodeCount: user?.backupCodes?.length,
-    // })
 
     if (!user || !user.mfaEnabled) {
       return NextResponse.json({ error: 'MFA not enabled' }, { status: 400 })
@@ -50,15 +38,11 @@ export async function POST(request: Request) {
     let message = ''
 
     if (backupCode) {
-      // console.log('Verifying backup code...')
       const hashedBackupCodes = user.backupCodes
-      // console.log('Available backup codes count:', hashedBackupCodes.length)
 
       const isValidBackupCode = verifyBackupCode(backupCode, hashedBackupCodes)
-      // console.log('Backup code verification result:', isValidBackupCode)
 
       if (isValidBackupCode) {
-        // console.log('Backup code verified successfully')
         isValid = true
 
         const hashedInput = require('crypto')
@@ -75,16 +59,11 @@ export async function POST(request: Request) {
         const remainingCodes = updatedBackupCodes.length
         message = `Backup code used successfully. ${remainingCodes} backup codes remaining.`
       } else {
-        // console.log('Backup code verification failed')
       }
     } else if (code) {
-      // console.log('Verifying authenticator code...')
       if (user.mfaMethod === 'authenticator' && user.mfaSecret) {
-        // console.log('MFA Secret exists, verifying TOTP...')
         isValid = verifyTOTP(code, user.mfaSecret)
-        // console.log('TOTP verification result:', isValid)
       } else if (user.mfaMethod === 'email') {
-        // console.log('Email MFA detected')
         return NextResponse.json(
           { error: 'Email MFA verification not yet implemented for login' },
           { status: 400 }
@@ -95,12 +74,9 @@ export async function POST(request: Request) {
           { status: 400 }
         )
       } else {
-        // console.log('No valid MFA method found')
       }
     } else {
-      // console.log('No code or backup code provided')
     }
-    // console.log('Final validation - isValid:', isValid)
 
     if (!isValid) {
       return NextResponse.json({ error: 'Invalid verification code' }, { status: 400 })

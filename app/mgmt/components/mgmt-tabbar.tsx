@@ -58,9 +58,9 @@ export default function MgmtTabBar({ active, onChange }: any) {
               className={`${base} ${isActive ? activeClasses : inactiveClasses} px-3 py-2 min-w-[96px] sm:min-w-[120px]`}
             >
               <Icon className={'w-4 h-4 ' + (isActive ? 'text-white' : 'text-muted-foreground')} />
-              {/* hide full label on very small sm screens, show on md+ */}
+
               <span className="text-sm hidden md:inline">{t.label}</span>
-              {/* show small label under icon for sm screens if needed */}
+
               <span className="text-xs md:hidden inline">{t.label.split(' ')[0]}</span>
             </Button>
           )

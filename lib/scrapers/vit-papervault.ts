@@ -6,13 +6,10 @@ export async function scrapeVITPaperVault(courseCode: string, examType?: string,
   try {
     const apiResult = await tryVITVaultListAPI(courseCode, examType, year)
 
-    // ALWAYS return API result if successful, even with 0 papers
-    // Only fall back to browser scraping if API completely fails (network error, etc.)
     if (apiResult.success) {
       return apiResult
     }
 
-    // Only use browser scraping as absolute last resort when API fails
     console.log('[vitpapervault] API failed, falling back to browser scraping')
     return await tryBrowserScraping(courseCode, examType, year)
   } catch (error: any) {
@@ -70,7 +67,6 @@ async function tryVITVaultListAPI(courseCode: string, examType?: string, year?: 
       year: new Date(p.paperDate).getUTCFullYear().toString(),
     }))
 
-    // Always return success if API responds, even with 0 results after filtering
     return {
       success: true,
       papers: papers.slice(0, 100),
@@ -79,7 +75,6 @@ async function tryVITVaultListAPI(courseCode: string, examType?: string, year?: 
     }
   } catch (err) {
     console.warn('List API failed (network/parse error), falling back:', err)
-    // Only return false on actual network/API errors
     return { success: false, papers: [] }
   }
 }

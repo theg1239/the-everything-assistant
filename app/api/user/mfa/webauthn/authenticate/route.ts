@@ -19,7 +19,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Try to parse JSON body, but handle empty body for options generation
     let requestBody: any = {}
     try {
       const text = await request.text()
@@ -27,17 +26,14 @@ export async function POST(request: NextRequest) {
         requestBody = JSON.parse(text)
       }
     } catch (parseError) {
-      // Empty body is fine for options generation
     }
 
     const { credential } = requestBody
 
-    // If no credential is provided, generate authentication options
     if (!credential) {
       return await generateAuthOptions(session.user.email)
     }
 
-    // If credential is provided, verify authentication
     return await verifyAuthCredential(credential, session.user.email, request)
   } catch (err: any) {
     console.error('🔐 WebAuthn authentication error:', err)
@@ -65,7 +61,6 @@ async function generateAuthOptions(userEmail: string) {
     return NextResponse.json({ error: 'WebAuthn not enabled for this user' }, { status: 400 })
   }
 
-  // Generate authentication options
   const options = await generateAuthenticationOptions({
     rpID:
       process.env.NODE_ENV === 'production'
@@ -82,7 +77,6 @@ async function generateAuthOptions(userEmail: string) {
     })),
   })
 
-  // Store challenge for later verification
   await prisma.user.update({
     where: { id: user.id },
     data: {
@@ -162,7 +156,6 @@ async function verifyAuthCredential(credential: any, userEmail: string, request:
     clientExtensionResults: credential.clientExtensionResults || {},
   }
 
-  // Filter transports down to the spec-defined set
   const filteredTransports: AuthenticatorTransport[] = stored.transports.filter(
     (t): t is AuthenticatorTransport => VALID_TRANSPORTS.includes(t as AuthenticatorTransport)
   )

@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
 import {
   Eye,
   EyeOff,
@@ -35,7 +34,6 @@ export function VTOPSettings({ className }: VTOPSettingsProps) {
   const [showPassword, setShowPassword] = useState(false)
   const [isLinking, setIsLinking] = useState(false)
   const [showLinkForm, setShowLinkForm] = useState(false)
-  const [autoLogin, setAutoLogin] = useState(true)
 
   useEffect(() => {
     checkLinkStatus()
@@ -62,14 +60,12 @@ export function VTOPSettings({ className }: VTOPSettingsProps) {
     setIsLinking(true)
 
     try {
-      // Save credentials directly - validation will happen on first use
       saveVTOPCredentials(username.trim(), password.trim())
       setIsLinked(true)
       setShowLinkForm(false)
       setPassword('')
       toast.success('VTOP credentials linked successfully!')
 
-      // Dispatch event to notify other components
       window.dispatchEvent(
         new CustomEvent('vtopCredentialsLinked', {
           detail: { username: username.trim() },
@@ -91,7 +87,6 @@ export function VTOPSettings({ className }: VTOPSettingsProps) {
     setShowLinkForm(false)
     toast.success('VTOP credentials unlinked successfully')
 
-    // Dispatch event to notify other components
     window.dispatchEvent(new CustomEvent('vtopCredentialsUnlinked'))
   }
 
@@ -99,8 +94,6 @@ export function VTOPSettings({ className }: VTOPSettingsProps) {
     if (!isLinked) return
 
     toast.info('Testing credentials... This will be validated on your next VTOP query.')
-
-    // We don't have a separate API, so just validate the stored credentials exist
     const valid = validateSavedCredentials()
     if (valid) {
       toast.success('Linked credentials are ready for use!')
@@ -138,20 +131,6 @@ export function VTOPSettings({ className }: VTOPSettingsProps) {
               <Shield className="h-5 w-5 text-green-500" />
             </div>
           </div>
-
-          {/* <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="auto-login">automatic VTOP login</Label>
-              <Switch
-                id="auto-login"
-                checked={autoLogin}
-                onCheckedChange={setAutoLogin}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              when enabled, VTOP queries will use your saved credentials automatically
-            </p>
-          </div> */}
 
           <div className="flex space-x-2">
             <Button variant="outline" size="sm" onClick={handleTestCredentials}>

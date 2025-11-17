@@ -91,13 +91,10 @@ export async function scrapePapersCodeChef(
       error: apiResult.error,
     })
 
-    // ALWAYS return API result if successful, even with 0 papers
-    // Only fall back to browser scraping if API completely fails (network error, etc.)
     if (apiResult.success) {
       return apiResult
     }
 
-    // Only use browser scraping as absolute last resort when API fails
     dbg('API failed, falling back to browser scraping')
     return await tryBrowserScraping(courseCode, examType, year)
   } catch (error) {
@@ -204,7 +201,6 @@ async function tryAPIApproach(
               }
             }
 
-            // If finalUrl is not available or invalid, skip this paper
             if (!finalUrlCandidate || !isValid) {
               if (!finalUrlCandidate) skippedNoFinalUrl++
               return null
@@ -301,7 +297,6 @@ async function tryAPIApproach(
       const papersArray = Array.isArray(codeData) ? codeData : codeData.papers || []
       dbg('api returned items (codeOnly)', papersArray.length)
 
-      // Always return success if API responds, even with 0 results
       if (papersArray) {
         let skippedNoFinalUrl = 0
         let headFailCount = 0
@@ -359,7 +354,6 @@ async function tryAPIApproach(
               }
             }
 
-            // If finalUrl is not available or invalid, skip this paper
             if (!finalUrlCandidate || !isValid) {
               if (!finalUrlCandidate) skippedNoFinalUrl++
               return null
@@ -410,12 +404,10 @@ async function tryAPIApproach(
       })
     }
 
-    // Return success even with no papers - API responded correctly
     dbg('API approached completed, returning 0 papers')
     return { success: true, papers: [], source: 'papers.codechefvit.com' }
   } catch (error) {
     console.error('API approach error:', error)
-    // Only return false on actual network/API errors
     return { success: false, papers: [], source: 'papers.codechefvit.com' }
   }
 }
@@ -474,7 +466,6 @@ async function tryBrowserScraping(
           const meta = metaElement?.textContent?.trim()
 
           if (title && href && title.length > 5) {
-            // Remove "Select" suffix from title
             const cleanTitle = title.replace(/Select$/, '').trim()
 
             const titleLower = cleanTitle.toLowerCase()
@@ -541,7 +532,6 @@ async function tryBrowserScraping(
     dbg('initial scraped paper cards', papers.length)
     const papersWithFinalUrls: Paper[] = []
 
-    // Process papers sequentially to prevent browser resource exhaustion
     for (const paper of papers) {
       if (paper.url.includes('.pdf') || paper.url.includes('cloudinary.com')) {
         papersWithFinalUrls.push(paper)
@@ -610,7 +600,6 @@ async function tryBrowserScraping(
 async function extractFinalUrlFromPaperPage(paperPageUrl: string): Promise<string | null> {
   let browser
   try {
-    // Add small delay to prevent resource exhaustion
     await new Promise(resolve => setTimeout(resolve, 200)) // Reduced from 500ms
 
     browser = await puppeteer.launch({

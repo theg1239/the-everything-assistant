@@ -274,7 +274,6 @@ export default function CustomBackground() {
             const data = await response.json()
             const prefs = data.preferences
 
-            // Handle legacy aurora preference
             if (prefs.auroraBackground !== undefined) {
               setBackgroundConfig({
                 ...defaultBackgroundConfig,

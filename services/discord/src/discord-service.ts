@@ -52,7 +52,6 @@ class DiscordService extends EventEmitter {
   private rateLimits: Map<string, { count: number; resetTime: number }>
   private recentBotMessages: Set<string>
 
-  // Slash commands
   private slashCommands: Collection<string, any>
 
   constructor(token: string, ownerId: string) {
@@ -87,7 +86,6 @@ class DiscordService extends EventEmitter {
   }
 
   private setupSlashCommands(): void {
-    // Define slash commands
     const commands = [
       new SlashCommandBuilder()
         .setName('ask')
@@ -101,7 +99,6 @@ class DiscordService extends EventEmitter {
         .setDescription('show available commands and help information'),
     ]
 
-    // Store commands in collection
     commands.forEach(command => {
       this.slashCommands.set(command.name, command)
     })
@@ -114,13 +111,11 @@ class DiscordService extends EventEmitter {
       const commands = this.slashCommands.map(command => command.toJSON())
 
       if (guildId) {
-        // Register for specific guild (faster for testing)
         await this.rest.put(Routes.applicationGuildCommands(this.client.user!.id, guildId), {
           body: commands,
         })
         console.log(`registered ${commands.length} slash commands for guild ${guildId}`)
       } else {
-        // Register globally (takes up to 1 hour to propagate)
         await this.rest.put(Routes.applicationCommands(this.client.user!.id), { body: commands })
         console.log(`registered ${commands.length} slash commands globally`)
       }
@@ -135,7 +130,6 @@ class DiscordService extends EventEmitter {
       this.isReady = true
       this.startContextCleanup()
 
-      // Register slash commands globally on startup
       await this.registerSlashCommands()
 
       this.emit('ready')
@@ -144,7 +138,6 @@ class DiscordService extends EventEmitter {
     this.client.on('guildCreate', async (guild: Guild) => {
       console.log(`joined new server: ${guild.name} (${guild.id})`)
 
-      // Register slash commands for the new guild immediately
       await this.registerSlashCommands(guild.id)
     })
 
@@ -193,7 +186,6 @@ class DiscordService extends EventEmitter {
 
     console.log(`processing slash command: /${commandName} from ${user.tag}`)
 
-    // Check rate limiting for non-owners
     if (!this.isOwner(user.id) && this.isRateLimited(user.id)) {
       await interaction.reply({
         content: 'you are being rate limited. please wait before using another command.',
@@ -202,7 +194,6 @@ class DiscordService extends EventEmitter {
       return
     }
 
-    // Update rate limiting
     if (!this.isOwner(user.id)) {
       this.updateRateLimit(user.id)
     }
@@ -244,7 +235,6 @@ class DiscordService extends EventEmitter {
     try {
       console.log(`processing ai request from ${interaction.user.tag}: ${question}`)
 
-      // Check for VTOP keywords
       const vtopKeywords = [
         'vtop',
         'grades',
@@ -274,10 +264,8 @@ class DiscordService extends EventEmitter {
         return
       }
 
-      // Defer reply since AI processing might take time
       await interaction.deferReply()
 
-      // Get conversation context
       const conversationHistory = this.getContext(interaction.user.id)
       console.log(
         `found ${conversationHistory.length} messages in conversation history for ${interaction.user.tag}`
@@ -285,7 +273,6 @@ class DiscordService extends EventEmitter {
 
       const startTime = Date.now()
 
-      // Create a mock message data for compatibility with existing handler
       const messageData: MessageData = {
         id: interaction.id,
         content: `/ask ${question}`,
@@ -397,22 +384,17 @@ class DiscordService extends EventEmitter {
 
       let formattedResponse = this.formatResponseForDiscord(response)
 
-      // Smart routing: owner gets responses in same channel, others get DMs for long responses
       const isLongResponse = formattedResponse.length > 1500
       const isOwner = this.isOwner(interaction.user.id)
       const isInGuild = !!interaction.guild
 
       if (isLongResponse && isInGuild && !isOwner) {
-        // Long responses in servers go to DM (but not for owner)
         await interaction.editReply(`sent a detailed response to ${interaction.user.tag} in dm.`)
         await interaction.user.send(formattedResponse)
       } else {
-        // Short responses, DM conversations, or owner messages stay in current channel
         if (formattedResponse.length > 2000) {
-          // Split long messages for Discord's 2000 character limit
           await interaction.editReply(formattedResponse.substring(0, 2000))
 
-          // Send remaining parts as follow-ups
           const remainingText = formattedResponse.substring(2000)
           const chunks = this.chunkMessage(remainingText, 2000)
 
@@ -447,13 +429,10 @@ class DiscordService extends EventEmitter {
   }
 
   private async handleIncomingMessage(message: Message): Promise<void> {
-    // Skip bot messages and system messages
     if (message.author.bot || message.system) return
 
-    // Only log messages for context, no command processing
     console.log(`message from ${message.author.tag}: ${message.content.substring(0, 100)}...`)
 
-    // Store message in context for conversation history
     this.addToContext(message.author.id, message.content, message.author.bot)
   }
 
@@ -847,10 +826,8 @@ Keep the response concise but informative.`
     formatted = formatted.replace(/\*(.*?)\*/g, '*$1*') // Italic
     formatted = formatted.replace(/`([^`]+)`/g, '`$1`') // Inline code
 
-    // Handle code blocks
     formatted = formatted.replace(/```([\s\S]*?)```/g, '```$1```')
 
-    // Clean up excessive newlines
     formatted = formatted.replace(/\n{3,}/g, '\n\n')
 
     return formatted.trim()
@@ -882,7 +859,6 @@ Keep the response concise but informative.`
         }
 
         if (line.length > maxLength) {
-          // Split very long lines
           const words = line.split(' ')
           let currentLine = ''
 

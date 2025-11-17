@@ -66,7 +66,6 @@ export default function Hub({
     setMounted(true)
   }, [])
 
-  // Lock background scroll and enable Esc to close while open
   useEffect(() => {
     if (!mounted) return
     const prevOverflow = document.body.style.overflow

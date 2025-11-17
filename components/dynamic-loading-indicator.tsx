@@ -152,7 +152,6 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
     description: 'Creating code solution',
   },
 
-  // Document and file tools
   createDocument: {
     name: 'Document Creation',
     icon: FileText,
@@ -167,7 +166,6 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
     description: 'Processing document content',
   },
 
-  // API and external service tools
   apiCall: {
     name: 'API Call',
     icon: Cloud,
@@ -175,7 +173,6 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
     description: 'Connecting to external service',
   },
 
-  // Math and calculation tools
   calculate: {
     name: 'Calculator',
     icon: Calculator,
@@ -183,7 +180,6 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
     description: 'Performing calculations',
   },
 
-  // Research and learning tools
   research: {
     name: 'Research',
     icon: BookOpen,
@@ -191,7 +187,6 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
     description: 'Gathering information',
   },
 
-  // Memory and context tools
   saveMemory: {
     name: 'Memory',
     icon: Brain,
@@ -206,7 +201,6 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
     description: 'Retrieving stored information',
   },
 
-  // Communication tools
   sendEmail: {
     name: 'Email',
     icon: Mail,
@@ -214,7 +208,6 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
     description: 'Composing and sending email',
   },
 
-  // Calendar and scheduling
   checkCalendar: {
     name: 'Calendar',
     icon: Calendar,
@@ -222,7 +215,6 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
     description: 'Accessing schedule information',
   },
 
-  // Default fallback
   default: {
     name: 'Processing',
     icon: Settings,
@@ -286,7 +278,6 @@ export function DynamicLoadingIndicator({
       if (message.toolInvocations) {
         for (const inv of message.toolInvocations) {
           if (inv.toolName === 'smartPaperSearch') {
-            // Check if this is an active call (no result yet)
             if (inv.state === 'call' && !inv.result) {
               foundActiveCall = true
               console.log(`[DLI] Found active smartPaperSearch call:`, inv)
@@ -560,18 +551,12 @@ export function DynamicLoadingIndicator({
         </div>
         <div className="flex flex-col">
           <span className="text-sm font-medium">{primaryMessage}</span>
-          {/* {paperStatus && (
-            <span className="text-[10px] text-muted-foreground mt-0.5">
-              RunId: {paperStatus.runId.slice(-6)} | Steps: {paperStatus.steps.length} | Last: {paperStatus.lastStep || 'none'}
-            </span>
-          )} */}
         </div>
       </div>
     </motion.div>
   )
 }
 
-// Helper function to get tool name from messages for external use
 export function getCurrentActiveTool(messages: any[]): string | null {
   if (messages.length === 0) return null
 
@@ -582,7 +567,6 @@ export function getCurrentActiveTool(messages: any[]): string | null {
       return tool.state === 'call' || tool.state !== 'result' || !tool.result
     })
 
-    // Sort by priority
     activeTools.sort((a: any, b: any) => {
       const priorities: Record<string, number> = {
         queryVTOP: 10,

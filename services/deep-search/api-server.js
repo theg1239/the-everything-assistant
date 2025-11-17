@@ -9,13 +9,11 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
-// Log every incoming request and its payload
 app.use((req, res, next) => {
   console.log(`[Request] ${req.method} ${req.url} - Body: ${JSON.stringify(req.body)}`)
   next()
 })
 
-// Intercept res.json to log every response payload
 app.use((req, res, next) => {
   const oldJson = res.json
   res.json = function (data) {
@@ -321,17 +319,5 @@ app.use((err, req, res, next) => {
   })
 })
 
-// Uncomment and configure your port when ready to run
-// const port = process.env.PORT || 3002
-// app.listen(port, () => {
-//   console.log(`Knowledge API server running on port ${port}`)
-//   console.log('Available endpoints:')
-//   console.log('  GET  /health')
-//   console.log('  POST /api/search')
-//   console.log('  POST /api/ask')
-//   console.log('  GET  /api/stats')
-//   console.log('  GET  /api/trending')
-//   console.log('  POST /api/compare')
-// })
 
 module.exports = app

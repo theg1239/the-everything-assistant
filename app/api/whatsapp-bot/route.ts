@@ -61,19 +61,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { messages, message, source, userContext, userId, conversationHistory } = body
 
-    // Handle different request formats
     let processedMessages: any[] = []
     let userMessage: string = ''
     let requestSource = source || 'whatsapp'
     let userInfo: any = {}
 
     if (message && typeof message === 'string') {
-      // Discord format: { message, source: 'discord', userId, conversationHistory }
       userMessage = message
       requestSource = source || 'discord'
       userInfo = { userId, userName: userContext?.username }
 
-      // Convert conversation history to messages format
       if (conversationHistory && Array.isArray(conversationHistory)) {
         processedMessages = conversationHistory.map((msg: any) => ({
           role: msg.role,
@@ -88,7 +85,6 @@ export async function POST(request: NextRequest) {
         id: `${requestSource}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       })
     } else if (messages && Array.isArray(messages) && messages.length > 0) {
-      // WhatsApp format: { messages, source: 'whatsapp', userContext }
       processedMessages = messages
       const lastMessage = messages[messages.length - 1]
 
@@ -109,10 +105,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get or create user for this bot request
     const user = await getOrCreateBotUser(requestSource, userInfo.userId, userInfo.userName)
 
-    // Create a simple session-like object for the bot user
     const fakeSession = {
       user: {
         id: user.id,
@@ -121,7 +115,6 @@ export async function POST(request: NextRequest) {
       },
     }
 
-    // Import the chat processing logic
     const { rateLimitedAI } = await import('@/lib/rate-limited-ai')
     const { createVITTools } = await import('@/lib/tools')
     const { VIT_SYSTEM_PROMPT } = await import('@/lib/prompts')
@@ -159,7 +152,6 @@ ${memories
 
     const tools = createVITTools(user.id)
 
-    // Create context-specific system prompt
     const contextPrompt =
       requestSource === 'whatsapp'
         ? `<whatsapp_context>
@@ -197,7 +189,6 @@ CRITICAL TOOL CONTINUATION RULES:
       tagName: 'reasoning',
     })
 
-    // Process the request through the AI system
     const resultStream = await rateLimitedAI.google.streamText(
       {
         model: await rateLimitedAI.google.model('gemini-flash-latest'),
@@ -233,7 +224,6 @@ CRITICAL TOOL CONTINUATION RULES:
       user.id
     )
 
-    // Return the streaming response
     return resultStream.toTextStreamResponse({
       headers: {
         'X-Source': requestSource,
@@ -262,10 +252,8 @@ CRITICAL TOOL CONTINUATION RULES:
   }
 }
 
-// Health check endpoint for bot services
 export async function GET(request: NextRequest) {
   try {
-    // Validate API key
     if (!validateAPIKey(request)) {
       return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
     }

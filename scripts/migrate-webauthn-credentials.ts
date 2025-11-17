@@ -1,9 +1,6 @@
 #!/usr/bin/env npx tsx
 
-/**
- * Migration script to convert WebAuthn credential IDs from base64 to base64url format
- * Run this script once to update existing credentials
- */
+
 
 import { PrismaClient } from '@prisma/client'
 

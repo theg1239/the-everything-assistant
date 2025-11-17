@@ -62,7 +62,6 @@ export function BroadcastDialog({ isOpen, onClose, payload }: BroadcastDialogPro
     onClose()
   }
 
-  // Touch handlers for swipe support
   const onTouchStart = (e: React.TouchEvent) => {
     setTouchEnd(null)
     setTouchStart(e.targetTouches[0].clientX)
@@ -87,7 +86,6 @@ export function BroadcastDialog({ isOpen, onClose, payload }: BroadcastDialogPro
     }
   }
 
-  // Updated chevron navigation based on OnboardingDialog approach
   const ChevronNavigation = () => {
     if (!isMounted || slides.length <= 1 || !isOpen) return null
 

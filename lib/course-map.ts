@@ -1,103 +1,81 @@
 export const COURSE_ACRONYMS: { [key: string]: string[] } = {
-  // Data Structures and Algorithms
   DSA: ['BCSE202L', 'BITE201L', 'ISWE102L', 'CSI2002'],
   'DATA STRUCTURES': ['BCSE202L', 'BITE201L', 'ISWE102L', 'CSI2002'],
   ALGORITHMS: ['BCSE202L', 'BCSE204L', 'CSI2003'],
 
-  // Digital System Design
   DSD: ['BECE102L'],
   'DIGITAL DESIGN': ['BECE102L'],
 
   'Artificial Intelligence': ['BCSE306L'],
 
-  // Operating Systems
   OS: ['BCSE303L', 'BITE303L', 'ISWE204L'],
   'OPERATING SYSTEM': ['BCSE303L', 'BITE303L', 'ISWE204L'],
 
-  // Database Systems
   DBMS: ['BCSE302L', 'BITE302L', 'ISWE103L'],
   DATABASE: ['BCSE302L', 'BITE302L', 'ISWE103L'],
 
-  // Computer Networks
   CN: ['BCSE308L', 'BITE305L', 'UCSC203L'],
   NETWORKS: ['BCSE308L', 'BITE305L', 'UCSC203L'],
   'COMPUTER NETWORKS': ['BCSE308L', 'BITE305L', 'UCSC203L'],
 
-  // Software Engineering
   SE: ['BCSE301L', 'BITE307L', 'ISWE101L'],
   'SOFTWARE ENGINEERING': ['BCSE301L', 'BITE307L', 'ISWE101L'],
 
-  // Machine Learning
   ML: ['BCSE209L', 'BITE410L', 'CSE4020'],
   'MACHINE LEARNING': ['BCSE209L', 'BITE410L', 'CSE4020'],
 
   AI: ['BCSE306L', 'BITE308L', 'BMEE407L', 'CBS3004'],
   'ARTIFICIAL INTELLIGENCE': ['BCSE306L', 'BITE308L', 'BMEE407L', 'CBS3004'],
 
-  // Computer Architecture
   CA: ['BCSE205L', 'BITE301L', 'ISWE301L', 'CBS1004'],
   'COMPUTER ARCHITECTURE': ['BCSE205L', 'BITE301L', 'ISWE301L', 'CBS1004'],
   COA: ['BCSE205L', 'BITE301L', 'ISWE301L', 'CBS1004'],
 
-  // Theory of Computation
   TOC: ['BCSE304L', 'BITE306L', 'ISWE203L'],
   'THEORY OF COMPUTATION': ['BCSE304L', 'BITE306L', 'ISWE203L'],
 
-  // Compiler Design
   CD: ['BCSE307L', 'CSI2005'],
   COMPILER: ['BCSE307L', 'CSI2005'],
   'COMPILER DESIGN': ['BCSE307L', 'CSI2005'],
 
-  // Web Technologies
   WT: ['BITE304L', 'ISWE206L'],
   'WEB TECH': ['BITE304L', 'ISWE206L'],
   'WEB TECHNOLOGIES': ['BITE304L', 'ISWE206L'],
 
-  // Data Mining
   DM: ['BCSE208L', 'BITE312E'],
   'DATA MINING': ['BCSE208L', 'BITE312E'],
 
-  // Cryptography and Network Security
   CNS: ['BCSE309L', 'BECE411L'],
   CRYPTOGRAPHY: ['BCSE309L', 'BECE411L'],
   'NETWORK SECURITY': ['BCSE309L', 'BECE411L'],
 
-  // Digital Signal Processing
   DSP: ['BECE301L'],
   'SIGNAL PROCESSING': ['BECE301L', 'BEVD203L'],
 
-  // VLSI Design
   VLSI: ['BECE303L'],
   'VLSI DESIGN': ['BECE303L'],
 
-  // Object Oriented Programming
   OOP: ['BCSE102L', 'ICSE102L'],
   OOPS: ['BCSE102L', 'ICSE102L'],
   'OBJECT ORIENTED': ['BCSE102L', 'ICSE102L', 'BITE404E'],
 
-  // Human Computer Interaction
   HCI: ['BITE311L'],
   'HUMAN COMPUTER INTERACTION': ['BITE311L'],
 
-  // Information Security
   IS: ['BCSE317L', 'CBS3002'],
   'INFO SEC': ['BCSE317L', 'CBS3002'],
   'INFORMATION SECURITY': ['BCSE317L', 'CBS3002'],
 
-  // Big Data Analytics
   BDA: ['BCSE402L', 'BITE411L'],
   'BIG DATA': ['BCSE402L', 'BITE411L'],
 
-  // Internet of Things
   IOT: ['BCSE401L', 'BITE403L'],
   'INTERNET OF THINGS': ['BCSE401L', 'BITE403L'],
 
-  // Cloud Computing
   CC: ['BITE412L', 'SWE4002'],
   CLOUD: ['BITE412L', 'SWE4002', 'BMEE355L', 'BECE355L'],
   'CLOUD COMPUTING': ['BITE412L', 'SWE4002'],
 
-  // Mathematics shortcuts
   CALC: ['BMAT101L', 'IMAT101L'],
   CALCULUS: ['BMAT101L', 'IMAT101L'],
   'LINEAR ALGEBRA': ['BMAT201L', 'BMAT203L', 'UMAT201L', 'IMAT201L'],
@@ -106,33 +84,27 @@ export const COURSE_ACRONYMS: { [key: string]: string[] } = {
   STATISTICS: ['BMAT202L', 'MAT2001', 'TMAT201L'],
   'DISCRETE MATH': ['BMAT205L', 'MAT1014'],
 
-  // Physics shortcuts
   PHYSICS: ['BPHY101L', 'IPHY101L'],
   QUANTUM: ['BPHY203L'],
   MECHANICS: ['BPHY202L', 'BMEE201L'],
 
-  // Chemistry shortcuts
   CHEMISTRY: ['BCHY101L', 'ICHY101L'],
   CHEM: ['BCHY101L', 'ICHY101L'],
 
-  // Electronics shortcuts
   ELECTRONICS: ['BEEE102L', 'IEEE102L'],
   ANALOG: ['BECE206L', 'BECE304L'],
   DIGITAL: ['BEEE206L', 'BECE102L'],
   MICROPROCESSOR: ['BECE204L', 'ISWE201L'],
   MICRO: ['BECE204L', 'ISWE201L'],
 
-  // Management shortcuts
   MANAGEMENT: ['BMGT101L'],
   ENTREPRENEURSHIP: ['BMGT108L', 'CFOC508M'],
 
-  // Language shortcuts
   ENGLISH: ['BENG101L', 'IENG101L'],
   COMMUNICATION: ['BENG101L', 'IENG101L', 'BHUM201L'],
 }
 
 export const COURSE_MAP: { [key: string]: string } = {
-  // Mathematics courses
   BMAT101L: 'Calculus',
   BMAT102L: 'Differential Equations and Transforms',
   BMAT201L: 'Complex Variables and Linear Algebra',
@@ -149,7 +121,6 @@ export const COURSE_MAP: { [key: string]: string } = {
   TMAT201L: 'Probability and Statistics',
   BMAT100L: 'Mathematics',
 
-  // Computer Science courses
   BCSE101E: 'Computer Programming: Python',
   BCSE102L: 'Structured and Object-Oriented Programming',
   BCSE102P: 'Structured and Object-Oriented Programming Lab',
@@ -215,7 +186,6 @@ export const COURSE_MAP: { [key: string]: string } = {
   ISWE301L: 'Computer Architecture and Organization',
   TCSE207L: 'Computer Programming: Python',
 
-  // Information Technology courses
   BITE101N: 'Introduction to Engineering',
   BITE201L: 'Data Structures and Algorithms',
   BITE201P: 'Data Structures and Algorithms Lab',
@@ -262,7 +232,6 @@ export const COURSE_MAP: { [key: string]: string } = {
   BITE414L: 'Blockchain Technology',
   BITE415L: 'Engineering Optimization',
 
-  // Physics courses
   BPHY101L: 'Engineering Physics',
   BPHY101P: 'Engineering Physics Lab',
   BPHY201L: 'Optics',
@@ -275,20 +244,17 @@ export const COURSE_MAP: { [key: string]: string } = {
   BPHY404L: 'Statistical Mechanics',
   IPHY101L: 'Engineering Physics',
 
-  // Chemistry courses
   BCHY101L: 'Engineering Chemistry',
   BCHY101P: 'Engineering Chemistry Lab',
   BCHY102N: 'Environmental Sciences',
   ICHY101L: 'Engineering Chemistry',
 
-  // English courses
   BENG101L: 'Technical English Communication',
   BENG101P: 'Technical English Communication Lab',
   BENG101N: 'Effective English Communication',
   BENG102P: 'Technical Report Writing',
   IENG101L: 'Technical English Communication',
 
-  // Electrical and Electronics courses
   BEEE102L: 'Basic Electrical and Electronics Engineering',
   BEEE102P: 'Basic Electrical and Electronics Engineering Lab',
   BEEE202L: 'Electromagnetic Theory',
@@ -299,7 +265,6 @@ export const COURSE_MAP: { [key: string]: string } = {
   IEEE102L: 'Basic Electrical and Electronics Engineering',
   EEE1024: 'Fundamentals of Electrical and Electronics Engineering',
 
-  // Electronics and Communication courses
   BECE102L: 'Digital System Design',
   BECE201L: 'Electronic Materials and Devices',
   BECE202L: 'Signals and Systems',
@@ -328,7 +293,6 @@ export const COURSE_MAP: { [key: string]: string } = {
   BECE409E: 'Sensors technology',
   BECE411L: 'Cryptography and Network Security',
 
-  // Electronics and VLSI Design courses
   BEVD101L: 'Electronic Materials',
   BEVD201L: 'Physics of Semiconductor Devices',
   BEVD202L: 'Electromagnetic Field Theory',
@@ -336,7 +300,6 @@ export const COURSE_MAP: { [key: string]: string } = {
   BEVD204L: 'Electronic Circuits',
   BEVD207L: 'Computer Architecture',
 
-  // Biotechnology courses
   BBIT100L: 'Biology',
   BBIT201L: 'Principles of Chemical Engineering',
   BBIT202L: 'Biochemistry',
@@ -361,7 +324,6 @@ export const COURSE_MAP: { [key: string]: string } = {
   TBIT209L: 'Developmental Biology',
   TBIT309L: 'Medical Biotechnology',
 
-  // Chemical Engineering courses
   BCHE202L: 'Chemical Engineering Thermodynamics',
   BCHE203L: 'Chemical Process Calculations',
   BCHE204L: 'Transport Phenomena',
@@ -370,7 +332,6 @@ export const COURSE_MAP: { [key: string]: string } = {
   BCHE301L: 'Mechanical Operations',
   BCHE314L: 'Fuels and Combustion',
 
-  // Mechanical Engineering courses
   BMEE102P: 'Engineering Design Visualisation Lab',
   BMEE201L: 'Engineering Mechanics',
   BMEE202L: 'Mechanics of Solids',
@@ -394,17 +355,14 @@ export const COURSE_MAP: { [key: string]: string } = {
   BMEE407L: 'Artificial Intelligence',
   BMEE411L: 'Society 5.0',
 
-  // Civil and Environmental Engineering courses
   BCLE212L: 'Natural Disaster Mitigation and Management',
   BCLE214L: 'Global Warming',
   BCLE215L: 'Waste Management',
   BCLE216L: 'Water Resource Management',
 
-  // Electrical and Computer Systems courses
   BECS403L: 'Big Data Analytic Applications to Electrical Systems',
   BECS403P: 'Big Data Analytic Applications to Electrical Systems Lab',
 
-  // Humanities and Social Sciences courses
   BHUM101N: 'Ethics and Values',
   BHUM102E: 'Indian Classical Music',
   BHUM103L: 'Micro Economics',
@@ -454,25 +412,20 @@ export const COURSE_MAP: { [key: string]: string } = {
   HUM1046: 'Behavioral Economics',
   IHUM107L: 'Sustainability and Society',
 
-  // Management courses
   BMGT101L: 'Principles of Management',
   BMGT103L: 'Organizational Behavior',
   BMGT108L: 'Entrepreneurship',
   BMGT109L: 'Introduction to Intellectual Property',
 
-  // Health Sciences and Technology courses
   BHST201L: 'Artificial Intelligence and Machine Learning in Healthcare',
   BHST205L: 'Applied Human Anatomy and Physiology',
 
-  // Biomedical courses
   BBMD101L: 'Anatomy and Physiology',
 
-  // Social Sciences courses
   BSSC101N: 'Essence of Traditional Knowledge',
   BSSC102N: 'Indian Constitution',
   USSC101L: 'Indian Constitution',
 
-  // Language courses
   BARB101L: 'Arabic',
   BCHI101L: 'Chinese I',
   BESP101L: 'Spanish I',
@@ -484,7 +437,6 @@ export const COURSE_MAP: { [key: string]: string } = {
   BKOR101L: 'Basic Korean - Level 1',
   BKOR102L: 'Basic Korean - Level 2',
 
-  // Skills Practice courses
   BSTS101P: 'Quantitative Skills Practice I',
   BSTS102P: 'Quantitative Skills Practice II',
   BSTS201P: 'Qualitative Skills Practice I',
@@ -492,7 +444,6 @@ export const COURSE_MAP: { [key: string]: string } = {
   BSTS301P: 'Advanced Competitive Coding - I',
   BSTS302P: 'Advanced Competitive Coding - II',
 
-  // Commerce and Accounting courses
   UCCA131L: 'Principles and Practices of Insurance',
   UCCA202L: 'Corporate Law',
   UCCA209L: 'Banking Theory and Practice',
@@ -500,11 +451,9 @@ export const COURSE_MAP: { [key: string]: string } = {
   UCCA231L: 'Digital Marketing for Financial Services',
   UCCA316E: 'Stock Market Operations',
 
-  // Special courses
   CRY2024: 'Introduction to The Art of Hunting Cryptically',
   MCSE502L: 'Design and Analysis of Algorithms',
 
-  // CFOC courses (Certificate courses)
   CFOC105M: 'Emotional Intelligence',
   CFOC119M: 'Training of Trainers',
   CFOC133M: 'E-Business',
@@ -523,16 +472,13 @@ export const COURSE_MAP: { [key: string]: string } = {
   CFOC599M: 'Leadership and Team Effectiveness',
 }
 
-// Enhanced function to find course names with acronym support
 export function findFullCourseName(code: string): string {
   const upperCode = code.toUpperCase().trim()
 
-  // Direct course code lookup
   if (COURSE_MAP[upperCode]) {
     return COURSE_MAP[upperCode]
   }
 
-  // Acronym lookup - return all matching courses
   if (COURSE_ACRONYMS[upperCode]) {
     const matches = COURSE_ACRONYMS[upperCode].map(
       courseCode => COURSE_MAP[courseCode] || courseCode
@@ -544,7 +490,6 @@ export function findFullCourseName(code: string): string {
     }
   }
 
-  // Partial name matching
   const searchResults = searchCoursesByName(upperCode)
   if (searchResults.length === 1) {
     return searchResults[0].name
@@ -555,19 +500,16 @@ export function findFullCourseName(code: string): string {
   return code
 }
 
-// Search courses by partial name matching
 export function searchCoursesByName(searchTerm: string): Array<{ code: string; name: string }> {
   const upperSearchTerm = searchTerm.toUpperCase().trim()
   const results: Array<{ code: string; name: string }> = []
 
-  // Search in course names
   for (const [code, name] of Object.entries(COURSE_MAP)) {
     if (name.toUpperCase().includes(upperSearchTerm)) {
       results.push({ code, name })
     }
   }
 
-  // Remove duplicates by name
   const uniqueResults = results.filter(
     (item, index, self) => index === self.findIndex(t => t.name === item.name)
   )
@@ -575,14 +517,12 @@ export function searchCoursesByName(searchTerm: string): Array<{ code: string; n
   return uniqueResults.slice(0, 10) // Limit to top 10 results
 }
 
-// Get all possible matches for a search term
 export function getAllCourseMatches(
   searchTerm: string
 ): Array<{ code: string; name: string; matchType: string }> {
   const upperSearchTerm = searchTerm.toUpperCase().trim()
   const results: Array<{ code: string; name: string; matchType: string }> = []
 
-  // Direct course code match
   if (COURSE_MAP[upperSearchTerm]) {
     results.push({
       code: upperSearchTerm,
@@ -591,7 +531,6 @@ export function getAllCourseMatches(
     })
   }
 
-  // Acronym matches
   if (COURSE_ACRONYMS[upperSearchTerm]) {
     COURSE_ACRONYMS[upperSearchTerm].forEach(courseCode => {
       if (COURSE_MAP[courseCode]) {
@@ -604,7 +543,6 @@ export function getAllCourseMatches(
     })
   }
 
-  // Partial name matches
   for (const [code, name] of Object.entries(COURSE_MAP)) {
     if (name.toUpperCase().includes(upperSearchTerm) && !results.some(r => r.code === code)) {
       results.push({
@@ -618,7 +556,6 @@ export function getAllCourseMatches(
   return results.slice(0, 15) // Limit results
 }
 
-// Smart course recognition function - for background processing
 export function recognizeCourseInText(
   text: string
 ): Array<{ original: string; matches: Array<{ code: string; name: string }> }> {
@@ -628,7 +565,6 @@ export function recognizeCourseInText(
     matches: Array<{ code: string; name: string }>
   }> = []
 
-  // Check for direct course codes (pattern: letters followed by numbers and optional letters)
   const courseCodePattern = /\b[A-Z]{3,6}[0-9]{3,4}[A-Z]?\b/g
   const codeMatches = text.match(courseCodePattern) || []
 
@@ -642,7 +578,6 @@ export function recognizeCourseInText(
     }
   })
 
-  // Check for acronyms
   Object.keys(COURSE_ACRONYMS).forEach(acronym => {
     const regex = new RegExp(`\\b${acronym}\\b`, 'gi')
     const acronymMatches = text.match(regex) || []

@@ -182,7 +182,6 @@ export class RateLimitedAI {
     return async () => {
       const key = await this.apiKeyManager.getCurrentKey()
       const google = createGoogleGenerativeAI({ apiKey: key })
-      // Cast for compatibility across ai SDK versions
       return google.textEmbeddingModel(modelName) as any
     }
   }
@@ -223,9 +222,7 @@ export class RateLimitedAI {
     })
   }
 
-  /**
-   * SINGLE‐VALUE embedding overload
-   */
+
   async embed(
     options: { model?: { modelId: string }; value: string },
     userId?: string
@@ -316,7 +313,6 @@ export class RateLimitedAI {
   }
 }
 
-// -- singleton managers per provider --
 
 const instances: Partial<Record<Provider, RateLimitedAI>> = {}
 

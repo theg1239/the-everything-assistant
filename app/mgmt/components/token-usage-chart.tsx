@@ -12,7 +12,6 @@ import {
 } from 'recharts'
 
 export default function TokenUsageChart({ data }: any) {
-  // data expected: [{ time: string, tokens: number, prompt: number, completion: number }, ...]
   if (!data || data.length === 0)
     return <div className="text-sm text-muted-foreground">no chart data</div>
 

@@ -44,7 +44,6 @@ interface EventSlot {
   isRegistrable: boolean
 }
 
-// Internal normalized slot shape that may carry eventId when available
 type NormalizedSlot = EventSlot & { eventId?: string }
 
 interface Event {
@@ -65,7 +64,6 @@ interface Event {
   judgementCriteria?: string
   rules?: string
   prizes?: string
-  // Optional embedded slots in arbitrary shape
   slots?: any
 }
 
@@ -79,7 +77,6 @@ interface GravitasEventsData {
     registrationStatus: string
     slots: EventSlot[]
   }
-  // Optional global slots list returned by API
   eventSlots?: any[]
   totalEvents?: number
   message?: string
@@ -193,7 +190,7 @@ const EventCard: React.FC<{
 
       <CardContent className="pt-0">
         <div className="space-y-3">
-          {/* Event Details */}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
             <div className="flex items-start gap-2 min-w-0">
               <Calendar className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
@@ -207,7 +204,7 @@ const EventCard: React.FC<{
               <span className="break-words">Team Size: {event.teamSize}</span>
             </div>
 
-            {/* Combined venues from slots, if any */}
+
             {Array.isArray(slots) && slots.length > 0 && (
               <div className="flex items-start gap-2 min-w-0 md:col-span-2">
                 <MapPin className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
@@ -235,14 +232,14 @@ const EventCard: React.FC<{
             </div>
           </div>
 
-          {/* Description */}
+
           <div>
             <p className="text-sm text-muted-foreground leading-relaxed break-words whitespace-pre-wrap">
               {event.shortDescription || event.description}
             </p>
           </div>
 
-          {/* Expandable detailed content */}
+
           {detailed &&
             (event.description || event.judgementCriteria || event.rules || event.prizes) && (
               <div className="border-t pt-3">
@@ -307,7 +304,7 @@ const EventCard: React.FC<{
               </div>
             )}
 
-          {/* Registration and seats summary from slots */}
+
           {Array.isArray(slots) && slots.length > 0 && (
             <div className="bg-muted/50 rounded-lg p-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
@@ -366,7 +363,7 @@ const EventCard: React.FC<{
             </div>
           )}
 
-          {/* Event Image */}
+
           {event.image && (
             <div className="mt-3">
               <img
@@ -467,13 +464,11 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
   const [categoryFilter, setCategoryFilter] = useState(data.filters?.category || 'all')
   const [seatsByEvent, setSeatsByEvent] = useState<Record<string, GravitasEventsData['seats']>>({})
   const [loadingEventSeats, setLoadingEventSeats] = useState<Record<string, boolean>>({})
-  // Maintain events in state so we can load more from server
   const initialEvents = data.events || (data.event ? [data.event] : [])
   const [events, setEvents] = useState<Event[]>(initialEvents)
   const [serverLoading, setServerLoading] = useState(false)
   const [serverExhausted, setServerExhausted] = useState(false)
 
-  // Normalize any slot shape into NormalizedSlot
   const normalizeSlots = (slots: any[], fallbackEventId?: string): NormalizedSlot[] => {
     if (!Array.isArray(slots)) return []
     return slots
@@ -511,11 +506,9 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
       .filter(Boolean) as NormalizedSlot[]
   }
 
-  // Build a map of eventId -> slots from various sources
   const slotsByEventId = useMemo(() => {
     const map = new Map<string, NormalizedSlot[]>()
 
-    // 1) Global eventSlots at root (if provided by API)
     if (Array.isArray((data as any).eventSlots)) {
       const normalized = normalizeSlots((data as any).eventSlots)
       for (const s of normalized) {
@@ -526,14 +519,12 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
       }
     }
 
-    // 2) Single event seats payload (server-side)
     if (data.event && data.seats && Array.isArray(data.seats.slots)) {
       const normalized = normalizeSlots(data.seats.slots, data.event.id)
       const arr = map.get(data.event.id) || []
       map.set(data.event.id, [...arr, ...normalized])
     }
 
-    // 2b) Any client-fetched seats per event (cached in state)
     for (const [eventId, seats] of Object.entries(seatsByEvent)) {
       if (seats && Array.isArray(seats.slots)) {
         const normalized = normalizeSlots(seats.slots, eventId)
@@ -542,7 +533,6 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
       }
     }
 
-    // 3) Embedded slots per event
     for (const ev of events) {
       if (Array.isArray((ev as any).slots)) {
         const normalized = normalizeSlots((ev as any).slots, ev.id)
@@ -551,7 +541,6 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
       }
     }
 
-    // Deduplicate by slot id per event
     for (const [eventId, arr] of map.entries()) {
       const byId = new Map(arr.map(s => [s.id, s]))
       map.set(eventId, Array.from(byId.values()))
@@ -594,12 +583,10 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
   const eventTypes = [...new Set(events.map(e => e.type))]
   const categories = [...new Set(events.map(e => e.category))]
 
-  // Client-side view-more pagination
   const DEFAULT_COUNT = 6
   const LOAD_STEP = 6
   const [visibleCount, setVisibleCount] = useState(DEFAULT_COUNT)
 
-  // Reset visible window when filters/search change
   useEffect(() => {
     setVisibleCount(DEFAULT_COUNT)
   }, [searchQuery, typeFilter, categoryFilter])
@@ -609,7 +596,6 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
     [filteredEvents, visibleCount]
   )
 
-  // Fetch additional events from Gravitas API (increase limit and merge by id)
   const fetchMoreFromServer = async () => {
     try {
       if (serverLoading || serverExhausted) return
@@ -681,7 +667,6 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
     )
   }
 
-  // Auto-fetch seats for single event to populate venues in the main card
   useEffect(() => {
     if (events.length === 1) {
       const id = events[0].id
@@ -693,25 +678,21 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events, slotsByEventId])
 
-  // Client-side: fetch specific event details (including seats/slots) for a given event id
   const fetchEventSeats = async (eventId: string) => {
     if (!eventId || loadingEventSeats[eventId] || seatsByEvent[eventId]) return
     setLoadingEventSeats(prev => ({ ...prev, [eventId]: true }))
     try {
-      // Use our own API route if present, else fallback to gravitas API directly
       const base = typeof window === 'undefined' ? process.env.NEXT_PUBLIC_BASE_URL || '' : ''
       const url = `${base}/api/events/${eventId}`
       const res = await fetch(url)
       if (res.ok) {
         const json = await res.json()
-        // Expecting shape similar to lib/tools.ts single event result
         if (json && json.data && json.data.seats) {
           setSeatsByEvent(prev => ({ ...prev, [eventId]: json.data.seats }))
         } else if (json && json.seats) {
           setSeatsByEvent(prev => ({ ...prev, [eventId]: json.seats }))
         }
       } else {
-        // Fallback: try gravitas API directly
         const alt = await fetch(`https://gravitas.vit.ac.in/api/events/${eventId}`)
         if (alt.ok) {
           const data = await alt.json()
@@ -747,7 +728,6 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
         }
       }
     } catch (e) {
-      // Silent fail; UI will just not show extra details
     } finally {
       setLoadingEventSeats(prev => ({ ...prev, [eventId]: false }))
     }
@@ -755,7 +735,7 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+
       <div className="text-left">
         <h2 className="text-2xl font-bold text-foreground mb-2">
           Gravitas Events {data.totalEvents ? `(${data.totalEvents})` : ''}
@@ -763,10 +743,10 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
         {data.message && <p className="text-muted-foreground">{data.message}</p>}
       </div>
 
-      {/* Single event with seats info (server-side or client-fetched) */}
+
       {events.length === 1 && <SeatsInfo seats={data.seats || seatsByEvent[events[0].id]} />}
 
-      {/* Filters for multiple events */}
+
       {events.length > 1 && (
         <Card>
           <CardHeader className="pb-3">
@@ -847,7 +827,7 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
         </Card>
       )}
 
-      {/* Events Grid */}
+
       {events.length === 1 ? (
         <div className="grid grid-cols-1 gap-4 lg:gap-6">
           {visibleEvents.map(event => {

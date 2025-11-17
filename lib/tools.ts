@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { scrapePapersCodeChef } from './scrapers/papers-codechef'
 import { scrapePapersService } from './scrapers/papers-scraper'
 import { scrapeVITPaperVault } from './scrapers/vit-papervault'
+import { scrapeExamCooker } from './scrapers/examcooker'
 import { scrapePlacementInfo } from './scrapers/placement-scraper'
 import { getMessMenu, formatMenuItems, getAvailableDateRange } from './scrapers/mess-menu-scraper'
 import { getCourseCode } from './question-generator'
@@ -768,6 +769,7 @@ export function createVITTools(userId: string) {
             scrapePapersService(resolvedCourseCode, examType, year),
             scrapePapersCodeChef(resolvedCourseCode, examType, year),
             scrapeVITPaperVault(resolvedCourseCode, examType, year),
+            scrapeExamCooker(resolvedCourseCode, examType, year),
           ])
 
           const papers: any[] = []

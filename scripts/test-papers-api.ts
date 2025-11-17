@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 /**
  * Test script for papers scrapers API approach
- * Tests both CodeChef and PaperVault APIs with a course name query
+ * Tests CodeChef, PaperVault, and ExamCooker APIs with a course name query
  * 
  * Run with: pnpm tsx scripts/test-papers-api.ts
  */
@@ -13,11 +13,12 @@ async function testPapersAPIs() {
   console.log('\nThis test verifies that:')
   console.log('1. API approach is used first (fast < 5s)')
   console.log('2. Browser scraping only triggers on API failure')
-  console.log('3. Both scrapers return success: true even with 0 papers\n')
+  console.log('3. All scrapers return success: true even with 0 papers\n')
 
   // Dynamic import to handle ESM/CommonJS
   const { scrapePapersCodeChef } = await import('../lib/scrapers/papers-codechef.js')
   const { scrapeVITPaperVault } = await import('../lib/scrapers/vit-papervault.js')
+  const { scrapeExamCooker } = await import('../lib/scrapers/examcooker.js')
 
   // Test with common courses
   const testCourses = [
@@ -116,3 +117,35 @@ async function testPapersAPIs() {
 
 // Run test
 testPapersAPIs().catch(console.error)
+    // Test ExamCooker API
+    console.log('\n📚 Testing examcooker.acmvit.in API...')
+    const startExamCooker = Date.now()
+    try {
+      const result = await scrapeExamCooker(testCourse.code)
+      const duration = Date.now() - startExamCooker
+
+      console.log(`   ✅ Success: ${result.success}`)
+      console.log(`   📄 Papers: ${result.papers.length}`)
+      console.log(`   🌐 Source: ${result.source}`)
+      console.log(`   🔗 URL: ${result.searchUrl || 'N/A'}`)
+      console.log(`   ⏱️  Duration: ${duration}ms`)
+
+      if ((result as any).error) {
+        console.log(`   ⚠️  Error: ${(result as any).error}`)
+      }
+
+      if (result.papers.length > 0) {
+        console.log(`\n   Top 3 papers:`)
+        result.papers.slice(0, 3).forEach((p: any, i: number) => {
+          console.log(`   ${i + 1}. ${p.title} (${p.examType}, ${p.year})`)
+        })
+      }
+
+      if (duration < 5000) {
+        console.log(`   ✓ Fast response → API approach used ✓`)
+      } else {
+        console.log(`   ⚠️  Slow response (${duration}ms) → Possible timeout or fallback`)
+      }
+    } catch (error: any) {
+      console.error(`   ❌ Failed: ${error.message}`)
+    }

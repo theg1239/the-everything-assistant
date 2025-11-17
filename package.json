@@ -127,6 +127,7 @@
     "@types/node": "^22.15.30",
     "@types/nodemailer": "^6.4.17",
     "@types/papaparse": "^5.3.16",
+    "@types/pdf-parse": "^1.1.5",
     "@types/pg": "^8.15.4",
     "@types/puppeteer": "^7.0.4",
     "@types/qrcode": "^1.5.5",

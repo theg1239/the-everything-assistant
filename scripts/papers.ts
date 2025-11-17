@@ -30,6 +30,7 @@ import { execSync } from 'child_process'
 import { scrapePapersService } from '../lib/scrapers/papers-scraper'
 import { scrapePapersCodeChef } from '../lib/scrapers/papers-codechef'
 import { scrapeVITPaperVault } from '../lib/scrapers/vit-papervault'
+import { scrapeExamCooker } from '../lib/scrapers/examcooker'
 import { getCourseCode } from '../lib/question-generator'
 import { getAllCourseMatches } from '../lib/course-map'
 import rateLimitedAI from '../lib/rate-limited-ai'
@@ -905,6 +906,7 @@ async function fetchAllPapers(courseCode: string, examType?: string, year?: stri
     scrapePapersService(courseCode, examType, year),
     scrapePapersCodeChef(courseCode, examType, year),
     scrapeVITPaperVault(courseCode, examType, year),
+    scrapeExamCooker(courseCode, examType, year),
   ])
   const papers: RawPaperMeta[] = []
   results.forEach((r, idx) => {

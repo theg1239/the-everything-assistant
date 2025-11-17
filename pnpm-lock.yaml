@@ -300,6 +300,9 @@ importers:
       '@types/papaparse':
         specifier: ^5.3.16
         version: 5.5.0
+      '@types/pdf-parse':
+        specifier: ^1.1.5
+        version: 1.1.5
       '@types/pg':
         specifier: ^8.15.4
         version: 8.15.6
@@ -2422,6 +2425,9 @@ packages:
 
   '@types/papaparse@5.5.0':
     resolution: {integrity: sha512-GVs5iMQmUr54BAZYYkByv8zPofFxmyxUpISPb2oh8sayR3+1zbxasrOvoKiHJ/nnoq/uULuPsu1Lze1EkagVFg==}
+
+  '@types/pdf-parse@1.1.5':
+    resolution: {integrity: sha512-kBfrSXsloMnUJOKi25s3+hRmkycHfLK6A09eRGqF/N8BkQoPUmaCr+q8Cli5FnfohEz/rsv82zAiPz/LXtOGhA==}
 
   '@types/pg@8.15.6':
     resolution: {integrity: sha512-NoaMtzhxOrubeL/7UZuNTrejB4MPAJ0RpxZqXQf2qXuVlTPuG6Y8p4u9dKRaue4yjmC7ZhzVO2/Yyyn25znrPQ==}
@@ -9311,6 +9317,10 @@ snapshots:
   '@types/offscreencanvas@2019.7.3': {}
 
   '@types/papaparse@5.5.0':
+    dependencies:
+      '@types/node': 22.19.1
+
+  '@types/pdf-parse@1.1.5':
     dependencies:
       '@types/node': 22.19.1
 

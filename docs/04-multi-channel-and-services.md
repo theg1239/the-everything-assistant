@@ -119,15 +119,6 @@ See §5 in `03-tools-and-integrations.md` for data flow. Operational notes:
 
 ---
 
-## 7. Template App (`ai-chatbot-main`)
-
-- Upstream Chat SDK template from Vercel (kept for reference).  
-- Uses Next.js App Router, shadcn/ui, `ai-sdk`.  
-- Not wired into production but helpful for experimentation or regression testing.  
-- Path: `ai-chatbot-main/` (contains its own `package.json`, `app`, `components`, etc.).
-
----
-
 ## 8. Running Everything Together
 
 | Service | Default Port | Start Command | Depends On |

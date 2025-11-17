@@ -1,6 +1,6 @@
 # Everything Assistant Documentation Hub
 
-_Last reviewed: 17 November 2025 (repo commit state at `main`)._
+_Last reviewed: 17 November 2025 (repo commit state at `stable`)._
 
 The Everything Assistant is a Next.js + Prisma stack that powers a VIT-centric agentic assistant with a web chat UI, personal hub, RAG search, exam tooling, and companion services (WhatsApp, Discord, proxy microservices, Reddit knowledge base, etc.).  
 This folder collects living documentation so you can find capabilities quickly without spelunking through the entire tree.

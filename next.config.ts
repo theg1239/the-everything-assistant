@@ -3,7 +3,7 @@ import { withWorkflow } from 'workflow/next'
 
 const nextConfig: NextConfig = {
   experimental: {
-    turbopackFileSystemCacheForDev: true
+    turbopackFileSystemCacheForDev: true,
     // turbopackFileSystemCacheForBuild: true,
   },
   turbopack: {},

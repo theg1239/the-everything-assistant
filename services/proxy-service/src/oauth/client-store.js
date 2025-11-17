@@ -59,7 +59,10 @@ class FileBackedClientsStore extends InMemoryClientsStore {
         this.clients = new Map(parsed.map(client => [client.client_id, client]))
       }
     } catch (error) {
-      console.warn('[oauth] Failed to read clients store, falling back to empty store:', error.message)
+      console.warn(
+        '[oauth] Failed to read clients store, falling back to empty store:',
+        error.message
+      )
       this.clients = new Map()
     }
   }

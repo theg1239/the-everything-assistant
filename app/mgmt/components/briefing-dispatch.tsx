@@ -82,9 +82,7 @@ export default function BriefingDispatch() {
           startedAt: new Date().toISOString(),
         })
         toast.success(
-          workflowDryRun
-            ? 'daily briefing dry run queued'
-            : 'daily briefing workflow started'
+          workflowDryRun ? 'daily briefing dry run queued' : 'daily briefing workflow started'
         )
       } catch (error: any) {
         console.error('[mgmt] workflow trigger failed', error)
@@ -104,7 +102,9 @@ export default function BriefingDispatch() {
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1">
-          <label className="text-xs uppercase tracking-wide text-muted-foreground">user email</label>
+          <label className="text-xs uppercase tracking-wide text-muted-foreground">
+            user email
+          </label>
           <Input
             placeholder="person@university.edu"
             value={email}
@@ -113,12 +113,10 @@ export default function BriefingDispatch() {
           />
         </div>
         <div className="space-y-1">
-          <label className="text-xs uppercase tracking-wide text-muted-foreground">user id (optional)</label>
-          <Input
-            placeholder="uuid..."
-            value={userId}
-            onChange={e => setUserId(e.target.value)}
-          />
+          <label className="text-xs uppercase tracking-wide text-muted-foreground">
+            user id (optional)
+          </label>
+          <Input placeholder="uuid..." value={userId} onChange={e => setUserId(e.target.value)} />
         </div>
         <div className="space-y-1 sm:col-span-2">
           <label className="text-xs uppercase tracking-wide text-muted-foreground flex items-center gap-1">
@@ -155,9 +153,7 @@ export default function BriefingDispatch() {
             <div className="text-right text-xs text-muted-foreground">
               <div>messages • {lastResult.messages}</div>
               <div>actions • {lastResult.actions}</div>
-              <div>
-                schedule • {lastResult.scheduledAt ? lastResult.scheduledAt : 'now'}
-              </div>
+              <div>schedule • {lastResult.scheduledAt ? lastResult.scheduledAt : 'now'}</div>
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground mt-2">
@@ -172,11 +168,15 @@ export default function BriefingDispatch() {
         </div>
         <p className="text-sm text-muted-foreground mb-4">
           queue the UseWorkflow daily briefing job. it hydrates stored snapshots, builds insights,
-          and sends everyone who enabled email briefings their update. optionally leave it in dry run
-          mode to verify logs before delivering.
+          and sends everyone who enabled email briefings their update. optionally leave it in dry
+          run mode to verify logs before delivering.
         </p>
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
-          <Switch checked={workflowDryRun} onCheckedChange={setWorkflowDryRun} id="workflow-dry-run" />
+          <Switch
+            checked={workflowDryRun}
+            onCheckedChange={setWorkflowDryRun}
+            id="workflow-dry-run"
+          />
           <label htmlFor="workflow-dry-run">dry run (no emails, logs only)</label>
         </div>
         <div className="flex justify-end mt-4">
@@ -192,13 +192,19 @@ export default function BriefingDispatch() {
             </div>
             <div className="flex items-center justify-between mt-1">
               <span>mode</span>
-              <span className="text-white">{workflowStatus.dryRun ? 'dry run' : 'live delivery'}</span>
+              <span className="text-white">
+                {workflowStatus.dryRun ? 'dry run' : 'live delivery'}
+              </span>
             </div>
             <div className="flex items-center justify-between mt-1">
               <span>targeted users</span>
-              <span>{workflowStatus.userIds?.length ? workflowStatus.userIds.length : 'all opted-in'}</span>
+              <span>
+                {workflowStatus.userIds?.length ? workflowStatus.userIds.length : 'all opted-in'}
+              </span>
             </div>
-            <div className="mt-1">queued at {new Date(workflowStatus.startedAt).toLocaleString()}</div>
+            <div className="mt-1">
+              queued at {new Date(workflowStatus.startedAt).toLocaleString()}
+            </div>
           </div>
         )}
       </div>

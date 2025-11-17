@@ -5,9 +5,7 @@ function stripAnsiCodes(input = '') {
 }
 
 function splitColumns(row = '') {
-  return row
-    .split('│')
-    .map(segment => segment.replace(/^[\s\u00a0]+|[\s\u00a0]+$/g, ''))
+  return row.split('│').map(segment => segment.replace(/^[\s\u00a0]+|[\s\u00a0]+$/g, ''))
 }
 
 function normalizeWhitespace(value = '') {
@@ -20,9 +18,11 @@ function normalizeWhitespace(value = '') {
 const TABLE_SEPARATOR = /^[\s┌┐└┘┬┴┼─]+$/
 
 function extractCliTables(text = '') {
-  const lines = text
-    .split('\n')
-    .map(line => stripAnsiCodes(line).replace(/[\t\r]+/g, '').trimEnd())
+  const lines = text.split('\n').map(line =>
+    stripAnsiCodes(line)
+      .replace(/[\t\r]+/g, '')
+      .trimEnd()
+  )
 
   const tables = []
   let buffer = []

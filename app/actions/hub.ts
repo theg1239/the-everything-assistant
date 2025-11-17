@@ -46,7 +46,7 @@ async function requireUser() {
 
 async function buildHubState(userId: string): Promise<PersonalHubState> {
   const [linked, rows] = await Promise.all([hasVTOPCredentials(), listVTOPSnapshots(userId)])
-''
+  ;('')
   const snapshots: PersonalHubSnapshot[] = rows.map((row: any) => {
     const data = row.data as VTOPFormattedResult | null
     return {
@@ -60,7 +60,10 @@ async function buildHubState(userId: string): Promise<PersonalHubState> {
     }
   })
   const lastSyncedAt = rows.length
-    ? rows.reduce((latest, row) => (row.fetchedAt > latest ? row.fetchedAt : latest), rows[0].fetchedAt)
+    ? rows.reduce(
+        (latest, row) => (row.fetchedAt > latest ? row.fetchedAt : latest),
+        rows[0].fetchedAt
+      )
     : null
   return {
     isLinked: linked,

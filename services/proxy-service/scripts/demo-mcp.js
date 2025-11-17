@@ -24,12 +24,12 @@ async function callTool(name, args) {
     },
   }
 
-const res = await fetch(endpoint, {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    Accept: 'application/json, text/event-stream',
-  },
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json, text/event-stream',
+    },
     body: JSON.stringify(payload),
   })
 

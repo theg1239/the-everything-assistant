@@ -19,10 +19,11 @@ function resolveSemesterQuery(semesterQuery, semesterOptions) {
   const numberMatch = query.match(/(?:semester\s*)?(\d+)(?:rd|th|st|nd)?/)
   if (numberMatch) {
     const requestedNumber = parseInt(numberMatch[1])
-    const found = semesterOptions.find(opt =>
-      opt.description.toLowerCase().includes(`semester ${requestedNumber}`) ||
-      opt.description.toLowerCase().includes(`sem ${requestedNumber}`) ||
-      opt.description.toLowerCase().includes(`${requestedNumber}`)
+    const found = semesterOptions.find(
+      opt =>
+        opt.description.toLowerCase().includes(`semester ${requestedNumber}`) ||
+        opt.description.toLowerCase().includes(`sem ${requestedNumber}`) ||
+        opt.description.toLowerCase().includes(`${requestedNumber}`)
     )
     if (found) {
       return found.number
@@ -65,7 +66,10 @@ function resolveSemesterQuery(semesterQuery, semesterOptions) {
             return filtered[0].number
           }
         }
-        console.log(`Multiple semesters found for ${season} query`, allMatches.map(m => m.description))
+        console.log(
+          `Multiple semesters found for ${season} query`,
+          allMatches.map(m => m.description)
+        )
         return null
       }
     }
@@ -1731,7 +1735,6 @@ function getNextStep(currentStep) {
 
   return stepFlow[currentStep] || 'complete'
 }
-
 
 module.exports = {
   executeInteractiveCoursePageWorkflow,

@@ -2,7 +2,8 @@ import type { HubVTOPCommand } from '@/types/hub'
 import { extractCliTables } from './utils'
 
 export function parseGrades(raw: any) {
-  const text = typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
+  const text =
+    typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
   if (!text.trim()) return null
   const tables = extractCliTables(text)
   if (!tables.length) return null

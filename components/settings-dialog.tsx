@@ -319,14 +319,16 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
         // Load user preferences
         const response = await fetch('/api/user/preferences')
-      if (response.ok) {
-        const data = await response.json()
-        const prefs = data.preferences
-        setCurrentPreferences(prefs)
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('userPreferencesUpdated', { detail: prefs }) as any)
-        }
-        setFollowUpSuggestions(prefs.followUpSuggestions ?? true)
+        if (response.ok) {
+          const data = await response.json()
+          const prefs = data.preferences
+          setCurrentPreferences(prefs)
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('userPreferencesUpdated', { detail: prefs }) as any
+            )
+          }
+          setFollowUpSuggestions(prefs.followUpSuggestions ?? true)
 
           // Handle both legacy aurora and new background config
           if (prefs.backgroundConfig) {
@@ -343,7 +345,8 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
             setDailyBriefingSettings({
               dismissTime: prefs.dailyBriefing.dismissTime || '07:30',
               emailEnabled: prefs.dailyBriefing.emailEnabled ?? false,
-              emailTime: prefs.dailyBriefing.emailTime || prefs.dailyBriefing.dismissTime || '07:30',
+              emailTime:
+                prefs.dailyBriefing.emailTime || prefs.dailyBriefing.dismissTime || '07:30',
             })
           }
         }
@@ -424,7 +427,9 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       if (response.ok) {
         setCurrentPreferences(payload)
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('userPreferencesUpdated', { detail: payload }) as any)
+          window.dispatchEvent(
+            new CustomEvent('userPreferencesUpdated', { detail: payload }) as any
+          )
         }
         toast.success('Preferences saved successfully')
       } else {
@@ -471,7 +476,9 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       }
       setCurrentPreferences(updatedPrefs)
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('userPreferencesUpdated', { detail: updatedPrefs }) as any)
+        window.dispatchEvent(
+          new CustomEvent('userPreferencesUpdated', { detail: updatedPrefs }) as any
+        )
       }
       toast.success('daily briefing updated')
     } catch (error) {
@@ -1166,7 +1173,9 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                         id="briefing-time"
                         type="time"
                         value={dailyBriefingSettings.dismissTime}
-                        onChange={e => handleBriefingSettingsUpdate({ dismissTime: e.target.value })}
+                        onChange={e =>
+                          handleBriefingSettingsUpdate({ dismissTime: e.target.value })
+                        }
                         disabled={updatingBriefing}
                         className="h-10 rounded-md border border-border bg-muted/40 px-3 text-sm text-foreground"
                       />
@@ -1185,7 +1194,9 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                       id="briefing-email"
                       checked={dailyBriefingSettings.emailEnabled}
                       disabled={updatingBriefing}
-                      onCheckedChange={checked => handleBriefingSettingsUpdate({ emailEnabled: checked })}
+                      onCheckedChange={checked =>
+                        handleBriefingSettingsUpdate({ emailEnabled: checked })
+                      }
                     />
                   </div>
                   {dailyBriefingSettings.emailEnabled && (

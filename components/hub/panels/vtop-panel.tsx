@@ -4,7 +4,13 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import type { HubVTOPCommand, PersonalHubSnapshot } from '@/types/hub'
 import { Card, CardContent } from '@/components/ui/card'
 
@@ -25,13 +31,22 @@ const COMMANDS: { id: HubVTOPCommand; label: string; description: string }[] = [
 
 interface VTOPPanelProps {
   linked: boolean
-  runCommand: (command: HubVTOPCommand, extras?: Record<string, any>) => Promise<PersonalHubSnapshot>
+  runCommand: (
+    command: HubVTOPCommand,
+    extras?: Record<string, any>
+  ) => Promise<PersonalHubSnapshot>
   onRequireLink?: () => void
   onLink?: () => void
   onResult: (snapshot: PersonalHubSnapshot) => void
 }
 
-export default function VTOPPanel({ linked, runCommand, onRequireLink, onLink, onResult }: VTOPPanelProps) {
+export default function VTOPPanel({
+  linked,
+  runCommand,
+  onRequireLink,
+  onLink,
+  onResult,
+}: VTOPPanelProps) {
   const [command, setCommand] = useState<HubVTOPCommand>('attendance')
   const [semesterQuery, setSemesterQuery] = useState('')
   const [courseQuery, setCourseQuery] = useState('')
@@ -132,7 +147,9 @@ export default function VTOPPanel({ linked, runCommand, onRequireLink, onLink, o
         )}
       </div>
 
-      {error && <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">{error}</div>}
+      {error && (
+        <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">{error}</div>
+      )}
 
       {snapshot && (
         <Card className="border border-border/60">

@@ -6,7 +6,8 @@ const { sanitizeErrorForResponse } = require('./utils/errors')
 const { record } = require('./metrics')
 
 const VERBOSE_LOG =
-  process.env.PROXY_VERBOSE_LOGS === '1' || (process.env.NODE_ENV || '').toLowerCase() !== 'production'
+  process.env.PROXY_VERBOSE_LOGS === '1' ||
+  (process.env.NODE_ENV || '').toLowerCase() !== 'production'
 
 const maskIdentifier = value => {
   if (!value || typeof value !== 'string') return 'unknown'
@@ -207,7 +208,9 @@ function executeInteractiveCommand({ mappedCommand, cliArgs, username, flags, re
   child.stderr.on('data', data => {
     stderr += data.toString()
     if (VERBOSE_LOG) {
-      console.log(`[cli-runner:${mappedCommand}] stderr chunk`, { snippet: snippet(data.toString()) })
+      console.log(`[cli-runner:${mappedCommand}] stderr chunk`, {
+        snippet: snippet(data.toString()),
+      })
     }
   })
 
@@ -276,11 +279,14 @@ function ensureInteractiveResolution({ child, stdout, mappedCommand, resolve }) 
     resolve(jsonOutput)
   } catch (parseErr) {
     if (VERBOSE_LOG) {
-      console.log('[cli-runner] ensureInteractiveResolution JSON parse failed, falling back to text', {
-        command: mappedCommand,
-        error: parseErr.message,
-        stdoutSnippet: snippet(stdout),
-      })
+      console.log(
+        '[cli-runner] ensureInteractiveResolution JSON parse failed, falling back to text',
+        {
+          command: mappedCommand,
+          error: parseErr.message,
+          stdoutSnippet: snippet(stdout),
+        }
+      )
     }
     record(mappedCommand, 'success')
     resolve({
@@ -335,7 +341,10 @@ function handleInteractivePrompt(buffer, command, flags) {
       return respond('all')
     }
   }
-  if (normalized.includes('choose a semester') || normalized.includes('enter the semester number')) {
+  if (
+    normalized.includes('choose a semester') ||
+    normalized.includes('enter the semester number')
+  ) {
     if (flags?.semester) return respond(String(flags.semester))
     if (flags?.semesterQuery) {
       const query = String(flags.semesterQuery).toLowerCase().trim()

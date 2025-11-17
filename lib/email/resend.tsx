@@ -96,12 +96,16 @@ function buildActionUrl(baseUrl: string, command?: HubVTOPCommand) {
   return url.toString()
 }
 
-function normalizeActions(actions: SendableDailyBriefingAction[], baseUrl: string): NormalizedAction[] {
+function normalizeActions(
+  actions: SendableDailyBriefingAction[],
+  baseUrl: string
+): NormalizedAction[] {
   return actions
     .filter(action => Boolean(action && action.label))
     .map((action, index) => {
       const label = sanitizeCopy(action.label) || 'Open hub'
-      const command = action.command && HUB_COMMANDS.includes(action.command) ? action.command : undefined
+      const command =
+        action.command && HUB_COMMANDS.includes(action.command) ? action.command : undefined
       return {
         id: action.id || `action-${index + 1}`,
         label,
@@ -165,7 +169,8 @@ function DailyBriefingEmail({
         backgroundColor: '#06070b',
         padding: '32px 16px',
         color: '#f5f5f7',
-        fontFamily: "'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        fontFamily:
+          "'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
       }}
     >
       <div style={{ maxWidth: '640px', margin: '0 auto' }}>
@@ -177,33 +182,74 @@ function DailyBriefingEmail({
             background: 'rgba(255,255,255,0.02)',
           }}
         >
-          <p style={{ ...STAT_STYLES, marginBottom: '10px', color: '#9ca0b3' }}>everything assistant briefing</p>
+          <p style={{ ...STAT_STYLES, marginBottom: '10px', color: '#9ca0b3' }}>
+            everything assistant briefing
+          </p>
           <h1 style={{ fontWeight: 400, fontSize: '28px', margin: '0 0 6px 0' }}>{greeting}</h1>
-          <p style={{ margin: '0 0 18px 0', color: '#b0b4c3', fontSize: '15px', lineHeight: '22px' }}>
+          <p
+            style={{ margin: '0 0 18px 0', color: '#b0b4c3', fontSize: '15px', lineHeight: '22px' }}
+          >
             Here is your morning snapshot. Generated {deliveredLabel}.
           </p>
-          <div style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: '20px', padding: '20px', background: 'rgba(0,0,0,0.2)' }}>
+          <div
+            style={{
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: '20px',
+              padding: '20px',
+              background: 'rgba(0,0,0,0.2)',
+            }}
+          >
             {hasMessages ? (
               messages.map((message, index) => {
                 const toneColor =
                   message.tone === 'alert'
                     ? '#ffb08a'
                     : message.tone === 'calm'
-                    ? '#a0a6ba'
-                    : '#f5f5f7'
+                      ? '#a0a6ba'
+                      : '#f5f5f7'
                 return (
-                  <div key={message.id} style={{ padding: '12px 0', borderBottom: index === messages.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.08)' }}>
-                    <p style={{ margin: 0, fontSize: '16px', fontWeight: 500, lineHeight: '24px', color: toneColor }}>{message.primary}</p>
+                  <div
+                    key={message.id}
+                    style={{
+                      padding: '12px 0',
+                      borderBottom:
+                        index === messages.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                    }}
+                  >
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: '16px',
+                        fontWeight: 500,
+                        lineHeight: '24px',
+                        color: toneColor,
+                      }}
+                    >
+                      {message.primary}
+                    </p>
                     {message.supporting && (
-                      <p style={{ margin: '4px 0 0', fontSize: '14px', color: '#a0a3ad', lineHeight: '20px' }}>{message.supporting}</p>
+                      <p
+                        style={{
+                          margin: '4px 0 0',
+                          fontSize: '14px',
+                          color: '#a0a3ad',
+                          lineHeight: '20px',
+                        }}
+                      >
+                        {message.supporting}
+                      </p>
                     )}
                   </div>
                 )
               })
             ) : (
               <div>
-                <p style={{ margin: 0, fontSize: '16px', fontWeight: 500 }}>no fresh hub updates yet.</p>
-                <p style={{ margin: '4px 0 0', fontSize: '14px', color: '#a0a3ad' }}>trigger a sync from the hub to populate this briefing.</p>
+                <p style={{ margin: 0, fontSize: '16px', fontWeight: 500 }}>
+                  no fresh hub updates yet.
+                </p>
+                <p style={{ margin: '4px 0 0', fontSize: '14px', color: '#a0a3ad' }}>
+                  trigger a sync from the hub to populate this briefing.
+                </p>
               </div>
             )}
             {actions.length > 0 && (
@@ -244,7 +290,8 @@ function DailyBriefingEmail({
             )}
           </div>
           <p style={{ margin: '20px 0 0', fontSize: '12px', color: '#6b6f7f' }}>
-            You are receiving this email because briefing emails are enabled. Update timing and inbox preferences anytime from the hub settings.
+            You are receiving this email because briefing emails are enabled. Update timing and
+            inbox preferences anytime from the hub settings.
           </p>
         </div>
       </div>
@@ -270,7 +317,13 @@ export async function sendDailyBriefingEmail(opts: {
   const greetingCopy = formatGreetingCopy(opts.greeting)
   const deliveredLabel = formatDeliveredLabel(deliveredAt)
 
-  const text = buildBriefingText(greetingCopy, normalizedMessages, normalizedActions, deliveredAt, baseUrl)
+  const text = buildBriefingText(
+    greetingCopy,
+    normalizedMessages,
+    normalizedActions,
+    deliveredAt,
+    baseUrl
+  )
 
   const payload: Parameters<typeof resendClient.emails.send>[0] = {
     from: resendFrom,

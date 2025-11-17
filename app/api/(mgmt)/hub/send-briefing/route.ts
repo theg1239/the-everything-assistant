@@ -3,11 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { listVTOPSnapshots } from '@/lib/vtop-snapshots'
-import {
-  buildDailyBriefingContext,
-  buildGreeting,
-  deriveTerseName,
-} from '@/lib/hub/daily-briefing'
+import { buildDailyBriefingContext, buildGreeting, deriveTerseName } from '@/lib/hub/daily-briefing'
 import { sendDailyBriefingEmail } from '@/lib/email/resend'
 import type { PersonalHubSnapshot } from '@/types/hub'
 
@@ -106,6 +102,9 @@ export async function POST(request: NextRequest) {
     })
   } catch (error: any) {
     console.error('[mgmt] failed to send briefing email', error)
-    return NextResponse.json({ error: error?.message || 'Failed to send briefing' }, { status: 500 })
+    return NextResponse.json(
+      { error: error?.message || 'Failed to send briefing' },
+      { status: 500 }
+    )
   }
 }

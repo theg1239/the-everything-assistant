@@ -77,7 +77,9 @@ export const DailyBriefingOverlay = memo(function DailyBriefingOverlay({
   }, [stage, isOnboarding])
   const insightsReleased = Math.min(revealedCount, messages.length)
   const insightsReady = !isOnboarding && messagesReady && messages.length > 0
-  const showExamActions = !isOnboarding && Boolean(examPrompt && insightsReleased >= messages.length && messages.length > 0)
+  const showExamActions =
+    !isOnboarding &&
+    Boolean(examPrompt && insightsReleased >= messages.length && messages.length > 0)
   const stageProgress = useMemo(() => {
     if (isOnboarding) return 25
     const syncProgress = hydration.total > 0 ? hydration.completed / hydration.total : 1
@@ -102,15 +104,30 @@ export const DailyBriefingOverlay = memo(function DailyBriefingOverlay({
       return `${insightsReleased} of ${messages.length} insights revealed`
     }
     return 'link VTOP to unlock your daily snapshots'
-  }, [stage, hydration.completed, hydration.total, hydrationCommand, messages.length, insightsReleased])
+  }, [
+    stage,
+    hydration.completed,
+    hydration.total,
+    hydrationCommand,
+    messages.length,
+    insightsReleased,
+  ])
 
   return (
-    <div className="absolute inset-0 z-30 bg-background/95 backdrop-blur-lg border-x border-t border-border/70" aria-live="polite" aria-busy={!messagesReady}>
+    <div
+      className="absolute inset-0 z-30 bg-background/95 backdrop-blur-lg border-x border-t border-border/70"
+      aria-live="polite"
+      aria-busy={!messagesReady}
+    >
       <div className="h-full flex flex-col items-center justify-center px-6 text-center">
         <div className="space-y-7 max-w-3xl w-full">
           <div className="space-y-2">
-            <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground/70">daily briefing</p>
-            <p className="text-3xl sm:text-4xl font-light tracking-tight text-foreground">{greeting}</p>
+            <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground/70">
+              daily briefing
+            </p>
+            <p className="text-3xl sm:text-4xl font-light tracking-tight text-foreground">
+              {greeting}
+            </p>
           </div>
           {!isOnboarding && stage !== 'briefing' && stageSteps.length > 0 && (
             <div className="space-y-3">
@@ -122,8 +139,8 @@ export const DailyBriefingOverlay = memo(function DailyBriefingOverlay({
                         step.status === 'done'
                           ? 'bg-foreground text-background border-foreground'
                           : step.status === 'active'
-                          ? 'border-white/90 text-white'
-                          : 'border-white/20 text-white/30'
+                            ? 'border-white/90 text-white'
+                            : 'border-white/20 text-white/30'
                       }`}
                     >
                       {idx + 1}
@@ -147,10 +164,16 @@ export const DailyBriefingOverlay = memo(function DailyBriefingOverlay({
           {isOnboarding ? (
             <div className="space-y-4">
               <p className="text-base text-muted-foreground">
-                link VTOP to let us pull attendance, timetable, assignments, leave, and exams directly into your daily hub.
+                link VTOP to let us pull attendance, timetable, assignments, leave, and exams
+                directly into your daily hub.
               </p>
               <div className="flex flex-wrap gap-3 justify-center">
-                <Button size="sm" className="rounded-full" onClick={() => onLinkRequest?.()} disabled={!onLinkRequest}>
+                <Button
+                  size="sm"
+                  className="rounded-full"
+                  onClick={() => onLinkRequest?.()}
+                  disabled={!onLinkRequest}
+                >
                   link vtop
                 </Button>
                 <Button size="sm" variant="outline" className="rounded-full" onClick={onDismiss}>
@@ -162,16 +185,22 @@ export const DailyBriefingOverlay = memo(function DailyBriefingOverlay({
             <div className="space-y-5">
               {stage === 'sync' || stage === 'prep' ? (
                 <div className="rounded-[24px] border border-border/60 bg-black/30 px-6 py-5 text-left space-y-2">
-                  <p className="text-sm uppercase tracking-[0.35em] text-muted-foreground">{stage === 'sync' ? 'syncing' : 'prepping'}</p>
+                  <p className="text-sm uppercase tracking-[0.35em] text-muted-foreground">
+                    {stage === 'sync' ? 'syncing' : 'prepping'}
+                  </p>
                   <p className="text-lg font-light text-white">
-                    {stage === 'sync' ? 'hydrating your hub snapshots…' : 'assembling today’s insights…'}
+                    {stage === 'sync'
+                      ? 'hydrating your hub snapshots…'
+                      : 'assembling today’s insights…'}
                   </p>
                   <p className="text-xs text-white/70">{stageSupporting}</p>
                 </div>
               ) : null}
               {currentMessage && stage === 'briefing' && (
                 <div className="space-y-4">
-                  <p className="text-[11px] uppercase tracking-[0.4em] text-muted-foreground">latest insight</p>
+                  <p className="text-[11px] uppercase tracking-[0.4em] text-muted-foreground">
+                    latest insight
+                  </p>
                   <AnimatePresence mode="wait">
                     <motion.div
                       key={currentMessage.id}
@@ -180,7 +209,9 @@ export const DailyBriefingOverlay = memo(function DailyBriefingOverlay({
                       exit={{ opacity: 0, y: -8 }}
                       transition={{ duration: 0.3 }}
                       className={`rounded-[28px] border border-white/15 bg-white/5 px-6 py-5 text-left shadow-[0_30px_80px_rgba(0,0,0,0.35)] ${
-                        insightsReleased < messages.length ? 'cursor-pointer tap-highlight-transparent' : ''
+                        insightsReleased < messages.length
+                          ? 'cursor-pointer tap-highlight-transparent'
+                          : ''
                       }`}
                       onClick={() => {
                         if (insightsReleased < messages.length) {
@@ -193,8 +224,8 @@ export const DailyBriefingOverlay = memo(function DailyBriefingOverlay({
                           currentMessage.tone === 'alert'
                             ? 'text-red-400'
                             : currentMessage.tone === 'calm'
-                            ? 'text-white/60'
-                            : ''
+                              ? 'text-white/60'
+                              : ''
                         }`}
                       >
                         {currentMessage.primary}
@@ -205,7 +236,9 @@ export const DailyBriefingOverlay = memo(function DailyBriefingOverlay({
                     </motion.div>
                   </AnimatePresence>
                   {insightsReleased < messages.length && (
-                    <p className="text-[11px] uppercase tracking-[0.4em] text-muted-foreground">tap to continue</p>
+                    <p className="text-[11px] uppercase tracking-[0.4em] text-muted-foreground">
+                      tap to continue
+                    </p>
                   )}
                 </div>
               )}
@@ -216,20 +249,41 @@ export const DailyBriefingOverlay = memo(function DailyBriefingOverlay({
               )}
               {showExamActions && examPrompt && (
                 <div className="rounded-[24px] border border-border/50 bg-black/25 px-6 py-5 space-y-3 text-left">
-                  <p className="text-[11px] uppercase tracking-[0.35em] text-muted-foreground">upcoming exam</p>
+                  <p className="text-[11px] uppercase tracking-[0.35em] text-muted-foreground">
+                    upcoming exam
+                  </p>
                   <p className="text-lg font-medium text-white">{examPrompt.course}</p>
-                  {examPrompt.when && <p className="text-xs text-muted-foreground">{examPrompt.when}</p>}
+                  {examPrompt.when && (
+                    <p className="text-xs text-muted-foreground">{examPrompt.when}</p>
+                  )}
                   <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-                    <Button size="sm" className="rounded-full" onClick={() => onExamAction('syllabus')}>
+                    <Button
+                      size="sm"
+                      className="rounded-full"
+                      onClick={() => onExamAction('syllabus')}
+                    >
                       syllabus
                     </Button>
-                    <Button size="sm" className="rounded-full" onClick={() => onExamAction('papers')}>
+                    <Button
+                      size="sm"
+                      className="rounded-full"
+                      onClick={() => onExamAction('papers')}
+                    >
                       past papers
                     </Button>
-                    <Button size="sm" className="rounded-full" onClick={() => onExamAction('materials')}>
+                    <Button
+                      size="sm"
+                      className="rounded-full"
+                      onClick={() => onExamAction('materials')}
+                    >
                       course materials
                     </Button>
-                    <Button size="sm" variant="outline" className="rounded-full" onClick={() => onExamAction('skip')}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="rounded-full"
+                      onClick={() => onExamAction('skip')}
+                    >
                       not now
                     </Button>
                   </div>
@@ -264,7 +318,11 @@ export const DailyBriefingOverlay = memo(function DailyBriefingOverlay({
               )}
               {!isOnboarding && stage === 'briefing' && insightsReleased >= messages.length && (
                 <div className="flex flex-col gap-2 items-center">
-                  <Button size="sm" className="rounded-full" onClick={() => onContinue?.() ?? onDismiss()}>
+                  <Button
+                    size="sm"
+                    className="rounded-full"
+                    onClick={() => onContinue?.() ?? onDismiss()}
+                  >
                     continue
                   </Button>
                   <button
@@ -280,7 +338,10 @@ export const DailyBriefingOverlay = memo(function DailyBriefingOverlay({
         </div>
       </div>
       <div className="absolute inset-x-0 bottom-0 h-1 bg-border/30">
-        <div className="h-full bg-primary transition-all duration-500" style={{ width: `${stageProgress}%` }} />
+        <div
+          className="h-full bg-primary transition-all duration-500"
+          style={{ width: `${stageProgress}%` }}
+        />
       </div>
     </div>
   )

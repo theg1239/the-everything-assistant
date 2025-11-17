@@ -353,10 +353,8 @@ export const rateLimitedAI = {
     updateUserConfig: (c: any) => getRateLimitedAI('google').updateUserConfig(c),
     getFullStatus: (u?: string) => getRateLimitedAI('google').getFullStatus(u),
     tools: {
-      google_search: (options?: GoogleSearchToolOptions) =>
-        googleTools.googleSearch(options ?? {}),
-      urlContext: (options?: GoogleUrlContextOptions) =>
-        googleTools.urlContext(options ?? {}),
+      google_search: (options?: GoogleSearchToolOptions) => googleTools.googleSearch(options ?? {}),
+      urlContext: (options?: GoogleUrlContextOptions) => googleTools.urlContext(options ?? {}),
       fileSearch: (options: GoogleFileSearchOptions) => googleTools.fileSearch(options),
       codeExecution: (options?: GoogleCodeExecutionOptions) =>
         googleTools.codeExecution(options ?? {}),

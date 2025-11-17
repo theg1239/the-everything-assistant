@@ -4,11 +4,11 @@ import { prisma } from '@/lib/prisma'
 function validateAPIKey(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization')
   const apiKey = process.env.WHATSAPP_BOT_API_KEY
-  
+
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return false
   }
-  
+
   const token = authHeader.slice(7)
   return token === apiKey
 }
@@ -16,35 +16,36 @@ function validateAPIKey(request: NextRequest): boolean {
 async function getOrCreateBotUser(source: string, userId: string, userName?: string) {
   const emailPrefix = source === 'whatsapp' ? 'whatsapp' : 'discord'
   const email = `${emailPrefix}-${userId}@${source}-bot.local`
-  
+
   let user = await prisma.user.findFirst({
     where: {
       preferences: {
         path: [source, source === 'whatsapp' ? 'phoneNumber' : 'userId'],
-        equals: userId
-      }
-    }
+        equals: userId,
+      },
+    },
   })
 
   if (!user) {
-    const name = userName || `${source.charAt(0).toUpperCase() + source.slice(1)} User ${userId.slice(-4)}`
-    
+    const name =
+      userName || `${source.charAt(0).toUpperCase() + source.slice(1)} User ${userId.slice(-4)}`
+
     const preferences: any = {
       [source]: {
         ...(source === 'whatsapp' ? { phoneNumber: userId } : { userId }),
         joinedAt: new Date().toISOString(),
-        [`is${source.charAt(0).toUpperCase() + source.slice(1)}User`]: true
-      }
+        [`is${source.charAt(0).toUpperCase() + source.slice(1)}User`]: true,
+      },
     }
 
     user = await prisma.user.create({
       data: {
         email,
         name,
-        preferences
-      }
+        preferences,
+      },
     })
-    
+
     console.log(`Created new ${source} user: ${name} (${userId})`)
   }
 
@@ -54,10 +55,7 @@ async function getOrCreateBotUser(source: string, userId: string, userName?: str
 export async function POST(request: NextRequest) {
   try {
     if (!validateAPIKey(request)) {
-      return NextResponse.json(
-        { error: 'Invalid API key' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
     }
 
     const body = await request.json()
@@ -74,36 +72,33 @@ export async function POST(request: NextRequest) {
       userMessage = message
       requestSource = source || 'discord'
       userInfo = { userId, userName: userContext?.username }
-      
+
       // Convert conversation history to messages format
       if (conversationHistory && Array.isArray(conversationHistory)) {
         processedMessages = conversationHistory.map((msg: any) => ({
           role: msg.role,
           content: msg.content,
-          id: `${requestSource}-history-${msg.timestamp}-${Math.random().toString(36).substr(2, 6)}`
+          id: `${requestSource}-history-${msg.timestamp}-${Math.random().toString(36).substr(2, 6)}`,
         }))
       }
-      
+
       processedMessages.push({
         role: 'user',
         content: userMessage,
-        id: `${requestSource}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        id: `${requestSource}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       })
     } else if (messages && Array.isArray(messages) && messages.length > 0) {
       // WhatsApp format: { messages, source: 'whatsapp', userContext }
       processedMessages = messages
       const lastMessage = messages[messages.length - 1]
-      
+
       if (!lastMessage || lastMessage.role !== 'user') {
-        return NextResponse.json(
-          { error: 'Last message must be from user' },
-          { status: 400 }
-        )
+        return NextResponse.json({ error: 'Last message must be from user' }, { status: 400 })
       }
-      
+
       userMessage = lastMessage.content
       requestSource = source || 'whatsapp'
-      
+
       if (requestSource === 'whatsapp' && userContext?.phoneNumber) {
         userInfo = { userId: userContext.phoneNumber, userName: userContext.userName }
       }
@@ -116,14 +111,14 @@ export async function POST(request: NextRequest) {
 
     // Get or create user for this bot request
     const user = await getOrCreateBotUser(requestSource, userInfo.userId, userInfo.userName)
-    
+
     // Create a simple session-like object for the bot user
     const fakeSession = {
       user: {
         id: user.id,
         email: user.email,
-        name: user.name
-      }
+        name: user.name,
+      },
     }
 
     // Import the chat processing logic
@@ -165,8 +160,9 @@ ${memories
     const tools = createVITTools(user.id)
 
     // Create context-specific system prompt
-    const contextPrompt = requestSource === 'whatsapp' 
-      ? `<whatsapp_context>
+    const contextPrompt =
+      requestSource === 'whatsapp'
+        ? `<whatsapp_context>
 This conversation is happening via WhatsApp. The user is messaging through WhatsApp Web.
 - Keep responses concise and mobile-friendly
 - Use emojis appropriately for WhatsApp
@@ -174,7 +170,7 @@ This conversation is happening via WhatsApp. The user is messaging through Whats
 - Be conversational and helpful
 - User: ${userInfo.userName || 'WhatsApp User'} (${userInfo.userId})
 </whatsapp_context>`
-      : `<discord_context>
+        : `<discord_context>
 This conversation is happening via Discord. The user is using slash commands.
 - keep responses concise and lowercase (except proper nouns and course codes)
 - no emojis
@@ -195,10 +191,7 @@ CRITICAL TOOL CONTINUATION RULES:
 - When you call a tool, that's step 1 - step 2 is ALWAYS providing your answer using that information
 - The conversation flow is: [user question] → [tool call] → [YOUR RESPONSE USING TOOL RESULTS]`
 
-    const finalMessagesForAI = [
-      { role: 'system', content: systemPrompt },
-      ...processedMessages
-    ]
+    const finalMessagesForAI = [{ role: 'system', content: systemPrompt }, ...processedMessages]
 
     const reasoningMiddleware = extractReasoningMiddleware({
       tagName: 'reasoning',
@@ -235,7 +228,7 @@ CRITICAL TOOL CONTINUATION RULES:
           } catch (e) {
             console.warn(`Failed to persist ${requestSource} usage:`, e)
           }
-        }
+        },
       },
       user.id
     )
@@ -248,7 +241,6 @@ CRITICAL TOOL CONTINUATION RULES:
         'X-Bot-User-Id': userInfo.userId,
       },
     })
-
   } catch (error: any) {
     console.error('Bot API error:', error)
 
@@ -275,10 +267,7 @@ export async function GET(request: NextRequest) {
   try {
     // Validate API key
     if (!validateAPIKey(request)) {
-      return NextResponse.json(
-        { error: 'Invalid API key' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
     }
 
     return NextResponse.json({
@@ -286,12 +275,9 @@ export async function GET(request: NextRequest) {
       service: 'bot-api',
       supports: ['whatsapp', 'discord'],
       timestamp: new Date().toISOString(),
-      version: '1.0.0'
+      version: '1.0.0',
     })
   } catch (error) {
-    return NextResponse.json(
-      { error: 'Health check failed' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Health check failed' }, { status: 500 })
   }
 }

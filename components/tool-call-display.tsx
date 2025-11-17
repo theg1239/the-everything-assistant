@@ -38,7 +38,6 @@ interface ToolCallDisplayProps {
 const VTOP_ARTIFACT_BLACKLIST = new Set(['exams', 'exam-schedule'])
 
 const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) => {
-
   if (toolName === 'queryVTOP') {
     if (result.data || result.output) {
       const vtopData = result.data || result.output
@@ -1180,7 +1179,9 @@ const ToolCallResultsSummary = ({
             <div className="flex items-center space-x-3">
               <AlertCircle className="h-5 w-5 text-orange-400" />
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-foreground break-words">Search completed</div>
+                <div className="text-sm font-medium text-foreground break-words">
+                  Search completed
+                </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   No results found for your query
                 </div>

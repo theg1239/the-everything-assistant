@@ -293,10 +293,7 @@ function getToolInputPayload(tool: any) {
   return tool.args ?? tool.input ?? undefined
 }
 
-function inferLegacyToolState(
-  tool: any,
-  output: any
-): 'result' | 'error' {
+function inferLegacyToolState(tool: any, output: any): 'result' | 'error' {
   const state = typeof tool?.state === 'string' ? tool.state : ''
   if (output && typeof output === 'object') {
     if ('success' in output && output.success === false) {
@@ -527,8 +524,9 @@ ${memories
       }
     }
 
-    const toolPreferenceGuidance = !prefersWebSearch && effectivePreferredTool
-      ? `
+    const toolPreferenceGuidance =
+      !prefersWebSearch && effectivePreferredTool
+        ? `
 
 IMPORTANT: The user has specifically selected the "${effectivePreferredTool}" tool. When responding to their query, you should prioritize using this tool if it's relevant to their question. Available tools and their purposes:
 
@@ -538,7 +536,7 @@ IMPORTANT: The user has specifically selected the "${effectivePreferredTool}" to
 - mess-menu: Use getMessMenu for hostel dining information
 
 If the user's query is relevant to the selected tool "${effectivePreferredTool}", use it even if other tools might also be applicable.`
-      : ''
+        : ''
 
     const memoryGuidance =
       memoryContext && isMemoryEnabled
@@ -863,14 +861,11 @@ CRITICAL TOOL CONTINUATION RULES:
     const hasConversationContent = finalMessages.some(msg => msg.role !== 'system')
 
     if (!hasConversationContent) {
-      const fallbackText =
-        "i'm on standby — ask a question or run a tool so i know what to do."
+      const fallbackText = "i'm on standby — ask a question or run a tool so i know what to do."
       const encoder = new TextEncoder()
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(
-            encoder.encode(`0:"${fallbackText.replace(/"/g, '\\"')}"\n`)
-          )
+          controller.enqueue(encoder.encode(`0:"${fallbackText.replace(/"/g, '\\"')}"\n`))
           controller.enqueue(
             encoder.encode(
               'e:{"finishReason":"stop","usage":{"promptTokens":0,"completionTokens":0},"isContinued":false}\n'

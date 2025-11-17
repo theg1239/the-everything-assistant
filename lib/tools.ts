@@ -726,7 +726,11 @@ export function createVITTools(userId: string) {
       description:
         "find past examination papers for VIT courses from real repositories. You can use course names or codes. You don' need the user to specify the year, when no year is specified, the tool will search for all available years.",
       inputSchema: findPastPapersInputSchema,
-      execute: async ({ courseCode, examType, year }: z.infer<typeof findPastPapersInputSchema>) => {
+      execute: async ({
+        courseCode,
+        examType,
+        year,
+      }: z.infer<typeof findPastPapersInputSchema>) => {
         try {
           if (!courseCode) {
             return {
@@ -1364,7 +1368,6 @@ export function createVITTools(userId: string) {
         }
       },
     }),
-  
 
     getFacultyInfo: tool({
       description: `Get current faculty information from a local JSON file (public/faculty.json). NEVER return all faculty members at once—ALWAYS require at least a department or faculty name filter. If no filter is provided, ask the user to specify a department or faculty name. Returns school, department, and faculty info. Do NOT provide a full list of all faculty.
@@ -1775,7 +1778,11 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
         const raw = await scrapePlacementInfo(year, companyFilter, combineWitch, campus)
         try {
           const { parsePlacementData } = await import('../lib/scrapers/placement-scraper')
-          const parsed = (await parsePlacementData(raw, '', undefined)) as unknown as ParsedPlacementData
+          const parsed = (await parsePlacementData(
+            raw,
+            '',
+            undefined
+          )) as unknown as ParsedPlacementData
           return {
             ...raw,
             campus,
@@ -1939,14 +1946,12 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 .sort((a: any, b: any) => b.score - a.score)
               console.debug(
                 '[getSyllabus] top candidates (objects):',
-                scored
-                  .slice(0, 6)
-                  .map((s: any) => ({
-                    code: s.item.code,
-                    title: s.item.title,
-                    filename: s.item.file || s.item.filename,
-                    score: s.score,
-                  }))
+                scored.slice(0, 6).map((s: any) => ({
+                  code: s.item.code,
+                  title: s.item.title,
+                  filename: s.item.file || s.item.filename,
+                  score: s.score,
+                }))
               )
               if (scored.length > 0 && scored[0].score > 0) {
                 const topScore = scored[0].score
@@ -2408,8 +2413,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 data: result.data || result.output,
                 output: result.output || result.data,
                 structured_data: result.structured_data || null,
-                message:
-                  result.message || `Successfully retrieved ${command} data from VTOP.`,
+                message: result.message || `Successfully retrieved ${command} data from VTOP.`,
                 raw: result.raw || false,
                 meta: result.meta || null,
               }

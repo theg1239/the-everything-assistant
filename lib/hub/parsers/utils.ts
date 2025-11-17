@@ -5,9 +5,7 @@ export function stripAnsiCodes(input: string) {
 }
 
 export function splitColumns(row: string) {
-  return row
-    .split('│')
-    .map(segment => segment.replace(/^[\s\u00a0]+|[\s\u00a0]+$/g, ''))
+  return row.split('│').map(segment => segment.replace(/^[\s\u00a0]+|[\s\u00a0]+$/g, ''))
 }
 
 export function normalizeWhitespace(value: string) {
@@ -26,9 +24,11 @@ type ParsedTable = {
 }
 
 export function extractCliTables(text: string): ParsedTable[] {
-  const lines = text
-    .split('\n')
-    .map(line => stripAnsiCodes(line).replace(/[\t\r]+/g, '').trimEnd())
+  const lines = text.split('\n').map(line =>
+    stripAnsiCodes(line)
+      .replace(/[\t\r]+/g, '')
+      .trimEnd()
+  )
 
   const tables: ParsedTable[] = []
   let buffer: string[] = []

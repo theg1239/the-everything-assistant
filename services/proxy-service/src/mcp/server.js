@@ -1,6 +1,8 @@
 const { randomUUID } = require('crypto')
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js')
-const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js')
+const {
+  StreamableHTTPServerTransport,
+} = require('@modelcontextprotocol/sdk/server/streamableHttp.js')
 const { SSEServerTransport } = require('@modelcontextprotocol/sdk/server/sse.js')
 const { isInitializeRequest } = require('@modelcontextprotocol/sdk/types.js')
 const { z } = require('zod')
@@ -10,10 +12,7 @@ const { runCommand } = require('../cli-runner')
 const { normalizeResultPayload } = require('../utils/shape')
 const { normalizeFlagsForCommand } = require('../utils/flags')
 const { resolvePassword } = require('../utils/credentials')
-const {
-  executeInteractiveCoursePageWorkflow,
-  getNextStep,
-} = require('../workflows/course-page')
+const { executeInteractiveCoursePageWorkflow, getNextStep } = require('../workflows/course-page')
 
 function coerceFlags(flags) {
   if (!flags) return {}
@@ -37,7 +36,10 @@ function resolveCredentialBundle(input, extra, fallbackUsername) {
   const authCredentials = extra?.authInfo?.credentials
   let username = input.username || fallbackUsername || authCredentials?.username
   let { password } = input
-  let { encryptedPassword, sessionKey } = normalizeEncryptedPayload(input.encryptedPassword, input.sessionKey)
+  let { encryptedPassword, sessionKey } = normalizeEncryptedPayload(
+    input.encryptedPassword,
+    input.sessionKey
+  )
 
   if (!password && (!encryptedPassword || !sessionKey) && authCredentials) {
     ;({ encryptedPassword, sessionKey } = normalizeEncryptedPayload(
@@ -77,14 +79,13 @@ const SSE_MESSAGES_PATH = '/mcp/messages'
 function registerTools(targetServer) {
   const manifest = capabilityManifest()
 
-  const flagsSchema = z
-    .preprocess(value => {
-      if (!value) return value
-      if (Array.isArray(value)) {
-        return {}
-      }
-      return value
-    }, z.record(z.any()))
+  const flagsSchema = z.preprocess(value => {
+    if (!value) return value
+    if (Array.isArray(value)) {
+      return {}
+    }
+    return value
+  }, z.record(z.any()))
 
   const oauthEnabled = process.env.MCP_OAUTH_ENABLED !== 'false'
 
@@ -114,15 +115,26 @@ function registerTools(targetServer) {
         inputSchema: baseInputSchema,
       },
       async ({ username, password, encryptedPassword, sessionKey, flags }, extra) => {
-        const credentials = resolveCredentialBundle({ username, password, encryptedPassword, sessionKey }, extra)
+        const credentials = resolveCredentialBundle(
+          { username, password, encryptedPassword, sessionKey },
+          extra
+        )
         const finalPassword = resolvePassword({
           password: credentials.password,
           encryptedPassword: credentials.encryptedPassword,
           sessionKey: credentials.sessionKey,
         })
         const normalizedFlagsInput = coerceFlags(flags)
-        const { sanitizedFlags } = normalizeFlagsForCommand(capability.command, normalizedFlagsInput)
-        const result = await runCommand(credentials.username, finalPassword, capability.command, sanitizedFlags)
+        const { sanitizedFlags } = normalizeFlagsForCommand(
+          capability.command,
+          normalizedFlagsInput
+        )
+        const result = await runCommand(
+          credentials.username,
+          finalPassword,
+          capability.command,
+          sanitizedFlags
+        )
         const shaped = normalizeResultPayload(result, capability.command, sanitizedFlags)
 
         if (!shaped.success) {
@@ -142,21 +154,19 @@ function registerTools(targetServer) {
 
 function registerInteractiveTools(targetServer, baseSchema) {
   const workflowSteps = ['semester', 'course', 'faculty', 'materials', 'download']
-  const interactiveInput = baseSchema
-    .extend({
-      step: z.enum(workflowSteps).optional(),
-      sessionData: z.string().optional(),
-    })
+  const interactiveInput = baseSchema.extend({
+    step: z.enum(workflowSteps).optional(),
+    sessionData: z.string().optional(),
+  })
 
-  const continueInput = z
-    .object({
-      sessionData: z.string(),
-      selection: z.string(),
-      step: z.enum(['semester', 'course', 'faculty', 'materials']),
-      password: z.string().optional(),
-      encryptedPassword: z.string().optional(),
-      sessionKey: z.string().optional(),
-    })
+  const continueInput = z.object({
+    sessionData: z.string(),
+    selection: z.string(),
+    step: z.enum(['semester', 'course', 'faculty', 'materials']),
+    password: z.string().optional(),
+    encryptedPassword: z.string().optional(),
+    sessionKey: z.string().optional(),
+  })
 
   targetServer.registerTool(
     'course-page-interactive',
@@ -166,18 +176,13 @@ function registerInteractiveTools(targetServer, baseSchema) {
       inputSchema: interactiveInput,
     },
     async (
-      {
-        username,
-        password,
-        encryptedPassword,
-        sessionKey,
-        step = 'semester',
-        flags,
-        sessionData,
-      },
+      { username, password, encryptedPassword, sessionKey, step = 'semester', flags, sessionData },
       extra
     ) => {
-      const credentials = resolveCredentialBundle({ username, password, encryptedPassword, sessionKey }, extra)
+      const credentials = resolveCredentialBundle(
+        { username, password, encryptedPassword, sessionKey },
+        extra
+      )
       const finalPassword = resolvePassword({
         password: credentials.password,
         encryptedPassword: credentials.encryptedPassword,

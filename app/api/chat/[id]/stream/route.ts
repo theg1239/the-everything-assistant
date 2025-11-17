@@ -5,10 +5,7 @@ interface StreamRouteParams {
   id: string
 }
 
-export async function GET(
-  _req: Request,
-  { params }: { params: Promise<StreamRouteParams> }
-) {
+export async function GET(_req: Request, { params }: { params: Promise<StreamRouteParams> }) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
     return new Response('Unauthorized', { status: 401 })

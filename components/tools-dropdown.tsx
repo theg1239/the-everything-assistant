@@ -166,6 +166,7 @@ export function ToolsDropdown({ onToolSelect, selectedTool }: ToolsDropdownProps
           >
             <div className="">
               <button
+                type="button"
                 onClick={() => handleToolSelect('')}
                 className={cn(
                   'w-full flex items-center gap-3 px-3 py-2 text-left transition-colors',
@@ -183,6 +184,7 @@ export function ToolsDropdown({ onToolSelect, selectedTool }: ToolsDropdownProps
 
               {availableTools.map((tool, index) => (
                 <button
+                  type="button"
                   key={tool.id}
                   onClick={() => handleToolSelect(tool.id)}
                   className={cn(

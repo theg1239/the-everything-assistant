@@ -650,6 +650,42 @@ function PureChatInterfaceComponent({
     }, [checkScrollPosition])
 
     useEffect(() => {
+      const container = contentRef.current?.parentElement
+      const contentNode = contentRef.current
+      if (!container || !contentNode || typeof window === 'undefined') return
+
+      let rafId: number | null = null
+      const scheduleCheck = () => {
+        if (rafId !== null) return
+        rafId = window.requestAnimationFrame(() => {
+          checkScrollPosition()
+          rafId = null
+        })
+      }
+
+      const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => scheduleCheck()) : null
+      resizeObserver?.observe(container)
+      resizeObserver?.observe(contentNode)
+
+      const mutationObserver = typeof MutationObserver !== 'undefined' ? new MutationObserver(() => scheduleCheck()) : null
+      mutationObserver?.observe(contentNode, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style', 'class', 'data-state'],
+      })
+      scheduleCheck()
+
+      return () => {
+        resizeObserver?.disconnect()
+        mutationObserver?.disconnect()
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId)
+        }
+      }
+    }, [checkScrollPosition])
+
+    useEffect(() => {
       if (isLoading) {
         setAutoScrollEnabled(false)
       } else {

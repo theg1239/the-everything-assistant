@@ -1548,7 +1548,7 @@ Based on the post context, comments, and video frames, please analyze the video 
       ]
 
       const { object: analysis } = await generateObject({
-        model: google('gemini-2.0-flash-exp'),
+        model: google('gemini-flash-latest'),
         messages,
         schema: videoAnalysisSchema,
         maxTokens: 2000,

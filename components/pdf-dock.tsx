@@ -85,7 +85,7 @@ export const MobilePdfDockButton: React.FC = () => {
             className="absolute right-0 mt-12 w-56 z-50"
             style={{ transformOrigin: 'top right' }}
           >
-            <div className="bg-card border border-border rounded-xl p-2 shadow-2xl space-y-2">
+            <div className="bg-card border border-border rounded-xl p-2 shadow-2xl space-y-2 max-h-[70vh] overflow-y-auto">
               {items.map(item => (
                 <div key={item.id} className="flex items-center justify-between gap-2">
                   <button
@@ -207,7 +207,7 @@ export const DesktopPdfDockButton: React.FC = () => {
             className="absolute right-0 mt-10 w-72 z-50"
             style={{ transformOrigin: 'top right' }}
           >
-            <div className="bg-card border border-border rounded-xl p-2 shadow-lg space-y-2">
+            <div className="bg-card border border-border rounded-xl p-2 shadow-lg space-y-2 max-h-[70vh] overflow-y-auto">
               {items.map(item => (
                 <div key={item.id} className="flex items-center justify-between gap-2">
                   <button

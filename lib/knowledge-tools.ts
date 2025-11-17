@@ -41,7 +41,7 @@ export function createKnowledgeTools() {
         const { embedding: vector } = await rateLimitedAI.google.embed({
           model: { modelId: 'gemini-embedding-001' },
           value: query,
-        })  
+        })
 
         const pool = await getRagPool()
         const client = await pool.connect()

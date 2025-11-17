@@ -2,11 +2,12 @@ import type { HubVTOPCommand } from '@/types/hub'
 import { extractCliTables } from './utils'
 
 export function parseLibraryDues(raw: any) {
-  const text = typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
+  const text =
+    typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
   if (!text.trim()) return null
   const tables = extractCliTables(text)
-  const duesTable = tables.find(table =>
-    table.headers.length >= 2 && table.headers[0].toLowerCase().includes('type')
+  const duesTable = tables.find(
+    table => table.headers.length >= 2 && table.headers[0].toLowerCase().includes('type')
   )
   if (!duesTable) return null
 

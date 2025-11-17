@@ -40,13 +40,13 @@ const sidebarVariants = {
   open: {
     x: 0,
     transition: {
-      duration: 0.25
+      duration: 0.25,
     },
   },
   closed: {
     x: -320,
     transition: {
-      duration: 0.2
+      duration: 0.2,
     },
   },
 }

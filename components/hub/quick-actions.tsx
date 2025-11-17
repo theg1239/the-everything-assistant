@@ -19,14 +19,24 @@ import {
 interface QuickActionsProps {
   linked: boolean
   onShowResult: (title: string, result: any) => void
-  goTo: (page: 'briefing' | 'vtop' | 'papers' | 'mess' | 'placements' | 'faculty' | 'reddit' | 'syllabi') => void
+  goTo: (
+    page: 'briefing' | 'vtop' | 'papers' | 'mess' | 'placements' | 'faculty' | 'reddit' | 'syllabi'
+  ) => void
   runVtop: (command: HubVTOPCommand, extras?: Record<string, any>) => Promise<PersonalHubSnapshot>
   onLink?: () => void
   disabled?: boolean
   syncingLabel?: string | null
 }
 
-export default function QuickActions({ linked, onShowResult, goTo, runVtop, onLink, disabled, syncingLabel }: QuickActionsProps) {
+export default function QuickActions({
+  linked,
+  onShowResult,
+  goTo,
+  runVtop,
+  onLink,
+  disabled,
+  syncingLabel,
+}: QuickActionsProps) {
   const placements = useHubTool<any>('getPlacementInfo')
   const [pendingAction, setPendingAction] = useState<string | null>(null)
   const [actions, setActions] = useState<any[]>([])

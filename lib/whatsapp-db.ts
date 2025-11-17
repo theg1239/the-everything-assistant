@@ -26,14 +26,13 @@ export interface WhatsAppMessage {
   createdAt: Date
 }
 
-
 export async function getOrCreateWhatsAppConversation(
   phoneNumber: string,
   userName?: string
 ): Promise<WhatsAppConversation> {
   try {
     let conversation = await prisma.whatsAppConversation.findUnique({
-      where: { phoneNumber }
+      where: { phoneNumber },
     })
 
     if (!conversation) {
@@ -41,22 +40,22 @@ export async function getOrCreateWhatsAppConversation(
         data: {
           phoneNumber,
           userName: userName || null,
-          lastMessageAt: new Date()
-        }
+          lastMessageAt: new Date(),
+        },
       })
       console.log(`Created new WhatsApp conversation for ${phoneNumber}`)
     } else if (userName && !conversation.userName) {
       conversation = await prisma.whatsAppConversation.update({
         where: { phoneNumber },
-        data: { 
+        data: {
           userName,
-          lastMessageAt: new Date()
-        }
+          lastMessageAt: new Date(),
+        },
       })
     } else {
       conversation = await prisma.whatsAppConversation.update({
         where: { phoneNumber },
-        data: { lastMessageAt: new Date() }
+        data: { lastMessageAt: new Date() },
       })
     }
 
@@ -93,8 +92,8 @@ export async function saveWhatsAppMessage(
         isCommand: options.isCommand || false,
         command: options.command || null,
         aiResponse: options.aiResponse || null,
-        processingTimeMs: options.processingTimeMs || null
-      }
+        processingTimeMs: options.processingTimeMs || null,
+      },
     })
 
     return message as WhatsAppMessage
@@ -114,7 +113,7 @@ export async function getWhatsAppMessages(
       where: { conversationId },
       orderBy: { createdAt: 'desc' },
       take: limit,
-      skip: offset
+      skip: offset,
     })
 
     return messages as WhatsAppMessage[]
@@ -137,17 +136,17 @@ export async function getActiveWhatsAppConversations(
       include: {
         _count: {
           select: {
-            messages: true
-          }
+            messages: true,
+          },
         },
         user: {
           select: {
             id: true,
             name: true,
-            email: true
-          }
-        }
-      }
+            email: true,
+          },
+        },
+      },
     })
 
     return conversations.map(conv => ({
@@ -160,7 +159,7 @@ export async function getActiveWhatsAppConversations(
       createdAt: conv.createdAt,
       updatedAt: conv.updatedAt,
       messageCount: conv._count.messages,
-      user: conv.user
+      user: conv.user,
     })) as any[]
   } catch (error) {
     console.error('Error getting active WhatsApp conversations:', error)
@@ -173,7 +172,7 @@ export async function getWhatsAppConversationByPhone(
 ): Promise<WhatsAppConversation | null> {
   try {
     const conversation = await prisma.whatsAppConversation.findUnique({
-      where: { phoneNumber }
+      where: { phoneNumber },
     })
 
     return conversation as WhatsAppConversation | null
@@ -190,7 +189,7 @@ export async function linkWhatsAppConversationToUser(
   try {
     const conversation = await prisma.whatsAppConversation.update({
       where: { phoneNumber },
-      data: { userId }
+      data: { userId },
     })
 
     console.log(`Linked WhatsApp conversation ${phoneNumber} to user ${userId}`)
@@ -208,7 +207,7 @@ export async function updateWhatsAppConversationStatus(
   try {
     const conversation = await prisma.whatsAppConversation.update({
       where: { phoneNumber },
-      data: { isActive }
+      data: { isActive },
     })
 
     return conversation as WhatsAppConversation
@@ -236,37 +235,37 @@ export async function getWhatsAppStats(days: number = 7): Promise<{
       totalMessages,
       commandMessages,
       responseTimeData,
-      dailyMessages
+      dailyMessages,
     ] = await Promise.all([
       prisma.whatsAppConversation.count(),
-      
+
       prisma.whatsAppConversation.count({
-        where: { isActive: true }
+        where: { isActive: true },
       }),
-      
+
       prisma.whatsAppMessage.count({
         where: {
-          createdAt: { gte: fromDate }
-        }
+          createdAt: { gte: fromDate },
+        },
       }),
-      
+
       prisma.whatsAppMessage.count({
         where: {
           isCommand: true,
-          createdAt: { gte: fromDate }
-        }
+          createdAt: { gte: fromDate },
+        },
       }),
-      
+
       prisma.whatsAppMessage.findMany({
         where: {
           processingTimeMs: { not: null },
-          createdAt: { gte: fromDate }
+          createdAt: { gte: fromDate },
         },
         select: {
-          processingTimeMs: true
-        }
+          processingTimeMs: true,
+        },
       }),
-      
+
       // Daily message counts
       prisma.$queryRaw`
         SELECT DATE(created_at) as date, COUNT(*) as count
@@ -274,12 +273,14 @@ export async function getWhatsAppStats(days: number = 7): Promise<{
         WHERE created_at >= ${fromDate}
         GROUP BY DATE(created_at)
         ORDER BY date ASC
-      `
+      `,
     ])
 
-    const averageResponseTime = responseTimeData.length > 0
-      ? responseTimeData.reduce((sum, msg) => sum + (msg.processingTimeMs || 0), 0) / responseTimeData.length
-      : 0
+    const averageResponseTime =
+      responseTimeData.length > 0
+        ? responseTimeData.reduce((sum, msg) => sum + (msg.processingTimeMs || 0), 0) /
+          responseTimeData.length
+        : 0
 
     return {
       totalConversations,
@@ -289,8 +290,8 @@ export async function getWhatsAppStats(days: number = 7): Promise<{
       averageResponseTime,
       messagesPerDay: (dailyMessages as any[]).map(row => ({
         date: new Date(row.date).toISOString().split('T')[0],
-        count: Number(row.count)
-      }))
+        count: Number(row.count),
+      })),
     }
   } catch (error) {
     console.error('Error getting WhatsApp stats:', error)
@@ -300,12 +301,14 @@ export async function getWhatsAppStats(days: number = 7): Promise<{
       totalMessages: 0,
       commandMessages: 0,
       averageResponseTime: 0,
-      messagesPerDay: []
+      messagesPerDay: [],
     }
   }
 }
 
-export async function cleanupInactiveWhatsAppConversations(daysInactive: number = 30): Promise<number> {
+export async function cleanupInactiveWhatsAppConversations(
+  daysInactive: number = 30
+): Promise<number> {
   try {
     const cutoffDate = new Date()
     cutoffDate.setDate(cutoffDate.getDate() - daysInactive)
@@ -313,11 +316,11 @@ export async function cleanupInactiveWhatsAppConversations(daysInactive: number 
     const result = await prisma.whatsAppConversation.updateMany({
       where: {
         lastMessageAt: { lt: cutoffDate },
-        isActive: true
+        isActive: true,
       },
       data: {
-        isActive: false
-      }
+        isActive: false,
+      },
     })
 
     console.log(`Marked ${result.count} WhatsApp conversations as inactive`)

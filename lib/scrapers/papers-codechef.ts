@@ -90,13 +90,13 @@ export async function scrapePapersCodeChef(
       searchUrl: apiResult.searchUrl,
       error: apiResult.error,
     })
-    
+
     // ALWAYS return API result if successful, even with 0 papers
     // Only fall back to browser scraping if API completely fails (network error, etc.)
     if (apiResult.success) {
       return apiResult
     }
-    
+
     // Only use browser scraping as absolute last resort when API fails
     dbg('API failed, falling back to browser scraping')
     return await tryBrowserScraping(courseCode, examType, year)
@@ -179,9 +179,9 @@ async function tryAPIApproach(
             }
 
             const finalUrlCandidate =
-              paper.finalUrl || 
-              (paper as any).final_url || 
-              paper.downloadUrl || 
+              paper.finalUrl ||
+              (paper as any).final_url ||
+              paper.downloadUrl ||
               (paper as any).file_url
             const paperUrl =
               finalUrlCandidate ||
@@ -300,7 +300,7 @@ async function tryAPIApproach(
       const codeData = await codeResponse.json()
       const papersArray = Array.isArray(codeData) ? codeData : codeData.papers || []
       dbg('api returned items (codeOnly)', papersArray.length)
-      
+
       // Always return success if API responds, even with 0 results
       if (papersArray) {
         let skippedNoFinalUrl = 0
@@ -334,9 +334,9 @@ async function tryAPIApproach(
             }
 
             const finalUrlCandidate =
-              paper.finalUrl || 
-              (paper as any).final_url || 
-              paper.downloadUrl || 
+              paper.finalUrl ||
+              (paper as any).final_url ||
+              paper.downloadUrl ||
               (paper as any).file_url
             const paperUrl =
               finalUrlCandidate ||
@@ -613,12 +613,12 @@ async function extractFinalUrlFromPaperPage(paperPageUrl: string): Promise<strin
     // Add small delay to prevent resource exhaustion
     await new Promise(resolve => setTimeout(resolve, 200)) // Reduced from 500ms
 
-  browser = await puppeteer.launch({
-    args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
-    defaultViewport: { width: 1280, height: 1024 },
-    executablePath: await chromium.executablePath(),
-    headless: true,
-  })
+    browser = await puppeteer.launch({
+      args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
+      defaultViewport: { width: 1280, height: 1024 },
+      executablePath: await chromium.executablePath(),
+      headless: true,
+    })
 
     const page = await browser.newPage()
     await page.setUserAgent(

@@ -331,10 +331,8 @@ const EventCard: React.FC<{
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-primary flex-shrink-0" />
                   <span className="font-medium">
-                    {slots
-                      .reduce((sum, s) => sum + (s.seatsLeft ?? 0), 0)
-                      .toLocaleString()}{' '}
-                    seats left
+                    {slots.reduce((sum, s) => sum + (s.seatsLeft ?? 0), 0).toLocaleString()} seats
+                    left
                   </span>
                 </div>
               </div>
@@ -419,7 +417,7 @@ const SeatsInfo: React.FC<{ seats: GravitasEventsData['seats'] }> = ({ seats }) 
               <span className="font-semibold text-green-600">{seats.seatsLeft}</span>
             </div>
           </div>
-          
+
           <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
             <span className="text-sm font-medium">Current Registrations</span>
             <span className="font-semibold">{seats.currentRegistrations}</span>
@@ -441,9 +439,7 @@ const SeatsInfo: React.FC<{ seats: GravitasEventsData['seats'] }> = ({ seats }) 
                       </div>
                     </div>
                     <div className="flex items-center justify-between md:flex-col md:items-end gap-2">
-                      <div className="text-sm font-medium">
-                        {slot.seatsLeft} seats left
-                      </div>
+                      <div className="text-sm font-medium">{slot.seatsLeft} seats left</div>
                       <div className="text-xs text-muted-foreground">
                         {slot.currentRegistrations}/{slot.totalSeats} registered
                       </div>
@@ -743,10 +739,7 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
               (sum: number, s: any) => sum + (s.currentRegistrations ?? 0),
               0
             ),
-            seatsLeft: eventSlots.reduce(
-              (sum: number, s: any) => sum + (s.seatsLeft ?? 0),
-              0
-            ),
+            seatsLeft: eventSlots.reduce((sum: number, s: any) => sum + (s.seatsLeft ?? 0), 0),
             registrationStatus: eventSlots.some((s: any) => s.isRegistrable) ? 'Open' : 'Closed',
             slots: eventSlots,
           }

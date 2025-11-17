@@ -139,7 +139,9 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
     if (Array.isArray(value)) {
       if (!value.length) return '—'
       if (value.every(item => typeof item !== 'object' || item === null)) {
-        return value.map(item => (item === null || item === undefined ? '—' : String(item))).join(', ')
+        return value
+          .map(item => (item === null || item === undefined ? '—' : String(item)))
+          .join(', ')
       }
       return `${value.length} items`
     }
@@ -147,7 +149,11 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
   }
 
   const renderPrimitiveValue = (value: any) => {
-    if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) {
+    if (
+      value === null ||
+      value === undefined ||
+      (typeof value === 'string' && value.trim() === '')
+    ) {
       return <span className="text-xs text-muted-foreground">—</span>
     }
 
@@ -237,16 +243,22 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
             <Calendar className="h-3 w-3 text-blue-500" />
             {section?.title || `Section ${idx + 1}`}
           </div>
-          {section?.note && (
-            <p className="text-xs text-muted-foreground">{section.note}</p>
-          )}
+          {section?.note && <p className="text-xs text-muted-foreground">{section.note}</p>}
           {Array.isArray(section?.exams) && section.exams.length > 0 ? (
             <div className="mt-2">
-              {renderStructuredArray(`${section?.title || 'section'}-exams`, section.exams, depth + 1)}
+              {renderStructuredArray(
+                `${section?.title || 'section'}-exams`,
+                section.exams,
+                depth + 1
+              )}
             </div>
           ) : Array.isArray(section?.schedule) && section.schedule.length > 0 ? (
             <div className="mt-2">
-              {renderStructuredArray(`${section?.title || 'section'}-schedule`, section.schedule, depth + 1)}
+              {renderStructuredArray(
+                `${section?.title || 'section'}-schedule`,
+                section.schedule,
+                depth + 1
+              )}
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">No entries found.</p>
@@ -327,7 +339,11 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
     )
   }
 
-  const renderStructuredArray = (arrayKey: string, value: any[], depth: number): React.ReactNode => {
+  const renderStructuredArray = (
+    arrayKey: string,
+    value: any[],
+    depth: number
+  ): React.ReactNode => {
     if (!value.length) {
       return <span className="text-xs text-muted-foreground">—</span>
     }
@@ -335,13 +351,15 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
     const normalizedKey = (arrayKey || '').toLowerCase()
     const tableCandidates = value.filter(isCliTable)
 
-    if (tableCandidates.length && (tableCandidates.length === value.length || normalizedKey.includes('table'))) {
+    if (
+      tableCandidates.length &&
+      (tableCandidates.length === value.length || normalizedKey.includes('table'))
+    ) {
       return renderCliTables(tableCandidates)
     }
 
     const looksLikeSections = value.every(
-      item =>
-        isPlainObject(item) && (Array.isArray(item.exams) || Array.isArray(item.schedule))
+      item => isPlainObject(item) && (Array.isArray(item.exams) || Array.isArray(item.schedule))
     )
 
     if (looksLikeSections) {
@@ -1119,7 +1137,8 @@ const PaperCard = ({
 
   const handleViewPaper = async () => {
     const urlToView = paper.link || paper.url || paper.pdfUrl || paper.downloadUrl
-    const fromExamCooker = typeof paper.source === 'string' && paper.source.toLowerCase() === 'examcooker'
+    const fromExamCooker =
+      typeof paper.source === 'string' && paper.source.toLowerCase() === 'examcooker'
 
     if (fromExamCooker) {
       if (urlToView && typeof window !== 'undefined') {

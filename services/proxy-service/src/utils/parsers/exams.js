@@ -6,17 +6,7 @@ function clean(value) {
   return value && typeof value === 'string' && value.trim().length ? value.trim() : undefined
 }
 
-function primaryExam(
-  code,
-  title,
-  slot,
-  examDate,
-  examTime,
-  venue,
-  seat,
-  seatNo,
-  daysLeft
-) {
+function primaryExam(code, title, slot, examDate, examTime, venue, seat, seatNo, daysLeft) {
   return {
     code: clean(code),
     title: clean(title),

@@ -59,8 +59,7 @@ const normalizeToolInvocations = (message: LegacyMessage): NormalizedToolInvocat
         typeof part.toolName === 'string'
           ? part.toolName
           : deriveToolNameFromType(part.type, `tool-${index}`)
-      const toolCallId =
-          part.toolCallId || `${toolName}-${message.id || 'message'}-${index}`
+      const toolCallId = part.toolCallId || `${toolName}-${message.id || 'message'}-${index}`
 
       const invocation: NormalizedToolInvocation = {
         toolCallId,
@@ -141,7 +140,11 @@ const ReasoningPanel = memo(function ReasoningPanel({
 
   if (!text) return null
 
-  const headerLabel = isStreaming ? 'Thinking…' : duration > 0 ? `Thought for ${duration}s` : 'Thoughts'
+  const headerLabel = isStreaming
+    ? 'Thinking…'
+    : duration > 0
+      ? `Thought for ${duration}s`
+      : 'Thoughts'
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-background/40 text-xs text-muted-foreground shadow-[0_15px_35px_rgba(0,0,0,0.25)] backdrop-blur-md">
@@ -168,7 +171,10 @@ const ReasoningPanel = memo(function ReasoningPanel({
             {isStreaming ? 'streaming' : duration > 0 ? `${duration}s` : 'ready'}
           </span>
           <ChevronDown
-            className={cn('h-4 w-4 text-foreground/70 transition-transform', isOpen ? 'rotate-180' : '')}
+            className={cn(
+              'h-4 w-4 text-foreground/70 transition-transform',
+              isOpen ? 'rotate-180' : ''
+            )}
           />
         </div>
       </button>

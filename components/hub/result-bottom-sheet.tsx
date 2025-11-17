@@ -14,7 +14,14 @@ interface ResultBottomSheetProps {
   mode?: 'static' | 'stream'
 }
 
-export function ResultBottomSheet({ open, onClose, result, title, loading = false, mode = 'static' }: ResultBottomSheetProps) {
+export function ResultBottomSheet({
+  open,
+  onClose,
+  result,
+  title,
+  loading = false,
+  mode = 'static',
+}: ResultBottomSheetProps) {
   const [tab, setTab] = useState<'insights' | 'details' | 'raw'>('insights')
 
   useEffect(() => {
@@ -81,22 +88,22 @@ export function ResultBottomSheet({ open, onClose, result, title, loading = fals
                 { id: 'insights', label: 'insights', enabled: Boolean(result?.formatted_content) },
                 { id: 'details', label: 'details', enabled: Boolean(result?.summary) },
                 { id: 'raw', label: 'raw', enabled: true },
-            ] as { id: typeof tab; label: string; enabled: boolean }[]
-          )
-            .filter(t => t.enabled)
-            .map(t => (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                  tab === t.id
-                    ? 'bg-primary/10 border-primary/40 text-primary'
-                    : 'border-border/50 text-muted-foreground'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
+              ] as { id: typeof tab; label: string; enabled: boolean }[]
+            )
+              .filter(t => t.enabled)
+              .map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                    tab === t.id
+                      ? 'bg-primary/10 border-primary/40 text-primary'
+                      : 'border-border/50 text-muted-foreground'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
           </div>
           <div className="mt-4 flex-1 overflow-auto px-4 pb-6 sm:px-6" data-allow-touch-scroll>
             {renderContent}
@@ -117,5 +124,8 @@ function safeStringify(obj: any) {
 
 function stripHtml(html?: string) {
   if (!html) return ''
-  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }

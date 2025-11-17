@@ -126,9 +126,8 @@ async function fetchBriefingAudienceStep({
       return Boolean(row.email && prefs?.emailEnabled)
     })
     .map(row => {
-      const prefs = ((row.preferences as StoredPreferences | null)?.dailyBriefing || {}) as NonNullable<
-        StoredPreferences['dailyBriefing']
-      >
+      const prefs = ((row.preferences as StoredPreferences | null)?.dailyBriefing ||
+        {}) as NonNullable<StoredPreferences['dailyBriefing']>
       return {
         id: row.id,
         email: row.email as string,

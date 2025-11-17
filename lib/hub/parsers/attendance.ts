@@ -42,7 +42,9 @@ export function parseAttendance(result: RawVTOPResult): ParsedHubResult | null {
     .map(line => line.replace(/[\r\t]+/g, '').trimEnd())
     .filter(line => line.length)
 
-  const headerIndex = lines.findIndex(line => HEADER_KEYWORDS.every(keyword => line.includes(keyword)))
+  const headerIndex = lines.findIndex(line =>
+    HEADER_KEYWORDS.every(keyword => line.includes(keyword))
+  )
   if (headerIndex === -1) {
     return null
   }
@@ -114,7 +116,8 @@ export function parseAttendance(result: RawVTOPResult): ParsedHubResult | null {
   const summary = `tracking ${mappedRows.length} courses • ${healthy} steady • ${needsAttention} need attention`
 
   const formattedRows = mappedRows
-    .map(row => `
+    .map(
+      row => `
         <tr>
           <td>${row.subject}</td>
           <td>${row.type}</td>
@@ -122,7 +125,8 @@ export function parseAttendance(result: RawVTOPResult): ParsedHubResult | null {
           <td>${row.classes}</td>
           <td>${row.percentage}</td>
           <td>${row.alert}</td>
-        </tr>`)
+        </tr>`
+    )
     .join('\n')
 
   const formatted_content = `

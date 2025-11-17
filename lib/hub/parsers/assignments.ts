@@ -2,7 +2,8 @@ import type { HubVTOPCommand } from '@/types/hub'
 import { extractCliTables } from './utils'
 
 export function parseAssignments(raw: any) {
-  const text = typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
+  const text =
+    typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
   if (!text.trim()) return null
   const tables = extractCliTables(text)
   const summaryTable = tables.find(table =>
@@ -23,9 +24,13 @@ export function parseAssignments(raw: any) {
 
   if (!subjects.length) return null
 
-  const upcoming = subjects.find(item => item.nextDue && item.nextDue !== 'N/A' && item.nextDue.toLowerCase() !== 'n/a')
+  const upcoming = subjects.find(
+    item => item.nextDue && item.nextDue !== 'N/A' && item.nextDue.toLowerCase() !== 'n/a'
+  )
 
-  const summary = upcoming ? `${upcoming.subject} due ${upcoming.nextDue}` : `${subjects.length} subjects tracked`
+  const summary = upcoming
+    ? `${upcoming.subject} due ${upcoming.nextDue}`
+    : `${subjects.length} subjects tracked`
 
   return {
     command: 'da' as HubVTOPCommand,

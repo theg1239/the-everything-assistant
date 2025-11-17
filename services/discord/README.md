@@ -15,11 +15,13 @@ A Discord bot version of The Everything Assistant with AI-powered responses, con
 ## Commands
 
 ### General Commands
+
 - `!ask [question]` - Ask the AI assistant anything
 - `!status` - Check bot status and uptime
 - `!help` - Show available commands
 
 ### Owner-Only Commands
+
 - `!context [question]` - Analyze recent channel history
 - `!everyone [message]` - Tag everyone in the server
 
@@ -38,6 +40,7 @@ A Discord bot version of The Everything Assistant with AI-powered responses, con
 ### 2. Bot Permissions
 
 When inviting the bot to your server, make sure it has these permissions:
+
 - Send Messages
 - Read Messages
 - Read Message History
@@ -48,11 +51,13 @@ When inviting the bot to your server, make sure it has these permissions:
 ### 3. Environment Configuration
 
 1. Copy `.env.example` to `.env`:
+
    ```bash
    cp .env.example .env
    ```
 
 2. Fill in your configuration:
+
    ```env
    DISCORD_TOKEN=your_discord_bot_token_here
    BOT_OWNER_ID=your_discord_user_id_here
@@ -99,21 +104,22 @@ src/
 
 ## Features Comparison with WhatsApp Bot
 
-| Feature | WhatsApp Bot | Discord Bot |
-|---------|--------------|-------------|
-| AI Assistant | ✅ | ✅ |
-| Context Analysis | ✅ | ✅ |
-| Conversation Memory | ✅ | ✅ |
-| Smart Routing | ✅ | ✅ |
-| Owner Privileges | ✅ | ✅ |
-| @everyone Tags | ✅ | ✅ |
-| Rate Limiting | ✅ | ✅ |
-| Rich Embeds | ❌ | ✅ |
-| Slash Commands | ❌ | 🔄 (Future) |
+| Feature             | WhatsApp Bot | Discord Bot |
+| ------------------- | ------------ | ----------- |
+| AI Assistant        | ✅           | ✅          |
+| Context Analysis    | ✅           | ✅          |
+| Conversation Memory | ✅           | ✅          |
+| Smart Routing       | ✅           | ✅          |
+| Owner Privileges    | ✅           | ✅          |
+| @everyone Tags      | ✅           | ✅          |
+| Rate Limiting       | ✅           | ✅          |
+| Rich Embeds         | ❌           | ✅          |
+| Slash Commands      | ❌           | 🔄 (Future) |
 
 ## Development
 
 The bot is built with:
+
 - **Discord.js v14** - Discord API wrapper
 - **TypeScript** - Type safety and modern JavaScript
 - **Express.js** - Web server for API endpoints
@@ -131,6 +137,7 @@ The bot is built with:
 ### Logs
 
 The bot provides detailed logging:
+
 - `🤖` Command processing
 - `📚` Context analysis
 - `🧠` AI request processing

@@ -98,9 +98,7 @@ function normalizeNameToken(value?: string | null) {
   if (!value) return 'there'
   const trimmed = value.trim()
   if (!trimmed) return 'there'
-  const sanitized = trimmed.toLowerCase().startsWith('hey ')
-    ? trimmed.slice(4).trim()
-    : trimmed
+  const sanitized = trimmed.toLowerCase().startsWith('hey ') ? trimmed.slice(4).trim() : trimmed
   const token = sanitized.split(/[\s._-]+/).filter(Boolean)[0] || 'there'
   if (!token) return 'there'
   const lower = token.replace(/[^A-Za-z]/g, '') || token
@@ -135,12 +133,16 @@ export function buildDailyBriefingContext(
   })
 
   const timetableData = timetable?.structured_data
-  const nextClassComputation = timetableData ? computeDynamicNextClass(timetableData, referenceDate) : null
+  const nextClassComputation = timetableData
+    ? computeDynamicNextClass(timetableData, referenceDate)
+    : null
 
   const examSchedule = normalizeExamSchedule(exams, referenceDate)
     .filter(entry => entry.examDateObj)
     .sort((a, b) => (a.examDateObj!.getTime() || 0) - (b.examDateObj!.getTime() || 0))
-  const upcomingExam = examSchedule.find(entry => entry.examDateObj && entry.examDateObj >= referenceDate)
+  const upcomingExam = examSchedule.find(
+    entry => entry.examDateObj && entry.examDateObj >= referenceDate
+  )
   const examFocus = upcomingExam || examSchedule[0]
   const examDaysAway = examFocus?.examDateObj
     ? differenceInCalendarDays(examFocus.examDateObj, referenceDate)
@@ -154,7 +156,11 @@ export function buildDailyBriefingContext(
 
   let busyScore = 0
   if (assignmentsDueSoon.length >= 2) busyScore += 2
-  if (assignmentsDueSoon.some(item => item.dueDate && differenceInCalendarDays(item.dueDate, referenceDate) <= 1)) {
+  if (
+    assignmentsDueSoon.some(
+      item => item.dueDate && differenceInCalendarDays(item.dueDate, referenceDate) <= 1
+    )
+  ) {
     busyScore += 1
   }
   if (nextClassComputation?.startsAt) {
@@ -169,7 +175,11 @@ export function buildDailyBriefingContext(
   if (busyScore >= 3) {
     messages.push({ id: 'mood-busy', primary: 'today looks like a very busy day.' })
   } else if (busyScore <= 0) {
-    messages.push({ id: 'mood-calm', primary: 'today looks mellow—reset and go again.', tone: 'calm' })
+    messages.push({
+      id: 'mood-calm',
+      primary: 'today looks mellow—reset and go again.',
+      tone: 'calm',
+    })
   } else {
     messages.push({ id: 'mood-balanced', primary: 'today looks balanced. pace yourself.' })
   }
@@ -211,7 +221,9 @@ export function buildDailyBriefingContext(
     messages.push({
       id: 'exam-class-balance',
       primary: `exam today plus ${todaysClasses.length} class${todaysClasses.length === 1 ? '' : 'es'} to juggle`,
-      supporting: windowLabel ? `${windowLabel} timetable window—plan buffers` : 'plan buffers between exam blocks and class slots',
+      supporting: windowLabel
+        ? `${windowLabel} timetable window—plan buffers`
+        : 'plan buffers between exam blocks and class slots',
       tone: 'alert',
     })
   }
@@ -223,13 +235,16 @@ export function buildDailyBriefingContext(
         : assignment.nextDue
       messages.push({
         id: `assignment-${index}`,
-        primary: `${assignment.subject || 'assignment'}${dueLabel ? ` due ${dueLabel}` : ''}`.trim(),
+        primary:
+          `${assignment.subject || 'assignment'}${dueLabel ? ` due ${dueLabel}` : ''}`.trim(),
         supporting: assignment.status,
       })
     })
   }
 
-  const nextClassInsight = timetable ? deriveNextClassInsight(timetable, referenceDate.getTime()) : null
+  const nextClassInsight = timetable
+    ? deriveNextClassInsight(timetable, referenceDate.getTime())
+    : null
   if (nextClassInsight) {
     messages.push({
       id: 'next-class',
@@ -238,13 +253,14 @@ export function buildDailyBriefingContext(
     })
   }
 
-  const examPrompt = examPhrase && examFocus?.examDateObj
-    ? {
-        course: examFocus.title || examFocus.course || examFocus.code,
-        code: examFocus.code,
-        when: formatDateWithTime(examFocus.examDateObj),
-      }
-    : undefined
+  const examPrompt =
+    examPhrase && examFocus?.examDateObj
+      ? {
+          course: examFocus.title || examFocus.course || examFocus.code,
+          code: examFocus.code,
+          when: formatDateWithTime(examFocus.examDateObj),
+        }
+      : undefined
 
   const notifications = deriveNotifications(
     {
@@ -285,7 +301,9 @@ export function buildDailyBriefingContext(
     messages.push({
       id: 'attendance-status',
       primary: `${attendanceStats.needsAttention} course${attendanceStats.needsAttention === 1 ? '' : 's'} have low attendance`,
-      supporting: attendanceStats.worstSubject ? `${attendanceStats.worstSubject} at ${attendanceStats.worstPercentage}%` : undefined,
+      supporting: attendanceStats.worstSubject
+        ? `${attendanceStats.worstSubject} at ${attendanceStats.worstPercentage}%`
+        : undefined,
       tone: 'alert',
     })
   } else if (attendanceStats?.healthy > 0) {
@@ -349,9 +367,11 @@ export function deriveNextClassInsight(snapshot?: PersonalHubSnapshot | null, no
   const course = fallback.course || fallback.subject || fallback.title || snapshot.title
   const room = fallback.location || fallback.room || fallback.venue
   const timeStamp = rolling?.startsAt
-    ? new Intl.DateTimeFormat(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(
-        rolling.startsAt
-      )
+    ? new Intl.DateTimeFormat(undefined, {
+        weekday: 'short',
+        hour: 'numeric',
+        minute: '2-digit',
+      }).format(rolling.startsAt)
     : fallback.startTime || fallback.start || fallback.slot || fallback.time
 
   const supportingParts = [
@@ -375,7 +395,9 @@ export function deriveAssignmentInsight(snapshot?: PersonalHubSnapshot | null, n
   const upcoming = pickUpcomingAssignment(subjects, now) || subjects[0]
   if (!upcoming) return null
   const absolute = upcoming.dueDate ? formatShortDate(upcoming.dueDate) : upcoming.nextDue
-  const relative = upcoming.dueDate ? formatDistanceToNow(upcoming.dueDate, { addSuffix: true }) : undefined
+  const relative = upcoming.dueDate
+    ? formatDistanceToNow(upcoming.dueDate, { addSuffix: true })
+    : undefined
 
   return {
     headline: upcoming.subject || 'assignment',
@@ -404,8 +426,8 @@ export function deriveAttendanceInsight(snapshot?: PersonalHubSnapshot | null) {
 export function deriveLeaveInsight(snapshot?: PersonalHubSnapshot | null) {
   if (!snapshot?.structured_data) return null
   const data: any = snapshot.structured_data
-  const pending = (data.requests || data.leaves || []).find(
-    (req: any) => (req.status || req.state || '').toLowerCase().includes('pending')
+  const pending = (data.requests || data.leaves || []).find((req: any) =>
+    (req.status || req.state || '').toLowerCase().includes('pending')
   )
   if (pending) {
     return {
@@ -439,9 +461,10 @@ export function deriveExamInsight(snapshot?: PersonalHubSnapshot | null, nowTick
 
   return {
     headline,
-    supporting: [upcoming.examTime, relative, nearby ? 'nearby exam' : undefined]
-      .filter(Boolean)
-      .join(' · ') || undefined,
+    supporting:
+      [upcoming.examTime, relative, nearby ? 'nearby exam' : undefined]
+        .filter(Boolean)
+        .join(' · ') || undefined,
     meta: upcoming.venue || upcoming.hall || upcoming.slot,
   }
 }
@@ -496,7 +519,9 @@ export function deriveNotifications(
   const assignmentList = normalizeAssignments(snapshots.assignmentsSnapshot, now)
   const upcomingDA = pickUpcomingAssignment(assignmentList, now)
   if (upcomingDA?.subject) {
-    const relative = upcomingDA.dueDate ? formatDistanceToNow(upcomingDA.dueDate, { addSuffix: true }) : upcomingDA.nextDue
+    const relative = upcomingDA.dueDate
+      ? formatDistanceToNow(upcomingDA.dueDate, { addSuffix: true })
+      : upcomingDA.nextDue
     notifications.push({
       id: 'da-due',
       text: `${upcomingDA.subject} due ${relative}`,
@@ -553,7 +578,10 @@ export type NormalizedAssignment = {
   [key: string]: any
 }
 
-export function normalizeAssignments(snapshot: PersonalHubSnapshot | null | undefined, reference: Date): NormalizedAssignment[] {
+export function normalizeAssignments(
+  snapshot: PersonalHubSnapshot | null | undefined,
+  reference: Date
+): NormalizedAssignment[] {
   if (!snapshot?.structured_data) return []
   const payload: any = snapshot.structured_data
   const subjects =
@@ -576,7 +604,10 @@ export function normalizeAssignments(snapshot: PersonalHubSnapshot | null | unde
   })
 }
 
-function pickUpcomingAssignment(list: NormalizedAssignment[], now: Date): NormalizedAssignment | null {
+function pickUpcomingAssignment(
+  list: NormalizedAssignment[],
+  now: Date
+): NormalizedAssignment | null {
   const dated = list
     .filter(item => item.dueDate && item.subject)
     .sort((a, b) => (a.dueDate!.getTime() || 0) - (b.dueDate!.getTime() || 0))
@@ -634,7 +665,11 @@ function pickUpcomingExam(list: NormalizedExamEntry[], now: Date): NormalizedExa
 }
 
 export function formatShortDate(date: Date) {
-  return new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).format(date)
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  }).format(date)
 }
 
 function formatDateWithTime(date: Date) {
@@ -860,7 +895,10 @@ function deriveClassesForDay(structuredData: any, referenceDate: Date): DayClass
   return results.sort((a, b) => a.sortValue - b.sortValue)
 }
 
-function buildClassScheduleNarrative(classes: DayClassSummary[], referenceDate: Date): DailyBriefingMessage | null {
+function buildClassScheduleNarrative(
+  classes: DayClassSummary[],
+  referenceDate: Date
+): DailyBriefingMessage | null {
   if (!classes.length) return null
   const sorted = [...classes].sort((a, b) => a.sortValue - b.sortValue)
   const withTime = sorted.filter(cls => typeof cls.startMinutes === 'number')

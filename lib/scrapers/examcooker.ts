@@ -159,7 +159,10 @@ function sanitizeSubject(value: string): string {
 }
 
 function parseTitle(rawTitle: string): ParsedTitle {
-  const cleanTitle = rawTitle.replace(/\.pdf$/i, '').replace(/select$/i, '').trim()
+  const cleanTitle = rawTitle
+    .replace(/\.pdf$/i, '')
+    .replace(/select$/i, '')
+    .trim()
   const examType = extractExamType(cleanTitle)
   const slot = extractSlot(cleanTitle)
   const { academicYear, year } = extractYearInfo(cleanTitle)
@@ -288,9 +291,7 @@ function normalizeYear(value?: string): string | undefined {
 
 function sanitizeTags(tags?: string[] | null): string[] {
   if (!Array.isArray(tags)) return []
-  return tags
-    .map(tag => (typeof tag === 'string' ? tag.trim() : ''))
-    .filter(Boolean)
+  return tags.map(tag => (typeof tag === 'string' ? tag.trim() : '')).filter(Boolean)
 }
 
 function resolveSlot(
@@ -318,9 +319,7 @@ function findYearInList(values: Array<string | undefined | null>): string | unde
 }
 
 function buildMetadataParts(parts: Array<string | undefined | null>): string[] {
-  return parts
-    .map(part => (part ? part.toString().trim() : ''))
-    .filter(Boolean)
+  return parts.map(part => (part ? part.toString().trim() : '')).filter(Boolean)
 }
 
 async function queryExamCooker(
@@ -409,8 +408,10 @@ function mapPaper(paper: ApiPaper, examType?: string, year?: string): Paper | nu
 
   const parsed = parseTitle(rawTitle)
   const normalizedExam =
-    normalizeExamType(paper.examType || paper.exam || paper.paperType || parsed.examType || examType, rawTitle) ||
-    'unknown'
+    normalizeExamType(
+      paper.examType || paper.exam || paper.paperType || parsed.examType || examType,
+      rawTitle
+    ) || 'unknown'
 
   const tags = sanitizeTags(paper.tags)
   const resolvedSlot = resolveSlot(parsed.slot, paper.slot, tags)
@@ -530,7 +531,11 @@ function deduplicatePapers(papers: Paper[]): Paper[] {
   return unique
 }
 
-async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
 

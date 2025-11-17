@@ -104,7 +104,9 @@ export default function Hub({
           <Drawer.Title className="sr-only">Hub</Drawer.Title>
           <Drawer.Handle className="mx-auto mt-2 mb-1 h-1 w-16 rounded-full bg-border/70 md:bg-border" />
           <div className="flex items-center justify-between gap-2 px-4 pb-3 border-b border-border/60 bg-background/80 backdrop-blur supports-[backdrop-filter]:backdrop-blur-md">
-            <div className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">hub</div>
+            <div className="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+              hub
+            </div>
             <div className="flex items-center gap-2">
               {isSyncing && !locked && (
                 <span className="text-xs px-2 py-0.5 rounded-full border border-border/50 text-muted-foreground flex items-center gap-1">
@@ -150,9 +152,12 @@ function HubEmptyState({ onAction }: { onAction?: () => void }) {
   return (
     <div className="h-full flex items-center justify-center px-6 py-8 text-center">
       <div className="space-y-3">
-        <div className="text-sm font-semibold uppercase text-muted-foreground">hub requires VTOP linking</div>
+        <div className="text-sm font-semibold uppercase text-muted-foreground">
+          hub requires VTOP linking
+        </div>
         <p className="text-2xl font-light text-foreground">
-          link once to pull timetable, assignments, attendance and leave status directly inside chat.
+          link once to pull timetable, assignments, attendance and leave status directly inside
+          chat.
         </p>
         <Button onClick={onAction} className="rounded-full px-6">
           link VTOP

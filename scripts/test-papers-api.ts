@@ -2,7 +2,7 @@
 /**
  * Test script for papers scrapers API approach
  * Tests CodeChef, PaperVault, and ExamCooker APIs with a course name query
- * 
+ *
  * Run with: pnpm tsx scripts/test-papers-api.ts
  */
 
@@ -43,7 +43,7 @@ async function testPapersAPIs() {
       console.log(`   🌐 Source: ${result.source}`)
       console.log(`   🔗 URL: ${result.searchUrl || 'N/A'}`)
       console.log(`   ⏱️  Duration: ${duration}ms`)
-      
+
       if (result.error) {
         console.log(`   ⚠️  Error: ${result.error}`)
       }
@@ -77,7 +77,7 @@ async function testPapersAPIs() {
       console.log(`   🌐 Source: ${result.source}`)
       console.log(`   🔗 URL: ${(result as any).searchUrl || 'N/A'}`)
       console.log(`   ⏱️  Duration: ${duration}ms`)
-      
+
       if ((result as any).error) {
         console.log(`   ⚠️  Error: ${(result as any).error}`)
       }
@@ -117,35 +117,35 @@ async function testPapersAPIs() {
 
 // Run test
 testPapersAPIs().catch(console.error)
-    // Test ExamCooker API
-    console.log('\n📚 Testing examcooker.acmvit.in API...')
-    const startExamCooker = Date.now()
-    try {
-      const result = await scrapeExamCooker(testCourse.code)
-      const duration = Date.now() - startExamCooker
+// Test ExamCooker API
+console.log('\n📚 Testing examcooker.acmvit.in API...')
+const startExamCooker = Date.now()
+try {
+  const result = await scrapeExamCooker(testCourse.code)
+  const duration = Date.now() - startExamCooker
 
-      console.log(`   ✅ Success: ${result.success}`)
-      console.log(`   📄 Papers: ${result.papers.length}`)
-      console.log(`   🌐 Source: ${result.source}`)
-      console.log(`   🔗 URL: ${result.searchUrl || 'N/A'}`)
-      console.log(`   ⏱️  Duration: ${duration}ms`)
+  console.log(`   ✅ Success: ${result.success}`)
+  console.log(`   📄 Papers: ${result.papers.length}`)
+  console.log(`   🌐 Source: ${result.source}`)
+  console.log(`   🔗 URL: ${result.searchUrl || 'N/A'}`)
+  console.log(`   ⏱️  Duration: ${duration}ms`)
 
-      if ((result as any).error) {
-        console.log(`   ⚠️  Error: ${(result as any).error}`)
-      }
+  if ((result as any).error) {
+    console.log(`   ⚠️  Error: ${(result as any).error}`)
+  }
 
-      if (result.papers.length > 0) {
-        console.log(`\n   Top 3 papers:`)
-        result.papers.slice(0, 3).forEach((p: any, i: number) => {
-          console.log(`   ${i + 1}. ${p.title} (${p.examType}, ${p.year})`)
-        })
-      }
+  if (result.papers.length > 0) {
+    console.log(`\n   Top 3 papers:`)
+    result.papers.slice(0, 3).forEach((p: any, i: number) => {
+      console.log(`   ${i + 1}. ${p.title} (${p.examType}, ${p.year})`)
+    })
+  }
 
-      if (duration < 5000) {
-        console.log(`   ✓ Fast response → API approach used ✓`)
-      } else {
-        console.log(`   ⚠️  Slow response (${duration}ms) → Possible timeout or fallback`)
-      }
-    } catch (error: any) {
-      console.error(`   ❌ Failed: ${error.message}`)
-    }
+  if (duration < 5000) {
+    console.log(`   ✓ Fast response → API approach used ✓`)
+  } else {
+    console.log(`   ⚠️  Slow response (${duration}ms) → Possible timeout or fallback`)
+  }
+} catch (error: any) {
+  console.error(`   ❌ Failed: ${error.message}`)
+}

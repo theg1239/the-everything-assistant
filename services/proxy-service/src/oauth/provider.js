@@ -37,7 +37,9 @@ class VtopOAuthProvider {
       createClientsStore({
         staticClients: options.staticClients || [],
         clientsFilePath:
-          options.clientsFilePath || process.env.MCP_OAUTH_CLIENTS_PATH || path.resolve(process.cwd(), 'mcp-oauth-clients.json'),
+          options.clientsFilePath ||
+          process.env.MCP_OAUTH_CLIENTS_PATH ||
+          path.resolve(process.cwd(), 'mcp-oauth-clients.json'),
       })
     this.codes = new Map()
     this.tokens = new Map()
@@ -106,7 +108,9 @@ class VtopOAuthProvider {
       throw new InvalidRequestError('Invalid consent token format')
     }
 
-    const expectedSignature = createHmac('sha256', this.consentSecret).update(body).digest('base64url')
+    const expectedSignature = createHmac('sha256', this.consentSecret)
+      .update(body)
+      .digest('base64url')
     const provided = Buffer.from(signature, 'base64url')
     const expected = Buffer.from(expectedSignature, 'base64url')
     if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
@@ -129,7 +133,8 @@ class VtopOAuthProvider {
   }
 
   renderConsentPage({ consentId, client, params }) {
-    const derivedName = client.client_name || client.application_name || client.software_id || client.client_id
+    const derivedName =
+      client.client_name || client.application_name || client.software_id || client.client_id
     const scopeList = (params.scopes || []).length ? params.scopes.join(', ') : 'mcp:tools'
     const redirectHost = (() => {
       try {

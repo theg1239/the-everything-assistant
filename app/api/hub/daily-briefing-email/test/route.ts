@@ -3,11 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { loadPersonalHubState } from '@/app/actions/hub'
 import { sendDailyBriefingEmail } from '@/lib/email/resend'
-import {
-  buildDailyBriefingContext,
-  buildGreeting,
-  deriveTerseName,
-} from '@/lib/hub/daily-briefing'
+import { buildDailyBriefingContext, buildGreeting, deriveTerseName } from '@/lib/hub/daily-briefing'
 
 export const runtime = 'nodejs'
 
@@ -23,7 +19,10 @@ export async function POST() {
     const context = buildDailyBriefingContext(state.snapshots || [], reference)
 
     if (context.messages.length === 0) {
-      context.messages.push({ id: 'empty', primary: 'no snapshots found — link VTOP to start syncing.' })
+      context.messages.push({
+        id: 'empty',
+        primary: 'no snapshots found — link VTOP to start syncing.',
+      })
     }
 
     const profileSnapshot = state.snapshots?.find(snapshot => snapshot.command === 'profile')

@@ -39,7 +39,8 @@ function resolveManifestPath() {
   }
 
   const discovered =
-    findUpwards('hub-capabilities.json', __dirname) || findUpwards('hub-capabilities.json', process.cwd())
+    findUpwards('hub-capabilities.json', __dirname) ||
+    findUpwards('hub-capabilities.json', process.cwd())
   if (discovered) {
     return discovered
   }

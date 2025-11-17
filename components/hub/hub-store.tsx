@@ -57,15 +57,9 @@ type HubStoreState = {
 
 type HubStoreActions = {
   setState: (
-    partial:
-      | Partial<HubStoreState>
-      | ((state: HubStoreState) => Partial<HubStoreState>)
+    partial: Partial<HubStoreState> | ((state: HubStoreState) => Partial<HubStoreState>)
   ) => void
-  setHubState: (
-    updater:
-      | PersonalHubState
-      | ((prev: PersonalHubState) => PersonalHubState)
-  ) => void
+  setHubState: (updater: PersonalHubState | ((prev: PersonalHubState) => PersonalHubState)) => void
 }
 
 export type HubStore = HubStoreState & HubStoreActions
@@ -113,7 +107,9 @@ export const createHubStore = (initialHubState: PersonalHubState): StoreApi<HubS
     },
     setHubState: updater => {
       if (typeof updater === 'function') {
-        set(state => ({ hubState: (updater as (prev: PersonalHubState) => PersonalHubState)(state.hubState) }))
+        set(state => ({
+          hubState: (updater as (prev: PersonalHubState) => PersonalHubState)(state.hubState),
+        }))
       } else {
         set({ hubState: updater })
       }
@@ -138,9 +134,7 @@ export function HubStoreProvider({
     storeRef.current?.getState().setHubState(initialState)
   }, [initialState])
 
-  return (
-    <HubStoreContext.Provider value={storeRef.current}>{children}</HubStoreContext.Provider>
-  )
+  return <HubStoreContext.Provider value={storeRef.current}>{children}</HubStoreContext.Provider>
 }
 
 export function useHubStore<T>(

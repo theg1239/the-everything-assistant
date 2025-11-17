@@ -435,7 +435,9 @@ export default function CustomBackground() {
         return (
           <TerminalBackground
             scale={backgroundConfig.terminal?.scale ?? defaultBackgroundConfig.terminal!.scale}
-            gridMul={backgroundConfig.terminal?.gridMul ?? defaultBackgroundConfig.terminal!.gridMul}
+            gridMul={
+              backgroundConfig.terminal?.gridMul ?? defaultBackgroundConfig.terminal!.gridMul
+            }
             digitSize={
               backgroundConfig.terminal?.digitSize ?? defaultBackgroundConfig.terminal!.digitSize
             }
@@ -490,7 +492,9 @@ export default function CustomBackground() {
       case 'color-bands':
         return (
           <ColorBands
-            colors={backgroundConfig.colorBands?.colors || defaultBackgroundConfig.colorBands!.colors}
+            colors={
+              backgroundConfig.colorBands?.colors || defaultBackgroundConfig.colorBands!.colors
+            }
             transparent={
               backgroundConfig.colorBands?.transparent ??
               defaultBackgroundConfig.colorBands!.transparent!
@@ -500,14 +504,17 @@ export default function CustomBackground() {
             }
             speed={backgroundConfig.colorBands?.speed ?? defaultBackgroundConfig.colorBands!.speed}
             autoRotate={
-              backgroundConfig.colorBands?.autoRotate ?? defaultBackgroundConfig.colorBands!.autoRotate
+              backgroundConfig.colorBands?.autoRotate ??
+              defaultBackgroundConfig.colorBands!.autoRotate
             }
             scale={backgroundConfig.colorBands?.scale ?? defaultBackgroundConfig.colorBands!.scale}
             frequency={
-              backgroundConfig.colorBands?.frequency ?? defaultBackgroundConfig.colorBands!.frequency
+              backgroundConfig.colorBands?.frequency ??
+              defaultBackgroundConfig.colorBands!.frequency
             }
             warpStrength={
-              backgroundConfig.colorBands?.warpStrength ?? defaultBackgroundConfig.colorBands!.warpStrength
+              backgroundConfig.colorBands?.warpStrength ??
+              defaultBackgroundConfig.colorBands!.warpStrength
             }
             mouseInfluence={
               backgroundConfig.colorBands?.mouseInfluence ??
@@ -527,12 +534,18 @@ export default function CustomBackground() {
             lineThickness={
               backgroundConfig.grid?.lineThickness ?? defaultBackgroundConfig.grid!.lineThickness
             }
-            linesColor={backgroundConfig.grid?.linesColor ?? defaultBackgroundConfig.grid!.linesColor}
+            linesColor={
+              backgroundConfig.grid?.linesColor ?? defaultBackgroundConfig.grid!.linesColor
+            }
             scanColor={backgroundConfig.grid?.scanColor ?? defaultBackgroundConfig.grid!.scanColor}
-            scanOpacity={backgroundConfig.grid?.scanOpacity ?? defaultBackgroundConfig.grid!.scanOpacity}
+            scanOpacity={
+              backgroundConfig.grid?.scanOpacity ?? defaultBackgroundConfig.grid!.scanOpacity
+            }
             gridScale={backgroundConfig.grid?.gridScale ?? defaultBackgroundConfig.grid!.gridScale}
             lineStyle={backgroundConfig.grid?.lineStyle ?? defaultBackgroundConfig.grid!.lineStyle}
-            lineJitter={backgroundConfig.grid?.lineJitter ?? defaultBackgroundConfig.grid!.lineJitter}
+            lineJitter={
+              backgroundConfig.grid?.lineJitter ?? defaultBackgroundConfig.grid!.lineJitter
+            }
             noiseIntensity={
               backgroundConfig.grid?.noiseIntensity ?? defaultBackgroundConfig.grid!.noiseIntensity
             }
@@ -550,7 +563,9 @@ export default function CustomBackground() {
               backgroundConfig.grid?.scanDuration ?? defaultBackgroundConfig.grid!.scanDuration
             }
             scanDelay={backgroundConfig.grid?.scanDelay ?? defaultBackgroundConfig.grid!.scanDelay}
-            enablePost={backgroundConfig.grid?.enablePost ?? defaultBackgroundConfig.grid!.enablePost}
+            enablePost={
+              backgroundConfig.grid?.enablePost ?? defaultBackgroundConfig.grid!.enablePost
+            }
             enableWebcam={false}
             showPreview={false}
           />

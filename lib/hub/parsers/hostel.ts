@@ -2,7 +2,8 @@ import type { HubVTOPCommand } from '@/types/hub'
 import { extractCliTables } from './utils'
 
 export function parseHostel(raw: any) {
-  const text = typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
+  const text =
+    typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
   if (!text.trim()) return null
   const tables = extractCliTables(text)
   const hostelTable = tables.find(table => table.headers.length === 2)

@@ -9,7 +9,8 @@ export function parseTimetable(raw: any) {
   const classes: TimetableClass[] = extractClassesFromTables((raw?.structured_data as any)?.tables)
 
   if (!classes.length) {
-    const text = typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
+    const text =
+      typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
     const lines = text.split('\n').map((line: string) => stripAnsiCodes(line).trimEnd())
     let currentDay: string | null = null
     let buffer: string[] = []
@@ -103,7 +104,10 @@ function parseBlock(lines: string[]): ParsedTable | null {
   const cleaned = lines.filter(line => line.includes('│'))
   if (!cleaned.length) return null
   const headerLine = cleaned[0]
-  const headers = headerLine.split('│').map(part => part.trim()).filter(Boolean)
+  const headers = headerLine
+    .split('│')
+    .map(part => part.trim())
+    .filter(Boolean)
   const rows: string[][] = []
   cleaned.slice(1).forEach(line => {
     if (/^[\s┌┐└┘┬┴┼─]+$/.test(line)) return

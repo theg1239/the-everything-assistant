@@ -219,7 +219,16 @@ export const MarkdownBlock = memo(function PureMarkdownBlock({
       'annotation',
       'annotation-xml',
     ],
-    ADD_ATTR: ['style', 'display', 'xmlns', 'mathvariant', 'aria-hidden', 'role', 'focusable', 'data-allow-touch-scroll'],
+    ADD_ATTR: [
+      'style',
+      'display',
+      'xmlns',
+      'mathvariant',
+      'aria-hidden',
+      'role',
+      'focusable',
+      'data-allow-touch-scroll',
+    ],
   })
 
   return (

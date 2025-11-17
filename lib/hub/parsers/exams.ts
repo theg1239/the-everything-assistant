@@ -14,8 +14,7 @@ type RawExamRow = {
   extra?: RawExamRow | null
 }
 
-const clean = (value?: string) =>
-  value && value.trim().length > 0 ? value.trim() : undefined
+const clean = (value?: string) => (value && value.trim().length > 0 ? value.trim() : undefined)
 
 function primaryExam(
   code?: string,
@@ -61,8 +60,11 @@ function normalizeExamRow(row: any[] = []): RawExamRow | null {
 }
 
 export function parseExams(raw: any) {
-  const structuredTables = Array.isArray(raw?.structured_data?.tables) ? raw.structured_data.tables : []
-  const text = typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
+  const structuredTables = Array.isArray(raw?.structured_data?.tables)
+    ? raw.structured_data.tables
+    : []
+  const text =
+    typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
   const fallbackTables = text.trim() ? extractCliTables(text) : []
   if (!structuredTables.length && !fallbackTables.length) return null
 
@@ -102,7 +104,10 @@ export function parseExams(raw: any) {
       parsedDate: exam.examDate ? Date.parse(exam.examDate) : NaN,
     }))
     .filter((exam: RawExamRow & { parsedDate: number }) => !Number.isNaN(exam.parsedDate))
-    .sort((a: RawExamRow & { parsedDate: number }, b: RawExamRow & { parsedDate: number }) => (a.parsedDate ?? 0) - (b.parsedDate ?? 0))[0]
+    .sort(
+      (a: RawExamRow & { parsedDate: number }, b: RawExamRow & { parsedDate: number }) =>
+        (a.parsedDate ?? 0) - (b.parsedDate ?? 0)
+    )[0]
 
   const summary = upcoming
     ? `${upcoming.title || upcoming.code} on ${upcoming.examDate}`

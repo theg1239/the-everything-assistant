@@ -52,11 +52,13 @@ ALLOWED_ORIGINS=http://localhost:3000,https://your-domain.com
 ### 3. Start the Service
 
 Development mode:
+
 ```bash
 npm run dev
 ```
 
 Production mode:
+
 ```bash
 npm start
 ```
@@ -72,6 +74,7 @@ Users can interact with the bot using these commands:
 - `!status` - Check bot status
 
 Example:
+
 ```
 !ask What is the weather today?
 !ask Explain quantum physics
@@ -80,6 +83,7 @@ Example:
 ### API Endpoints
 
 #### Health Check
+
 ```
 GET /health
 ```
@@ -87,6 +91,7 @@ GET /health
 Returns server health and status information.
 
 #### WhatsApp Status
+
 ```
 GET /api/whatsapp/status
 ```
@@ -94,6 +99,7 @@ GET /api/whatsapp/status
 Returns WhatsApp connection status and client information.
 
 #### Send Message
+
 ```
 POST /api/whatsapp/send
 Content-Type: application/json
@@ -105,6 +111,7 @@ Content-Type: application/json
 ```
 
 #### Webhook for Main App
+
 ```
 POST /api/webhook
 Content-Type: application/json
@@ -187,7 +194,7 @@ async newAPIMethod(data) {
         },
         body: JSON.stringify(data)
     });
-    
+
     return await response.json();
 }
 ```

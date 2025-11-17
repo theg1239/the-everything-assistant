@@ -45,7 +45,9 @@ export const MinimalStatusCard = memo(function MinimalStatusCard({
 }: MinimalStatusCardProps) {
   return (
     <div className="rounded-3xl sm:rounded-[32px] border border-white/10 bg-[rgba(7,8,16,0.8)] backdrop-blur-xl p-4 sm:p-6 space-y-4 sm:space-y-5 shadow-[0_15px_50px_rgba(0,0,0,0.45)] sm:shadow-[0_25px_80px_rgba(0,0,0,0.55)]">
-      <div className="text-[10px] uppercase tracking-[0.2em] text-white/60 sm:text-[11px] sm:tracking-[0.3em]">hub status</div>
+      <div className="text-[10px] uppercase tracking-[0.2em] text-white/60 sm:text-[11px] sm:tracking-[0.3em]">
+        hub status
+      </div>
       <div className="space-y-2">
         <p className="text-sm text-white/70">hey {terseName},</p>
         <div className="text-2xl sm:text-3xl font-light text-white leading-snug">
@@ -75,7 +77,10 @@ export const MinimalStatusCard = memo(function MinimalStatusCard({
           {linked ? 'vtop linked' : 'vtop not linked'}
         </span>
         {!linked && onLink && (
-          <button className="underline-offset-4 underline text-white/70 hover:text-white" onClick={onLink}>
+          <button
+            className="underline-offset-4 underline text-white/70 hover:text-white"
+            onClick={onLink}
+          >
             link now
           </button>
         )}

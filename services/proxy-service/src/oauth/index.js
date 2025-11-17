@@ -6,7 +6,9 @@ const {
   getOAuthProtectedResourceMetadataUrl,
   createOAuthMetadata,
 } = require('@modelcontextprotocol/sdk/server/auth/router.js')
-const { requireBearerAuth } = require('@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js')
+const {
+  requireBearerAuth,
+} = require('@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js')
 const { InvalidRequestError } = require('@modelcontextprotocol/sdk/server/auth/errors.js')
 const { VtopOAuthProvider } = require('./provider')
 const { renderErrorPage, renderSuccessRedirectPage } = require('./templates')
@@ -53,8 +55,7 @@ function setupMcpOAuth(app) {
     : undefined
   const staticClients = loadStaticClients()
   const clientsFilePath =
-    process.env.MCP_OAUTH_CLIENTS_PATH ||
-    path.resolve(process.cwd(), 'mcp-oauth-clients.json')
+    process.env.MCP_OAUTH_CLIENTS_PATH || path.resolve(process.cwd(), 'mcp-oauth-clients.json')
 
   const provider = new VtopOAuthProvider({
     strictResource: process.env.MCP_OAUTH_STRICT_RESOURCE !== 'false',
@@ -105,27 +106,31 @@ function setupMcpOAuth(app) {
 
   const oauthMetadata = createOAuthMetadata(sharedOptions)
 
-  oauthRouter.post(
-    '/consent',
-    express.urlencoded({ extended: false }),
-    async (req, res) => {
-      try {
-        const result = await provider.handleConsentSubmission(req.body || {})
-        res.status(200).send(renderSuccessRedirectPage(result.redirectUrl))
-      } catch (error) {
-        console.error('[oauth] consent error:', error)
-        if (error.redirectUrl) {
-          res.redirect(302, error.redirectUrl)
-          return
-        }
-        const status = error instanceof InvalidRequestError ? 400 : 500
-        res.status(status).send(renderErrorPage(error.message || 'Failed to authorize client. Please restart the flow.'))
+  oauthRouter.post('/consent', express.urlencoded({ extended: false }), async (req, res) => {
+    try {
+      const result = await provider.handleConsentSubmission(req.body || {})
+      res.status(200).send(renderSuccessRedirectPage(result.redirectUrl))
+    } catch (error) {
+      console.error('[oauth] consent error:', error)
+      if (error.redirectUrl) {
+        res.redirect(302, error.redirectUrl)
+        return
       }
+      const status = error instanceof InvalidRequestError ? 400 : 500
+      res
+        .status(status)
+        .send(
+          renderErrorPage(error.message || 'Failed to authorize client. Please restart the flow.')
+        )
     }
-  )
+  })
 
   oauthRouter.get('/consent', (req, res) => {
-    res.status(400).send(renderErrorPage('Consent session missing or expired. Restart the OAuth authorization flow.'))
+    res
+      .status(400)
+      .send(
+        renderErrorPage('Consent session missing or expired. Restart the OAuth authorization flow.')
+      )
   })
 
   const autoRegisterEnabled = process.env.MCP_OAUTH_AUTO_REGISTER === 'false' ? false : true

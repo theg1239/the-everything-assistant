@@ -30,7 +30,8 @@ const {
 require('dotenv').config()
 
 const VERBOSE_LOG =
-  process.env.PROXY_VERBOSE_LOGS === '1' || (process.env.NODE_ENV || '').toLowerCase() !== 'production'
+  process.env.PROXY_VERBOSE_LOGS === '1' ||
+  (process.env.NODE_ENV || '').toLowerCase() !== 'production'
 
 const app = express()
 
@@ -39,7 +40,10 @@ const DEFAULT_SYNC_COMMANDS = ['profile', 'timetable', 'attendance', 'marks', 'c
 // Per-username VTOP call limiter to guard against repeated CLI panics
 // Defaults: 15 calls per 5 minutes per username when MCP OAuth is enabled.
 const PER_USER_VTOP_LIMIT = parseInt(process.env.VTOP_USER_LIMIT || '15', 10)
-const PER_USER_VTOP_WINDOW_MS = parseInt(process.env.VTOP_USER_WINDOW_MS || String(5 * 60 * 1000), 10)
+const PER_USER_VTOP_WINDOW_MS = parseInt(
+  process.env.VTOP_USER_WINDOW_MS || String(5 * 60 * 1000),
+  10
+)
 const userVtopCache = new NodeCache({ stdTTL: PER_USER_VTOP_WINDOW_MS / 1000, checkperiod: 60 })
 
 const maskIdentifier = value => {
@@ -117,7 +121,10 @@ function checkPerUserVtopLimit(username) {
   const key = `user:${username.toLowerCase()}`
   const current = userVtopCache.get(key) || 0
   if (current >= PER_USER_VTOP_LIMIT) {
-    return { allowed: false, remainingMs: userVtopCache.getTtl(key) ? userVtopCache.getTtl(key) - Date.now() : 0 }
+    return {
+      allowed: false,
+      remainingMs: userVtopCache.getTtl(key) ? userVtopCache.getTtl(key) - Date.now() : 0,
+    }
   }
   userVtopCache.set(key, current + 1)
   return { allowed: true }
@@ -181,26 +188,20 @@ app.post('/vtop', vtopLimiter, async (req, res) => {
   logRequest(
     'vtop',
     requestId,
-    `command=${command} user=${maskIdentifier(username)} flags=${JSON.stringify(scrubFlags(
-      sanitizedFlags
-    ))} encrypted=${Boolean(encryptedPassword)} password=${Boolean(password)}`
+    `command=${command} user=${maskIdentifier(username)} flags=${JSON.stringify(
+      scrubFlags(sanitizedFlags)
+    )} encrypted=${Boolean(encryptedPassword)} password=${Boolean(password)}`
   )
 
   try {
     const result = await runCommand(username, finalPassword, command, sanitizedFlags)
     const shaped = normalizeResultPayload(result, command, sanitizedFlags)
     if (VERBOSE_LOG) {
-      const outputSnippet =
-        typeof shaped.output === 'string' ? shaped.output.slice(0, 400) : null
-      logRequest(
-        'vtop',
-        requestId,
-        `debug result command=${command} success=${shaped.success}`,
-        {
-          outputSnippet,
-          meta: shaped.meta || null,
-        }
-      )
+      const outputSnippet = typeof shaped.output === 'string' ? shaped.output.slice(0, 400) : null
+      logRequest('vtop', requestId, `debug result command=${command} success=${shaped.success}`, {
+        outputSnippet,
+        meta: shaped.meta || null,
+      })
     }
     logRequest(
       'vtop',
@@ -233,7 +234,12 @@ app.post('/sync', vtopLimiter, async (req, res) => {
   const commandList = Array.isArray(commands) && commands.length ? commands : DEFAULT_SYNC_COMMANDS
   const unsupported = commandList.filter(cmd => !SUPPORTED_COMMANDS.includes(cmd))
   if (unsupported.length) {
-    return res.status(400).json({ error: `Unsupported commands: ${unsupported.join(', ')}`, supportedCommands: SUPPORTED_COMMANDS })
+    return res
+      .status(400)
+      .json({
+        error: `Unsupported commands: ${unsupported.join(', ')}`,
+        supportedCommands: SUPPORTED_COMMANDS,
+      })
   }
 
   let resolvedPassword

@@ -2,7 +2,8 @@ import type { HubVTOPCommand } from '@/types/hub'
 import { extractCliTables } from './utils'
 
 export function parseLeave(raw: any) {
-  const text = typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
+  const text =
+    typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
   if (!text.trim()) return null
   const tables = extractCliTables(text)
   const leaveTable = tables.find(table =>
@@ -24,7 +25,9 @@ export function parseLeave(raw: any) {
 
   const pending = requests.find(req => req.status?.toLowerCase().includes('pending'))
 
-  const summary = pending ? `${pending.reason || 'request'} pending` : `${requests.length} requests on file`
+  const summary = pending
+    ? `${pending.reason || 'request'} pending`
+    : `${requests.length} requests on file`
 
   return {
     command: 'leave' as HubVTOPCommand,

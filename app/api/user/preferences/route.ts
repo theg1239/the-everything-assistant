@@ -76,7 +76,12 @@ export async function PATCH(request: NextRequest) {
           ...body.dailyBriefing,
         }
       }
-      if (!body.backgroundConfig && !body.dailyBriefing && body.preferences === undefined && typeof body.followUpSuggestions !== 'boolean') {
+      if (
+        !body.backgroundConfig &&
+        !body.dailyBriefing &&
+        body.preferences === undefined &&
+        typeof body.followUpSuggestions !== 'boolean'
+      ) {
         return NextResponse.json({ error: 'Invalid preferences data' }, { status: 400 })
       }
     }

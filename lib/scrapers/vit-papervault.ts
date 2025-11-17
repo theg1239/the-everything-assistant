@@ -5,7 +5,7 @@ import { findFullCourseName } from '../course-map'
 export async function scrapeVITPaperVault(courseCode: string, examType?: string, year?: string) {
   try {
     const apiResult = await tryVITVaultListAPI(courseCode, examType, year)
-    
+
     // ALWAYS return API result if successful, even with 0 papers
     // Only fall back to browser scraping if API completely fails (network error, etc.)
     if (apiResult.success) {
@@ -69,7 +69,7 @@ async function tryVITVaultListAPI(courseCode: string, examType?: string, year?: 
       examType: p.paperType,
       year: new Date(p.paperDate).getUTCFullYear().toString(),
     }))
-    
+
     // Always return success if API responds, even with 0 results after filtering
     return {
       success: true,

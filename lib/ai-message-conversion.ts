@@ -95,7 +95,9 @@ export function legacyMessageToUiMessage(message: LegacyMessage): AppUIMessage {
         type: 'file',
         url: attachment.url,
         mediaType: attachment.contentType || 'application/octet-stream',
-        providerMetadata: attachment.name ? ({ attachmentName: attachment.name } as any) : undefined,
+        providerMetadata: attachment.name
+          ? ({ attachmentName: attachment.name } as any)
+          : undefined,
       })
     }
   }
@@ -170,7 +172,9 @@ export function uiMessageToLegacyMessage(message: AppUIMessage): LegacyMessage {
   return legacy
 }
 
-export function extractTextFromParts(parts: UIMessagePart<UIDataTypes, AppUITools>[] | undefined): string {
+export function extractTextFromParts(
+  parts: UIMessagePart<UIDataTypes, AppUITools>[] | undefined
+): string {
   if (!Array.isArray(parts)) return ''
   return parts
     .filter(part => part.type === 'text')

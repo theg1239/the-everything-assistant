@@ -76,7 +76,15 @@ const SNAPSHOT_ICONS: Partial<Record<HubVTOPCommand, ReactNode>> = {
   marks: <Award className="h-4 w-4" />,
   cgpa: <Award className="h-4 w-4" />,
 }
-const SYNC_SEQUENCE: HubVTOPCommand[] = ['profile', 'attendance', 'timetable', 'marks', 'cgpa', 'exams', 'da']
+const SYNC_SEQUENCE: HubVTOPCommand[] = [
+  'profile',
+  'attendance',
+  'timetable',
+  'marks',
+  'cgpa',
+  'exams',
+  'da',
+]
 const DAILY_BRIEFING_COMMANDS: HubVTOPCommand[] = Array.from(
   new Set<HubVTOPCommand>([
     ...SYNC_SEQUENCE,
@@ -295,9 +303,7 @@ export default function HubShell({
         dailyBriefingActive: false,
         overlayMode: null,
         unlinkedOverlayDismissed:
-          current.overlayMode === 'onboarding'
-            ? true
-            : current.unlinkedOverlayDismissed,
+          current.overlayMode === 'onboarding' ? true : current.unlinkedOverlayDismissed,
       }))
       if (options?.persist ?? overlayMode === 'briefing') {
         persistDailyBriefingSeen()
@@ -468,8 +474,8 @@ export default function HubShell({
         scheduledAt instanceof Date
           ? scheduledAt.toISOString()
           : typeof scheduledAt === 'string' && scheduledAt.trim().length
-          ? scheduledAt
-          : undefined
+            ? scheduledAt
+            : undefined
 
       if (scheduleToken && emailPlanRef.current === scheduleToken && !force) {
         if (!silent) toast.message('briefing email already scheduled')
@@ -634,7 +640,8 @@ export default function HubShell({
         {
           id: 'link-vtop',
           primary: 'link VTOP to let us pull your briefing.',
-          supporting: 'we will pull attendance, timetable, assignments, and exam snapshots in seconds.',
+          supporting:
+            'we will pull attendance, timetable, assignments, and exam snapshots in seconds.',
         },
       ],
       dailyMessagesPrepared: true,
@@ -708,7 +715,11 @@ export default function HubShell({
       }
       if (!cancelled) {
         setState(state => ({
-          dailyHydration: { ...state.dailyHydration, running: false, completed: state.dailyHydration.total },
+          dailyHydration: {
+            ...state.dailyHydration,
+            running: false,
+            completed: state.dailyHydration.total,
+          },
           hydrationCurrentCommand: null,
           dailyBriefingReady: true,
         }))
@@ -728,7 +739,13 @@ export default function HubShell({
   ])
 
   useEffect(() => {
-    if (!dailyBriefingActive || overlayMode !== 'briefing' || !dailyBriefingReady || dailyMessagesPrepared) return
+    if (
+      !dailyBriefingActive ||
+      overlayMode !== 'briefing' ||
+      !dailyBriefingReady ||
+      dailyMessagesPrepared
+    )
+      return
     const reference = nowTick ? new Date(nowTick) : new Date()
     const context = buildDailyBriefingContext(hubState.snapshots, reference)
     setState({
@@ -752,13 +769,22 @@ export default function HubShell({
     if (!dailyBriefingActive || overlayMode !== 'briefing' || !dailyMessagesPrepared) return
     if (!dailyMessages.length) return
     if (dailyRevealedCount >= dailyMessages.length) return
-    const timeout = window.setTimeout(() => {
-      setState(current => ({
-        dailyRevealedCount: Math.min(current.dailyRevealedCount + 1, dailyMessages.length),
-      }))
-    }, dailyRevealedCount === 0 ? DAILY_REVEAL_DELAY_MS : 1600)
+    const timeout = window.setTimeout(
+      () => {
+        setState(current => ({
+          dailyRevealedCount: Math.min(current.dailyRevealedCount + 1, dailyMessages.length),
+        }))
+      },
+      dailyRevealedCount === 0 ? DAILY_REVEAL_DELAY_MS : 1600
+    )
     return () => window.clearTimeout(timeout)
-  }, [dailyBriefingActive, overlayMode, dailyMessagesPrepared, dailyMessages.length, dailyRevealedCount])
+  }, [
+    dailyBriefingActive,
+    overlayMode,
+    dailyMessagesPrepared,
+    dailyMessages.length,
+    dailyRevealedCount,
+  ])
 
   useEffect(() => {
     if (!dailyBriefingActive || overlayMode !== 'briefing') return
@@ -777,13 +803,7 @@ export default function HubShell({
     }
     const timeout = window.setTimeout(() => dismissDailyBriefing(), diff)
     return () => window.clearTimeout(timeout)
-  }, [
-    dailyBriefingActive,
-    overlayMode,
-    briefingPrefs.dismissTime,
-    nowTick,
-    dismissDailyBriefing,
-  ])
+  }, [dailyBriefingActive, overlayMode, briefingPrefs.dismissTime, nowTick, dismissDailyBriefing])
 
   useEffect(() => {
     if (!dailyBriefingActive || overlayMode !== 'briefing') return
@@ -813,19 +833,17 @@ export default function HubShell({
     nowTick,
   ])
 
-  
-
   const Panel = useMemo(() => {
     switch (page) {
       case 'vtop':
         return (
-            <VTOPPanel
-              linked={linked}
-              runCommand={runVtopCommand}
-              onRequireLink={() => setState({ page: 'briefing' })}
-              onLink={handleLinkIntent}
-              onResult={openSnapshot}
-            />
+          <VTOPPanel
+            linked={linked}
+            runCommand={runVtopCommand}
+            onRequireLink={() => setState({ page: 'briefing' })}
+            onLink={handleLinkIntent}
+            onResult={openSnapshot}
+          />
         )
       case 'papers':
         return <PastPapersPanel />
@@ -907,14 +925,21 @@ export default function HubShell({
     () => deriveAssignmentInsight(assignmentsSnapshot, nowTick),
     [assignmentsSnapshot, nowTick]
   )
-  const attendanceInsight = useMemo(() => deriveAttendanceInsight(attendanceSnapshot), [attendanceSnapshot])
+  const attendanceInsight = useMemo(
+    () => deriveAttendanceInsight(attendanceSnapshot),
+    [attendanceSnapshot]
+  )
   const leaveInsight = useMemo(() => deriveLeaveInsight(leaveSnapshot), [leaveSnapshot])
-  const examInsight = useMemo(() => deriveExamInsight(examsSnapshot, nowTick), [examsSnapshot, nowTick])
+  const examInsight = useMemo(
+    () => deriveExamInsight(examsSnapshot, nowTick),
+    [examsSnapshot, nowTick]
+  )
   const attendanceRisks = useMemo(() => {
     const rows = ((attendanceSnapshot?.structured_data as any)?.rows || []) as any[]
     return rows
       .map(row => {
-        const numeric = typeof row.percentage === 'string' ? parseFloat(row.percentage) : Number(row.percentage)
+        const numeric =
+          typeof row.percentage === 'string' ? parseFloat(row.percentage) : Number(row.percentage)
         return { ...row, numeric: Number.isFinite(numeric) ? numeric : null }
       })
       .filter(row => row.numeric !== null)
@@ -938,7 +963,10 @@ export default function HubShell({
   }, [assignmentsSnapshot, nowTick])
 
   const quickCaps = useMemo(
-    () => capabilities.filter(cap => ['attendance', 'timetable', 'da', 'leave', 'exams'].includes(cap.command)),
+    () =>
+      capabilities.filter(cap =>
+        ['attendance', 'timetable', 'da', 'leave', 'exams'].includes(cap.command)
+      ),
     [capabilities]
   )
   const daCapability = useMemo(() => capabilities.find(cap => cap.command === 'da'), [capabilities])
@@ -955,9 +983,20 @@ export default function HubShell({
         },
         nowTick
       ),
-    [attendanceSnapshot, assignmentsSnapshot, leaveSnapshot, examsSnapshot, librarySnapshot, gradesSnapshot, nowTick]
+    [
+      attendanceSnapshot,
+      assignmentsSnapshot,
+      leaveSnapshot,
+      examsSnapshot,
+      librarySnapshot,
+      gradesSnapshot,
+      nowTick,
+    ]
   )
-  const persona = useMemo(() => derivePersona(profileSnapshot, hostelSnapshot), [profileSnapshot, hostelSnapshot])
+  const persona = useMemo(
+    () => derivePersona(profileSnapshot, hostelSnapshot),
+    [profileSnapshot, hostelSnapshot]
+  )
   const emailSummaryLabel = briefingPrefs.emailEnabled
     ? `email briefing scheduled ${formatPreferenceTimeLabel(
         briefingPrefs.emailTime || briefingPrefs.dismissTime
@@ -1019,7 +1058,11 @@ export default function HubShell({
       {linked && (
         <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
           {timetableSnapshot && (
-            <TimetablePeek snapshot={timetableSnapshot} now={nowTick} onOpen={() => openSnapshot(timetableSnapshot)} />
+            <TimetablePeek
+              snapshot={timetableSnapshot}
+              now={nowTick}
+              onOpen={() => openSnapshot(timetableSnapshot)}
+            />
           )}
           {(attendanceRisks.length > 0 || assignmentSubjects.length > 0) && (
             <HubSurface className="space-y-4">
@@ -1031,7 +1074,9 @@ export default function HubShell({
                     items={attendanceRisks.map(item => ({
                       title: item.subject,
                       meta: item.percentage,
-                      supporting: item.alert?.toLowerCase().includes('attend') ? item.alert : undefined,
+                      supporting: item.alert?.toLowerCase().includes('attend')
+                        ? item.alert
+                        : undefined,
                     }))}
                     fallback="all courses steady"
                     onOpen={() => attendanceSnapshot && openSnapshot(attendanceSnapshot)}
@@ -1056,7 +1101,11 @@ export default function HubShell({
       )}
 
       {linked && notifications.length > 0 && (
-        <NotificationStrip notifications={notifications} capabilities={capabilities} onRun={handleCapabilityRun} />
+        <NotificationStrip
+          notifications={notifications}
+          capabilities={capabilities}
+          onRun={handleCapabilityRun}
+        />
       )}
 
       {linked && (
@@ -1106,7 +1155,12 @@ export default function HubShell({
           <div className={HUB_LABEL_CLASS}>latest pulls</div>
           <div className="space-y-2">
             {latestSnapshots.map(snapshot => (
-              <SnapshotGlance key={snapshot.command} snapshot={snapshot} onOpen={openSnapshot} minimal />
+              <SnapshotGlance
+                key={snapshot.command}
+                snapshot={snapshot}
+                onOpen={openSnapshot}
+                minimal
+              />
             ))}
           </div>
         </div>
@@ -1165,7 +1219,9 @@ export default function HubShell({
         {dailyBriefingActive && (
           <DailyBriefingOverlay
             mode={overlayMode || (linked ? 'briefing' : 'onboarding')}
-            greeting={dailyGreeting || buildGreeting(nowTick ? new Date(nowTick) : new Date(), terseName)}
+            greeting={
+              dailyGreeting || buildGreeting(nowTick ? new Date(nowTick) : new Date(), terseName)
+            }
             messages={dailyMessages}
             revealedCount={dailyRevealedCount}
             hydration={dailyHydration}
@@ -1345,7 +1401,9 @@ function TimetablePeek({
       {highlight && (
         <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm leading-relaxed text-white/90">
           <div className={`${HUB_LABEL_CLASS} text-white/70`}>next</div>
-          <div className="text-lg font-medium text-white">{highlight.subject || highlight.slot || 'class'}</div>
+          <div className="text-lg font-medium text-white">
+            {highlight.subject || highlight.slot || 'class'}
+          </div>
           <div className="text-xs text-white/70">
             {rolling?.startsAt
               ? new Intl.DateTimeFormat(undefined, {
@@ -1368,7 +1426,10 @@ function TimetablePeek({
       )}
       <div className="grid gap-3 sm:grid-cols-2">
         {rows.map((cls, idx) => (
-          <div key={`${cls.day}-${cls.slot}-${idx}`} className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3">
+          <div
+            key={`${cls.day}-${cls.slot}-${idx}`}
+            className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3"
+          >
             <div className={HUB_LABEL_CLASS}>{cls.day || 'day'}</div>
             <div className="text-sm font-medium text-white line-clamp-1">
               {cls.subject || cls.slot || 'class'}
@@ -1427,7 +1488,9 @@ function SnapshotCard({
       <CardContent className="p-4 space-y-2">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">{snapshot.command}</p>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              {snapshot.command}
+            </p>
             <p className="text-base font-semibold">{snapshot.title}</p>
           </div>
           <Button size="sm" variant="outline" onClick={() => onOpen(snapshot)}>
@@ -1450,7 +1513,8 @@ function SnapshotGlance({
   minimal?: boolean
 }) {
   const icon = SNAPSHOT_ICONS[snapshot.command as HubVTOPCommand]
-  const summary = snapshot.summary?.split('\n').filter(Boolean).slice(0, 2).join(' ') || 'view details'
+  const summary =
+    snapshot.summary?.split('\n').filter(Boolean).slice(0, 2).join(' ') || 'view details'
   const updatedLabel = formatDistanceToNow(new Date(snapshot.fetchedAt), { addSuffix: true })
 
   return (
@@ -1475,7 +1539,8 @@ function HubOnboarding({ onLink }: { onLink?: () => void }) {
     <HubSurface className="space-y-4 text-white">
       <div className={HUB_LABEL_CLASS}>hub requires VTOP linking</div>
       <p className="text-2xl font-light">
-        connect once to pull timetable, assignments, attendance, leave status and exams without leaving chat.
+        connect once to pull timetable, assignments, attendance, leave status and exams without
+        leaving chat.
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <Button onClick={() => onLink?.()} className="rounded-full px-6">

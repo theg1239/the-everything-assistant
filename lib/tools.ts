@@ -828,6 +828,81 @@ export function createVITTools(userId: string) {
         }
       },
     }),
+    resolveCourseCode: tool({
+      description:
+        'Resolve a VIT course name, acronym, or partial description to canonical course codes using the local course map. Use this before any course-specific tools (past papers, VTOP course materials, FFCS lookups) when the user did not provide the exact course code.',
+      inputSchema: z.object({
+        query: z
+          .string()
+          .min(1, 'Provide a course name, acronym, or code to resolve.')
+          .describe(
+            'Course name, acronym, or partial code. Examples: "database systems", "DSA", "BCSE302L", "machine learning lab".'
+          ),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(10)
+          .optional()
+          .describe('Maximum number of candidate codes to return (default 5).'),
+      }),
+      execute: async ({ query, limit }) => {
+        const cleanedQuery = query.trim()
+        if (!cleanedQuery) {
+          return {
+            success: false,
+            message: 'Please provide a course name, acronym, or partial code to resolve.',
+          }
+        }
+
+        const limitValue = Math.max(1, Math.min(limit ?? 5, 10))
+        let matches = getAllCourseMatches(cleanedQuery)
+
+        if (matches.length === 0) {
+          const fallback = searchCoursesByName(cleanedQuery)
+          matches = fallback.map(match => ({
+            code: match.code,
+            name: match.name,
+            matchType: 'name_similarity',
+          }))
+        }
+
+        const recognizedCourses = recognizeCourseInText(cleanedQuery)
+        const limitedMatches = matches.slice(0, limitValue)
+        const normalizedName = findFullCourseName(
+          limitedMatches[0]?.code || cleanedQuery.toUpperCase()
+        )
+
+        if (limitedMatches.length === 0) {
+          return {
+            success: false,
+            query: cleanedQuery,
+            message: `No VIT course matches found for "${cleanedQuery}".`,
+            suggestions: [
+              'Check the spelling or include more of the course title (e.g., "database systems lab").',
+              'Include any known acronym such as DSA, DBMS, ML, etc.',
+              'Mention part of the official course code if available (e.g., BCSE, BMAT).',
+            ],
+            recognizedCourses,
+          }
+        }
+
+        return {
+          success: true,
+          query: cleanedQuery,
+          matches: limitedMatches,
+          totalMatches: matches.length,
+          normalizedName,
+          recognizedCourses,
+          primary: limitedMatches[0],
+          limitUsed: limitValue,
+          message:
+            limitedMatches.length === 1
+              ? `Resolved "${cleanedQuery}" to ${limitedMatches[0].code} (${limitedMatches[0].name}).`
+              : `Found ${limitedMatches.length} candidate course codes for "${cleanedQuery}".`,
+        }
+      },
+    }),
 
     /* gravitasEventRegistration: tool({
       description:

@@ -12,7 +12,14 @@ interface Paper {
   metadata: string
   examType: string
   year: string
+  slot?: string
 }
+
+const SLOT_TAG_REGEX = /^[A-G][1-2]$/i
+const SLOT_REGEX = /\b([A-G][1-2])\b/i
+const YEAR_RANGE_REGEX = /\b((?:20)?\d{2})\s*-\s*((?:20)?\d{2})\b/
+const YEAR_REGEX = /\b(20\d{2})\b/
+const COURSE_CODE_REGEX = /([A-Z]{2,4}\d{3}[A-Z]{0,3})/g
 
 interface ApiPaper {
   _id: string
@@ -151,6 +158,171 @@ function sanitizeSubject(value: string): string {
     .trim()
 }
 
+function parseTitle(rawTitle: string): ParsedTitle {
+  const cleanTitle = rawTitle.replace(/\.pdf$/i, '').replace(/select$/i, '').trim()
+  const examType = extractExamType(cleanTitle)
+  const slot = extractSlot(cleanTitle)
+  const { academicYear, year } = extractYearInfo(cleanTitle)
+  const courseCode = extractCourseCode(cleanTitle)
+  const courseName = extractCourseName(cleanTitle, courseCode)
+
+  return {
+    cleanTitle,
+    examType,
+    slot,
+    year,
+    academicYear,
+    courseCode,
+    courseName,
+  }
+}
+
+function extractExamType(title: string): string | undefined {
+  const patterns: { regex: RegExp; normalize: (value: string) => string }[] = [
+    { regex: /\bcat[-\s]?1\b/i, normalize: () => 'CAT-1' },
+    { regex: /\bcat[-\s]?2\b/i, normalize: () => 'CAT-2' },
+    { regex: /\bfat\b/i, normalize: () => 'FAT' },
+    { regex: /\bmid(?:term)?\b/i, normalize: () => 'MID' },
+    { regex: /\bquiz\b/i, normalize: () => 'Quiz' },
+    { regex: /\bcia\b/i, normalize: () => 'CIA' },
+  ]
+
+  for (const { regex, normalize } of patterns) {
+    if (regex.test(title)) {
+      return normalize(title.match(regex)?.[0] || '')
+    }
+  }
+  return undefined
+}
+
+function extractSlot(title: string): string | undefined {
+  const match = title.match(SLOT_REGEX)
+  return match ? match[1].toUpperCase() : undefined
+}
+
+function extractYearInfo(title: string): { academicYear?: string; year?: string } {
+  const rangeMatch = title.match(YEAR_RANGE_REGEX)
+  if (rangeMatch) {
+    const start = normalizeYear(rangeMatch[1])
+    const end = normalizeYear(rangeMatch[2])
+    if (start && end) {
+      return {
+        academicYear: `${start}-${end}`,
+        year: start,
+      }
+    }
+  }
+
+  const singleMatch = title.match(YEAR_REGEX)
+  if (singleMatch) {
+    const normalized = normalizeYear(singleMatch[1])
+    return { year: normalized, academicYear: normalized }
+  }
+
+  return {}
+}
+
+function extractCourseCode(title: string): string | undefined {
+  let courseCode: string | undefined
+  let match: RegExpExecArray | null
+  while ((match = COURSE_CODE_REGEX.exec(title.toUpperCase())) !== null) {
+    courseCode = match[1].toUpperCase()
+  }
+  COURSE_CODE_REGEX.lastIndex = 0
+  return courseCode
+}
+
+function extractCourseName(title: string, courseCode?: string): string | undefined {
+  let working = title
+  if (courseCode) {
+    const idx = working.toUpperCase().lastIndexOf(courseCode)
+    if (idx > -1) {
+      working = working.slice(0, idx)
+    }
+  }
+
+  working = working.replace(/[-–—]\s*$/, '').trim()
+
+  const tokens = working.split(/\s+/)
+  const resultTokens: string[] = []
+  let started = false
+
+  for (const token of tokens) {
+    if (!started) {
+      if (isMetadataToken(token)) {
+        continue
+      }
+      started = true
+    }
+    resultTokens.push(token)
+  }
+
+  const name = resultTokens.join(' ').trim()
+  return name || undefined
+}
+
+function isMetadataToken(token: string): boolean {
+  const normalized = token.replace(/[^a-z0-9-]/gi, '').toLowerCase()
+  if (!normalized) return true
+  if (/^cat-?\d$/.test(normalized)) return true
+  if (/^(fat|quiz|mid|cia)$/.test(normalized)) return true
+  if (/^(qp|paper|select)$/.test(normalized)) return true
+  if (/^[a-g]\d$/i.test(normalized)) return true
+  if (/^\d{2}-\d{2}$/.test(normalized)) return true
+  if (/^20\d{2}$/.test(normalized)) return true
+  return false
+}
+
+function normalizeYear(value?: string): string | undefined {
+  if (!value) return undefined
+  const digits = value.replace(/\D/g, '')
+  if (digits.length === 4) return digits
+  if (digits.length === 2) {
+    const parsed = parseInt(digits, 10)
+    if (!Number.isNaN(parsed)) {
+      return (2000 + parsed).toString()
+    }
+  }
+  return undefined
+}
+
+function sanitizeTags(tags?: string[] | null): string[] {
+  if (!Array.isArray(tags)) return []
+  return tags
+    .map(tag => (typeof tag === 'string' ? tag.trim() : ''))
+    .filter(Boolean)
+}
+
+function resolveSlot(
+  parsedSlot?: string,
+  explicitSlot?: string | null,
+  tags: string[] = []
+): string | undefined {
+  const candidates = [parsedSlot, explicitSlot, ...tags]
+  for (const candidate of candidates) {
+    if (!candidate) continue
+    const trimmed = candidate.trim()
+    if (SLOT_TAG_REGEX.test(trimmed)) return trimmed.toUpperCase()
+    const match = trimmed.match(SLOT_REGEX)
+    if (match) return match[1].toUpperCase()
+  }
+  return undefined
+}
+
+function findYearInList(values: Array<string | undefined | null>): string | undefined {
+  for (const value of values) {
+    const year = extractYear(value || undefined)
+    if (year) return year
+  }
+  return undefined
+}
+
+function buildMetadataParts(parts: Array<string | undefined | null>): string[] {
+  return parts
+    .map(part => (part ? part.toString().trim() : ''))
+    .filter(Boolean)
+}
+
 async function queryExamCooker(
   subject: string,
   apiKey: string,
@@ -212,7 +384,7 @@ async function queryExamCooker(
 }
 
 function mapPaper(paper: ApiPaper, examType?: string, year?: string): Paper | null {
-  const title =
+  const rawTitle =
     paper.title ||
     paper.paperName ||
     paper.name ||
@@ -235,25 +407,39 @@ function mapPaper(paper: ApiPaper, examType?: string, year?: string): Paper | nu
     return null
   }
 
-  const normalizedExam = normalizeExamType(paper.examType || paper.exam || paper.paperType || examType, title)
-  const normalizedYear = normalizeYear(paper.year || paper.academicYear || year, title)
+  const parsed = parseTitle(rawTitle)
+  const normalizedExam =
+    normalizeExamType(paper.examType || paper.exam || paper.paperType || parsed.examType || examType, rawTitle) ||
+    'unknown'
 
-  const tags = Array.isArray(paper.tags) ? paper.tags : []
-  const metadataParts = [
-    paper.metadata?.trim(),
-    paper.slot ? `Slot ${paper.slot.toUpperCase()}` : undefined,
-    paper.academicYear?.trim(),
-    paper.courseCode?.trim(),
-    tags.slice(0, 3).join(', ') || undefined,
-  ].filter(Boolean)
+  const tags = sanitizeTags(paper.tags)
+  const resolvedSlot = resolveSlot(parsed.slot, paper.slot, tags)
+  const resolvedYear =
+    parsed.year ||
+    extractYear(paper.year) ||
+    extractYear(paper.academicYear) ||
+    findYearInList([paper.metadata, ...tags]) ||
+    (year ? extractYear(year) : undefined) ||
+    extractYear(rawTitle) ||
+    parsed.academicYear ||
+    'unknown'
+
+  const metadataParts = buildMetadataParts([
+    paper.metadata,
+    parsed.courseName,
+    parsed.courseCode || paper.courseCode,
+    parsed.academicYear || paper.academicYear,
+    resolvedSlot ? `Slot ${resolvedSlot}` : undefined,
+  ])
 
   return {
-    title: title.trim(),
+    title: parsed.cleanTitle || rawTitle.trim(),
     url,
     source: SOURCE,
-    metadata: metadataParts.join(' · ') || '',
-    examType: normalizedExam || 'unknown',
-    year: normalizedYear || 'unknown',
+    metadata: metadataParts.join(' · '),
+    examType: normalizedExam,
+    year: resolvedYear,
+    slot: resolvedSlot,
   }
 }
 
@@ -288,14 +474,6 @@ function detectExamInText(text: string): string | undefined {
   if (/quiz/i.test(text)) return 'Quiz'
   if (/mid(?:term)?/i.test(text)) return 'MID'
   if (/cia/i.test(text)) return 'CIA'
-  return undefined
-}
-
-function normalizeYear(value?: string | null, fallbackText?: string): string | undefined {
-  const fromValue = extractYear(value)
-  if (fromValue) return fromValue
-  const fromFallback = extractYear(fallbackText)
-  if (fromFallback) return fromFallback
   return undefined
 }
 
@@ -361,4 +539,13 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
   } finally {
     clearTimeout(timeout)
   }
+}
+interface ParsedTitle {
+  cleanTitle: string
+  examType?: string
+  slot?: string
+  year?: string
+  academicYear?: string
+  courseCode?: string
+  courseName?: string
 }

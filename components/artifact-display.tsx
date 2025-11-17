@@ -1118,9 +1118,18 @@ const PaperCard = ({
   const [isLoading, setIsLoading] = useState(false)
 
   const handleViewPaper = async () => {
+    const urlToView = paper.link || paper.url || paper.pdfUrl || paper.downloadUrl
+    const fromExamCooker = typeof paper.source === 'string' && paper.source.toLowerCase() === 'examcooker'
+
+    if (fromExamCooker) {
+      if (urlToView && typeof window !== 'undefined') {
+        window.open(urlToView, '_blank', 'noopener,noreferrer')
+      }
+      return
+    }
+
     setIsLoading(true)
     try {
-      const urlToView = paper.link || paper.url || paper.pdfUrl || paper.downloadUrl
       onViewPdf(urlToView, paper.title)
     } finally {
       // Keep loading state for a brief moment to show feedback
@@ -3103,7 +3112,7 @@ const PureArtifactDisplay = ({
                   ? 'grid-cols-1'
                   : isFullscreen
                     ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'
-                    : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+                    : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3'
                 : isMobile
                   ? 'grid-cols-1'
                   : isFullscreen

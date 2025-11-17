@@ -283,6 +283,36 @@ Make the formatted_content engaging and conversational while being informative a
   }
 }
 
+function getToolOutputPayload(tool: any) {
+  if (!tool) return null
+  return tool.result ?? tool.output ?? null
+}
+
+function getToolInputPayload(tool: any) {
+  if (!tool) return undefined
+  return tool.args ?? tool.input ?? undefined
+}
+
+function inferLegacyToolState(
+  tool: any,
+  output: any
+): 'result' | 'error' {
+  const state = typeof tool?.state === 'string' ? tool.state : ''
+  if (output && typeof output === 'object') {
+    if ('success' in output && output.success === false) {
+      return 'error'
+    }
+    return 'result'
+  }
+  if (state.includes('error')) {
+    return 'error'
+  }
+  if (state.includes('output')) {
+    return 'result'
+  }
+  return 'error'
+}
+
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions)
@@ -612,29 +642,34 @@ CRITICAL TOOL CONTINUATION RULES:
       if (lastUserMessage && lastUserMessage.role === 'user') {
         let toolContext = ''
 
-        if (directToolCallResult.toolName === 'queryVTOP' && directToolCallResult.result?.success) {
-          const command =
-            directToolCallResult.result.command || directToolCallResult.args?.command || 'data'
-          let dataContext = ''
+        if (directToolCallResult.toolName === 'queryVTOP') {
+          const directResultPayload = getToolOutputPayload(directToolCallResult)
+          if (directResultPayload?.success) {
+            const command =
+              directResultPayload.command ||
+              getToolInputPayload(directToolCallResult)?.command ||
+              'data'
+            let dataContext = ''
 
-          if (directToolCallResult.result.formatted_content) {
-            dataContext = directToolCallResult.result.formatted_content
-          } else if (directToolCallResult.result.summary) {
-            dataContext = directToolCallResult.result.summary
-          } else if (directToolCallResult.result.data || directToolCallResult.result.output) {
-            const rawData = directToolCallResult.result.data || directToolCallResult.result.output
-            if (typeof rawData === 'string') {
-              dataContext = rawData.substring(0, 500) + (rawData.length > 500 ? '...' : '')
-            } else if (Array.isArray(rawData)) {
-              dataContext = `Retrieved ${rawData.length} items for ${command}`
-            } else {
-              dataContext = `Retrieved ${command} data from VTOP`
+            if (directResultPayload.formatted_content) {
+              dataContext = directResultPayload.formatted_content
+            } else if (directResultPayload.summary) {
+              dataContext = directResultPayload.summary
+            } else if (directResultPayload.data || directResultPayload.output) {
+              const rawData = directResultPayload.data || directResultPayload.output
+              if (typeof rawData === 'string') {
+                dataContext = rawData.substring(0, 500) + (rawData.length > 500 ? '...' : '')
+              } else if (Array.isArray(rawData)) {
+                dataContext = `Retrieved ${rawData.length} items for ${command}`
+              } else {
+                dataContext = `Retrieved ${command} data from VTOP`
+              }
             }
-          }
 
-          if (dataContext) {
-            toolContext = `\n\n[VTOP ${command.toUpperCase()} DATA CONTEXT]:\n${dataContext}`
-            toolContext += `\n\n[IMPORTANT]: VTOP ${command} data was successfully retrieved above. Use this data to answer the user's question about ${command}.`
+            if (dataContext) {
+              toolContext = `\n\n[VTOP ${command.toUpperCase()} DATA CONTEXT]:\n${dataContext}`
+              toolContext += `\n\n[IMPORTANT]: VTOP ${command} data was successfully retrieved above. Use this data to answer the user's question about ${command}.`
+            }
           }
         }
 
@@ -647,90 +682,89 @@ CRITICAL TOOL CONTINUATION RULES:
       }
     }
 
-    if (
-      directToolCallResult &&
-      directToolCallExecuted &&
-      directToolCallResult.result?.formatted_content
-    ) {
-      const responseText =
-        directToolCallResult.result.formatted_content ||
-        directToolCallResult.result.summary ||
-        `Here's your ${directToolCallResult.args?.command || 'data'} from VTOP.`
+    if (directToolCallResult && directToolCallExecuted) {
+      const directResultPayload = getToolOutputPayload(directToolCallResult)
+      if (directResultPayload?.formatted_content) {
+        const responseText =
+          directResultPayload.formatted_content ||
+          directResultPayload.summary ||
+          `Here's your ${directToolCallResult.args?.command || 'data'} from VTOP.`
 
-      const mockResult = {
-        text: responseText,
-        response: { id: `direct-${Date.now()}` },
-        toolResults: [directToolCallResult],
-        steps: [
+        const mockResult = {
+          text: responseText,
+          response: { id: `direct-${Date.now()}` },
+          toolResults: [directToolCallResult],
+          steps: [
+            {
+              toolResults: [directToolCallResult],
+            },
+          ],
+        }
+
+        const safeInvocations = sanitizeToolInvocations([
           {
-            toolResults: [directToolCallResult],
-          },
-        ],
-      }
-
-      const safeInvocations = sanitizeToolInvocations([
-        {
-          toolCallId: directToolCallResult.toolCallId,
-          toolName: directToolCallResult.toolName,
-          args: directToolCallResult.args,
-          result: directToolCallResult.result,
-          state: directToolCallResult.state,
-        },
-      ])
-
-      try {
-        await saveMessage(
-          chat.id,
-          'assistant',
-          responseText,
-          safeInvocations,
-          mockResult.response.id
-        )
-        console.log('Direct tool call message saved with tool invocation')
-      } catch (error) {
-        console.error('Failed to save direct tool call message:', error)
-      }
-
-      const stream = createUIMessageStream<AppUIMessage>({
-        originalMessages: uiMessages,
-        generateId,
-        execute: ({ writer }) => {
-          const messageId = generateId()
-          const textPartId = generateId()
-
-          writer.write({ type: 'start', messageId })
-          writer.write({
-            type: 'tool-input-available',
             toolCallId: directToolCallResult.toolCallId,
             toolName: directToolCallResult.toolName,
-            input: directToolCallResult.args,
-          })
-          writer.write({
-            type: 'tool-output-available',
-            toolCallId: directToolCallResult.toolCallId,
-            output: directToolCallResult.result,
-          })
-          writer.write({ type: 'text-start', id: textPartId })
-          writer.write({ type: 'text-delta', id: textPartId, delta: responseText })
-          writer.write({ type: 'text-end', id: textPartId })
-          writer.write({
-            type: 'finish',
-            finishReason: 'stop',
-            messageMetadata: {
-              chatId: chat.id,
-              chatPath: chat.path,
-            },
-          })
-        },
-      })
+            args: directToolCallResult.args,
+            result: directResultPayload,
+            state: directToolCallResult.state,
+          },
+        ])
 
-      return createUIMessageStreamResponse({
-        headers: {
-          'X-Chat-Id': chat.id,
-          'X-Chat-Path': chat.path,
-        },
-        stream,
-      })
+        try {
+          await saveMessage(
+            chat.id,
+            'assistant',
+            responseText,
+            safeInvocations,
+            mockResult.response.id
+          )
+          console.log('Direct tool call message saved with tool invocation')
+        } catch (error) {
+          console.error('Failed to save direct tool call message:', error)
+        }
+
+        const stream = createUIMessageStream<AppUIMessage>({
+          originalMessages: uiMessages,
+          generateId,
+          execute: ({ writer }) => {
+            const messageId = generateId()
+            const textPartId = generateId()
+
+            writer.write({ type: 'start', messageId })
+            writer.write({
+              type: 'tool-input-available',
+              toolCallId: directToolCallResult.toolCallId,
+              toolName: directToolCallResult.toolName,
+              input: directToolCallResult.args,
+            })
+            writer.write({
+              type: 'tool-output-available',
+              toolCallId: directToolCallResult.toolCallId,
+              output: directResultPayload,
+            })
+            writer.write({ type: 'text-start', id: textPartId })
+            writer.write({ type: 'text-delta', id: textPartId, delta: responseText })
+            writer.write({ type: 'text-end', id: textPartId })
+            writer.write({
+              type: 'finish',
+              finishReason: 'stop',
+              messageMetadata: {
+                chatId: chat.id,
+                chatPath: chat.path,
+              },
+            })
+          },
+        })
+
+        return createUIMessageStreamResponse({
+          headers: {
+            'X-Chat-Id': chat.id,
+            'X-Chat-Path': chat.path,
+          },
+          stream,
+        })
+      }
     }
 
     const attachmentAware = enhancedMessages.some(
@@ -1047,11 +1081,12 @@ CRITICAL TOOL CONTINUATION RULES:
           )
 
           for (const tr of uniqueToolResults) {
+            const toolOutput = getToolOutputPayload(tr)
             if (
               tr.toolName === 'queryVTOP' &&
-              tr.result?.success &&
-              tr.result.data &&
-              !tr.result.parsedData
+              toolOutput?.success &&
+              toolOutput.data &&
+              !toolOutput.parsedData
             ) {
               try {
                 const userContext =
@@ -1063,12 +1098,12 @@ CRITICAL TOOL CONTINUATION RULES:
                         .join(' | ')
                     : ''
                 const parsed = await parseVTOPData(
-                  tr.result,
-                  tr.args.command,
+                  toolOutput,
+                  getToolInputPayload(tr)?.command || 'data',
                   userContext,
                   session.user.id
                 )
-                Object.assign(tr.result, {
+                Object.assign(toolOutput, {
                   parsedData: parsed,
                   formatted_content: (parsed as any).formatted_content,
                   structured_data: (parsed as any).structured_data,
@@ -1080,13 +1115,17 @@ CRITICAL TOOL CONTINUATION RULES:
             }
           }
 
-          const allInvocations = uniqueToolResults.map((tr: any) => ({
-            toolCallId: tr.toolCallId || `${tr.toolName}-${Date.now()}`,
-            toolName: tr.toolName,
-            args: tr.args || {},
-            result: tr.result || null,
-            state: tr.result ? (tr.result.success !== false ? 'result' : 'error') : 'error',
-          }))
+          const allInvocations = uniqueToolResults.map((tr: any) => {
+            const toolOutput = getToolOutputPayload(tr)
+            const toolArgs = getToolInputPayload(tr) || {}
+            return {
+              toolCallId: tr.toolCallId || `${tr.toolName}-${Date.now()}`,
+              toolName: tr.toolName,
+              args: toolArgs,
+              result: toolOutput || null,
+              state: inferLegacyToolState(tr, toolOutput),
+            }
+          })
 
           const safeInvocations = sanitizeToolInvocations(allInvocations)
 

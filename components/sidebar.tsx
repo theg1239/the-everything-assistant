@@ -40,17 +40,13 @@ const sidebarVariants = {
   open: {
     x: 0,
     transition: {
-      type: 'tween',
       duration: 0.25,
-      ease: [0.25, 0.46, 0.45, 0.94], // Custom easing for smoothness
     },
   },
   closed: {
     x: -320,
     transition: {
-      type: 'tween',
       duration: 0.2,
-      ease: [0.25, 0.46, 0.45, 0.94],
     },
   },
 }
@@ -58,11 +54,11 @@ const sidebarVariants = {
 const overlayVariants = {
   open: {
     opacity: 1,
-    transition: { duration: 0.2, ease: 'easeOut' },
+    transition: { duration: 0.2 },
   },
   closed: {
     opacity: 0,
-    transition: { duration: 0.15, ease: 'easeIn' },
+    transition: { duration: 0.15 },
   },
 }
 

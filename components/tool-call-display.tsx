@@ -35,11 +35,17 @@ interface ToolCallDisplayProps {
   setMaximizedItem?: (item: any) => void
 }
 
+const VTOP_ARTIFACT_BLACKLIST = new Set(['exams', 'exam-schedule'])
+
 const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) => {
   if (toolName === 'queryVTOP') {
     if (result.data || result.output) {
       const vtopData = result.data || result.output
       const command = result.command || 'unknown'
+
+      if (VTOP_ARTIFACT_BLACKLIST.has(command)) {
+        return null
+      }
 
       let parsedData = vtopData
       if (typeof vtopData === 'string') {
@@ -840,7 +846,7 @@ const ToolCallLoadingState = ({ toolCalls }: { toolCalls: any[] }) => {
               <Loader2 className="h-5 w-5 text-primary animate-spin" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-foreground truncate">
+              <div className="text-sm font-medium text-foreground break-words">
                 Searching for data...
               </div>
               {/* <div className="text-xs text-muted-foreground mt-1">
@@ -1018,7 +1024,7 @@ const ToolCallResultsSummary = ({
               <div className="flex items-center space-x-3">
                 <AlertCircle className="h-5 w-5 text-red-400" />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-foreground truncate">
+                  <div className="text-sm font-medium text-foreground break-words">
                     {firstFailedTool.toolName === 'queryVTOP' && isAuthError
                       ? 'VTOP Login Failed'
                       : firstFailedTool.toolName === 'queryVTOP'
@@ -1109,7 +1115,7 @@ const ToolCallResultsSummary = ({
                   <GraduationCap className="h-5 w-5 text-blue-500" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-foreground truncate">
+                  <div className="text-sm font-medium text-foreground break-words">
                     Authentication Required
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
@@ -1143,6 +1149,29 @@ const ToolCallResultsSummary = ({
         </motion.div>
       )
     }
+    const hasSuppressedVtopSuccess = completedTools.some(tool => {
+      if (tool.toolName !== 'queryVTOP') return false
+      const command =
+        tool.result?.command ||
+        tool.args?.command ||
+        tool.function?.arguments?.command ||
+        (typeof tool.function?.arguments === 'string'
+          ? (() => {
+              try {
+                return JSON.parse(tool.function.arguments || '{}')?.command
+              } catch (error) {
+                return null
+              }
+            })()
+          : null) ||
+        'unknown'
+      return tool.result && tool.result.success !== false && VTOP_ARTIFACT_BLACKLIST.has(command)
+    })
+
+    if (hasSuppressedVtopSuccess) {
+      return null
+    }
+
     return (
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3">
         <Card className="w-full border-orange-500/20 bg-orange-500/5">
@@ -1150,7 +1179,9 @@ const ToolCallResultsSummary = ({
             <div className="flex items-center space-x-3">
               <AlertCircle className="h-5 w-5 text-orange-400" />
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-foreground truncate">Search completed</div>
+                <div className="text-sm font-medium text-foreground break-words">
+                  Search completed
+                </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   No results found for your query
                 </div>
@@ -1203,7 +1234,7 @@ const ToolCallResultsSummary = ({
                       <GraduationCap className="h-5 w-5 text-blue-500" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-foreground truncate">
+                      <div className="text-sm font-medium text-foreground break-words">
                         Authentication Required
                       </div>
                       <div className="text-xs text-muted-foreground mt-1">

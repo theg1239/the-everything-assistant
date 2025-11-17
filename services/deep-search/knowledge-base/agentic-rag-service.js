@@ -10,7 +10,7 @@ class AgenticRAGService {
 
     this.thinkingBudget = options.thinkingBudget !== undefined ? options.thinkingBudget : 1024
 
-    this.chatModel = google('gemini-2.5-flash-lite-preview-06-17', {
+    this.chatModel = google('gemini-flash-lite-latest', {
       thinkingConfig: {
         thinkingBudget: this.thinkingBudget,
       },

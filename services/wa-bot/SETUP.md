@@ -23,21 +23,25 @@ WHATSAPP_BOT_API_KEY=your-secure-api-key-here
 ### WhatsApp Bot Service
 
 1. Navigate to the WhatsApp bot directory:
+
 ```bash
 cd services/wa-bot
 ```
 
 2. Install dependencies:
+
 ```bash
 npm install
 ```
 
 3. Copy and configure environment variables:
+
 ```bash
 cp example.env .env
 ```
 
 4. Edit `.env` with your configuration:
+
 ```env
 # Server Configuration
 PORT=3001
@@ -68,12 +72,14 @@ MESSAGE_DELAY_MS=1000
 ## Step 2: Start the Services
 
 ### 1. Start the Main Application
+
 ```bash
 # In the main project directory
 npm run dev
 ```
 
 ### 2. Start the WhatsApp Bot Service
+
 ```bash
 # In services/wa-bot directory
 npm run dev
@@ -98,6 +104,7 @@ Send a message to the connected WhatsApp number:
 You should receive a response with available commands.
 
 Try the AI assistant:
+
 ```
 !ask What is the weather today?
 ```
@@ -105,7 +112,7 @@ Try the AI assistant:
 ## Available Commands
 
 - `!ask [question]` - Ask the AI assistant anything
-- `!help` - Show available commands  
+- `!help` - Show available commands
 - `!status` - Check bot status
 
 ## Monitoring
@@ -119,8 +126,9 @@ Try the AI assistant:
 ### Logs
 
 The bot service provides detailed logging with emojis:
+
 - 🚀 Service startup
-- 📱 WhatsApp events  
+- 📱 WhatsApp events
 - 📨 Message processing
 - 🧠 AI requests
 - ⚡ Performance metrics
@@ -174,6 +182,7 @@ location /wa-bot/ {
 ## Database Integration
 
 The bot automatically:
+
 - Creates WhatsApp users in the database
 - Tracks conversations and messages
 - Links to existing users when possible
@@ -256,6 +265,7 @@ pm2 start whatsapp-bot
 ## Features
 
 ### ✅ Implemented
+
 - ✅ WhatsApp Web integration
 - ✅ AI-powered responses via main application
 - ✅ Command parsing (!ask, !help, !status)
@@ -267,6 +277,7 @@ pm2 start whatsapp-bot
 - ✅ Health checks and status endpoints
 
 ### 🔮 Future Enhancements
+
 - Group chat support
 - Message encryption
 - Media file handling
@@ -278,6 +289,7 @@ pm2 start whatsapp-bot
 ## Support
 
 For issues and questions:
+
 1. Check the logs for error messages
 2. Verify configuration settings
 3. Test API connectivity

@@ -1,11 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import type { ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
-import { hasVTOPCredentials } from '@/lib/vtop-credentials'
-import { experimental_useObject as useObject } from '@ai-sdk/react'
-import { vtopResultSchema } from '@/app/api/hub/vtop/schema'
 import { useHubTool } from './use-hub-tool'
+import type { HubVTOPCommand, PersonalHubSnapshot } from '@/types/hub'
 import {
   CalendarClock,
   ClipboardCheck,
@@ -18,54 +17,77 @@ import {
 } from 'lucide-react'
 
 interface QuickActionsProps {
+  linked: boolean
   onShowResult: (title: string, result: any) => void
-  onShowStream?: (title: string, object: any, isLoading: boolean, stop: () => void) => void
-  goTo: (page: 'vtop' | 'papers' | 'mess' | 'placements' | 'faculty' | 'reddit') => void
+  goTo: (
+    page: 'briefing' | 'vtop' | 'papers' | 'mess' | 'placements' | 'faculty' | 'reddit' | 'syllabi'
+  ) => void
+  runVtop: (command: HubVTOPCommand, extras?: Record<string, any>) => Promise<PersonalHubSnapshot>
+  onLink?: () => void
+  disabled?: boolean
+  syncingLabel?: string | null
 }
 
-export default function QuickActions({ onShowResult, onShowStream, goTo }: QuickActionsProps) {
-  const [linked] = useState<boolean>(hasVTOPCredentials())
-  const attendance = useObject({ api: '/api/hub/vtop', schema: vtopResultSchema }) as any
-  const timetable = useObject({ api: '/api/hub/vtop', schema: vtopResultSchema }) as any
+export default function QuickActions({
+  linked,
+  onShowResult,
+  goTo,
+  runVtop,
+  onLink,
+  disabled,
+  syncingLabel,
+}: QuickActionsProps) {
   const placements = useHubTool<any>('getPlacementInfo')
-  const [startedAttendance, setStartedAttendance] = useState(false)
-  const [startedTimetable, setStartedTimetable] = useState(false)
+  const [pendingAction, setPendingAction] = useState<string | null>(null)
   const [actions, setActions] = useState<any[]>([])
 
   const runAttendance = async () => {
-    if (!linked) return goTo('vtop')
-    await attendance.submit({ command: 'attendance', extras: {} })
-    if (onShowStream)
-      onShowStream('attendance', attendance.object, attendance.isLoading, attendance.stop)
-    setStartedAttendance(true)
+    if (!linked) {
+      onLink?.()
+      return goTo('briefing')
+    }
+    try {
+      setPendingAction('attendance')
+      const snapshot = await runVtop('attendance')
+      onShowResult(snapshot.title || 'attendance', snapshot)
+    } finally {
+      setPendingAction(null)
+    }
   }
 
   const runTimetable = async () => {
-    if (!linked) return goTo('vtop')
-    await timetable.submit({ command: 'timetable', extras: {} })
-    if (onShowStream)
-      onShowStream('timetable', timetable.object, timetable.isLoading, timetable.stop)
-    setStartedTimetable(true)
+    if (!linked) {
+      onLink?.()
+      return goTo('briefing')
+    }
+    try {
+      setPendingAction('timetable')
+      const snapshot = await runVtop('timetable')
+      onShowResult(snapshot.title || 'timetable', snapshot)
+    } finally {
+      setPendingAction(null)
+    }
   }
 
-  useEffect(() => {
-    if (startedAttendance && onShowStream) {
-      onShowStream('attendance', attendance.object, attendance.isLoading, attendance.stop)
+  const runAssignments = async () => {
+    if (!linked) {
+      onLink?.()
+      return goTo('briefing')
     }
-  }, [startedAttendance, attendance.object, attendance.isLoading])
-
-  useEffect(() => {
-    if (startedTimetable && onShowStream) {
-      onShowStream('timetable', timetable.object, timetable.isLoading, timetable.stop)
+    try {
+      setPendingAction('assignments')
+      const snapshot = await runVtop('da')
+      onShowResult(snapshot.title || 'digital assignments', snapshot)
+    } finally {
+      setPendingAction(null)
     }
-  }, [startedTimetable, timetable.object, timetable.isLoading])
+  }
 
   const runPlacements = async () => {
     const res = await placements.run({})
     onShowResult('placements overview', res)
   }
 
-  // Build and randomize actions on mount and when link state changes
   useEffect(() => {
     const candidates = [
       linked
@@ -74,8 +96,7 @@ export default function QuickActions({ onShowResult, onShowStream, goTo }: Quick
             label: 'my attendance',
             icon: <ClipboardCheck className="h-3.5 w-3.5" />,
             onClick: runAttendance,
-            loading: attendance.isLoading,
-            requiresLinked: true,
+            loading: pendingAction === 'attendance',
           }
         : null,
       linked
@@ -84,8 +105,16 @@ export default function QuickActions({ onShowResult, onShowStream, goTo }: Quick
             label: 'my timetable',
             icon: <CalendarClock className="h-3.5 w-3.5" />,
             onClick: runTimetable,
-            loading: timetable.isLoading,
-            requiresLinked: true,
+            loading: pendingAction === 'timetable',
+          }
+        : null,
+      linked
+        ? {
+            id: 'assignments',
+            label: 'my assignments',
+            icon: <ClipboardCheck className="h-3.5 w-3.5" />,
+            onClick: runAssignments,
+            loading: pendingAction === 'assignments',
           }
         : null,
       {
@@ -121,52 +150,40 @@ export default function QuickActions({ onShowResult, onShowStream, goTo }: Quick
       },
     ].filter(Boolean) as any[]
 
-    // Shuffle
     for (let i = candidates.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1))
-      const tmp = candidates[i]
-      candidates[i] = candidates[j]
-      candidates[j] = tmp
+      ;[candidates[i], candidates[j]] = [candidates[j], candidates[i]]
     }
 
-    // Ensure exactly 4 actions; if fewer than 4 (should not happen), fill with safe defaults
-    const safeDefaults = ['mess', 'papers', 'placements', 'faculty', 'reddit']
     const chosen: any[] = []
     const seen = new Set<string>()
-    for (const c of candidates) {
+    for (const action of candidates) {
       if (chosen.length >= 4) break
-      if (seen.has(c.id)) continue
-      seen.add(c.id)
-      chosen.push(c)
-    }
-    if (chosen.length < 4) {
-      for (const id of safeDefaults) {
-        if (chosen.length >= 4) break
-        if (seen.has(id)) continue
-        const fallback = candidates.find(c => c.id === id)
-        if (fallback) {
-          seen.add(id)
-          chosen.push(fallback)
-        }
-      }
+      if (seen.has(action.id)) continue
+      chosen.push(action)
+      seen.add(action.id)
     }
 
-    setActions(chosen.slice(0, 4))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [linked])
+    setActions(chosen)
+  }, [linked, pendingAction, placements.loading, goTo, runVtop])
 
   return (
     <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-2 sm:overflow-x-auto no-scrollbar">
-      {actions.map(a => (
+      {actions.map(action => (
         <ActionButton
-          key={a.id}
-          label={a.label}
-          icon={a.icon}
-          onClick={a.onClick}
-          loading={!!a.loading}
-          ariaLabel={a.label}
+          key={action.id}
+          label={action.label}
+          icon={action.icon}
+          onClick={action.onClick}
+          loading={!!action.loading}
+          disabled={disabled}
         />
       ))}
+      {disabled && (
+        <div className="col-span-full text-xs text-muted-foreground mt-1">
+          {syncingLabel ? `syncing ${syncingLabel.replace('-', ' ')}…` : 'sync in progress'}
+        </div>
+      )}
     </div>
   )
 }
@@ -177,24 +194,21 @@ function ActionButton({
   onClick,
   loading,
   disabled,
-  ariaLabel,
 }: {
   label: string
-  icon?: React.ReactNode
+  icon?: ReactNode
   onClick: () => void
   loading?: boolean
   disabled?: boolean
-  ariaLabel?: string
 }) {
   return (
     <Button
       size="sm"
       variant="secondary"
-      disabled={disabled}
       onClick={onClick}
       aria-busy={loading || undefined}
-      aria-label={ariaLabel || label}
       className="rounded-full px-3 whitespace-nowrap w-full sm:w-auto justify-center"
+      disabled={loading || disabled}
     >
       {loading ? (
         <>

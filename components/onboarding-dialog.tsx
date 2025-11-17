@@ -87,7 +87,7 @@ const onboardingSteps: OnboardingStep[] = [
     examples: [
       'what does reddit think about placements?',
       'is there a holiday next week?',
-      'when is FFCS?',
+      'when does riviera happen this year?',
     ],
   },
   {
@@ -114,8 +114,8 @@ const onboardingSteps: OnboardingStep[] = [
     artworkImage: '/onboarding-artwork/artwork2.png',
     examples: [
       'show me the faculty members in cse',
-      'when is the diwali holiday?',
-      'what are the dates of gravitas?',
+      'when is the winter vacation?',
+      'what are the dates of riviera?',
     ],
   },
   {

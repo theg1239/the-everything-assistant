@@ -1,0 +1,11 @@
+{
+  "servers": {
+    "local-proxy": {
+      "transport": "http",
+      "url": "http://localhost:3001/mcp",
+      "headers": {
+        "Accept": "application/json, text/event-stream"
+      }
+    }
+  }
+}

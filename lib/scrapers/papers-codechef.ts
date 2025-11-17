@@ -32,6 +32,7 @@ interface ApiPaper {
   paperUrl?: string
   finalUrl?: string
   final_url?: string
+  file_url?: string
   metadata?: string
   description?: string
   examType?: string
@@ -89,10 +90,15 @@ export async function scrapePapersCodeChef(
       searchUrl: apiResult.searchUrl,
       error: apiResult.error,
     })
-    if (apiResult.success && apiResult.papers.length > 0) {
+
+    // ALWAYS return API result if successful, even with 0 papers
+    // Only fall back to browser scraping if API completely fails (network error, etc.)
+    if (apiResult.success) {
       return apiResult
     }
-    dbg('falling back to browser scraping')
+
+    // Only use browser scraping as absolute last resort when API fails
+    dbg('API failed, falling back to browser scraping')
     return await tryBrowserScraping(courseCode, examType, year)
   } catch (error) {
     console.error('Error in scrapePapersCodeChef:', error)
@@ -173,7 +179,10 @@ async function tryAPIApproach(
             }
 
             const finalUrlCandidate =
-              paper.finalUrl || (paper as any).final_url || paper.downloadUrl
+              paper.finalUrl ||
+              (paper as any).final_url ||
+              paper.downloadUrl ||
+              (paper as any).file_url
             const paperUrl =
               finalUrlCandidate ||
               paper.paperUrl ||
@@ -291,7 +300,9 @@ async function tryAPIApproach(
       const codeData = await codeResponse.json()
       const papersArray = Array.isArray(codeData) ? codeData : codeData.papers || []
       dbg('api returned items (codeOnly)', papersArray.length)
-      if (papersArray && papersArray.length > 0) {
+
+      // Always return success if API responds, even with 0 results
+      if (papersArray) {
         let skippedNoFinalUrl = 0
         let headFailCount = 0
         let headOkCount = 0
@@ -323,7 +334,10 @@ async function tryAPIApproach(
             }
 
             const finalUrlCandidate =
-              paper.finalUrl || (paper as any).final_url || paper.downloadUrl
+              paper.finalUrl ||
+              (paper as any).final_url ||
+              paper.downloadUrl ||
+              (paper as any).file_url
             const paperUrl =
               finalUrlCandidate ||
               paper.paperUrl ||
@@ -396,9 +410,12 @@ async function tryAPIApproach(
       })
     }
 
-    return { success: false, papers: [], source: 'papers.codechefvit.com' }
+    // Return success even with no papers - API responded correctly
+    dbg('API approached completed, returning 0 papers')
+    return { success: true, papers: [], source: 'papers.codechefvit.com' }
   } catch (error) {
     console.error('API approach error:', error)
+    // Only return false on actual network/API errors
     return { success: false, papers: [], source: 'papers.codechefvit.com' }
   }
 }
@@ -413,9 +430,9 @@ async function tryBrowserScraping(
     dbg('launching puppeteer for browser scraping')
     browser = await puppeteer.launch({
       args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
-      defaultViewport: chromium.defaultViewport,
+      defaultViewport: { width: 1280, height: 1024 },
       executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
+      headless: true,
     })
 
     const page = await browser.newPage()
@@ -598,9 +615,9 @@ async function extractFinalUrlFromPaperPage(paperPageUrl: string): Promise<strin
 
     browser = await puppeteer.launch({
       args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
-      defaultViewport: chromium.defaultViewport,
+      defaultViewport: { width: 1280, height: 1024 },
       executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
+      headless: true,
     })
 
     const page = await browser.newPage()

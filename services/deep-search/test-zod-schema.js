@@ -91,7 +91,7 @@ async function testContentAnalysisSchema() {
     const testContent = `This is a great tutorial about machine learning algorithms. The professor explains neural networks clearly and provides practical examples. Students found it very helpful for their coursework.`
 
     const { object } = await generateObject({
-      model: google('gemini-2.5-flash-lite-preview-06-17'),
+      model: google('gemini-flash-lite-latest'),
       prompt: `Analyze this Reddit content: "${testContent}"`,
       schema: contentAnalysisSchema,
       maxTokens: 500,

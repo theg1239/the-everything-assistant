@@ -2,10 +2,10 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createVITTools } from '@/lib/tools'
 import { getFormattedVTOPCredentials as getServerFormatted } from '@/lib/server-vtop-credentials'
-import { google } from '@ai-sdk/google'
-import { streamObject } from 'ai'
+import { streamObject, type LanguageModel } from 'ai'
 import { vtopResultSchema } from './schema'
 import { saveTokenUsage } from '@/lib/db'
+import { rateLimitedAI } from '@/lib/rate-limited-ai'
 
 export const maxDuration = 30
 
@@ -37,9 +37,10 @@ export async function POST(req: Request) {
 
     const raw = await vtop.execute(args, { toolCallId: `vtop-${Date.now()}`, messages: [] })
 
-    const modelName = 'gemini-2.5-flash-lite'
+    const modelName = 'gemini-flash-latest'
+    const model = (await rateLimitedAI.google.model(modelName)) as LanguageModel
     const result = streamObject({
-      model: google(modelName),
+      model,
       schema: vtopResultSchema,
       prompt: [
         'You are a formatter for VTOP portal data (VIT University).',
@@ -79,7 +80,6 @@ export async function POST(req: Request) {
       },
     })
 
-    console.log('VTOP result:', result)
     return result.toTextStreamResponse()
   } catch (e: any) {
     return new Response(JSON.stringify({ error: e?.message || 'failed to stream vtop result' }), {

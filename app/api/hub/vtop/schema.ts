@@ -7,7 +7,13 @@ export const vtopResultSchema = z.object({
   formatted_content: z
     .string()
     .describe('well-structured HTML for rich rendering, valid and sanitized'),
-  structured_data: z.any().describe('structured JSON form of the result'),
+  structured_data: z
+    .object({
+      data: z.any().optional(),
+    })
+    .passthrough()
+    .optional()
+    .describe('structured JSON form of the result'),
   meta: z
     .object({
       fetchedAt: z.string().describe('iso date of when data was fetched'),

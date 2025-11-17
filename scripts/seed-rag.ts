@@ -67,26 +67,35 @@ async function main() {
     max: 4,
   })
 
+  try {
+    await pool.query('CREATE EXTENSION IF NOT EXISTS vector;')
+  } catch (error) {
+    console.error(
+      'Failed to ensure pgvector extension exists on DATABASE_URL2 connection. Please enable the vector extension and retry.'
+    )
+    throw error
+  }
+
+  if (fresh) {
+    console.log('Dropping vit_rag_chunks table for a clean reseed...')
+    await pool.query('DROP TABLE IF EXISTS vit_rag_chunks;')
+  }
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS vit_rag_chunks (
       id uuid PRIMARY KEY,
       chunk text NOT NULL,
       metadata jsonb,
-      embedding vector(768) NOT NULL
+      embedding vector(3072) NOT NULL
     );
   `)
-
-  if (fresh) {
-    console.log('Clearing vit_rag_chunks table...')
-    await pool.query('TRUNCATE vit_rag_chunks;')
-  }
 
   // Insert custom chunk if provided
   if (customText) {
     console.log('Inserting custom chunk:', customText)
     try {
       const { embedding } = await rateLimitedAI.google.embed({
-        model: { modelId: 'text-embedding-004' },
+        model: { modelId: 'gemini-embedding-001' },
         value: customText,
       })
       const id = randomUUID()
@@ -129,7 +138,7 @@ async function main() {
   for (const [idx, doc] of docs.entries()) {
     try {
       const { embedding } = await rateLimitedAI.google.embed({
-        model: { modelId: 'text-embedding-004' },
+        model: { modelId: 'gemini-embedding-001' },
         value: doc.pageContent,
       })
 

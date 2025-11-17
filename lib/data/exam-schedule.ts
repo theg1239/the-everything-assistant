@@ -2,94 +2,65 @@ import { ContextData } from './index'
 
 export const examSchedule: ContextData = {
   section: 'exam-schedule',
-  title: 'Exam Schedule & Information Fall 2025-26',
-  lastUpdated: '2025-09-04',
+  title: 'Exam Schedule & Information (FAT + Winter 2025-26)',
+  lastUpdated: '2025-11-16',
   priority: 'high',
   content: `
-Fall Semester 2025-26 Exam Schedule:
+## FALL SEMESTER 2025-26 – FAT STATUS
+- Laboratory FAT Window: Nov 10-14, 2025 (completed/ongoing clean-up slots).
+- Theory FAT Window: Nov 17 – Dec 4, 2025 (3-hour exams, 50% weightage).
+- Entry Requirements: Hall ticket + ID card; arrive 30 minutes early.
+- Last Theory Instructional Day: Nov 14, 2025.
 
-Continuous Assessment Test - I (CAT-1):
-- Dates: August 17-23, 2025 (Sunday to Saturday)
-- Duration: 90 minutes per exam
-- Weightage: 15% of total marks
-- Venue: Regular classrooms
-- Syllabus: Topics covered till mid-semester
- - Status: Concluded
+## WINTER SEMESTER 2025-26 – ASSESSMENT PLAN
+### Continuous Assessment Tests
+- CAT-I: Jan 27 – Feb 2, 2026 (Tue-Mon).
+  - Duration: 90 minutes per course.
+  - Coverage: All topics up to mid-January.
+- CAT-II: Mar 15 – Mar 23, 2026 (Sun-Mon).
+  - Duration: 90 minutes.
+  - Coverage: Topics post CAT-I.
 
-Continuous Assessment Test - II (CAT-2):
-- Dates: October 5-11, 2025 (Sunday to Saturday)
-- Duration: 90 minutes per exam
-- Weightage: 15% of total marks
-- Venue: Regular classrooms
-- Syllabus: Topics covered since CAT-1
- - Status: Upcoming
+### Final Assessment Tests (FAT)
+- Lab FATs: Apr 11 – Apr 17, 2026 (Sat-Fri) with slots defined by the respective schools.
+- Theory FATs: Begin Apr 20, 2026 (Mon); detailed timetable from CoE closer to date.
+- Weightage: CAT-I 15% + CAT-II 15% + Digital/Assignments 10% + FAT 50% + Quiz/Practical components 10%.
 
-Final Assessment Test (FAT) - Laboratory:
-- Dates: November 10-14, 2025 (Monday to Friday)
-- Duration: As per lab schedule
-- Weightage: 50% of lab component
-- Venue: Respective laboratories
-- Last instructional day for labs: November 7, 2025
+### Key Deadlines / Windows
+- Course Withdrawal: Feb 16 – Feb 18, 2026.
+- Assignment & Project Uploads: Due Apr 17, 2026 (Friday).
+- Re-registration Fee Deadline: Dec 13, 2025 (before semester start).
+- Add/Drop: Dec 5 – Dec 7, 2025.
 
-Final Assessment Test (FAT) - Theory:
-- Dates: November 17 - December 4, 2025 (Monday to Thursday)
-- Duration: 3 hours per exam
-- Weightage: 50% of total marks
-- Venue: Exam halls (to be announced by CoE)
-- Last instructional day for theory: November 14, 2025
+### Holidays Affecting Instruction
+- Winter Vacation: Dec 21, 2025 – Jan 4, 2026.
+- Pongal Break: Jan 14 – Jan 18, 2026.
+- Riviera 2026: Feb 26 – Mar 1, 2026 (adjust rehearsal schedules early).
+- Holi: Mar 4, 2026 (Holiday).
+- Ramzan: Mar 19, 2026 (Holiday).
+- Telugu New Year: Mar 20, 2026 (Holiday).
+- Good Friday: Apr 3, 2026 (No instruction day).
+- Tamil New Year / Dr. B. R. Ambedkar Birthday: Apr 14, 2026 (Holiday within FAT-Lab window).
 
-For weekend intra semester:
-- Mid Terms: 2025-09-20 to 2025-09-21
-- Final assessment test for Lab courses: 2025-11-15
-- Last instructional day  for theory courses: 2025-11-16
-- Final assessment test for theory courses: 2025-11-17 to 2025-12-04
+### Attendance & Policies
+- Minimum 75% attendance remains mandatory for CAT/FAT eligibility (target 100%).
+- Wish list registration (Oct 13-14, 2025) is compulsory for course registration validation.
+- Any malpractice during FAT invites disciplinary action; electronic gadgets prohibited except approved calculators.
 
-Important Deadlines:
-- Course withdrawal option: September 8-10, 2025
-- Assignment and project report uploads: November 14, 2025 (Friday)
-- FAT schedule announcement: By Controller of Examinations at appropriate time
-
-Attendance Requirements:
-- Minimum 75% attendance mandatory for appearing in examinations (CAT and FAT)
-- 100% attendance preferred; relaxation given for genuine reasons only
-- Students below 75% attendance will not be eligible for exams
-
-Exam Guidelines:
-- Students must carry valid ID card and hall ticket
-- Entry not allowed 30 minutes after exam starts
-- No electronic devices allowed except permitted calculators
-- Dress code: Formal attire mandatory
-- Any malpractice results in severe disciplinary action
-- Mobile phones strictly prohibited in exam halls
-
-Assessment Pattern:
-- CAT-1: 15% (covers initial syllabus)
-- CAT-2: 15% (covers mid-semester syllabus)
-- Digital Assignment: 10% (online submission)
-- FAT: 50% (comprehensive - entire syllabus)
-- Quiz/Surprise Tests: 10% (conducted throughout semester)
-
-Grade System:
-- S (Outstanding): 90-100% (10 points)
-- A (Excellent): 80-89% (9 points)
-- B (Very Good): 70-79% (8 points)
-- C (Good): 60-69% (7 points)
-- D (Average): 50-59% (6 points)
-- E (Pass): 45-49% (5 points)
-- F (Fail): Below 45% (0 points)
-- N: Audit (no points)
-
-Re-examination Policy:
-- Available for failed courses in subsequent semester
-- Re-exam fee applicable as per university norms (6000 INR for both theory and lab)
-- Re-registration required for failed courses
+### Preparation Tips
+- Use the gap between FAT conclusion (Dec 4) & Winter start (Dec 5) to reset materials and lab requirements.
+- Pre-block hostel/commute arrangements for CAT windows and Riviera week crowds.
+- Sync personal calendars with Ramzan/Tamil New Year to avoid clashes with lab FAT slots.
 `,
   metadata: {
-    currentSemester: 'Fall 2025-26',
-    nextExamPeriod: 'CAT-2 October 5-11, 2025',
-    cat1Dates: 'August 17-23, 2025',
-    cat2Dates: 'October 5-11, 2025',
-    fatDates: 'November 17 - December 4, 2025',
+    currentSemester: 'Fall 2025-26 (FAT window)',
+    theoryFatDates: '2025-11-17 to 2025-12-04',
+    winterSemesterStart: '2025-12-05',
+    cat1Dates: '2026-01-27 to 2026-02-02',
+    cat2Dates: '2026-03-15 to 2026-03-23',
+    labFatWindow: '2026-04-11 to 2026-04-17',
+    theoryFatStart: '2026-04-20',
     attendanceRequirement: '75%',
+    assignmentDeadline: '2026-04-17',
   },
 }

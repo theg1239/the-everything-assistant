@@ -9,10 +9,15 @@ interface SavedVTOPCredentials {
 const COOKIE_NAME = 'vtop_linked_credentials'
 const ENCRYPTION_KEY_COOKIE = 'vtop_master_key'
 
+function cookieFlags() {
+  const isSecure = typeof window !== 'undefined' && window.location?.protocol === 'https:'
+  return `path=/;samesite=strict${isSecure ? ';secure' : ''}`
+}
+
 function setCookie(name: string, value: string, days: number = 30) {
   const expires = new Date()
   expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000)
-  document.cookie = `${name}=${encodeURIComponent(value)};expires=${expires.toUTCString()};path=/;secure;samesite=strict`
+  document.cookie = `${name}=${encodeURIComponent(value)};expires=${expires.toUTCString()};${cookieFlags()}`
 }
 
 function getCookie(name: string): string | null {
@@ -27,7 +32,7 @@ function getCookie(name: string): string | null {
 }
 
 function deleteCookie(name: string) {
-  document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;secure;samesite=strict`
+  document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;${cookieFlags()}`
 }
 
 function getMasterKey(): string {

@@ -1,4 +1,11 @@
-import { smoothStream, extractReasoningMiddleware } from 'ai'
+import {
+  smoothStream,
+  extractReasoningMiddleware,
+  createUIMessageStream,
+  createUIMessageStreamResponse,
+  generateId,
+  stepCountIs,
+} from 'ai'
 import { inspect } from 'util'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { createVITTools } from '@/lib/tools'
@@ -7,8 +14,9 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getChat, createChat, saveMessage, updateChat } from '@/lib/db'
 import { memoryService } from '@/lib/memory/memory-service'
-import { generateChatPath, extractTitleFromContent } from '@/lib/utils'
+import { extractTitleFromContent } from '@/lib/utils'
 import { sanitizeToolInvocations } from '@/lib/sanitize-tools'
+import { uiMessagesToLegacyMessages, type AppUIMessage } from '@/lib/ai-message-conversion'
 import { z } from 'zod'
 
 async function generateChatTitle(userMessage: string, userId?: string): Promise<string> {
@@ -275,19 +283,60 @@ Make the formatted_content engaging and conversational while being informative a
   }
 }
 
+function getToolOutputPayload(tool: any) {
+  if (!tool) return null
+  return tool.result ?? tool.output ?? null
+}
+
+function getToolInputPayload(tool: any) {
+  if (!tool) return undefined
+  return tool.args ?? tool.input ?? undefined
+}
+
+function inferLegacyToolState(tool: any, output: any): 'result' | 'error' {
+  const state = typeof tool?.state === 'string' ? tool.state : ''
+  if (output && typeof output === 'object') {
+    if ('success' in output && output.success === false) {
+      return 'error'
+    }
+    return 'result'
+  }
+  if (state.includes('error')) {
+    return 'error'
+  }
+  if (state.includes('output')) {
+    return 'result'
+  }
+  return 'error'
+}
+
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user?.id) {
       return new Response('Unauthorized', { status: 401 })
     }
-    const { messages, id: chatId, directToolCall, preferredTool } = await req.json()
+    const payload = await req.json()
+    const { id: requestedChatId, directToolCall, preferredTool } = payload
+    const uiMessages: AppUIMessage[] = Array.isArray(payload?.messages) ? payload.messages : []
+    const messages: any[] = uiMessagesToLegacyMessages(uiMessages)
+    const metadataPreferredTool =
+      uiMessages.length > 0
+        ? ((uiMessages[uiMessages.length - 1]?.metadata || {}) as Record<string, any>)
+            ?.preferredTool
+        : undefined
+    const effectivePreferredTool = preferredTool || metadataPreferredTool
 
-    let chat = chatId ? await getChat(chatId, session.user.id) : null
+    const normalizedChatId =
+      typeof requestedChatId === 'string' && requestedChatId.trim().length > 0
+        ? requestedChatId
+        : generateId()
+
+    let chat = normalizedChatId ? await getChat(normalizedChatId, session.user.id) : null
     if (!chat) {
       const tempTitle = extractTitleFromContent(messages[0]?.content || 'New Chat')
-      const path = generateChatPath()
-      chat = await createChat(session.user.id, tempTitle, path)
+      const path = `/chat/${normalizedChatId}`
+      chat = await createChat(session.user.id, tempTitle, path, normalizedChatId)
 
       const userMessage = messages[0]?.content || ''
       if (userMessage.trim()) {
@@ -428,8 +477,8 @@ export async function POST(req: Request) {
       )
     }
 
-    const userMessage = messages[messages.length - 1]
-    if (userMessage.role === 'user') {
+    const userMessage = messages.length > 0 ? messages[messages.length - 1] : null
+    if (userMessage?.role === 'user') {
       await saveMessage(chat.id, 'user', userMessage.content, undefined, userMessage.id)
     }
 
@@ -437,7 +486,7 @@ export async function POST(req: Request) {
     const isMemoryEnabled = memorySettings?.isEnabled ?? true
 
     let memoryContext = ''
-    if (isMemoryEnabled && userMessage.role === 'user') {
+    if (isMemoryEnabled && userMessage?.role === 'user') {
       try {
         const memories = await memoryService.getUserMemories(session.user.id, { pageSize: 100 })
 
@@ -461,27 +510,44 @@ ${memories
       } catch (error) {}
     }
 
-    const tools = createVITTools(session.user.id)
+    const baseTools = createVITTools(session.user.id)
+    const prefersWebSearch = effectivePreferredTool === 'web-search'
+    let tools: Record<string, any> = baseTools
 
-    const toolPreferenceGuidance = preferredTool
-      ? `
+    if (prefersWebSearch) {
+      try {
+        const googleSearchTool = rateLimitedAI.google.tools.google_search()
+        tools = googleSearchTool ? { google_search: googleSearchTool } : {}
+      } catch (error) {
+        console.error('Failed to initialize Google Search tool:', error)
+        tools = {}
+      }
+    }
 
-IMPORTANT: The user has specifically selected the "${preferredTool}" tool. When responding to their query, you should prioritize using this tool if it's relevant to their question. Available tools and their purposes:
+    const toolPreferenceGuidance =
+      !prefersWebSearch && effectivePreferredTool
+        ? `
+
+IMPORTANT: The user has specifically selected the "${effectivePreferredTool}" tool. When responding to their query, you should prioritize using this tool if it's relevant to their question. Available tools and their purposes:
 
 - reddit-search: Use searchRedditKnowledge or searchRedditWithContext for student discussions and academic advice
 - vtop-query: Use queryVTOP for personal VTOP data like grades, attendance, timetable  
 - past-papers: Use findPastPapers for examination papers and course materials
 - mess-menu: Use getMessMenu for hostel dining information
 
-If the user's query is relevant to the selected tool "${preferredTool}", use it even if other tools might also be applicable.`
-      : ''
+If the user's query is relevant to the selected tool "${effectivePreferredTool}", use it even if other tools might also be applicable.`
+        : ''
 
     const memoryGuidance =
       memoryContext && isMemoryEnabled
         ? `\n\n<memory_context>\n  <instructions>Use the following information to provide more personalized and relevant responses.</instructions>\n  ${memoryContext}\n</memory_context>`
         : ''
 
-    const combinedSystemPrompt = `${VIT_SYSTEM_PROMPT}  
+    const webSearchPrompt = `You are a VIT assistant that uses the web search tool to gather the latest information before answering. Search when the user asks for facts, current events, or details you are unsure about. Summarize findings in a friendly, trustworthy tone and cite the retrieved information in natural language.`
+
+    const combinedSystemPrompt = prefersWebSearch
+      ? webSearchPrompt
+      : `${VIT_SYSTEM_PROMPT}  
 
 ${toolPreferenceGuidance}${memoryGuidance}
 
@@ -574,29 +640,34 @@ CRITICAL TOOL CONTINUATION RULES:
       if (lastUserMessage && lastUserMessage.role === 'user') {
         let toolContext = ''
 
-        if (directToolCallResult.toolName === 'queryVTOP' && directToolCallResult.result?.success) {
-          const command =
-            directToolCallResult.result.command || directToolCallResult.args?.command || 'data'
-          let dataContext = ''
+        if (directToolCallResult.toolName === 'queryVTOP') {
+          const directResultPayload = getToolOutputPayload(directToolCallResult)
+          if (directResultPayload?.success) {
+            const command =
+              directResultPayload.command ||
+              getToolInputPayload(directToolCallResult)?.command ||
+              'data'
+            let dataContext = ''
 
-          if (directToolCallResult.result.formatted_content) {
-            dataContext = directToolCallResult.result.formatted_content
-          } else if (directToolCallResult.result.summary) {
-            dataContext = directToolCallResult.result.summary
-          } else if (directToolCallResult.result.data || directToolCallResult.result.output) {
-            const rawData = directToolCallResult.result.data || directToolCallResult.result.output
-            if (typeof rawData === 'string') {
-              dataContext = rawData.substring(0, 500) + (rawData.length > 500 ? '...' : '')
-            } else if (Array.isArray(rawData)) {
-              dataContext = `Retrieved ${rawData.length} items for ${command}`
-            } else {
-              dataContext = `Retrieved ${command} data from VTOP`
+            if (directResultPayload.formatted_content) {
+              dataContext = directResultPayload.formatted_content
+            } else if (directResultPayload.summary) {
+              dataContext = directResultPayload.summary
+            } else if (directResultPayload.data || directResultPayload.output) {
+              const rawData = directResultPayload.data || directResultPayload.output
+              if (typeof rawData === 'string') {
+                dataContext = rawData.substring(0, 500) + (rawData.length > 500 ? '...' : '')
+              } else if (Array.isArray(rawData)) {
+                dataContext = `Retrieved ${rawData.length} items for ${command}`
+              } else {
+                dataContext = `Retrieved ${command} data from VTOP`
+              }
             }
-          }
 
-          if (dataContext) {
-            toolContext = `\n\n[VTOP ${command.toUpperCase()} DATA CONTEXT]:\n${dataContext}`
-            toolContext += `\n\n[IMPORTANT]: VTOP ${command} data was successfully retrieved above. Use this data to answer the user's question about ${command}.`
+            if (dataContext) {
+              toolContext = `\n\n[VTOP ${command.toUpperCase()} DATA CONTEXT]:\n${dataContext}`
+              toolContext += `\n\n[IMPORTANT]: VTOP ${command} data was successfully retrieved above. Use this data to answer the user's question about ${command}.`
+            }
           }
         }
 
@@ -609,80 +680,89 @@ CRITICAL TOOL CONTINUATION RULES:
       }
     }
 
-    if (
-      directToolCallResult &&
-      directToolCallExecuted &&
-      directToolCallResult.result?.formatted_content
-    ) {
-      const responseText =
-        directToolCallResult.result.formatted_content ||
-        directToolCallResult.result.summary ||
-        `Here's your ${directToolCallResult.args?.command || 'data'} from VTOP.`
+    if (directToolCallResult && directToolCallExecuted) {
+      const directResultPayload = getToolOutputPayload(directToolCallResult)
+      if (directResultPayload?.formatted_content) {
+        const responseText =
+          directResultPayload.formatted_content ||
+          directResultPayload.summary ||
+          `Here's your ${directToolCallResult.args?.command || 'data'} from VTOP.`
 
-      const mockResult = {
-        text: responseText,
-        response: { id: `direct-${Date.now()}` },
-        toolResults: [directToolCallResult],
-        steps: [
+        const mockResult = {
+          text: responseText,
+          response: { id: `direct-${Date.now()}` },
+          toolResults: [directToolCallResult],
+          steps: [
+            {
+              toolResults: [directToolCallResult],
+            },
+          ],
+        }
+
+        const safeInvocations = sanitizeToolInvocations([
           {
-            toolResults: [directToolCallResult],
+            toolCallId: directToolCallResult.toolCallId,
+            toolName: directToolCallResult.toolName,
+            args: directToolCallResult.args,
+            result: directResultPayload,
+            state: directToolCallResult.state,
           },
-        ],
+        ])
+
+        try {
+          await saveMessage(
+            chat.id,
+            'assistant',
+            responseText,
+            safeInvocations,
+            mockResult.response.id
+          )
+          console.log('Direct tool call message saved with tool invocation')
+        } catch (error) {
+          console.error('Failed to save direct tool call message:', error)
+        }
+
+        const stream = createUIMessageStream<AppUIMessage>({
+          originalMessages: uiMessages,
+          generateId,
+          execute: ({ writer }) => {
+            const messageId = generateId()
+            const textPartId = generateId()
+
+            writer.write({ type: 'start', messageId })
+            writer.write({
+              type: 'tool-input-available',
+              toolCallId: directToolCallResult.toolCallId,
+              toolName: directToolCallResult.toolName,
+              input: directToolCallResult.args,
+            })
+            writer.write({
+              type: 'tool-output-available',
+              toolCallId: directToolCallResult.toolCallId,
+              output: directResultPayload,
+            })
+            writer.write({ type: 'text-start', id: textPartId })
+            writer.write({ type: 'text-delta', id: textPartId, delta: responseText })
+            writer.write({ type: 'text-end', id: textPartId })
+            writer.write({
+              type: 'finish',
+              finishReason: 'stop',
+              messageMetadata: {
+                chatId: chat.id,
+                chatPath: chat.path,
+              },
+            })
+          },
+        })
+
+        return createUIMessageStreamResponse({
+          headers: {
+            'X-Chat-Id': chat.id,
+            'X-Chat-Path': chat.path,
+          },
+          stream,
+        })
       }
-
-      const safeInvocations = sanitizeToolInvocations([
-        {
-          toolCallId: directToolCallResult.toolCallId,
-          toolName: directToolCallResult.toolName,
-          args: directToolCallResult.args,
-          result: directToolCallResult.result,
-          state: directToolCallResult.state,
-        },
-      ])
-
-      try {
-        await saveMessage(
-          chat.id,
-          'assistant',
-          responseText,
-          safeInvocations,
-          mockResult.response.id
-        )
-        console.log('Direct tool call message saved with tool invocation')
-      } catch (error) {
-        console.error('Failed to save direct tool call message:', error)
-      }
-
-      const encoder = new TextEncoder()
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(
-            encoder.encode(
-              `9:{"toolCallId":"${directToolCallResult.toolCallId}","toolName":"${directToolCallResult.toolName}","args":${JSON.stringify(directToolCallResult.args)}}\n`
-            )
-          )
-          controller.enqueue(
-            encoder.encode(
-              `a:{"toolCallId":"${directToolCallResult.toolCallId}","result":${JSON.stringify(directToolCallResult.result)}}\n`
-            )
-          )
-          controller.enqueue(encoder.encode(`0:"${responseText.replace(/"/g, '\\"')}"\n`))
-          controller.enqueue(
-            encoder.encode(
-              `e:{"finishReason":"stop","usage":{"promptTokens":100,"completionTokens":50},"isContinued":false}\n`
-            )
-          )
-          controller.close()
-        },
-      })
-
-      return new Response(stream, {
-        headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-          'X-Chat-Id': chat.id,
-          'X-Chat-Path': chat.path,
-        },
-      })
     }
 
     const attachmentAware = enhancedMessages.some(
@@ -694,23 +774,32 @@ CRITICAL TOOL CONTINUATION RULES:
         )
     )
 
-    let modelName = 'gemini-2.5-flash'
+    let modelName = 'gemini-flash-latest'
     const hasPdf =
       attachmentAware &&
       enhancedMessages.some((m: any) =>
         m.attachments?.some((a: any) => a?.contentType === 'application/pdf')
       )
     if (hasPdf) {
-      modelName = 'gemini-2.5-flash'
+      modelName = 'gemini-flash-latest'
     }
 
-    let finalMessages: any[] = [{ role: 'system', content: combinedSystemPrompt }]
+    let finalMessages: any[] = prefersWebSearch
+      ? []
+      : [{ role: 'system', content: combinedSystemPrompt }]
     if (!attachmentAware) {
-      finalMessages.push(...enhancedMessages)
+      for (const m of enhancedMessages) {
+        if (!m?.content || typeof m.content !== 'string' || m.content.trim().length === 0) {
+          continue
+        }
+        finalMessages.push({ role: m.role, content: m.content })
+      }
     } else {
       for (const m of enhancedMessages) {
         if (!m.attachments || m.attachments.length === 0) {
-          finalMessages.push({ role: m.role, content: m.content })
+          if (m.content && m.content.trim().length > 0) {
+            finalMessages.push({ role: m.role, content: m.content })
+          }
           continue
         }
         const parts: any[] = []
@@ -751,8 +840,48 @@ CRITICAL TOOL CONTINUATION RULES:
             }
           }
         }
+        if (parts.length === 0) {
+          continue
+        }
         finalMessages.push({ role: m.role, content: parts })
       }
+    }
+
+    finalMessages = finalMessages.filter(msg => {
+      if (!msg) return false
+      if (typeof msg.content === 'string') {
+        return msg.content.trim().length > 0
+      }
+      if (Array.isArray(msg.content)) {
+        return msg.content.length > 0
+      }
+      return Boolean(msg.content)
+    })
+
+    const hasConversationContent = finalMessages.some(msg => msg.role !== 'system')
+
+    if (!hasConversationContent) {
+      const fallbackText = "i'm on standby — ask a question or run a tool so i know what to do."
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(`0:"${fallbackText.replace(/"/g, '\\"')}"\n`))
+          controller.enqueue(
+            encoder.encode(
+              'e:{"finishReason":"stop","usage":{"promptTokens":0,"completionTokens":0},"isContinued":false}\n'
+            )
+          )
+          controller.close()
+        },
+      })
+
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'X-Chat-Id': chat.id,
+          'X-Chat-Path': `/chat/${chat.id}`,
+        },
+      })
     }
 
     let savedFinalStepUsage = false
@@ -778,8 +907,7 @@ CRITICAL TOOL CONTINUATION RULES:
         },
         experimental_transform: smoothStream({ chunking: 'word' }),
         middleware: [reasoningMiddleware],
-        maxSteps: 5,
-        experimental_continueSteps: true,
+        stopWhen: stepCountIs(5),
         onError: async (error: any) => {
           console.error('Streaming error occurred:', error)
 
@@ -948,11 +1076,12 @@ CRITICAL TOOL CONTINUATION RULES:
           )
 
           for (const tr of uniqueToolResults) {
+            const toolOutput = getToolOutputPayload(tr)
             if (
               tr.toolName === 'queryVTOP' &&
-              tr.result?.success &&
-              tr.result.data &&
-              !tr.result.parsedData
+              toolOutput?.success &&
+              toolOutput.data &&
+              !toolOutput.parsedData
             ) {
               try {
                 const userContext =
@@ -964,12 +1093,12 @@ CRITICAL TOOL CONTINUATION RULES:
                         .join(' | ')
                     : ''
                 const parsed = await parseVTOPData(
-                  tr.result,
-                  tr.args.command,
+                  toolOutput,
+                  getToolInputPayload(tr)?.command || 'data',
                   userContext,
                   session.user.id
                 )
-                Object.assign(tr.result, {
+                Object.assign(toolOutput, {
                   parsedData: parsed,
                   formatted_content: (parsed as any).formatted_content,
                   structured_data: (parsed as any).structured_data,
@@ -981,13 +1110,17 @@ CRITICAL TOOL CONTINUATION RULES:
             }
           }
 
-          const allInvocations = uniqueToolResults.map((tr: any) => ({
-            toolCallId: tr.toolCallId || `${tr.toolName}-${Date.now()}`,
-            toolName: tr.toolName,
-            args: tr.args || {},
-            result: tr.result || null,
-            state: tr.result ? (tr.result.success !== false ? 'result' : 'error') : 'error',
-          }))
+          const allInvocations = uniqueToolResults.map((tr: any) => {
+            const toolOutput = getToolOutputPayload(tr)
+            const toolArgs = getToolInputPayload(tr) || {}
+            return {
+              toolCallId: tr.toolCallId || `${tr.toolName}-${Date.now()}`,
+              toolName: tr.toolName,
+              args: toolArgs,
+              result: toolOutput || null,
+              state: inferLegacyToolState(tr, toolOutput),
+            }
+          })
 
           const safeInvocations = sanitizeToolInvocations(allInvocations)
 
@@ -1038,11 +1171,22 @@ CRITICAL TOOL CONTINUATION RULES:
       session.user.id
     )
 
-    return resultStream.toDataStreamResponse({
+    return resultStream.toUIMessageStreamResponse({
+      originalMessages: uiMessages,
+      generateMessageId: generateId,
       headers: {
         'X-Chat-Id': chat.id,
-        'X-Chat-Path': chat.path,
+        'X-Chat-Path': `/chat/${chat.id}`,
       },
+      messageMetadata: ({ part }) => {
+        if (part.type === 'finish') {
+          return {
+            chatId: chat.id,
+            chatPath: `/chat/${chat.id}`,
+          }
+        }
+      },
+      onError: () => 'An error occurred while processing your request.',
     })
   } catch (error: any) {
     console.error('Chat API error:', error)

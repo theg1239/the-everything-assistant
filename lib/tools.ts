@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { scrapePapersCodeChef } from './scrapers/papers-codechef'
 import { scrapePapersService } from './scrapers/papers-scraper'
 import { scrapeVITPaperVault } from './scrapers/vit-papervault'
+import { scrapeExamCooker } from './scrapers/examcooker'
 import { scrapePlacementInfo } from './scrapers/placement-scraper'
 import { getMessMenu, formatMenuItems, getAvailableDateRange } from './scrapers/mess-menu-scraper'
 import { getCourseCode } from './question-generator'
@@ -23,6 +24,11 @@ import {
   getPaperIndexMeta,
 } from './agents/paper-agent'
 import { analyzeQuestionFrequencies } from './agents/question-frequency-agent'
+
+type ParsedPlacementData = {
+  formatted_content: string
+  summary: string
+}
 
 async function searchRedditKnowledge(query: string, limit: number = 10) {
   try {
@@ -704,21 +710,27 @@ export const courseUtils = {
 }
 
 export function createVITTools(userId: string) {
+  const findPastPapersInputSchema = z.object({
+    courseCode: z
+      .string()
+      .optional()
+      .describe("course code like BCSE302L or course name like 'database systems'"),
+    examType: z.string().optional().describe('exam type: cat1, cat2, fat, quiz'),
+    year: z.string().optional().describe('academic year like 2023, 2022'),
+  })
+
   return {
     ...createKnowledgeTools(),
     ...createMemoryTool(userId),
     findPastPapers: tool({
       description:
         "find past examination papers for VIT courses from real repositories. You can use course names or codes. You don' need the user to specify the year, when no year is specified, the tool will search for all available years.",
-      parameters: z.object({
-        courseCode: z
-          .string()
-          .optional()
-          .describe("course code like BCSE302L or course name like 'database systems'"),
-        examType: z.string().optional().describe('exam type: cat1, cat2, fat, quiz'),
-        year: z.string().optional().describe('academic year like 2023, 2022'),
-      }),
-      execute: async ({ courseCode, examType, year }) => {
+      inputSchema: findPastPapersInputSchema,
+      execute: async ({
+        courseCode,
+        examType,
+        year,
+      }: z.infer<typeof findPastPapersInputSchema>) => {
         try {
           if (!courseCode) {
             return {
@@ -761,6 +773,7 @@ export function createVITTools(userId: string) {
             scrapePapersService(resolvedCourseCode, examType, year),
             scrapePapersCodeChef(resolvedCourseCode, examType, year),
             scrapeVITPaperVault(resolvedCourseCode, examType, year),
+            scrapeExamCooker(resolvedCourseCode, examType, year),
           ])
 
           const papers: any[] = []
@@ -819,11 +832,86 @@ export function createVITTools(userId: string) {
         }
       },
     }),
+    resolveCourseCode: tool({
+      description:
+        'Resolve a VIT course name, acronym, or partial description to canonical course codes using the local course map. Use this before any course-specific tools (past papers, VTOP course materials, FFCS lookups) when the user did not provide the exact course code.',
+      inputSchema: z.object({
+        query: z
+          .string()
+          .min(1, 'Provide a course name, acronym, or code to resolve.')
+          .describe(
+            'Course name, acronym, or partial code. Examples: "database systems", "DSA", "BCSE302L", "machine learning lab".'
+          ),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(10)
+          .optional()
+          .describe('Maximum number of candidate codes to return (default 5).'),
+      }),
+      execute: async ({ query, limit }) => {
+        const cleanedQuery = query.trim()
+        if (!cleanedQuery) {
+          return {
+            success: false,
+            message: 'Please provide a course name, acronym, or partial code to resolve.',
+          }
+        }
 
-    gravitasEventRegistration: tool({
+        const limitValue = Math.max(1, Math.min(limit ?? 5, 10))
+        let matches = getAllCourseMatches(cleanedQuery)
+
+        if (matches.length === 0) {
+          const fallback = searchCoursesByName(cleanedQuery)
+          matches = fallback.map(match => ({
+            code: match.code,
+            name: match.name,
+            matchType: 'name_similarity',
+          }))
+        }
+
+        const recognizedCourses = recognizeCourseInText(cleanedQuery)
+        const limitedMatches = matches.slice(0, limitValue)
+        const normalizedName = findFullCourseName(
+          limitedMatches[0]?.code || cleanedQuery.toUpperCase()
+        )
+
+        if (limitedMatches.length === 0) {
+          return {
+            success: false,
+            query: cleanedQuery,
+            message: `No VIT course matches found for "${cleanedQuery}".`,
+            suggestions: [
+              'Check the spelling or include more of the course title (e.g., "database systems lab").',
+              'Include any known acronym such as DSA, DBMS, ML, etc.',
+              'Mention part of the official course code if available (e.g., BCSE, BMAT).',
+            ],
+            recognizedCourses,
+          }
+        }
+
+        return {
+          success: true,
+          query: cleanedQuery,
+          matches: limitedMatches,
+          totalMatches: matches.length,
+          normalizedName,
+          recognizedCourses,
+          primary: limitedMatches[0],
+          limitUsed: limitValue,
+          message:
+            limitedMatches.length === 1
+              ? `Resolved "${cleanedQuery}" to ${limitedMatches[0].code} (${limitedMatches[0].name}).`
+              : `Found ${limitedMatches.length} candidate course codes for "${cleanedQuery}".`,
+        }
+      },
+    }),
+
+    /* gravitasEventRegistration: tool({
       description:
         'Resolve a Gravitas event by name (or id) and return the direct registration page URL (https://gravitas.vit.ac.in/events/[id]). Use when the user asks to register for an event.',
-      parameters: z.object({
+      inputSchema: z.object({
         searchQuery: z
           .string()
           .optional()
@@ -1054,149 +1142,150 @@ export function createVITTools(userId: string) {
         }
       },
     }),
+    */
+    // indexPastPapers: tool({
+    //   description:
+    //     'Download, OCR/extract, embed, and index past papers for a course so the user can ask detailed questions about them. Returns an indexId to use with askPaperQuestion.',
+    //   inputSchema: z.object({
+    //     course: z.string().describe('Course code or name'),
+    //     examType: z.string().optional(),
+    //     year: z.string().optional(),
+    //     maxPapers: z.number().int().min(1).max(12).optional(),
+    //     questionFocus: z
+    //       .string()
+    //       .optional()
+    //       .describe(
+    //         'Optional natural language focus (e.g. "recurrence relations") to bias relevance'
+    //       ),
+    //     debug: z.boolean().optional().describe('Enable verbose paper-agent logging'),
+    //   }),
+    //   execute: async ({ course, examType, year, maxPapers, questionFocus, debug }) => {
+    //     try {
+    //       const res = await indexPastPapers({
+    //         course,
+    //         examType,
+    //         year,
+    //         maxPapers,
+    //         questionFocus,
+    //         debug,
+    //       })
+    //       return res
+    //     } catch (e: any) {
+    //       return { success: false, error: e.message || 'Indexing failed' }
+    //     }
+    //   },
+    // }),
 
-    indexPastPapers: tool({
-      description:
-        'Download, OCR/extract, embed, and index past papers for a course so the user can ask detailed questions about them. Returns an indexId to use with askPaperQuestion.',
-      parameters: z.object({
-        course: z.string().describe('Course code or name'),
-        examType: z.string().optional(),
-        year: z.string().optional(),
-        maxPapers: z.number().int().min(1).max(12).optional(),
-        questionFocus: z
-          .string()
-          .optional()
-          .describe(
-            'Optional natural language focus (e.g. "recurrence relations") to bias relevance'
-          ),
-        debug: z.boolean().optional().describe('Enable verbose paper-agent logging'),
-      }),
-      execute: async ({ course, examType, year, maxPapers, questionFocus, debug }) => {
-        try {
-          const res = await indexPastPapers({
-            course,
-            examType,
-            year,
-            maxPapers,
-            questionFocus,
-            debug,
-          })
-          return res
-        } catch (e: any) {
-          return { success: false, error: e.message || 'Indexing failed' }
-        }
-      },
-    }),
+    // askPaperQuestion: tool({
+    //   description:
+    //     'Ask a question about already indexed past papers. Requires indexId from indexPastPapers tool.',
+    //   inputSchema: z.object({
+    //     indexId: z.string().describe('Index ID returned by indexPastPapers'),
+    //     question: z.string().describe('User question'),
+    //     debug: z.boolean().optional().describe('Enable verbose logging'),
+    //   }),
+    //   execute: async ({ indexId, question, debug }) => {
+    //     try {
+    //       const meta = getPaperIndexMeta(indexId)
+    //       if (!meta) return { success: false, error: 'Index not found. Re-run indexPastPapers.' }
+    //       const ans = await askIndexedPaperQuestion(indexId, question, debug)
+    //       return { ...ans, indexMeta: meta }
+    //     } catch (e: any) {
+    //       return { success: false, error: e.message || 'Failed to answer question' }
+    //     }
+    //   },
+    // }),
 
-    askPaperQuestion: tool({
-      description:
-        'Ask a question about already indexed past papers. Requires indexId from indexPastPapers tool.',
-      parameters: z.object({
-        indexId: z.string().describe('Index ID returned by indexPastPapers'),
-        question: z.string().describe('User question'),
-        debug: z.boolean().optional().describe('Enable verbose logging'),
-      }),
-      execute: async ({ indexId, question, debug }) => {
-        try {
-          const meta = getPaperIndexMeta(indexId)
-          if (!meta) return { success: false, error: 'Index not found. Re-run indexPastPapers.' }
-          const ans = await askIndexedPaperQuestion(indexId, question, debug)
-          return { ...ans, indexMeta: meta }
-        } catch (e: any) {
-          return { success: false, error: e.message || 'Failed to answer question' }
-        }
-      },
-    }),
+    // smartPaperSearch: tool({
+    //   description:
+    //     'Search for relevant past papers by providing a natural language question (semantic). Returns ranked papers and an indexId for deeper Q&A.',
+    //   inputSchema: z.object({
+    //     course: z.string().describe('Course code or name'),
+    //     question: z.string().describe('Question to find in past papers'),
+    //     examType: z.string().optional(),
+    //     year: z.string().optional(),
+    //     maxPapers: z.number().int().min(1).max(12).optional(),
+    //     debug: z.boolean().optional().describe('Enable verbose logging'),
+    //     runId: z
+    //       .string()
+    //       .optional()
+    //       .describe('Client-provided run/session id for streaming progress UI'),
+    //   }),
+    //   execute: async ({ course, question, examType, year, maxPapers, debug, runId }) => {
+    //     try {
+    //       if (!runId) {
+    //         const params = `${course}-${question}`.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+    //         runId = `smartpaper_${params}`.slice(0, 60)
+    //       }
 
-    smartPaperSearch: tool({
-      description:
-        'Search for relevant past papers by providing a natural language question (semantic). Returns ranked papers and an indexId for deeper Q&A.',
-      parameters: z.object({
-        course: z.string().describe('Course code or name'),
-        question: z.string().describe('Question to find in past papers'),
-        examType: z.string().optional(),
-        year: z.string().optional(),
-        maxPapers: z.number().int().min(1).max(12).optional(),
-        debug: z.boolean().optional().describe('Enable verbose logging'),
-        runId: z
-          .string()
-          .optional()
-          .describe('Client-provided run/session id for streaming progress UI'),
-      }),
-      execute: async ({ course, question, examType, year, maxPapers, debug, runId }) => {
-        try {
-          if (!runId) {
-            const params = `${course}-${question}`.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
-            runId = `smartpaper_${params}`.slice(0, 60)
-          }
+    //       console.log(
+    //         `[smartPaperSearch] Using runId: ${runId} for course: ${course}, question: ${question}`
+    //       )
 
-          console.log(
-            `[smartPaperSearch] Using runId: ${runId} for course: ${course}, question: ${question}`
-          )
+    //       // Always fire a start event to establish connection
+    //       try {
+    //         const { paperProgress } = await import('./progress/paper-progress')
+    //         paperProgress.emitStep(runId, 'start', { course, question })
+    //         console.log(`[smartPaperSearch] Emitted start event for runId: ${runId}`)
+    //       } catch (e) {
+    //         console.error(`[smartPaperSearch] Failed to emit start event:`, e)
+    //       }
 
-          // Always fire a start event to establish connection
-          try {
-            const { paperProgress } = await import('./progress/paper-progress')
-            paperProgress.emitStep(runId, 'start', { course, question })
-            console.log(`[smartPaperSearch] Emitted start event for runId: ${runId}`)
-          } catch (e) {
-            console.error(`[smartPaperSearch] Failed to emit start event:`, e)
-          }
+    //       const res = await smartPaperSearchByQuestion({
+    //         course,
+    //         question,
+    //         examType,
+    //         year,
+    //         maxPapers,
+    //         debug,
+    //         runId,
+    //       })
+    //       if (res && (res as any).rankedPapers && !(res as any).papers) {
+    //         return { ...(res as any), papers: (res as any).rankedPapers, runId }
+    //       }
+    //       return { ...res, runId }
+    //     } catch (e: any) {
+    //       console.error(`[smartPaperSearch] Error:`, e)
+    //       return { success: false, error: e.message || 'Smart search failed', runId }
+    //     }
+    //   },
+    // }),
 
-          const res = await smartPaperSearchByQuestion({
-            course,
-            question,
-            examType,
-            year,
-            maxPapers,
-            debug,
-            runId,
-          })
-          if (res && (res as any).rankedPapers && !(res as any).papers) {
-            return { ...(res as any), papers: (res as any).rankedPapers, runId }
-          }
-          return { ...res, runId }
-        } catch (e: any) {
-          console.error(`[smartPaperSearch] Error:`, e)
-          return { success: false, error: e.message || 'Smart search failed', runId }
-        }
-      },
-    }),
+    // analyzeQuestionPatterns: tool({
+    //   description:
+    //     'Analyze past papers and report the most repeated or common question patterns for a course and exam type. Returns top repeated patterns with counts and sample questions.',
+    //   inputSchema: z.object({
+    //     course: z.string().describe('Course code or name (e.g., BMAT201L or "Complex Variables")'),
+    //     examType: z
+    //       .string()
+    //       .optional()
+    //       .describe(
+    //         'Exam type filter: CAT-1, CAT-2, FAT, Quiz (case-insensitive, hyphen optional).'
+    //       ),
+    //     topN: z
+    //       .number()
+    //       .int()
+    //       .min(3)
+    //       .max(50)
+    //       .optional()
+    //       .describe('How many top repeated patterns to return (default 12).'),
+    //     debug: z.boolean().optional(),
+    //   }),
+    //   execute: async ({ course, examType, topN, debug }) => {
+    //     try {
+    //       const res = await analyzeQuestionFrequencies({ course, examType, topN, debug })
+    //       return res
+    //     } catch (e: any) {
+    //       return { success: false, error: e?.message || 'Failed to analyze question patterns' }
+    //     }
+    //   },
+    // }),
 
-    analyzeQuestionPatterns: tool({
-      description:
-        'Analyze past papers and report the most repeated or common question patterns for a course and exam type. Returns top repeated patterns with counts and sample questions.',
-      parameters: z.object({
-        course: z.string().describe('Course code or name (e.g., BMAT201L or "Complex Variables")'),
-        examType: z
-          .string()
-          .optional()
-          .describe(
-            'Exam type filter: CAT-1, CAT-2, FAT, Quiz (case-insensitive, hyphen optional).'
-          ),
-        topN: z
-          .number()
-          .int()
-          .min(3)
-          .max(50)
-          .optional()
-          .describe('How many top repeated patterns to return (default 12).'),
-        debug: z.boolean().optional(),
-      }),
-      execute: async ({ course, examType, topN, debug }) => {
-        try {
-          const res = await analyzeQuestionFrequencies({ course, examType, topN, debug })
-          return res
-        } catch (e: any) {
-          return { success: false, error: e?.message || 'Failed to analyze question patterns' }
-        }
-      },
-    }),
-
+    /*
     ffcs_planner: tool({
       description:
         'Launch the FFCS (Fully Flexible Credit System) course planner. Use this tool to help the user plan their courses for the upcoming semester. This tool provides an interactive UI for searching, selecting, and visualizing a timetable.',
-      parameters: z.object({}),
+      inputSchema: z.object({}),
       execute: async () => {
         return {
           status: 'requires_user_interface',
@@ -1204,11 +1293,11 @@ export function createVITTools(userId: string) {
         }
       },
     }),
-
+    */
     getCourseInfo: tool({
       description:
         'Get information about courses from the FFCS dataset (supports all schools: SMEC, SCORE, SCOPE, SBST, SCE, SCHEME, SELECT, SENSE). Returns faculty names, slots, venue, etc.',
-      parameters: z.object({
+      inputSchema: z.object({
         school: z
           .enum(['smec', 'score', 'scope', 'sbst', 'sce', 'scheme', 'select', 'sense'])
           .describe(
@@ -1284,7 +1373,7 @@ export function createVITTools(userId: string) {
       description: `Get current faculty information from a local JSON file (public/faculty.json). NEVER return all faculty members at once—ALWAYS require at least a department or faculty name filter. If no filter is provided, ask the user to specify a department or faculty name. Returns school, department, and faculty info. Do NOT provide a full list of all faculty.
 
 For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'CIVIL') and full or partial department names (e.g., 'computer science', 'school of mechanical engineering', 'information technology', 'civil engineering'). The search is robust to acronyms, full names, and partial matches in either direction.`,
-      parameters: z.object({
+      inputSchema: z.object({
         department: z
           .string()
           .optional()
@@ -1667,7 +1756,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
     getPlacementInfo: tool({
       description:
         'Get latest placement statistics and company information. Use this for any questions about placements, highest packages, company offers, salary stats, or recruitment.',
-      parameters: z.object({
+      inputSchema: z.object({
         year: z.string().optional().describe('Academic year, e.g., 2024-25'),
         companyFilter: z
           .string()
@@ -1689,11 +1778,11 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
         const raw = await scrapePlacementInfo(year, companyFilter, combineWitch, campus)
         try {
           const { parsePlacementData } = await import('../lib/scrapers/placement-scraper')
-          interface ParsedPlacementData {
-            formatted_content: string
-            summary: string
-          }
-          const parsed = (await parsePlacementData(raw, '', undefined)) as ParsedPlacementData
+          const parsed = (await parsePlacementData(
+            raw,
+            '',
+            undefined
+          )) as unknown as ParsedPlacementData
           return {
             ...raw,
             campus,
@@ -1713,7 +1802,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
     getSyllabus: tool({
       description:
         'Fetch the syllabus PDF for a given course. The tool looks up available syllabus filenames from public/syllabi.json and constructs a Google Storage URL like https://storage.googleapis.com/examcooker/syllabi/<FILENAME>. Use course code or partial course name to search.',
-      parameters: z.object({
+      inputSchema: z.object({
         query: z
           .string()
           .describe('Course code (e.g., ACXC101N) or course name (e.g., "Art of Advertising")'),
@@ -1857,14 +1946,12 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 .sort((a: any, b: any) => b.score - a.score)
               console.debug(
                 '[getSyllabus] top candidates (objects):',
-                scored
-                  .slice(0, 6)
-                  .map((s: any) => ({
-                    code: s.item.code,
-                    title: s.item.title,
-                    filename: s.item.file || s.item.filename,
-                    score: s.score,
-                  }))
+                scored.slice(0, 6).map((s: any) => ({
+                  code: s.item.code,
+                  title: s.item.title,
+                  filename: s.item.file || s.item.filename,
+                  score: s.score,
+                }))
               )
               if (scored.length > 0 && scored[0].score > 0) {
                 const topScore = scored[0].score
@@ -1994,7 +2081,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
     getMessMenu: tool({
       description:
         "get mess menu for VIT hostels (both men's and ladies' hostels). Use this when users ask about mess menu, today's food, what's for lunch/dinner/breakfast/snacks, tomorrow's menu, etc. Covers special mess, veg mess, and non-veg mess for both hostels. IMPORTANT: Do NOT ask for hostelType and messType if you are already aware of the user's preference through memory, populate them from memory.",
-      parameters: z.object({
+      inputSchema: z.object({
         hostelType: z
           .preprocess(
             val => {
@@ -2077,10 +2164,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
     queryVTOP: tool({
       description:
         "Access VTOP (VIT's official portal) to get PERSONAL student data that requires login authentication. Use ONLY for individual student information like personal grades, attendance, timetable, marks, hostel info, library dues, exam schedules, digital assignments, and course materials. DO NOT use for general VIT information already available in knowledge base (like admission requirements, grading system explanation, campus facilities, exam patterns, etc.). This tool automatically handles credential authentication and interactive command prompts through intelligent defaults. For course materials, it supports smart natural language queries like 'anuj kumar's fluid mechanics notes' or 'week 5 assignments'. Use this tool ONLY when users request their PERSONAL VTOP data - credentials will be prompted securely.",
-      parameters: z.object({
+      inputSchema: z.object({
         command: z
           .enum([
-            // 'profile',
+            'profile',
             'marks',
             'grades',
             'attendance',
@@ -2248,9 +2335,21 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             if (faculty !== undefined) flags.faculty = faculty
             if (classGroup !== undefined) flags.classGroup = classGroup
             if (fuzzyIndex !== undefined) flags.fuzzyIndex = fuzzyIndex
-            if (courseQuery) flags.course = courseQuery
+            if (courseQuery) flags.courseQuery = courseQuery
+            if (facultyQuery) flags.facultyQuery = facultyQuery
+            if (materialQuery) flags.materialQuery = materialQuery
             if (debug) flags.debug = debug
-            if (command === 'timetable') {
+            const DEFAULT_LATEST_SEMESTER = new Set([
+              'timetable',
+              'marks',
+              'grades',
+              'cgpa',
+              'exam-schedule',
+              'exams',
+              'calendar',
+              'attendance',
+            ])
+            if (DEFAULT_LATEST_SEMESTER.has(command) && !flags.semester && !flags.semesterQuery) {
               flags.semesterQuery = 'latest'
             }
 
@@ -2312,8 +2411,11 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 success: true,
                 command,
                 data: result.data || result.output,
-                message: `Successfully retrieved ${command} data from VTOP.`,
+                output: result.output || result.data,
+                structured_data: result.structured_data || null,
+                message: result.message || `Successfully retrieved ${command} data from VTOP.`,
                 raw: result.raw || false,
+                meta: result.meta || null,
               }
             } else {
               const errorMsg =
@@ -2367,7 +2469,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
     searchRedditKnowledge: tool({
       description:
         'Search the Reddit knowledge base for student and academic information from various educational subreddits. This provides AI-powered responses based on community-validated information from students about studying, courses, exams, college life, and academic advice.',
-      parameters: z.object({
+      inputSchema: z.object({
         query: z
           .string()
           .describe(
@@ -2409,7 +2511,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
     searchRedditWithContext: tool({
       description:
         'Search Reddit with enhanced capabilities to handle trending topics and broader queries about current events, popular discussions, and more. This combines trending topic retrieval with the knowledge base search for comprehensive results.',
-      parameters: z.object({
+      inputSchema: z.object({
         query: z
           .string()
           .describe(
@@ -2449,7 +2551,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
     getRedditOverview: tool({
       description:
         'Get an overview of Reddit activity and trending topics. This provides insights into popular discussions, recent trends, and overall Reddit activity related to VIT and other educational topics.',
-      parameters: z.object({}),
+      inputSchema: z.object({}),
       execute: async () => {
         try {
           const overview = await getRedditOverview()
@@ -2479,7 +2581,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       description: `Get information about VIT-Vellore campus blocks (SJT, TT, SMV, MB, etc.).  
   Use it to answer: “where is TT?”, “what is GDN used for?”, “which departments sit in Gandhi Block?”.  
   The tool returns a concise description, typical usage, and a quick location cue.`,
-      parameters: z.object({
+      inputSchema: z.object({
         block: z.string().describe('Block / building code: e.g. SJT, TT, SMV, MB'),
       }),
       execute: async ({ block }) => {
@@ -2617,11 +2719,11 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
         }
       },
     }),
-
+    /*
     gravitasEvents: tool({
       description:
         'Get information about Gravitas events at VIT, including event details, schedules, registration status, and seat availability. Can fetch all events or specific event details by ID.',
-      parameters: z.object({
+      inputSchema: z.object({
         eventId: z
           .string()
           .optional()
@@ -2974,7 +3076,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           }
         }
       },
-    }),
+    }),*/
   }
 }
 

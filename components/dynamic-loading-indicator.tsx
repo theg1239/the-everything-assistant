@@ -237,6 +237,7 @@ interface DynamicLoadingIndicatorProps {
   showForFirstMessage?: boolean
   className?: string
   retryCount?: number
+  isAssistantStreaming?: boolean
 }
 
 export function DynamicLoadingIndicator({
@@ -244,7 +245,23 @@ export function DynamicLoadingIndicator({
   isLoading,
   showForFirstMessage = false,
   className = '',
+  isAssistantStreaming = false,
 }: DynamicLoadingIndicatorProps) {
+  const [streamingDelayActive, setStreamingDelayActive] = React.useState(false)
+
+  React.useEffect(() => {
+    if (isAssistantStreaming) {
+      setStreamingDelayActive(true)
+      const timeout = setTimeout(() => setStreamingDelayActive(false), 500)
+      return () => clearTimeout(timeout)
+    }
+    setStreamingDelayActive(false)
+    return undefined
+  }, [isAssistantStreaming])
+
+  const suppressDuringStreaming = isAssistantStreaming && !streamingDelayActive
+  const lastMessage = messages[messages.length - 1]
+
   const [paperStatus, setPaperStatus] = React.useState<{
     runId: string
     lastStep?: string
@@ -253,8 +270,7 @@ export function DynamicLoadingIndicator({
   const activeRunRef = React.useRef<string | null>(null)
 
   React.useEffect(() => {
-    const last = messages[messages.length - 1]
-    if (last?.role === 'user') {
+    if (lastMessage?.role === 'user') {
       setPaperStatus(null)
       activeRunRef.current = null
       return
@@ -405,6 +421,7 @@ export function DynamicLoadingIndicator({
     }
   }, [isLoading, paperStatus])
 
+  if (suppressDuringStreaming) return null
   if (!isLoading && !paperStatus) return null
   if (hideAfterDone || hideAfterNoProgress) return null
 
@@ -439,10 +456,6 @@ export function DynamicLoadingIndicator({
     }
 
     const lastMessage = messages[messages.length - 1]
-
-    if (lastMessage?.role === 'assistant' && lastMessage.streaming) {
-      return TOOL_CONFIGS.streaming
-    }
 
     if (lastMessage?.role === 'user') {
       return TOOL_CONFIGS.thinking

@@ -35,3 +35,5 @@ downloads/
 scripts/dump/
 node_modules
 dist
+.wrangler
+.open-next

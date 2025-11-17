@@ -26,7 +26,11 @@
     "test:performance:stress": "tsx scripts/test-performance.ts stress",
     "test:performance:report": "tsx scripts/test-performance.ts report",
     "test:performance:seed": "tsx scripts/test-performance.ts seed",
-    "papers:index": "tsx scripts/papers.ts"
+    "papers:index": "tsx scripts/papers.ts",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
     "@ai-sdk/cerebras": "latest",
@@ -42,6 +46,7 @@
     "@next-auth/prisma-adapter": "^1.0.7",
     "@octokit/rest": "^22.0.0",
     "@octokit/types": "^14.1.0",
+    "@opennextjs/cloudflare": "^1.12.0",
     "@openrouter/ai-sdk-provider": "^1.2.3",
     "@prisma/client": "^6.10.1",
     "@radix-ui/react-dialog": "^1.1.14",
@@ -65,6 +70,7 @@
     "@types/crypto-js": "^4.2.2",
     "@types/marked": "^6.0.0",
     "@upstash/redis": "^1.35.0",
+    "@workflow/next": "4.0.1-beta.14",
     "@workflow/world-local": "5.0.0-beta.8",
     "@workflow/world-vercel": "4.0.1-beta.8",
     "ai": "latest",
@@ -146,7 +152,8 @@
     "prisma": "^6.10.1",
     "tailwindcss": "^3.4.1",
     "tsx": "^4.20.3",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "wrangler": "^4.47.0"
   },
   "pnpm": {
     "overrides": {

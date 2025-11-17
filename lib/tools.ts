@@ -1,9 +1,5 @@
 import { tool } from 'ai'
 import { z } from 'zod'
-import { scrapePapersCodeChef } from './scrapers/papers-codechef'
-import { scrapePapersService } from './scrapers/papers-scraper'
-import { scrapeVITPaperVault } from './scrapers/vit-papervault'
-import { scrapeExamCooker } from './scrapers/examcooker'
 import { scrapePlacementInfo } from './scrapers/placement-scraper'
 import { getMessMenu, formatMenuItems, getAvailableDateRange } from './scrapers/mess-menu-scraper'
 import { getCourseCode } from './question-generator'
@@ -17,13 +13,35 @@ import { getCourseData, School } from './ffcs-tool'
 import { createKnowledgeTools } from './knowledge-tools'
 import { createMemoryTool } from './memory/memory-tools'
 import { hasVTOPCredentials, getFormattedVTOPCredentials } from './server-vtop-credentials'
-import {
-  indexPastPapers,
-  askIndexedPaperQuestion,
-  smartPaperSearchByQuestion,
-  getPaperIndexMeta,
-} from './agents/paper-agent'
-import { analyzeQuestionFrequencies } from './agents/question-frequency-agent'
+
+const paperScrapingEnabled = process.env.ENABLE_PAPER_SCRAPING === 'true'
+
+type PaperScraperDeps = {
+  scrapePapersService: typeof import('./scrapers/papers-scraper').scrapePapersService
+  scrapePapersCodeChef: typeof import('./scrapers/papers-codechef').scrapePapersCodeChef
+  scrapeVITPaperVault: typeof import('./scrapers/vit-papervault').scrapeVITPaperVault
+  scrapeExamCooker: typeof import('./scrapers/examcooker').scrapeExamCooker
+}
+
+let paperScraperDepsPromise: Promise<PaperScraperDeps> | null = null
+
+async function loadPaperScraperDeps(): Promise<PaperScraperDeps> {
+  if (!paperScraperDepsPromise) {
+    paperScraperDepsPromise = Promise.all([
+      import('./scrapers/papers-scraper'),
+      import('./scrapers/papers-codechef'),
+      import('./scrapers/vit-papervault'),
+      import('./scrapers/examcooker'),
+    ]).then(([paperScraper, codeChef, vitPaperVault, examCooker]) => ({
+      scrapePapersService: paperScraper.scrapePapersService,
+      scrapePapersCodeChef: codeChef.scrapePapersCodeChef,
+      scrapeVITPaperVault: vitPaperVault.scrapeVITPaperVault,
+      scrapeExamCooker: examCooker.scrapeExamCooker,
+    }))
+  }
+
+  return paperScraperDepsPromise
+}
 
 type ParsedPlacementData = {
   formatted_content: string
@@ -705,6 +723,9 @@ export function createVITTools(userId: string) {
         year,
       }: z.infer<typeof findPastPapersInputSchema>) => {
         try {
+          const { scrapePapersService, scrapePapersCodeChef, scrapeVITPaperVault, scrapeExamCooker } =
+            await loadPaperScraperDeps()
+
           if (!courseCode) {
             return {
               success: false,
@@ -742,12 +763,18 @@ export function createVITTools(userId: string) {
             }
           }
 
-          const results = await Promise.allSettled([
+          const sourcesToUse = [
             scrapePapersService(resolvedCourseCode, examType, year),
-            scrapePapersCodeChef(resolvedCourseCode, examType, year),
-            scrapeVITPaperVault(resolvedCourseCode, examType, year),
+            scrapePapersCodeChef(resolvedCourseCode, examType, year, {
+              enableBrowserFallback: paperScrapingEnabled,
+            }),
+            scrapeVITPaperVault(resolvedCourseCode, examType, year, {
+              enableBrowserFallback: paperScrapingEnabled,
+            }),
             scrapeExamCooker(resolvedCourseCode, examType, year),
-          ])
+          ]
+
+          const results = await Promise.allSettled(sourcesToUse)
 
           const papers: any[] = []
           const sources: any[] = []
@@ -755,7 +782,9 @@ export function createVITTools(userId: string) {
           results.forEach(r => {
             if (r.status === 'fulfilled' && r.value.success) {
               papers.push(...r.value.papers)
-              sources.push(r.value.source)
+              if (r.value.source) {
+                sources.push(r.value.source)
+              }
             }
           })
 

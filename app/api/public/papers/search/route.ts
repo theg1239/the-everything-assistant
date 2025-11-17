@@ -1,12 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { scrapePapersService } from '@/lib/scrapers/papers-scraper'
-import { scrapePapersCodeChef } from '@/lib/scrapers/papers-codechef'
-import { scrapeVITPaperVault } from '@/lib/scrapers/vit-papervault'
-import { scrapeExamCooker } from '@/lib/scrapers/examcooker'
 import { getCourseCode } from '@/lib/question-generator'
 import { getAllCourseMatches } from '@/lib/course-map'
 
 export const runtime = 'nodejs'
+
+const paperScrapingEnabled = process.env.ENABLE_PAPER_SCRAPING === 'true'
+
+type PaperScrapers = {
+  scrapePapersService: typeof import('@/lib/scrapers/papers-scraper').scrapePapersService
+  scrapePapersCodeChef: typeof import('@/lib/scrapers/papers-codechef').scrapePapersCodeChef
+  scrapeVITPaperVault: typeof import('@/lib/scrapers/vit-papervault').scrapeVITPaperVault
+  scrapeExamCooker: typeof import('@/lib/scrapers/examcooker').scrapeExamCooker
+}
+
+let scraperPromise: Promise<PaperScrapers> | null = null
+
+async function loadScrapers(): Promise<PaperScrapers> {
+  if (!scraperPromise) {
+    scraperPromise = Promise.all([
+      import('@/lib/scrapers/papers-scraper'),
+      import('@/lib/scrapers/papers-codechef'),
+      import('@/lib/scrapers/vit-papervault'),
+      import('@/lib/scrapers/examcooker'),
+    ]).then(([paperScraper, codeChef, vitPaperVault, examCooker]) => ({
+      scrapePapersService: paperScraper.scrapePapersService,
+      scrapePapersCodeChef: codeChef.scrapePapersCodeChef,
+      scrapeVITPaperVault: vitPaperVault.scrapeVITPaperVault,
+      scrapeExamCooker: examCooker.scrapeExamCooker,
+    }))
+  }
+
+  return scraperPromise
+}
 
 export async function GET(req: NextRequest) {
   const started = Date.now()
@@ -44,25 +69,33 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-            error: 'unresolved_course_code',
-            input: courseInput,
-            message: `Could not resolve a valid course code for "${courseInput}"`,
-            suggestions: [
-              'Use the exact VIT course code (e.g., BCSE302L)',
-              'Try a different spelling of the course name',
-              'Provide at least 2 distinctive words from the course title',
-            ],
+          error: 'unresolved_course_code',
+          input: courseInput,
+          message: `Could not resolve a valid course code for "${courseInput}"`,
+          suggestions: [
+            'Use the exact VIT course code (e.g., BCSE302L)',
+            'Try a different spelling of the course name',
+            'Provide at least 2 distinctive words from the course title',
+          ],
         },
         { status: 400 }
       )
     }
 
-    const results = await Promise.allSettled([
+    const { scrapePapersService, scrapePapersCodeChef, scrapeVITPaperVault, scrapeExamCooker } = await loadScrapers()
+
+    const sourcesToUse = [
       scrapePapersService(resolvedCourseCode, examType, year),
-      scrapePapersCodeChef(resolvedCourseCode, examType, year),
-      scrapeVITPaperVault(resolvedCourseCode, examType, year),
+      scrapePapersCodeChef(resolvedCourseCode, examType, year, {
+        enableBrowserFallback: paperScrapingEnabled,
+      }),
+      scrapeVITPaperVault(resolvedCourseCode, examType, year, {
+        enableBrowserFallback: paperScrapingEnabled,
+      }),
       scrapeExamCooker(resolvedCourseCode, examType, year),
-    ])
+    ]
+
+    const results = await Promise.allSettled(sourcesToUse)
 
     const papers: any[] = []
     const sources: string[] = []

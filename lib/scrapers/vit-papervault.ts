@@ -1,13 +1,24 @@
-import puppeteer from 'puppeteer-core'
-import chromium from '@sparticuz/chromium'
 import { findFullCourseName } from '../course-map'
 
-export async function scrapeVITPaperVault(courseCode: string, examType?: string, year?: string) {
+export async function scrapeVITPaperVault(
+  courseCode: string,
+  examType?: string,
+  year?: string,
+  options?: { enableBrowserFallback?: boolean }
+) {
   try {
     const apiResult = await tryVITVaultListAPI(courseCode, examType, year)
 
     if (apiResult.success) {
       return apiResult
+    }
+
+    if (options?.enableBrowserFallback === false) {
+      return {
+        ...apiResult,
+        success: false,
+        error: apiResult.error || 'Browser scraping disabled',
+      }
     }
 
     console.log('[vitpapervault] API failed, falling back to browser scraping')
@@ -82,6 +93,11 @@ async function tryVITVaultListAPI(courseCode: string, examType?: string, year?: 
 async function tryBrowserScraping(courseCode: string, examType?: string, year?: string) {
   let browser
   try {
+    const [{ default: puppeteer }, { default: chromium }] = await Promise.all([
+      import('puppeteer-core'),
+      import('@sparticuz/chromium'),
+    ])
+
     browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: { width: 1280, height: 1024 },

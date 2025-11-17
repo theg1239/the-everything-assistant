@@ -1,5 +1,3 @@
-import puppeteer from 'puppeteer-core'
-import chromium from '@sparticuz/chromium'
 import { findFullCourseName } from '../course-map'
 
 const DEBUG_PAPERS =
@@ -78,7 +76,8 @@ function deduplicatePapers(papers: Paper[]): Paper[] {
 export async function scrapePapersCodeChef(
   courseCode: string,
   examType?: string,
-  year?: string
+  year?: string,
+  options?: { enableBrowserFallback?: boolean }
 ): Promise<ScraperResult> {
   try {
     dbg('start', { courseCode, examType, year })
@@ -93,6 +92,14 @@ export async function scrapePapersCodeChef(
 
     if (apiResult.success) {
       return apiResult
+    }
+
+    if (options?.enableBrowserFallback === false) {
+      return {
+        ...apiResult,
+        success: false,
+        error: apiResult.error || 'Browser scraping disabled',
+      }
     }
 
     dbg('API failed, falling back to browser scraping')
@@ -419,6 +426,11 @@ async function tryBrowserScraping(
 ): Promise<ScraperResult> {
   let browser
   try {
+    const [{ default: puppeteer }, { default: chromium }] = await Promise.all([
+      import('puppeteer-core'),
+      import('@sparticuz/chromium'),
+    ])
+
     dbg('launching puppeteer for browser scraping')
     browser = await puppeteer.launch({
       args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],

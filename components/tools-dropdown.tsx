@@ -16,6 +16,12 @@ interface Tool {
 
 const availableTools: Tool[] = [
   {
+    id: 'web-search',
+    name: 'web search',
+    description: 'Search the live web for up-to-date answers',
+    icon: <Search className="w-4 h-4" />,
+  },
+  {
     id: 'reddit-search',
     name: 'search reddit',
     description: 'Search Reddit knowledge base for student discussions and academic advice',
@@ -37,7 +43,7 @@ const availableTools: Tool[] = [
     id: 'mess-menu',
     name: 'mess menu',
     description: 'Get mess menu for VIT hostels',
-    icon: <Search className="w-4 h-4" />,
+    icon: <FileText className="w-4 h-4" />,
   },
 ]
 

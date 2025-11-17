@@ -1,0 +1,255 @@
+[
+  {
+    "command": "attendance",
+    "cliCommand": "attendance",
+    "title": "attendance autopilot",
+    "description": "Slot-wise attendance with 75% guardrails.",
+    "group": "academics",
+    "autoSync": true,
+    "parser": "attendance",
+    "insights": ["attendance-risk"],
+    "flags": {
+      "semester": false
+    },
+    "interactive": {
+      "requiresSemester": true
+    }
+  },
+  {
+    "command": "sync",
+    "cliCommand": "sync",
+    "title": "hub sync",
+    "description": "Batch refresh personal hub snapshots.",
+    "group": "hub",
+    "autoSync": false
+  },
+  {
+    "command": "timetable",
+    "cliCommand": "timetable",
+    "title": "timetable pulse",
+    "description": "Next FFCS block with slots and rooms.",
+    "group": "academics",
+    "autoSync": true,
+    "insights": ["next-class"],
+    "flags": {
+      "semester": false
+    },
+    "interactive": {
+      "requiresSemester": true
+    }
+  },
+  {
+    "command": "marks",
+    "cliCommand": "marks",
+    "title": "marks ledger",
+    "description": "Continuous assessment per semester.",
+    "group": "academics",
+    "autoSync": false,
+    "flags": {
+      "semester": true
+    },
+    "interactive": {
+      "requiresSemester": true
+    }
+  },
+  {
+    "command": "grades",
+    "cliCommand": "grades",
+    "title": "grade history",
+    "description": "Grade cards with deltas.",
+    "group": "academics",
+    "autoSync": false,
+    "flags": {
+      "semester": true
+    },
+    "interactive": {
+      "requiresSemester": true
+    }
+  },
+  {
+    "command": "cgpa",
+    "cliCommand": "cgpa",
+    "title": "cgpa trend",
+    "description": "Cumulative GPA across semesters.",
+    "group": "academics",
+    "autoSync": false
+  },
+  {
+    "command": "exams",
+    "cliCommand": "exams",
+    "title": "exam schedule",
+    "description": "Upcoming exam timetable snapshot.",
+    "group": "academics",
+    "autoSync": true,
+    "insights": ["exam"],
+    "flags": {
+      "semester": true
+    },
+    "interactive": {
+      "requiresSemester": true
+    }
+  },
+  {
+    "command": "exam-schedule",
+    "cliCommand": "exams",
+    "title": "exam schedule",
+    "description": "Alias for exams.",
+    "group": "academics",
+    "autoSync": true,
+    "flags": {
+      "semester": true
+    },
+    "interactive": {
+      "requiresSemester": true
+    }
+  },
+  {
+    "command": "calendar",
+    "cliCommand": "calendar",
+    "title": "academic calendar",
+    "description": "Term dates and working days.",
+    "group": "logistics",
+    "autoSync": false,
+    "flags": {
+      "semester": true,
+      "classGroup": true
+    },
+    "interactive": {
+      "requiresSemester": true,
+      "requiresClassGroup": true
+    }
+  },
+  {
+    "command": "course-page",
+    "cliCommand": "course-page",
+    "title": "course materials",
+    "description": "Dnloader for notes, slides, DAs.",
+    "group": "documents",
+    "autoSync": false,
+    "flags": {
+      "semester": true,
+      "course": true,
+      "faculty": true,
+      "fuzzyIndex": true
+    },
+    "interactive": {
+      "requiresCourse": true,
+      "requiresFaculty": true,
+      "requiresSemester": true
+    }
+  },
+  {
+    "command": "receipts",
+    "cliCommand": "receipts",
+    "title": "fee receipts",
+    "description": "Official receipt PDFs and refs.",
+    "group": "documents",
+    "autoSync": false
+  },
+  {
+    "command": "library-dues",
+    "cliCommand": "library-dues",
+    "title": "library dues",
+    "description": "Books on hold, fines, due dates.",
+    "group": "logistics",
+    "autoSync": true
+  },
+  {
+    "command": "hostel",
+    "cliCommand": "hostel",
+    "title": "hostel info",
+    "description": "Block, room, contacts from VTOP.",
+    "group": "logistics",
+    "autoSync": false
+  },
+  {
+    "command": "nightslip",
+    "cliCommand": "nightslip",
+    "title": "night slip",
+    "description": "Request and approval feed.",
+    "group": "logistics",
+    "autoSync": true
+  },
+  {
+    "command": "leave",
+    "cliCommand": "leave",
+    "title": "leave status",
+    "description": "Leave tracker with approval states.",
+    "group": "logistics",
+    "autoSync": true,
+    "insights": ["leave"]
+  },
+  {
+    "command": "leave-status",
+    "cliCommand": "leave",
+    "title": "leave status",
+    "description": "Alias for leave command.",
+    "group": "logistics",
+    "autoSync": true,
+    "insights": ["leave"]
+  },
+  {
+    "command": "msg",
+    "cliCommand": "msg",
+    "title": "class messages",
+    "description": "Latest announcements per course.",
+    "group": "academics",
+    "autoSync": true
+  },
+  {
+    "command": "class-message",
+    "cliCommand": "msg",
+    "title": "class messages",
+    "description": "Alias for class messages.",
+    "group": "academics",
+    "autoSync": true
+  },
+  {
+    "command": "da",
+    "cliCommand": "da",
+    "title": "digital assignments",
+    "description": "Submission deadlines and status.",
+    "group": "documents",
+    "autoSync": false,
+    "insights": ["assignments"],
+    "flags": {
+      "course": false
+    },
+    "interactive": {
+      "autoCtrlC": true
+    }
+  },
+  {
+    "command": "facility",
+    "cliCommand": "facility",
+    "title": "facility booking",
+    "description": "Hostel facility registration status.",
+    "group": "logistics",
+    "autoSync": false,
+    "interactive": {
+      "autoCtrlC": true
+    }
+  },
+  {
+    "command": "syllabus",
+    "cliCommand": "syllabus",
+    "title": "syllabus vault",
+    "description": "Course PDF downloader with fuzzy search.",
+    "group": "documents",
+    "autoSync": false,
+    "flags": {
+      "course": true
+    },
+    "interactive": {
+      "requiresCourse": true
+    }
+  },
+  {
+    "command": "profile",
+    "cliCommand": "profile",
+    "title": "profile",
+    "description": "Student profile snapshot.",
+    "group": "logistics",
+    "autoSync": true
+  }
+]

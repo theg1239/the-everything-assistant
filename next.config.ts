@@ -1,13 +1,15 @@
 import type { NextConfig } from 'next'
+import { withWorkflow } from 'workflow/next'
 
 const nextConfig: NextConfig = {
-  turbopack: {},
-  eslint: { 
-    ignoreDuringBuilds: false,
-    dirs: ['app', 'components', 'lib', 'hooks', 'contexts', 'providers', 'types'] // Only lint specific directories
+  experimental: {
+    turbopackFileSystemCacheForDev: true
+    // turbopackFileSystemCacheForBuild: true,
   },
+  turbopack: {},
   typescript: { ignoreBuildErrors: false },
   images: { unoptimized: true },
+  reactCompiler: true,
   serverExternalPackages: ['playwright-core', '@sparticuz/chromium'],
   outputFileTracingExcludes: { '*': ['./ai-chatbot-main/**/*', './services/**/*'] },
   // compiler: {
@@ -15,4 +17,4 @@ const nextConfig: NextConfig = {
   // },
 }
 
-export default nextConfig
+export default withWorkflow(nextConfig)

@@ -479,13 +479,13 @@ class WhatsAppService extends EventEmitter {
             working = (working.slice(0, labeledMatch.index) + working.slice(labeledMatch.index + labeledMatch[0].length)).trim();
         } else {
             // Support "limit 500 ..." syntax
-            const limitWordMatch = working.match(/^limit\s+(\d+)(?:\s+(.*))?$/i);
+            const limitWordMatch = working.match(/^limit\s+(\d+)(?:\s+([\s\S]*))?$/i);
             if (limitWordMatch) {
                 limit = parseInt(limitWordMatch[1], 10);
                 working = (limitWordMatch[2] || '').trim();
             } else {
                 // Support leading numeric value e.g., "500 summarize the chat"
-                const leadingMatch = working.match(/^(\d+)(?:\s+(.*))?$/);
+                const leadingMatch = working.match(/^(\d+)(?:\s+([\s\S]*))?$/);
                 if (leadingMatch) {
                     limit = parseInt(leadingMatch[1], 10);
                     working = (leadingMatch[2] || '').trim();
@@ -509,16 +509,19 @@ class WhatsAppService extends EventEmitter {
     async fetchAllChatMessages(chat, options = {}) {
         const {
             batchSize = 200,
-            maxMessages = 800
+            maxMessages = 800,
+            yieldToLoop = false
         } = options;
 
         const messages = [];
         const seenMessageIds = new Set();
+        const effectiveBatchSize = Math.max(1, Math.min(Math.floor(batchSize) || 1, 300));
+
         let remaining = Math.max(maxMessages, 0);
         let cursor = null;
 
         while (remaining > 0) {
-            const limit = Math.min(batchSize, remaining);
+            const limit = Math.min(effectiveBatchSize, remaining);
             const fetchOptions = { limit };
             if (cursor) {
                 fetchOptions.before = cursor;
@@ -552,6 +555,10 @@ class WhatsAppService extends EventEmitter {
             }
 
             cursor = batch[batch.length - 1];
+
+            if (yieldToLoop) {
+                    await this.delay(0);
+                }
         }
 
         return messages;
@@ -829,15 +836,22 @@ class WhatsAppService extends EventEmitter {
             
             // Determine how many messages to fetch
             const defaultLimit = 150;
-            const extendedLimit = 800;
-            const historyLimit = sanitizedLimit || (trimmedQuestion ? extendedLimit : defaultLimit);
-            const fetchAll = historyLimit > defaultLimit;
+            const maxAutoLimit = 800;
+            const fetchAllThreshold = 220; // avoid large single fetches without explicit limit
+
+            let historyLimit = sanitizedLimit ?? (trimmedQuestion ? Math.min(maxAutoLimit, 250) : defaultLimit);
+            historyLimit = Math.max(20, Math.min(historyLimit, maxAutoLimit));
+
+            const fetchAll = historyLimit > fetchAllThreshold;
             const maxAgeDays = sanitizedLimit !== null ? null : (trimmedQuestion ? null : 7);
+            const batchSize = fetchAll ? Math.min(200, Math.max(50, Math.floor(historyLimit / 2))) : Math.max(20, historyLimit);
 
             const recentMessages = await this.getChatHistory(originalChat, historyLimit, {
                 fetchAll,
                 maxMessages: historyLimit,
-                maxAgeDays
+                maxAgeDays,
+                batchSize,
+                yieldToLoop: true
             });
             
             if (recentMessages.length === 0) {
@@ -892,7 +906,9 @@ Keep the response concise but informative.`;
             const {
                 fetchAll = false,
                 maxMessages = limit,
-                maxAgeDays = 7
+                maxAgeDays = 7,
+                batchSize = 200,
+                yieldToLoop = false
             } = options;
 
             const maxCount = Math.max(maxMessages || limit || 100, 1);
@@ -901,16 +917,20 @@ Keep the response concise but informative.`;
                 fetchAll,
                 requestedLimit: limit,
                 maxMessages: maxCount,
-                maxAgeDays
+                maxAgeDays,
+                batchSize
             });
 
             let messages;
             if (fetchAll) {
                 messages = await this.fetchAllChatMessages(chat, {
-                    maxMessages: maxCount
+                    maxMessages: maxCount,
+                    batchSize,
+                    yieldToLoop
                 });
             } else {
-                messages = await chat.fetchMessages({ limit: maxCount });
+                const directLimit = Math.min(maxCount, Math.max(1, Math.floor(batchSize) || 1));
+                messages = await chat.fetchMessages({ limit: directLimit });
             }
 
             if (!messages || messages.length === 0) {
@@ -921,6 +941,7 @@ Keep the response concise but informative.`;
             const chronologicalMessages = messages.slice().reverse();
 
             const processedMessages = [];
+            const contactCache = new Map();
             for (const message of chronologicalMessages) {
                 if (message.isStatus || message.type === 'notification') {
                     continue;
@@ -992,12 +1013,12 @@ Keep the response concise but informative.`;
         if (!messages || messages.length === 0) {
             return 'No messages found.';
         }
-        
+
         const formatted = messages.map(msg => {
             const senderName = msg.isFromMe ? 'Bot' : msg.sender;
             return `[${msg.timestamp}] ${senderName}: ${msg.text}`;
         }).join('\n');
-        
+
         return formatted;
     }
 

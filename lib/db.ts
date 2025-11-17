@@ -1,5 +1,6 @@
 import { prisma } from './prisma'
 import { sanitizeToolInvocations } from './sanitize-tools'
+import { generateChatPath } from './utils'
 
 export interface User {
   id: string
@@ -134,12 +135,20 @@ export async function getChat(id: string, userId: string): Promise<Chat | null> 
   }
 }
 
-export async function createChat(userId: string, title: string, path: string): Promise<Chat> {
+export async function createChat(
+  userId: string,
+  title: string,
+  path?: string,
+  id?: string
+): Promise<Chat> {
+  const resolvedPath = path ?? (id ? `/chat/${id}` : generateChatPath())
+
   const chat = await prisma.chat.create({
     data: {
+      ...(id ? { id } : {}),
       userId,
       title,
-      path,
+      path: resolvedPath,
     },
     select: {
       id: true,
@@ -150,7 +159,8 @@ export async function createChat(userId: string, title: string, path: string): P
       path: true,
     },
   })
-  return chat as Chat
+
+  return { ...chat, path: resolvedPath } as Chat
 }
 
 export async function createChatWithFirstMessage(

@@ -30,6 +30,7 @@ import { execSync } from 'child_process'
 import { scrapePapersService } from '../lib/scrapers/papers-scraper'
 import { scrapePapersCodeChef } from '../lib/scrapers/papers-codechef'
 import { scrapeVITPaperVault } from '../lib/scrapers/vit-papervault'
+import { scrapeExamCooker } from '../lib/scrapers/examcooker'
 import { getCourseCode } from '../lib/question-generator'
 import { getAllCourseMatches } from '../lib/course-map'
 import rateLimitedAI from '../lib/rate-limited-ai'
@@ -282,9 +283,9 @@ async function getOrCreateSharedBrowser(log?: Logger): Promise<Browser> {
       } else {
         sharedBrowser = await puppeteer.launch({
           args,
-          defaultViewport: chromium.defaultViewport ?? { width: 1280, height: 1024 },
+          defaultViewport: { width: 1280, height: 1024 },
           executablePath: await chromium.executablePath(),
-          headless: chromium.headless,
+          headless: true,
         })
       }
       sharedBrowserUsageCount = 0
@@ -716,9 +717,9 @@ async function downloadPdf(
 
 // ------------------------ Text extraction + chunking ------------------------
 function pickGeminiModel(opts: { pdf?: boolean; ocr?: boolean; fast?: boolean } = {}) {
-  if (opts.ocr || opts.pdf) return 'gemini-2.5-flash'
-  if (opts.fast) return 'gemini-2.5-flash'
-  return 'gemini-2.5-flash'
+  if (opts.ocr || opts.pdf) return 'gemini-flash-latest'
+  if (opts.fast) return 'gemini-flash-latest'
+  return 'gemini-flash-latest'
 }
 async function extractTextFromPdf(
   pdfData: Buffer,
@@ -905,6 +906,7 @@ async function fetchAllPapers(courseCode: string, examType?: string, year?: stri
     scrapePapersService(courseCode, examType, year),
     scrapePapersCodeChef(courseCode, examType, year),
     scrapeVITPaperVault(courseCode, examType, year),
+    scrapeExamCooker(courseCode, examType, year),
   ])
   const papers: RawPaperMeta[] = []
   results.forEach((r, idx) => {

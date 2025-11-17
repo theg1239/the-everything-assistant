@@ -2,6 +2,14 @@ import { redirect } from 'next/navigation'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { ChatInterface } from '@/components/chat-interface'
+import { generateUUID } from '@/lib/utils'
+import {
+  loadPersonalHubState,
+  syncCoreHubSnapshots,
+  refreshVTOPSnapshotAction,
+  runHubToolAction,
+} from '@/app/actions/hub'
+import type { PersonalHubState } from '@/types/hub'
 
 async function getLatestBroadcast() {
   try {
@@ -25,13 +33,29 @@ export default async function Home() {
     redirect('/login')
   }
 
-  const latestBroadcast = await getLatestBroadcast()
+  const initialChatId = generateUUID()
+  const fallbackHubState: PersonalHubState = { isLinked: false, snapshots: [], lastSyncedAt: null }
+  const [latestBroadcast, initialHubState] = await Promise.all([
+    getLatestBroadcast(),
+    loadPersonalHubState().catch(() => fallbackHubState),
+  ])
 
   return (
     <main id="main-content" className="flex min-h-screen flex-col bg-transparent">
       <div className="flex flex-1 overflow-hidden">
         <div className="relative flex flex-1 flex-col overflow-hidden">
-          <ChatInterface autoResume={false} />
+          <ChatInterface
+            chatId={initialChatId}
+            key={initialChatId}
+            autoResume={false}
+            initialHubState={initialHubState}
+            hubActions={{
+              refreshState: loadPersonalHubState,
+              syncCore: syncCoreHubSnapshots,
+              refreshVTOP: refreshVTOPSnapshotAction,
+              runTool: runHubToolAction,
+            }}
+          />
         </div>
       </div>
     </main>

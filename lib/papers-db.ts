@@ -17,6 +17,7 @@ export async function ensurePaperSchema() {
   const db = getPool()
   await db.query(`
   CREATE EXTENSION IF NOT EXISTS pgcrypto;
+  CREATE EXTENSION IF NOT EXISTS vector;
     CREATE TABLE IF NOT EXISTS past_papers (
       id uuid PRIMARY KEY,
       course_code text NOT NULL,
@@ -34,14 +35,14 @@ export async function ensurePaperSchema() {
       paper_id uuid REFERENCES past_papers(id) ON DELETE CASCADE,
       chunk_index int,
       text text,
-      embedding vector(768) NOT NULL
+      embedding vector(3072) NOT NULL
     );
     CREATE TABLE IF NOT EXISTS past_paper_question_embeddings (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       paper_id uuid REFERENCES past_papers(id) ON DELETE CASCADE,
       question_index int,
       question text,
-      embedding vector(768)
+      embedding vector(3072)
     );
     CREATE TABLE IF NOT EXISTS paper_indexes (
       id uuid PRIMARY KEY,

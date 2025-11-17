@@ -684,7 +684,7 @@ Please provide:
 5. Relevance to students (high/medium/low)`
 
       const { object } = await generateObject({
-        model: google('gemini-2.5-flash-lite-preview-06-17'),
+        model: google('gemini-flash-latest'),
         prompt,
         schema: contentAnalysisSchema,
         maxTokens: 1000,
@@ -1459,9 +1459,9 @@ Please provide:
   }
 
   async analyzeVideoFrames(framePaths, postContext = {}, videoData = {}) {
+    const frameImages = []
     try {
       // Convert frame images to base64 for Gemini
-      const frameImages = []
       const maxFramesToAnalyze = 8 // Limit to avoid token limits
 
       for (let i = 0; i < Math.min(framePaths.length, maxFramesToAnalyze); i++) {

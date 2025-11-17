@@ -1,6 +1,7 @@
 import { forwardRef, useImperativeHandle, useEffect, useRef, useMemo, FC, ReactNode } from 'react'
 
 import * as THREE from 'three'
+import 'three-mesh-bvh'
 
 import { Canvas, useFrame } from '@react-three/fiber'
 import { PerspectiveCamera } from '@react-three/drei'
@@ -337,7 +338,9 @@ const MergedPlanes = forwardRef<
   useFrame((_, delta) => {
     mesh.current.material.uniforms.time.value += 0.1 * delta
   })
-  return <mesh ref={mesh} geometry={geometry} material={material} />
+  // Note: temporary cast to avoid type identity conflicts between multiple versions of @types/three.
+  // See repo README / instructions for deduping @types/three across the workspace.
+  return <mesh ref={mesh as unknown as any} geometry={geometry as any} material={material as any} />
 })
 MergedPlanes.displayName = 'MergedPlanes'
 

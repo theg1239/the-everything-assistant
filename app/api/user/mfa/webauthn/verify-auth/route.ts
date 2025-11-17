@@ -76,8 +76,8 @@ export async function POST(request: NextRequest) {
 
   // 5) Convert stored.publicKey (Buffer or Uint8Array) into a Node Buffer
   const credentialPublicKey = Buffer.isBuffer(stored.publicKey)
-    ? stored.publicKey
-    : Buffer.from(stored.publicKey)
+    ? new Uint8Array(stored.publicKey)
+    : new Uint8Array(Buffer.from(stored.publicKey))
 
   // 6) Normalize the counter
   const prevCounter = typeof stored.counter === 'bigint' ? Number(stored.counter) : stored.counter

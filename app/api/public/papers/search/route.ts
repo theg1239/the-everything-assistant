@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { scrapePapersService } from '@/lib/scrapers/papers-scraper'
 import { scrapePapersCodeChef } from '@/lib/scrapers/papers-codechef'
 import { scrapeVITPaperVault } from '@/lib/scrapers/vit-papervault'
+import { scrapeExamCooker } from '@/lib/scrapers/examcooker'
 import { getCourseCode } from '@/lib/question-generator'
 import { getAllCourseMatches } from '@/lib/course-map'
 
@@ -62,13 +63,14 @@ export async function GET(req: NextRequest) {
       scrapePapersService(resolvedCourseCode, examType, year),
       scrapePapersCodeChef(resolvedCourseCode, examType, year),
       scrapeVITPaperVault(resolvedCourseCode, examType, year),
+      scrapeExamCooker(resolvedCourseCode, examType, year),
     ])
 
     const papers: any[] = []
     const sources: string[] = []
     const sourceErrors: Array<{ source: string; error: string }> = []
 
-    const sourceNames = ['VIT Papers Archive', 'CodeChef', 'VIT Paper Vault']
+    const sourceNames = ['VIT Papers Archive', 'CodeChef', 'VIT Paper Vault', 'ExamCooker']
 
     results.forEach((r, idx) => {
       const name = sourceNames[idx] || `source_${idx}`

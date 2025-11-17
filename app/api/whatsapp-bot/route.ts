@@ -207,7 +207,7 @@ CRITICAL TOOL CONTINUATION RULES:
     // Process the request through the AI system
     const resultStream = await rateLimitedAI.google.streamText(
       {
-        model: await rateLimitedAI.google.model('gemini-2.5-flash'),
+        model: await rateLimitedAI.google.model('gemini-flash-latest'),
         messages: finalMessagesForAI,
         tools,
         temperature: 0.7,
@@ -223,7 +223,7 @@ CRITICAL TOOL CONTINUATION RULES:
               await saveTokenUsage({
                 userId: user.id,
                 chatId: null, // No specific chat for bot users
-                model: 'gemini-2.5-flash',
+                model: 'gemini-flash-latest',
                 stepIndex: typeof stepIndex === 'number' ? stepIndex : null,
                 promptTokens: usage.promptTokens || 0,
                 completionTokens: usage.completionTokens || 0,
@@ -241,12 +241,12 @@ CRITICAL TOOL CONTINUATION RULES:
     )
 
     // Return the streaming response
-    return resultStream.toDataStreamResponse({
+    return resultStream.toTextStreamResponse({
       headers: {
         'X-Source': requestSource,
         'X-User-Id': user.id,
-        'X-Bot-User-Id': userInfo.userId
-      }
+        'X-Bot-User-Id': userInfo.userId,
+      },
     })
 
   } catch (error: any) {

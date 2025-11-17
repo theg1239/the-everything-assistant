@@ -44,6 +44,7 @@ import { useMemo } from 'react'
 import { FeedbackSection } from '@/components/feedback-section'
 import { MemoryManagement } from '@/components/memory-management'
 import { VTOPSettings } from '@/components/vtop-settings'
+import { deleteAccountAction } from '@/app/actions/account'
 
 const Aurora = dynamic(() => import('@/components/backgrounds/aurora'), {
   ssr: false,
@@ -60,6 +61,25 @@ const Dither = dynamic(() => import('@/components/backgrounds/dither'), {
   loading: () => null,
 })
 
+const FloatingLines = dynamic(() => import('@/components/backgrounds/floating-lines'), {
+  ssr: false,
+  loading: () => null,
+})
+
+const ColorBands = dynamic(() => import('@/components/backgrounds/color-bands'), {
+  ssr: false,
+  loading: () => null,
+})
+
+const TerminalPreview = dynamic(() => import('@/components/backgrounds/terminal'), {
+  ssr: false,
+  loading: () => null,
+})
+
+const GridPreview = dynamic(() => import('@/components/backgrounds/grid'), {
+  ssr: false,
+  loading: () => null,
+})
 export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any) {
   const { data: session } = useSession()
   const { setBackgroundType, toggleBackground } = useCustomBackground()
@@ -71,6 +91,14 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     enabled: true,
   })
   const [theme, setTheme] = useState('system')
+  const [dailyBriefingSettings, setDailyBriefingSettings] = useState({
+    dismissTime: '07:30',
+    emailEnabled: false,
+    emailTime: '07:30',
+  })
+  const [updatingBriefing, setUpdatingBriefing] = useState(false)
+  const [currentPreferences, setCurrentPreferences] = useState<any>({})
+  const [sendingTestBriefing, setSendingTestBriefing] = useState(false)
 
   const [touchStartY, setTouchStartY] = useState(0)
   const [touchStartScrollTop, setTouchStartScrollTop] = useState(0)
@@ -88,6 +116,83 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
           noiseIntensity={0.4}
           scale={1.2}
           rotation={30}
+        />
+      ),
+      []
+    )
+    const floatingLinesComponent = useMemo(
+      () => (
+        <FloatingLines
+          lineCount={[10, 8, 6]}
+          lineDistance={[6, 5, 4]}
+          animationSpeed={0.45}
+          interactive={false}
+          parallax={false}
+          bendStrength={0}
+        />
+      ),
+      []
+    )
+    const colorBandsComponent = useMemo(
+      () => (
+        <ColorBands
+          colors={['#22d3ee', '#3b82f6', '#a855f7', '#f97316']}
+          transparent
+          rotation={28}
+          speed={0.3}
+          autoRotate={10}
+          scale={1.1}
+          frequency={1}
+          warpStrength={1.2}
+          mouseInfluence={0}
+          parallax={0}
+          noise={0.05}
+        />
+      ),
+      []
+    )
+    const terminalComponent = useMemo(
+      () => (
+        <TerminalPreview
+          scale={1}
+          gridMul={[2, 1]}
+          digitSize={1.4}
+          timeScale={0.3}
+          scanlineIntensity={0.25}
+          glitchAmount={0.85}
+          flickerAmount={0.35}
+          noiseAmp={0.45}
+          chromaticAberration={0.001}
+          dither={0.35}
+          curvature={0.1}
+          tint="#2fd4c8"
+          mouseReact={false}
+          brightness={0.9}
+          backgroundColor="#030712"
+          overlayOpacity={0.45}
+        />
+      ),
+      []
+    )
+    const gridComponent = useMemo(
+      () => (
+        <GridPreview
+          className="absolute inset-0"
+          lineThickness={1.1}
+          linesColor="#2dd4ff"
+          scanColor="#f472b6"
+          scanOpacity={0.45}
+          gridScale={0.12}
+          lineStyle="dashed"
+          lineJitter={0.08}
+          scanDirection="pingpong"
+          noiseIntensity={0.02}
+          scanGlow={0.6}
+          scanSoftness={2}
+          scanPhaseTaper={0.85}
+          scanDuration={2.5}
+          scanDelay={2.5}
+          enablePost={false}
         />
       ),
       []
@@ -111,6 +216,12 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
             {beamsComponent}
           </div>
         )
+      case 'floating-lines':
+        return (
+          <div className="relative w-full h-16 rounded-md overflow-hidden bg-black">
+            {floatingLinesComponent}
+          </div>
+        )
       case 'dither':
         return (
           <div className="relative w-full h-16 rounded-md overflow-hidden bg-black">
@@ -125,6 +236,24 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
               enableMouseInteraction={false}
               mouseRadius={1}
             />
+          </div>
+        )
+      case 'color-bands':
+        return (
+          <div className="relative w-full h-16 rounded-md overflow-hidden bg-black">
+            {colorBandsComponent}
+          </div>
+        )
+      case 'grid':
+        return (
+          <div className="relative w-full h-16 rounded-md overflow-hidden bg-black">
+            {gridComponent}
+          </div>
+        )
+      case 'terminal':
+        return (
+          <div className="relative w-full h-16 rounded-md overflow-hidden bg-black">
+            {terminalComponent}
           </div>
         )
       case 'gradient':
@@ -190,10 +319,14 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
         // Load user preferences
         const response = await fetch('/api/user/preferences')
-        if (response.ok) {
-          const data = await response.json()
-          const prefs = data.preferences
-          setFollowUpSuggestions(prefs.followUpSuggestions ?? true)
+      if (response.ok) {
+        const data = await response.json()
+        const prefs = data.preferences
+        setCurrentPreferences(prefs)
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('userPreferencesUpdated', { detail: prefs }) as any)
+        }
+        setFollowUpSuggestions(prefs.followUpSuggestions ?? true)
 
           // Handle both legacy aurora and new background config
           if (prefs.backgroundConfig) {
@@ -203,6 +336,14 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
             setBackgroundConfig({
               type: 'aurora',
               enabled: prefs.auroraBackground,
+            })
+          }
+
+          if (prefs.dailyBriefing) {
+            setDailyBriefingSettings({
+              dismissTime: prefs.dailyBriefing.dismissTime || '07:30',
+              emailEnabled: prefs.dailyBriefing.emailEnabled ?? false,
+              emailTime: prefs.dailyBriefing.emailTime || prefs.dailyBriefing.dismissTime || '07:30',
             })
           }
         }
@@ -269,17 +410,22 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     if (!session?.user?.id) return
 
     try {
+      const payload = { ...currentPreferences, ...newPreferences }
       const response = await fetch('/api/user/preferences', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          preferences: newPreferences,
+          preferences: payload,
         }),
       })
 
       if (response.ok) {
+        setCurrentPreferences(payload)
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('userPreferencesUpdated', { detail: payload }) as any)
+        }
         toast.success('Preferences saved successfully')
       } else {
         throw new Error('Failed to save preferences')
@@ -292,10 +438,68 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
   const handleFollowUpSuggestionsChange = async (checked: boolean) => {
     setFollowUpSuggestions(checked)
-    await savePreferences({
-      followUpSuggestions: checked,
-      backgroundConfig,
-    })
+    await savePreferences({ followUpSuggestions: checked })
+  }
+
+  const handleBriefingSettingsUpdate = async (updates: Partial<typeof dailyBriefingSettings>) => {
+    const previous = dailyBriefingSettings
+    const next = { ...dailyBriefingSettings, ...updates }
+    setDailyBriefingSettings(next)
+    setUpdatingBriefing(true)
+    try {
+      const response = await fetch('/api/user/preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dailyBriefing: {
+            dismissTime: next.dismissTime,
+            emailEnabled: next.emailEnabled,
+            emailTime: next.emailTime,
+          },
+        }),
+      })
+      if (!response.ok) throw new Error('Failed to update daily briefing preferences')
+
+      const updatedPrefs = {
+        ...currentPreferences,
+        dailyBriefing: {
+          ...(currentPreferences.dailyBriefing || {}),
+          dismissTime: next.dismissTime,
+          emailEnabled: next.emailEnabled,
+          emailTime: next.emailTime,
+        },
+      }
+      setCurrentPreferences(updatedPrefs)
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('userPreferencesUpdated', { detail: updatedPrefs }) as any)
+      }
+      toast.success('daily briefing updated')
+    } catch (error) {
+      console.error('Error updating daily briefing preferences:', error)
+      toast.error('failed to update daily briefing')
+      setDailyBriefingSettings(previous)
+    } finally {
+      setUpdatingBriefing(false)
+    }
+  }
+
+  const handleSendTestBriefing = async () => {
+    setSendingTestBriefing(true)
+    try {
+      const response = await fetch('/api/hub/daily-briefing-email/test', {
+        method: 'POST',
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to send test briefing')
+      }
+      toast.success('daily briefing sent to your inbox')
+    } catch (error: any) {
+      console.error('Error sending test briefing:', error)
+      toast.error(error?.message || 'failed to send daily briefing email')
+    } finally {
+      setSendingTestBriefing(false)
+    }
   }
 
   const handleMemoryToggle = async (checked: boolean) => {
@@ -878,6 +1082,29 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     }
   }
 
+  const [deletingAccount, setDeletingAccount] = useState(false)
+  const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(false)
+
+  const handleDeleteAccount = async () => {
+    if (!confirmDeleteAccount) {
+      setConfirmDeleteAccount(true)
+      setTimeout(() => setConfirmDeleteAccount(false), 3000)
+      return
+    }
+    setDeletingAccount(true)
+    setConfirmDeleteAccount(false)
+    try {
+      await deleteAccountAction()
+      toast.success('account deleted — signing you out')
+      await signOut({ callbackUrl: '/login' })
+    } catch (error: any) {
+      console.error('failed to delete account', error)
+      toast.error(error?.message || 'failed to delete account')
+    } finally {
+      setDeletingAccount(false)
+    }
+  }
+
   const renderContent = () => {
     switch (activeSection) {
       case 'general':
@@ -920,6 +1147,114 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                       checked={memoryEnabled}
                       onCheckedChange={handleMemoryToggle}
                     />
+                  </div>
+                </div>
+
+                <div className="space-y-4 p-4 rounded-lg border border-border bg-muted/10">
+                  <h4 className="font-semibold text-base">daily briefing</h4>
+                  <div className="flex flex-col gap-2 rounded-lg border border-border bg-background p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <Label htmlFor="briefing-time" className="text-sm md:text-base">
+                          auto end time
+                        </Label>
+                        <p className="text-xs md:text-sm text-muted-foreground">
+                          briefing closes automatically after this time every morning
+                        </p>
+                      </div>
+                      <input
+                        id="briefing-time"
+                        type="time"
+                        value={dailyBriefingSettings.dismissTime}
+                        onChange={e => handleBriefingSettingsUpdate({ dismissTime: e.target.value })}
+                        disabled={updatingBriefing}
+                        className="h-10 rounded-md border border-border bg-muted/40 px-3 text-sm text-foreground"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-background">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="briefing-email" className="text-sm md:text-base">
+                        email summary
+                      </Label>
+                      <p className="text-xs md:text-sm text-muted-foreground">
+                        send the briefing to your inbox when it ends
+                      </p>
+                    </div>
+                    <Switch
+                      id="briefing-email"
+                      checked={dailyBriefingSettings.emailEnabled}
+                      disabled={updatingBriefing}
+                      onCheckedChange={checked => handleBriefingSettingsUpdate({ emailEnabled: checked })}
+                    />
+                  </div>
+                  {dailyBriefingSettings.emailEnabled && (
+                    <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-background">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="briefing-email-time" className="text-sm md:text-base">
+                          email send time
+                        </Label>
+                        <p className="text-xs md:text-sm text-muted-foreground">
+                          usually the same as dismiss time, customize if needed
+                        </p>
+                      </div>
+                      <input
+                        id="briefing-email-time"
+                        type="time"
+                        value={dailyBriefingSettings.emailTime}
+                        onChange={e => handleBriefingSettingsUpdate({ emailTime: e.target.value })}
+                        disabled={updatingBriefing}
+                        className="h-10 rounded-md border border-border bg-muted/40 px-3 text-sm text-foreground"
+                      />
+                    </div>
+                  )}
+                  <div className="flex justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!dailyBriefingSettings.emailEnabled || sendingTestBriefing}
+                      onClick={handleSendTestBriefing}
+                      className="rounded-full"
+                    >
+                      {sendingTestBriefing && <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />}
+                      send test briefing
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-4 p-4 rounded-lg border border-border bg-muted/10">
+                  <h4 className="font-semibold text-base">account</h4>
+                  <div className="flex flex-col gap-2 rounded-lg border border-border bg-background p-3">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-full bg-destructive/10 text-destructive p-3">
+                        <Trash2 className="h-4 w-4" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="font-semibold text-sm md:text-base">delete account</p>
+                        <p className="text-xs md:text-sm text-muted-foreground">
+                          permanently delete your account and all data
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      disabled={deletingAccount}
+                      onClick={handleDeleteAccount}
+                      className={cn(
+                        'w-full sm:w-auto',
+                        confirmDeleteAccount ? 'bg-red-600 hover:bg-red-700' : ''
+                      )}
+                    >
+                      {deletingAccount ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> deleting…
+                        </>
+                      ) : confirmDeleteAccount ? (
+                        'confirm delete?'
+                      ) : (
+                        'delete my account'
+                      )}
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -1195,6 +1530,26 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
             type: 'dither' as BackgroundType,
             name: 'dither',
             description: 'retro dithered waves with pixel art aesthetics',
+          },
+          {
+            type: 'floating-lines' as BackgroundType,
+            name: 'floating lines',
+            description: 'high-energy neon lines with parallax and bend effects',
+          },
+          {
+            type: 'terminal' as BackgroundType,
+            name: 'faulty terminal',
+            description: 'retro CRT matrix with scanlines and glitches',
+          },
+          {
+            type: 'grid' as BackgroundType,
+            name: 'reactive grid',
+            description: '3D neon scanning grid with motion parallax',
+          },
+          {
+            type: 'color-bands' as BackgroundType,
+            name: 'color bands',
+            description: 'shimmering ribbon gradients with warp and parallax',
           },
           {
             type: 'gradient' as BackgroundType,

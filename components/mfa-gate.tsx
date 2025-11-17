@@ -4,6 +4,7 @@ import { useSession } from 'next-auth/react'
 import { usePathname } from 'next/navigation'
 import { MFAProvider, useMFA } from '@/contexts/mfa-context'
 import { MFAChallenge } from '@/components/mfa-challenge'
+import { LoginFloatingBackground } from '@/components/login-floating-background'
 
 function MFAGateInner({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession()
@@ -14,13 +15,11 @@ function MFAGateInner({ children }: { children: React.ReactNode }) {
 
   if (status === 'loading' || isCheckingMFA) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center p-4 z-10">
-        <div className="text-center">
-          <h1 className="text-4xl font-light text-white drop-shadow-lg">
-            the everything assistant
-          </h1>
+      <LoginFloatingBackground>
+        <div className="text-center text-white">
+          <h1 className="text-4xl font-light drop-shadow-lg">the everything assistant</h1>
         </div>
-      </div>
+      </LoginFloatingBackground>
     )
   }
 

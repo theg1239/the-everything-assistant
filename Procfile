@@ -1,1 +1,1 @@
-web: cd services/reddit-scraper && node api-server.js
+web: "cd services/reddit-scraper && node api-server.js"

@@ -20,6 +20,14 @@ export async function GET(request: NextRequest) {
       auroraBackground: true,
     }
 
+    if (!preferences.dailyBriefing) {
+      preferences.dailyBriefing = {
+        dismissTime: '07:30',
+        emailEnabled: false,
+        emailTime: '07:30',
+      }
+    }
+
     if (!preferences.backgroundConfig && preferences.auroraBackground !== undefined) {
       preferences.backgroundConfig = {
         type: 'aurora',
@@ -43,26 +51,34 @@ export async function PATCH(request: NextRequest) {
 
     const body = await request.json()
 
-    // Handle both old and new formats
-    let preferencesToUpdate: any = {}
+    const existingUser = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    })
+    if (!existingUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    const currentPrefs = ((existingUser as any).preferences || {}) as Record<string, any>
+    let preferencesToUpdate: Record<string, any> = { ...currentPrefs }
 
     if (body.preferences) {
-      // Old format: { preferences: { followUpSuggestions: true, auroraBackground: true } }
       preferencesToUpdate = body.preferences
-    } else if (body.backgroundConfig) {
-      // New format: { backgroundConfig: { type: 'aurora', enabled: true } }
-      // Get existing preferences first
-      const existingUser = await prisma.user.findUnique({
-        where: { email: session.user.email },
-      })
-
-      const existingPrefs = (existingUser as any)?.preferences || {}
-      preferencesToUpdate = {
-        ...existingPrefs,
-        backgroundConfig: body.backgroundConfig,
-      }
     } else {
-      return NextResponse.json({ error: 'Invalid preferences data' }, { status: 400 })
+      if (body.backgroundConfig) {
+        preferencesToUpdate.backgroundConfig = body.backgroundConfig
+      }
+      if (typeof body.followUpSuggestions === 'boolean') {
+        preferencesToUpdate.followUpSuggestions = body.followUpSuggestions
+      }
+      if (body.dailyBriefing) {
+        preferencesToUpdate.dailyBriefing = {
+          ...(preferencesToUpdate.dailyBriefing || {}),
+          ...body.dailyBriefing,
+        }
+      }
+      if (!body.backgroundConfig && !body.dailyBriefing && body.preferences === undefined && typeof body.followUpSuggestions !== 'boolean') {
+        return NextResponse.json({ error: 'Invalid preferences data' }, { status: 400 })
+      }
     }
 
     const updatedUser = await prisma.user.update({

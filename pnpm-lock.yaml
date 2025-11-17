@@ -164,6 +164,9 @@ importers:
       isomorphic-dompurify:
         specifier: ^2.26.0
         version: 2.32.0
+      jsdom:
+        specifier: ^27.2.0
+        version: 27.2.0
       katex:
         specifier: ^0.16.22
         version: 0.16.25

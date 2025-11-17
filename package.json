@@ -28,7 +28,7 @@
     "test:performance:seed": "tsx scripts/test-performance.ts seed",
     "papers:index": "tsx scripts/papers.ts",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "deploy": "npx prisma generate && opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
@@ -84,6 +84,7 @@
     "face-api.js": "^0.22.2",
     "framer-motion": "latest",
     "isomorphic-dompurify": "^2.26.0",
+    "jsdom": "^27.2.0",
     "katex": "^0.16.22",
     "langchain": "^0.3.29",
     "lucide-react": "latest",

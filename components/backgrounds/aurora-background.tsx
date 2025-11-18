@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useSession } from 'next-auth/react'
+import { readJson } from '@/lib/http'
+import type { UserPreferencesResponse } from '@/types/preferences'
 
 const Aurora = dynamic(() => import('@/components/backgrounds/aurora'), {
   ssr: false,
@@ -11,13 +13,13 @@ const Aurora = dynamic(() => import('@/components/backgrounds/aurora'), {
 
 export default function AuroraBackground() {
   const { data: session, status } = useSession()
-  const [auroraEnabled, setAuroraEnabled] = useState(true)
+  const [auroraEnabled, setAuroraEnabled] = useState(false)
   const [preferencesLoaded, setPreferencesLoaded] = useState(false)
 
   useEffect(() => {
     const loadAuroraPreference = async () => {
       if (status === 'unauthenticated' || !session?.user?.email) {
-        setAuroraEnabled(true)
+        setAuroraEnabled(false)
         setPreferencesLoaded(true)
         return
       }
@@ -26,13 +28,13 @@ export default function AuroraBackground() {
         try {
           const response = await fetch('/api/user/preferences')
           if (response.ok) {
-            const data = await response.json()
+            const data = await readJson<UserPreferencesResponse>(response)
             const prefs = data.preferences
             setAuroraEnabled(prefs.auroraBackground ?? true)
           }
         } catch (error) {
           console.error('Error loading aurora preference:', error)
-          setAuroraEnabled(true)
+          setAuroraEnabled(false)
         } finally {
           setPreferencesLoaded(true)
         }

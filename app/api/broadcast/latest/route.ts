@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { broadcastSlidesSchema } from '@/types/api/broadcast'
 
 export const revalidate = 0
 
@@ -15,7 +16,13 @@ export async function GET() {
       return NextResponse.json(null, { status: 200 })
     }
 
-    return NextResponse.json(latestBroadcast)
+    const slides = broadcastSlidesSchema.parse(latestBroadcast.slides)
+
+    return NextResponse.json({
+      id: latestBroadcast.id,
+      slides,
+      createdAt: latestBroadcast.createdAt.toISOString(),
+    })
   } catch (error) {
     console.error('Error fetching latest broadcast:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })

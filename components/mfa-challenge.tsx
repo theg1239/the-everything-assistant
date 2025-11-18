@@ -9,17 +9,73 @@ import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { useMFA } from '@/contexts/mfa-context'
 import { LoginFloatingBackground } from '@/components/login-floating-background'
+import { readJson } from '@/lib/http'
+import type { AuthenticatorTransport, PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/server'
 
-interface MFAStatus {
+interface MfaStatusResponse {
   mfaEnabled: boolean
   mfaMethod?: string
   backupCodeCount: number
 }
 
+interface MfaVerificationResponse {
+  success?: boolean
+  message?: string
+  error?: string
+}
+
+interface WebAuthnVerificationResponse {
+  success?: boolean
+  message?: string
+  error?: string
+}
+
+const SUPPORTED_AUTHENTICATOR_TRANSPORTS: AuthenticatorTransport[] = [
+  'usb',
+  'nfc',
+  'ble',
+  'internal',
+]
+
+const isAuthenticatorTransport = (value: string): value is AuthenticatorTransport =>
+  SUPPORTED_AUTHENTICATOR_TRANSPORTS.includes(value as AuthenticatorTransport)
+
+const normalizeTransports = (
+  transports?: readonly string[]
+): AuthenticatorTransport[] | undefined => {
+  if (!transports) return undefined
+  const filtered = transports.filter(isAuthenticatorTransport)
+  return filtered.length ? filtered : undefined
+}
+
+const base64urlToArrayBuffer = (base64url: string): ArrayBuffer => {
+  const padding = '='.repeat((4 - (base64url.length % 4)) % 4)
+  const base64 = (base64url + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const rawData = window.atob(base64)
+  const outputArray = new Uint8Array(rawData.length)
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i)
+  }
+  return outputArray.buffer
+}
+
+const arrayBufferToBase64url = (buffer: ArrayBuffer | ArrayBufferView): string => {
+  const bytes =
+    buffer instanceof ArrayBuffer
+      ? new Uint8Array(buffer)
+      : new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+  let binary = ''
+  bytes.forEach(byte => {
+    binary += String.fromCharCode(byte)
+  })
+  const base64 = btoa(binary)
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+}
+
 export function MFAChallenge() {
   const [code, setCode] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [mfaStatus, setMFAStatus] = useState<MFAStatus | null>(null)
+  const [mfaStatus, setMFAStatus] = useState<MfaStatusResponse | null>(null)
   const [isBackupMode, setIsBackupMode] = useState(false)
   const { data: session } = useSession()
   const { setMFAVerified } = useMFA()
@@ -34,10 +90,11 @@ export function MFAChallenge() {
   const fetchMFAStatus = async () => {
     try {
       const response = await fetch('/api/user/mfa')
-      if (response.ok) {
-        const data = await response.json()
-        setMFAStatus(data)
+      if (!response.ok) {
+        throw new Error('Failed to fetch MFA status')
       }
+      const data = await readJson<MfaStatusResponse>(response)
+      setMFAStatus(data)
     } catch (error) {
       console.error('Failed to fetch MFA status:', error)
       toast.error('Failed to load MFA information')
@@ -61,33 +118,25 @@ export function MFAChallenge() {
         throw new Error('Failed to get authentication options')
       }
 
-      const options = await optionsResponse.json()
+      const options = await readJson<PublicKeyCredentialRequestOptionsJSON>(optionsResponse)
 
-      function base64urlToUint8Array(base64url: string): Uint8Array {
-        const padding = '='.repeat((4 - (base64url.length % 4)) % 4)
-        const base64 = (base64url + padding).replace(/-/g, '+').replace(/_/g, '/')
-        const rawData = window.atob(base64)
-        const outputArray = new Uint8Array(rawData.length)
-        for (let i = 0; i < rawData.length; ++i) {
-          outputArray[i] = rawData.charCodeAt(i)
-        }
-        return outputArray
-      }
+      const allowCredentials: PublicKeyCredentialDescriptor[] | undefined =
+        options.allowCredentials && options.allowCredentials.length
+          ? options.allowCredentials.map(cred => ({
+              type: cred.type,
+              id: base64urlToArrayBuffer(cred.id),
+              transports: normalizeTransports(cred.transports),
+            }))
+          : undefined
 
-      const authenticationOptions = {
-        ...options,
-        challenge:
-          typeof options.challenge === 'string'
-            ? base64urlToUint8Array(options.challenge)
-            : new Uint8Array(options.challenge),
-        allowCredentials:
-          options.allowCredentials?.map((cred: any) => ({
-            ...cred,
-            id:
-              typeof cred.id === 'string'
-                ? base64urlToUint8Array(cred.id)
-                : new Uint8Array(cred.id),
-          })) || [],
+      const challengeBuffer = base64urlToArrayBuffer(options.challenge)
+      const authenticationOptions: PublicKeyCredentialRequestOptions = {
+        challenge: challengeBuffer,
+        timeout: options.timeout,
+        rpId: options.rpId,
+        allowCredentials,
+        userVerification: options.userVerification,
+        extensions: options.extensions,
       }
 
       console.log('WebAuthn authentication options:', {
@@ -96,11 +145,15 @@ export function MFAChallenge() {
         userVerification: authenticationOptions.userVerification,
         timeout: authenticationOptions.timeout,
         rpId: authenticationOptions.rpId,
-        challenge: authenticationOptions.challenge
-          ? Array.from(authenticationOptions.challenge).slice(0, 10).join(',') + '...'
-          : 'null',
-        allowCredentials: authenticationOptions.allowCredentials?.map((cred: any) => ({
-          id: cred.id ? Array.from(cred.id).slice(0, 10).join(',') + '...' : 'null',
+        challenge: (() => {
+          const buffer = challengeBuffer
+          return (
+            Array.from(new Uint8Array(buffer))
+              .slice(0, 10)
+              .join(',') + '...'
+          )
+        })(),
+        allowCredentials: authenticationOptions.allowCredentials?.map(cred => ({
           transports: cred.transports,
           type: cred.type,
         })),
@@ -110,10 +163,7 @@ export function MFAChallenge() {
         publicKey: {
           ...authenticationOptions,
           challenge: '[Uint8Array]',
-          allowCredentials: authenticationOptions.allowCredentials?.map((cred: any) => ({
-            ...cred,
-            id: '[Uint8Array]',
-          })),
+          allowCredentials: authenticationOptions.allowCredentials,
         },
       })
 
@@ -149,11 +199,6 @@ export function MFAChallenge() {
 
       const response = credential.response as AuthenticatorAssertionResponse
 
-      function uint8ArrayToBase64url(buffer: Uint8Array): string {
-        const base64 = btoa(String.fromCharCode(...buffer))
-        return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
-      }
-
       const verifyResponse = await fetch('/api/user/mfa/webauthn/verify-auth', {
         method: 'POST',
         headers: {
@@ -162,13 +207,13 @@ export function MFAChallenge() {
         body: JSON.stringify({
           credential: {
             id: credential.id,
-            rawId: uint8ArrayToBase64url(new Uint8Array(credential.rawId)),
+            rawId: arrayBufferToBase64url(credential.rawId),
             response: {
-              authenticatorData: uint8ArrayToBase64url(new Uint8Array(response.authenticatorData)),
-              clientDataJSON: uint8ArrayToBase64url(new Uint8Array(response.clientDataJSON)),
-              signature: uint8ArrayToBase64url(new Uint8Array(response.signature)),
+              authenticatorData: arrayBufferToBase64url(response.authenticatorData),
+              clientDataJSON: arrayBufferToBase64url(response.clientDataJSON),
+              signature: arrayBufferToBase64url(response.signature),
               userHandle: response.userHandle
-                ? uint8ArrayToBase64url(new Uint8Array(response.userHandle))
+                ? arrayBufferToBase64url(response.userHandle)
                 : null,
             },
             type: credential.type,
@@ -177,7 +222,7 @@ export function MFAChallenge() {
         }),
       })
 
-      const data = await verifyResponse.json()
+      const data = await readJson<WebAuthnVerificationResponse>(verifyResponse)
 
       if (verifyResponse.ok) {
         toast.success('Authentication successful!')
@@ -234,7 +279,7 @@ export function MFAChallenge() {
         body: JSON.stringify(isBackupMode ? { backupCode: code.trim() } : { code: code.trim() }),
       })
 
-      const data = await response.json()
+      const data = await readJson<MfaVerificationResponse>(response)
 
       if (response.ok) {
         toast.success('MFA verification successful!')

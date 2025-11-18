@@ -3,13 +3,15 @@
 import { useState, useEffect } from 'react'
 import { BroadcastDialog } from '@/components/broadcast-dialog'
 import { useOnboarding } from '@/hooks/use-onboarding'
+import type { LatestBroadcastResponse } from '@/types/api/broadcast'
 
 interface GlobalBroadcastDialogProps {
-  latestBroadcast: any
+  latestBroadcast: LatestBroadcastResponse | null
 }
 
-function getBroadcastId(broadcast: any) {
-  return broadcast?.id || broadcast?.createdAt || JSON.stringify(broadcast)
+function getBroadcastId(broadcast: LatestBroadcastResponse | null) {
+  if (!broadcast) return 'none'
+  return broadcast.id || broadcast.createdAt
 }
 
 export function GlobalBroadcastDialog({ latestBroadcast }: GlobalBroadcastDialogProps) {

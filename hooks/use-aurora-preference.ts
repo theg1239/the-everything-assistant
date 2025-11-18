@@ -3,15 +3,18 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import type { BackgroundConfig } from '@/components/backgrounds/custom-background'
+import { readJson } from '@/lib/http'
+import type { UserPreferencesResponse } from '@/types/preferences'
 
 export function useAuroraPreference() {
   const { data: session } = useSession()
-  const [auroraEnabled, setAuroraEnabled] = useState(true)
+  const [auroraEnabled, setAuroraEnabled] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const loadAuroraPreference = async () => {
       if (!session?.user?.email) {
+        setAuroraEnabled(false)
         setIsLoading(false)
         return
       }
@@ -19,14 +22,14 @@ export function useAuroraPreference() {
       try {
         const response = await fetch('/api/user/preferences')
         if (response.ok) {
-          const data = await response.json()
+          const data = await readJson<UserPreferencesResponse>(response)
           const prefs = data.preferences
 
           if (prefs.backgroundConfig) {
             const config = prefs.backgroundConfig as BackgroundConfig
             setAuroraEnabled(config.type === 'aurora' && config.enabled)
           } else {
-            setAuroraEnabled(prefs.auroraBackground ?? true)
+            setAuroraEnabled(prefs.auroraBackground ?? false)
           }
         }
       } catch (error) {

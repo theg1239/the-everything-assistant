@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getRateLimitedAI } from '@/lib/rate-limited-ai'
+import type { ApiKeyUsageSnapshot } from '@/lib/api-key-manager'
 import { validateEnvironmentConfig, getEnvironmentSummary } from '@/lib/env-config'
+import { rateLimitActionRequestSchema } from '@/types/api/rate-limit'
 
 export async function GET(req: NextRequest) {
   try {
@@ -27,20 +29,12 @@ export async function GET(req: NextRequest) {
       groqAI.getConfig(),
     ])
 
-    const combinedUsageStats = {
-      ...Object.entries(googleUsageStats).reduce(
-        (acc, [key, value]) => {
-          acc[`google_${key}`] = value
-          return acc
-        },
-        {} as Record<string, any>
+    const combinedUsageStats: Record<string, ApiKeyUsageSnapshot> = {
+      ...Object.fromEntries(
+        Object.entries(googleUsageStats).map(([key, value]) => [`google_${key}`, value])
       ),
-      ...Object.entries(groqUsageStats).reduce(
-        (acc, [key, value]) => {
-          acc[`groq_${key}`] = value
-          return acc
-        },
-        {} as Record<string, any>
+      ...Object.fromEntries(
+        Object.entries(groqUsageStats).map(([key, value]) => [`groq_${key}`, value])
       ),
     }
 
@@ -79,12 +73,13 @@ export async function GET(req: NextRequest) {
         apiKeys: envSummary.apiKeys.totalAvailable > 0 ? 'Available' : 'None configured',
       },
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Rate limiting status check failed:', error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
       {
         error: 'Failed to get rate limiting status',
-        message: error.message || 'Unknown error',
+        message,
       },
       { status: 500 }
     )
@@ -104,8 +99,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized access - admin only' }, { status: 403 })
     }
 
-    const body = await req.json()
-    const { action } = body
+    const rawBody = await req.json().catch(() => null)
+    if (!rawBody) {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    }
+    const parsed = rateLimitActionRequestSchema.safeParse(rawBody)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Invalid request payload', details: parsed.error.flatten() },
+        { status: 400 }
+      )
+    }
+
+    const { action, config } = parsed.data
 
     const rateLimited = getRateLimitedAI('groq')
 
@@ -125,7 +131,6 @@ export async function POST(req: NextRequest) {
         })
 
       case 'update_config':
-        const { config } = body
         if (!config) {
           return NextResponse.json({ error: 'Configuration object required' }, { status: 400 })
         }
@@ -140,12 +145,13 @@ export async function POST(req: NextRequest) {
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Rate limiting action failed:', error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
       {
         error: 'Failed to execute action',
-        message: error.message || 'Unknown error',
+        message,
       },
       { status: 500 }
     )

@@ -1,7 +1,15 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
+import { Prisma } from '@prisma/client'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import {
+  broadcastDeleteSchema,
+  broadcastSlidesSchema,
+  broadcastUpdateSchema,
+  pastBroadcastSchema,
+  type PastBroadcast,
+} from '@/types/api/broadcast'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -18,12 +26,15 @@ export async function GET() {
       take: 50,
     })
 
-    const transformedBroadcasts = broadcasts.map(broadcast => ({
-      id: broadcast.id,
-      slides: broadcast.slides,
-      timestamp: broadcast.createdAt.toISOString(),
-      sentBy: session?.user?.email || 'Admin',
-    }))
+    const transformedBroadcasts: PastBroadcast[] = broadcasts.map(broadcast => {
+      const slides = broadcastSlidesSchema.parse(broadcast.slides)
+      return pastBroadcastSchema.parse({
+        id: broadcast.id,
+        slides,
+        timestamp: broadcast.createdAt.toISOString(),
+        sentBy: session?.user?.email || 'Admin',
+      })
+    })
 
     return NextResponse.json({ broadcasts: transformedBroadcasts })
   } catch (error) {
@@ -40,12 +51,15 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
-    const body = await req.json()
-    const { id } = body
-
-    if (!id) {
+    const rawBody = await req.json().catch(() => null)
+    if (!rawBody) {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    }
+    const parsed = broadcastDeleteSchema.safeParse(rawBody)
+    if (!parsed.success) {
       return NextResponse.json({ error: 'Broadcast ID is required' }, { status: 400 })
     }
+    const { id } = parsed.data
 
     await prisma.broadcast.delete({
       where: {
@@ -68,27 +82,35 @@ export async function PUT(req: NextRequest) {
   }
 
   try {
-    const body = await req.json()
-    const { id, slides } = body
-
-    if (!id) {
-      return NextResponse.json({ error: 'Broadcast ID is required' }, { status: 400 })
+    const rawBody = await req.json().catch(() => null)
+    if (!rawBody) {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
 
-    if (!slides || !Array.isArray(slides) || slides.length === 0) {
-      return NextResponse.json({ error: 'Invalid broadcast payload' }, { status: 400 })
+    const parsed = broadcastUpdateSchema.safeParse(rawBody)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Invalid broadcast payload', details: parsed.error.flatten() },
+        { status: 400 }
+      )
     }
+
+    const { id, slides } = parsed.data
 
     const updatedBroadcast = await prisma.broadcast.update({
       where: {
         id: id,
       },
       data: {
-        slides: slides,
+        slides: slides as Prisma.InputJsonValue,
       },
     })
 
-    return NextResponse.json(updatedBroadcast)
+    return NextResponse.json({
+      id: updatedBroadcast.id,
+      slides,
+      createdAt: updatedBroadcast.createdAt.toISOString(),
+    })
   } catch (error) {
     console.error('Error updating broadcast:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })

@@ -26,6 +26,7 @@ import { GlobalBroadcastDialog } from '@/components/global-broadcast-dialog'
 import { PWAInstallDialog } from '@/components/pwa-install-dialog'
 import { SidebarWrapper } from '@/components/sidebar-wrapper'
 import { BotIdClient } from 'botid/client'
+import type { LatestBroadcastResponse } from '@/types/api/broadcast'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -188,7 +189,7 @@ export const viewport = {
   themeColor: '#000000',
 }
 
-async function getLatestBroadcast() {
+async function getLatestBroadcast(): Promise<LatestBroadcastResponse | null> {
   try {
     const res = await fetch(
       process.env.NEXT_PUBLIC_BASE_URL
@@ -197,8 +198,9 @@ async function getLatestBroadcast() {
       { cache: 'no-store' }
     )
     if (!res.ok) return null
-    return await res.json()
-  } catch {
+    return (await res.json()) as LatestBroadcastResponse | null
+  } catch (error) {
+    console.error('failed to load latest broadcast', error)
     return null
   }
 }

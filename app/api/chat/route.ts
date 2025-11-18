@@ -16,8 +16,106 @@ import { getChat, createChat, saveMessage, updateChat } from '@/lib/db'
 import { memoryService } from '@/lib/memory/memory-service'
 import { extractTitleFromContent } from '@/lib/utils'
 import { sanitizeToolInvocations } from '@/lib/sanitize-tools'
-import { uiMessagesToLegacyMessages, type AppUIMessage } from '@/lib/ai-message-conversion'
+import {
+  uiMessagesToLegacyMessages,
+  type AppUIMessage,
+  type LegacyMessage,
+} from '@/lib/ai-message-conversion'
+import type { JsonValue } from '@/types/tools'
 import { z } from 'zod'
+
+type ToolCallPayload = {
+  toolName: string
+  args?: Record<string, JsonValue>
+  toolCallId?: string
+}
+
+type ChatRequestPayload = {
+  id?: string
+  directToolCall?: ToolCallPayload
+  preferredTool?: string
+  messages?: AppUIMessage[]
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const isJsonValue = (value: unknown): value is JsonValue => {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return true
+  }
+
+  if (Array.isArray(value)) {
+    return value.every(isJsonValue)
+  }
+
+  if (isRecord(value)) {
+    return Object.values(value).every(isJsonValue)
+  }
+
+  return false
+}
+
+const normalizeToolCall = (value: unknown): ToolCallPayload | undefined => {
+  if (!isRecord(value) || typeof value.toolName !== 'string') {
+    return undefined
+  }
+
+  const normalizedArgs: Record<string, JsonValue> | undefined = isRecord(value.args)
+    ? Object.entries(value.args).reduce<Record<string, JsonValue>>((acc, [key, arg]) => {
+        if (isJsonValue(arg)) {
+          acc[key] = arg
+        }
+        return acc
+      }, {})
+    : undefined
+
+  return {
+    toolName: value.toolName,
+    toolCallId: typeof value.toolCallId === 'string' ? value.toolCallId : undefined,
+    args: normalizedArgs,
+  }
+}
+
+type LegacyToolMessage = LegacyMessage
+
+const getMessageText = (message: LegacyMessage | null | undefined): string =>
+  message?.content ?? ''
+
+const parseChatRequestPayload = (value: unknown): ChatRequestPayload | null => {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const payload: ChatRequestPayload = {}
+
+  if (typeof value.id === 'string') {
+    payload.id = value.id
+  }
+
+  if (typeof value.preferredTool === 'string') {
+    payload.preferredTool = value.preferredTool
+  }
+
+  const directToolCall = normalizeToolCall(
+    (value as { directToolCall?: unknown }).directToolCall
+  )
+  if (directToolCall) {
+    payload.directToolCall = directToolCall
+  }
+
+  const rawMessages = (value as { messages?: unknown }).messages
+  if (Array.isArray(rawMessages)) {
+    payload.messages = rawMessages as AppUIMessage[]
+  }
+
+  return payload
+}
 
 async function generateChatTitle(userMessage: string, userId?: string): Promise<string> {
   try {
@@ -316,10 +414,14 @@ export async function POST(req: Request) {
     if (!session?.user?.id) {
       return new Response('Unauthorized', { status: 401 })
     }
-    const payload = await req.json()
+    const rawPayload = await req.json().catch(() => null)
+    const payload = parseChatRequestPayload(rawPayload)
+    if (!payload) {
+      return new Response('Invalid request body', { status: 400 })
+    }
     const { id: requestedChatId, directToolCall, preferredTool } = payload
-    const uiMessages: AppUIMessage[] = Array.isArray(payload?.messages) ? payload.messages : []
-    const messages: any[] = uiMessagesToLegacyMessages(uiMessages)
+    const uiMessages: AppUIMessage[] = payload.messages ?? []
+    const messages = uiMessagesToLegacyMessages(uiMessages)
     const metadataPreferredTool =
       uiMessages.length > 0
         ? ((uiMessages[uiMessages.length - 1]?.metadata || {}) as Record<string, any>)
@@ -334,11 +436,12 @@ export async function POST(req: Request) {
 
     let chat = normalizedChatId ? await getChat(normalizedChatId, session.user.id) : null
     if (!chat) {
-      const tempTitle = extractTitleFromContent(messages[0]?.content || 'New Chat')
+      const initialContent = getMessageText(messages[0])
+      const tempTitle = extractTitleFromContent(initialContent || 'New Chat')
       const path = `/chat/${normalizedChatId}`
       chat = await createChat(session.user.id, tempTitle, path, normalizedChatId)
 
-      const userMessage = messages[0]?.content || ''
+      const userMessage = initialContent
       if (userMessage.trim()) {
         setTimeout(() => {
           generateChatTitle(userMessage, session.user.id)
@@ -372,21 +475,42 @@ export async function POST(req: Request) {
           directToolCall.args.includeCourses = true
         }
         try {
-          const result = await tool.execute(directToolCall.args, {
+          type ToolExecutionOptions = {
+            toolCallId: string
+            messages: LegacyMessage[]
+          }
+          type ToolExecute = (
+            args: Record<string, JsonValue>,
+            options: ToolExecutionOptions
+          ) => Promise<Record<string, JsonValue> | JsonValue | null>
+          const execute = tool.execute as unknown as ToolExecute
+          const toolArgs: Record<string, JsonValue> =
+            (directToolCall.args && Object.keys(directToolCall.args).length > 0
+              ? directToolCall.args
+              : {}) ?? {}
+          const executionOptions = {
             toolCallId: directToolCall.toolCallId || Date.now().toString(),
-            messages: messages || [],
-          })
+            messages,
+          }
+          const rawResult = (await execute(toolArgs, executionOptions)) ?? null
+          const resultObject =
+            rawResult && typeof rawResult === 'object' && !Array.isArray(rawResult)
+              ? (rawResult as Record<string, JsonValue>)
+              : null
+          const structuredResult =
+            resultObject && ('success' in resultObject || 'data' in resultObject)
+              ? (resultObject as Record<string, any>)
+              : null
 
           if (
             directToolCall.toolName === 'queryVTOP' &&
-            'success' in result &&
-            (result as any).success &&
-            'data' in result &&
-            (result as any).data
+            structuredResult &&
+            structuredResult.success !== false &&
+            structuredResult.data
           ) {
             try {
               const command = (
-                'command' in result ? result.command : directToolCall.args?.command
+                structuredResult.command ?? directToolCall.args?.command
               ) as string
 
               const userContext =
@@ -397,9 +521,14 @@ export async function POST(req: Request) {
                       .map((m: any) => m.content)
                       .join(' | ')
                   : ''
-              const parsedData = await parseVTOPData(result, command, userContext, session.user.id)
+              const parsedData = await parseVTOPData(
+                structuredResult,
+                command,
+                userContext,
+                session.user.id
+              )
 
-              Object.assign(result, {
+              Object.assign(structuredResult, {
                 parsedData,
                 formatted_content: (parsedData as any).formatted_content,
                 structured_data: (parsedData as any).structured_data,
@@ -410,7 +539,7 @@ export async function POST(req: Request) {
                 toolCallId: directToolCall.toolCallId || Date.now().toString(),
                 toolName: directToolCall.toolName,
                 args: directToolCall.args,
-                result: result,
+                result: structuredResult,
                 state: 'result',
               }
               directToolCallExecuted = true
@@ -420,7 +549,7 @@ export async function POST(req: Request) {
                 toolCallId: directToolCall.toolCallId || Date.now().toString(),
                 toolName: directToolCall.toolName,
                 args: directToolCall.args,
-                result: result,
+                result: structuredResult ?? rawResult,
                 state: 'result',
               }
               directToolCallExecuted = true
@@ -430,7 +559,7 @@ export async function POST(req: Request) {
               toolCallId: directToolCall.toolCallId || Date.now().toString(),
               toolName: directToolCall.toolName,
               args: directToolCall.args,
-              result: result,
+              result: structuredResult ?? rawResult,
               state: 'result',
             }
             directToolCallExecuted = true
@@ -478,7 +607,8 @@ export async function POST(req: Request) {
 
     const userMessage = messages.length > 0 ? messages[messages.length - 1] : null
     if (userMessage?.role === 'user') {
-      await saveMessage(chat.id, 'user', userMessage.content, undefined, userMessage.id)
+      const persistedContent = getMessageText(userMessage)
+      await saveMessage(chat.id, 'user', persistedContent, undefined, userMessage.id)
     }
 
     const memorySettings = await memoryService.getUserMemorySettings(session.user.id)

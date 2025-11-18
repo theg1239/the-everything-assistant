@@ -9,11 +9,17 @@ import { useSession } from 'next-auth/react'
 import { Loader2, MessageSquarePlus, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
+import { readJson } from '@/lib/http'
+import type { JsonValue } from '@/types/tools'
 
 interface KnowledgeChunk {
   id: number
   chunk: string
-  metadata: any
+  metadata: Record<string, JsonValue> | null
+}
+
+interface FeedbackResponse {
+  issueUrl: string
 }
 
 type View = 'menu' | 'contribute' | 'feedback'
@@ -39,7 +45,7 @@ export function FeedbackSection() {
       if (!response.ok) {
         throw new Error('Failed to fetch knowledge base.')
       }
-      const data = await response.json()
+      const data = await readJson<KnowledgeChunk[]>(response)
       setKnowledgeChunks(data)
       const combinedText = data
         .map((chunk: KnowledgeChunk) => chunk.chunk.trim())
@@ -152,7 +158,7 @@ export function FeedbackSection() {
 
       if (!response.ok) throw new Error('Failed to submit contribution.')
 
-      const result = await response.json()
+      const result = await readJson<FeedbackResponse>(response)
       toast.success('Contribution submitted!', {
         description: `Track your contribution on GitHub: ${result.issueUrl}`,
       })
@@ -186,7 +192,7 @@ export function FeedbackSection() {
 
       if (!response.ok) throw new Error('Failed to submit feedback.')
 
-      const result = await response.json()
+      const result = await readJson<FeedbackResponse>(response)
       toast.success('Feedback submitted!', {
         description: `Track your feedback on GitHub: ${result.issueUrl}`,
       })

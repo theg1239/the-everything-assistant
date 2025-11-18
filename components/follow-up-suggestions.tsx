@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Lightbulb, X, ChevronRight, ChevronLeft } from 'lucide-react'
+import { readJson } from '@/lib/http'
 
 interface FollowUpSuggestionsProps {
   lastAssistantMessage?: string
@@ -178,8 +179,8 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
       })
 
       if (response.ok) {
-        const data = await response.json()
-        setSuggestions(data.suggestions || [])
+        const data = await readJson<{ suggestions?: string[] }>(response)
+        setSuggestions(data.suggestions ?? [])
       } else {
         console.error('Failed to fetch AI suggestions, using fallback')
         const fallbackSuggestions = generateFollowUpQuestions(lastAssistantMessage)

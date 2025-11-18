@@ -17,6 +17,20 @@ export interface ApiKeyConfig {
   keyHealthCheckInterval: number
 }
 
+export interface ApiKeyUsageSnapshot {
+  requests: number
+  failures: number
+  lastUsed: number | null
+  lastFailed: number | null
+  availableTokens: {
+    minute: number
+    hour: number
+    day: number
+  }
+  isRateLimited: boolean
+  isCurrent: boolean
+}
+
 export class TokenBucket {
   private capacity: number
   private tokens: number
@@ -415,8 +429,8 @@ export class ApiKeyManager {
     }
   }
 
-  async getKeyUsageStats(): Promise<Record<string, any>> {
-    const stats: Record<string, any> = {}
+  async getKeyUsageStats(): Promise<Record<string, ApiKeyUsageSnapshot>> {
+    const stats: Record<string, ApiKeyUsageSnapshot> = {}
     for (const [idx, key] of this.config.keys.entries()) {
       const keyHash = this.hashKey(key)
       const raw = await this.redis.hgetall(`stats:${keyHash}`)

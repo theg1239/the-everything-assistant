@@ -1,6 +1,7 @@
 import { createCanvasDocument, updateCanvasDocument, getCanvasDocuments } from '@/lib/db'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { canvasCreateSchema, canvasUpdateSchema } from '@/types/api/canvas'
 
 export async function GET(request: Request) {
   try {
@@ -31,7 +32,15 @@ export async function POST(request: Request) {
       return new Response('Unauthorized', { status: 401 })
     }
 
-    const { chatId, title, content, type = 'document' } = await request.json()
+    const rawBody = await request.json().catch(() => null)
+    if (!rawBody) {
+      return new Response('Invalid request body', { status: 400 })
+    }
+    const parsedBody = canvasCreateSchema.safeParse(rawBody)
+    if (!parsedBody.success) {
+      return new Response('Invalid request body', { status: 400 })
+    }
+    const { chatId, title, content, type } = parsedBody.data
 
     const document = await createCanvasDocument(chatId, title, content, type)
 
@@ -49,7 +58,15 @@ export async function PUT(request: Request) {
       return new Response('Unauthorized', { status: 401 })
     }
 
-    const { id, title, content } = await request.json()
+    const rawBody = await request.json().catch(() => null)
+    if (!rawBody) {
+      return new Response('Invalid request body', { status: 400 })
+    }
+    const parsedBody = canvasUpdateSchema.safeParse(rawBody)
+    if (!parsedBody.success) {
+      return new Response('Invalid request body', { status: 400 })
+    }
+    const { id, title, content } = parsedBody.data
 
     await updateCanvasDocument(id, title, content)
 

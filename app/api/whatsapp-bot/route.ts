@@ -1,5 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { z } from 'zod'
+
+type ConversationMessage = {
+  role: string
+  content: string
+  id?: string
+}
+
+const historyMessageSchema = z.object({
+  role: z.string(),
+  content: z.string(),
+  timestamp: z.union([z.string(), z.number()]).optional(),
+})
+
+const botRequestSchema = z.object({
+  source: z.enum(['whatsapp', 'discord']).optional(),
+  message: z.string().optional(),
+  messages: z
+    .array(
+      z.object({
+        role: z.string(),
+        content: z.string(),
+        id: z.string().optional(),
+      })
+    )
+    .optional(),
+  userContext: z
+    .object({
+      username: z.string().optional(),
+      userName: z.string().optional(),
+      phoneNumber: z.string().optional(),
+    })
+    .optional(),
+  userId: z.string().optional(),
+  conversationHistory: z.array(historyMessageSchema).optional(),
+})
 
 function validateAPIKey(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization')
@@ -58,21 +94,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
     }
 
-    const body = await request.json()
-    const { messages, message, source, userContext, userId, conversationHistory } = body
+    const rawBody = await request.json().catch(() => null)
+    const parsedBody = botRequestSchema.safeParse(rawBody)
+    if (!parsedBody.success) {
+      return NextResponse.json({ error: 'Invalid request format' }, { status: 400 })
+    }
+    const { messages, message, source, userContext, userId, conversationHistory } = parsedBody.data
 
-    let processedMessages: any[] = []
+    let processedMessages: ConversationMessage[] = []
     let userMessage: string = ''
     let requestSource = source || 'whatsapp'
-    let userInfo: any = {}
+    let userInfo: { userId?: string; userName?: string } = {}
 
     if (message && typeof message === 'string') {
       userMessage = message
       requestSource = source || 'discord'
-      userInfo = { userId, userName: userContext?.username }
+      userInfo = { userId, userName: userContext?.username || userContext?.userName }
 
       if (conversationHistory && Array.isArray(conversationHistory)) {
-        processedMessages = conversationHistory.map((msg: any) => ({
+        processedMessages = conversationHistory.map(msg => ({
           role: msg.role,
           content: msg.content,
           id: `${requestSource}-history-${msg.timestamp}-${Math.random().toString(36).substr(2, 6)}`,
@@ -103,6 +143,10 @@ export async function POST(request: NextRequest) {
         { error: 'Invalid request format: message or messages array required' },
         { status: 400 }
       )
+    }
+
+    if (!userInfo.userId) {
+      return NextResponse.json({ error: 'userId is required' }, { status: 400 })
     }
 
     const user = await getOrCreateBotUser(requestSource, userInfo.userId, userInfo.userName)

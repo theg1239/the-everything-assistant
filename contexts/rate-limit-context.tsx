@@ -2,6 +2,16 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
 
+interface RateLimitErrorPayload {
+  message?: string
+  error?: string
+  resetTime?: string | number
+  reset_at?: string | number
+  reset?: string | number
+  retry_after?: string | number
+  type?: string
+}
+
 interface RateLimitError {
   isRateLimit: boolean
   resetTime?: string
@@ -15,6 +25,11 @@ interface RateLimitContextType {
   setRateLimitError: (error: RateLimitError | null) => void
   clearRateLimitError: () => void
   checkForRateLimitError: (error: any) => boolean
+}
+
+const normalizeResetInput = (value: string | number | undefined): string | undefined => {
+  if (value === undefined || value === null) return undefined
+  return typeof value === 'string' ? value : value.toString()
 }
 
 const RateLimitContext = createContext<RateLimitContextType | undefined>(undefined)
@@ -240,15 +255,17 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
             const clone = res.clone()
             const ct = clone.headers.get('content-type') || ''
             if (ct.includes('application/json')) {
-              const json = await clone.json()
+              const json = (await clone.json()) as RateLimitErrorPayload
               const msg = json.message || json.error || JSON.stringify(json)
-              let reset = json.resetTime || json.reset_at || json.reset || json.retry_after
+              let resetRaw =
+                json.resetTime || json.reset_at || json.reset || json.retry_after
               const raHeader =
                 clone.headers.get('Retry-After') ||
                 clone.headers.get('retry-after') ||
                 clone.headers.get('x-rate-limit-reset') ||
                 clone.headers.get('x-ratelimit-reset')
-              if (!reset && raHeader) reset = raHeader
+              if (!resetRaw && raHeader) resetRaw = raHeader
+              const reset = normalizeResetInput(resetRaw)
               trySet({ resetTime: reset, userLimit: json.type === 'user_rate_limit', message: msg })
               try {
                 // eslint-disable-next-line no-console
@@ -256,16 +273,17 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
             } else {
               const bodyText = await clone.text()
               try {
-                const parsed = JSON.parse(bodyText)
+                const parsed = JSON.parse(bodyText) as RateLimitErrorPayload
                 const msg = parsed.message || parsed.error || JSON.stringify(parsed)
-                let reset =
+                let resetRaw =
                   parsed.resetTime || parsed.reset_at || parsed.reset || parsed.retry_after
                 const raHeader =
                   clone.headers.get('Retry-After') ||
                   clone.headers.get('retry-after') ||
                   clone.headers.get('x-rate-limit-reset') ||
                   clone.headers.get('x-ratelimit-reset')
-                if (!reset && raHeader) reset = raHeader
+                if (!resetRaw && raHeader) resetRaw = raHeader
+                const reset = normalizeResetInput(resetRaw)
                 trySet({
                   resetTime: reset,
                   userLimit: parsed.type === 'user_rate_limit',

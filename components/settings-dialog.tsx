@@ -45,6 +45,16 @@ import { FeedbackSection } from '@/components/feedback-section'
 import { MemoryManagement } from '@/components/memory-management'
 import { VTOPSettings } from '@/components/vtop-settings'
 import { deleteAccountAction } from '@/app/actions/account'
+import { readJson } from '@/lib/http'
+import type { UserPreferences, UserPreferencesResponse } from '@/types/preferences'
+import type { MemorySettings } from '@/hooks/use-memories'
+import type {
+  MfaAvailabilityResponse,
+  MfaBackupCodesResponse,
+  MfaSetupResponse,
+  MfaStatusResponse,
+} from '@/types/api/mfa'
+import type { PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/server'
 
 const Aurora = dynamic(() => import('@/components/backgrounds/aurora'), {
   ssr: false,
@@ -80,15 +90,103 @@ const GridPreview = dynamic(() => import('@/components/backgrounds/grid'), {
   ssr: false,
   loading: () => null,
 })
+
+interface ChatSummary {
+  id: string
+  title: string
+  path: string
+  createdAt: string
+  updatedAt: string
+}
+
+interface ChatActionResponse {
+  success?: boolean
+  message?: string
+  count?: number
+  error?: string
+}
+
+interface DailyBriefingTestResponse {
+  ok?: boolean
+  error?: string
+}
+
+interface PreferencesUpdateResponse {
+  preferences: UserPreferences
+  message?: string
+  error?: string
+}
+
+type BasicApiResponse = {
+  success?: boolean
+  message?: string
+  error?: string
+}
+
+interface MfaMethodChangeResponse extends BasicApiResponse {
+  requiresRegistration?: boolean
+}
+
+type SelectableBackgroundType = Exclude<BackgroundType, 'null'>
+
+const BACKGROUND_TYPE_VALUES = [
+  'aurora',
+  'beams',
+  'dither',
+  'floating-lines',
+  'terminal',
+  'grid',
+  'color-bands',
+  'gradient',
+  'solid',
+] as const satisfies readonly SelectableBackgroundType[]
+
+const isSelectableBackgroundType = (
+  value: BackgroundType | string | undefined | null
+): value is SelectableBackgroundType => !!value && (BACKGROUND_TYPE_VALUES as readonly string[]).includes(value)
+
+const base64urlToArrayBuffer = (base64url: string): ArrayBuffer => {
+  const padding = '='.repeat((4 - (base64url.length % 4)) % 4)
+  const base64 = (base64url + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const rawData = window.atob(base64)
+  const outputArray = new Uint8Array(rawData.length)
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i)
+  }
+  return outputArray.buffer
+}
+
+const cloneBufferSource = (value: ArrayBufferLike | ArrayBuffer | Uint8Array): ArrayBuffer => {
+  const source = value instanceof Uint8Array ? value : new Uint8Array(value as ArrayBufferLike)
+  const copy = new Uint8Array(source.length)
+  copy.set(source)
+  return copy.buffer
+}
+
+const arrayBufferToBase64url = (buffer: ArrayBuffer | ArrayBufferView): string => {
+  const bytes =
+    buffer instanceof ArrayBuffer
+      ? new Uint8Array(buffer)
+      : new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+  let binary = ''
+  bytes.forEach(byte => {
+    binary += String.fromCharCode(byte)
+  })
+  const base64 = btoa(binary)
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+}
 export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any) {
   const { data: session } = useSession()
   const { setBackgroundType, toggleBackground } = useCustomBackground()
   const [activeSection, setActiveSection] = useState('general')
   const [pendingSection, setPendingSection] = useState<string | null>(null)
   const [followUpSuggestions, setFollowUpSuggestions] = useState(true)
-  const [backgroundConfig, setBackgroundConfig] = useState({
-    type: 'aurora' as BackgroundType,
-    enabled: true,
+  const [backgroundConfig, setBackgroundConfig] = useState<{
+    type: SelectableBackgroundType
+    enabled: boolean
+  }>({
+    type: 'aurora',
+    enabled: false,
   })
   const [theme, setTheme] = useState('system')
   const [dailyBriefingSettings, setDailyBriefingSettings] = useState({
@@ -97,7 +195,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     emailTime: '07:30',
   })
   const [updatingBriefing, setUpdatingBriefing] = useState(false)
-  const [currentPreferences, setCurrentPreferences] = useState<any>({})
+  const [currentPreferences, setCurrentPreferences] = useState<UserPreferences | null>(null)
   const [sendingTestBriefing, setSendingTestBriefing] = useState(false)
 
   const [touchStartY, setTouchStartY] = useState(0)
@@ -275,7 +373,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isArchiving, setIsArchiving] = useState(false)
   const [showArchivedChats, setShowArchivedChats] = useState(false)
-  const [archivedChats, setArchivedChats] = useState<any[]>([])
+  const [archivedChats, setArchivedChats] = useState<ChatSummary[]>([])
   const [loadingArchived, setLoadingArchived] = useState(false)
   const [restoringChats, setRestoringChats] = useState<Set<string>>(new Set())
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -306,30 +404,42 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
   })
 
   useEffect(() => {
-    const loadPreferences = async () => {
-      if (!session?.user?.id) return
+    if (!(open && session?.user?.id)) return
 
+    const controller = new AbortController()
+
+    const loadPreferences = async () => {
+      let loadedMfaMethod: 'email' | 'authenticator' | 'security_key' = 'email'
       setLoadingPreferences(true)
       try {
-        const memorySettings = await fetch('/api/memories/settings').then(res =>
-          res.ok ? res.json() : null
-        )
-        setMemoryEnabled(memorySettings?.isEnabled ?? true)
+        const memorySettingsResponse = await fetch('/api/memories/settings', {
+          signal: controller.signal,
+        })
+        if (memorySettingsResponse.ok) {
+          const memorySettings = await readJson<MemorySettings>(memorySettingsResponse)
+          setMemoryEnabled(memorySettings.isEnabled)
+        } else {
+          setMemoryEnabled(true)
+        }
 
-        const response = await fetch('/api/user/preferences')
+        const response = await fetch('/api/user/preferences', { signal: controller.signal })
         if (response.ok) {
-          const data = await response.json()
+          const data = await readJson<UserPreferencesResponse>(response)
           const prefs = data.preferences
           setCurrentPreferences(prefs)
           if (typeof window !== 'undefined') {
-            window.dispatchEvent(
-              new CustomEvent('userPreferencesUpdated', { detail: prefs }) as any
-            )
+            window.dispatchEvent(new CustomEvent('userPreferencesUpdated', { detail: prefs }))
           }
           setFollowUpSuggestions(prefs.followUpSuggestions ?? true)
 
           if (prefs.backgroundConfig) {
-            setBackgroundConfig(prefs.backgroundConfig)
+            const bgType = isSelectableBackgroundType(prefs.backgroundConfig.type)
+              ? prefs.backgroundConfig.type
+              : 'aurora'
+            setBackgroundConfig({
+              type: bgType,
+              enabled: prefs.backgroundConfig.enabled ?? true,
+            })
           } else if (prefs.auroraBackground !== undefined) {
             setBackgroundConfig({
               type: 'aurora',
@@ -347,10 +457,9 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
           }
         }
 
-        let loadedMfaMethod: 'email' | 'authenticator' | 'security_key' = 'email'
-        const mfaResponse = await fetch('/api/user/mfa')
+        const mfaResponse = await fetch('/api/user/mfa', { signal: controller.signal })
         if (mfaResponse.ok) {
-          const mfaData = await mfaResponse.json()
+          const mfaData = await readJson<MfaStatusResponse>(mfaResponse)
           setMfaEnabled(mfaData.mfaEnabled ?? false)
           loadedMfaMethod =
             mfaData.mfaMethod === 'security_key'
@@ -362,9 +471,11 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
           setBackupCodes(new Array(mfaData.backupCodesCount || 0).fill('••••••••'))
         }
 
-        const availabilityResponse = await fetch('/api/user/mfa/availability')
+        const availabilityResponse = await fetch('/api/user/mfa/availability', {
+          signal: controller.signal,
+        })
         if (availabilityResponse.ok) {
-          const availabilityData = await availabilityResponse.json()
+          const availabilityData = await readJson<MfaAvailabilityResponse>(availabilityResponse)
 
           const hasWebAuthnSupport = !!(
             window.navigator.credentials &&
@@ -388,22 +499,27 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
           }
         }
       } catch (error) {
-        console.error('Error loading preferences:', error)
+        if (!controller.signal.aborted) {
+          console.error('Error loading preferences:', error)
+        }
       } finally {
-        setLoadingPreferences(false)
+        if (!controller.signal.aborted) {
+          setLoadingPreferences(false)
+        }
       }
     }
 
-    if (open && session?.user?.id) {
-      loadPreferences()
-    }
+    void loadPreferences()
+
+    return () => controller.abort()
   }, [open, session?.user?.id])
 
-  const savePreferences = async (newPreferences: any) => {
+  const savePreferences = async (newPreferences: Partial<UserPreferences>) => {
     if (!session?.user?.id) return
 
     try {
-      const payload = { ...currentPreferences, ...newPreferences }
+      const basePrefs: UserPreferences = currentPreferences ?? {}
+      const payload: UserPreferences = { ...basePrefs, ...newPreferences }
       const response = await fetch('/api/user/preferences', {
         method: 'PATCH',
         headers: {
@@ -417,9 +533,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       if (response.ok) {
         setCurrentPreferences(payload)
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(
-            new CustomEvent('userPreferencesUpdated', { detail: payload }) as any
-          )
+          window.dispatchEvent(new CustomEvent('userPreferencesUpdated', { detail: payload }))
         }
         toast.success('Preferences saved successfully')
       } else {
@@ -455,10 +569,11 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       })
       if (!response.ok) throw new Error('Failed to update daily briefing preferences')
 
-      const updatedPrefs = {
-        ...currentPreferences,
+      const basePrefs: UserPreferences = currentPreferences ?? {}
+      const updatedPrefs: UserPreferences = {
+        ...basePrefs,
         dailyBriefing: {
-          ...(currentPreferences.dailyBriefing || {}),
+          ...(basePrefs.dailyBriefing || {}),
           dismissTime: next.dismissTime,
           emailEnabled: next.emailEnabled,
           emailTime: next.emailTime,
@@ -466,9 +581,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       }
       setCurrentPreferences(updatedPrefs)
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(
-          new CustomEvent('userPreferencesUpdated', { detail: updatedPrefs }) as any
-        )
+        window.dispatchEvent(new CustomEvent('userPreferencesUpdated', { detail: updatedPrefs }))
       }
       toast.success('daily briefing updated')
     } catch (error) {
@@ -486,7 +599,12 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       const response = await fetch('/api/hub/daily-briefing-email/test', {
         method: 'POST',
       })
-      const payload = await response.json().catch(() => ({}))
+      let payload: DailyBriefingTestResponse | null = null
+      try {
+        payload = await readJson<DailyBriefingTestResponse>(response)
+      } catch {
+        payload = null
+      }
       if (!response.ok) {
         throw new Error(payload?.error || 'Failed to send test briefing')
       }
@@ -514,7 +632,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     }
   }
 
-  const handleBackgroundTypeChange = async (type: BackgroundType) => {
+  const handleBackgroundTypeChange = async (type: SelectableBackgroundType) => {
     const newConfig = { ...backgroundConfig, type }
     setBackgroundConfig(newConfig)
 
@@ -582,17 +700,17 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       })
 
       if (response.ok) {
-        const data = await response.json()
+        const data = await readJson<MfaSetupResponse>(response)
 
         if (mfaMethod === 'authenticator') {
-          setQrCodeUrl(data.qrCode)
-          setManualEntryKey(data.secret)
+          setQrCodeUrl(data.qrCode || '')
+          setManualEntryKey(data.secret || '')
         }
 
         setSetupStep('verify')
 
         if (mfaMethod === 'email') {
-          toast.success('Verification code sent to your email')
+          toast.success(data.message || 'Verification code sent to your email')
         }
       } else {
         throw new Error('Failed to initiate MFA setup')
@@ -647,7 +765,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
           throw new Error('Failed to get registration options')
         }
 
-        const options = await optionsResponse.json()
+        const options = await readJson<PublicKeyCredentialCreationOptionsJSON>(optionsResponse)
         console.log('Received WebAuthn options:', options)
         console.log(
           'Challenge type:',
@@ -657,30 +775,22 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         )
         console.log('User ID type:', typeof options.user.id, 'Length:', options.user.id?.length)
 
-        function base64urlToUint8Array(base64url: string): Uint8Array {
-          const padding = '='.repeat((4 - (base64url.length % 4)) % 4)
-          const base64 = (base64url + padding).replace(/-/g, '+').replace(/_/g, '/')
-          const rawData = window.atob(base64)
-          const outputArray = new Uint8Array(rawData.length)
-          for (let i = 0; i < rawData.length; ++i) {
-            outputArray[i] = rawData.charCodeAt(i)
-          }
-          return outputArray
-        }
+        const userIdBuffer: BufferSource =
+          typeof options.user.id === 'string'
+            ? base64urlToArrayBuffer(options.user.id)
+            : cloneBufferSource(options.user.id as ArrayBufferLike | Uint8Array)
+        const challengeBuffer: BufferSource =
+          typeof options.challenge === 'string'
+            ? base64urlToArrayBuffer(options.challenge)
+            : cloneBufferSource(options.challenge as ArrayBufferLike | Uint8Array)
 
         const credentialCreationOptions: PublicKeyCredentialCreationOptions = {
           rp: options.rp,
           user: {
             ...options.user,
-            id:
-              typeof options.user.id === 'string'
-                ? base64urlToUint8Array(options.user.id)
-                : new Uint8Array(options.user.id),
+            id: userIdBuffer,
           },
-          challenge:
-            typeof options.challenge === 'string'
-              ? base64urlToUint8Array(options.challenge)
-              : new Uint8Array(options.challenge),
+          challenge: challengeBuffer,
           pubKeyCredParams: options.pubKeyCredParams,
           timeout: Math.min(options.timeout || 60000, 60000), // Cap at 60 seconds
           attestation: 'none', // Use 'none' for better compatibility
@@ -734,11 +844,6 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
         const response = credential.response as AuthenticatorAttestationResponse
 
-        function uint8ArrayToBase64url(buffer: Uint8Array): string {
-          const base64 = btoa(String.fromCharCode(...buffer))
-          return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
-        }
-
         console.log('Sending credential to server for verification...')
         const verifyResponse = await fetch('/api/user/mfa/webauthn/verify', {
           method: 'POST',
@@ -748,12 +853,12 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
           body: JSON.stringify({
             credential: {
               id: credential.id,
-              rawId: uint8ArrayToBase64url(new Uint8Array(credential.rawId)),
+              rawId: arrayBufferToBase64url(cloneBufferSource(credential.rawId)),
               response: {
-                attestationObject: uint8ArrayToBase64url(
-                  new Uint8Array(response.attestationObject)
+                attestationObject: arrayBufferToBase64url(
+                  cloneBufferSource(response.attestationObject)
                 ),
-                clientDataJSON: uint8ArrayToBase64url(new Uint8Array(response.clientDataJSON)),
+                clientDataJSON: arrayBufferToBase64url(cloneBufferSource(response.clientDataJSON)),
               },
               type: credential.type,
               clientExtensionResults: credential.getClientExtensionResults?.() || {},
@@ -763,13 +868,13 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         })
 
         if (verifyResponse.ok) {
-          const data = await verifyResponse.json()
+          const data = await readJson<MfaBackupCodesResponse>(verifyResponse)
           setBackupCodes(data.backupCodes)
           setMfaEnabled(true)
           setSetupStep('backup')
           toast.success('Security key registered successfully!')
         } else {
-          const errorData = await verifyResponse.json()
+          const errorData = await readJson<BasicApiResponse>(verifyResponse)
           throw new Error(errorData.error || 'Failed to register security key')
         }
       } else {
@@ -785,13 +890,13 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         })
 
         if (response.ok) {
-          const data = await response.json()
+          const data = await readJson<MfaBackupCodesResponse>(response)
           setBackupCodes(data.backupCodes)
           setMfaEnabled(true)
           setSetupStep('backup')
           toast.success('MFA setup completed successfully')
         } else {
-          const errorData = await response.json()
+          const errorData = await readJson<BasicApiResponse>(response)
           throw new Error(errorData.error || 'Invalid verification code')
         }
       }
@@ -824,7 +929,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       })
 
       if (response.ok) {
-        const data = await response.json()
+        const data = await readJson<MfaBackupCodesResponse>(response)
         setBackupCodes(data.backupCodes)
         toast.success('New backup codes generated successfully')
       } else {
@@ -892,19 +997,19 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       })
 
       if (response.ok) {
-        const data = await response.json()
+        const data = await readJson<MfaMethodChangeResponse>(response)
 
         if (data.requiresRegistration && method === 'security_key') {
           setMfaMethod(method)
           setShowMfaSetup(true)
-          setSetupStep('verify') // Skip method selection, go straight to verification
-          toast.success('Please register your security key')
+          setSetupStep('verify')
+          toast.success(data.message || 'Please register your security key')
         } else {
           setMfaMethod(method)
-          toast.success('MFA method updated successfully')
+          toast.success(data.message || 'MFA method updated successfully')
         }
       } else {
-        const errorData = await response.json()
+        const errorData = await readJson<BasicApiResponse>(response)
         throw new Error(errorData.error || 'Failed to update MFA method')
       }
     } catch (error: any) {
@@ -945,9 +1050,9 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         method: 'DELETE',
       })
       if (response.ok) {
-        const result = await response.json()
+        const result = await readJson<ChatActionResponse>(response)
         window.dispatchEvent(new CustomEvent('chatsDeleted', { detail: result }))
-        toast.success(`${result.count} chats deleted successfully`)
+        toast.success(`${result.count ?? 0} chats deleted successfully`)
         onOpenChange(false)
       } else {
         throw new Error('Failed to delete chats')
@@ -973,9 +1078,9 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         method: 'PATCH',
       })
       if (response.ok) {
-        const result = await response.json()
+        const result = await readJson<ChatActionResponse>(response)
         window.dispatchEvent(new CustomEvent('chatsArchived', { detail: result }))
-        toast.success(`${result.count} chats archived successfully`)
+        toast.success(`${result.count ?? 0} chats archived successfully`)
         onOpenChange(false)
       } else {
         throw new Error('Failed to archive chats')
@@ -995,7 +1100,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     try {
       const response = await fetch('/api/chats?archived=true&limit=50')
       if (response.ok) {
-        const chats = await response.json()
+        const chats = await readJson<ChatSummary[]>(response)
         setArchivedChats(chats)
       }
     } catch (error) {
@@ -1044,9 +1149,9 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         method: 'DELETE',
       })
       if (response.ok) {
-        const result = await response.json()
+        const result = await readJson<ChatActionResponse>(response)
         setArchivedChats([])
-        toast.success(`${result.count} archived chats deleted successfully`)
+        toast.success(`${result.count ?? 0} archived chats deleted successfully`)
       } else {
         throw new Error('Failed to delete archived chats')
       }
@@ -1495,49 +1600,53 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         )
 
       case 'personalization':
-        const backgroundOptions = [
+        const backgroundOptions: Array<{
+          type: SelectableBackgroundType
+          name: string
+          description: string
+        }> = [
           {
-            type: 'aurora' as BackgroundType,
+            type: 'aurora',
             name: 'aurora',
             description: 'animated aurora borealis effect with flowing colors',
           },
           {
-            type: 'beams' as BackgroundType,
+            type: 'beams',
             name: 'light beams',
             description: 'dynamic light beams with subtle animations',
           },
           {
-            type: 'dither' as BackgroundType,
+            type: 'dither',
             name: 'dither',
             description: 'retro dithered waves with pixel art aesthetics',
           },
           {
-            type: 'floating-lines' as BackgroundType,
+            type: 'floating-lines',
             name: 'floating lines',
             description: 'high-energy neon lines with parallax and bend effects',
           },
           {
-            type: 'terminal' as BackgroundType,
+            type: 'terminal',
             name: 'faulty terminal',
             description: 'retro CRT matrix with scanlines and glitches',
           },
           {
-            type: 'grid' as BackgroundType,
+            type: 'grid',
             name: 'reactive grid',
             description: '3D neon scanning grid with motion parallax',
           },
           {
-            type: 'color-bands' as BackgroundType,
+            type: 'color-bands',
             name: 'color bands',
             description: 'shimmering ribbon gradients with warp and parallax',
           },
           {
-            type: 'gradient' as BackgroundType,
+            type: 'gradient',
             name: 'gradient',
             description: 'smooth color gradient background',
           },
           {
-            type: 'solid' as BackgroundType,
+            type: 'solid',
             name: 'lights out',
             description: 'what it says',
           },

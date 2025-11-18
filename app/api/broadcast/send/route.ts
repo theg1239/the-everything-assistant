@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { PrismaClient, Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { broadcastPayloadSchema, type BroadcastPayload } from '@/types/api/broadcast'
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -12,20 +13,35 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json()
-    const { slides } = body
-
-    if (!slides || !Array.isArray(slides) || slides.length === 0) {
-      return NextResponse.json({ error: 'Invalid broadcast payload' }, { status: 400 })
+    const rawBody = await req.json().catch(() => null)
+    if (!rawBody) {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
     }
+
+    const parsedPayload = broadcastPayloadSchema.safeParse(rawBody)
+    if (!parsedPayload.success) {
+      return NextResponse.json(
+        { error: 'Invalid broadcast payload', details: parsedPayload.error.flatten() },
+        { status: 400 }
+      )
+    }
+
+    const payload: BroadcastPayload = parsedPayload.data
 
     const newBroadcast = await prisma.broadcast.create({
       data: {
-        slides: slides,
+        slides: payload.slides as Prisma.InputJsonValue,
       },
     })
 
-    return NextResponse.json(newBroadcast, { status: 201 })
+    return NextResponse.json(
+      {
+        id: newBroadcast.id,
+        slides: payload.slides,
+        createdAt: newBroadcast.createdAt.toISOString(),
+      },
+      { status: 201 }
+    )
   } catch (error) {
     console.error('Error creating broadcast:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })

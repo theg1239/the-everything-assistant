@@ -1,8 +1,20 @@
 import { NextResponse } from 'next/server'
 import { Octokit } from '@octokit/rest'
+import { feedbackRequestSchema } from '@/types/api/feedback'
 
 export async function POST(req: Request) {
-  const { type, title, body, contribution, user } = await req.json()
+  const rawBody = await req.json().catch(() => null)
+  if (!rawBody) {
+    return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 })
+  }
+  const parsed = feedbackRequestSchema.safeParse(rawBody)
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: 'Invalid submission payload.', details: parsed.error.flatten() },
+      { status: 400 }
+    )
+  }
+  const { type, title, body, contribution, user } = parsed.data
 
   if (
     !process.env.GITHUB_TOKEN ||

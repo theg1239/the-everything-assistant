@@ -2,6 +2,24 @@ import { NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createVITTools } from '@/lib/tools'
+import { z } from 'zod'
+import type { JsonValue } from '@/types/tools'
+
+const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    z.record(jsonValueSchema),
+  ])
+)
+
+const hubToolRequestSchema = z.object({
+  toolName: z.string().min(1),
+  args: z.record(jsonValueSchema).optional(),
+})
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,11 +31,25 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const body = await request.json().catch(() => ({}))
-    const toolName = body?.toolName as string
-    const args = (body?.args || {}) as Record<string, any>
+    const rawBody = await request.json().catch(() => null)
+    if (!rawBody) {
+      return new Response(JSON.stringify({ error: 'Invalid request body' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
 
-    if (!toolName || typeof toolName !== 'string') {
+    const parsedBody = hubToolRequestSchema.safeParse(rawBody)
+    if (!parsedBody.success) {
+      return new Response(JSON.stringify({ error: 'Invalid request body' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    const { toolName, args = {} } = parsedBody.data
+
+    if (!toolName) {
       return new Response(JSON.stringify({ error: 'toolName is required' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
@@ -25,7 +57,9 @@ export async function POST(request: NextRequest) {
     }
 
     const tools = createVITTools(session.user.id)
-    const tool = (tools as any)[toolName]
+    const tool = (tools as Record<string, unknown>)[toolName] as
+      | { execute: (toolArgs: Record<string, JsonValue>) => Promise<unknown> }
+      | undefined
 
     if (!tool || typeof tool.execute !== 'function') {
       return new Response(

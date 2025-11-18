@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { generateFollowUpSuggestions } from '@/lib/follow-up-generator'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
+import { z } from 'zod'
+
+const suggestionRequestSchema = z.object({
+  assistantMessage: z.string().min(1),
+  userMessage: z.string().optional(),
+})
 
 export const maxDuration = 30
 
@@ -12,14 +18,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { assistantMessage, userMessage } = await request.json()
-
-    if (!assistantMessage || typeof assistantMessage !== 'string') {
+    const rawBody = await request.json().catch(() => null)
+    const parsedBody = suggestionRequestSchema.safeParse(rawBody)
+    if (!parsedBody.success) {
       return NextResponse.json(
         { error: 'assistantMessage is required and must be a string' },
         { status: 400 }
       )
     }
+    const { assistantMessage, userMessage } = parsedBody.data
 
     const suggestions = await generateFollowUpSuggestions(assistantMessage, userMessage)
 

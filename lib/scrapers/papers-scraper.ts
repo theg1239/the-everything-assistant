@@ -93,7 +93,11 @@ export async function scrapePapersService(
       throw new Error(`Papers service returned ${response.status}: ${response.statusText}`)
     }
 
-    const data = await response.json()
+    const data = (await response.json()) as {
+      success: boolean
+      papers?: ApiPaper[]
+      error?: string
+    }
 
     if (!data.success) {
       return {

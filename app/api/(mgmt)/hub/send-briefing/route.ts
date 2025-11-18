@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { listVTOPSnapshots } from '@/lib/vtop-snapshots'
 import { buildDailyBriefingContext, buildGreeting, deriveTerseName } from '@/lib/hub/daily-briefing'
 import { sendDailyBriefingEmail } from '@/lib/email/resend'
+import { sendBriefingRequestSchema } from '@/types/hub'
 import type { PersonalHubSnapshot } from '@/types/hub'
 
 export const runtime = 'nodejs'
@@ -24,12 +25,19 @@ export async function POST(request: NextRequest) {
       return unauthorized('admin access required')
     }
 
-    const body = await request.json().catch(() => null)
-    if (!body) {
+    const rawBody = await request.json().catch(() => null)
+    if (!rawBody) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
     }
+    const parsedBody = sendBriefingRequestSchema.safeParse(rawBody)
+    if (!parsedBody.success) {
+      return NextResponse.json(
+        { error: 'Invalid request body', details: parsedBody.error.flatten() },
+        { status: 400 }
+      )
+    }
 
-    const { userId, email, scheduledAt, referenceTime } = body
+    const { userId, email, scheduledAt, referenceTime } = parsedBody.data
     if (!userId && !email) {
       return NextResponse.json({ error: 'Provide either userId or email' }, { status: 400 })
     }

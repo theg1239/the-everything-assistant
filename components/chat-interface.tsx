@@ -30,6 +30,8 @@ import { RateLimitErrorDisplay } from '@/components/rate-limit-error-display'
 import { OnboardingDialog } from '@/components/onboarding-dialog'
 import { useOnboarding } from '@/hooks/use-onboarding'
 import { toast } from 'sonner'
+import { readJson } from '@/lib/http'
+import type { UserPreferencesResponse } from '@/types/preferences'
 import ScrollToTopButton from '@/components/scroll-to-top-button'
 import { cn } from '@/lib/utils'
 import { useThrottle } from '@/hooks/use-debounce'
@@ -46,6 +48,16 @@ import {
 import { useChatStore } from '@/hooks/use-chat-store'
 
 type Message = LegacyMessage
+
+type MutableAppMessage = AppUIMessage & {
+  content?: string
+  toolInvocations?: any[]
+}
+
+interface ChatSummaryResponse {
+  title?: string
+  messages?: LegacyMessage[]
+}
 
 const useViewportHeight = () => {
   const mainRef = useRef<HTMLDivElement>(null)
@@ -106,6 +118,9 @@ import {
   type LegacyMessage,
   type AppUIMessage,
 } from '@/lib/ai-message-conversion'
+
+const getLegacyMessageText = (message: LegacyMessage | null | undefined): string =>
+  message?.content ?? ''
 
 function memoryToMessage(memory: MemoryWithId): Message {
   return {
@@ -409,7 +424,7 @@ function PureChatInterfaceComponent({
       try {
         const response = await fetch('/api/user/preferences')
         if (response.ok) {
-          const data = await response.json()
+          const data = await readJson<UserPreferencesResponse>(response)
           setUserPreferences(data.preferences)
         }
       } catch (error) {
@@ -513,7 +528,7 @@ function PureChatInterfaceComponent({
       if (message.role === 'assistant') {
         const legacyMessage = uiMessageToLegacyMessage(message)
         if (legacyMessage.content) {
-          setLastAssistantMessage(legacyMessage.content)
+          setLastAssistantMessage(getLegacyMessageText(legacyMessage))
           if (userPreferences.followUpSuggestions !== false) {
             setShowFollowUpSuggestions(true)
           }
@@ -525,17 +540,18 @@ function PureChatInterfaceComponent({
           try {
             const targetChatId = currentChatId || metadata.chatId
             const response = await fetch(`/api/chats/${targetChatId}`)
-            if (response.ok) {
-              const chatData = await response.json()
-              if (chatData.title && chatData.title !== 'New Chat') {
-                window.dispatchEvent(
-                  new CustomEvent('chatTitleUpdated', {
-                    detail: { chatId: currentChatId, title: chatData.title },
-                  })
-                )
-              } else if (attempt < maxAttempts) {
-                setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
-              }
+            if (!response.ok) {
+              throw new Error('Failed to load chat metadata')
+            }
+            const chatData = await readJson<ChatSummaryResponse>(response)
+            if (chatData.title && chatData.title !== 'New Chat') {
+              window.dispatchEvent(
+                new CustomEvent('chatTitleUpdated', {
+                  detail: { chatId: currentChatId, title: chatData.title },
+                })
+              )
+            } else if (attempt < maxAttempts) {
+              setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
             }
           } catch (error) {
             if (attempt < maxAttempts) {
@@ -799,7 +815,7 @@ function PureChatInterfaceComponent({
 
       if (isGeminiStreamingError) {
         setErrorMessage('An error occurred. Please start a new chat.')
-        setMessages(prev =>
+        setUiMessages(prev =>
           prev.map((msg, idx) =>
             idx === prev.length - 1 && msg.role === 'assistant'
               ? { ...msg, content: '', error: 'streaming_error' }
@@ -895,7 +911,7 @@ function PureChatInterfaceComponent({
   const resetToHome = () => {
     if (window.location.pathname !== '/') {
       router.push('/')
-      setMessages([])
+      setUiMessages([])
       resetChatStore()
       setInput('')
       setHasUserInitiatedConversation(false)
@@ -975,7 +991,7 @@ function PureChatInterfaceComponent({
         return message
       })
 
-      setMessages(prev => {
+      setUiMessages(prev => {
         const base = [...updatedMessagesForLoading]
         if (base.length === 0) return base
         const last = base[base.length - 1]
@@ -1172,7 +1188,7 @@ function PureChatInterfaceComponent({
         if (toolCallId) {
           updateToolResult(toolCallId, command, result.result)
         }
-        const updatedMessages = messages.map((message: any) => {
+        const updatedMessages = (uiMessages as MutableAppMessage[]).map(message => {
           if (message.toolInvocations) {
             const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
               if (toolInvocation.toolCallId && toolInvocation.toolCallId === toolCallId) {
@@ -1212,30 +1228,32 @@ function PureChatInterfaceComponent({
           }
           return message
         })
-        setMessages([...updatedMessages])
+        setUiMessages([...updatedMessages] as AppUIMessage[])
 
         try {
           const formattedContent =
             (result.result && (result.result.formatted_content || result.result.summary)) || ''
           if (formattedContent) {
-            setMessages(prev => {
-              const idx = prev.findIndex(
+            setUiMessages(prev => {
+              const mutablePrev = prev as MutableAppMessage[]
+              const idx = mutablePrev.findIndex(
                 m =>
                   m.role === 'assistant' &&
                   m.toolInvocations?.some((t: any) => t.toolCallId === toolCallId)
               )
               if (idx !== -1) {
-                const clone = [...prev]
+                const clone = mutablePrev.map(message => ({ ...message })) as MutableAppMessage[]
                 const target = clone[idx]
-                if (!target.content || (target.content as string).trim() === '') {
+                const existingContent = target.content || ''
+                if (existingContent.trim() === '') {
                   clone[idx] = { ...target, content: formattedContent }
-                } else if (!target.content.includes(formattedContent.slice(0, 30))) {
+                } else if (!existingContent.includes(formattedContent.slice(0, 30))) {
                   clone[idx] = {
                     ...target,
-                    content: `${target.content}\n\n${formattedContent}`.trim(),
+                    content: `${existingContent}\n\n${formattedContent}`.trim(),
                   }
                 }
-                return clone
+                return clone as AppUIMessage[]
               }
               const newAssistantMsg = {
                 id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -1250,8 +1268,8 @@ function PureChatInterfaceComponent({
                     state: 'result',
                   },
                 ],
-              } as any
-              return [...prev, newAssistantMsg]
+              } as MutableAppMessage
+              return [...mutablePrev, newAssistantMsg] as AppUIMessage[]
             })
             try {
               setLastAssistantMessage(
@@ -1279,11 +1297,12 @@ function PureChatInterfaceComponent({
             setTimeout(async () => {
               try {
                 const refreshResponse = await fetch(`/api/chats/${chatId}`)
-                if (refreshResponse.ok) {
-                  const chatData = await refreshResponse.json()
-                  if (chatData.messages) {
-                    setMessages(chatData.messages)
-                  }
+                if (!refreshResponse.ok) {
+                  throw new Error('Failed to refresh conversation after VTOP data retrieval')
+                }
+                const chatData = await readJson<ChatSummaryResponse>(refreshResponse)
+                if (chatData.messages) {
+                  setUiMessages(legacyMessagesToUiMessages(chatData.messages))
                 }
               } catch (error) {
                 console.warn('Failed to refresh conversation after VTOP data retrieval:', error)
@@ -1591,7 +1610,7 @@ function PureChatInterfaceComponent({
                 onClick={() => {
                   if (window.location.pathname !== '/') {
                     router.replace('/')
-                    setMessages([])
+                    setUiMessages([])
                     setInput('')
                     setShowFullChat(false)
                     setHasUserInitiatedConversation(false)

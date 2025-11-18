@@ -8,6 +8,7 @@ import {
   type VerifyAuthenticationResponseOpts,
   type AuthenticatorTransport,
 } from '@simplewebauthn/server'
+import { webAuthnVerifyAuthSchema } from '@/types/api/mfa'
 
 const VALID_TRANSPORTS: AuthenticatorTransport[] = ['usb', 'nfc', 'ble', 'hybrid', 'internal']
 
@@ -17,10 +18,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { credential } = await request.json()
-  if (!credential) {
+  const rawBody = await request.json().catch(() => null)
+  const parsedBody = webAuthnVerifyAuthSchema.safeParse(rawBody)
+  if (!parsedBody.success) {
     return NextResponse.json({ error: 'Credential is required' }, { status: 400 })
   }
+  const { credential } = parsedBody.data
 
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
@@ -84,7 +87,7 @@ export async function POST(request: NextRequest) {
       authenticatorData: credential.response.authenticatorData,
       clientDataJSON: credential.response.clientDataJSON,
       signature: credential.response.signature,
-      userHandle: credential.response.userHandle,
+      userHandle: credential.response.userHandle ?? undefined,
     },
     clientExtensionResults: credential.clientExtensionResults || {},
   }

@@ -32,6 +32,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { readJson } from '@/lib/http'
 
 interface EventSlot {
   id: string
@@ -89,6 +90,66 @@ interface GravitasEventsData {
 
 interface GravitasEventsArtifactProps {
   data: GravitasEventsData
+}
+
+type GravitasApiEvent = Partial<{
+  id: string | number
+  name: string
+  type: string
+  category: string
+  description: string
+  club: string
+  tagline: string
+  start_date: string
+  end_date: string
+  startDate: string
+  endDate: string
+  team_size: string | number
+  price_per_ticket: number
+  scope: string
+  image: string
+  short_description: string
+}>
+
+type GravitasEventsApiResponse = {
+  data?: {
+    events?: GravitasApiEvent[]
+    eventSlots?: GravitasEventSlotRecord[]
+  }
+  seats?: GravitasEventsData['seats']
+}
+
+type GravitasEventSlotRecord = Partial<{
+  id: string | number
+  eventId: string | number
+  event_id: string | number
+  venue: string
+  location: string
+  start_date: string
+  end_date: string
+  startDate: string
+  endDate: string
+  total_entries: number
+  totalEntries: number
+  seats_left: number
+  seatsLeft: number
+  availableEntries: number
+  available_entries: number
+  entries_left: number
+  remaining: number
+  remaining_entries: number
+  overall_entries: number
+  totalSeats: number
+  isRegistrable: boolean
+  is_registrable: boolean
+}>
+
+type GravitasEventSeatsResponse = {
+  data?: {
+    seats?: GravitasEventsData['seats']
+    eventSlots?: GravitasEventSlotRecord[]
+  }
+  seats?: GravitasEventsData['seats']
 }
 
 const formatDate = (dateString: string) => {
@@ -469,7 +530,10 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
   const [serverLoading, setServerLoading] = useState(false)
   const [serverExhausted, setServerExhausted] = useState(false)
 
-  const normalizeSlots = (slots: any[], fallbackEventId?: string): NormalizedSlot[] => {
+  const normalizeSlots = (
+    slots: GravitasEventSlotRecord[] | undefined,
+    fallbackEventId?: string
+  ): NormalizedSlot[] => {
     if (!Array.isArray(slots)) return []
     return slots
       .map((s: any) => {
@@ -613,24 +677,24 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
         setServerExhausted(true)
         return
       }
-      const json = await res.json()
-      const apiEvents: any[] = json?.data?.events || []
+      const json = await readJson<GravitasEventsApiResponse>(res)
+      const apiEvents: GravitasApiEvent[] = json?.data?.events || []
       if (!Array.isArray(apiEvents) || apiEvents.length === 0) {
         setServerExhausted(true)
         return
       }
 
-      const mapped: Event[] = apiEvents.map((ev: any) => ({
-        id: String(ev.id),
+      const mapped: Event[] = apiEvents.map(ev => ({
+        id: String(ev.id ?? ''),
         name: String(ev.name || ''),
         type: String(ev.type || ''),
         category: String(ev.category || ''),
         description: String(ev.description || ''),
         club: String(ev.club || ''),
         tagline: String(ev.tagline || ''),
-        startDate: String(ev.start_date || ''),
-        endDate: String(ev.end_date || ''),
-        teamSize: String(ev.team_size || ''),
+        startDate: String(ev.start_date || ev.startDate || ''),
+        endDate: String(ev.end_date || ev.endDate || ''),
+        teamSize: String(ev.team_size ?? ''),
         price: Number(ev.price_per_ticket ?? 0),
         scope: String(ev.scope || ''),
         image: String(ev.image || ''),
@@ -686,42 +750,35 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
       const url = `${base}/api/events/${eventId}`
       const res = await fetch(url)
       if (res.ok) {
-        const json = await res.json()
-        if (json && json.data && json.data.seats) {
-          setSeatsByEvent(prev => ({ ...prev, [eventId]: json.data.seats }))
-        } else if (json && json.seats) {
+        const json = await readJson<GravitasEventSeatsResponse>(res)
+        if (json?.data?.seats) {
+          setSeatsByEvent(prev => ({ ...prev, [eventId]: json.data!.seats! }))
+        } else if (json?.seats) {
           setSeatsByEvent(prev => ({ ...prev, [eventId]: json.seats }))
         }
       } else {
         const alt = await fetch(`https://gravitas.vit.ac.in/api/events/${eventId}`)
         if (alt.ok) {
-          const data = await alt.json()
-          const eventSlots = (data?.data?.eventSlots || []).map((slot: any) => {
-            const totalSeats = Number(slot.overall_entries || slot.total_entries || 0)
-            const seatsLeft = Number(slot.total_entries || 0) // total_entries is seats left
-            const currentRegistrations = Math.max(0, totalSeats - seatsLeft)
-            return {
-              id: String(slot.id),
-              venue: String(slot.venue || ''),
-              startDate: String(slot.start_date || ''),
-              endDate: String(slot.end_date || ''),
-              totalSeats,
-              currentRegistrations,
-              seatsLeft,
-              isRegistrable: Boolean(slot.is_registrable || false),
-            }
-          })
+          const data = await readJson<GravitasEventSeatsResponse>(alt)
+          const normalizedSlots = normalizeSlots(data?.data?.eventSlots || [], eventId)
+          const eventSlots: EventSlot[] = normalizedSlots.map(({ eventId: _ignored, ...slot }) => ({
+            id: slot.id,
+            venue: slot.venue,
+            startDate: slot.startDate,
+            endDate: slot.endDate,
+            totalSeats: slot.totalSeats,
+            currentRegistrations: slot.currentRegistrations,
+            seatsLeft: slot.seatsLeft,
+            isRegistrable: slot.isRegistrable,
+          }))
           const seats = {
-            totalSeatsAvailable: eventSlots.reduce(
-              (sum: number, s: any) => sum + (s.totalSeats ?? 0),
-              0
-            ),
+            totalSeatsAvailable: eventSlots.reduce((sum, s) => sum + (s.totalSeats ?? 0), 0),
             currentRegistrations: eventSlots.reduce(
-              (sum: number, s: any) => sum + (s.currentRegistrations ?? 0),
+              (sum, s) => sum + (s.currentRegistrations ?? 0),
               0
             ),
-            seatsLeft: eventSlots.reduce((sum: number, s: any) => sum + (s.seatsLeft ?? 0), 0),
-            registrationStatus: eventSlots.some((s: any) => s.isRegistrable) ? 'Open' : 'Closed',
+            seatsLeft: eventSlots.reduce((sum, s) => sum + (s.seatsLeft ?? 0), 0),
+            registrationStatus: eventSlots.some(s => s.isRegistrable) ? 'Open' : 'Closed',
             slots: eventSlots,
           }
           setSeatsByEvent(prev => ({ ...prev, [eventId]: seats }))

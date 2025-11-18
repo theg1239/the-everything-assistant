@@ -47,6 +47,7 @@ type UsageLog = {
   createdAt: string
 }
 import { BroadcastDialog } from '@/components/broadcast-dialog'
+import { readJson } from '@/lib/http'
 
 interface RateLimitStatus {
   status: string
@@ -173,14 +174,19 @@ export default function ManagementClient() {
       setViewerOpen(true)
       const res = await fetch(`/api/chat-messages/${chatId}`)
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j.error || 'Failed to fetch messages')
+        let errorPayload: { error?: string } = {}
+        try {
+          errorPayload = await readJson<{ error?: string }>(res)
+        } catch {
+          errorPayload = {}
+        }
+        throw new Error(errorPayload.error || 'Failed to fetch messages')
       }
-      const data = (await res.json()) as {
+      const data = await readJson<{
         chatId: string
         user: { id: string; name: string | null; email: string | null } | null
         messages: { id: string; role: 'user' | 'assistant'; content: string; createdAt: string }[]
-      }
+      }>(res)
       setViewerData(data)
     } catch (e: any) {
       setViewerError(e?.message || 'Failed to fetch messages')
@@ -203,21 +209,40 @@ export default function ManagementClient() {
       ])
 
       if (!rateLimitRes.ok) {
-        const json = await rateLimitRes.json()
+        let json: { error?: string } = {}
+        try {
+          json = await readJson<{ error?: string }>(rateLimitRes)
+        } catch {
+          json = {}
+        }
         throw new Error(json.error || 'Failed to fetch rate limit status')
       }
       if (!statsRes.ok) {
-        const json = await statsRes.json()
+        let json: { error?: string } = {}
+        try {
+          json = await readJson<{ error?: string }>(statsRes)
+        } catch {
+          json = {}
+        }
         throw new Error(json.error || 'Failed to fetch stats')
       }
       if (!usageRes.ok) {
-        const json = await usageRes.json()
+        let json: { error?: string } = {}
+        try {
+          json = await readJson<{ error?: string }>(usageRes)
+        } catch {
+          json = {}
+        }
         throw new Error(json.error || 'Failed to fetch usage')
       }
 
-      const rateLimitData = await rateLimitRes.json()
-      const statsData = await statsRes.json()
-      const usageData = await usageRes.json()
+      const rateLimitData = await readJson<RateLimitStatus>(rateLimitRes)
+      const statsData = await readJson<Stats>(statsRes)
+      const usageData = await readJson<{
+        recent: UsageLog[]
+        summary: any
+        summaryAllTime?: any
+      }>(usageRes)
 
       setData(rateLimitData)
       setStats(statsData)
@@ -235,10 +260,15 @@ export default function ManagementClient() {
     try {
       const res = await fetch('/api/broadcast')
       if (!res.ok) {
-        const json = await res.json()
+        let json: { error?: string } = {}
+        try {
+          json = await readJson<{ error?: string }>(res)
+        } catch {
+          json = {}
+        }
         throw new Error(json.error || 'Failed to fetch past broadcasts')
       }
-      const data = await res.json()
+      const data = await readJson<{ broadcasts?: PastBroadcast[] }>(res)
       setPastBroadcasts(data.broadcasts || [])
     } catch (err: any) {
       toast.error(err.message || 'Failed to fetch past broadcasts')
@@ -296,9 +326,9 @@ export default function ManagementClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slides: broadcastSlides }),
       })
-      const json = await res.json()
+      const json = await readJson<{ error?: string; message?: string }>(res)
       if (!res.ok) throw new Error(json.error || 'Broadcast failed')
-      toast.success(json.message)
+      toast.success(json.message || 'Broadcast sent')
       setBroadcastSlides([{ title: '', text: '', image: '' }])
       fetchPastBroadcasts()
     } catch (err: any) {
@@ -322,7 +352,7 @@ export default function ManagementClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: editingBroadcast, slides: editSlides }),
       })
-      const json = await res.json()
+      const json = await readJson<{ error?: string }>(res)
       if (!res.ok) throw new Error(json.error || 'Failed to update broadcast')
       toast.success('Broadcast updated successfully')
       setEditingBroadcast(null)
@@ -346,7 +376,7 @@ export default function ManagementClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
       })
-      const json = await res.json()
+      const json = await readJson<{ error?: string }>(res)
       if (!res.ok) throw new Error(json.error || 'Failed to delete broadcast')
       toast.success('Broadcast deleted successfully')
       fetchPastBroadcasts()
@@ -382,9 +412,9 @@ export default function ManagementClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, config }),
       })
-      const json = await res.json()
+      const json = await readJson<{ error?: string; message?: string }>(res)
       if (!res.ok) throw new Error(json.error || 'Action failed')
-      toast.success(json.message)
+      toast.success(json.message || 'Action completed')
       await fetchData()
     } catch (err: any) {
       toast.error(err.message || 'Action failed')

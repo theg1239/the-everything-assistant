@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils'
 import { formatDate } from '@/lib/utils'
 import { SettingsDialog } from '@/components/settings-dialog'
 import { useSidebar } from '@/contexts/sidebar-context'
+import { readJson } from '@/lib/http'
 
 interface Chat {
   id: string
@@ -175,7 +176,7 @@ export const Sidebar = memo(
           const response = await fetch(`/api/chats?limit=15&offset=${offset}`)
 
           if (response.ok) {
-            const data = await response.json()
+            const data = await readJson<Chat[]>(response)
 
             if (reset) {
               setChats(data)
@@ -184,7 +185,7 @@ export const Sidebar = memo(
             } else {
               setChats(prevChats => {
                 const existingIds = new Set(prevChats.map(chat => chat.id))
-                const newChats = data.filter((chat: Chat) => !existingIds.has(chat.id))
+                const newChats = data.filter(chat => !existingIds.has(chat.id))
                 return [...prevChats, ...newChats]
               })
             }

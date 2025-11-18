@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
+import type { Prisma } from '@prisma/client'
 import {
   verifyTOTP,
   hashBackupCodes,
@@ -10,6 +11,7 @@ import {
   logSecurityEvent,
   checkRateLimit,
 } from '@/lib/mfa'
+import { mfaVerificationSchema } from '@/types/api/mfa'
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,7 +20,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { code, method, credential } = await request.json()
+    const rawBody = await request.json().catch(() => null)
+    const parsedBody = mfaVerificationSchema.safeParse(rawBody)
+    if (!parsedBody.success) {
+      return NextResponse.json({ error: 'Verification code is required' }, { status: 400 })
+    }
+    const { code, method, credential } = parsedBody.data
 
     if (method === 'security_key') {
       if (!credential) {
@@ -27,7 +34,7 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         )
       }
-    } else if (!code || typeof code !== 'string') {
+    } else if (!code) {
       return NextResponse.json({ error: 'Verification code is required' }, { status: 400 })
     }
 
@@ -73,10 +80,11 @@ export async function POST(request: NextRequest) {
     }
     let isValidCode = false
 
+    const tempSecret = user.tempMfaSecret
     if (user.tempMfaMethod === 'email') {
-      isValidCode = await bcrypt.compare(code, user.tempMfaSecret)
+      isValidCode = await bcrypt.compare(code as string, tempSecret)
     } else if (user.tempMfaMethod === 'authenticator') {
-      isValidCode = verifyTOTP(code, user.tempMfaSecret)
+      isValidCode = verifyTOTP(code as string, tempSecret)
     } else if (user.tempMfaMethod === 'security_key') {
       return NextResponse.json(
         { error: 'Please use the WebAuthn verification endpoint for security keys' },
@@ -99,19 +107,14 @@ export async function POST(request: NextRequest) {
 
     const backupCodes = generateBackupCodes()
     const hashedBackupCodes = hashBackupCodes(backupCodes)
-    const updateData: any = {
+    const updateData: Prisma.UserUpdateInput = {
       mfaEnabled: true,
       mfaMethod: user.tempMfaMethod,
       tempMfaSecret: null,
       tempMfaMethod: null,
       tempMfaExpires: null,
       backupCodes: hashedBackupCodes,
-    }
-
-    if (user.tempMfaMethod === 'authenticator') {
-      updateData.mfaSecret = user.tempMfaSecret
-    } else {
-      updateData.mfaSecret = null
+      mfaSecret: user.tempMfaMethod === 'authenticator' ? user.tempMfaSecret : null,
     }
 
     await prisma.user.update({

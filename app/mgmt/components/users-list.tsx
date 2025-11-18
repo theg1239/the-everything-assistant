@@ -5,10 +5,21 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Search, Send } from 'lucide-react'
 import { toast } from 'sonner'
+import { readJson } from '@/lib/http'
 
-export default function UsersList({ onSelectUser }: any) {
+type MgmtUser = {
+  id: string
+  email?: string | null
+  name?: string | null
+}
+
+interface UsersListProps {
+  onSelectUser?: (user: MgmtUser) => void
+}
+
+export default function UsersList({ onSelectUser }: UsersListProps) {
   const [query, setQuery] = useState('')
-  const [users, setUsers] = useState<any[]>([])
+  const [users, setUsers] = useState<MgmtUser[]>([])
   const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
@@ -25,7 +36,7 @@ export default function UsersList({ onSelectUser }: any) {
       const offset = reset ? 0 : users.length
       const res = await fetch(`/api/users?limit=25&offset=${offset}`)
       if (!res.ok) throw new Error('failed')
-      const json = await res.json()
+      const json = await readJson<{ users?: MgmtUser[] }>(res)
       const items = json.users || []
       setUsers(reset ? items : [...users, ...items])
       setHasMore(items.length === 25)
@@ -36,19 +47,22 @@ export default function UsersList({ onSelectUser }: any) {
     }
   }
 
-  const handleSendBriefing = async (user: any) => {
+  const handleSendBriefing = async (user: MgmtUser) => {
     if (!user?.id && !user?.email) {
       toast.error('user record missing id/email')
       return
     }
-    setSendingId(user.id || user.email)
+    setSendingId(user.id ?? user.email ?? null)
     try {
       const res = await fetch('/api/(mgmt)/hub/send-briefing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, email: user.email }),
       })
-      const json = await res.json().catch(() => ({}))
+      const json = await readJson<{
+        error?: string
+        briefing?: { scheduledAt?: string }
+      }>(res)
       if (!res.ok) {
         throw new Error(json.error || 'failed to send briefing')
       }
@@ -97,7 +111,7 @@ export default function UsersList({ onSelectUser }: any) {
               (u.email || '').toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q)
             )
           })
-          .map((u: any) => (
+          .map((u: MgmtUser) => (
             <div
               key={u.id}
               className="rounded-md border border-border/30 p-3 flex items-center justify-between bg-black/10"

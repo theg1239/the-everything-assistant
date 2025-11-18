@@ -13,10 +13,13 @@ import type { RawVTOPResult } from '@/lib/hub/parsers/attendance'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { saveTokenUsage } from '@/lib/db'
 import { listVTOPSnapshots, upsertVTOPSnapshot } from '@/lib/vtop-snapshots'
+import { toJsonValue } from '@/lib/json'
 import type {
   HubVTOPCommand,
   PersonalHubState,
   PersonalHubSnapshot,
+  ProxySyncResponse,
+  ProxySyncResultEntry,
   VTOPCredentialPayload,
 } from '@/types/hub'
 import type { z } from 'zod'
@@ -54,7 +57,7 @@ async function buildHubState(userId: string): Promise<PersonalHubState> {
       title: data?.title || row.command,
       summary: data?.summary || 'no summary available',
       formatted_content: data?.formatted_content,
-      structured_data: data?.structured_data,
+      structured_data: toJsonValue(data?.structured_data),
       meta: data?.meta || null,
       fetchedAt: row.fetchedAt.toISOString(),
     }
@@ -187,17 +190,10 @@ export async function refreshVTOPSnapshotAction(
     title: snapshot.title,
     summary: snapshot.summary,
     formatted_content: snapshot.formatted_content,
-    structured_data: snapshot.structured_data,
+    structured_data: toJsonValue(snapshot.structured_data),
     meta: snapshot.meta || null,
     fetchedAt: new Date().toISOString(),
   }
-}
-
-type ProxySyncResultEntry = {
-  command: string
-  success: boolean
-  result?: RawVTOPResult
-  error?: any
 }
 
 async function runProxySyncBatch(commands: HubVTOPCommand[], creds: VTOPCredentialPayload) {
@@ -216,9 +212,8 @@ async function runProxySyncBatch(commands: HubVTOPCommand[], creds: VTOPCredenti
     throw new Error(`proxy sync failed: ${response.status}`)
   }
 
-  const payload = await response.json()
-  const results = Array.isArray(payload?.results) ? payload.results : []
-  return results as ProxySyncResultEntry[]
+  const payload: ProxySyncResponse = await response.json()
+  return Array.isArray(payload.results) ? payload.results : []
 }
 
 export async function syncCoreHubSnapshots(commands: HubVTOPCommand[] = [...HUB_CORE_COMMANDS]) {

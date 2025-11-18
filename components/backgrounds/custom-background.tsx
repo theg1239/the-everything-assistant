@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useSession } from 'next-auth/react'
 import { usePathname } from 'next/navigation'
+import { readJson } from '@/lib/http'
+import type { UserPreferencesResponse } from '@/types/preferences'
 
 const Aurora = dynamic(() => import('@/components/backgrounds/aurora'), {
   ssr: false,
@@ -39,6 +41,19 @@ const GridBackground = dynamic(() => import('@/components/backgrounds/grid'), {
   ssr: false,
   loading: () => null,
 })
+
+const BACKGROUND_TYPES = [
+  'aurora',
+  'beams',
+  'dither',
+  'floating-lines',
+  'terminal',
+  'grid',
+  'color-bands',
+  'gradient',
+  'solid',
+  'null',
+] as const satisfies readonly BackgroundType[]
 
 export type BackgroundType =
   | 'aurora'
@@ -147,8 +162,8 @@ export interface BackgroundConfig {
 }
 
 const defaultBackgroundConfig: BackgroundConfig = {
-  type: 'null',
-  enabled: true,
+  type: 'aurora',
+  enabled: false,
   aurora: {
     colorStops: ['#5227FF', '#7cff67', '#5227FF'],
     amplitude: 1.2,
@@ -240,11 +255,26 @@ const defaultBackgroundConfig: BackgroundConfig = {
   },
 }
 
+type StoredBackgroundConfig = Partial<Omit<BackgroundConfig, 'type'>> & { type?: string }
+
+const ensureBackgroundType = (value?: string): BackgroundType => {
+  return value && (BACKGROUND_TYPES as readonly string[]).includes(value)
+    ? (value as BackgroundType)
+    : defaultBackgroundConfig.type
+}
+
+const normalizeBackgroundConfig = (config?: StoredBackgroundConfig): BackgroundConfig => ({
+  ...defaultBackgroundConfig,
+  ...(config || {}),
+  type: ensureBackgroundType(config?.type),
+})
+
 export default function CustomBackground() {
   const { data: session, status } = useSession()
   const pathname = usePathname()
-  const [backgroundConfig, setBackgroundConfig] =
-    useState<BackgroundConfig>(defaultBackgroundConfig)
+  const [backgroundConfig, setBackgroundConfig] = useState<BackgroundConfig>(() => ({
+    ...defaultBackgroundConfig,
+  }))
   const [preferencesLoaded, setPreferencesLoaded] = useState(false)
 
   const isLoginPage = pathname === '/login'
@@ -252,17 +282,13 @@ export default function CustomBackground() {
   useEffect(() => {
     const loadBackgroundPreference = async () => {
       if (isLoginPage) {
-        setBackgroundConfig({
-          ...defaultBackgroundConfig,
-          type: 'aurora',
-          enabled: true,
-        })
+        setBackgroundConfig(normalizeBackgroundConfig({ type: 'aurora', enabled: true }))
         setPreferencesLoaded(true)
         return
       }
 
       if (status === 'unauthenticated' || !session?.user?.email) {
-        setBackgroundConfig(defaultBackgroundConfig)
+        setBackgroundConfig(normalizeBackgroundConfig())
         setPreferencesLoaded(true)
         return
       }
@@ -271,27 +297,22 @@ export default function CustomBackground() {
         try {
           const response = await fetch('/api/user/preferences')
           if (response.ok) {
-            const data = await response.json()
+            const data = await readJson<UserPreferencesResponse>(response)
             const prefs = data.preferences
 
             if (prefs.auroraBackground !== undefined) {
-              setBackgroundConfig({
-                ...defaultBackgroundConfig,
-                type: 'aurora',
-                enabled: prefs.auroraBackground,
-              })
+              setBackgroundConfig(
+                normalizeBackgroundConfig({ type: 'aurora', enabled: prefs.auroraBackground })
+              )
             } else if (prefs.backgroundConfig) {
-              setBackgroundConfig({
-                ...defaultBackgroundConfig,
-                ...prefs.backgroundConfig,
-              })
+              setBackgroundConfig(normalizeBackgroundConfig(prefs.backgroundConfig))
             } else {
-              setBackgroundConfig(defaultBackgroundConfig)
+              setBackgroundConfig(normalizeBackgroundConfig())
             }
           }
         } catch (error) {
           console.error('Error loading background preference:', error)
-          setBackgroundConfig(defaultBackgroundConfig)
+          setBackgroundConfig(normalizeBackgroundConfig())
         } finally {
           setPreferencesLoaded(true)
         }

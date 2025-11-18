@@ -22,6 +22,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
 import { toast } from 'sonner'
+import { readJson } from '@/lib/http'
 
 interface CanvasDocument {
   id?: string
@@ -55,26 +56,40 @@ function CanvasContent({ isOpen, onClose, chatId, initialDocument }: CanvasProps
   const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    if (isOpen && chatId && !initialDocument) {
+    if (!(isOpen && chatId && !initialDocument)) return
+
+    let cancelled = false
+    const loadDocuments = async () => {
       setIsLoading(true)
-      fetch(`/api/canvas?chatId=${chatId}`)
-        .then(res => res.json())
-        .then((docs: CanvasDocument[]) => {
-          setExistingDocuments(docs)
-          setTimeout(() => {
-            if (docs.length > 0) {
-              const mostRecent = docs[0]
-              setDocument(mostRecent)
-              setViewMode('preview')
-            }
-            setIsLoading(false)
-          }, 100)
-        })
-        .catch(error => {
+      try {
+        const response = await fetch(`/api/canvas?chatId=${chatId}`)
+        if (!response.ok) {
+          throw new Error('Failed to load documents')
+        }
+        const docs = await readJson<CanvasDocument[]>(response)
+        if (cancelled) return
+        setExistingDocuments(docs)
+        setTimeout(() => {
+          if (docs.length > 0) {
+            const mostRecent = docs[0]
+            setDocument(mostRecent)
+            setViewMode('preview')
+          }
+          setIsLoading(false)
+        }, 100)
+      } catch (error) {
+        if (!cancelled) {
           console.error('Error loading canvas documents:', error)
           toast.error('Failed to load documents')
           setIsLoading(false)
-        })
+        }
+      }
+    }
+
+    void loadDocuments()
+
+    return () => {
+      cancelled = true
     }
   }, [isOpen, chatId, initialDocument])
 
@@ -108,7 +123,7 @@ function CanvasContent({ isOpen, onClose, chatId, initialDocument }: CanvasProps
       })
 
       if (response.ok) {
-        const result = await response.json()
+        const result = await readJson<CanvasDocument>(response)
         setDocument(prev => ({ ...prev, id: result.id }))
         toast.success('Document saved successfully!')
       } else {

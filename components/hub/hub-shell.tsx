@@ -68,6 +68,7 @@ import {
 } from '@/lib/hub/daily-briefing'
 import { toast } from 'sonner'
 import { HUB_BRIEFING_ACTION_EVENT } from '@/lib/hub/constants'
+import { readJson } from '@/lib/http'
 
 const PINNED_COMMANDS: HubVTOPCommand[] = ['timetable', 'attendance', 'marks', 'cgpa', 'profile']
 const SNAPSHOT_ICONS: Partial<Record<HubVTOPCommand, ReactNode>> = {
@@ -505,11 +506,21 @@ export default function HubShell({
           },
           body: JSON.stringify(payload),
         })
-        const responseBody = await response
-          .json()
-          .catch(() => ({ error: `status ${response.status}` }))
         if (!response.ok) {
+          let responseBody: { error?: string } | null = null
+          try {
+            responseBody = await readJson<{ error?: string }>(response)
+          } catch {
+            responseBody = null
+          }
           throw new Error(responseBody?.error || `status ${response.status}`)
+        } else {
+          // consume body to keep connection clean if server returns payload
+          try {
+            await readJson<Record<string, unknown>>(response)
+          } catch {
+            // ignore non-JSON success payloads
+          }
         }
         if (scheduleToken) {
           emailPlanRef.current = scheduleToken

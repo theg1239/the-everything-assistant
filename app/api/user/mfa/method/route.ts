@@ -12,6 +12,7 @@ import {
   checkRateLimit,
   logSecurityEvent,
 } from '@/lib/mfa'
+import { mfaMethodChangeSchema } from '@/types/api/mfa'
 
 export async function PATCH(request: NextRequest) {
   try {
@@ -20,7 +21,13 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { newMethod, verificationCode } = await request.json()
+    const rawBody = await request.json().catch(() => null)
+    const parsedBody = mfaMethodChangeSchema.safeParse(rawBody)
+    if (!parsedBody.success) {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    }
+
+    const { newMethod, verificationCode } = parsedBody.data
 
     if (!newMethod || !['email', 'authenticator', 'security_key'].includes(newMethod)) {
       return NextResponse.json({ error: 'Invalid method' }, { status: 400 })

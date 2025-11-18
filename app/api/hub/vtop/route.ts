@@ -6,6 +6,13 @@ import { streamObject, type LanguageModel } from 'ai'
 import { vtopResultSchema } from './schema'
 import { saveTokenUsage } from '@/lib/db'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
+import { z } from 'zod'
+import type { VtopCommandFlags } from '@/types/tools'
+
+const vtopRequestSchema = z.object({
+  command: z.string().min(1).optional(),
+  extras: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),
+})
 
 export const maxDuration = 30
 
@@ -15,9 +22,13 @@ export async function POST(req: Request) {
     return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 })
   }
 
-  const body = await req.json().catch(() => ({}))
-  const command = (body?.command as string) || 'attendance'
-  const extras = (body?.extras || {}) as Record<string, any>
+  const rawBody = await req.json().catch(() => null)
+  const parsedBody = vtopRequestSchema.safeParse(rawBody || {})
+  if (!parsedBody.success) {
+    return new Response(JSON.stringify({ error: 'invalid request body' }), { status: 400 })
+  }
+  const command = parsedBody.data.command || 'attendance'
+  const extras = parsedBody.data.extras || {}
 
   try {
     const tools = createVITTools(session.user.id)
@@ -27,7 +38,7 @@ export async function POST(req: Request) {
     }
 
     const serverCreds = await getServerFormatted()
-    const args: any = {
+    const args: Record<string, string | number | boolean | undefined> = {
       command,
       ...(serverCreds
         ? { username: serverCreds.username, password: serverCreds.encryptedPassword }

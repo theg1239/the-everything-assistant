@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { sendDailyBriefingEmail } from '@/lib/email/resend'
+import { dailyBriefingEmailSchema } from '@/types/hub'
 
 export const runtime = 'nodejs'
 
@@ -12,20 +13,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const body = await request.json()
-    const messages = Array.isArray(body.messages) ? body.messages : []
-    if (messages.length === 0) {
-      return NextResponse.json({ error: 'Missing messages' }, { status: 400 })
+    const rawBody = await request.json().catch(() => null)
+    if (!rawBody) {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
     }
+    const parsedBody = dailyBriefingEmailSchema.safeParse(rawBody)
+    if (!parsedBody.success) {
+      return NextResponse.json(
+        { error: 'Invalid request body', details: parsedBody.error.flatten() },
+        { status: 400 }
+      )
+    }
+    const { messages, actions, greeting, scheduledAt } = parsedBody.data
 
     await sendDailyBriefingEmail({
       to: session.user.email,
-      greeting: body.greeting || 'good morning',
+      greeting: greeting || 'good morning',
       messages,
-      actions: Array.isArray(body.actions)
-        ? body.actions.map((action: any) => ({ label: action.label || 'open hub' }))
-        : [],
-      scheduledAt: typeof body.scheduledAt === 'string' ? body.scheduledAt : undefined,
+      actions,
+      scheduledAt,
     })
 
     return NextResponse.json({ ok: true })

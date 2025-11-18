@@ -15,6 +15,16 @@ export interface FFCSToolData {
 
 export type School = 'smec' | 'score' | 'scope' | 'sbst' | 'sce' | 'scheme' | 'select' | 'sense'
 
+type RawCourseSession = {
+  type?: string
+  venue?: string
+  slot?: string
+  faculty?: string
+}
+
+type RawCourseCategory = Record<string, RawCourseSession[]>
+type RawCourseData = Record<string, RawCourseCategory>
+
 export async function getCourseData(school: School = 'smec'): Promise<FFCSToolData> {
   const baseUrl =
     typeof window === 'undefined' ? process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000' : ''
@@ -22,16 +32,16 @@ export async function getCourseData(school: School = 'smec'): Promise<FFCSToolDa
   if (!response.ok) {
     throw new Error(`Failed to fetch course data for ${school}`)
   }
-  const data = await response.json()
+  const data = (await response.json()) as RawCourseData
 
   const allCourses: Course[] = []
 
-  Object.values<any>(data).forEach((category: any) => {
-    Object.entries<any>(category).forEach(([courseKey, sessions]) => {
+  Object.values(data).forEach(category => {
+    Object.entries(category).forEach(([courseKey, sessions]) => {
       const [codePart, ...titleRest] = courseKey.split(' - ')
       const code = codePart.trim()
       const title = titleRest.join(' - ').trim()
-      ;(sessions as any[]).forEach(session => {
+      sessions.forEach(session => {
         allCourses.push({
           CODE: code,
           TITLE: title,

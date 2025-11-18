@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
 import { Mail, CalendarClock, Send } from 'lucide-react'
 import { triggerDailyBriefingWorkflowAction } from '@/app/actions/workflows'
+import { readJson } from '@/lib/http'
 
 export default function BriefingDispatch() {
   const [email, setEmail] = useState('')
@@ -46,17 +47,27 @@ export default function BriefingDispatch() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      const json = await res.json().catch(() => ({}))
+      const json = await readJson<{
+        error?: string
+        user?: { email: string }
+        briefing?: {
+          greeting?: string
+          messages?: number
+          actions?: number
+          scheduledAt?: string | null
+          referenceTime?: string
+        }
+      }>(res)
       if (!res.ok) {
         throw new Error(json.error || 'failed to send briefing')
       }
       setLastResult({
-        email: json.user?.email,
-        greeting: json.briefing?.greeting,
+        email: json.user?.email ?? '',
+        greeting: json.briefing?.greeting ?? '',
         messages: json.briefing?.messages ?? 0,
         actions: json.briefing?.actions ?? 0,
         scheduledAt: json.briefing?.scheduledAt ?? null,
-        referenceTime: json.briefing?.referenceTime,
+        referenceTime: json.briefing?.referenceTime ?? new Date().toISOString(),
       })
       toast.success(
         json.briefing?.scheduledAt

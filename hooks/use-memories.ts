@@ -153,7 +153,7 @@ export function useDeleteMemory() {
   })
 }
 
-interface MemorySettings {
+export interface MemorySettings {
   isEnabled: boolean
   autoSave: boolean
   autoSaveFilter: 'low' | 'medium' | 'high'

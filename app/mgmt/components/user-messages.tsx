@@ -4,10 +4,19 @@ import React, { useEffect, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
+import { readJson } from '@/lib/http'
 
-export default function UserMessages({ user, onClose }: any) {
+type UserSummary = { id: string; name?: string | null; email?: string | null }
+type UserMessage = { id: string; role: 'user' | 'assistant'; content: string; createdAt: string }
+
+interface UserMessagesProps {
+  user?: UserSummary | null
+  onClose?: () => void
+}
+
+export default function UserMessages({ user, onClose }: UserMessagesProps) {
   const [q, setQ] = useState('')
-  const [messages, setMessages] = useState<any[]>([])
+  const [messages, setMessages] = useState<UserMessage[]>([])
   const [loading, setLoading] = useState(false)
   const [offset, setOffset] = useState(0)
   const limit = 30
@@ -28,7 +37,7 @@ export default function UserMessages({ user, onClose }: any) {
         `/api/user-messages?userId=${encodeURIComponent(user.id)}&limit=${limit}&offset=${off}`
       )
       if (!res.ok) throw new Error('failed')
-      const json = await res.json()
+      const json = await readJson<{ messages?: UserMessage[] }>(res)
       const items = json.messages || []
       setMessages(reset ? items : [...messages, ...items])
       setHasMore(items.length === limit)

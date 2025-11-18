@@ -55,6 +55,8 @@ interface ScraperResult {
   searchUrl?: string
 }
 
+type PapersApiResponse = ApiPaper[] | { papers?: ApiPaper[] }
+
 function deduplicatePapers(papers: Paper[]): Paper[] {
   const seen = new Set<string>()
   const uniquePapers: Paper[] = []
@@ -139,7 +141,7 @@ async function tryAPIApproach(
 
     if (response.ok) {
       dbg('response ok for fullCourseName search')
-      const data = await response.json()
+      const data = (await response.json()) as PapersApiResponse
 
       const papersArray = Array.isArray(data) ? data : data.papers || []
       dbg('api returned items', papersArray.length)
@@ -220,7 +222,7 @@ async function tryAPIApproach(
           })
         )
 
-        let papers = validatedPapers.filter(paper => paper !== null) as Paper[]
+        let papers = validatedPapers.filter((paper): paper is Paper => paper !== null)
         dbg('post-validate counts', {
           totalIn: papersArray.length,
           keptAfterValidate: papers.length,
@@ -293,7 +295,7 @@ async function tryAPIApproach(
 
     if (codeResponse.ok) {
       dbg('response ok for codeOnly search')
-      const codeData = await codeResponse.json()
+      const codeData = (await codeResponse.json()) as PapersApiResponse
       const papersArray = Array.isArray(codeData) ? codeData : codeData.papers || []
       dbg('api returned items (codeOnly)', papersArray.length)
 
@@ -373,7 +375,7 @@ async function tryAPIApproach(
           })
         )
 
-        let papers = validatedPapers.filter(paper => paper !== null) as Paper[]
+        let papers = validatedPapers.filter((paper): paper is Paper => paper !== null)
         dbg('post-validate counts (codeOnly)', {
           totalIn: papersArray.length,
           keptAfterValidate: papers.length,

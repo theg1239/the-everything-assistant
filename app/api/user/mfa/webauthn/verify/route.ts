@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { generateBackupCodes, hashBackupCodes, logSecurityEvent } from '@/lib/mfa'
 import { verifyRegistrationResponse } from '@simplewebauthn/server'
 import type { VerifyRegistrationResponseOpts } from '@simplewebauthn/server'
+import { webAuthnRegistrationSchema } from '@/types/api/mfa'
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,11 +14,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { credential, method } = await request.json()
-
-    if (!credential || !method || method !== 'security_key') {
+    const rawBody = await request.json().catch(() => null)
+    const parsedBody = webAuthnRegistrationSchema.safeParse(rawBody)
+    if (!parsedBody.success) {
       return NextResponse.json({ error: 'Invalid credential or method' }, { status: 400 })
     }
+    const { credential, method } = parsedBody.data
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },

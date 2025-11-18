@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Loader2, Trash2, Edit, Save, X, Plus, Search, Star, Calendar, Tag } from 'lucide-react'
 import { toast } from 'sonner'
+import { readJson } from '@/lib/http'
 
 export interface Memory {
   id: string
@@ -42,14 +43,14 @@ export function MemoryManagement() {
     isLoading: isLoadingMemories,
     error: memoriesError,
     refetch,
-  } = useQuery({
+  } = useQuery<Memory[]>({
     queryKey: ['memories'],
     queryFn: async () => {
       const response = await fetch('/api/memories')
       if (!response.ok) {
         throw new Error('Failed to fetch memories')
       }
-      return response.json()
+      return readJson<Memory[]>(response)
     },
     enabled: !!session?.user?.id,
     staleTime: 5 * 60 * 1000,

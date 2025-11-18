@@ -8,6 +8,7 @@ import QRCode from 'qrcode'
 import crypto from 'crypto'
 import nodemailer from 'nodemailer'
 import bcrypt from 'bcryptjs'
+import { mfaSetupRequestSchema } from '@/types/api/mfa'
 
 const prisma = new PrismaClient()
 
@@ -37,7 +38,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { method } = await request.json()
+    const rawBody = await request.json().catch(() => null)
+    const parsedBody = mfaSetupRequestSchema.safeParse(rawBody)
+    if (!parsedBody.success) {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    }
+
+    const { method } = parsedBody.data
 
     if (!method || !['email', 'authenticator', 'security_key'].includes(method)) {
       return NextResponse.json({ error: 'Invalid method' }, { status: 400 })

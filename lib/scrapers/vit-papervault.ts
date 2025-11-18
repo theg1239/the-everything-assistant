@@ -2,6 +2,14 @@ import puppeteer from 'puppeteer-core'
 import chromium from '@sparticuz/chromium'
 import { findFullCourseName } from '../course-map'
 
+interface PaperVaultEntry {
+  subjectName: string
+  paperType: string
+  paperDate: string
+  paperLink: string
+  paperSlot: string
+}
+
 export async function scrapeVITPaperVault(courseCode: string, examType?: string, year?: string) {
   try {
     const apiResult = await tryVITVaultListAPI(courseCode, examType, year)
@@ -30,8 +38,8 @@ async function tryVITVaultListAPI(courseCode: string, examType?: string, year?: 
     })
     if (!resp.ok) throw new Error(`status ${resp.status}`)
 
-    const body = await resp.json()
-    const all: any[] = Array.isArray(body.data) ? body.data : []
+    const body = (await resp.json()) as { data?: PaperVaultEntry[] }
+    const all: PaperVaultEntry[] = Array.isArray(body.data) ? body.data : []
 
     const full = findFullCourseName(courseCode)
     const plainName = full.replace(/\s*\[.*\]$/, '')

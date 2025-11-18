@@ -3,6 +3,7 @@ import { Course, FFCSToolData, getCourseData } from '@/lib/ffcs-tool'
 import TimetableGrid, { TimetableEntry, TimetableSchema } from '../timetable-grid'
 import { v4 as uuidv4 } from 'uuid'
 import { Calendar, X } from 'lucide-react'
+import { readJson } from '@/lib/http'
 
 const FFCSArtifact: React.FC = () => {
   const [school, setSchool] = useState<
@@ -49,7 +50,10 @@ const FFCSArtifact: React.FC = () => {
         setCourseData(data)
 
         const schemaResponse = await fetch(`/ffcs/schemas/${campus}.json`)
-        const schemaData = await schemaResponse.json()
+        if (!schemaResponse.ok) {
+          throw new Error('Failed to load timetable schema')
+        }
+        const schemaData = await readJson<TimetableSchema>(schemaResponse)
         setTimetableSchema(schemaData)
       } catch (error) {
         console.error(`Failed to load courses or schema for ${campus}:`, error)

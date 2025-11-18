@@ -123,6 +123,7 @@ export function ToolsDropdown({ onToolSelect, selectedTool }: ToolsDropdownProps
           <TooltipTrigger asChild>
             <Button
               ref={buttonRef}
+              type="button"
               variant="ghost"
               size="sm"
               onClick={() => setIsOpen(!isOpen)}

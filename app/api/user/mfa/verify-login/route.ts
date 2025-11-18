@@ -11,6 +11,7 @@ import {
   checkRateLimit,
   logSecurityEvent,
 } from '@/lib/mfa'
+import { mfaVerifyLoginSchema } from '@/types/api/mfa'
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,11 +20,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { code, useBackupCode } = await request.json()
-
-    if (!code) {
+    const rawBody = await request.json().catch(() => null)
+    const parsedBody = mfaVerifyLoginSchema.safeParse(rawBody)
+    if (!parsedBody.success) {
       return NextResponse.json({ error: 'Verification code is required' }, { status: 400 })
     }
+
+    const { code, useBackupCode } = parsedBody.data
 
     const rateLimitKey = `mfa-login-${session.user.email}`
     if (!checkRateLimit(rateLimitKey, 5, 15 * 60 * 1000)) {

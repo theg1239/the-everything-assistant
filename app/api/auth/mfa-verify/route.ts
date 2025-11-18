@@ -3,6 +3,7 @@ import { checkBotId } from 'botid/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { verifyTOTP, verifyBackupCode } from '@/lib/mfa'
+import { mfaVerifyRequestSchema } from '@/types/api/mfa'
 
 export async function POST(request: Request) {
   try {
@@ -18,7 +19,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { code, backupCode } = await request.json()
+    const rawBody = await request.json().catch(() => null)
+    if (!rawBody) {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+    }
+    const parsedBody = mfaVerifyRequestSchema.safeParse(rawBody)
+    if (!parsedBody.success) {
+      return NextResponse.json(
+        { error: 'Invalid request body', details: parsedBody.error.flatten() },
+        { status: 400 }
+      )
+    }
+    const { code, backupCode } = parsedBody.data
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },

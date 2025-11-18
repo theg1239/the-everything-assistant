@@ -24,10 +24,144 @@ import {
   getPaperIndexMeta,
 } from './agents/paper-agent'
 import { analyzeQuestionFrequencies } from './agents/question-frequency-agent'
+import type {
+  FacultyCourseRecord,
+  FacultyResultEntry,
+  FacultySchoolRecord,
+  JsonValue,
+  SyllabusEntry,
+  VtopCommandFlags,
+  VtopInteractiveRequestBody,
+  VtopRequestBody,
+} from '@/types/tools'
 
 type ParsedPlacementData = {
   formatted_content: string
   summary: string
+}
+
+const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(jsonValueSchema), z.record(jsonValueSchema)])
+)
+
+const redditAskResponseSchema = z.object({
+  success: z.boolean(),
+  response: z.string().optional(),
+  sources: z.array(jsonValueSchema).optional(),
+  confidence: z.number().optional(),
+  totalResults: z.number().optional(),
+  searchResults: z.number().optional(),
+  searchAttempts: z.number().optional(),
+  refinedQueries: z.array(z.string()).optional(),
+  serviceUsed: z.string().optional(),
+  error: z.string().optional(),
+})
+
+const redditRawResponseSchema = z.object({
+  results: z.array(jsonValueSchema).optional(),
+})
+
+const redditTrendingResponseSchema = z.object({
+  trending: z.array(z.string()).optional(),
+})
+
+const redditStatsResponseSchema = z.object({
+  stats: z.record(z.number()).optional(),
+})
+
+const deriveSchoolAcronym = (name: string): string => {
+  const match = name.match(/\(([^)]+)\)/)
+  if (match && match[1]) {
+    return match[1].toLowerCase()
+  }
+  return name.toLowerCase()
+}
+
+const facultyCourseSchema = z.object({
+  code: z.string().optional(),
+  title: z.string().optional(),
+  slot: z.string().optional(),
+  venue: z.string().optional(),
+  type: z.string().optional(),
+})
+
+const facultyMemberSchema = z
+  .object({
+    name: z.string().optional(),
+    department: z.string().optional(),
+    designation: z.string().optional(),
+    email: z.string().optional(),
+    phone: z.string().optional(),
+    slot: z.string().optional(),
+    room: z.string().optional(),
+    profile_url: z.string().optional(),
+    profileUrl: z.string().optional(),
+    image_url: z.string().optional(),
+    image: z.string().optional(),
+    courses: z.array(facultyCourseSchema).optional(),
+  })
+  .catchall(jsonValueSchema)
+
+const facultyDepartmentSchema = z.object({
+  name: z.string().optional(),
+  department: z.string().optional(),
+  url: z.string().optional(),
+  faculty: z.array(facultyMemberSchema).optional(),
+})
+
+const facultySchoolSchema = z.object({
+  school: z.string().optional(),
+  departments: z.array(facultyDepartmentSchema).optional(),
+})
+
+const facultyDataSchema: z.ZodType<FacultySchoolRecord[]> = z.array(facultySchoolSchema)
+
+const syllabusEntrySchema: z.ZodType<SyllabusEntry> = z.union([
+  z.string(),
+  z.object({
+    code: z.string().optional(),
+    title: z.string().optional(),
+    file: z.string().optional(),
+    filename: z.string().optional(),
+  }),
+])
+
+const syllabusListSchema = z.array(syllabusEntrySchema)
+
+type FacultyData = z.infer<typeof facultyDataSchema>
+
+const vtopErrorResponseSchema = z
+  .object({
+    error: z.string().optional(),
+  })
+  .catchall(jsonValueSchema)
+
+const vtopProxyResponseSchema = z.object({
+  success: z.boolean().optional(),
+  data: jsonValueSchema.optional(),
+  output: jsonValueSchema.optional(),
+  structured_data: jsonValueSchema.optional(),
+  message: z.string().optional(),
+  raw: z.boolean().optional(),
+  meta: jsonValueSchema.optional(),
+  error: z.string().optional(),
+})
+
+const vtopInteractiveResponseSchema = vtopProxyResponseSchema.extend({
+  options: jsonValueSchema.optional(),
+  prompt: z.string().optional(),
+  nextStep: z.string().optional(),
+  sessionData: jsonValueSchema.optional(),
+  completed: z.boolean().optional(),
+  downloadInfo: jsonValueSchema.optional(),
+  smartMatch: jsonValueSchema.optional(),
+})
+
+const SCHOOL_VALUES: School[] = ['smec', 'score', 'scope', 'sbst', 'sce', 'scheme', 'select', 'sense']
+
+const toSchool = (value: string): School | null => {
+  const normalized = value.toLowerCase() as School
+  return SCHOOL_VALUES.includes(normalized) ? normalized : null
 }
 
 async function searchRedditKnowledge(query: string, limit: number = 10) {
@@ -45,7 +179,7 @@ async function searchRedditKnowledge(query: string, limit: number = 10) {
       throw new Error(`Reddit knowledge base service unavailable: ${response.status}`)
     }
 
-    const data = await response.json()
+    const data = redditAskResponseSchema.parse(await response.json())
     if (data.success) {
       return {
         success: true,
@@ -95,7 +229,7 @@ async function searchRedditRaw(query: string, limit: number = 10) {
       throw new Error(`Reddit knowledge base service unavailable: ${response.status}`)
     }
 
-    const data = await response.json()
+    const data = redditRawResponseSchema.parse(await response.json())
     return data.results || []
   } catch (error) {
     console.error('Error accessing Reddit knowledge base:', error)
@@ -117,7 +251,7 @@ async function getTrendingRedditTopics() {
       throw new Error(`Reddit trending service unavailable: ${response.status}`)
     }
 
-    const data = await response.json()
+    const data = redditTrendingResponseSchema.parse(await response.json())
     return data.trending || []
   } catch (error) {
     console.error('Error accessing Reddit trending:', error)
@@ -133,8 +267,12 @@ async function getRedditOverview() {
       fetch(`${apiUrl}/api/stats`),
     ])
 
-    const trending = trendingResponse.ok ? (await trendingResponse.json()).trending || [] : []
-    const stats = statsResponse.ok ? (await statsResponse.json()).stats || {} : {}
+    const trending = trendingResponse.ok
+      ? redditTrendingResponseSchema.parse(await trendingResponse.json()).trending || []
+      : []
+    const stats = statsResponse.ok
+      ? redditStatsResponseSchema.parse(await statsResponse.json()).stats || {}
+      : {}
 
     return {
       success: true,
@@ -476,7 +614,7 @@ async function handleIntelligentCoursePage(params: {
 
   const PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001'
 
-  let requestBody: any = {
+  const requestBody: VtopInteractiveRequestBody = {
     command: 'course-page-interactive',
     username,
     step,
@@ -522,7 +660,7 @@ async function handleIntelligentCoursePage(params: {
     })
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
+      const errorData = vtopErrorResponseSchema.parse(await response.json().catch(() => ({})))
       return {
         success: false,
         error: `VTOP interactive request failed: ${response.status}`,
@@ -531,7 +669,7 @@ async function handleIntelligentCoursePage(params: {
       }
     }
 
-    const result = await response.json()
+    const result = vtopInteractiveResponseSchema.parse(await response.json())
 
     return {
       success: true,
@@ -998,7 +1136,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               : '/faculty.json'
           )
           if (!res.ok) throw new Error('Could not load faculty.json')
-          const schools = await res.json()
+          const schools = facultyDataSchema.parse(await res.json())
 
           let results = []
           const deptFilter = department ? department.toLowerCase() : null
@@ -1007,9 +1145,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           for (let i = 0; i < schools.length; ++i) {
             const school = schools[i]
             const schoolName = school.school
+            if (!schoolName) continue
             const departments = school.departments || []
             let schoolMatches = false
-            if (deptFilter && schoolName && matchesDepartment(schoolName, deptFilter)) {
+            if (deptFilter && matchesDepartment(schoolName, deptFilter)) {
               schoolMatches = true
             }
             for (let j = 0; j < departments.length; ++j) {
@@ -1018,8 +1157,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 const facultyArr = dept.faculty || []
                 for (let k = 0; k < facultyArr.length; ++k) {
                   const faculty = facultyArr[k]
-                  if (facultyFilter && faculty.name) {
-                    const name = normalizeString(faculty.name)
+                  const facultyNameValue = faculty.name
+                  if (!facultyNameValue) continue
+                  if (facultyFilter) {
+                    const name = normalizeString(facultyNameValue)
                     const filter = normalizeString(facultyFilter)
                     const nameTokens = name.split(' ')
                     const filterTokens = filter.split(' ')
@@ -1046,12 +1187,11 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                       }
                     }
                     if (!allTokensMatch) continue
-                  } else if (facultyFilter && !faculty.name) {
-                    continue
                   }
-                  let facultyEntry: any = {
-                    name: faculty.name,
-                    department: faculty.department || schoolName,
+
+                  let facultyEntry: FacultyResultEntry = {
+                    name: facultyNameValue,
+                    department: faculty.department || dept.department || dept.name || schoolName,
                     school: schoolName,
                     email: faculty.email || undefined,
                     profileUrl: faculty.profile_url || faculty.profileUrl || undefined,
@@ -1060,27 +1200,25 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                   }
                   let teachesCourse = true
                   if (courseFilter) {
-                    const schoolAcronym = (() => {
-                      const match = schoolName.match(/\(([^)]+)\)/)
-                      if (match && match[1]) {
-                        return match[1].toLowerCase()
-                      }
-                      return schoolName.toLowerCase()
-                    })()
+                    const normalizedSchool = toSchool(deriveSchoolAcronym(schoolName))
+                    if (!normalizedSchool) {
+                      teachesCourse = false
+                      continue
+                    }
                     try {
-                      const courseDataResult = await getCourseData(schoolAcronym as any)
-                      const { allCourses } = courseDataResult
-                      const normalizeName = (name: string) =>
-                        name
+                      const { allCourses } = await getCourseData(normalizedSchool)
+                      const normalizeName = (value?: string) =>
+                        (value ?? '')
                           .replace(/^Dr\.?\s*|\s+/g, '')
                           .toLowerCase()
                           .trim()
-                      const facultyNameNormalized = normalizeName(faculty.name)
+                      const facultyNameNormalized = normalizeName(facultyNameValue)
                       const facultyCourses = allCourses.filter(course => {
                         const courseFacultyNormalized = normalizeName(course.FACULTY)
                         const courseTitle = course.TITLE.toLowerCase()
                         const courseCode = course.CODE.toLowerCase()
                         return (
+                          facultyNameNormalized.length > 0 &&
                           (courseFacultyNormalized.includes(facultyNameNormalized) ||
                             facultyNameNormalized.includes(courseFacultyNormalized)) &&
                           (courseTitle.includes(courseFilter) || courseCode.includes(courseFilter))
@@ -1088,41 +1226,38 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                       })
                       if (facultyCourses.length === 0) {
                         teachesCourse = false
-                      } else {
-                        if (includeCourses) {
-                          facultyEntry.courses = facultyCourses.map(course => ({
-                            code: course.CODE,
-                            title: course.TITLE,
-                            slot: course.SLOT,
-                            type: course.TYPE,
-                          }))
-                        }
+                      } else if (includeCourses) {
+                        facultyEntry.courses = facultyCourses.map(course => ({
+                          code: course.CODE,
+                          title: course.TITLE,
+                          slot: course.SLOT,
+                          type: course.TYPE,
+                          venue: course.VENUE,
+                        }))
                       }
-                    } catch (error) {
+                    } catch {
                       teachesCourse = false
                     }
                   } else if (includeCourses) {
-                    const schoolAcronym = (() => {
-                      const match = schoolName.match(/\(([^)]+)\)/)
-                      if (match && match[1]) {
-                        return match[1].toLowerCase()
-                      }
-                      return schoolName.toLowerCase()
-                    })()
+                    const normalizedSchool = toSchool(deriveSchoolAcronym(schoolName))
+                    if (!normalizedSchool) {
+                      facultyEntry.courses = []
+                      continue
+                    }
                     try {
-                      const courseDataResult = await getCourseData(schoolAcronym as any)
-                      const { allCourses } = courseDataResult
-                      const normalizeName = (name: string) =>
-                        name
+                      const { allCourses } = await getCourseData(normalizedSchool)
+                      const normalizeName = (value?: string) =>
+                        (value ?? '')
                           .replace(/^Dr\.?\s*|\s+/g, '')
                           .toLowerCase()
                           .trim()
-                      const facultyNameNormalized = normalizeName(faculty.name)
+                      const facultyNameNormalized = normalizeName(facultyNameValue)
                       const facultyCourses = allCourses.filter(course => {
                         const courseFacultyNormalized = normalizeName(course.FACULTY)
                         return (
-                          courseFacultyNormalized.includes(facultyNameNormalized) ||
-                          facultyNameNormalized.includes(courseFacultyNormalized)
+                          facultyNameNormalized.length > 0 &&
+                          (courseFacultyNormalized.includes(facultyNameNormalized) ||
+                            facultyNameNormalized.includes(courseFacultyNormalized))
                         )
                       })
                       facultyEntry.courses = facultyCourses.map(course => ({
@@ -1130,8 +1265,9 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                         title: course.TITLE,
                         slot: course.SLOT,
                         type: course.TYPE,
+                        venue: course.VENUE,
                       }))
-                    } catch (error) {
+                    } catch {
                       facultyEntry.courses = []
                     }
                   }
@@ -1141,16 +1277,17 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 }
                 continue
               }
-              if (
-                deptFilter &&
-                (!dept.department || !matchesDepartment(dept.department, deptFilter))
-              )
+              const departmentName = dept.department || dept.name || ''
+              if (deptFilter && !matchesDepartment(departmentName || schoolName, deptFilter)) {
                 continue
+              }
               const facultyArr = dept.faculty || []
               for (let k = 0; k < facultyArr.length; ++k) {
                 const faculty = facultyArr[k]
-                if (facultyFilter && faculty.name) {
-                  const name = normalizeString(faculty.name)
+                const facultyNameValue = faculty.name
+                if (!facultyNameValue) continue
+                if (facultyFilter) {
+                  const name = normalizeString(facultyNameValue)
                   const filter = normalizeString(facultyFilter)
                   const nameTokens = name.split(' ')
                   const filterTokens = filter.split(' ')
@@ -1177,12 +1314,11 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                     }
                   }
                   if (!allTokensMatch) continue
-                } else if (facultyFilter && !faculty.name) {
-                  continue
                 }
-                let facultyEntry: any = {
-                  name: faculty.name,
-                  department: faculty.department || schoolName,
+
+                let facultyEntry: FacultyResultEntry = {
+                  name: facultyNameValue,
+                  department: faculty.department || departmentName || schoolName,
                   school: schoolName,
                   email: faculty.email || undefined,
                   profileUrl: faculty.profile_url || faculty.profileUrl || undefined,
@@ -1191,27 +1327,25 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 }
                 let teachesCourse = true
                 if (courseFilter) {
-                  const schoolAcronym = (() => {
-                    const match = schoolName.match(/\(([^)]+)\)/)
-                    if (match && match[1]) {
-                      return match[1].toLowerCase()
-                    }
-                    return schoolName.toLowerCase()
-                  })()
+                  const normalizedSchool = toSchool(deriveSchoolAcronym(schoolName))
+                  if (!normalizedSchool) {
+                    teachesCourse = false
+                    continue
+                  }
                   try {
-                    const courseDataResult = await getCourseData(schoolAcronym as any)
-                    const { allCourses } = courseDataResult
-                    const normalizeName = (name: string) =>
-                      name
+                    const { allCourses } = await getCourseData(normalizedSchool)
+                    const normalizeName = (value?: string) =>
+                      (value ?? '')
                         .replace(/^Dr\.?\s*|\s+/g, '')
                         .toLowerCase()
                         .trim()
-                    const facultyNameNormalized = normalizeName(faculty.name)
+                    const facultyNameNormalized = normalizeName(facultyNameValue)
                     const facultyCourses = allCourses.filter(course => {
                       const courseFacultyNormalized = normalizeName(course.FACULTY)
                       const courseTitle = course.TITLE.toLowerCase()
                       const courseCode = course.CODE.toLowerCase()
                       return (
+                        facultyNameNormalized.length > 0 &&
                         (courseFacultyNormalized.includes(facultyNameNormalized) ||
                           facultyNameNormalized.includes(courseFacultyNormalized)) &&
                         (courseTitle.includes(courseFilter) || courseCode.includes(courseFilter))
@@ -1219,41 +1353,38 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                     })
                     if (facultyCourses.length === 0) {
                       teachesCourse = false
-                    } else {
-                      if (includeCourses) {
-                        facultyEntry.courses = facultyCourses.map(course => ({
-                          code: course.CODE,
-                          title: course.TITLE,
-                          slot: course.SLOT,
-                          type: course.TYPE,
-                        }))
-                      }
+                    } else if (includeCourses) {
+                      facultyEntry.courses = facultyCourses.map(course => ({
+                        code: course.CODE,
+                        title: course.TITLE,
+                        slot: course.SLOT,
+                        type: course.TYPE,
+                        venue: course.VENUE,
+                      }))
                     }
-                  } catch (error) {
+                  } catch {
                     teachesCourse = false
                   }
                 } else if (includeCourses) {
-                  const schoolAcronym = (() => {
-                    const match = schoolName.match(/\(([^)]+)\)/)
-                    if (match && match[1]) {
-                      return match[1].toLowerCase()
-                    }
-                    return schoolName.toLowerCase()
-                  })()
+                  const normalizedSchool = toSchool(deriveSchoolAcronym(schoolName))
+                  if (!normalizedSchool) {
+                    facultyEntry.courses = []
+                    continue
+                  }
                   try {
-                    const courseDataResult = await getCourseData(schoolAcronym as any)
-                    const { allCourses } = courseDataResult
-                    const normalizeName = (name: string) =>
-                      name
+                    const { allCourses } = await getCourseData(normalizedSchool)
+                    const normalizeName = (value?: string) =>
+                      (value ?? '')
                         .replace(/^Dr\.?\s*|\s+/g, '')
                         .toLowerCase()
                         .trim()
-                    const facultyNameNormalized = normalizeName(faculty.name)
+                    const facultyNameNormalized = normalizeName(facultyNameValue)
                     const facultyCourses = allCourses.filter(course => {
                       const courseFacultyNormalized = normalizeName(course.FACULTY)
                       return (
-                        courseFacultyNormalized.includes(facultyNameNormalized) ||
-                        facultyNameNormalized.includes(courseFacultyNormalized)
+                        facultyNameNormalized.length > 0 &&
+                        (courseFacultyNormalized.includes(facultyNameNormalized) ||
+                          facultyNameNormalized.includes(courseFacultyNormalized))
                       )
                     })
                     facultyEntry.courses = facultyCourses.map(course => ({
@@ -1261,8 +1392,9 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                       title: course.TITLE,
                       slot: course.SLOT,
                       type: course.TYPE,
+                      venue: course.VENUE,
                     }))
-                  } catch (error) {
+                  } catch {
                     facultyEntry.courses = []
                   }
                 }
@@ -1275,20 +1407,15 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
 
           if (results.length === 1 && !courseQuery && !includeCourses) {
             const faculty = results[0]
-            const schoolAcronym = (() => {
-              const match = faculty.school?.match(/\(([^)]+)\)/)
-              if (match && match[1]) {
-                return match[1].toLowerCase()
-              }
-              return faculty.school?.toLowerCase() || ''
-            })()
+            const schoolAsEnum = faculty.school
+              ? toSchool(deriveSchoolAcronym(faculty.school))
+              : null
 
-            if (schoolAcronym) {
+            if (schoolAsEnum && faculty.name) {
               try {
-                const courseDataResult = await getCourseData(schoolAcronym as any)
-                const { allCourses } = courseDataResult
-                const normalizeName = (name: string) =>
-                  name
+                const { allCourses } = await getCourseData(schoolAsEnum)
+                const normalizeName = (name?: string) =>
+                  (name ?? '')
                     .replace(/^Dr\.?\s*|\s+/g, '')
                     .toLowerCase()
                     .trim()
@@ -1306,6 +1433,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                   title: course.TITLE,
                   slot: course.SLOT,
                   type: course.TYPE,
+                  venue: course.VENUE,
                 }))
 
                 return {
@@ -1315,7 +1443,9 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                   message:
                     `Found faculty member ${faculty.name} in ${faculty.department || faculty.school}.` +
                     `\n\nCourses taught (${faculty.courses.length}):` +
-                    `\n${faculty.courses.map((c: { code: string; title: string }) => `- ${c.code}: ${c.title}`).join('\n')}`,
+                    `\n${faculty.courses
+                      .map((c: FacultyCourseRecord) => `- ${c.code ?? 'N/A'}: ${c.title ?? 'Unknown'}`)
+                      .join('\n')}`,
                 }
               } catch (error) {
                 console.error('Error fetching courses for faculty:', error)
@@ -1419,7 +1549,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             }
           }
 
-          const data = await res.json()
+          const data: any = await res.json()
           console.debug(
             '[getSyllabus] loaded items:',
             Array.isArray(data) ? data.length : 'unknown'
@@ -1913,7 +2043,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               })
             }
 
-            const flags: Record<string, any> = {}
+            const flags: VtopCommandFlags = {}
             if (semester !== undefined) flags.semester = semester
             if (semesterQuery) flags.semesterQuery = semesterQuery
             if (course !== undefined) flags.course = course
@@ -1939,7 +2069,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             }
 
             const PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001'
-            let requestBody: any = {
+            const requestBody: VtopRequestBody = {
               command,
               username: user,
               flags,
@@ -1961,7 +2091,9 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             })
 
             if (!response.ok) {
-              const errorData = await response.json().catch(() => ({}))
+              const errorData = vtopErrorResponseSchema.parse(
+                await response.json().catch(() => ({}))
+              )
               const errorMsg =
                 typeof errorData === 'object' &&
                 'error' in errorData &&
@@ -1990,7 +2122,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               continue
             }
 
-            const result = await response.json()
+            const result = vtopProxyResponseSchema.parse(await response.json())
             if (result.success) {
               return {
                 success: true,
@@ -2327,8 +2459,8 @@ function getLevenshteinDistance(a: string, b: string): number {
   return matrix[a.length][b.length]
 }
 
-function normalizeString(str: string): string {
-  return str
+function normalizeString(str?: string): string {
+  return (str ?? '')
     .toLowerCase()
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')

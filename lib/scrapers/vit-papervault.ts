@@ -83,10 +83,12 @@ async function tryVITVaultListAPI(courseCode: string, examType?: string, year?: 
       papers: papers.slice(0, 100),
       source: 'vitpapervault.in',
       searchUrl: 'https://api.vitpapervault.in/api/paper/list',
+      error: undefined,
     }
   } catch (err) {
     console.warn('List API failed (network/parse error), falling back:', err)
-    return { success: false, papers: [] }
+    const message = err instanceof Error ? err.message : 'Unknown API error'
+    return { success: false, papers: [], error: message }
   }
 }
 

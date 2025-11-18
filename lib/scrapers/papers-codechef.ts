@@ -614,6 +614,11 @@ async function extractFinalUrlFromPaperPage(paperPageUrl: string): Promise<strin
   try {
     await new Promise(resolve => setTimeout(resolve, 200)) // Reduced from 500ms
 
+    const [{ default: puppeteer }, { default: chromium }] = await Promise.all([
+      import('puppeteer-core'),
+      import('@sparticuz/chromium'),
+    ])
+
     browser = await puppeteer.launch({
       args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
       defaultViewport: { width: 1280, height: 1024 },

@@ -117,6 +117,38 @@ const parseChatRequestPayload = (value: unknown): ChatRequestPayload | null => {
   return payload
 }
 
+const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    z
+      .object({
+        __schema_placeholder: z.boolean().optional(),
+      })
+      .catchall(jsonValueSchema),
+  ])
+)
+
+const structuredDataSchema: z.ZodType<Record<string, JsonValue>> = z
+  .object({
+    __schema_placeholder: jsonValueSchema.optional(),
+  })
+  .catchall(jsonValueSchema)
+
+const stripSchemaPlaceholders = (value: unknown): void => {
+  if (Array.isArray(value)) {
+    value.forEach(stripSchemaPlaceholders)
+    return
+  }
+  if (value && typeof value === 'object') {
+    delete (value as Record<string, unknown>).__schema_placeholder
+    Object.values(value).forEach(stripSchemaPlaceholders)
+  }
+}
+
 async function generateChatTitle(userMessage: string, userId?: string): Promise<string> {
   try {
     const cleanMessage = userMessage.trim().toLowerCase()
@@ -180,9 +212,7 @@ async function parseVTOPData(
     const vtopParseSchema = z.object({
       success: z.boolean(),
       formatted_content: z.string(),
-      structured_data: z
-        .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
-        .optional(),
+      structured_data: structuredDataSchema.optional(),
       summary: z.string(),
     })
 
@@ -368,7 +398,12 @@ Make the formatted_content engaging and conversational while being informative a
       userId
     )
 
-    return result.object
+    const parsed = result.object as z.infer<typeof vtopParseSchema>
+    if (parsed?.structured_data && typeof parsed.structured_data === 'object') {
+      stripSchemaPlaceholders(parsed.structured_data)
+    }
+
+    return parsed
   } catch (error) {
     console.error('Error parsing VTOP data with AI SDK:', error)
     return {

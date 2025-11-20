@@ -71,7 +71,7 @@ export const MobilePdfDockButton: React.FC = () => {
                 items.map(item => (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between gap-2 rounded-2xl border border-border/40 px-3 py-2"
+                    className="flex items-center justify-between gap-2 rounded-2xl bg-background/70 px-3 py-2"
                   >
                     <button
                       className="flex flex-col text-left text-sm text-foreground truncate flex-1"
@@ -184,14 +184,18 @@ export const DesktopPdfDockButton: React.FC = () => {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -6 }}
             transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-            className="absolute left-0 mt-10 w-72 z-50"
+            className="absolute left-0 mt-5 w-72 z-50"
             style={{ transformOrigin: 'top left' }}
           >
             <div className="bg-card border border-border rounded-xl p-2 shadow-lg space-y-2 max-h-[70vh] overflow-y-auto">
               {items.map(item => (
-                <div key={item.id} className="flex items-center justify-between gap-2">
+                <div
+                  key={item.id}
+                  className="flex border-none items-center justify-between gap-2 px-1"
+                >
                   <button
-                    className="flex items-center gap-2 text-sm text-foreground truncate text-left flex-1"
+                    className="flex items-center gap-2 text-sm text-foreground truncate text-left flex-1 border-0 bg-transparent outline-none"
+                    style={{ border: 'none', boxShadow: 'none' }}
                     onMouseEnter={() => {
                       if (closeTimerRef.current !== undefined) {
                         clearTimeout(closeTimerRef.current)
@@ -217,11 +221,12 @@ export const DesktopPdfDockButton: React.FC = () => {
                     }}
                     title={item.title || item.url}
                   >
-                    <FileSearch className="h-4 w-4 text-primary" />
+                    <FileSearch className="border-none h-4 w-10 text-primary" />
                     <span className="truncate">{item.title || 'PDF Document'}</span>
                   </button>
                   <button
-                    className="text-muted-foreground hover:text-foreground p-1 rounded"
+                    className="text-muted-foreground hover:text-foreground p-1 rounded bg-transparent outline-none"
+                    style={{ border: 'none', boxShadow: 'none' }}
                     onClick={() => removePdf && removePdf(item.id)}
                     aria-label="Close PDF"
                   >

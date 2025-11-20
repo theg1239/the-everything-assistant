@@ -1,0 +1,27 @@
+.tool-card {
+  border: 1px solid hsl(var(--border));
+  background: color-mix(in srgb, hsl(var(--muted)) 70%, white 30%);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.tool-card__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.tool-card__body {
+  margin-top: 8px;
+  color: hsl(var(--foreground));
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.tool-card__muted {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.85rem;
+}
+

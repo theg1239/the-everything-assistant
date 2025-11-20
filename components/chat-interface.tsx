@@ -1429,7 +1429,7 @@ function PureChatInterfaceComponent({
                   handleSubmit={handleFormSubmit}
                   isLoading={isLoading}
                   onToolSelect={handleToolSelection}
-                  selectedTool={selectedTool}
+                  selectedTool={selectedTool || 'general'}
                   placeholder="ask anything..."
                 />{' '}
               </motion.div>
@@ -1764,7 +1764,7 @@ function PureChatInterfaceComponent({
                   placeholder="ask anything..."
                   stop={stop}
                   onToolSelect={handleToolSelection}
-                  selectedTool={selectedTool}
+                  selectedTool={selectedTool || 'general'}
                 />
                 <div className="px-2 sm:px-4 pb-0.5">
                   <p className="text-[10px] sm:text-xs text-muted-foreground text-center leading-tight">

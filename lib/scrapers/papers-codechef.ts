@@ -1,6 +1,24 @@
 import { findFullCourseName } from '../course-map'
 import { BROWSER_TOOLS_ENABLED } from '../browser-flags'
 
+let cachedPuppeteer: any = null
+let cachedChromium: any = null
+
+async function getBrowserDeps() {
+  if (!BROWSER_TOOLS_ENABLED) {
+    throw new Error('Browser scraping is disabled (BROWSER_TOOLS_ENABLED = false)')
+  }
+  if (!cachedPuppeteer || !cachedChromium) {
+    const [{ default: puppeteer }, { default: chromium }] = await Promise.all([
+      import('puppeteer-core'),
+      import('@sparticuz/chromium'),
+    ])
+    cachedPuppeteer = puppeteer
+    cachedChromium = chromium
+  }
+  return { puppeteer: cachedPuppeteer, chromium: cachedChromium }
+}
+
 const DEBUG_PAPERS =
   process.env.DEBUG_PAPERS_CODECHEF === '1' ||
   process.env.DEBUG_PAPERS_CODECHEF === 'true' ||
@@ -89,11 +107,6 @@ export async function scrapePapersCodeChef(
       source: 'papers.codechef',
     }
   }
-
-  const [{ default: puppeteer }, { default: chromium }] = await Promise.all([
-    import('puppeteer-core'),
-    import('@sparticuz/chromium'),
-  ])
   try {
     dbg('start', { courseCode, examType, year })
     const apiResult = await tryAPIApproach(courseCode, examType, year)
@@ -431,6 +444,8 @@ async function tryBrowserScraping(
   examType?: string,
   year?: string
 ): Promise<ScraperResult> {
+  const { puppeteer, chromium } = await getBrowserDeps()
+
   let browser
   try {
     dbg('launching puppeteer for browser scraping')
@@ -454,7 +469,7 @@ async function tryBrowserScraping(
     await new Promise(res => setTimeout(res, 1500)) // Reduced wait time
 
     const papers = await page.evaluate(
-      (courseCode, examType, year) => {
+      (courseCode: string, examType?: string, year?: string) => {
         const paperElements = Array.from(
           document.querySelectorAll(
             'a[href*="/paper/"], .paper-card, .paper-item, [data-testid*="paper"], .card, .grid > div, .paper-link'
@@ -615,6 +630,8 @@ async function extractFinalUrlFromPaperPage(paperPageUrl: string): Promise<strin
   let browser
   try {
     await new Promise(resolve => setTimeout(resolve, 200)) // Reduced from 500ms
+
+    const { puppeteer, chromium } = await getBrowserDeps()
 
     browser = await puppeteer.launch({
       args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],

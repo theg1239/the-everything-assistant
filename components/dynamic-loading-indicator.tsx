@@ -239,20 +239,6 @@ export function DynamicLoadingIndicator({
   className = '',
   isAssistantStreaming = false,
 }: DynamicLoadingIndicatorProps) {
-  const [streamingDelayActive, setStreamingDelayActive] = React.useState(false)
-
-  React.useEffect(() => {
-    if (isAssistantStreaming) {
-      setStreamingDelayActive(true)
-      const timeout = setTimeout(() => setStreamingDelayActive(false), 500)
-      return () => clearTimeout(timeout)
-    }
-    setStreamingDelayActive(false)
-    return undefined
-  }, [isAssistantStreaming])
-
-  const suppressDuringStreaming = isAssistantStreaming && !streamingDelayActive
-  const lastMessage = messages[messages.length - 1]
 
   const [paperStatus, setPaperStatus] = React.useState<{
     runId: string
@@ -260,6 +246,15 @@ export function DynamicLoadingIndicator({
     steps: { step: string; detail?: any; ts: number }[]
   } | null>(null)
   const activeRunRef = React.useRef<string | null>(null)
+  const lastMessage = messages[messages.length - 1]
+  const thinkingFallback =
+    !isAssistantStreaming &&
+    !isLoading &&
+    !paperStatus &&
+    messages.length > 0 &&
+    lastMessage?.role === 'user'
+
+  const isActive = isLoading || !!paperStatus || thinkingFallback
 
   React.useEffect(() => {
     if (lastMessage?.role === 'user') {
@@ -404,16 +399,16 @@ export function DynamicLoadingIndicator({
   }, [isDoneStep])
 
   React.useEffect(() => {
-    if (!isLoading && paperStatus && paperStatus.steps.length === 0) {
+    if (!isLoading && !isAssistantStreaming && paperStatus && paperStatus.steps.length === 0) {
       const t = setTimeout(() => setHideAfterNoProgress(true), 1000)
       return () => clearTimeout(t)
     } else if (hideAfterNoProgress) {
       setHideAfterNoProgress(false)
     }
-  }, [isLoading, paperStatus])
+  }, [isLoading, isAssistantStreaming, paperStatus])
 
-  if (suppressDuringStreaming) return null
-  if (!isLoading && !paperStatus) return null
+  if (isAssistantStreaming) return null
+  if (!isActive) return null
   if (hideAfterDone || hideAfterNoProgress) return null
 
   const labelMap: Record<string, string> = {
@@ -448,7 +443,7 @@ export function DynamicLoadingIndicator({
 
     const lastMessage = messages[messages.length - 1]
 
-    if (lastMessage?.role === 'user') {
+    if (thinkingFallback || lastMessage?.role === 'user') {
       return TOOL_CONFIGS.thinking
     }
     if (lastMessage?.role === 'assistant' && lastMessage.toolInvocations) {

@@ -287,12 +287,14 @@ const PureMessageBubble = ({
           )}
 
           <div
-            className={cn('flex flex-col gap-4', {
+            className={cn('flex flex-col gap-4 break-words', {
               'bg-primary text-primary-foreground px-3 py-2 rounded-xl': message.role === 'user',
             })}
           >
             {isUser ? (
-              <p className="text-base leading-relaxed">{message.content}</p>
+              <p className="text-base leading-relaxed whitespace-pre-wrap break-words">
+                {message.content}
+              </p>
             ) : hasContent ? (
               <OptimizedMarkdown id={message.id} content={message.content as string} />
             ) : null}

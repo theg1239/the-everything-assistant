@@ -220,12 +220,12 @@ export async function POST(req: Request) {
         model: await rateLimitedAI.google.model(modelName),
         messages: finalMessages,
         tools,
-        temperature: 0.7,
-        maxTokens: 4096,
+        temperature: 1.0,
+        maxTokens: 10000,
         providerOptions: {
           google: {
             thinkingConfig: {
-              thinkingBudget: 2048,
+              thinkingBudget: 4096,
               includeThoughts: true,
             },
           },

@@ -586,8 +586,6 @@ export default function CustomBackground() {
             enablePost={
               backgroundConfig.grid?.enablePost ?? defaultBackgroundConfig.grid!.enablePost
             }
-            enableWebcam={false}
-            showPreview={false}
           />
         )
 

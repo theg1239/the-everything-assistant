@@ -17,12 +17,12 @@ import { getCourseData, School } from './ffcs-tool'
 import { createKnowledgeTools } from './knowledge-tools'
 import { createMemoryTool } from './memory/memory-tools'
 import { hasVTOPCredentials, getFormattedVTOPCredentials } from './server-vtop-credentials'
-import {
-  indexPastPapers,
-  askIndexedPaperQuestion,
-  smartPaperSearchByQuestion,
-  getPaperIndexMeta,
-} from './agents/paper-agent'
+// import {
+//   indexPastPapers,
+//   askIndexedPaperQuestion,
+//   smartPaperSearchByQuestion,
+//   getPaperIndexMeta,
+// } from './agents/paper-agent'
 import { analyzeQuestionFrequencies } from './agents/question-frequency-agent'
 import type {
   FacultyCourseRecord,
@@ -891,8 +891,8 @@ export function createVITTools(userId: string) {
           const sources: any[] = []
 
           results.forEach(r => {
-            if (r.status === 'fulfilled' && r.value.success) {
-              papers.push(...r.value.papers)
+            if (r.status === 'fulfilled' && r.value?.success) {
+              papers.push(...(r.value.papers || []))
               sources.push(r.value.source)
             }
           })

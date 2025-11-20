@@ -71,8 +71,8 @@ export function paperTools() {
         const sources: any[] = []
 
         results.forEach(r => {
-          if (r.status === 'fulfilled' && r.value.success) {
-            papers.push(...r.value.papers)
+          if (r.status === 'fulfilled' && r.value?.success) {
+            papers.push(...(r.value.papers || []))
             sources.push(r.value.source)
           }
         })
@@ -126,4 +126,3 @@ export function paperTools() {
 }
 
 export type PaperTools = ReturnType<typeof paperTools>
-

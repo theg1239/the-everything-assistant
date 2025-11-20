@@ -72,16 +72,16 @@ export async function GET(req: NextRequest) {
 
     results.forEach((r, idx) => {
       const name = sourceNames[idx] || `source_${idx}`
-      if (r.status === 'fulfilled') {
+      if (r.status === 'fulfilled' && r.value) {
         if (r.value.success) {
-          papers.push(...r.value.papers)
-          sources.push((r.value as any).source || name)
+          papers.push(...(r.value.papers || []))
+          sources.push((r.value as any)?.source || name)
         } else {
           const errMsg = (r.value as any)?.error || 'unknown_error'
           sourceErrors.push({ source: name, error: errMsg })
         }
-      } else {
-        sourceErrors.push({ source: name, error: r.reason?.message || 'rejected' })
+      } else if (r.status === 'rejected') {
+        sourceErrors.push({ source: name, error: (r as PromiseRejectedResult).reason?.message || 'rejected' })
       }
     })
 

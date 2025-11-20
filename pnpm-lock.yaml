@@ -26,9 +26,6 @@ importers:
       '@ai-sdk/react':
         specifier: latest
         version: 2.0.93(react@19.2.0)(zod@3.25.76)
-      '@dqbd/tiktoken':
-        specifier: ^1.0.21
-        version: 1.0.22
       '@emotion/is-prop-valid':
         specifier: ^1.2.1
         version: 1.4.0
@@ -976,9 +973,6 @@ packages:
   '@dotenvx/dotenvx@1.31.0':
     resolution: {integrity: sha512-GeDxvtjiRuoyWVU9nQneId879zIyNdL05bS7RKiqMkfBSKpHMWHLoRyRqjYWLaXmX/llKO1hTlqHDmatkQAjPA==}
     hasBin: true
-
-  '@dqbd/tiktoken@1.0.22':
-    resolution: {integrity: sha512-RYhO8xeHkMNX5Ixqf4M1Ve3siCYJY/dI0yLnlX4M4oIEDOvjMIQ+E+3OUpAaZcWTaMtQJzGcDAghYfllpx3i/w==}
 
   '@ecies/ciphers@0.2.5':
     resolution: {integrity: sha512-GalEZH4JgOMHYYcYmVqnFirFsjZHeoGMDt9IxEnM9F7GRUUyUksJ7Ou53L83WHJq3RWKD3AcBpo0iQh0oMpf8A==}
@@ -9725,8 +9719,6 @@ snapshots:
       object-treeify: 1.1.33
       picomatch: 4.0.3
       which: 4.0.0
-
-  '@dqbd/tiktoken@1.0.22': {}
 
   '@ecies/ciphers@0.2.5(@noble/ciphers@1.3.0)':
     dependencies:

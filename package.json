@@ -37,7 +37,6 @@
     "@ai-sdk/groq": "latest",
     "@ai-sdk/provider": "^2.0.0",
     "@ai-sdk/react": "latest",
-    "@dqbd/tiktoken": "^1.0.21",
     "@emotion/is-prop-valid": "^1.2.1",
     "@langchain/core": "^0.3.61",
     "@langchain/textsplitters": "^0.1.0",

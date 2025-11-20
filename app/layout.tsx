@@ -1,6 +1,6 @@
 import type React from 'react'
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import localFont from 'next/font/local'
 import '@/styles/globals.css'
 import '@/styles/sidebar-styles.css'
 import '@/styles/hamburger-styles.css'
@@ -28,7 +28,12 @@ import { SidebarWrapper } from '@/components/sidebar-wrapper'
 import { BotIdClient } from 'botid/client'
 import type { LatestBroadcastResponse } from '@/types/api/broadcast'
 
-const inter = Inter({ subsets: ['latin'] })
+const googleSansFlex = localFont({
+  src: '../public/GoogleSansFlex.ttf',
+  weight: '100 900',
+  style: 'normal',
+  display: 'swap',
+})
 
 const protectedRoutes = [
   {
@@ -249,7 +254,7 @@ export default async function RootLayout({
           }
         `}</style>
       </head>
-      <body className={`${inter.className}`}>
+      <body className={googleSansFlex.className}>
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-2 focus:rounded-md focus:bg-primary focus:text-primary-foreground"

@@ -102,6 +102,8 @@
     "pdf-parse": "^1.1.1",
     "pdfjs-dist": "^5.4.54",
     "pg": "^8.16.2",
+    "posthog-js": "^1.297.2",
+    "posthog-node": "^5.13.2",
     "postprocessing": "^6.37.4",
     "puppeteer-core": "latest",
     "qrcode": "^1.5.4",

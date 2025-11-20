@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef } from 'react'
 import {
   EffectComposer,
   RenderPass,
@@ -7,12 +7,8 @@ import {
   ChromaticAberrationEffect,
 } from 'postprocessing'
 import * as THREE from 'three'
-import * as faceapi from 'face-api.js'
 
 type GridScanProps = {
-  enableWebcam?: boolean
-  showPreview?: boolean
-  modelsPath?: string
   sensitivity?: number
 
   lineThickness?: number
@@ -310,9 +306,6 @@ void main(){
 `
 
 export const GridScan: React.FC<GridScanProps> = ({
-  enableWebcam = false,
-  showPreview = false,
-  modelsPath = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights',
   sensitivity = 0.55,
   lineThickness = 1,
   linesColor = '#392e4e',
@@ -340,7 +333,6 @@ export const GridScan: React.FC<GridScanProps> = ({
   style,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const videoRef = useRef<HTMLVideoElement | null>(null)
 
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
   const materialRef = useRef<THREE.ShaderMaterial | null>(null)
@@ -349,8 +341,6 @@ export const GridScan: React.FC<GridScanProps> = ({
   const chromaRef = useRef<ChromaticAberrationEffect | null>(null)
   const rafRef = useRef<number | null>(null)
 
-  const [modelsReady, setModelsReady] = useState(false)
-  const [uiFaceActive, setUiFaceActive] = useState(false)
 
   const lookTarget = useRef(new THREE.Vector2(0, 0))
   const tiltTarget = useRef(0)
@@ -380,16 +370,10 @@ export const GridScan: React.FC<GridScanProps> = ({
     }
   }
 
-  const bufX = useRef<number[]>([])
-  const bufY = useRef<number[]>([])
-  const bufT = useRef<number[]>([])
-  const bufYaw = useRef<number[]>([])
-
   const s = THREE.MathUtils.clamp(sensitivity, 0, 1)
   const skewScale = THREE.MathUtils.lerp(0.06, 0.2, s)
   const tiltScale = THREE.MathUtils.lerp(0.12, 0.3, s)
   const yawScale = THREE.MathUtils.lerp(0.1, 0.28, s)
-  const depthResponse = THREE.MathUtils.lerp(0.25, 0.45, s)
   const smoothTime = THREE.MathUtils.lerp(0.45, 0.12, s)
   const maxSpeed = Infinity
 
@@ -400,7 +384,6 @@ export const GridScan: React.FC<GridScanProps> = ({
     if (!el) return
     let leaveTimer: number | null = null
     const onMove = (e: MouseEvent) => {
-      if (uiFaceActive) return
       if (leaveTimer) {
         clearTimeout(leaveTimer)
         leaveTimer = null
@@ -431,7 +414,6 @@ export const GridScan: React.FC<GridScanProps> = ({
       }
     }
     const onLeave = () => {
-      if (uiFaceActive) return
       if (leaveTimer) clearTimeout(leaveTimer)
       leaveTimer = window.setTimeout(
         () => {
@@ -453,7 +435,7 @@ export const GridScan: React.FC<GridScanProps> = ({
       if (scanOnClick) el.removeEventListener('click', onClick)
       if (leaveTimer) clearTimeout(leaveTimer)
     }
-  }, [uiFaceActive, snapBackDelay, scanOnClick, enableGyro])
+  }, [snapBackDelay, scanOnClick, enableGyro])
 
   useEffect(() => {
     const container = containerRef.current
@@ -692,7 +674,6 @@ export const GridScan: React.FC<GridScanProps> = ({
   useEffect(() => {
     if (!enableGyro) return
     const handler = (e: DeviceOrientationEvent) => {
-      if (uiFaceActive) return
       const gamma = e.gamma ?? 0
       const beta = e.beta ?? 0
       const nx = THREE.MathUtils.clamp(gamma / 45, -1, 1)
@@ -704,130 +685,8 @@ export const GridScan: React.FC<GridScanProps> = ({
     return () => {
       window.removeEventListener('deviceorientation', handler)
     }
-  }, [enableGyro, uiFaceActive])
+  }, [enableGyro])
 
-  useEffect(() => {
-    let canceled = false
-    const load = async () => {
-      try {
-        await Promise.all([
-          faceapi.nets.tinyFaceDetector.loadFromUri(modelsPath),
-          faceapi.nets.faceLandmark68TinyNet.loadFromUri(modelsPath),
-        ])
-        if (!canceled) setModelsReady(true)
-      } catch {
-        if (!canceled) setModelsReady(false)
-      }
-    }
-    load()
-    return () => {
-      canceled = true
-    }
-  }, [modelsPath])
-
-  useEffect(() => {
-    let stop = false
-    let lastDetect = 0
-
-    const start = async () => {
-      if (!enableWebcam || !modelsReady) return
-      const video = videoRef.current
-      if (!video) return
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false,
-        })
-        video.srcObject = stream
-        await video.play()
-      } catch {
-        return
-      }
-
-      const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 })
-
-      const detect = async (ts: number) => {
-        if (stop) return
-
-        if (ts - lastDetect >= 33) {
-          lastDetect = ts
-          try {
-            const res = await faceapi.detectSingleFace(video, opts).withFaceLandmarks(true)
-            if (res && res.detection) {
-              const det = res.detection
-              const box = det.box
-              const vw = video.videoWidth || 1
-              const vh = video.videoHeight || 1
-
-              const cx = box.x + box.width * 0.5
-              const cy = box.y + box.height * 0.5
-              const nx = (cx / vw) * 2 - 1
-              const ny = (cy / vh) * 2 - 1
-              medianPush(bufX.current, nx, 5)
-              medianPush(bufY.current, ny, 5)
-              const nxm = median(bufX.current)
-              const nym = median(bufY.current)
-
-              const look = new THREE.Vector2(Math.tanh(nxm), Math.tanh(nym))
-
-              const faceSize = Math.min(1, Math.hypot(box.width / vw, box.height / vh))
-              const depthScale = 1 + depthResponse * (faceSize - 0.25)
-              lookTarget.current.copy(look.multiplyScalar(depthScale))
-
-              const leftEye = res.landmarks.getLeftEye()
-              const rightEye = res.landmarks.getRightEye()
-              const lc = centroid(leftEye)
-              const rc = centroid(rightEye)
-              const tilt = Math.atan2(rc.y - lc.y, rc.x - lc.x)
-              medianPush(bufT.current, tilt, 5)
-              tiltTarget.current = median(bufT.current)
-
-              const nose = res.landmarks.getNose()
-              const tip = nose[nose.length - 1] || nose[Math.floor(nose.length / 2)]
-              const jaw = res.landmarks.getJawOutline()
-              const leftCheek = jaw[3] || jaw[2]
-              const rightCheek = jaw[13] || jaw[14]
-              const dL = dist2(tip, leftCheek)
-              const dR = dist2(tip, rightCheek)
-              const eyeDist = Math.hypot(rc.x - lc.x, rc.y - lc.y) + 1e-6
-              let yawSignal = THREE.MathUtils.clamp((dR - dL) / (eyeDist * 1.6), -1, 1)
-              yawSignal = Math.tanh(yawSignal)
-              medianPush(bufYaw.current, yawSignal, 5)
-              yawTarget.current = median(bufYaw.current)
-
-              setUiFaceActive(true)
-            } else {
-              setUiFaceActive(false)
-            }
-          } catch {
-            setUiFaceActive(false)
-          }
-        }
-
-        if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
-          ;(video as any).requestVideoFrameCallback(() => detect(performance.now()))
-        } else {
-          requestAnimationFrame(detect)
-        }
-      }
-
-      requestAnimationFrame(detect)
-    }
-
-    start()
-
-    return () => {
-      stop = true
-      const video = videoRef.current
-      if (video) {
-        const stream = video.srcObject as MediaStream | null
-        if (stream) stream.getTracks().forEach(t => t.stop())
-        video.pause()
-        video.srcObject = null
-      }
-    }
-  }, [enableWebcam, modelsReady, depthResponse])
 
   return (
     <div
@@ -835,26 +694,6 @@ export const GridScan: React.FC<GridScanProps> = ({
       className={`relative w-full h-full overflow-hidden ${className ?? ''}`}
       style={style}
     >
-      {showPreview && (
-        <div className="absolute right-3 bottom-3 w-[220px] h-[132px] rounded-lg overflow-hidden border border-white/25 shadow-[0_4px_16px_rgba(0,0,0,0.4)] bg-black text-white text-[12px] leading-[1.2] font-sans pointer-events-none">
-          <video
-            ref={videoRef}
-            muted
-            playsInline
-            autoPlay
-            className="w-full h-full object-cover -scale-x-100"
-          />
-          <div className="absolute left-2 top-2 px-[6px] py-[2px] bg-black/50 rounded-[6px] backdrop-blur-[4px]">
-            {enableWebcam
-              ? modelsReady
-                ? uiFaceActive
-                  ? 'Face: tracking'
-                  : 'Face: searching'
-                : 'Loading models'
-              : 'Webcam disabled'}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -932,33 +771,6 @@ function smoothDampFloat(
     velRef.v = 0
   }
   return { value: out, v: velRef.v }
-}
-
-function medianPush(buf: number[], v: number, maxLen: number) {
-  buf.push(v)
-  if (buf.length > maxLen) buf.shift()
-}
-
-function median(buf: number[]) {
-  if (buf.length === 0) return 0
-  const a = [...buf].sort((x, y) => x - y)
-  const mid = Math.floor(a.length / 2)
-  return a.length % 2 ? a[mid] : (a[mid - 1] + a[mid]) * 0.5
-}
-
-function centroid(points: { x: number; y: number }[]) {
-  let x = 0,
-    y = 0
-  const n = points.length || 1
-  for (const p of points) {
-    x += p.x
-    y += p.y
-  }
-  return { x: x / n, y: y / n }
-}
-
-function dist2(a: { x: number; y: number }, b: { x: number; y: number }) {
-  return Math.hypot(a.x - b.x, a.y - b.y)
 }
 
 export default GridScan

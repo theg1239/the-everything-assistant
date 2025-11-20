@@ -184,10 +184,10 @@ export const DesktopPdfDockButton: React.FC = () => {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -6 }}
             transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-            className="absolute right-0 mt-10 w-72 z-50"
-            style={{ transformOrigin: 'top right' }}
+            className="absolute left-0 mt-10 w-72 z-50"
+            style={{ transformOrigin: 'top left' }}
           >
-            <div className="bg-card border border-border rounded-xl p-2 shadow-lg space-y-2">
+            <div className="bg-card border border-border rounded-xl p-2 shadow-lg space-y-2 max-h-[70vh] overflow-y-auto">
               {items.map(item => (
                 <div key={item.id} className="flex items-center justify-between gap-2">
                   <button

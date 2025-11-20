@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
-import ReactMarkdown from 'react-markdown'
+import { Streamdown } from 'streamdown'
 import { OptimizedMarkdown } from './optimized-markdown'
 import { ToolCallDisplay } from './tool-call-display'
 import { MessageActions } from './message-actions'
@@ -186,9 +186,9 @@ const ReasoningPanel = memo(function ReasoningPanel({
         )}
       >
         <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-3 text-muted-foreground max-h-64 overflow-y-auto">
-          <div className="prose prose-sm dark:prose-invert leading-relaxed">
-            <ReactMarkdown>{text}</ReactMarkdown>
-          </div>
+          <Streamdown className="prose prose-sm dark:prose-invert leading-relaxed">
+            {text}
+          </Streamdown>
         </div>
       </div>
     </div>

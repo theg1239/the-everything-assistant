@@ -20,7 +20,7 @@ import {
   Code,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import ReactMarkdown from 'react-markdown'
+import { Streamdown } from 'streamdown'
 import { toast } from 'sonner'
 import { readJson } from '@/lib/http'
 
@@ -392,90 +392,88 @@ function CanvasContent({ isOpen, onClose, chatId, initialDocument }: CanvasProps
 
               {viewMode === 'preview' && (
                 <div className="h-full overflow-y-auto p-4 sm:p-6 bg-muted/10">
-                  <div className="prose prose-slate dark:prose-invert max-w-none prose-sm sm:prose-base">
-                    <ReactMarkdown
-                      components={{
-                        h1: ({ children }) => (
-                          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-4 sm:mb-6 pb-2 border-b border-border">
+                  <Streamdown
+                    className="prose prose-slate dark:prose-invert max-w-none prose-sm sm:prose-base"
+                    components={{
+                      h1: ({ children }) => (
+                        <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-4 sm:mb-6 pb-2 border-b border-border">
+                          {children}
+                        </h1>
+                      ),
+                      h2: ({ children }) => (
+                        <h2 className="text-xl sm:text-2xl font-semibold text-foreground mb-3 sm:mb-4 mt-6 sm:mt-8">
+                          {children}
+                        </h2>
+                      ),
+                      h3: ({ children }) => (
+                        <h3 className="text-lg sm:text-xl font-medium text-foreground mb-2 sm:mb-3 mt-4 sm:mt-6">
+                          {children}
+                        </h3>
+                      ),
+                      p: ({ children }) => (
+                        <p className="text-foreground mb-3 sm:mb-4 leading-relaxed text-sm sm:text-base">
+                          {children}
+                        </p>
+                      ),
+                      ul: ({ children }) => (
+                        <ul className="list-disc pl-4 sm:pl-6 mb-3 sm:mb-4 text-foreground space-y-1">
+                          {children}
+                        </ul>
+                      ),
+                      ol: ({ children }) => (
+                        <ol className="list-decimal pl-4 sm:pl-6 mb-3 sm:mb-4 text-foreground space-y-1">
+                          {children}
+                        </ol>
+                      ),
+                      li: ({ children }) => (
+                        <li className="leading-relaxed text-sm sm:text-base">{children}</li>
+                      ),
+                      code: ({ children }) => (
+                        <code className="bg-muted px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-xs sm:text-sm font-mono border">
+                          {children}
+                        </code>
+                      ),
+                      pre: ({ children }) => (
+                        <pre className="bg-muted p-3 sm:p-4 rounded-lg overflow-x-auto mb-3 sm:mb-4 border border-border">
+                          <code className="text-xs sm:text-sm font-mono">{children}</code>
+                        </pre>
+                      ),
+                      blockquote: ({ children }) => (
+                        <blockquote className="border-l-4 border-primary pl-3 sm:pl-4 italic text-muted-foreground mb-3 sm:mb-4 bg-muted/50 py-2 rounded-r text-sm sm:text-base">
+                          {children}
+                        </blockquote>
+                      ),
+                      a: ({ children, href }) => (
+                        <a
+                          href={href}
+                          className="text-primary hover:text-primary/80 underline text-sm sm:text-base"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {children}
+                        </a>
+                      ),
+                      table: ({ children }) => (
+                        <div className="overflow-x-auto mb-3 sm:mb-4">
+                          <table className="min-w-full divide-y divide-border text-sm">
                             {children}
-                          </h1>
-                        ),
-                        h2: ({ children }) => (
-                          <h2 className="text-xl sm:text-2xl font-semibold text-foreground mb-3 sm:mb-4 mt-6 sm:mt-8">
-                            {children}
-                          </h2>
-                        ),
-                        h3: ({ children }) => (
-                          <h3 className="text-lg sm:text-xl font-medium text-foreground mb-2 sm:mb-3 mt-4 sm:mt-6">
-                            {children}
-                          </h3>
-                        ),
-                        p: ({ children }) => (
-                          <p className="text-foreground mb-3 sm:mb-4 leading-relaxed text-sm sm:text-base">
-                            {children}
-                          </p>
-                        ),
-                        ul: ({ children }) => (
-                          <ul className="list-disc pl-4 sm:pl-6 mb-3 sm:mb-4 text-foreground space-y-1">
-                            {children}
-                          </ul>
-                        ),
-                        ol: ({ children }) => (
-                          <ol className="list-decimal pl-4 sm:pl-6 mb-3 sm:mb-4 text-foreground space-y-1">
-                            {children}
-                          </ol>
-                        ),
-                        li: ({ children }) => (
-                          <li className="leading-relaxed text-sm sm:text-base">{children}</li>
-                        ),
-                        code: ({ children }) => (
-                          <code className="bg-muted px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-xs sm:text-sm font-mono border">
-                            {children}
-                          </code>
-                        ),
-                        pre: ({ children }) => (
-                          <pre className="bg-muted p-3 sm:p-4 rounded-lg overflow-x-auto mb-3 sm:mb-4 border border-border">
-                            <code className="text-xs sm:text-sm font-mono">{children}</code>
-                          </pre>
-                        ),
-                        blockquote: ({ children }) => (
-                          <blockquote className="border-l-4 border-primary pl-3 sm:pl-4 italic text-muted-foreground mb-3 sm:mb-4 bg-muted/50 py-2 rounded-r text-sm sm:text-base">
-                            {children}
-                          </blockquote>
-                        ),
-                        a: ({ children, href }) => (
-                          <a
-                            href={href}
-                            className="text-primary hover:text-primary/80 underline text-sm sm:text-base"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            {children}
-                          </a>
-                        ),
-                        table: ({ children }) => (
-                          <div className="overflow-x-auto mb-3 sm:mb-4">
-                            <table className="min-w-full divide-y divide-border text-sm">
-                              {children}
-                            </table>
-                          </div>
-                        ),
-                        th: ({ children }) => (
-                          <th className="px-2 sm:px-4 py-1 sm:py-2 bg-muted text-left text-xs sm:text-sm font-medium text-foreground">
-                            {children}
-                          </th>
-                        ),
-                        td: ({ children }) => (
-                          <td className="px-2 sm:px-4 py-1 sm:py-2 text-xs sm:text-sm text-foreground border-t border-border">
-                            {children}
-                          </td>
-                        ),
-                      }}
-                    >
-                      {document.content ||
-                        '*No content yet. Switch to edit mode to start writing.*'}
-                    </ReactMarkdown>
-                  </div>
+                          </table>
+                        </div>
+                      ),
+                      th: ({ children }) => (
+                        <th className="px-2 sm:px-4 py-1 sm:py-2 bg-muted text-left text-xs sm:text-sm font-medium text-foreground">
+                          {children}
+                        </th>
+                      ),
+                      td: ({ children }) => (
+                        <td className="px-2 sm:px-4 py-1 sm:py-2 text-xs sm:text-sm text-foreground border-t border-border">
+                          {children}
+                        </td>
+                      ),
+                    }}
+                  >
+                    {document.content || '*No content yet. Switch to edit mode to start writing.*'}
+                  </Streamdown>
                 </div>
               )}
 
@@ -490,60 +488,59 @@ function CanvasContent({ isOpen, onClose, chatId, initialDocument }: CanvasProps
                     />
                   </div>
                   <div className="w-1/2 overflow-y-auto p-4 bg-muted/10">
-                    <div className="prose prose-slate dark:prose-invert max-w-none prose-sm">
-                      <ReactMarkdown
-                        components={{
-                          h1: ({ children }) => (
-                            <h1 className="text-xl font-bold text-foreground mb-3 pb-1 border-b border-border">
-                              {children}
-                            </h1>
-                          ),
-                          h2: ({ children }) => (
-                            <h2 className="text-lg font-semibold text-foreground mb-2 mt-4">
-                              {children}
-                            </h2>
-                          ),
-                          h3: ({ children }) => (
-                            <h3 className="text-base font-medium text-foreground mb-2 mt-3">
-                              {children}
-                            </h3>
-                          ),
-                          p: ({ children }) => (
-                            <p className="text-foreground mb-2 leading-relaxed text-sm">
-                              {children}
-                            </p>
-                          ),
-                          ul: ({ children }) => (
-                            <ul className="list-disc pl-4 mb-2 text-foreground text-sm">
-                              {children}
-                            </ul>
-                          ),
-                          ol: ({ children }) => (
-                            <ol className="list-decimal pl-4 mb-2 text-foreground text-sm">
-                              {children}
-                            </ol>
-                          ),
-                          li: ({ children }) => <li className="mb-1 text-sm">{children}</li>,
-                          code: ({ children }) => (
-                            <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono border">
-                              {children}
-                            </code>
-                          ),
-                          pre: ({ children }) => (
-                            <pre className="bg-muted p-2 rounded overflow-x-auto mb-2 border border-border">
-                              <code className="text-xs font-mono">{children}</code>
-                            </pre>
-                          ),
-                          blockquote: ({ children }) => (
-                            <blockquote className="border-l-2 border-primary pl-2 italic text-muted-foreground mb-2 text-sm">
-                              {children}
-                            </blockquote>
-                          ),
-                        }}
-                      >
-                        {document.content || '*No content yet...*'}
-                      </ReactMarkdown>
-                    </div>
+                    <Streamdown
+                      className="prose prose-slate dark:prose-invert max-w-none prose-sm"
+                      components={{
+                        h1: ({ children }) => (
+                          <h1 className="text-xl font-bold text-foreground mb-3 pb-1 border-b border-border">
+                            {children}
+                          </h1>
+                        ),
+                        h2: ({ children }) => (
+                          <h2 className="text-lg font-semibold text-foreground mb-2 mt-4">
+                            {children}
+                          </h2>
+                        ),
+                        h3: ({ children }) => (
+                          <h3 className="text-base font-medium text-foreground mb-2 mt-3">
+                            {children}
+                          </h3>
+                        ),
+                        p: ({ children }) => (
+                          <p className="text-foreground mb-2 leading-relaxed text-sm">
+                            {children}
+                          </p>
+                        ),
+                        ul: ({ children }) => (
+                          <ul className="list-disc pl-4 mb-2 text-foreground text-sm">
+                            {children}
+                          </ul>
+                        ),
+                        ol: ({ children }) => (
+                          <ol className="list-decimal pl-4 mb-2 text-foreground text-sm">
+                            {children}
+                          </ol>
+                        ),
+                        li: ({ children }) => <li className="mb-1 text-sm">{children}</li>,
+                        code: ({ children }) => (
+                          <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono border">
+                            {children}
+                          </code>
+                        ),
+                        pre: ({ children }) => (
+                          <pre className="bg-muted p-2 rounded overflow-x-auto mb-2 border border-border">
+                            <code className="text-xs font-mono">{children}</code>
+                          </pre>
+                        ),
+                        blockquote: ({ children }) => (
+                          <blockquote className="border-l-2 border-primary pl-2 italic text-muted-foreground mb-2 text-sm">
+                            {children}
+                          </blockquote>
+                        ),
+                      }}
+                    >
+                      {document.content || '*No content yet...*'}
+                    </Streamdown>
                   </div>
                 </div>
               )}

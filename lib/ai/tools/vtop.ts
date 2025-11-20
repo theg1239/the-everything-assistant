@@ -1,5 +1,5 @@
 import { tool } from 'ai'
-import { z } from 'zod'
+import * as z from 'zod'
 
 import { hasVTOPCredentials, getFormattedVTOPCredentials } from '@/lib/server-vtop-credentials'
 import type {
@@ -10,7 +10,14 @@ import type {
 } from '@/types/tools'
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
-  z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(jsonValueSchema), z.record(jsonValueSchema)])
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    z.record(z.string(), jsonValueSchema),
+  ])
 )
 
 const vtopErrorResponseSchema = z
@@ -533,4 +540,3 @@ export function vtopTools() {
 }
 
 export type VtopTools = ReturnType<typeof vtopTools>
-

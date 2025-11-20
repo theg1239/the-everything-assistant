@@ -1,10 +1,17 @@
 import { tool } from 'ai'
-import { z } from 'zod'
+import * as z from 'zod'
 
 import type { JsonValue } from '@/types/tools'
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
-  z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(jsonValueSchema), z.record(jsonValueSchema)])
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    z.record(z.string(), jsonValueSchema),
+  ])
 )
 
 const redditAskResponseSchema = z.object({
@@ -29,7 +36,7 @@ const redditTrendingResponseSchema = z.object({
 })
 
 const redditStatsResponseSchema = z.object({
-  stats: z.record(z.number()).optional(),
+  stats: z.record(z.string(), z.number().optional()).optional(),
 })
 
 async function searchRedditKnowledge(query: string, limit: number = 10) {
@@ -344,4 +351,3 @@ export function redditTools() {
 }
 
 export type RedditTools = ReturnType<typeof redditTools>
-

@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 const contributorSchema = z.object({
   name: z.string().optional().nullable(),

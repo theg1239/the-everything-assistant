@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { paperProgress } from '@/lib/progress/paper-progress'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { z } from 'zod'
+import * as z from 'zod'
 
 const progressSchema = z.object({
   runId: z.string().min(1),

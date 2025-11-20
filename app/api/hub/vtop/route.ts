@@ -6,12 +6,14 @@ import { streamObject, type LanguageModel } from 'ai'
 import { vtopResultSchema } from './schema'
 import { saveTokenUsage } from '@/lib/db'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
-import { z } from 'zod'
+import * as z from 'zod'
 import type { VtopCommandFlags } from '@/types/tools'
 
 const vtopRequestSchema = z.object({
   command: z.string().min(1).optional(),
-  extras: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),
+  extras: z
+    .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+    .optional(),
 })
 
 export const maxDuration = 30

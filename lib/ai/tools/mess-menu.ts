@@ -1,5 +1,5 @@
 import { tool } from 'ai'
-import { z } from 'zod'
+import * as z from 'zod'
 
 import { getMessMenu, formatMenuItems, getAvailableDateRange } from '@/lib/scrapers/mess-menu-scraper'
 

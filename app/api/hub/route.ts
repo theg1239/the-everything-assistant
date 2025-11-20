@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createVITTools } from '@/lib/tools'
-import { z } from 'zod'
+import * as z from 'zod'
 import type { JsonValue } from '@/types/tools'
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
@@ -12,13 +12,13 @@ const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
     z.boolean(),
     z.null(),
     z.array(jsonValueSchema),
-    z.record(jsonValueSchema),
+    z.record(z.string(), jsonValueSchema),
   ])
 )
 
 const hubToolRequestSchema = z.object({
   toolName: z.string().min(1),
-  args: z.record(jsonValueSchema).optional(),
+  args: z.record(z.string(), jsonValueSchema).optional(),
 })
 
 export async function POST(request: NextRequest) {

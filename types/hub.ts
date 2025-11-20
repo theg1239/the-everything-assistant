@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type { RawVTOPResult } from '@/lib/hub/parsers/attendance'
 import type { JsonValue } from '@/types/tools'
 

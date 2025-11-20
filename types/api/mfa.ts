@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type { JsonValue } from '@/types/tools'
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
@@ -8,7 +8,7 @@ const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
     z.boolean(),
     z.null(),
     z.array(jsonValueSchema),
-    z.record(jsonValueSchema),
+    z.record(z.string(), jsonValueSchema),
   ])
 )
 
@@ -19,7 +19,7 @@ const webAuthnBaseSchema = z.object({
   id: z.string().min(1),
   rawId: z.string().min(1),
   type: z.literal('public-key'),
-  clientExtensionResults: z.record(jsonValueSchema).optional(),
+  clientExtensionResults: z.record(z.string(), jsonValueSchema).optional(),
 })
 
 export const webAuthnRegistrationCredentialSchema = webAuthnBaseSchema.extend({

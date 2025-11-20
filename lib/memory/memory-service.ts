@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { z } from 'zod'
+import * as z from 'zod'
 
 export type MemoryImportance = 1 | 2 | 3 | 4 | 5
 export type AutoSaveFilter = 'low' | 'medium' | 'high'

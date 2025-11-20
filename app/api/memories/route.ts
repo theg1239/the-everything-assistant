@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import { memoryService, memorySchema } from '@/lib/memory/memory-service'
-import { z } from 'zod'
+import * as z from 'zod'
 
 export async function GET(request: Request) {
   try {
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     return NextResponse.json(memory, { status: 201 })
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify(error.errors), { status: 400 })
+      return new NextResponse(JSON.stringify(error.issues), { status: 400 })
     }
     console.error('Failed to create memory:', error)
     return new NextResponse('Internal server error', { status: 500 })

@@ -1,5 +1,5 @@
 import { tool } from 'ai'
-import { z } from 'zod'
+import * as z from 'zod'
 import { scrapePapersCodeChef } from './scrapers/papers-codechef'
 import { scrapePapersService } from './scrapers/papers-scraper'
 import { scrapeVITPaperVault } from './scrapers/vit-papervault'
@@ -23,7 +23,7 @@ import { hasVTOPCredentials, getFormattedVTOPCredentials } from './server-vtop-c
 //   smartPaperSearchByQuestion,
 //   getPaperIndexMeta,
 // } from './agents/paper-agent'
-import { analyzeQuestionFrequencies } from './agents/question-frequency-agent'
+// import { analyzeQuestionFrequencies } from './agents/question-frequency-agent'
 import type {
   FacultyCourseRecord,
   FacultyResultEntry,
@@ -41,7 +41,14 @@ type ParsedPlacementData = {
 }
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
-  z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(jsonValueSchema), z.record(jsonValueSchema)])
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    z.record(z.string(), jsonValueSchema),
+  ])
 )
 
 const redditAskResponseSchema = z.object({
@@ -66,7 +73,7 @@ const redditTrendingResponseSchema = z.object({
 })
 
 const redditStatsResponseSchema = z.object({
-  stats: z.record(z.number()).optional(),
+  stats: z.record(z.string(), z.number().optional()).optional(),
 })
 
 const deriveSchoolAcronym = (name: string): string => {

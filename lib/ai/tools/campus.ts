@@ -1,5 +1,5 @@
 import { tool } from 'ai'
-import { z } from 'zod'
+import * as z from 'zod'
 
 export function campusTools() {
   const getCampusInfo = tool({

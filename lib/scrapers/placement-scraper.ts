@@ -2,7 +2,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import Papa from 'papaparse'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
-import { z } from 'zod'
+import * as z from 'zod'
 
 interface Company {
   name: string

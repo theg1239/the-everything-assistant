@@ -1,11 +1,18 @@
 import { tool } from 'ai'
-import { z } from 'zod'
+import * as z from 'zod'
 
 import { getCourseData, type School } from '@/lib/ffcs-tool'
 import type { FacultyCourseRecord, FacultyResultEntry, FacultySchoolRecord, JsonValue } from '@/types/tools'
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
-  z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(jsonValueSchema), z.record(jsonValueSchema)])
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    z.record(z.string(), jsonValueSchema),
+  ])
 )
 
 const facultyCourseSchema = z.object({
@@ -343,4 +350,3 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
 }
 
 export type FacultyTools = ReturnType<typeof facultyTools>
-

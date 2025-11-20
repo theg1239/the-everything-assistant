@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type { ApiKeyConfig } from '@/lib/api-key-manager'
 
 const rateLimitWindowSchema = z.object({

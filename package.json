@@ -74,7 +74,6 @@
     "date-fns": "^4.1.0",
     "dotenv": "^16.6.0",
     "framer-motion": "latest",
-    "jsdom": "^27.2.0",
     "lucide-react": "latest",
     "nanoid": "latest",
     "next": "^16.0.3",
@@ -106,7 +105,7 @@
     "uuid": "^9.0.1",
     "vaul": "^1.1.2",
     "workflow": "4.0.1-beta.13",
-    "zod": "^3.23.8",
+    "zod": "^4.1.12",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
@@ -123,8 +122,8 @@
     "@types/uuid": "^9.0.8",
     "autoprefixer": "^10.4.17",
     "babel-plugin-react-compiler": "^1.0.0",
-    "eslint": "^8.56.0",
-    "eslint-config-next": "14.1.0",
+    "eslint": "^9.39.1",
+    "eslint-config-next": "16.0.3",
     "postcss": "^8.4.33",
     "prettier": "^3.5.3",
     "prisma": "^6.10.1",

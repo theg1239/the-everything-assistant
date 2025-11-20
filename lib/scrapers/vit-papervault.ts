@@ -27,7 +27,7 @@ export async function scrapeVITPaperVault(courseCode: string, examType?: string,
     }
 
     console.log('[vitpapervault] API failed, falling back to browser scraping')
-    return await tryBrowserScraping(courseCode, examType, year)
+    // return await tryBrowserScraping(courseCode, examType, year)
   } catch (error: any) {
     console.error('Error scraping vitpapervault.in:', error)
     return {
@@ -95,126 +95,126 @@ async function tryVITVaultListAPI(courseCode: string, examType?: string, year?: 
   }
 }
 
-async function tryBrowserScraping(courseCode: string, examType?: string, year?: string) {
-  if (!BROWSER_TOOLS_ENABLED) {
-    throw new Error('Browser scraping is disabled')
-  }
+// async function tryBrowserScraping(courseCode: string, examType?: string, year?: string) {
+//   if (!BROWSER_TOOLS_ENABLED) {
+//     throw new Error('Browser scraping is disabled')
+//   }
 
-  const [{ default: puppeteer }, { default: chromium }] = await Promise.all([
-    import('puppeteer-core'),
-    import('@sparticuz/chromium'),
-  ])
+//   const [{ default: puppeteer }, { default: chromium }] = await Promise.all([
+//     import('puppeteer-core'),
+//     import('@sparticuz/chromium'),
+//   ])
 
-  let browser
-  try {
-    browser = await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: { width: 1280, height: 1024 },
-      executablePath: await chromium.executablePath(),
-      headless: true,
-    })
+//   let browser
+//   try {
+//     browser = await puppeteer.launch({
+//       args: chromium.args,
+//       defaultViewport: { width: 1280, height: 1024 },
+//       executablePath: await chromium.executablePath(),
+//       headless: true,
+//     })
 
-    const page = await browser.newPage()
-    await page.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
-        '(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    )
+//     const page = await browser.newPage()
+//     await page.setUserAgent(
+//       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+//         '(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+//     )
 
-    await page.goto('https://vitpapervault.in', {
-      waitUntil: 'networkidle2',
-      timeout: 15000,
-    })
+//     await page.goto('https://vitpapervault.in', {
+//       waitUntil: 'networkidle2',
+//       timeout: 15000,
+//     })
 
-    const searchSelector =
-      'input[type="search"], input[placeholder*="search"], input[name*="search"], #search'
+//     const searchSelector =
+//       'input[type="search"], input[placeholder*="search"], input[name*="search"], #search'
 
-    try {
-      await page.waitForSelector(searchSelector, { timeout: 5000 })
-      await page.type(searchSelector, courseCode)
-      await page.keyboard.press('Enter')
-      await new Promise(res => setTimeout(res, 2000))
-    } catch {}
+//     try {
+//       await page.waitForSelector(searchSelector, { timeout: 5000 })
+//       await page.type(searchSelector, courseCode)
+//       await page.keyboard.press('Enter')
+//       await new Promise(res => setTimeout(res, 2000))
+//     } catch {}
 
-    const papers = await page.evaluate(
-      (courseCode, examType, year) => {
-        const els = Array.from(
-          document.querySelectorAll(
-            'a[href*=".pdf"], a[href*="download"], .paper-link, .download-link'
-          )
-        )
-        const out: any[] = []
+//     const papers = await page.evaluate(
+//       (courseCode, examType, year) => {
+//         const els = Array.from(
+//           document.querySelectorAll(
+//             'a[href*=".pdf"], a[href*="download"], .paper-link, .download-link'
+//           )
+//         )
+//         const out: any[] = []
 
-        els.forEach(el => {
-          const titleText =
-            (el.textContent || '').trim() || el.getAttribute('title') || 'Question Paper'
-          const href = el.getAttribute('href') || ''
-          if (!href.includes('.pdf')) return
+//         els.forEach(el => {
+//           const titleText =
+//             (el.textContent || '').trim() || el.getAttribute('title') || 'Question Paper'
+//           const href = el.getAttribute('href') || ''
+//           if (!href.includes('.pdf')) return
 
-          const tl = titleText.toLowerCase()
-          const cc = courseCode.toLowerCase()
+//           const tl = titleText.toLowerCase()
+//           const cc = courseCode.toLowerCase()
 
-          const okCourse = tl.includes(cc) || tl.includes(cc.replace(/(\d+)/, ' $1'))
+//           const okCourse = tl.includes(cc) || tl.includes(cc.replace(/(\d+)/, ' $1'))
 
-          let okExam = true
-          if (examType) {
-            const examTypeLower = examType.toLowerCase()
-            okExam =
-              tl.includes(examTypeLower) ||
-              (examTypeLower === 'cat1' && (tl.includes('cat 1') || tl.includes('cat-1'))) ||
-              (examTypeLower === 'cat2' && (tl.includes('cat 2') || tl.includes('cat-2'))) ||
-              (examTypeLower === 'fat' && (tl.includes('final') || tl.includes('fat'))) ||
-              (examTypeLower === 'quiz' && tl.includes('quiz'))
-          }
+//           let okExam = true
+//           if (examType) {
+//             const examTypeLower = examType.toLowerCase()
+//             okExam =
+//               tl.includes(examTypeLower) ||
+//               (examTypeLower === 'cat1' && (tl.includes('cat 1') || tl.includes('cat-1'))) ||
+//               (examTypeLower === 'cat2' && (tl.includes('cat 2') || tl.includes('cat-2'))) ||
+//               (examTypeLower === 'fat' && (tl.includes('final') || tl.includes('fat'))) ||
+//               (examTypeLower === 'quiz' && tl.includes('quiz'))
+//           }
 
-          const okYear = !year || tl.includes(year) || (href.includes(year) as any)
-          if (okCourse && okExam && okYear) {
-            let extractedExamType = examType || 'unknown'
-            let extractedYear = year || 'unknown'
+//           const okYear = !year || tl.includes(year) || (href.includes(year) as any)
+//           if (okCourse && okExam && okYear) {
+//             let extractedExamType = examType || 'unknown'
+//             let extractedYear = year || 'unknown'
 
-            if (!examType || examType === 'unknown') {
-              if (tl.includes('cat-1') || tl.includes('cat 1')) extractedExamType = 'CAT-1'
-              else if (tl.includes('cat-2') || tl.includes('cat 2')) extractedExamType = 'CAT-2'
-              else if (tl.includes('fat') || tl.includes('final')) extractedExamType = 'FAT'
-              else if (tl.includes('quiz')) extractedExamType = 'Quiz'
-            }
+//             if (!examType || examType === 'unknown') {
+//               if (tl.includes('cat-1') || tl.includes('cat 1')) extractedExamType = 'CAT-1'
+//               else if (tl.includes('cat-2') || tl.includes('cat 2')) extractedExamType = 'CAT-2'
+//               else if (tl.includes('fat') || tl.includes('final')) extractedExamType = 'FAT'
+//               else if (tl.includes('quiz')) extractedExamType = 'Quiz'
+//             }
 
-            if (!year || year === 'unknown') {
-              const yearMatch = titleText.match(/20\d{2}/)
-              if (yearMatch) extractedYear = yearMatch[0]
-            }
+//             if (!year || year === 'unknown') {
+//               const yearMatch = titleText.match(/20\d{2}/)
+//               if (yearMatch) extractedYear = yearMatch[0]
+//             }
 
-            out.push({
-              title: titleText.substring(0, 100),
-              url: href.startsWith('http') ? href : `https://vitpapervault.in${href}`,
-              source: 'vitpapervault.in',
-              metadata: '',
-              examType: extractedExamType,
-              year: extractedYear,
-            })
-          }
-        })
+//             out.push({
+//               title: titleText.substring(0, 100),
+//               url: href.startsWith('http') ? href : `https://vitpapervault.in${href}`,
+//               source: 'vitpapervault.in',
+//               metadata: '',
+//               examType: extractedExamType,
+//               year: extractedYear,
+//             })
+//           }
+//         })
 
-        return out
-      },
-      courseCode,
-      examType,
-      year
-    )
+//         return out
+//       },
+//       courseCode,
+//       examType,
+//       year
+//     )
 
-    return {
-      success: true,
-      papers: papers.slice(0, 50),
-      source: 'vitpapervault.in',
-    }
-  } catch (error: any) {
-    console.error('Browser scraping error:', error)
-    return {
-      success: false,
-      papers: [],
-      error: error.message,
-      source: 'vitpapervault.in',
-    }
-  } finally {
-    if (browser) await browser.close()
-  }
-}
+//     return {
+//       success: true,
+//       papers: papers.slice(0, 50),
+//       source: 'vitpapervault.in',
+//     }
+//   } catch (error: any) {
+//     console.error('Browser scraping error:', error)
+//     return {
+//       success: false,
+//       papers: [],
+//       error: error.message,
+//       source: 'vitpapervault.in',
+//     }
+//   } finally {
+//     if (browser) await browser.close()
+//   }
+// }

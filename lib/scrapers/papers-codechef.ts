@@ -1,24 +1,6 @@
 import { findFullCourseName } from '../course-map'
 import { BROWSER_TOOLS_ENABLED } from '../browser-flags'
 
-let cachedPuppeteer: any = null
-let cachedChromium: any = null
-
-async function getBrowserDeps() {
-  if (!BROWSER_TOOLS_ENABLED) {
-    throw new Error('Browser scraping is disabled (BROWSER_TOOLS_ENABLED = false)')
-  }
-  if (!cachedPuppeteer || !cachedChromium) {
-    const [{ default: puppeteer }, { default: chromium }] = await Promise.all([
-      import('puppeteer-core'),
-      import('@sparticuz/chromium'),
-    ])
-    cachedPuppeteer = puppeteer
-    cachedChromium = chromium
-  }
-  return { puppeteer: cachedPuppeteer, chromium: cachedChromium }
-}
-
 const DEBUG_PAPERS =
   process.env.DEBUG_PAPERS_CODECHEF === '1' ||
   process.env.DEBUG_PAPERS_CODECHEF === 'true' ||
@@ -118,12 +100,7 @@ export async function scrapePapersCodeChef(
       error: apiResult.error,
     })
 
-    if (apiResult.success) {
-      return apiResult
-    }
-
-    dbg('API failed, falling back to browser scraping')
-    return await tryBrowserScraping(courseCode, examType, year)
+    return apiResult
   } catch (error) {
     console.error('Error in scrapePapersCodeChef:', error)
     const errorMessage = error instanceof Error ? error.message : String(error)
@@ -439,287 +416,287 @@ async function tryAPIApproach(
   }
 }
 
-async function tryBrowserScraping(
-  courseCode: string,
-  examType?: string,
-  year?: string
-): Promise<ScraperResult> {
-  const { puppeteer, chromium } = await getBrowserDeps()
+// async function tryBrowserScraping(
+//   courseCode: string,
+//   examType?: string,
+//   year?: string
+// ): Promise<ScraperResult> {
+//   const { puppeteer, chromium } = await getBrowserDeps()
 
-  let browser
-  try {
-    dbg('launching puppeteer for browser scraping')
-    browser = await puppeteer.launch({
-      args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
-      defaultViewport: { width: 1280, height: 1024 },
-      executablePath: await chromium.executablePath(),
-      headless: true,
-    })
+//   let browser
+//   try {
+//     dbg('launching puppeteer for browser scraping')
+//     browser = await puppeteer.launch({
+//       args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
+//       defaultViewport: { width: 1280, height: 1024 },
+//       executablePath: await chromium.executablePath(),
+//       headless: true,
+//     })
 
-    const page = await browser.newPage()
-    await page.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    )
+//     const page = await browser.newPage()
+//     await page.setUserAgent(
+//       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+//     )
 
-    const fullCourseName = findFullCourseName(courseCode)
-    const searchUrl = `https://papers.codechefvit.com/catalogue?subject=${encodeURIComponent(fullCourseName)}`
-    dbg('browser goto', { searchUrl, fullCourseName })
-    await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 10000 }) // Faster loading
+//     const fullCourseName = findFullCourseName(courseCode)
+//     const searchUrl = `https://papers.codechefvit.com/catalogue?subject=${encodeURIComponent(fullCourseName)}`
+//     dbg('browser goto', { searchUrl, fullCourseName })
+//     await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 10000 }) // Faster loading
 
-    await new Promise(res => setTimeout(res, 1500)) // Reduced wait time
+//     await new Promise(res => setTimeout(res, 1500)) // Reduced wait time
 
-    const papers = await page.evaluate(
-      (courseCode: string, examType?: string, year?: string) => {
-        const paperElements = Array.from(
-          document.querySelectorAll(
-            'a[href*="/paper/"], .paper-card, .paper-item, [data-testid*="paper"], .card, .grid > div, .paper-link'
-          )
-        )
+//     const papers = await page.evaluate(
+//       (courseCode: string, examType?: string, year?: string) => {
+//         const paperElements = Array.from(
+//           document.querySelectorAll(
+//             'a[href*="/paper/"], .paper-card, .paper-item, [data-testid*="paper"], .card, .grid > div, .paper-link'
+//           )
+//         )
 
-        const results: {
-          title: string
-          url: string
-          source: string
-          metadata: string
-          examType: string
-          year: string
-        }[] = []
+//         const results: {
+//           title: string
+//           url: string
+//           source: string
+//           metadata: string
+//           examType: string
+//           year: string
+//         }[] = []
 
-        paperElements.forEach(element => {
-          const titleElement = element.querySelector('h3, h2, .title, .paper-title, .card-title')
-          const linkElement = element.tagName === 'A' ? element : element.querySelector('a')
-          const metaElement = element.querySelector('.meta, .details, .paper-meta, .subtitle')
+//         paperElements.forEach(element => {
+//           const titleElement = element.querySelector('h3, h2, .title, .paper-title, .card-title')
+//           const linkElement = element.tagName === 'A' ? element : element.querySelector('a')
+//           const metaElement = element.querySelector('.meta, .details, .paper-meta, .subtitle')
 
-          const title = titleElement?.textContent?.trim() || element.textContent?.trim()
-          const href = linkElement?.getAttribute('href')
-          const meta = metaElement?.textContent?.trim()
+//           const title = titleElement?.textContent?.trim() || element.textContent?.trim()
+//           const href = linkElement?.getAttribute('href')
+//           const meta = metaElement?.textContent?.trim()
 
-          if (title && href && title.length > 5) {
-            const cleanTitle = title.replace(/Select$/, '').trim()
+//           if (title && href && title.length > 5) {
+//             const cleanTitle = title.replace(/Select$/, '').trim()
 
-            const titleLower = cleanTitle.toLowerCase()
-            const courseLower = courseCode.toLowerCase()
-            const metaLower = (meta || '').toLowerCase()
+//             const titleLower = cleanTitle.toLowerCase()
+//             const courseLower = courseCode.toLowerCase()
+//             const metaLower = (meta || '').toLowerCase()
 
-            const matchesCourse =
-              titleLower.includes(courseLower) ||
-              titleLower.includes(courseLower.replace(/(\d+)/, ' $1')) ||
-              titleLower.includes(courseLower.replace(/([a-z]+)(\d+)/, '$1 $2')) ||
-              titleLower.includes(courseLower.replace(/([a-z]+)(\d+)([a-z])/, '$1 $2 $3'))
+//             const matchesCourse =
+//               titleLower.includes(courseLower) ||
+//               titleLower.includes(courseLower.replace(/(\d+)/, ' $1')) ||
+//               titleLower.includes(courseLower.replace(/([a-z]+)(\d+)/, '$1 $2')) ||
+//               titleLower.includes(courseLower.replace(/([a-z]+)(\d+)([a-z])/, '$1 $2 $3'))
 
-            const matchesExam =
-              !examType ||
-              titleLower.includes(examType.toLowerCase()) ||
-              metaLower.includes(examType.toLowerCase()) ||
-              (examType.toLowerCase() === 'cat1' &&
-                (titleLower.includes('cat 1') || titleLower.includes('cat-1'))) ||
-              (examType.toLowerCase() === 'cat2' &&
-                (titleLower.includes('cat 2') || titleLower.includes('cat-2'))) ||
-              (examType.toLowerCase() === 'fat' && titleLower.includes('final'))
+//             const matchesExam =
+//               !examType ||
+//               titleLower.includes(examType.toLowerCase()) ||
+//               metaLower.includes(examType.toLowerCase()) ||
+//               (examType.toLowerCase() === 'cat1' &&
+//                 (titleLower.includes('cat 1') || titleLower.includes('cat-1'))) ||
+//               (examType.toLowerCase() === 'cat2' &&
+//                 (titleLower.includes('cat 2') || titleLower.includes('cat-2'))) ||
+//               (examType.toLowerCase() === 'fat' && titleLower.includes('final'))
 
-            const matchesYear = !year || titleLower.includes(year) || metaLower.includes(year)
+//             const matchesYear = !year || titleLower.includes(year) || metaLower.includes(year)
 
-            if (matchesCourse && matchesExam && matchesYear) {
-              let extractedExamType = examType || ''
-              if (!extractedExamType) {
-                if (titleLower.includes('cat-1') || titleLower.includes('cat 1'))
-                  extractedExamType = 'CAT-1'
-                else if (titleLower.includes('cat-2') || titleLower.includes('cat 2'))
-                  extractedExamType = 'CAT-2'
-                else if (titleLower.includes('fat') || titleLower.includes('final'))
-                  extractedExamType = 'FAT'
-                else if (titleLower.includes('quiz')) extractedExamType = 'Quiz'
-                else extractedExamType = 'unknown'
-              }
+//             if (matchesCourse && matchesExam && matchesYear) {
+//               let extractedExamType = examType || ''
+//               if (!extractedExamType) {
+//                 if (titleLower.includes('cat-1') || titleLower.includes('cat 1'))
+//                   extractedExamType = 'CAT-1'
+//                 else if (titleLower.includes('cat-2') || titleLower.includes('cat 2'))
+//                   extractedExamType = 'CAT-2'
+//                 else if (titleLower.includes('fat') || titleLower.includes('final'))
+//                   extractedExamType = 'FAT'
+//                 else if (titleLower.includes('quiz')) extractedExamType = 'Quiz'
+//                 else extractedExamType = 'unknown'
+//               }
 
-              let extractedYear = year || ''
-              if (!extractedYear) {
-                const yearMatch = cleanTitle.match(/20\d{2}/)
-                if (yearMatch) extractedYear = yearMatch[0]
-                else extractedYear = 'unknown'
-              }
+//               let extractedYear = year || ''
+//               if (!extractedYear) {
+//                 const yearMatch = cleanTitle.match(/20\d{2}/)
+//                 if (yearMatch) extractedYear = yearMatch[0]
+//                 else extractedYear = 'unknown'
+//               }
 
-              results.push({
-                title: cleanTitle.substring(0, 100),
-                url: href.startsWith('http') ? href : `https://papers.codechefvit.com${href}`,
-                source: 'papers.codechefvit.com',
-                metadata: meta || '',
-                examType: extractedExamType,
-                year: extractedYear,
-              })
-            }
-          }
-        })
+//               results.push({
+//                 title: cleanTitle.substring(0, 100),
+//                 url: href.startsWith('http') ? href : `https://papers.codechefvit.com${href}`,
+//                 source: 'papers.codechefvit.com',
+//                 metadata: meta || '',
+//                 examType: extractedExamType,
+//                 year: extractedYear,
+//               })
+//             }
+//           }
+//         })
 
-        return results
-      },
-      courseCode,
-      examType,
-      year
-    )
+//         return results
+//       },
+//       courseCode,
+//       examType,
+//       year
+//     )
 
-    dbg('initial scraped paper cards', papers.length)
-    const papersWithFinalUrls: Paper[] = []
+//     dbg('initial scraped paper cards', papers.length)
+//     const papersWithFinalUrls: Paper[] = []
 
-    for (const paper of papers) {
-      if (paper.url.includes('.pdf') || paper.url.includes('cloudinary.com')) {
-        papersWithFinalUrls.push(paper)
-        continue
-      }
+//     for (const paper of papers) {
+//       if (paper.url.includes('.pdf') || paper.url.includes('cloudinary.com')) {
+//         papersWithFinalUrls.push(paper)
+//         continue
+//       }
 
-      try {
-        const finalUrlPromise = extractFinalUrlFromPaperPage(paper.url)
-        const timeoutPromise = new Promise<string | null>(
-          (_, reject) => setTimeout(() => reject(new Error('Timeout')), 8000) // Reduced from 15000 to 8000
-        )
+//       try {
+//         const finalUrlPromise = extractFinalUrlFromPaperPage(paper.url)
+//         const timeoutPromise = new Promise<string | null>(
+//           (_, reject) => setTimeout(() => reject(new Error('Timeout')), 8000) // Reduced from 15000 to 8000
+//         )
 
-        const finalUrl = await Promise.race([finalUrlPromise, timeoutPromise])
+//         const finalUrl = await Promise.race([finalUrlPromise, timeoutPromise])
 
-        if (finalUrl && finalUrl.includes('cloudinary.com')) {
-          try {
-            const response = await fetch(finalUrl, { method: 'HEAD' })
-            if (response.ok) {
-              papersWithFinalUrls.push({
-                ...paper,
-                url: finalUrl, // Use the Cloudinary PDF URL instead of the paper page URL
-              })
-              continue
-            }
-          } catch (validationError) {
-            console.warn(`Final URL validation failed for ${paper.title}:`, validationError)
-            dbg('finalUrl HEAD failed (browser scraping)', { title: paper.title, finalUrl })
-          }
-        }
-      } catch (error) {
-        console.warn(`Failed to extract finalUrl for ${paper.title}:`, error)
-        dbg('finalUrl extraction error or timeout', { title: paper.title, pageUrl: paper.url })
-      }
+//         if (finalUrl && finalUrl.includes('cloudinary.com')) {
+//           try {
+//             const response = await fetch(finalUrl, { method: 'HEAD' })
+//             if (response.ok) {
+//               papersWithFinalUrls.push({
+//                 ...paper,
+//                 url: finalUrl, // Use the Cloudinary PDF URL instead of the paper page URL
+//               })
+//               continue
+//             }
+//           } catch (validationError) {
+//             console.warn(`Final URL validation failed for ${paper.title}:`, validationError)
+//             dbg('finalUrl HEAD failed (browser scraping)', { title: paper.title, finalUrl })
+//           }
+//         }
+//       } catch (error) {
+//         console.warn(`Failed to extract finalUrl for ${paper.title}:`, error)
+//         dbg('finalUrl extraction error or timeout', { title: paper.title, pageUrl: paper.url })
+//       }
 
-      papersWithFinalUrls.push(paper)
-    }
+//       papersWithFinalUrls.push(paper)
+//     }
 
-    const deduplicatedPapers = deduplicatePapers(papersWithFinalUrls as Paper[])
-    dbg('browser scraping result count', deduplicatedPapers.length)
+//     const deduplicatedPapers = deduplicatePapers(papersWithFinalUrls as Paper[])
+//     dbg('browser scraping result count', deduplicatedPapers.length)
 
-    return {
-      success: true,
-      papers: deduplicatedPapers,
-      source: 'papers.codechefvit.com',
-    }
-  } catch (error) {
-    console.error('Error in browser scraping:', error)
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    return {
-      success: false,
-      papers: [],
-      error: errorMessage,
-      source: 'papers.codechefvit.com',
-    }
-  } finally {
-    if (browser) {
-      try {
-        await browser.close()
-      } catch (closeError) {
-        console.warn('Browser cleanup error in tryBrowserScraping:', closeError)
-      }
-    }
-  }
-}
+//     return {
+//       success: true,
+//       papers: deduplicatedPapers,
+//       source: 'papers.codechefvit.com',
+//     }
+//   } catch (error) {
+//     console.error('Error in browser scraping:', error)
+//     const errorMessage = error instanceof Error ? error.message : String(error)
+//     return {
+//       success: false,
+//       papers: [],
+//       error: errorMessage,
+//       source: 'papers.codechefvit.com',
+//     }
+//   } finally {
+//     if (browser) {
+//       try {
+//         await browser.close()
+//       } catch (closeError) {
+//         console.warn('Browser cleanup error in tryBrowserScraping:', closeError)
+//       }
+//     }
+//   }
+// }
 
-async function extractFinalUrlFromPaperPage(paperPageUrl: string): Promise<string | null> {
-  let browser
-  try {
-    await new Promise(resolve => setTimeout(resolve, 200)) // Reduced from 500ms
+// async function extractFinalUrlFromPaperPage(paperPageUrl: string): Promise<string | null> {
+//   let browser
+//   try {
+//     await new Promise(resolve => setTimeout(resolve, 200)) // Reduced from 500ms
 
-    const { puppeteer, chromium } = await getBrowserDeps()
+//     const { puppeteer, chromium } = await getBrowserDeps()
 
-    browser = await puppeteer.launch({
-      args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
-      defaultViewport: { width: 1280, height: 1024 },
-      executablePath: await chromium.executablePath(),
-      headless: true,
-    })
+//     browser = await puppeteer.launch({
+//       args: [...chromium.args, '--no-sandbox', '--disable-dev-shm-usage'],
+//       defaultViewport: { width: 1280, height: 1024 },
+//       executablePath: await chromium.executablePath(),
+//       headless: true,
+//     })
 
-    const page = await browser.newPage()
-    await page.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    )
+//     const page = await browser.newPage()
+//     await page.setUserAgent(
+//       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+//     )
 
-    await page.goto(paperPageUrl, { waitUntil: 'domcontentloaded', timeout: 6000 })
+//     await page.goto(paperPageUrl, { waitUntil: 'domcontentloaded', timeout: 6000 })
 
-    await new Promise(res => setTimeout(res, 500))
+//     await new Promise(res => setTimeout(res, 500))
 
-    const finalUrl = await page.evaluate(() => {
-      const cloudinaryLinks = Array.from(document.querySelectorAll('a[href*="cloudinary.com"]'))
-      if (cloudinaryLinks.length > 0) {
-        return (cloudinaryLinks[0] as HTMLAnchorElement).href
-      }
+//     const finalUrl = await page.evaluate(() => {
+//       const cloudinaryLinks = Array.from(document.querySelectorAll('a[href*="cloudinary.com"]'))
+//       if (cloudinaryLinks.length > 0) {
+//         return (cloudinaryLinks[0] as HTMLAnchorElement).href
+//       }
 
-      const downloadButtons = Array.from(document.querySelectorAll('button, a, [role="button"]'))
-      for (const button of downloadButtons) {
-        const text = button.textContent?.toLowerCase() || ''
-        if (
-          text.includes('download') ||
-          text.includes('view') ||
-          text.includes('open') ||
-          text.includes('pdf')
-        ) {
-          const href =
-            button.getAttribute('href') ||
-            button.getAttribute('data-url') ||
-            button.getAttribute('data-href') ||
-            button.getAttribute('onclick')?.match(/window\.open\(['"]([^'"]+)['"]/)?.[1]
-          if (href && href.includes('cloudinary.com')) {
-            return href
-          }
-        }
-      }
+//       const downloadButtons = Array.from(document.querySelectorAll('button, a, [role="button"]'))
+//       for (const button of downloadButtons) {
+//         const text = button.textContent?.toLowerCase() || ''
+//         if (
+//           text.includes('download') ||
+//           text.includes('view') ||
+//           text.includes('open') ||
+//           text.includes('pdf')
+//         ) {
+//           const href =
+//             button.getAttribute('href') ||
+//             button.getAttribute('data-url') ||
+//             button.getAttribute('data-href') ||
+//             button.getAttribute('onclick')?.match(/window\.open\(['"]([^'"]+)['"]/)?.[1]
+//           if (href && href.includes('cloudinary.com')) {
+//             return href
+//           }
+//         }
+//       }
 
-      const scripts = Array.from(document.querySelectorAll('script'))
-      for (const script of scripts) {
-        const content = script.textContent || ''
+//       const scripts = Array.from(document.querySelectorAll('script'))
+//       for (const script of scripts) {
+//         const content = script.textContent || ''
 
-        const finalUrlMatch = content.match(/finalUrl['"]?\s*:\s*['"]([^'"]+)['"]/i)
-        if (finalUrlMatch && finalUrlMatch[1].includes('cloudinary.com')) {
-          return finalUrlMatch[1]
-        }
+//         const finalUrlMatch = content.match(/finalUrl['"]?\s*:\s*['"]([^'"]+)['"]/i)
+//         if (finalUrlMatch && finalUrlMatch[1].includes('cloudinary.com')) {
+//           return finalUrlMatch[1]
+//         }
 
-        const cloudinaryMatch = content.match(/https?:\/\/[^"']*cloudinary\.com[^"']*\.pdf/g)
-        if (cloudinaryMatch && cloudinaryMatch.length > 0) {
-          return cloudinaryMatch[0]
-        }
-      }
+//         const cloudinaryMatch = content.match(/https?:\/\/[^"']*cloudinary\.com[^"']*\.pdf/g)
+//         if (cloudinaryMatch && cloudinaryMatch.length > 0) {
+//           return cloudinaryMatch[0]
+//         }
+//       }
 
-      const iframes = Array.from(document.querySelectorAll('iframe'))
-      for (const iframe of iframes) {
-        const src = iframe.getAttribute('src')
-        if (src && src.includes('cloudinary.com') && src.includes('.pdf')) {
-          return src
-        }
-      }
+//       const iframes = Array.from(document.querySelectorAll('iframe'))
+//       for (const iframe of iframes) {
+//         const src = iframe.getAttribute('src')
+//         if (src && src.includes('cloudinary.com') && src.includes('.pdf')) {
+//           return src
+//         }
+//       }
 
-      const embeds = Array.from(document.querySelectorAll('embed, object'))
-      for (const embed of embeds) {
-        const src = embed.getAttribute('src') || embed.getAttribute('data')
-        if (src && src.includes('cloudinary.com') && src.includes('.pdf')) {
-          return src
-        }
-      }
+//       const embeds = Array.from(document.querySelectorAll('embed, object'))
+//       for (const embed of embeds) {
+//         const src = embed.getAttribute('src') || embed.getAttribute('data')
+//         if (src && src.includes('cloudinary.com') && src.includes('.pdf')) {
+//           return src
+//         }
+//       }
 
-      return null
-    })
+//       return null
+//     })
 
-    return finalUrl
-  } catch (error) {
-    console.warn(`Failed to extract finalUrl from ${paperPageUrl}:`, error)
-    return null
-  } finally {
-    if (browser) {
-      try {
-        await browser.close()
-      } catch (closeError) {
-        console.warn(`Browser cleanup error for ${paperPageUrl}:`, closeError)
-      }
-    }
-  }
-}
+//     return finalUrl
+//   } catch (error) {
+//     console.warn(`Failed to extract finalUrl from ${paperPageUrl}:`, error)
+//     return null
+//   } finally {
+//     if (browser) {
+//       try {
+//         await browser.close()
+//       } catch (closeError) {
+//         console.warn(`Browser cleanup error for ${paperPageUrl}:`, closeError)
+//       }
+//     }
+//   }
+// }

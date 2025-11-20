@@ -1,6 +1,5 @@
-import puppeteer from 'puppeteer-core'
-import chromium from '@sparticuz/chromium'
 import { findFullCourseName } from '../course-map'
+import { BROWSER_TOOLS_ENABLED } from '../browser-flags'
 
 interface PaperVaultEntry {
   subjectName: string
@@ -16,6 +15,15 @@ export async function scrapeVITPaperVault(courseCode: string, examType?: string,
 
     if (apiResult.success) {
       return apiResult
+    }
+
+    if (!BROWSER_TOOLS_ENABLED) {
+      return {
+        success: false,
+        papers: [],
+        error: 'Browser scraping is disabled (BROWSER_TOOLS_ENABLED = false)',
+        source: 'vitpapervault.in',
+      }
     }
 
     console.log('[vitpapervault] API failed, falling back to browser scraping')
@@ -88,6 +96,15 @@ async function tryVITVaultListAPI(courseCode: string, examType?: string, year?: 
 }
 
 async function tryBrowserScraping(courseCode: string, examType?: string, year?: string) {
+  if (!BROWSER_TOOLS_ENABLED) {
+    throw new Error('Browser scraping is disabled')
+  }
+
+  const [{ default: puppeteer }, { default: chromium }] = await Promise.all([
+    import('puppeteer-core'),
+    import('@sparticuz/chromium'),
+  ])
+
   let browser
   try {
     browser = await puppeteer.launch({

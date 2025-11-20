@@ -1,8 +1,15 @@
-import puppeteer from 'puppeteer-core'
-import chromium from '@sparticuz/chromium'
+import { BROWSER_TOOLS_ENABLED } from '../browser-flags'
 
 export async function scrapeFacultyInfo(department?: string, facultyName?: string) {
   try {
+    if (!BROWSER_TOOLS_ENABLED) {
+      return {
+        success: false,
+        error: 'Browser scraping is disabled (BROWSER_TOOLS_ENABLED = false)',
+        message: 'Enable browser tools to scrape faculty pages.',
+      }
+    }
+
     return await tryBrowserScraping(department, facultyName)
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
@@ -16,6 +23,11 @@ export async function scrapeFacultyInfo(department?: string, facultyName?: strin
 }
 
 async function tryBrowserScraping(department?: string, facultyName?: string) {
+  const [{ default: puppeteer }, { default: chromium }] = await Promise.all([
+    import('puppeteer-core'),
+    import('@sparticuz/chromium'),
+  ])
+
   let browser
   try {
     browser = await puppeteer.launch({

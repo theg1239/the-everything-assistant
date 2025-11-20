@@ -23,10 +23,27 @@ import {
 } from '../papers-db'
 
 import { paperProgress } from '../progress/paper-progress'
-import puppeteer from 'puppeteer-core'
-import chromium from '@sparticuz/chromium'
 import { existsSync } from 'fs'
 import { PDFDocument } from 'pdf-lib'
+import { BROWSER_TOOLS_ENABLED } from '../browser-flags'
+
+let cachedPuppeteer: any = null
+let cachedChromium: any = null
+
+async function ensureBrowserDeps() {
+  if (!BROWSER_TOOLS_ENABLED) {
+    throw new Error('Browser tools are disabled (BROWSER_TOOLS_ENABLED = false)')
+  }
+  if (!cachedPuppeteer || !cachedChromium) {
+    const [{ default: puppeteer }, { default: chromium }] = await Promise.all([
+      import('puppeteer-core'),
+      import('@sparticuz/chromium'),
+    ])
+    cachedPuppeteer = puppeteer
+    cachedChromium = chromium
+  }
+  return { puppeteer: cachedPuppeteer, chromium: cachedChromium }
+}
 
 async function computeHash(buf: Buffer | Uint8Array): Promise<string> {
   try {
@@ -166,6 +183,8 @@ const MAX_SHARED_BROWSER_USAGE = 10
 let launchingBrowserPromise: Promise<any> | null = null
 
 async function getOrCreateSharedBrowser(log?: Logger): Promise<any> {
+  const { puppeteer, chromium } = await ensureBrowserDeps()
+
   if (sharedBrowser && sharedBrowserUsageCount < MAX_SHARED_BROWSER_USAGE) {
     sharedBrowserUsageCount++
     return sharedBrowser

@@ -1,6 +1,5 @@
-import puppeteer from 'puppeteer-core'
-import chromium from '@sparticuz/chromium'
 import { findFullCourseName } from '../course-map'
+import { BROWSER_TOOLS_ENABLED } from '../browser-flags'
 
 const DEBUG_PAPERS =
   process.env.DEBUG_PAPERS_CODECHEF === '1' ||
@@ -82,6 +81,19 @@ export async function scrapePapersCodeChef(
   examType?: string,
   year?: string
 ): Promise<ScraperResult> {
+  if (!BROWSER_TOOLS_ENABLED) {
+    return {
+      success: false,
+      papers: [],
+      error: 'Browser scraping is disabled (BROWSER_TOOLS_ENABLED = false)',
+      source: 'papers.codechef',
+    }
+  }
+
+  const [{ default: puppeteer }, { default: chromium }] = await Promise.all([
+    import('puppeteer-core'),
+    import('@sparticuz/chromium'),
+  ])
   try {
     dbg('start', { courseCode, examType, year })
     const apiResult = await tryAPIApproach(courseCode, examType, year)

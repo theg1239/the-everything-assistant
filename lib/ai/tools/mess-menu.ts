@@ -3,8 +3,10 @@ import { z } from 'zod'
 
 import { getMessMenu, formatMenuItems, getAvailableDateRange } from '@/lib/scrapers/mess-menu-scraper'
 
-function organizeMenuByMealType(menuItems: Array<{ type: number; menu: string }>) {
-  const mealTypes: { [key: string]: string[] } = {
+type MealBuckets = Record<string, string[]>
+
+function organizeMenuByMealType(menuItems: Array<{ type: number; menu: string }>): MealBuckets {
+  const mealTypes: MealBuckets = {
     breakfast: [],
     lunch: [],
     snacks: [],
@@ -40,6 +42,35 @@ function organizeMenuByMealType(menuItems: Array<{ type: number; menu: string }>
   return mealTypes
 }
 
+const normalizeHostelType = (value?: string): 'mens' | 'ladies' | undefined => {
+  if (!value) return undefined
+  const normalized = value.trim().toLowerCase()
+  if (normalized.startsWith('lad')) return 'ladies'
+  if (normalized.startsWith('men')) return 'mens'
+  return undefined
+}
+
+const normalizeMessType = (value?: string): 'special' | 'veg' | 'nonveg' | undefined => {
+  if (!value) return undefined
+  const normalized = value.trim().toLowerCase().replace(/[^a-z]/g, '')
+  if (normalized.includes('nonveg')) return 'nonveg'
+  if (normalized.includes('special')) return 'special'
+  if (normalized.includes('veg')) return 'veg'
+  return undefined
+}
+
+const normalizeMealType = (
+  value?: string
+): 'breakfast' | 'lunch' | 'snacks' | 'dinner' | undefined => {
+  if (!value) return undefined
+  const normalized = value.trim().toLowerCase()
+  if (normalized.startsWith('break')) return 'breakfast'
+  if (normalized.startsWith('lun')) return 'lunch'
+  if (normalized.startsWith('snack')) return 'snacks'
+  if (normalized.startsWith('din')) return 'dinner'
+  return undefined
+}
+
 export function messMenuTools() {
   const getMessMenuTool = tool({
     description:
@@ -52,11 +83,19 @@ export function messMenuTools() {
     }),
     execute: async ({ hostelType, messType, date, mealType }) => {
       const processedDate = date ? new Date(date) : new Date()
-      const result = await getMessMenu(hostelType, messType, processedDate, mealType)
+      const normalizedHostel = normalizeHostelType(hostelType)
+      const normalizedMess = normalizeMessType(messType)
+      const normalizedMeal = normalizeMealType(mealType)
+      const result = await getMessMenu(
+        normalizedHostel,
+        normalizedMess,
+        processedDate.toISOString().split('T')[0],
+        normalizedMeal
+      )
 
       if (result.success && result.data && result.data.todayMenu) {
-        const organizedTodayMenu = organizeMenuByMealType(result.data.todayMenu)
-        const formattedMenu = formatMenuItems(organizedTodayMenu, processedDate)
+        const organizedTodayMenu = organizeMenuByMealType(result.data.todayMenu.menu)
+        const formattedMenu = formatMenuItems(result.data.todayMenu.menu)
         return {
           ...result,
           data: {
@@ -69,7 +108,7 @@ export function messMenuTools() {
       }
 
       if (!result.success && result.error) {
-        const dateRange = await getAvailableDateRange(hostelType, messType)
+        const dateRange = await getAvailableDateRange(normalizedHostel, normalizedMess)
         if (dateRange) {
           return {
             ...result,

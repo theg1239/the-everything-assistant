@@ -18,7 +18,8 @@ yarn-error.log*
 
 ai-chatbot
 # env files
-.env*
+.env
+.env.local
 
 # vercel
 .vercel

@@ -8,9 +8,9 @@
 
 ---
 
-## About
+## Overview
 
-This project is an AI assistant designed to demonstrate various capabilities, including conversational AI, multimodal input processing (like image analysis), and tool integration. It provides a solution to everything campus-related.
+The Everything Assistant is an AI-native campus companion that blends chat, workflows, and multi-channel agents. It ships a Next.js web experience, curated knowledge base + RAG stack, WhatsApp/Discord bots, FFCS tooling, and proxy services that make university systems feel realtime.
 
 ### Core Features
 
@@ -30,112 +30,86 @@ This project is built using modern web technologies:
 - **Authentication**: NextAuth.js
 - **Deployment**: Vercel, Heroku, Render
 
-## Getting Started
-
-1.  **Explore Capabilities**: Understand the core features and potential uses.
-2.  **Set up Environment**: Configure necessary API keys and database connections.
-3.  **Run Locally**: Get the project running on your development machine.
-
-## Local Development
 
 ### Prerequisites
 
-- Node.js (v18+)
-- npm
-- Git
+- Node.js 22.x (see `package.json` engines)
+- pnpm 9+ (preferred) or npm 10+
+- Postgres database
+- Upstash Redis
 
-### Installation
+### Install & Run Locally
 
 ```bash
-# Clone the repository
 git clone https://github.com/theg1239/the-everything-assistant.git
-
-# Navigate to the project directory
 cd the-everything-assistant
-
-# Install dependencies
-npm install
-
-# Run the development server
-npm run dev
+cp .env.example .env
+pnpm install
+pnpm dev
 ```
 
-### Scripts
+The dev server runs at `http://localhost:3000`. Sign-in flows rely on NextAuth, so configure an OAuth provider (Google or email magic links) before testing gated routes.
 
-- `npm run dev` - Start the development server
-- `npm run build` - Build for production
-- `npm run start` - Start the production server
-- `npm run lint` - Run linters
-- `npm run format` - Format code
-- `npm run format:check` - Check code formatting
+### Database & Knowledge Base
 
-## Project Structure
-
-This project follows a modular Next.js monorepo structure with several key directories:
+```bash
+pnpm prisma:migrate         # create or update schema
+pnpm prisma:generate        # regenerate Prisma Client
+pnpm prisma:studio          # inspect data locally
+pnpm seed:rag               # seed the RAG corpus
+pnpm seed:rag --fresh       # rebuild the corpus from scratch
+```
+## Project Layout
 
 ```
-├── app/                # Next.js App Router (pages, API routes, layouts)
-│   ├── api/
-│   ├── chat/
-│   ├── login/
-│   ├── mgmt/
-│   ├── layout.tsx
-│   ├── not-found.tsx
-│   └── page.tsx
-├── components/         # Reusable React components
-│   ├── backgrounds/
-│   ├── legacy/
-│   ├── ui/
-│   └── ...
-├── contexts/           # React Contexts for state management
-├── hooks/              # Custom React Hooks
-├── lib/                # Utilities, helpers, and core logic
-│   ├── data/
-│   ├── scrapers/
-│   └── ...
-├── prisma/             # Prisma schema and migrations
-│   └── schema.prisma
-├── providers/          # React Providers (session, theme, etc.)
-├── public/             # Static assets (images, onboarding artwork, placements data, etc.)
-│   ├── assets/
-│   ├── onboarding-artwork/
-│   └── placements/
-├── services/           # External tool service integrations
-│   ├── proxy-service/
-│   └── reddit-scraper/
-├── styles/             # Stylesheets
-├── types/              # TypeScript type definitions
-├── package.json        # Project manifest
-├── next.config.ts      # Next.js configuration
-└── ...                 # Other config files
+├── app/                    # App Router routes, layouts, actions, workflows, management UI
+│   ├── api/                # Edge/server routes for chat tools, auth, telemetry
+│   ├── chat/               # Main chat surface, streaming handlers, artifacts view
+│   ├── dev/                # Internal developer utilities
+│   ├── guidelines/         # In-product docs
+│   ├── login/              # Auth + MFA flows
+│   ├── mgmt/               # Broadcasts, moderation, rate limit dashboards
+│   ├── workflows/          # Task-specific views and automation entries
+│   └── layout.tsx ...      # Global layout + metadata
+├── components/             # UI primitives, chat widgets, artifacts, dialogs, monitors
+├── contexts/               # React context providers (memory, MFA, PDF dock, etc.)
+├── hooks/                  # Client + server hooks (telemetry, auth, streaming helpers)
+├── lib/                    # Tool callers, data clients, org logic, rate limiting helpers
+├── prisma/                 # `schema.prisma`, migrations, seed helpers
+├── providers/              # App-level providers (session, theme, PostHog, AI SDK)
+├── public/                 # Static assets, onboarding artwork, placements data
+├── services/               # Companion services + bots (proxy, deep-search, wa-bot, discord, papers, ffcs-extension)
+├── scripts/                # RAG + performance scripts, utility CLIs
+├── docs/                   # Living documentation and operational playbooks
+├── types/, styles/, test/  # Shared types, Tailwind config, automated tests
+└── ai-chatbot-main/        # Template scaffolding for spin-off assistants
 ```
 
-### Notable Service Directories
+## Companion Services & Channels
 
-- **services/proxy-service/**  
-  Handles proxying, authentication, and external API requests. Contains its own entrypoint, config, and static files.
+- `services/proxy-service` – Authenticated proxy/MCP server for VTOP and protected university endpoints.
+- `services/deep-search` – Reddit + knowledge base enrichment worker powering `app/paper-search` and research previews.
+- `services/wa-bot` – WhatsApp bot entrypoint synced with the chat tool catalog.
+- `services/discord` – Discord bot + slash-command orchestration.
+- `services/ffcs-extension` – FFCS scheduling/draft planner (bundled web extension +  API shim).
+- `services/papers` – scripts and endpoints for paper ingestion + embeddings.
 
-- **services/reddit-scraper/**  
-  Standalon fetching and analysis service. Includes:
-  - `scrapers/`: Reddit and image analysis scripts
-  - `utils/`: Logging and utility functions
-  - `knowledge-base/`: Knowledge base and RAG scripts
-  - `logs/`: Log files
-  - `public/`: Static files for the service
+Each service folder documents its own install/run steps; some rely on Heroku/Render/Workers, others run locally via `npm install && npm run dev`.
 
 ## Documentation
 
-Need the full tour? The `docs/` directory contains living documentation for every part of the repo—product UX, platform architecture, tool catalog, companion services, and operational playbooks. Start with `docs/README.md` for the table of contents.
+`docs/README.md` is the hub for product, architecture, tools, multi-channel services, and operations. Start there whenever you add a feature so cross-links stay fresh. The `hub-capabilities.json` file mirrors the capabilities exposed to the assistant UI.
+
+## Deployment
+
+- **Vercel** – Deploy the Next.js app directly; see `vercel.json` and `vercel-template.json`.
+- **Companion bots** – WhatsApp/Discord services ship their own env requirements; keep secrets per channel.
 
 ## Contributing
 
-We welcome contributions! If you'd like to contribute, please follow these steps:
-
-1.  Fork the repository.
-2.  Create a new branch for your feature or bugfix.
-3.  Make your changes and commit them with clear messages.
-4.  Push your branch to your fork.
-5.  Open a Pull Request to the main repository.
+1. Fork the repository and create a branch (`feat/my-awesome-thing`).
+2. Keep docs (`docs/`, `hub-capabilities.json`) in sync with code changes.
+3. Open a pull request against `stable` with screenshots or Looms for UI changes.
 
 ## Issues
 

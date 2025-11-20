@@ -17,12 +17,19 @@ export const VtopCard = memo(function VtopCard({ toolCall, retryToolCallId, onRe
   const payload = toolCall.result as VtopResult
   const command = payload?.command || toolCall.args?.command
   const isError = payload?.success === false || toolCall.state === 'error'
+  const commandLabel = (() => {
+    if (typeof command === 'string') return command
+    if (Array.isArray(command)) return command.filter(Boolean).join(', ')
+    if (command && typeof command === 'object') return JSON.stringify(command)
+    if (command !== undefined && command !== null) return String(command)
+    return 'data'
+  })()
 
   return (
     <div className="rounded-md border bg-muted/30 p-3 space-y-2">
       <div className="flex items-center gap-2 text-sm font-semibold">
         {isError ? <AlertTriangle className="h-4 w-4 text-amber-600" /> : null}
-        <span>VTOP • {command || 'data'}</span>
+        <span>VTOP • {commandLabel}</span>
       </div>
 
       <Section hidden={!payload?.formatted_content}>

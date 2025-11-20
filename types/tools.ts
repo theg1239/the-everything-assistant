@@ -80,3 +80,19 @@ export interface VtopRequestBody {
   sessionKey?: string
   flags: VtopCommandFlags
 }
+
+export type ToolInvocationState = 'partial-call' | 'call' | 'result' | 'error' | string
+
+export interface ToolInvocation {
+  toolName: string
+  toolCallId?: string
+  args?: Record<string, JsonValue | undefined>
+  input?: Record<string, JsonValue | undefined>
+  output?: JsonValue
+  result?: JsonValue
+  state?: ToolInvocationState
+  error?: string
+  hidden?: boolean
+  providerExecuted?: boolean
+  meta?: Record<string, JsonValue | undefined>
+}

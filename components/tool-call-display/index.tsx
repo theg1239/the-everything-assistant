@@ -47,7 +47,13 @@ const renderCard = (
 }
 
 const PureToolCallDisplay = ({ toolCall, retryToolCallId, onRetry }: ToolCallDisplayProps) => {
-  if (toolCall?.result?.hidden) return null
+  const resultHidden =
+    typeof toolCall.result === 'object' && toolCall.result !== null
+      ? Boolean((toolCall.result as Record<string, unknown>).hidden)
+      : false
+
+  if (toolCall.hidden || resultHidden) return null
+
   return <div className="space-y-2">{renderCard(toolCall, retryToolCallId, onRetry)}</div>
 }
 

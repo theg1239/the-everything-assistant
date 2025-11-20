@@ -110,6 +110,7 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
     "@types/node": "^22.15.30",
     "@types/nodemailer": "^6.4.17",
     "@types/papaparse": "^5.3.16",

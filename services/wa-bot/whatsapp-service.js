@@ -24,7 +24,6 @@ class WhatsAppService extends EventEmitter {
     }
   }
 
-
   getChromePath() {
     const fs = require('fs')
     const chromePaths = [
@@ -43,14 +42,12 @@ class WhatsAppService extends EventEmitter {
           console.log(`🌐 Using Chrome at: ${path}`)
           return path
         }
-      } catch (error) {
-      }
+      } catch (error) {}
     }
 
     console.log('🌐 Using default Puppeteer Chromium')
     return undefined // Let Puppeteer use its bundled Chromium
   }
-
 
   async initialize() {
     try {
@@ -86,7 +83,6 @@ class WhatsAppService extends EventEmitter {
     }
   }
 
-
   addToContext(phoneNumber, message, isBot = false) {
     if (!this.conversationContext.has(phoneNumber)) {
       this.conversationContext.set(phoneNumber, [])
@@ -109,7 +105,6 @@ class WhatsAppService extends EventEmitter {
     this.conversationContext.set(phoneNumber, context)
   }
 
-
   getContext(phoneNumber) {
     if (!this.conversationContext.has(phoneNumber)) {
       return []
@@ -125,11 +120,9 @@ class WhatsAppService extends EventEmitter {
     return validContext
   }
 
-
   clearContext(phoneNumber) {
     this.conversationContext.delete(phoneNumber)
   }
-
 
   cleanupContexts() {
     const now = Date.now()
@@ -144,13 +137,11 @@ class WhatsAppService extends EventEmitter {
     }
   }
 
-
   startContextCleanup() {
     setInterval(() => {
       this.cleanupContexts()
     }, this.contextConfig.cleanupInterval)
   }
-
 
   setupEventHandlers() {
     this.client.on('qr', qr => {
@@ -247,7 +238,6 @@ class WhatsAppService extends EventEmitter {
     })
   }
 
-
   getNormalizedContactId(message) {
     if (!message) {
       return null
@@ -275,7 +265,6 @@ class WhatsAppService extends EventEmitter {
     return candidate
   }
 
-
   extractUserFromId(contactId) {
     if (!contactId) {
       return null
@@ -289,7 +278,6 @@ class WhatsAppService extends EventEmitter {
     const [sanitizedUser] = userPart.split(':')
     return sanitizedUser || null
   }
-
 
   buildFallbackContact(message, normalizedId) {
     if (message && message.fromMe && this.client?.info?.wid) {
@@ -332,7 +320,6 @@ class WhatsAppService extends EventEmitter {
     }
   }
 
-
   async resolveContact(message, normalizedId = null) {
     if (!normalizedId) {
       normalizedId = this.getNormalizedContactId(message)
@@ -371,7 +358,6 @@ class WhatsAppService extends EventEmitter {
     return this.buildFallbackContact(message, normalizedId)
   }
 
-
   async resolveContactById(contactId) {
     if (!contactId || !this.client) {
       return null
@@ -408,7 +394,6 @@ class WhatsAppService extends EventEmitter {
 
     return contact
   }
-
 
   parseContextCommandArgs(rawArgs) {
     if (!rawArgs) {
@@ -453,7 +438,6 @@ class WhatsAppService extends EventEmitter {
       limit,
     }
   }
-
 
   async fetchAllChatMessages(chat, options = {}) {
     const { batchSize = 200, maxMessages = 800, yieldToLoop = false } = options
@@ -507,7 +491,6 @@ class WhatsAppService extends EventEmitter {
 
     return messages
   }
-
 
   async handleIncomingMessage(message) {
     if (!this.isReady || message.isStatus) {
@@ -612,7 +595,6 @@ class WhatsAppService extends EventEmitter {
     }
   }
 
-
   async handleCommand(messageData, originalMessage) {
     const { body, from, fromName, chatId, isGroup } = messageData
     const command = body.toLowerCase().split(' ')[0]
@@ -667,6 +649,12 @@ class WhatsAppService extends EventEmitter {
         await this.sendStatusMessage(originalChat)
         break
 
+      case '!linkvtop':
+      case '!vtoplink':
+      case '!link':
+        await this.handleLinkVtopCommand(originalChat, userChat, from, fromName, messageData)
+        break
+
       case '!everyone':
         if (!isGroup) {
           await this.sendMessageToChat(
@@ -693,7 +681,6 @@ class WhatsAppService extends EventEmitter {
         break
     }
   }
-
 
   async handleAskCommand(originalChat, userChat, phoneNumber, userName, question, messageData) {
     try {
@@ -754,6 +741,45 @@ class WhatsAppService extends EventEmitter {
     }
   }
 
+  async handleLinkVtopCommand(originalChat, userChat, phoneNumber, userName, messageData) {
+    try {
+      const baseUrl = process.env.MAIN_APP_URL || 'http://localhost:3000'
+      const apiKey = process.env.MAIN_APP_API_KEY || process.env.WHATSAPP_BOT_API_KEY
+      const res = await fetch(`${baseUrl}/api/whatsapp/link`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ phoneNumber, userName }),
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        console.error('link vtop failed', res.status, text)
+        await this.sendMessageToChat(
+          userChat,
+          'could not generate a secure link right now. please try again later.'
+        )
+        return
+      }
+
+      const json = await res.json()
+      const linkMsg = `🔗 VTOP secure link\n\nTap: ${json.link}\n\nExpires in ~10 minutes. After approving, come back here and run your VTOP command (e.g., attendance).`
+
+      if (messageData.isGroup) {
+        await this.sendMessageToChat(originalChat, `sent a secure VTOP link to ${userName} in dm`)
+      }
+
+      await this.sendMessageToChat(userChat, linkMsg)
+    } catch (err) {
+      console.error('handleLinkVtopCommand error', err)
+      await this.sendMessageToChat(
+        userChat,
+        'something went wrong while creating the link. please try again in a bit.'
+      )
+    }
+  }
 
   async handleContextCommand(
     originalChat,
@@ -857,7 +883,6 @@ Keep the response concise but informative.`
       )
     }
   }
-
 
   async getChatHistory(chat, limit = 100, options = {}) {
     try {
@@ -964,7 +989,6 @@ Keep the response concise but informative.`
     }
   }
 
-
   formatChatHistoryForAI(messages) {
     if (!messages || messages.length === 0) {
       return 'No messages found.'
@@ -979,7 +1003,6 @@ Keep the response concise but informative.`
 
     return formatted
   }
-
 
   async handleAIResponseSmart(originalChat, userChat, response, startTime, messageData) {
     try {
@@ -1055,7 +1078,6 @@ Keep the response concise but informative.`
       )
     }
   }
-
 
   shouldTagEveryone(response, messageData) {
     if (!messageData.isGroup) {
@@ -1170,7 +1192,6 @@ Keep the response concise but informative.`
     }
   }
 
-
   async getGroupParticipants(chat) {
     try {
       if (!chat.isGroup) {
@@ -1185,7 +1206,6 @@ Keep the response concise but informative.`
       return []
     }
   }
-
 
   async formatResponseWithTags(response, chat, shouldTagEveryone = false) {
     let formatted = this.formatResponseForWhatsApp(response)

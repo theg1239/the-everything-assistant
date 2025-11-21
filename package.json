@@ -75,6 +75,7 @@
     "date-fns": "^4.1.0",
     "dotenv": "^16.6.0",
     "framer-motion": "latest",
+    "jsonwebtoken": "^9.0.2",
     "lucide-react": "latest",
     "nanoid": "latest",
     "next": "^16.0.3",
@@ -111,6 +112,7 @@
   },
   "devDependencies": {
     "@types/crypto-js": "^4.2.2",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.15.30",
     "@types/nodemailer": "^6.4.17",
     "@types/papaparse": "^5.3.16",

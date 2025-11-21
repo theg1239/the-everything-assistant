@@ -164,7 +164,156 @@ const vtopInteractiveResponseSchema = vtopProxyResponseSchema.extend({
   smartMatch: jsonValueSchema.optional(),
 })
 
-const SCHOOL_VALUES: School[] = ['smec', 'score', 'scope', 'sbst', 'sce', 'scheme', 'select', 'sense']
+type McpClientConfig = {
+  endpoint?: string
+  accessToken?: string
+  clientName?: string
+}
+
+type VITToolsOptions = {
+  channel?: 'web' | 'whatsapp' | 'discord' | 'hub' | string
+  mcp?: McpClientConfig
+}
+
+async function callVtopViaMcp(options: {
+  command: string
+  flags?: Record<string, any>
+  username?: string
+  password?: string
+  encryptedPassword?: string
+  sessionKey?: string
+  mcp: McpClientConfig
+}) {
+  const { command, flags, username, password, encryptedPassword, sessionKey, mcp } = options
+
+  if (!mcp?.endpoint || !mcp?.accessToken) return null
+
+  const endpoint = mcp.endpoint.replace(/\/$/, '')
+  const baseHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${mcp.accessToken}`,
+    Accept: 'application/json',
+  }
+
+  const initializeBody = {
+    jsonrpc: '2.0',
+    id: `init-${Date.now()}`,
+    method: 'initialize',
+    params: {
+      protocolVersion: '2025-06-18',
+      capabilities: { experimental: {}, sampling: {} },
+      clientInfo: {
+        name: mcp.clientName || 'vit-whatsapp-bot',
+        version: '1.0.0',
+      },
+    },
+  }
+
+  const initRes = await fetch(endpoint, {
+    method: 'POST',
+    headers: baseHeaders,
+    body: JSON.stringify(initializeBody),
+  })
+
+  if (!initRes.ok) {
+    throw new Error(`MCP initialize failed (${initRes.status})`)
+  }
+
+  const sessionId =
+    initRes.headers.get('Mcp-Session-Id') || initRes.headers.get('mcp-session-id') || undefined
+
+  const args: Record<string, any> = {}
+  if (flags && Object.keys(flags).length) args.flags = flags
+  if (username) args.username = username
+  if (password) args.password = password
+  if (encryptedPassword) args.encryptedPassword = encryptedPassword
+  if (sessionKey) args.sessionKey = sessionKey
+
+  const toolCallBody = {
+    jsonrpc: '2.0',
+    id: `call-${Date.now()}`,
+    method: 'tools/call',
+    params: {
+      name: command,
+      arguments: args,
+    },
+  }
+
+  const callHeaders = {
+    ...baseHeaders,
+    ...(sessionId ? { 'Mcp-Session-Id': sessionId } : {}),
+  }
+
+  const callRes = await fetch(endpoint, {
+    method: 'POST',
+    headers: callHeaders,
+    body: JSON.stringify(toolCallBody),
+  })
+
+  let parsed: any = null
+  try {
+    parsed = await callRes.json()
+  } catch (error) {
+    parsed = null
+  }
+
+  if (sessionId) {
+    fetch(endpoint, {
+      method: 'DELETE',
+      headers: callHeaders,
+    }).catch(() => {})
+  }
+
+  if (!callRes.ok) {
+    const message = parsed?.error?.message || `MCP call failed: ${callRes.status}`
+    return {
+      success: false,
+      error: message,
+      message,
+      via: 'mcp',
+    }
+  }
+
+  const structured =
+    parsed?.result?.structuredContent || parsed?.result || parsed?.content || parsed?.data || null
+
+  if (!structured) {
+    return {
+      success: false,
+      error: 'Empty MCP response',
+      message: 'Failed to retrieve data from MCP server.',
+      via: 'mcp',
+    }
+  }
+
+  const safeStructured = vtopProxyResponseSchema.safeParse(structured)
+
+  if (safeStructured.success) {
+    return { ...safeStructured.data, via: 'mcp' }
+  }
+
+  if (typeof structured === 'object' && 'success' in (structured as any)) {
+    return { ...(structured as any), via: 'mcp' }
+  }
+
+  return {
+    success: false,
+    error: 'Invalid MCP response shape',
+    details: structured,
+    via: 'mcp',
+  }
+}
+
+const SCHOOL_VALUES: School[] = [
+  'smec',
+  'score',
+  'scope',
+  'sbst',
+  'sce',
+  'scheme',
+  'select',
+  'sense',
+]
 
 const toSchool = (value: string): School | null => {
   const normalized = value.toLowerCase() as School
@@ -569,7 +718,6 @@ async function handleIntelligentCoursePage(params: {
 
   let step = interactiveStep
   if (!step) {
-
     if (
       (contextualCourseQuery || courseQuery) &&
       (contextualFacultyQuery || facultyQuery) &&
@@ -602,7 +750,6 @@ async function handleIntelligentCoursePage(params: {
           messages.length > 0 &&
           previousStepType === 'semester' &&
           /^\s*\d+\s*$/.test(messages[messages.length - 1]?.content || '')
-
 
         if (shouldCompleteSemesterSelection || userJustSelectedSemester) {
           step = 'semester'
@@ -827,7 +974,10 @@ export const courseUtils = {
   },
 }
 
-export function createVITTools(userId: string) {
+export function createVITTools(userId: string, options: VITToolsOptions = {}) {
+  const toolOptions = options
+  const mcpConfig = options.mcp
+  const channel = options.channel
   const findPastPapersInputSchema = z.object({
     courseCode: z
       .string()
@@ -1025,15 +1175,6 @@ export function createVITTools(userId: string) {
         }
       },
     }),
-
-
-
-
-
-
-
-
-
 
     getCourseInfo: tool({
       description:
@@ -1451,7 +1592,9 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                     `Found faculty member ${faculty.name} in ${faculty.department || faculty.school}.` +
                     `\n\nCourses taught (${faculty.courses.length}):` +
                     `\n${faculty.courses
-                      .map((c: FacultyCourseRecord) => `- ${c.code ?? 'N/A'}: ${c.title ?? 'Unknown'}`)
+                      .map(
+                        (c: FacultyCourseRecord) => `- ${c.code ?? 'N/A'}: ${c.title ?? 'Unknown'}`
+                      )
                       .join('\n')}`,
                 }
               } catch (error) {
@@ -2003,8 +2146,59 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
         const MAX_RETRIES = 3
         let attempt = 0
         let lastError: any = null
+        let triedMcp = false
         while (attempt < MAX_RETRIES) {
           try {
+            const flags: VtopCommandFlags = {}
+            if (semester !== undefined) flags.semester = semester
+            if (semesterQuery) flags.semesterQuery = semesterQuery
+            if (course !== undefined) flags.course = course
+            if (faculty !== undefined) flags.faculty = faculty
+            if (classGroup !== undefined) flags.classGroup = classGroup
+            if (fuzzyIndex !== undefined) flags.fuzzyIndex = fuzzyIndex
+            if (courseQuery) flags.courseQuery = courseQuery
+            if (facultyQuery) flags.facultyQuery = facultyQuery
+            if (materialQuery) flags.materialQuery = materialQuery
+            if (debug) flags.debug = debug
+            const DEFAULT_LATEST_SEMESTER = new Set([
+              'timetable',
+              'marks',
+              'grades',
+              'cgpa',
+              'exam-schedule',
+              'exams',
+              'calendar',
+              'attendance',
+            ])
+            if (DEFAULT_LATEST_SEMESTER.has(command) && !flags.semester && !flags.semesterQuery) {
+              flags.semesterQuery = 'latest'
+            }
+
+            const preferMcp =
+              !triedMcp &&
+              mcpConfig?.endpoint &&
+              mcpConfig?.accessToken &&
+              (channel === 'whatsapp' || channel === 'discord' || mcpConfig.clientName)
+
+            if (preferMcp) {
+              triedMcp = true
+              const mcpResult = await callVtopViaMcp({
+                command,
+                flags,
+                username,
+                password,
+                mcp: mcpConfig,
+              })
+
+              if (mcpResult && mcpResult.success) {
+                return mcpResult
+              }
+
+              if (mcpResult) {
+                lastError = mcpResult
+              }
+            }
+
             let user = username
             let pass = password
             if (!user || !pass) {
@@ -2048,31 +2242,6 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 fuzzyIndex,
                 messages: context?.messages || [],
               })
-            }
-
-            const flags: VtopCommandFlags = {}
-            if (semester !== undefined) flags.semester = semester
-            if (semesterQuery) flags.semesterQuery = semesterQuery
-            if (course !== undefined) flags.course = course
-            if (faculty !== undefined) flags.faculty = faculty
-            if (classGroup !== undefined) flags.classGroup = classGroup
-            if (fuzzyIndex !== undefined) flags.fuzzyIndex = fuzzyIndex
-            if (courseQuery) flags.courseQuery = courseQuery
-            if (facultyQuery) flags.facultyQuery = facultyQuery
-            if (materialQuery) flags.materialQuery = materialQuery
-            if (debug) flags.debug = debug
-            const DEFAULT_LATEST_SEMESTER = new Set([
-              'timetable',
-              'marks',
-              'grades',
-              'cgpa',
-              'exam-schedule',
-              'exams',
-              'calendar',
-              'attendance',
-            ])
-            if (DEFAULT_LATEST_SEMESTER.has(command) && !flags.semester && !flags.semesterQuery) {
-              flags.semesterQuery = 'latest'
             }
 
             const PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001'
@@ -2442,7 +2611,6 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
         }
       },
     }),
-
   }
 }
 

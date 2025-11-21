@@ -162,6 +162,7 @@ export async function POST(request: NextRequest) {
 
     const { rateLimitedAI } = await import('@/lib/rate-limited-ai')
     const { createVITTools } = await import('@/lib/tools')
+    const { getUserMcpToken, refreshUserMcpToken, isExpired } = await import('@/lib/mcp-tokens')
     const { VIT_SYSTEM_PROMPT } = await import('@/lib/prompts')
     const { memoryService } = await import('@/lib/memory/memory-service')
     const { smoothStream, extractReasoningMiddleware } = await import('ai')
@@ -195,7 +196,31 @@ ${memories
       }
     }
 
-    const tools = createVITTools(user.id)
+    const vtopMcpEndpoint =
+      process.env.VTOP_MCP_URL ||
+      (process.env.VTOP_PROXY_URL
+        ? `${process.env.VTOP_PROXY_URL.replace(/\/$/, '')}/mcp`
+        : undefined)
+
+    let mcpToken = await getUserMcpToken(user.id)
+    if (mcpToken && isExpired(mcpToken)) {
+      mcpToken = await refreshUserMcpToken(user.id)
+    }
+
+    const fallbackToken =
+      process.env.WHATSAPP_VTOP_MCP_ACCESS_TOKEN || process.env.VTOP_MCP_ACCESS_TOKEN
+
+    const tools = createVITTools(user.id, {
+      channel: requestSource,
+      mcp:
+        requestSource === 'whatsapp'
+          ? {
+              endpoint: vtopMcpEndpoint,
+              accessToken: mcpToken?.accessToken || fallbackToken,
+              clientName: 'whatsapp-bot-client',
+            }
+          : undefined,
+    })
 
     const contextPrompt =
       requestSource === 'whatsapp'

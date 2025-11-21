@@ -2174,30 +2174,52 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               flags.semesterQuery = 'latest'
             }
 
-            const preferMcp =
-              !triedMcp &&
-              mcpConfig?.endpoint &&
-              mcpConfig?.accessToken &&
-              (channel === 'whatsapp' || channel === 'discord' || mcpConfig.clientName)
+        const isBotChannel = channel === 'whatsapp' || channel === 'discord'
+        const preferMcp =
+          !triedMcp &&
+          mcpConfig?.endpoint &&
+          mcpConfig?.accessToken &&
+          (isBotChannel || mcpConfig.clientName)
 
-            if (preferMcp) {
-              triedMcp = true
-              const mcpResult = await callVtopViaMcp({
+        if (isBotChannel && mcpConfig?.endpoint && !mcpConfig?.accessToken) {
+          return {
+            success: false,
+            requiresMcpLink: true,
+            command,
+            message:
+              'Missing VTOP MCP token. Please run !linkvtop in WhatsApp to re-authorize, then retry.',
+          }
+        }
+
+        if (preferMcp) {
+          triedMcp = true
+          const mcpResult = await callVtopViaMcp({
+            command,
+            flags,
+            username,
+            password,
+            mcp: mcpConfig,
+          })
+
+          if (mcpResult && mcpResult.success) {
+            return mcpResult
+          }
+
+          if (mcpResult) {
+            lastError = mcpResult
+            if (isBotChannel) {
+              return {
+                success: false,
+                requiresMcpLink: true,
                 command,
-                flags,
-                username,
-                password,
-                mcp: mcpConfig,
-              })
-
-              if (mcpResult && mcpResult.success) {
-                return mcpResult
-              }
-
-              if (mcpResult) {
-                lastError = mcpResult
+                message:
+                  mcpResult.message ||
+                  'Your VTOP session token expired. Send !linkvtop again to refresh access.',
+                details: mcpResult,
               }
             }
+          }
+        }
 
             let user = username
             let pass = password

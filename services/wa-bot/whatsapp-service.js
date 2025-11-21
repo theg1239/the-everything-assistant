@@ -693,29 +693,6 @@ class WhatsAppService extends EventEmitter {
         `📚 Found ${conversationHistory.length} messages in conversation history for ${userName}`
       )
 
-      const vtopKeywords = [
-        'vtop',
-        'grades',
-        'attendance',
-        'timetable',
-        'marks',
-        'schedule',
-        'exam',
-        'faculty',
-        'course',
-      ]
-      const isVtopQuery = vtopKeywords.some(keyword => question.toLowerCase().includes(keyword))
-
-      if (isVtopQuery) {
-        const vtopMessage = `for vtop features like checking grades, attendance, timetable, and other academic information, please use the web interface at:\n\nhttps://the-everything-assistant.vercel.app\n\nthe website provides full access to all vtop features with a better user experience for academic data.`
-        const targetChat = messageData.isGroup ? userChat : originalChat
-        if (messageData.isGroup) {
-          await this.sendMessageToChat(originalChat, `sent vtop info to ${userName} in dm`)
-        }
-        await this.sendMessageToChat(targetChat, vtopMessage)
-        return
-      }
-
       await this.sendTypingToChat(originalChat)
 
       const startTime = Date.now()

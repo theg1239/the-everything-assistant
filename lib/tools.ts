@@ -17,6 +17,7 @@ import { getCourseData, School } from './ffcs-tool'
 import { createKnowledgeTools } from './knowledge-tools'
 import { createMemoryTool } from './memory/memory-tools'
 import { hasVTOPCredentials, getFormattedVTOPCredentials } from './server-vtop-credentials'
+import { getUserMcpToken, refreshUserMcpToken, isExpired as isMcpExpired } from './mcp-tokens'
 // import {
 //   indexPastPapers,
 //   askIndexedPaperQuestion,
@@ -2175,19 +2176,34 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             }
 
         const isBotChannel = channel === 'whatsapp' || channel === 'discord'
+
+        // Lazy-load MCP token from DB if not explicitly provided
+        let mcpAccessToken = mcpConfig?.accessToken
+        if (!mcpAccessToken && mcpConfig?.endpoint) {
+          const stored = await getUserMcpToken(userId)
+          if (stored) {
+            if (isMcpExpired(stored)) {
+              const refreshed = await refreshUserMcpToken(userId)
+              if (refreshed?.accessToken) mcpAccessToken = refreshed.accessToken
+            } else {
+              mcpAccessToken = stored.accessToken
+            }
+          }
+        }
+
         const preferMcp =
           !triedMcp &&
           mcpConfig?.endpoint &&
-          mcpConfig?.accessToken &&
+          mcpAccessToken &&
           (isBotChannel || mcpConfig.clientName)
 
-        if (isBotChannel && mcpConfig?.endpoint && !mcpConfig?.accessToken) {
+        if (isBotChannel && mcpConfig?.endpoint && !mcpAccessToken) {
           return {
             success: false,
             requiresMcpLink: true,
             command,
             message:
-              'Missing VTOP MCP token. Please run !linkvtop in WhatsApp to re-authorize, then retry.',
+              'Missing or expired VTOP MCP token. Please run !linkvtop in WhatsApp to re-authorize, then retry.',
           }
         }
 
@@ -2198,7 +2214,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             flags,
             username,
             password,
-            mcp: mcpConfig,
+            mcp: { ...mcpConfig, accessToken: mcpAccessToken },
           })
 
           if (mcpResult && mcpResult.success) {

@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
     const { getUserMcpToken, refreshUserMcpToken, isExpired } = await import('@/lib/mcp-tokens')
     const { VIT_SYSTEM_PROMPT } = await import('@/lib/prompts')
     const { memoryService } = await import('@/lib/memory/memory-service')
-    const { smoothStream, extractReasoningMiddleware } = await import('ai')
+    const { smoothStream, extractReasoningMiddleware, stepCountIs } = await import('ai')
 
     const memorySettings = await memoryService.getUserMemorySettings(user.id)
     const isMemoryEnabled = memorySettings?.isEnabled ?? true
@@ -268,7 +268,8 @@ CRITICAL TOOL CONTINUATION RULES:
         maxTokens: requestSource === 'whatsapp' ? 2048 : 4096,
         experimental_transform: smoothStream({ chunking: 'word' }),
         middleware: [reasoningMiddleware],
-        maxSteps: 3,
+        maxSteps: 5,
+        stopWhen: stepCountIs(5),
         experimental_continueSteps: true,
         onStepFinish: async ({ usage, stepIndex }: any) => {
           try {

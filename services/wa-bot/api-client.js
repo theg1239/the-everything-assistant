@@ -102,7 +102,7 @@ class APIClient {
 
       // Fast path for the new AI SDK text stream (plain text, no prefixes)
       const textFromPlainStream = rawText.trim()
-      if (textFromPlainStream && !/^[0-4aefd]:/.test(textFromPlainStream.split('\n')[0] || '')) {
+      if (!isSse && textFromPlainStream && !/^[0-4aefd]:/.test(textFromPlainStream.split('\n')[0] || '')) {
         console.log('🆕 Parsed plain text stream response')
         return { text: textFromPlainStream, reasoning: '', toolResults: [], error: null }
       }
@@ -280,6 +280,7 @@ class APIClient {
           text += chunk.delta || ''
           break
         case 'tool-result':
+        case 'tool-output-available':
           toolResults.push(chunk)
           break
         case 'error':

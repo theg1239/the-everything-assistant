@@ -33,7 +33,7 @@
   },
   "dependencies": {
     "@ai-sdk/cerebras": "latest",
-    "@ai-sdk/google": "2.0.33",
+    "@ai-sdk/google": "2.0.40",
     "@ai-sdk/groq": "latest",
     "@ai-sdk/provider": "^2.0.0",
     "@ai-sdk/react": "latest",

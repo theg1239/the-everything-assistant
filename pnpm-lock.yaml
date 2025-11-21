@@ -15,8 +15,8 @@ importers:
         specifier: latest
         version: 1.0.31(zod@4.1.12)
       '@ai-sdk/google':
-        specifier: 2.0.33
-        version: 2.0.33(zod@4.1.12)
+        specifier: 2.0.40
+        version: 2.0.40(zod@4.1.12)
       '@ai-sdk/groq':
         specifier: latest
         version: 2.0.29(zod@4.1.12)
@@ -345,8 +345,8 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/google@2.0.33':
-    resolution: {integrity: sha512-Mi8GbW6hw7VFvyrghjP8JI7FQoXRs0w1MOS/shrksN+X8hMEcIF/+KXNFrjopOy7EA12NUpKAlJkWiTpjsLHGw==}
+  '@ai-sdk/google@2.0.40':
+    resolution: {integrity: sha512-E7MTVE6vhWXQJzXQDvojwA9t5xlhWpxttCH3R/kUyiE6y0tT8Ay2dmZLO+bLpFBQ5qrvBMrjKWpDVQMoo6TJZg==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -7992,7 +7992,7 @@ snapshots:
       '@vercel/oidc': 3.0.3
       zod: 4.1.12
 
-  '@ai-sdk/google@2.0.33(zod@4.1.12)':
+  '@ai-sdk/google@2.0.40(zod@4.1.12)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
       '@ai-sdk/provider-utils': 3.0.17(zod@4.1.12)

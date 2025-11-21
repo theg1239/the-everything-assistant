@@ -69,6 +69,12 @@ class APIClient {
 
   async parseStreamingResponse(response) {
     try {
+      // Prefer AI SDK UI stream parsing when possible (handles text-delta/reasoning/tool-result)
+      const sdkResult = await this.tryParseWithAISDKUIStream(response)
+      if (sdkResult) {
+        return sdkResult
+      }
+
       const rawText = await this.readTextStream(response)
       console.log('📥 Raw API response:', rawText.substring(0, 400) + '...')
       console.log('📊 Response length:', rawText.length)
@@ -278,6 +284,71 @@ class APIClient {
     }
 
     return { text: finalText, reasoning: (reasoning || '').trim() }
+  }
+
+  async tryParseWithAISDKUIStream(response) {
+    const contentType = (response.headers.get('content-type') || '').toLowerCase()
+    const looksLikeStream =
+      contentType.includes('text/event-stream') ||
+      contentType.includes('event-stream') ||
+      response.headers.get('x-uses-ui-stream') === '1'
+
+    if (!looksLikeStream || !response?.body) {
+      return null
+    }
+
+    try {
+      const { readUIMessageStream } = require('ai')
+      const { Readable } = require('stream')
+
+      const body = response.body
+      const webStream =
+        typeof body.getReader === 'function' ? body : Readable.toWeb ? Readable.toWeb(body) : null
+
+      if (!webStream) {
+        return null
+      }
+
+      let text = ''
+      let reasoning = ''
+
+      const uiStream = readUIMessageStream({
+        stream: webStream,
+        terminateOnError: false,
+      })
+
+      for await (const message of uiStream) {
+        if (!message?.parts) continue
+        for (const part of message.parts) {
+          if (part.type === 'text' && typeof part.text === 'string') {
+            text += part.text
+          } else if (part.type === 'reasoning' && typeof part.text === 'string') {
+            reasoning += part.text
+          } else if (part.type === 'tool-result') {
+            const r = part.result || part
+            const candidate =
+              r?.formatted_content || r?.summary || r?.content || r?.text || r?.result
+            if (candidate && typeof candidate === 'string') {
+              text += candidate
+            }
+          }
+        }
+      }
+
+      if (!text && !reasoning) {
+        return null
+      }
+
+      return {
+        text: text.trim(),
+        reasoning: reasoning.trim(),
+        toolResults: [],
+        error: null,
+      }
+    } catch (err) {
+      console.warn('⚠️ AI SDK UI stream parser failed, falling back:', err?.message || err)
+      return null
+    }
   }
 
   async healthCheck() {

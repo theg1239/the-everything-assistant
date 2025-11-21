@@ -86,6 +86,15 @@ class APIClient {
             error: null,
           }
         }
+        const regexText = this.extractTextDeltas(rawText)
+        if (regexText) {
+          return {
+            text: regexText,
+            reasoning: '',
+            toolResults: [],
+            error: null,
+          }
+        }
       }
 
       // Fast path for the new AI SDK text stream (plain text, no prefixes)
@@ -278,6 +287,12 @@ class APIClient {
     }
 
     return { text: finalText, reasoning: (reasoning || '').trim() }
+  }
+
+  extractTextDeltas(rawText) {
+    const matches = [...rawText.matchAll(/"type"\\s*:\\s*"text-delta"[^"]*"delta"\\s*:\\s*"([^"]*)"/g)]
+    if (!matches.length) return ''
+    return matches.map(m => (m[1] || '').replace(/\\\\n/g, '\n')).join('')
   }
 
 

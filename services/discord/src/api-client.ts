@@ -102,6 +102,11 @@ class APIClient {
             error: undefined,
           }
         }
+        // Regex fallback in case structured parsing missed deltas
+        const regexText = this.extractTextDeltas(rawText)
+        if (regexText) {
+          return { text: regexText, reasoning: '', toolResults: [], error: undefined }
+        }
       }
 
       // Fast path for plain text streams that already contain the full answer
@@ -316,6 +321,12 @@ class APIClient {
     }
 
     return { text: finalText, reasoning: reasoning.trim() }
+  }
+
+  private extractTextDeltas(rawText: string): string {
+    const matches = [...rawText.matchAll(/"type"\\s*:\\s*"text-delta"[^"]*"delta"\\s*:\\s*"([^"]*)"/g)]
+    if (!matches.length) return ''
+    return matches.map(m => (m[1] || '').replace(/\\\\n/g, '\n')).join('')
   }
 
   async healthCheck(): Promise<boolean> {

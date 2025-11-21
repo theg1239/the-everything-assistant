@@ -36,6 +36,8 @@ interface SidebarProps {
   [key: string]: any
 }
 
+const SIDEBAR_WIDTH = 280
+
 const sidebarVariants = {
   open: {
     x: 0,
@@ -44,7 +46,7 @@ const sidebarVariants = {
     },
   },
   closed: {
-    x: -320,
+    x: -SIDEBAR_WIDTH,
     transition: {
       duration: 0.2,
     },
@@ -417,7 +419,7 @@ export const Sidebar = memo(
                 initial="closed"
                 animate="open"
                 exit="closed"
-                className="fixed left-0 top-0 z-50 h-full w-[320px] bg-background/80 backdrop-blur-sm border-r border-border/30 flex flex-col shadow-2xl"
+                className="fixed left-0 top-0 z-50 h-full w-[280px] bg-background/80 backdrop-blur-sm border-r border-border/30 flex flex-col shadow-2xl"
                 onMouseEnter={() => setHovering(true)}
                 onMouseLeave={() => setHovering(false)}
                 onClick={e => e.stopPropagation()}

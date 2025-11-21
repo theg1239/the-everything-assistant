@@ -1408,11 +1408,17 @@ function PureChatInterfaceComponent({
             setHubOpen(false)
           }}
         />
-        <div className="flex flex-col h-[100dvh] bg-transparent text-foreground relative overflow-hidden mobile-viewport-fix">
+        <div
+          className={cn(
+            'flex flex-col h-[100dvh] bg-transparent text-foreground relative overflow-hidden mobile-viewport-fix transition-[padding] duration-200 ease-in-out',
+            sidebarOpen && 'md:pl-[280px] md:pr-10'
+          )}
+          style={{ overflowX: 'hidden' }}
+        >
           <div className="relative z-10 flex flex-col h-full">
             <header className="flex-shrink-0 sticky top-0 z-40">
               <div className="flex h-14 items-center px-4 gap-2">
-                <HamburgerButton onClick={toggleSidebar} className="md:hidden" />
+                {!sidebarOpen && <HamburgerButton onClick={toggleSidebar} className="md:hidden" />}
               </div>
             </header>
             <div className="flex-1 flex flex-col items-center justify-center px-4 space-y-8 overflow-y-auto overflow-fix pt-6 md:pt-0">
@@ -1590,11 +1596,15 @@ function PureChatInterfaceComponent({
         />
         <div
           ref={mainRef}
-          className="flex flex-col h-[calc(var(--vh,1vh)*100)] bg-transparent text-foreground overflow-hidden mobile-viewport-fix"
+          className={cn(
+            'flex flex-col h-[calc(var(--vh,1vh)*100)] bg-transparent text-foreground overflow-hidden mobile-viewport-fix transition-[padding] duration-200 ease-in-out',
+            sidebarOpen && 'md:pl-[280px] md:pr-10'
+          )}
           style={{
             height: 'var(--app-height, 100vh)',
             position: 'relative',
             width: '100%',
+            overflowX: 'hidden',
           }}
         >
           <header
@@ -1604,34 +1614,38 @@ function PureChatInterfaceComponent({
             )}
           >
             <div className="flex h-14 items-center px-4 gap-2">
-              <HamburgerButton onClick={toggleSidebar} className="md:block" />
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  if (window.location.pathname !== '/') {
-                    router.replace('/')
-                    setUiMessages([])
-                    setInput('')
-                    setShowFullChat(false)
-                    setHasUserInitiatedConversation(false)
-                    setIsFirstMessageInNewChat(false)
-                    setShowFollowUpSuggestions(false)
-                    setLastAssistantMessage('')
-                    setLastUserMessage('')
-                    setOptimisticChatId(undefined)
-                    setChatCreatedEventDispatched(false)
-                    setErrorMessage(null)
-                    clearRateLimitError()
-                    clearToolResult('')
-                  } else {
-                    router.push('/')
-                  }
-                }}
-                className="h-9 ml-auto"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                new chat
-              </Button>
+              {!sidebarOpen && (
+                <>
+                  <HamburgerButton onClick={toggleSidebar} className="md:block" />
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      if (window.location.pathname !== '/') {
+                        router.replace('/')
+                        setUiMessages([])
+                        setInput('')
+                        setShowFullChat(false)
+                        setHasUserInitiatedConversation(false)
+                        setIsFirstMessageInNewChat(false)
+                        setShowFollowUpSuggestions(false)
+                        setLastAssistantMessage('')
+                        setLastUserMessage('')
+                        setOptimisticChatId(undefined)
+                        setChatCreatedEventDispatched(false)
+                        setErrorMessage(null)
+                        clearRateLimitError()
+                        clearToolResult('')
+                      } else {
+                        router.push('/')
+                      }
+                    }}
+                    className="h-9 ml-auto"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    new chat
+                  </Button>
+                </>
+              )}
               {canInstall && !isInstalled && (
                 <Button
                   variant="ghost"

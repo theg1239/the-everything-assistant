@@ -90,7 +90,7 @@
       --input: 240 5.9% 90%;
       --ring: 262.1 83.3% 57.8%;
       --radius: 0.75rem;
-      --sidebar-width: 320px;
+      --sidebar-width: 280px;
       --sidebar-transition: transform 0.3s ease, opacity 0.3s ease;
     }
 
@@ -348,21 +348,6 @@
   }
 
   @layer utilities {
-    .sidebar-open .max-w-5xl {
-      margin-left: 20rem;
-      margin-right: 1rem;
-      max-width: none;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    @media (max-width: 768px) {
-      .sidebar-open .max-w-5xl {
-        margin-left: 0;
-        margin-right: 0;
-        max-width: 80rem;
-      }
-    }
-
     .sidebar-toggle-collapsed {
       position: fixed;
       left: 1rem;

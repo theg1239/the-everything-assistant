@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
 import { isSMTPConfigured } from '@/lib/env-config'
 import speakeasy from 'speakeasy'
 import QRCode from 'qrcode'
@@ -9,8 +9,6 @@ import crypto from 'crypto'
 import nodemailer from 'nodemailer'
 import bcrypt from 'bcryptjs'
 import { mfaSetupRequestSchema } from '@/types/api/mfa'
-
-const prisma = new PrismaClient()
 
 const createEmailTransporter = () => {
   console.log('SMTP_EMAIL exists:', !!process.env.SMTP_EMAIL)

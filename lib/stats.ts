@@ -1,6 +1,5 @@
-import { PrismaClient, Prisma } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from '@/lib/prisma'
+import { Prisma } from '@/prisma/generated/client'
 
 export async function getTotalUsers() {
   return prisma.user.count()

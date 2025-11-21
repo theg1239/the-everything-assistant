@@ -1,5 +1,5 @@
 import { prisma } from './prisma'
-import type { VTOPSnapshot } from '@prisma/client'
+import type { VTOPSnapshot } from '@/prisma/generated/client'
 
 export type VTOPSnapshotPayload = {
   command: string

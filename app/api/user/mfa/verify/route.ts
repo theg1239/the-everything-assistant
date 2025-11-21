@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
-import type { Prisma } from '@prisma/client'
+import type { Prisma } from '@/prisma/generated/client'
 import {
   verifyTOTP,
   hashBackupCodes,

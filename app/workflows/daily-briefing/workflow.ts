@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client'
+import type { Prisma } from '@/prisma/generated/client'
 import { prisma } from '@/lib/prisma'
 import { listVTOPSnapshots } from '@/lib/vtop-snapshots'
 import {

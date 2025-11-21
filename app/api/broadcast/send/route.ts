@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { Prisma } from '@prisma/client'
+import { Prisma } from '@/prisma/generated/client'
 import { prisma } from '@/lib/prisma'
 import { broadcastPayloadSchema, type BroadcastPayload } from '@/types/api/broadcast'
 

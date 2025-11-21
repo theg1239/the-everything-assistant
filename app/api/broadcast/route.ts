@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { Prisma } from '@prisma/client'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@/prisma/generated/client'
 import {
   broadcastDeleteSchema,
   broadcastSlidesSchema,

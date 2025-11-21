@@ -103,6 +103,22 @@ class APIClient {
         }
       }
 
+      // Heuristic: if body contains SSE-style "data: {\"type\":\"text-delta\"...}"
+      if (rawText.includes('"type":"text-delta"') || rawText.includes('data: {"type":"text-')) {
+        const { text, reasoning } = this.parseUIStream(rawText)
+        if (text || reasoning) {
+          return {
+            text:
+              text ||
+              "I received your message but couldn't generate a proper response. Please try again.",
+            reasoning,
+            toolResults: [],
+            error: undefined,
+          }
+        }
+      }
+
+      // Fast path for plain text streams that already contain the full answer
       const plainText = rawText.trim()
       const firstLine = plainText.split('\n')[0] || ''
       if (plainText && !/^[0-4aefd]:/.test(firstLine)) {

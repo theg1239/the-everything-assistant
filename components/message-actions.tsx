@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { ThumbsUp, ThumbsDown, Copy, GraduationCap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -57,50 +58,72 @@ export function MessageActions({
   }
 
   return (
-    <div className="flex items-center space-x-2 mt-3 pt-3 border-t border-slate-700/30">
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => handleVote(true)}
-        className={cn(
-          'h-8 w-8 p-0 text-slate-400 hover:text-green-400',
-          vote === true && 'text-green-400'
-        )}
-      >
-        <ThumbsUp className="h-3 w-3" />
-      </Button>
+    <TooltipProvider delayDuration={150}>
+      <div className="flex items-center space-x-2 mt-3 pt-3 border-t border-slate-700/30">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleVote(true)}
+              className={cn(
+                'h-8 w-8 p-0 text-slate-400 hover:text-green-400',
+                vote === true && 'text-green-400'
+              )}
+            >
+              <ThumbsUp className="h-3 w-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">upvote</TooltipContent>
+        </Tooltip>
 
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => handleVote(false)}
-        className={cn(
-          'h-8 w-8 p-0 text-slate-400 hover:text-red-400',
-          vote === false && 'text-red-400'
-        )}
-      >
-        <ThumbsDown className="h-3 w-3" />
-      </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleVote(false)}
+              className={cn(
+                'h-8 w-8 p-0 text-slate-400 hover:text-red-400',
+                vote === false && 'text-red-400'
+              )}
+            >
+              <ThumbsDown className="h-3 w-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">downvote</TooltipContent>
+        </Tooltip>
 
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={copyToClipboard}
-        className="h-8 w-8 p-0 text-slate-400 hover:text-blue-400"
-      >
-        <Copy className="h-3 w-3" />
-      </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={copyToClipboard}
+              className="h-8 w-8 p-0 text-slate-400 hover:text-blue-400"
+            >
+              <Copy className="h-3 w-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">copy text</TooltipContent>
+        </Tooltip>
 
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={createCanvasDocument}
-        className="h-8 w-8 p-0 text-slate-400 hover:text-purple-400"
-      >
-        <GraduationCap className="h-3 w-3" />
-      </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={createCanvasDocument}
+              className="h-8 w-8 p-0 text-slate-400 hover:text-purple-400"
+            >
+              <GraduationCap className="h-3 w-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">open the hub</TooltipContent>
+        </Tooltip>
 
-      {copied && <span className="text-xs text-green-400">copied!</span>}
-    </div>
+        {copied && <span className="text-xs text-green-400">copied!</span>}
+      </div>
+    </TooltipProvider>
   )
 }

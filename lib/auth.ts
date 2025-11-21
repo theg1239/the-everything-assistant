@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth/next'
 import GoogleProvider from 'next-auth/providers/google'
 import { PrismaAdapter } from '@next-auth/prisma-adapter'
 import { prisma } from '@/lib/prisma'
-import type { PrismaClient as NextAuthPrismaClient } from '@prisma/client'
+import type { PrismaClient as NextAuthPrismaClient } from '@/prisma/generated/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 
 const prismaForAuth = prisma as unknown as NextAuthPrismaClient

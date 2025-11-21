@@ -257,14 +257,14 @@ class DiscordBotServer {
       console.log(`Total processing time: ${processingTimeMs}ms`)
 
       if (respondCallback) {
-        await respondCallback(response.text)
+        await respondCallback(response)
       }
     } catch (error) {
       console.error('Failed to process AI request:', error)
 
       if (respondCallback) {
         await respondCallback(
-          'Sorry, I encountered an error processing your request. Please try again.'
+          { text: 'Sorry, I encountered an error processing your request. Please try again.' }
         )
       }
     }

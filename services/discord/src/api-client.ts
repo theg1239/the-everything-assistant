@@ -8,6 +8,7 @@ interface ConversationHistory {
 
 interface APIResponse {
   text: string
+  reasoning?: string
   toolResults: any[]
   error?: string
 }
@@ -51,6 +52,8 @@ class APIClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Accept: 'text/event-stream, text/plain',
+          'X-WABA-UI-STREAM': '1',
           Authorization: `Bearer ${this.apiKey}`,
           'User-Agent': 'the-everything-assistant-bot/1.0.0',
         },
@@ -81,11 +84,26 @@ class APIClient {
 
   private async parseStreamingResponse(response: any): Promise<APIResponse> {
     try {
-      const text = await response.text()
-      console.log('raw api response:', text.substring(0, 400) + '...')
-      console.log('response length:', text.length)
+      const rawText = await this.readTextStream(response)
+      console.log('raw api response:', rawText.substring(0, 400) + '...')
+      console.log('response length:', rawText.length)
 
-      const lines = text.split('\n').filter((line: string) => line.trim())
+      const contentType = (response.headers.get('content-type') || '').toLowerCase()
+      const isSse = contentType.includes('text/event-stream')
+
+      if (isSse) {
+        const { text, reasoning } = this.parseUIStream(rawText)
+        return {
+          text:
+            text ||
+            "I received your message but couldn't generate a proper response. Please try again.",
+          reasoning,
+          toolResults: [],
+          error: undefined,
+        }
+      }
+
+      const lines = rawText.split('\n').filter((line: string) => line.trim())
       console.log('total lines:', lines.length)
 
       let finalText = ''
@@ -172,7 +190,7 @@ class APIClient {
 
       if (!finalText.trim() && lines.some((line: string) => line.includes('completionTokens'))) {
         console.warn('API completed successfully but returned no text content')
-        console.log('Full response for debugging:', text)
+        console.log('Full response for debugging:', rawText)
         finalText =
           'I processed your request but the response was empty. This might be a temporary issue with the AI service. Please try again.'
       }
@@ -186,6 +204,7 @@ class APIClient {
         text:
           finalText ||
           "I received your message but couldn't generate a proper response. Please try again.",
+        reasoning: '',
         toolResults,
         error: error || undefined,
       }
@@ -193,10 +212,81 @@ class APIClient {
       console.error('Failed to parse streaming response:', error)
       return {
         text: 'Sorry, I encountered an error processing your request. Please try again later.',
+        reasoning: '',
         toolResults: [],
         error: (error as Error).message,
       }
     }
+  }
+
+  /**
+   * Read response body as UTF-8 text, supporting both web streams and Node readable streams.
+   */
+  private async readTextStream(response: any): Promise<string> {
+    if (!response?.body) return ''
+
+    const decoder = new TextDecoder()
+    let result = ''
+
+    const hasTDS = typeof (globalThis as any).TextDecoderStream === 'function'
+    if (typeof (response.body as any).getReader === 'function' && hasTDS) {
+      const reader = (response.body as any)
+        .pipeThrough(new (globalThis as any).TextDecoderStream())
+        .getReader()
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        result += value
+      }
+    } else {
+      for await (const chunk of response.body as any) {
+        result += decoder.decode(chunk, { stream: true })
+      }
+      result += decoder.decode()
+    }
+
+    return result
+  }
+
+  /**
+   * Parse AI SDK UI SSE stream for reasoning + text deltas.
+   */
+  private parseUIStream(rawText: string): { text: string; reasoning: string } {
+    const events = rawText.split('\n\n').filter(Boolean)
+    let reasoning = ''
+    let text = ''
+
+    for (const event of events) {
+      for (const line of event.split('\n')) {
+        const trimmed = line.trim()
+        if (!trimmed.startsWith('data:')) continue
+        const payload = trimmed.slice(5).trim()
+        if (!payload) continue
+
+        let chunk: any
+        try {
+          chunk = JSON.parse(payload)
+        } catch {
+          continue
+        }
+
+        switch (chunk.type) {
+          case 'reasoning-delta':
+            reasoning += chunk.delta || ''
+            break
+          case 'text-delta':
+            text += chunk.delta || ''
+            break
+          case 'error':
+            console.error('stream error chunk:', chunk.errorText || chunk.error)
+            break
+          default:
+            break
+        }
+      }
+    }
+
+    return { text: text.trim(), reasoning: reasoning.trim() }
   }
 
   async healthCheck(): Promise<boolean> {

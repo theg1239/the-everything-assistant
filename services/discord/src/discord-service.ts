@@ -553,7 +553,7 @@ class DiscordService extends EventEmitter {
         question,
         conversationHistory,
         startTime,
-        respondCallback: (response: string) =>
+        respondCallback: (response: any) =>
           this.handleAIResponse(messageData, response, startTime),
       })
     } catch (error) {
@@ -601,7 +601,7 @@ Keep the response concise but informative.`
         question: analysisPrompt,
         conversationHistory: [],
         startTime,
-        respondCallback: (response: string) =>
+        respondCallback: (response: any) =>
           this.handleAIResponse(messageData, response, startTime),
       })
     } catch (error) {
@@ -689,7 +689,7 @@ Keep the response concise but informative.`
 
   private async handleAIResponse(
     messageData: MessageData,
-    response: string,
+    response: any,
     startTime: number
   ): Promise<void> {
     try {
@@ -698,14 +698,17 @@ Keep the response concise but informative.`
 
       console.log(`AI Response ready in ${processingTime}ms`)
 
-      if (!response || response.trim() === '') {
+      const responseText = typeof response === 'string' ? response : response?.text || ''
+      const reasoningText = typeof response === 'object' ? response?.reasoning || '' : ''
+
+      if (!responseText || responseText.trim() === '') {
         await channel.send("Sorry, I couldn't generate a response. Please try asking again.")
         return
       }
 
-      const shouldTagEveryone = this.shouldTagEveryone(response, messageData)
+      const shouldTagEveryone = this.shouldTagEveryone(responseText, messageData)
 
-      let formattedResponse = this.formatResponseForDiscord(response)
+      let formattedResponse = this.formatResponseForDiscord(responseText)
 
       if (shouldTagEveryone && guild) {
         formattedResponse = `@everyone\n\n${formattedResponse}`
@@ -714,15 +717,31 @@ Keep the response concise but informative.`
       const isLongResponse = formattedResponse.length > 1500
       const isOwner = this.isOwner(author.id)
 
+      let thinkingMessage: Message | null = null
+      if (reasoningText.trim()) {
+        try {
+          const reasoningDisplay = `💭 thinking...\n${this.formatResponseForDiscord(reasoningText)}`
+          thinkingMessage = await channel.send(reasoningDisplay)
+        } catch (err) {
+          console.warn('Failed to send reasoning message:', err)
+        }
+      }
+
       if (isLongResponse && guild && !isOwner) {
         await channel.send(`Sent a detailed response to ${author.tag} in DM.`)
         await author.send(formattedResponse)
-      } else {
-        if (formattedResponse.length > 2000) {
-          await this.sendLongMessage(channel, formattedResponse)
-        } else {
+      } else if (formattedResponse.length > 2000) {
+        await this.sendLongMessage(channel, formattedResponse)
+      } else if (thinkingMessage) {
+        // "Edit" the reasoning message into the final answer when possible
+        try {
+          await thinkingMessage.edit(formattedResponse)
+        } catch (err) {
+          console.warn('Failed to edit reasoning message, sending new message:', err)
           await channel.send(formattedResponse)
         }
+      } else {
+        await channel.send(formattedResponse)
       }
     } catch (error) {
       console.error('Error in handleAIResponse:', error)

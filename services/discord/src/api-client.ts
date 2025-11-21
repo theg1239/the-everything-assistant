@@ -130,38 +130,42 @@ class APIClient {
 
       for (const line of lines) {
         try {
-          console.log('processing line:', line.substring(0, 100) + (line.length > 100 ? '...' : ''))
+          const trimmedLine = line.trim()
+          console.log(
+            'processing line:',
+            trimmedLine.substring(0, 100) + (trimmedLine.length > 100 ? '...' : '')
+          )
 
-          if (line.startsWith('0:')) {
-            let content = line.slice(2)
+          if (trimmedLine.startsWith('0:')) {
+            let content = trimmedLine.slice(2)
             if (content.startsWith('"') && content.endsWith('"')) {
               content = content.slice(1, -1)
             }
             content = content.replace(/\\"/g, '"').replace(/\\n/g, '\n')
             finalText += content
-          } else if (line.startsWith('1:')) {
-            let content = line.slice(2)
+          } else if (trimmedLine.startsWith('1:')) {
+            let content = trimmedLine.slice(2)
             if (content.startsWith('"') && content.endsWith('"')) {
               content = content.slice(1, -1)
             }
             content = content.replace(/\\"/g, '"').replace(/\\n/g, '\n')
             finalText += content
-          } else if (line.startsWith('f:')) {
-            const metadata = JSON.parse(line.slice(2))
+          } else if (trimmedLine.startsWith('f:')) {
+            const metadata = JSON.parse(trimmedLine.slice(2))
             console.log('Received metadata:', metadata)
-          } else if (line.startsWith('9:')) {
-            const toolCall = JSON.parse(line.slice(2))
+          } else if (trimmedLine.startsWith('9:')) {
+            const toolCall = JSON.parse(trimmedLine.slice(2))
             console.log('Tool call detected:', toolCall.toolName)
-          } else if (line.startsWith('a:')) {
-            const toolResult = JSON.parse(line.slice(2))
+          } else if (trimmedLine.startsWith('a:')) {
+            const toolResult = JSON.parse(trimmedLine.slice(2))
             toolResults.push(toolResult)
-          } else if (line.startsWith('e:')) {
-            const endData = JSON.parse(line.slice(2))
+          } else if (trimmedLine.startsWith('e:')) {
+            const endData = JSON.parse(trimmedLine.slice(2))
             if (endData.finishReason !== 'stop') {
               console.warn('Stream ended unexpectedly:', endData.finishReason)
             }
-          } else if (line.startsWith('data:')) {
-            const payload = line.slice(5).trim()
+          } else if (trimmedLine.startsWith('data:')) {
+            const payload = trimmedLine.slice(5).trim()
             if (payload && payload !== '[DONE]') {
               try {
                 const chunk = JSON.parse(payload)
@@ -183,9 +187,9 @@ class APIClient {
                 // ignore malformed SSE payloads
               }
             }
-          } else if (line.startsWith('d:')) {
+          } else if (trimmedLine.startsWith('d:')) {
             try {
-              const data = JSON.parse(line.slice(2))
+              const data = JSON.parse(trimmedLine.slice(2))
               if (data.text) {
                 finalText += data.text
               } else if (data.content) {
@@ -194,13 +198,17 @@ class APIClient {
                 finalText += data
               }
             } catch (e) {
-              const rawContent = line.slice(2)
+              const rawContent = trimmedLine.slice(2)
               if (rawContent && rawContent !== '{}') {
                 finalText += rawContent
               }
             }
-          } else if (line.startsWith('2:') || line.startsWith('3:') || line.startsWith('4:')) {
-            let content = line.slice(2)
+          } else if (
+            trimmedLine.startsWith('2:') ||
+            trimmedLine.startsWith('3:') ||
+            trimmedLine.startsWith('4:')
+          ) {
+            let content = trimmedLine.slice(2)
             if (content.startsWith('"') && content.endsWith('"')) {
               content = content.slice(1, -1)
             }
@@ -347,7 +355,10 @@ class APIClient {
   }
 
   private extractTextDeltas(rawText: string): string {
-    const matches = [...rawText.matchAll(/"type"\s*:\s*"text-delta"[^"]*"delta"\s*:\s*"([^"]*)"/g)]
+    // Capture any text-delta blocks even when other quoted fields appear between type and delta
+    const matches = [
+      ...rawText.matchAll(/"type"\s*:\s*"text-delta"[\s\S]*?"delta"\s*:\s*"([^"]*)"/g),
+    ]
     if (!matches.length) return ''
     return matches.map(m => (m[1] || '').replace(/\\\\n/g, '\n')).join('')
   }

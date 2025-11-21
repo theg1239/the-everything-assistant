@@ -112,7 +112,9 @@ class APIClient {
       let toolResults = []
 
       for (const line of lines) {
-        const cleanedLine = line.startsWith('data:') ? line.slice(5).trim() : line
+        const cleanedLine = (line || '').trim().startsWith('data:')
+          ? line.trim().slice(5).trim()
+          : line.trim()
 
         try {
           if (cleanedLine.startsWith('0:') || cleanedLine.startsWith('1:')) {
@@ -290,7 +292,10 @@ class APIClient {
   }
 
   extractTextDeltas(rawText) {
-    const matches = [...rawText.matchAll(/"type"\s*:\s*"text-delta"[^"]*"delta"\s*:\s*"([^"]*)"/g)]
+    // Capture any text-delta blocks even when other quoted fields appear between type and delta
+    const matches = [
+      ...rawText.matchAll(/"type"\s*:\s*"text-delta"[\s\S]*?"delta"\s*:\s*"([^"]*)"/g),
+    ]
     if (!matches.length) return ''
     return matches.map(m => (m[1] || '').replace(/\\\\n/g, '\n')).join('')
   }

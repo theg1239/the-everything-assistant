@@ -91,26 +91,12 @@ class APIClient {
       const contentType = (response.headers.get('content-type') || '').toLowerCase()
       const isSse = contentType.includes('text/event-stream')
 
-      if (isSse) {
-        const { text, reasoning } = this.parseUIStream(rawText)
-        return {
-          text:
-            text ||
-            "I received your message but couldn't generate a proper response. Please try again.",
-          reasoning,
-          toolResults: [],
-          error: undefined,
-        }
-      }
-
-      // Heuristic: if body contains SSE-style "data: {\"type\":\"text-delta\"...}"
-      if (rawText.includes('"type":"text-delta"') || rawText.includes('data: {"type":"text-')) {
+      // Prefer UI/SSE parsing whenever the payload contains data: lines or SSE content type
+      if (isSse || rawText.includes('data:')) {
         const { text, reasoning } = this.parseUIStream(rawText)
         if (text || reasoning) {
           return {
-            text:
-              text ||
-              "I received your message but couldn't generate a proper response. Please try again.",
+            text,
             reasoning,
             toolResults: [],
             error: undefined,
@@ -279,41 +265,40 @@ class APIClient {
    * Parse AI SDK UI SSE stream for reasoning + text deltas.
    */
   private parseUIStream(rawText: string): { text: string; reasoning: string } {
-    const events = rawText.split('\n\n').filter(Boolean)
+    // Robust per-line parser; handles SSE payload even if content-type wasn't SSE
+    const lines = rawText.split(/\r?\n/)
     let reasoning = ''
     let text = ''
     const toolResults: any[] = []
 
-    for (const event of events) {
-      for (const line of event.split('\n')) {
-        const trimmed = line.trim()
-        if (!trimmed.startsWith('data:')) continue
-        const payload = trimmed.slice(5).trim()
-        if (!payload) continue
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed.startsWith('data:')) continue
+      const payload = trimmed.slice(5).trim()
+      if (!payload || payload === '[DONE]') continue
 
-        let chunk: any
-        try {
-          chunk = JSON.parse(payload)
-        } catch {
-          continue
-        }
+      let chunk: any
+      try {
+        chunk = JSON.parse(payload)
+      } catch {
+        continue
+      }
 
-        switch (chunk.type) {
-          case 'reasoning-delta':
-            reasoning += chunk.delta || ''
-            break
-          case 'text-delta':
-            text += chunk.delta || ''
-            break
-          case 'tool-result':
-            toolResults.push(chunk)
-            break
-          case 'error':
-            console.error('stream error chunk:', chunk.errorText || chunk.error)
-            break
-          default:
-            break
-        }
+      switch (chunk.type) {
+        case 'reasoning-delta':
+          reasoning += chunk.delta || ''
+          break
+        case 'text-delta':
+          text += chunk.delta || ''
+          break
+        case 'tool-result':
+          toolResults.push(chunk)
+          break
+        case 'error':
+          console.error('stream error chunk:', chunk.errorText || chunk.error)
+          break
+        default:
+          break
       }
     }
 

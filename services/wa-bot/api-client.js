@@ -76,13 +76,15 @@ class APIClient {
       const contentType = (response.headers.get('content-type') || '').toLowerCase()
       const isSse = contentType.includes('text/event-stream')
 
-      if (isSse) {
+      if (isSse || rawText.includes('data:')) {
         const { text, reasoning } = this.parseUIStream(rawText)
-        return {
-          text: text || "I received your message but couldn't generate a proper response. Please try again.",
-          reasoning: reasoning || '',
-          toolResults: [],
-          error: null,
+        if (text || reasoning) {
+          return {
+            text: text || "I received your message but couldn't generate a proper response. Please try again.",
+            reasoning: reasoning || '',
+            toolResults: [],
+            error: null,
+          }
         }
       }
 
@@ -225,42 +227,40 @@ class APIClient {
    * Returns accumulated text (assistant answer) and reasoning (if streamed).
    */
   parseUIStream(rawText) {
-    const events = rawText.split('\n\n').filter(Boolean)
+    const lines = rawText.split(/\r?\n/)
     let reasoning = ''
     let text = ''
     const toolResults = []
 
-    for (const event of events) {
-      for (const line of event.split('\n')) {
-        const trimmed = line.trim()
-        if (!trimmed.startsWith('data:')) {
-          continue
-        }
-        const payload = trimmed.slice(5).trim()
-        if (!payload) continue
-        let chunk
-        try {
-          chunk = JSON.parse(payload)
-        } catch {
-          continue
-        }
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed.startsWith('data:')) {
+        continue
+      }
+      const payload = trimmed.slice(5).trim()
+      if (!payload || payload === '[DONE]') continue
+      let chunk
+      try {
+        chunk = JSON.parse(payload)
+      } catch {
+        continue
+      }
 
-        switch (chunk.type) {
-          case 'reasoning-delta':
-            reasoning += chunk.delta || ''
-            break
-          case 'text-delta':
-            text += chunk.delta || ''
-            break
-          case 'tool-result':
-            toolResults.push(chunk)
-            break
-          case 'error':
-            console.error('❌ Stream error chunk:', chunk.errorText || chunk.error)
-            break
-          default:
-            break
-        }
+      switch (chunk.type) {
+        case 'reasoning-delta':
+          reasoning += chunk.delta || ''
+          break
+        case 'text-delta':
+          text += chunk.delta || ''
+          break
+        case 'tool-result':
+          toolResults.push(chunk)
+          break
+        case 'error':
+          console.error('❌ Stream error chunk:', chunk.errorText || chunk.error)
+          break
+        default:
+          break
       }
     }
 

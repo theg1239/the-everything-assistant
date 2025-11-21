@@ -118,10 +118,15 @@ export async function POST(req: Request) {
     if (prefersWebSearch) {
       try {
         const googleSearchTool = rateLimitedAI.google.tools.google_search()
-        tools = googleSearchTool ? { google_search: googleSearchTool } : {}
+        if (googleSearchTool) {
+          tools = {
+            ...tools,
+            google_search: googleSearchTool,
+          }
+        }
       } catch (error) {
         console.error('Failed to initialize Google Search tool:', error)
-        tools = {}
+        tools = { ...tools }
       }
     }
 
@@ -232,7 +237,7 @@ export async function POST(req: Request) {
         },
         experimental_transform: smoothStream({ chunking: 'word' }),
         middleware: [reasoningMiddleware],
-        stopWhen: stepCountIs(5),
+        stopWhen: stepCountIs(10),
         onError: async (error: any) => {
           console.error('Streaming error occurred:', error)
 

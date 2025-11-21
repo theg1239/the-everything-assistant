@@ -1,4 +1,5 @@
 import { tool } from 'ai'
+import { searchTool, extractTool } from '@parallel-web/ai-sdk-tools'
 import * as z from 'zod'
 import { scrapePapersCodeChef } from './scrapers/papers-codechef'
 import { scrapePapersService } from './scrapers/papers-scraper'
@@ -979,6 +980,13 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
   const toolOptions = options
   const mcpConfig = options.mcp
   const channel = options.channel
+  const webTools =
+    process.env.PARALLEL_API_KEY && process.env.PARALLEL_API_KEY.trim().length > 0
+      ? {
+          webSearch: searchTool,
+          webExtract: extractTool,
+        }
+      : {}
   const findPastPapersInputSchema = z.object({
     courseCode: z
       .string()
@@ -989,6 +997,7 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
   })
 
   return {
+    ...webTools,
     ...createKnowledgeTools(),
     ...createMemoryTool(userId),
     findPastPapers: tool({

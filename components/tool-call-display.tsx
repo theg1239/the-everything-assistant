@@ -784,6 +784,10 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     }
   }
 
+  if (toolName === 'webSearch' || toolName === 'webExtract') {
+    return null
+  }
+
   if (toolName === 'getCampusInfo') {
     if (result.success && result.name) {
       const description = result.description ? `${result.name}: ${result.description}` : result.name
@@ -877,6 +881,9 @@ const ToolCallResultsSummary = ({
     }
   }
   const completedTools = toolCalls.filter(tool => tool.result)
+  const onlyHiddenWebTools =
+    completedTools.length > 0 &&
+    completedTools.every(tool => tool.toolName === 'webSearch' || tool.toolName === 'webExtract')
   const isMobile = useMediaQuery('(max-width: 640px)')
 
   const enrichedToolCalls = toolCalls
@@ -1165,20 +1172,79 @@ const ToolCallResultsSummary = ({
       return null
     }
 
+    if (onlyHiddenWebTools) {
+      return null
+    }
+
+    const statusFor = (tool: any) => {
+      if (tool.state === 'error' || tool.result?.success === false) return { label: 'error', color: 'text-red-500 bg-red-500/10' }
+      if (tool.result) return { label: 'done', color: 'text-green-600 bg-green-600/10' }
+      return { label: 'running', color: 'text-amber-500 bg-amber-500/10' }
+    }
+
+    const labelFor = (tool: any) => {
+      const map: Record<string, string> = {
+        queryVTOP: 'vtop',
+        searchRedditKnowledge: 'reddit search',
+        searchRedditWithContext: 'reddit search',
+        getMessMenu: 'mess menu',
+        findPastPapers: 'past papers',
+        getPlacementInfo: 'placements',
+        getCourseInfo: 'course info',
+        getFacultyInfo: 'faculty',
+      }
+      return map[tool.toolName] || tool.toolName || 'tool'
+    }
+
+    const visible = enrichedToolCalls.filter(
+      t => t.toolName !== 'webSearch' && t.toolName !== 'webExtract'
+    )
+
+    if (visible.length === 0) return null
+
     return (
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-3">
-        <Card className="w-full border-orange-500/20 bg-orange-500/5">
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center space-x-3">
-              <AlertCircle className="h-5 w-5 text-orange-400" />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-foreground break-words">
-                  Search completed
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  No results found for your query
-                </div>
-              </div>
+        <Card className="w-full border-border/60 bg-muted/30">
+          <CardContent className="p-3 sm:p-4 space-y-3">
+            <div className="text-sm font-medium text-foreground">tool activity</div>
+            <div className="space-y-2">
+              {visible.map(tool => {
+                const status = statusFor(tool)
+                const message =
+                  tool.result?.message ||
+                  tool.result?.summary ||
+                  tool.result?.note ||
+                  tool.result?.error ||
+                  ''
+                return (
+                  <div
+                    key={tool.toolCallId || `${tool.toolName}-${Math.random()}`}
+                    className="flex items-start gap-2 rounded-md border border-border/50 bg-background/60 px-3 py-2"
+                  >
+                    <div
+                      className={`mt-1 h-2 w-2 rounded-full ${status.color}`}
+                      aria-hidden="true"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium capitalize">
+                          {labelFor(tool)}
+                        </span>
+                        <span
+                          className={`text-[11px] leading-none px-2 py-0.5 rounded-full ${status.color}`}
+                        >
+                          {status.label}
+                        </span>
+                      </div>
+                      {message && (
+                        <div className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                          {message}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </CardContent>
         </Card>

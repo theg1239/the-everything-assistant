@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import jwt from 'jsonwebtoken'
+import { prisma } from '@/lib/prisma'
 import { saveUserMcpToken } from '@/lib/mcp-tokens'
 
-type TokenResponse = {
+type RawTokenResponse = {
   access_token: string
   refresh_token?: string
   expires_in?: number
@@ -10,74 +10,112 @@ type TokenResponse = {
   token_type?: string
 }
 
-function bad(msg: string, code = 400) {
-  return new Response(msg, { status: code, headers: { 'Content-Type': 'text/plain' } })
+function decodeState(state: string): any | null {
+  try {
+    const parts = state.split('.')
+    if (parts.length < 2) return null
+    const payload = Buffer.from(parts[1], 'base64url').toString('utf8')
+    return JSON.parse(payload)
+  } catch (err) {
+    console.error('Failed to decode state JWT:', err)
+    return null
+  }
 }
 
-export async function GET(request: NextRequest) {
-  const url = new URL(request.url)
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url)
   const code = url.searchParams.get('code')
   const state = url.searchParams.get('state')
 
-  if (!code || !state) return bad('Missing code or state', 400)
-
-  let payload: any
-  try {
-    payload = jwt.verify(
-      state,
-      process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'state-secret'
-    )
-  } catch (e) {
-    return bad('Invalid or expired state', 400)
+  if (!code || !state) {
+    return NextResponse.json({ error: 'Missing code or state' }, { status: 400 })
   }
 
-  const verifier = payload?.v
-  const userId = payload?.uid
-  if (!verifier || !userId) return bad('Malformed state', 400)
+  const statePayload = decodeState(state)
+  const userId =
+    statePayload?.uid ||
+    statePayload?.userId ||
+    statePayload?.user_id ||
+    statePayload?.sub ||
+    null
+  const codeVerifier = statePayload?.v || statePayload?.code_verifier
+
+  if (!userId) {
+    return NextResponse.json({ error: 'Invalid state: user not found' }, { status: 400 })
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
+  if (!user) {
+    return NextResponse.json({ error: 'User not found' }, { status: 404 })
+  }
+
+  const oauthBase =
+    process.env.VTOP_MCP_URL ||
+    (process.env.VTOP_PROXY_URL ? process.env.VTOP_PROXY_URL.replace(/\/$/, '') : '')
+  const tokenUrl = oauthBase ? `${oauthBase}/oauth/token` : ''
+
+  if (!tokenUrl) {
+    return NextResponse.json({ error: 'VTOP_MCP_URL or VTOP_PROXY_URL not configured' }, { status: 500 })
+  }
 
   const clientId = process.env.VTOP_MCP_CLIENT_ID || 'default-client'
-  const proxyBase = process.env.VTOP_PROXY_URL?.replace(/\/$/, '') || 'http://localhost:3001'
-  const redirectUri = `${process.env.APP_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/whatsapp/oauth/callback`
-
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
     code,
-    redirect_uri: redirectUri,
     client_id: clientId,
-    code_verifier: verifier,
+    redirect_uri: `${url.origin}/api/whatsapp/oauth/callback`,
   })
 
-  const tokenRes = await fetch(`${proxyBase}/oauth/token`, {
+  if (codeVerifier) {
+    body.append('code_verifier', codeVerifier)
+  }
+
+  const tokenRes = await fetch(tokenUrl, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body.toString(),
   })
 
   if (!tokenRes.ok) {
-    const text = await tokenRes.text()
-    return bad(`Token exchange failed: ${tokenRes.status} ${text}`, 400)
+    const errText = await tokenRes.text().catch(() => '')
+    console.error('Token exchange failed:', tokenRes.status, errText)
+    return NextResponse.json(
+      { error: 'Token exchange failed', detail: errText || tokenRes.statusText },
+      { status: 502 }
+    )
   }
 
-  const tokenJson = (await tokenRes.json().catch(() => null)) as TokenResponse | null
-  if (!tokenJson?.access_token) return bad('No access_token in response', 400)
+  const json = (await tokenRes.json().catch(() => null)) as RawTokenResponse | null
+  if (!json?.access_token) {
+    return NextResponse.json({ error: 'Missing access_token in response' }, { status: 502 })
+  }
 
-  const expiresAt = tokenJson.expires_in
-    ? new Date(Date.now() + tokenJson.expires_in * 1000).toISOString()
-    : null
+  const expiresAt =
+    json.expires_in && json.expires_in > 0
+      ? new Date(Date.now() + json.expires_in * 1000).toISOString()
+      : null
 
   await saveUserMcpToken(userId, {
-    accessToken: tokenJson.access_token,
-    refreshToken: tokenJson.refresh_token,
+    accessToken: json.access_token,
+    refreshToken: json.refresh_token,
     expiresAt,
-    scope: tokenJson.scope,
-    tokenType: tokenJson.token_type,
+    scope: json.scope,
+    tokenType: json.token_type,
     clientId,
   })
 
-  return new Response(
-    'Linked successfully. You can return to WhatsApp and continue using VTOP commands.',
-    { status: 200, headers: { 'Content-Type': 'text/plain' } }
-  )
+  const successHtml = `
+<!DOCTYPE html>
+<html>
+  <head><title>VTOP linked</title></head>
+  <body style="font-family: system-ui; padding: 24px;">
+    <h2>VTOP linked successfully ✅</h2>
+    <p>Go back to WhatsApp and re-run your command (e.g., <code>!ask check my attendance</code>).</p>
+  </body>
+</html>`
+
+  return new NextResponse(successHtml, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  })
 }

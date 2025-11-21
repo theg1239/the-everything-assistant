@@ -1,10 +1,10 @@
 'use client'
 
 import * as React from 'react'
-import { createPortal } from 'react-dom'
 import { Wrench, Search, FileText, GraduationCap, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 
 interface Tool {
@@ -54,154 +54,95 @@ interface ToolsDropdownProps {
 
 export function ToolsDropdown({ onToolSelect, selectedTool }: ToolsDropdownProps) {
   const [isOpen, setIsOpen] = React.useState(false)
-  const [mounted, setMounted] = React.useState(false)
-  const [dropdownPosition, setDropdownPosition] = React.useState({ top: 0, left: 0 })
-  const buttonRef = React.useRef<HTMLButtonElement>(null)
-  const dropdownRef = React.useRef<HTMLDivElement>(null)
 
-  React.useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  React.useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node) &&
-        buttonRef.current &&
-        !buttonRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false)
-      }
-    }
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside)
-      }
-    }
-  }, [isOpen])
-
-  React.useEffect(() => {
-    if (isOpen && buttonRef.current && mounted) {
-      const buttonRect = buttonRef.current.getBoundingClientRect()
-
-      const dropdownHeight = 180
-      const dropdownWidth = 240
-
-      let top = buttonRect.top - dropdownHeight - 8
-
-      let left = buttonRect.right - dropdownWidth
-
-      if (top < 8) {
-        top = buttonRect.bottom + 8
-      }
-
-      if (left < 8) {
-        left = 8
-      }
-
-      if (left + dropdownWidth > window.innerWidth - 8) {
-        left = window.innerWidth - dropdownWidth - 8
-      }
-
-      setDropdownPosition({ top, left })
-    }
-  }, [isOpen, mounted])
   const handleToolSelect = (toolId: string) => {
     onToolSelect?.(toolId)
     setIsOpen(false)
   }
 
   const selectedToolData = availableTools.find(tool => tool.id === selectedTool)
+  const selectedName = selectedToolData?.name || selectedTool || 'general'
+
+  const toolEntries: Tool[] = React.useMemo(
+    () => [
+      {
+        id: '',
+        name: 'general',
+        description: 'Default assistant behavior',
+        icon: <MessageSquare className="w-4 h-4" />,
+      },
+      ...availableTools,
+    ],
+    []
+  )
 
   return (
-    <div className="relative">
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
       <TooltipProvider>
-        {' '}
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              ref={buttonRef}
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsOpen(!isOpen)}
-              className={cn(
-                'h-8 px-2 text-muted-foreground hover:text-foreground transition-all',
-                selectedTool &&
-                  'text-blue-500 hover:text-blue-600 bg-blue-50/50 dark:bg-blue-950/20'
-              )}
-            >
-              {selectedTool ? (
-                <>
-                  <Wrench className="w-4 h-4" />
-                  <span className="ml-1 text-xs font-medium hidden sm:inline">
-                    {selectedToolData?.name || 'Tool'}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="text-xs font-medium hidden sm:inline mr-1">Tools</span>
-                  <Wrench className="w-4 h-4" />
-                </>
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {selectedTool ? `using: ${selectedToolData?.name}` : 'available tools'}
-          </TooltipContent>{' '}
-        </Tooltip>
-      </TooltipProvider>{' '}
-      {isOpen &&
-        mounted &&
-        createPortal(
-          <div
-            ref={dropdownRef}
-            className="fixed z-50 min-w-[240px] bg-background/80 backdrop-blur-md border border-border/50 rounded-lg shadow-lg overflow-hidden"
-            style={{
-              top: dropdownPosition.top,
-              left: dropdownPosition.left,
-            }}
-          >
-            <div className="">
-              <button
-                onClick={() => handleToolSelect('')}
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
                 className={cn(
-                  'w-full flex items-center gap-3 px-3 py-2 text-left transition-colors',
-                  'hover:bg-muted/50',
-                  !selectedTool && 'bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300'
+                  'h-8 px-2 text-muted-foreground hover:text-foreground transition-all',
+                  selectedTool &&
+                    'text-blue-500 hover:text-blue-600 bg-blue-50/50 dark:bg-blue-950/20'
                 )}
               >
-                <div className="flex-shrink-0">
-                  <MessageSquare className="w-4 h-4" />
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-medium">general</div>
-                </div>
-              </button>
+                {selectedTool ? (
+                  <>
+                    <Wrench className="w-4 h-4" />
+                    <span className="ml-1 text-xs font-medium hidden sm:inline">{selectedName}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs font-medium hidden sm:inline mr-1">Tools</span>
+                    <Wrench className="w-4 h-4" />
+                  </>
+                )}
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent>{selectedTool ? `using: ${selectedName}` : 'available tools'}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
 
-              {availableTools.map((tool, index) => (
-                <button
-                  key={tool.id}
-                  onClick={() => handleToolSelect(tool.id)}
-                  className={cn(
-                    'w-full flex items-center gap-3 px-3 py-2 text-left transition-colors',
-                    'hover:bg-muted/50',
-                    selectedTool === tool.id &&
-                      'bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300'
-                  )}
-                >
-                  <div className="flex-shrink-0">{tool.icon}</div>
-                  <div className="flex-1">
-                    <div className="text-sm font-medium">{tool.name}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>,
-          document.body
-        )}
-    </div>
+      <PopoverContent
+        align="end"
+        sideOffset={8}
+        className="w-56 p-1 border-border/60 bg-background/95 backdrop-blur supports-[backdrop-filter]:backdrop-blur"
+      >
+        <div className="flex flex-col py-1" role="menu">
+          {toolEntries.map(entry => {
+            const isActive = (selectedTool || '') === entry.id
+            return (
+              <button
+                key={entry.id || 'general'}
+                onClick={() => handleToolSelect(entry.id)}
+                className={cn(
+                  'inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm capitalize transition-colors text-left',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60',
+                  isActive
+                    ? 'bg-blue-50/80 dark:bg-blue-950/30 text-blue-700 dark:text-blue-200'
+                    : 'hover:bg-muted/60 text-foreground/90'
+                )}
+                role="menuitemradio"
+                aria-checked={isActive}
+              >
+                <span className="text-muted-foreground">
+                  {React.isValidElement(entry.icon)
+                    ? React.cloneElement(entry.icon as React.ReactElement, { className: 'w-4 h-4' })
+                    : entry.icon}
+                </span>
+                <span className="flex-1 truncate">{entry.name}</span>
+              </button>
+            )
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }

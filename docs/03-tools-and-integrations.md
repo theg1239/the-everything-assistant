@@ -15,6 +15,11 @@ Every non-trivial capability surfaces to the models via `lib/tools.ts`. This doc
 5. **Campus life** – mess menus, timetable/course lookups, placements.
 6. **Diagnostics** – progress emitters used by scripts.
 
+Additional web capabilities:
+
+- **Parallel Web search & extract** (`webSearch`, `webExtract`) – live web search and focused page extraction powered by `@parallel-web/ai-sdk-tools` (requires `PARALLEL_API_KEY`).
+- **VTOP MCP OAuth** – WhatsApp users authorize via `/api/whatsapp/oauth/callback`, exchanging the `code` from the proxy and persisting tokens in user preferences.
+
 All tools share the rate-limited AI clients defined in `lib/rate-limited-ai.ts`, so they automatically respect API key rotation and user-level throttling.
 
 ---

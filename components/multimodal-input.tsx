@@ -162,10 +162,11 @@ const PureMultimodalInput = ({
       e.preventDefault()
       if (input.trim() && !isLoading) {
         handleSubmit(e)
+        setInput('')
         resetHeight()
       }
     },
-    [input, isLoading, handleSubmit, resetHeight]
+    [input, isLoading, handleSubmit, resetHeight, setInput]
   )
 
   const safeInput = input ?? ''

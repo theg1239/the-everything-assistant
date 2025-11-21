@@ -7,5 +7,9 @@ declare namespace NodeJS {
     REDDIT_API_URL: string
     WHATSAPP_BOT_API_KEY: string
     EXAMCOOKER_API_KEY?: string
+    PARALLEL_API_KEY?: string
+    VTOP_MCP_URL?: string
+    VTOP_PROXY_URL?: string
+    VTOP_MCP_CLIENT_ID?: string
   }
 }

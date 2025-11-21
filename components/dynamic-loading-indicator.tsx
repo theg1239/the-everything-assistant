@@ -81,6 +81,18 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
     message: 'searching web...',
     description: 'Searching the internet',
   },
+  webSearch: {
+    name: 'Web Search',
+    icon: Search,
+    message: 'searching web...',
+    description: 'Searching the internet',
+  },
+  webExtract: {
+    name: 'Web Extract',
+    icon: Globe,
+    message: 'extracting from page...',
+    description: 'Pulling content from links',
+  },
 
   findPastPapers: {
     name: 'Past Papers',
@@ -491,6 +503,8 @@ export function DynamicLoadingIndicator({
       getPlacementInfo: 6,
       searchRedditKnowledge: 5,
       searchRedditWithContext: 5,
+      webSearch: 5,
+      webExtract: 4,
       saveMemory: 4,
       getMessMenu: 3,
       getCampusInfo: 3,
@@ -573,6 +587,8 @@ export function getCurrentActiveTool(messages: any[]): string | null {
         getPlacementInfo: 6,
         searchRedditKnowledge: 5,
         searchRedditWithContext: 5,
+        webSearch: 5,
+        webExtract: 4,
         saveMemory: 4,
         getMessMenu: 3,
         getCampusInfo: 3,

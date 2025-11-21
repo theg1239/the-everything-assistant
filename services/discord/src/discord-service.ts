@@ -288,7 +288,7 @@ class DiscordService extends EventEmitter {
         question,
         conversationHistory,
         startTime,
-        respondCallback: (response: string) =>
+        respondCallback: (response: any) =>
           this.handleSlashAIResponse(interaction, response, startTime),
       })
     } catch (error) {
@@ -367,7 +367,7 @@ class DiscordService extends EventEmitter {
 
   private async handleSlashAIResponse(
     interaction: ChatInputCommandInteraction,
-    response: string,
+    response: string | { text?: string; reasoning?: string },
     startTime: number
   ): Promise<void> {
     try {
@@ -375,14 +375,16 @@ class DiscordService extends EventEmitter {
 
       console.log(`ai response ready in ${processingTime}ms`)
 
-      if (!response || response.trim() === '') {
+      const textResponse = typeof response === 'string' ? response : response?.text || ''
+
+      if (!textResponse || textResponse.trim() === '') {
         await interaction.editReply(
           'sorry, i could not generate a response. please try asking again.'
         )
         return
       }
 
-      let formattedResponse = this.formatResponseForDiscord(response)
+      let formattedResponse = this.formatResponseForDiscord(textResponse)
 
       const isLongResponse = formattedResponse.length > 1500
       const isOwner = this.isOwner(interaction.user.id)

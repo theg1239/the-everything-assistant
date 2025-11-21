@@ -10,6 +10,7 @@ interface MessageActionsProps {
   messageId: string
   chatId: string
   content: string
+  role?: 'system' | 'user' | 'assistant' | string
   onCreateCanvas?: (content: string) => void
 }
 
@@ -17,6 +18,7 @@ export function MessageActions({
   messageId,
   chatId,
   content,
+  role = 'assistant',
   onCreateCanvas,
 }: MessageActionsProps) {
   const [vote, setVote] = useState<boolean | null>(null)
@@ -33,6 +35,8 @@ export function MessageActions({
           chatId,
           messageId,
           isUpvoted,
+          messageContent: content,
+          messageRole: role,
         }),
       })
       setVote(isUpvoted)

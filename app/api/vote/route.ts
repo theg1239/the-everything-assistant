@@ -7,6 +7,8 @@ const voteSchema = z.object({
   chatId: z.string().min(1),
   messageId: z.string().min(1),
   isUpvoted: z.boolean(),
+  messageContent: z.string().optional(),
+  messageRole: z.enum(['system', 'user', 'assistant']).optional(),
 })
 
 export async function POST(request: Request) {
@@ -21,9 +23,12 @@ export async function POST(request: Request) {
     if (!parsedBody.success) {
       return new Response('Invalid request body', { status: 400 })
     }
-    const { chatId, messageId, isUpvoted } = parsedBody.data
+    const { chatId, messageId, isUpvoted, messageContent, messageRole } = parsedBody.data
 
-    await saveVote(chatId, messageId, isUpvoted)
+    await saveVote(chatId, messageId, isUpvoted, {
+      content: messageContent,
+      role: messageRole,
+    })
 
     return Response.json({ success: true })
   } catch (error) {

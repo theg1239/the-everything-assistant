@@ -647,12 +647,35 @@ export async function getVote(chatId: string, messageId: string): Promise<Vote |
   }
 }
 
+type VoteMessageMetadata = {
+  content?: string
+  role?: string
+}
+
 export async function saveVote(
   chatId: string,
   messageId: string,
-  isUpvoted: boolean
+  isUpvoted: boolean,
+  messageMetadata?: VoteMessageMetadata
 ): Promise<void> {
   try {
+    const messageExists = await prisma.message.findUnique({
+      where: { id: messageId },
+      select: { id: true },
+    })
+
+    if (!messageExists && messageMetadata?.content) {
+      await prisma.message.create({
+        data: {
+          id: messageId,
+          chatId,
+          role: messageMetadata.role || 'assistant',
+          content: messageMetadata.content,
+        },
+        select: { id: true },
+      })
+    }
+
     await prisma.vote.upsert({
       where: {
         chatId_messageId: {

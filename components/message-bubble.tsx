@@ -305,6 +305,7 @@ const PureMessageBubble = ({
                 messageId={message.id}
                 chatId={chatId}
                 content={message.content}
+                role={message.role}
                 onCreateCanvas={onCreateCanvas}
               />
             )}

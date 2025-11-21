@@ -989,7 +989,10 @@ Keep the response concise but informative.`
 
       console.log(`✅ AI Response ready in ${duration}ms`)
 
-      if (!response || response.trim() === '') {
+      const responseText = typeof response === 'string' ? response : response?.text || ''
+      const reasoningText = typeof response === 'object' ? response?.reasoning || '' : ''
+
+      if (!responseText || responseText.trim() === '') {
         console.warn('⚠️ Empty response received from AI')
         await this.sendMessageToChat(
           originalChat,
@@ -998,10 +1001,20 @@ Keep the response concise but informative.`
         return
       }
 
-      const shouldTagEveryone = this.shouldTagEveryone(response, messageData)
+      let thinkingMessage = null
+      if (reasoningText.trim()) {
+        try {
+          const reasoningDisplay = `💭 thinking...\n${this.formatResponseForWhatsApp(reasoningText)}`
+          thinkingMessage = await originalChat.sendMessage(reasoningDisplay)
+        } catch (err) {
+          console.warn('⚠️ Failed to send reasoning message:', err?.message || err)
+        }
+      }
+
+      const shouldTagEveryone = this.shouldTagEveryone(responseText, messageData)
 
       const formattedResponse = await this.formatResponseWithTags(
-        response,
+        responseText,
         originalChat,
         shouldTagEveryone
       )
@@ -1013,11 +1026,26 @@ Keep the response concise but informative.`
         `📏 Response length: ${responseLength} chars, ${isLongResponse ? (isBotOwner ? 'bot owner - sending in current chat' : 'sending to DM') : 'sending in current chat'}${shouldTagEveryone ? ' with @everyone tags' : ''}`
       )
 
-      if (isLongResponse && messageData.isGroup && !isBotOwner) {
+      // If we showed reasoning, keep the final message in the same chat to mimic an edit.
+      if (reasoningText.trim()) {
+        await this.sendMessageToChat(originalChat, formattedResponse)
+      } else if (isLongResponse && messageData.isGroup && !isBotOwner) {
         await this.sendMessageToChat(originalChat, `sent a detailed response in dm`)
         await this.sendMessageToChat(userChat, formattedResponse)
       } else {
         await this.sendMessageToChat(originalChat, formattedResponse)
+      }
+
+      if (thinkingMessage && typeof thinkingMessage.delete === 'function') {
+        try {
+          await thinkingMessage.delete(true) // try delete for everyone (if supported)
+        } catch (err) {
+          try {
+            await thinkingMessage.delete()
+          } catch (err2) {
+            console.warn('⚠️ Failed to delete reasoning message:', err2?.message || err2)
+          }
+        }
       }
     } catch (error) {
       console.error('❌ Error in handleAIResponseSmart:', error)

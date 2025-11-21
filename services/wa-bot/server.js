@@ -320,14 +320,14 @@ class WABotServer {
       console.log(`Total processing time: ${processingTimeMs}ms`)
 
       if (respondCallback) {
-        await respondCallback(response.text, startTime)
+        await respondCallback(response, startTime)
       }
     } catch (error) {
       console.error('Failed to process AI request:', error)
 
       if (respondCallback) {
         await respondCallback(
-          'sorry, i encountered an error processing your request. please try again.',
+          { text: 'sorry, i encountered an error processing your request. please try again.' },
           startTime
         )
       }

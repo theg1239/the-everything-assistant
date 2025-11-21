@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import * as z from 'zod'
+import { generateId, type UIMessage } from 'ai'
 
 type ConversationMessage = {
   role: string
@@ -267,6 +268,36 @@ CRITICAL TOOL CONTINUATION RULES:
       },
       user.id
     )
+
+    const wantUIStream =
+      request.headers.get('x-waba-ui-stream') === '1' ||
+      request.nextUrl.searchParams.get('uiStream') === '1'
+
+    const uiMessagesForStream: UIMessage[] | undefined = Array.isArray(processedMessages)
+      ? processedMessages.map(msg => ({
+          id: msg.id || generateId(),
+          role: msg.role === 'assistant' ? 'assistant' : msg.role === 'system' ? 'system' : 'user',
+          parts: [
+            {
+              type: 'text',
+              text: msg.content ?? '',
+            },
+          ],
+        }))
+      : undefined
+
+    if (wantUIStream) {
+      return resultStream.toUIMessageStreamResponse({
+        originalMessages: uiMessagesForStream,
+        generateMessageId: generateId,
+        headers: {
+          'X-Source': requestSource,
+          'X-User-Id': user.id,
+          'X-Bot-User-Id': userInfo.userId,
+        },
+        onError: () => 'An error occurred while processing your request.',
+      })
+    }
 
     return resultStream.toTextStreamResponse({
       headers: {

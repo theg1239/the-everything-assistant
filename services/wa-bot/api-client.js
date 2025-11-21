@@ -33,6 +33,8 @@ class APIClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Accept: 'text/event-stream, text/plain',
+          'X-WABA-UI-STREAM': '1', // ask server for UI stream so we can capture reasoning
           Authorization: `Bearer ${this.apiKey}`,
           'User-Agent': 'WhatsApp-Bot-Service/1.0.0',
         },
@@ -67,55 +69,65 @@ class APIClient {
 
   async parseStreamingResponse(response) {
     try {
-      const text = await response.text()
-      console.log('📥 Raw API response:', text.substring(0, 400) + '...')
-      console.log('📊 Response length:', text.length)
+      const rawText = await this.readTextStream(response)
+      console.log('📥 Raw API response:', rawText.substring(0, 400) + '...')
+      console.log('📊 Response length:', rawText.length)
 
-      const lines = text.split('\n').filter(line => line.trim())
-      console.log('📝 Total lines:', lines.length)
+      const contentType = (response.headers.get('content-type') || '').toLowerCase()
+      const isSse = contentType.includes('text/event-stream')
+
+      if (isSse) {
+        const { text, reasoning } = this.parseUIStream(rawText)
+        return {
+          text: text || "I received your message but couldn't generate a proper response. Please try again.",
+          reasoning: reasoning || '',
+          toolResults: [],
+          error: null,
+        }
+      }
+
+      // Fast path for the new AI SDK text stream (plain text, no prefixes)
+      const textFromPlainStream = rawText.trim()
+      if (textFromPlainStream && !/^[0-4aefd]:/.test(textFromPlainStream.split('\n')[0] || '')) {
+        console.log('🆕 Parsed plain text stream response')
+        return { text: textFromPlainStream, reasoning: '', toolResults: [], error: null }
+      }
+
+      // Legacy parser (kept for backwards compatibility with numbered data streams)
+      const lines = rawText.split('\n').filter(line => line.trim())
+      console.log('📝 Total lines (legacy path):', lines.length)
 
       let finalText = ''
       let toolResults = []
-      let error = null
 
       for (const line of lines) {
-        try {
-          console.log(
-            '🔍 Processing line:',
-            line.substring(0, 100) + (line.length > 100 ? '...' : '')
-          )
+        const cleanedLine = line.startsWith('data:') ? line.slice(5).trim() : line
 
-          if (line.startsWith('0:')) {
-            let content = line.slice(2)
+        try {
+          if (cleanedLine.startsWith('0:') || cleanedLine.startsWith('1:')) {
+            let content = cleanedLine.slice(2)
             if (content.startsWith('"') && content.endsWith('"')) {
               content = content.slice(1, -1)
             }
             content = content.replace(/\\"/g, '"').replace(/\\n/g, '\n')
             finalText += content
-          } else if (line.startsWith('1:')) {
-            let content = line.slice(2)
-            if (content.startsWith('"') && content.endsWith('"')) {
-              content = content.slice(1, -1)
-            }
-            content = content.replace(/\\"/g, '"').replace(/\\n/g, '\n')
-            finalText += content
-          } else if (line.startsWith('f:')) {
-            const metadata = JSON.parse(line.slice(2))
+          } else if (cleanedLine.startsWith('f:')) {
+            const metadata = JSON.parse(cleanedLine.slice(2))
             console.log('📋 Received metadata:', metadata)
-          } else if (line.startsWith('9:')) {
-            const toolCall = JSON.parse(line.slice(2))
+          } else if (cleanedLine.startsWith('9:')) {
+            const toolCall = JSON.parse(cleanedLine.slice(2))
             console.log('🔧 Tool call detected:', toolCall.toolName)
-          } else if (line.startsWith('a:')) {
-            const toolResult = JSON.parse(line.slice(2))
+          } else if (cleanedLine.startsWith('a:')) {
+            const toolResult = JSON.parse(cleanedLine.slice(2))
             toolResults.push(toolResult)
-          } else if (line.startsWith('e:')) {
-            const endData = JSON.parse(line.slice(2))
-            if (endData.finishReason !== 'stop') {
+          } else if (cleanedLine.startsWith('e:')) {
+            const endData = JSON.parse(cleanedLine.slice(2))
+            if (endData.finishReason && endData.finishReason !== 'stop') {
               console.warn('⚠️ Stream ended unexpectedly:', endData.finishReason)
             }
-          } else if (line.startsWith('d:')) {
+          } else if (cleanedLine.startsWith('d:')) {
             try {
-              const data = JSON.parse(line.slice(2))
+              const data = JSON.parse(cleanedLine.slice(2))
               if (data.text) {
                 finalText += data.text
               } else if (data.content) {
@@ -124,13 +136,17 @@ class APIClient {
                 finalText += data
               }
             } catch (e) {
-              const rawContent = line.slice(2)
+              const rawContent = cleanedLine.slice(2)
               if (rawContent && rawContent !== '{}') {
                 finalText += rawContent
               }
             }
-          } else if (line.startsWith('2:') || line.startsWith('3:') || line.startsWith('4:')) {
-            let content = line.slice(2)
+          } else if (
+            cleanedLine.startsWith('2:') ||
+            cleanedLine.startsWith('3:') ||
+            cleanedLine.startsWith('4:')
+          ) {
+            let content = cleanedLine.slice(2)
             if (content.startsWith('"') && content.endsWith('"')) {
               content = content.slice(1, -1)
             }
@@ -140,48 +156,111 @@ class APIClient {
             }
           }
         } catch (parseError) {
-          console.warn('⚠️ Failed to parse line:', line.substring(0, 100), parseError.message)
+          console.warn('⚠️ Failed to parse line:', cleanedLine.substring(0, 100), parseError)
         }
       }
 
       if (!finalText.trim()) {
-        console.log('⚠️ No text content found, checking tool results...')
         for (const result of toolResults) {
-          if (result.result && result.result.formatted_content) {
+          if (result?.result?.formatted_content) {
             finalText += result.result.formatted_content + '\n'
-          } else if (result.result && result.result.summary) {
+          } else if (result?.result?.summary) {
             finalText += result.result.summary + '\n'
           }
         }
       }
 
-      if (!finalText.trim() && lines.some(line => line.includes('completionTokens'))) {
-        console.warn('⚠️ API completed successfully but returned no text content')
-        console.log('📋 Full response for debugging:', text)
-        finalText =
-          'I processed your request but the response was empty. This might be a temporary issue with the AI service. Please try again.'
-      }
+      const safeText =
+        finalText.trim() ||
+        "I received your message but couldn't generate a proper response. Please try again."
 
-      finalText = finalText.trim()
-
-      console.log('✅ Parsed response length:', finalText.length)
-      console.log('📄 Response preview:', finalText.substring(0, 100) + '...')
+      console.log('✅ Parsed response length:', safeText.length)
+      console.log('📄 Response preview:', safeText.substring(0, 100) + '...')
 
       return {
-        text:
-          finalText ||
-          "I received your message but couldn't generate a proper response. Please try again.",
+        text: safeText,
+        reasoning: '',
         toolResults,
-        error,
+        error: null,
       }
     } catch (error) {
       console.error('❌ Failed to parse streaming response:', error)
       return {
         text: 'Sorry, I encountered an error processing your request. Please try again later.',
+        reasoning: '',
         toolResults: [],
         error: error.message,
       }
     }
+  }
+
+  async readTextStream(response) {
+    if (!response?.body) {
+      return ''
+    }
+
+    const decoder = new TextDecoder()
+    let result = ''
+
+    if (typeof response.body.getReader === 'function' && typeof TextDecoderStream === 'function') {
+      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        result += value
+      }
+    } else {
+      for await (const chunk of response.body) {
+        result += decoder.decode(chunk, { stream: true })
+      }
+      result += decoder.decode()
+    }
+
+    return result
+  }
+
+  /**
+   * Parse UI message SSE stream produced by AI SDK createUIMessageStreamResponse.
+   * Returns accumulated text (assistant answer) and reasoning (if streamed).
+   */
+  parseUIStream(rawText) {
+    const events = rawText.split('\n\n').filter(Boolean)
+    let reasoning = ''
+    let text = ''
+
+    for (const event of events) {
+      for (const line of event.split('\n')) {
+        const trimmed = line.trim()
+        if (!trimmed.startsWith('data:')) {
+          continue
+        }
+        const payload = trimmed.slice(5).trim()
+        if (!payload) continue
+        let chunk
+        try {
+          chunk = JSON.parse(payload)
+        } catch {
+          continue
+        }
+
+        switch (chunk.type) {
+          case 'reasoning-delta':
+            reasoning += chunk.delta || ''
+            break
+          case 'text-delta':
+            text += chunk.delta || ''
+            break
+          case 'error':
+            console.error('❌ Stream error chunk:', chunk.errorText || chunk.error)
+            break
+          default:
+            break
+        }
+      }
+    }
+
+    return { text: (text || '').trim(), reasoning: (reasoning || '').trim() }
   }
 
   async healthCheck() {

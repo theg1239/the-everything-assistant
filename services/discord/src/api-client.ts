@@ -103,6 +103,17 @@ class APIClient {
         }
       }
 
+      const plainText = rawText.trim()
+      const firstLine = plainText.split('\n')[0] || ''
+      if (plainText && !/^[0-4aefd]:/.test(firstLine)) {
+        return {
+          text: plainText,
+          reasoning: '',
+          toolResults: [],
+          error: undefined,
+        }
+      }
+
       const lines = rawText.split('\n').filter((line: string) => line.trim())
       console.log('total lines:', lines.length)
 

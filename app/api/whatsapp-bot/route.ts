@@ -269,9 +269,15 @@ CRITICAL TOOL CONTINUATION RULES:
       user.id
     )
 
+    const forceTextStream =
+      request.headers.get('x-text-stream') === '1' ||
+      request.nextUrl.searchParams.get('textStream') === '1'
+
     const wantUIStream =
-      request.headers.get('x-waba-ui-stream') === '1' ||
-      request.nextUrl.searchParams.get('uiStream') === '1'
+      (!forceTextStream &&
+        (request.headers.get('x-waba-ui-stream') === '1' ||
+          request.nextUrl.searchParams.get('uiStream') === '1')) ||
+      (!forceTextStream && requestSource) // default to UI stream for bot clients unless explicitly forced to text
 
     const uiMessagesForStream: UIMessage[] | undefined = Array.isArray(processedMessages)
       ? processedMessages.map(msg => ({

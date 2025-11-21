@@ -370,7 +370,7 @@ const PureMultimodalInput = ({
 
           <div className="flex items-center justify-between px-3 pb-2">
             <p className="hidden sm:block text-[10px] text-muted-foreground">
-              Enter to send • Shift+Enter for newline • / to focus
+              enter to send • shift+enter for newline • / to focus
             </p>
             <div
               className={cn(

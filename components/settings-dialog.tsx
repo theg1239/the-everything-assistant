@@ -4,9 +4,12 @@ import { useState, useEffect } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { motion } from 'framer-motion'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Drawer } from 'vaul'
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
+import { useSidebar } from '@/contexts/sidebar-context'
 import {
   Settings,
   Bell,
@@ -178,6 +181,7 @@ const arrayBufferToBase64url = (buffer: ArrayBuffer | ArrayBufferView): string =
 export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any) {
   const { data: session } = useSession()
   const { setBackgroundType, toggleBackground } = useCustomBackground()
+  const { setIsOpen: setSidebarOpen } = useSidebar()
   const [activeSection, setActiveSection] = useState('general')
   const [pendingSection, setPendingSection] = useState<string | null>(null)
   const [followUpSuggestions, setFollowUpSuggestions] = useState(true)
@@ -402,6 +406,42 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     authenticator: true,
     security_key: true,
   })
+  const [isDesktop, setIsDesktop] = useState<boolean>(() => {
+    if (typeof window === 'undefined') {
+      return true
+    }
+    return window.matchMedia('(min-width: 768px)').matches
+  })
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const updateViewportHeight = () => {
+      document.documentElement.style.setProperty('--app-viewport-height', `${window.innerHeight}px`)
+    }
+
+    updateViewportHeight()
+    window.addEventListener('resize', updateViewportHeight)
+    window.addEventListener('orientationchange', updateViewportHeight)
+
+    return () => {
+      window.removeEventListener('resize', updateViewportHeight)
+      window.removeEventListener('orientationchange', updateViewportHeight)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mediaQuery = window.matchMedia('(min-width: 768px)')
+    const handler = (event: MediaQueryListEvent) => setIsDesktop(event.matches)
+    setIsDesktop(mediaQuery.matches)
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handler)
+      return () => mediaQuery.removeEventListener('change', handler)
+    }
+    mediaQuery.addListener(handler)
+    return () => mediaQuery.removeListener(handler)
+  }, [])
 
   useEffect(() => {
     if (!(open && session?.user?.id)) return
@@ -468,7 +508,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                 ? 'authenticator'
                 : 'email'
           setMfaMethod(loadedMfaMethod)
-          setBackupCodes(new Array(mfaData.backupCodesCount || 0).fill('••••••••'))
+          setBackupCodes(new Array(mfaData.backupCodesCount || 0).fill('ΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇó'))
         }
 
         const availabilityResponse = await fetch('/api/user/mfa/availability', {
@@ -1176,7 +1216,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     setConfirmDeleteAccount(false)
     try {
       await deleteAccountAction()
-      toast.success('account deleted — signing you out')
+      toast.success('account deleted ΓÇö signing you out')
       await signOut({ callbackUrl: '/login' })
     } catch (error: any) {
       console.error('failed to delete account', error)
@@ -1332,7 +1372,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                     >
                       {deletingAccount ? (
                         <>
-                          <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> deleting…
+                          <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> deletingΓÇª
                         </>
                       ) : confirmDeleteAccount ? (
                         'confirm delete?'
@@ -2379,77 +2419,120 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       setVerificationCode('')
       setShowBackupCodes(false)
       setShowBackupCodesReveal(false)
-    } else {
-      if (activeSection === 'general' || !open) {
-        setActiveSection('general')
-      }
+    } else if (activeSection !== 'general') {
+      setActiveSection('general')
     }
   }, [open])
 
+  useEffect(() => {
+    if (open) {
+      setSidebarOpen(false)
+    }
+  }, [open, setSidebarOpen])
+
+  const renderNavigation = (variant: 'desktop' | 'mobile') => (
+    <nav className={variant === 'desktop' ? 'space-y-1' : 'space-y-3'}>
+      <div
+        className={cn(
+          'grid grid-cols-2',
+          variant === 'desktop' ? 'gap-1 md:grid-cols-1 md:gap-1' : 'gap-2'
+        )}
+      >
+        {menuItems.map((item: { id: string; label: string; icon: any }) => {
+          const Icon = item.icon
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveSection(item.id)}
+              className={cn(
+                'w-full flex flex-col md:flex-row items-center md:gap-3 gap-1 px-2 md:px-3 py-3 md:py-2 rounded-lg text-xs md:text-sm transition-colors text-center md:text-left',
+                variant === 'mobile' && 'flex-row gap-2 px-3 text-sm',
+                activeSection === item.id
+                  ? 'bg-primary/10 text-primary font-medium'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+              )}
+            >
+              <Icon className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{item.label}</span>
+            </button>
+          )
+        })}
+      </div>
+    </nav>
+  )
+
+  const renderMainContent = (className?: string) => (
+    <div className={cn('p-4 md:p-6', className)}>
+      <motion.div
+        key={activeSection}
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.2 }}
+      >
+        {renderContent()}
+      </motion.div>
+    </div>
+  )
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {' '}
-      <DialogContent className="max-w-5xl w-[95vw] h-[calc(var(--vh,1vh)*90)] md:h-[90vh] max-h-[800px] p-0 gap-0 bg-background border border-border overflow-hidden rounded-xl">
-        <div className="flex flex-col md:flex-row h-full rounded-xl overflow-hidden">
-          <div className="block md:hidden border-b border-border bg-muted/20 p-4 flex-shrink-0">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-semibold">settings</DialogTitle>
-            </DialogHeader>
-          </div>
-          <div className="w-full md:w-72 border-r-0 md:border-r border-border bg-muted/20 p-4 md:p-6 transition-all duration-300 rounded-tl-xl md:rounded-bl-xl md:rounded-tl-xl rounded-tr-xl md:rounded-tr-none flex-shrink-0">
-            <div className="hidden md:block">
-              <DialogHeader className="mb-6">
+    <>
+      <Dialog open={isDesktop && open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-5xl w-[95vw] h-[calc(var(--vh,1vh)*90)] md:h-[90vh] max-h-[800px] p-0 gap-0 bg-background border border-border overflow-hidden rounded-xl">
+          <VisuallyHidden>
+            <DialogTitle>settings</DialogTitle>
+          </VisuallyHidden>
+          <div className="flex flex-col md:flex-row h-full rounded-xl overflow-hidden">
+            <div className="block md:hidden border-b border-border bg-muted/20 p-4 flex-shrink-0">
+              <DialogHeader>
                 <DialogTitle className="text-xl font-semibold">settings</DialogTitle>
               </DialogHeader>
             </div>
-            <nav className="space-y-1">
-              <div className="grid grid-cols-2 gap-1 md:grid-cols-1 md:gap-1">
-                {menuItems.map((item: { id: string; label: string; icon: any }) => {
-                  const Icon = item.icon
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => setActiveSection(item.id)}
-                      className={cn(
-                        'w-full flex flex-col md:flex-row items-center md:gap-3 gap-1 px-2 md:px-3 py-3 md:py-2 rounded-lg text-xs md:text-sm transition-colors text-center md:text-left',
-                        activeSection === item.id
-                          ? 'bg-primary/10 text-primary font-medium'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                      )}
-                    >
-                      <Icon className="w-4 h-4 flex-shrink-0" />
-                      <span className="truncate">{item.label}</span>
-                    </button>
-                  )
-                })}
+            <div className="w-full md:w-72 border-r-0 md:border-r border-border bg-muted/20 p-4 md:p-6 transition-all duration-300 rounded-tl-xl md:rounded-bl-xl md:rounded-tl-xl rounded-tr-xl md:rounded-tr-none flex-shrink-0">
+              <div className="hidden md:block">
+                <DialogHeader className="mb-6">
+                  <DialogTitle className="text-xl font-semibold">settings</DialogTitle>
+                </DialogHeader>
               </div>
-            </nav>{' '}
-          </div>{' '}
-          <div
-            className="flex-1 min-h-0 overflow-y-auto rounded-br-xl md:rounded-tr-xl rounded-bl-xl md:rounded-bl-none"
-            data-allow-touch-scroll
-            style={{
-              overflow: 'auto',
-              WebkitOverflowScrolling: 'touch',
-              overscrollBehavior: 'contain',
-              position: 'relative',
-              touchAction: 'pan-y',
-              transform: 'translate3d(0, 0, 0)',
-            }}
-          >
-            <div className="p-4 md:p-6">
-              <motion.div
-                key={activeSection}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                {renderContent()}
-              </motion.div>
+              {renderNavigation('desktop')}
+            </div>
+            <div
+              className="flex-1 min-h-0 overflow-y-auto rounded-br-xl md:rounded-tr-xl rounded-bl-xl md:rounded-bl-none"
+              data-allow-touch-scroll
+              style={{
+                overflow: 'auto',
+                WebkitOverflowScrolling: 'touch',
+                overscrollBehavior: 'contain',
+                position: 'relative',
+                touchAction: 'pan-y',
+                transform: 'translate3d(0, 0, 0)',
+              }}
+            >
+              {renderMainContent()}
             </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      <Drawer.Root open={!isDesktop && open} onOpenChange={onOpenChange}>
+        <Drawer.Portal>
+          <Drawer.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
+          <Drawer.Content className="fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-md sm:max-w-lg h-[min(calc(var(--app-viewport-height,100vh)*0.995),780px)] flex flex-col rounded-t-3xl border border-border/50 bg-background/95 shadow-2xl overflow-hidden">
+            <Drawer.Handle className="mx-auto mt-3 mb-4 h-1.5 w-12 rounded-full bg-border/60" />
+            <div className="px-4 pb-6 flex flex-1 flex-col gap-4 overflow-hidden" data-allow-touch-scroll>
+              <div className="text-center">
+                <p className="text-base font-semibold">settings</p>
+                <p className="text-xs text-muted-foreground">personalize your assistant</p>
+              </div>
+              <div className="rounded-2xl border border-border/50 bg-muted/20 p-3 max-h-48 overflow-y-auto" data-allow-touch-scroll>
+                {renderNavigation('mobile')}
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto rounded-2xl border border-border/50 bg-background" data-allow-touch-scroll>
+                {renderMainContent('p-4')}
+              </div>
+            </div>
+          </Drawer.Content>
+        </Drawer.Portal>
+      </Drawer.Root>
+    </>
   )
 }

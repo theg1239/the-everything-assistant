@@ -2184,7 +2184,11 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           if (stored) {
             if (isMcpExpired(stored)) {
               const refreshed = await refreshUserMcpToken(userId)
-              if (refreshed?.accessToken) mcpAccessToken = refreshed.accessToken
+              if (refreshed?.accessToken) {
+                mcpAccessToken = refreshed.accessToken
+              } else if (stored.accessToken) {
+                mcpAccessToken = stored.accessToken
+              }
             } else {
               mcpAccessToken = stored.accessToken
             }
@@ -2223,7 +2227,15 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
 
           if (mcpResult) {
             lastError = mcpResult
-            if (isBotChannel) {
+
+            const msg = (mcpResult.message || mcpResult.error || '').toLowerCase()
+            const tokenIssues =
+              msg.includes('unauthorized') ||
+              msg.includes('invalid token') ||
+              msg.includes('expired') ||
+              msg.includes('forbidden')
+
+            if (isBotChannel && (!mcpResult.success && tokenIssues)) {
               return {
                 success: false,
                 requiresMcpLink: true,
@@ -2233,6 +2245,11 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                   'Your VTOP session token expired. Send !linkvtop again to refresh access.',
                 details: mcpResult,
               }
+            }
+
+            // For non-token errors, surface the MCP error instead of forcing relink
+            if (isBotChannel) {
+              return mcpResult as any
             }
           }
         }

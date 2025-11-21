@@ -77,12 +77,15 @@ class APIClient {
       const isSse = contentType.includes('text/event-stream')
 
       if (isSse || rawText.includes('data:')) {
-        const { text, reasoning } = this.parseUIStream(rawText)
-        if (text || reasoning) {
+        const { text, reasoning, toolResults } = this.parseUIStream(rawText)
+        if (text || reasoning || (toolResults || []).length) {
+          const enriched = text || this.extractMessageFromToolResults(toolResults)
           return {
-            text: text || "I received your message but couldn't generate a proper response. Please try again.",
+            text:
+              enriched ||
+              "I received your message but couldn't generate a proper response. Please try again.",
             reasoning: reasoning || '',
-            toolResults: [],
+            toolResults: toolResults || [],
             error: null,
           }
         }
@@ -193,19 +196,21 @@ class APIClient {
         }
       }
 
-      const safeText =
-        finalText.trim() ||
-        "I received your message but couldn't generate a proper response. Please try again."
+    const fallbackFromTool = this.extractMessageFromToolResults(toolResults)
+    const safeText =
+      finalText.trim() ||
+      fallbackFromTool ||
+      "I received your message but couldn't generate a proper response. Please try again."
 
-      console.log('✅ Parsed response length:', safeText.length)
-      console.log('📄 Response preview:', safeText.substring(0, 100) + '...')
+    console.log('✅ Parsed response length:', safeText.length)
+    console.log('📄 Response preview:', safeText.substring(0, 100) + '...')
 
-      return {
-        text: safeText,
-        reasoning: '',
-        toolResults,
-        error: null,
-      }
+    return {
+      text: safeText,
+      reasoning: '',
+      toolResults,
+      error: null,
+    }
     } catch (error) {
       console.error('❌ Failed to parse streaming response:', error)
       return {
@@ -304,7 +309,7 @@ class APIClient {
       if (regexDelta) finalText = regexDelta.trim()
     }
 
-    return { text: finalText, reasoning: (reasoning || '').trim() }
+    return { text: finalText, reasoning: (reasoning || '').trim(), toolResults }
   }
 
   extractTextDeltas(rawText) {
@@ -357,6 +362,28 @@ class APIClient {
       console.error('Failed to send feedback:', error)
       return false
     }
+  }
+
+  extractMessageFromToolResults(toolResults = []) {
+    for (const tr of toolResults) {
+      const payload = tr?.result || tr?.data || tr
+      if (!payload || typeof payload !== 'object') continue
+
+      const candidates = [
+        payload.message,
+        payload.formatted_content,
+        payload.summary,
+        payload.content,
+        payload.text,
+        payload.error,
+      ].filter(Boolean)
+
+      if (candidates.length) {
+        const first = candidates[0]
+        return Array.isArray(first) ? JSON.stringify(first) : String(first)
+      }
+    }
+    return ''
   }
 }
 

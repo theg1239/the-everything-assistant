@@ -108,11 +108,11 @@ class APIClient {
       const lines = rawText.split('\n').filter(line => line.trim())
       console.log('📝 Total lines (legacy path):', lines.length)
 
-      let finalText = ''
-      let toolResults = []
+    let finalText = ''
+    let toolResults = []
 
-      for (const line of lines) {
-        const cleanedLine = (line || '').trim().startsWith('data:')
+    for (const line of lines) {
+      const cleanedLine = (line || '').trim().startsWith('data:')
           ? line.trim().slice(5).trim()
           : line.trim()
 
@@ -170,14 +170,24 @@ class APIClient {
           }
         } catch (parseError) {
           console.warn('⚠️ Failed to parse line:', cleanedLine.substring(0, 100), parseError)
-        }
       }
+    }
 
-      if (!finalText.trim()) {
-        for (const result of toolResults) {
-          if (result?.result?.formatted_content) {
-            finalText += result.result.formatted_content + '\n'
-          } else if (result?.result?.summary) {
+    // Last-gasp fallback: scrape any text-delta payloads in the entire stream
+    if (!finalText.trim()) {
+      const regexDelta =
+        this.extractTextDeltas(rawText) || this.extractTextDeltas(rawText.replace(/\\"/g, '"'))
+      if (regexDelta) {
+        console.log('Recovered text from regex fallback')
+        finalText += regexDelta
+      }
+    }
+
+    if (!finalText.trim()) {
+      for (const result of toolResults) {
+        if (result?.result?.formatted_content) {
+          finalText += result.result.formatted_content + '\n'
+        } else if (result?.result?.summary) {
             finalText += result.result.summary + '\n'
           }
         }
@@ -286,6 +296,12 @@ class APIClient {
           if (finalText) break
         }
       }
+    }
+
+    if (!finalText) {
+      const regexDelta =
+        this.extractTextDeltas(rawText) || this.extractTextDeltas(rawText.replace(/\\"/g, '"'))
+      if (regexDelta) finalText = regexDelta.trim()
     }
 
     return { text: finalText, reasoning: (reasoning || '').trim() }

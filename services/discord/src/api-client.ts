@@ -121,11 +121,11 @@ class APIClient {
         }
       }
 
-      const lines = rawText.split('\n').filter((line: string) => line.trim())
-      console.log('total lines:', lines.length)
+    const lines = rawText.split('\n').filter((line: string) => line.trim())
+    console.log('total lines:', lines.length)
 
-      let finalText = ''
-      let toolResults: any[] = []
+    let finalText = ''
+    let toolResults: any[] = []
       let error: string | null = null
 
       for (const line of lines) {
@@ -223,6 +223,16 @@ class APIClient {
             line.substring(0, 100),
             (parseError as Error).message
           )
+        }
+      }
+
+      // Last-gasp fallback: scrape any text-delta payloads in the entire stream
+      if (!finalText.trim()) {
+        const regexDelta =
+          this.extractTextDeltas(rawText) || this.extractTextDeltas(rawText.replace(/\\"/g, '"'))
+        if (regexDelta) {
+          console.log('Recovered text from regex fallback')
+          finalText += regexDelta
         }
       }
 
@@ -349,6 +359,12 @@ class APIClient {
           if (finalText) break
         }
       }
+    }
+
+    if (!finalText) {
+      const regexDelta =
+        this.extractTextDeltas(rawText) || this.extractTextDeltas(rawText.replace(/\\"/g, '"'))
+      if (regexDelta) finalText = regexDelta.trim()
     }
 
     return { text: finalText, reasoning: reasoning.trim() }

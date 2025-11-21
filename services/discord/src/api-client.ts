@@ -160,6 +160,29 @@ class APIClient {
             if (endData.finishReason !== 'stop') {
               console.warn('Stream ended unexpectedly:', endData.finishReason)
             }
+          } else if (line.startsWith('data:')) {
+            const payload = line.slice(5).trim()
+            if (payload && payload !== '[DONE]') {
+              try {
+                const chunk = JSON.parse(payload)
+                switch (chunk.type) {
+                  case 'text-delta':
+                    finalText += chunk.delta || ''
+                    break
+                  case 'reasoning-delta':
+                    // reasoning chunks are informational for Discord; ignore for now
+                    break
+                  case 'tool-result':
+                    toolResults.push(chunk)
+                    break
+                  case 'error':
+                    error = error || chunk.error || chunk.errorText || null
+                    break
+                }
+              } catch {
+                // ignore malformed SSE payloads
+              }
+            }
           } else if (line.startsWith('d:')) {
             try {
               const data = JSON.parse(line.slice(2))
@@ -324,7 +347,7 @@ class APIClient {
   }
 
   private extractTextDeltas(rawText: string): string {
-    const matches = [...rawText.matchAll(/"type"\\s*:\\s*"text-delta"[^"]*"delta"\\s*:\\s*"([^"]*)"/g)]
+    const matches = [...rawText.matchAll(/"type"\s*:\s*"text-delta"[^"]*"delta"\s*:\s*"([^"]*)"/g)]
     if (!matches.length) return ''
     return matches.map(m => (m[1] || '').replace(/\\\\n/g, '\n')).join('')
   }

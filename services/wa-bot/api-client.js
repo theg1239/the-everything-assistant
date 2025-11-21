@@ -290,7 +290,7 @@ class APIClient {
   }
 
   extractTextDeltas(rawText) {
-    const matches = [...rawText.matchAll(/"type"\\s*:\\s*"text-delta"[^"]*"delta"\\s*:\\s*"([^"]*)"/g)]
+    const matches = [...rawText.matchAll(/"type"\s*:\s*"text-delta"[^"]*"delta"\s*:\s*"([^"]*)"/g)]
     if (!matches.length) return ''
     return matches.map(m => (m[1] || '').replace(/\\\\n/g, '\n')).join('')
   }

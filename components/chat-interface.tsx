@@ -539,6 +539,7 @@ function PureChatInterfaceComponent({
         const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
           try {
             const targetChatId = currentChatId || metadata.chatId
+            if (!targetChatId) return
             const response = await fetch(`/api/chats/${targetChatId}`)
             if (!response.ok) {
               throw new Error('Failed to load chat metadata')
@@ -547,7 +548,7 @@ function PureChatInterfaceComponent({
             if (chatData.title && chatData.title !== 'New Chat') {
               window.dispatchEvent(
                 new CustomEvent('chatTitleUpdated', {
-                  detail: { chatId: currentChatId, title: chatData.title },
+                  detail: { chatId: targetChatId, title: chatData.title },
                 })
               )
             } else if (attempt < maxAttempts) {
@@ -910,6 +911,9 @@ function PureChatInterfaceComponent({
 
   const resetToHome = () => {
     if (window.location.pathname !== '/') {
+      try {
+        window.history.replaceState({}, '', '/')
+      } catch {}
       router.push('/')
       setUiMessages([])
       resetChatStore()
@@ -1621,6 +1625,9 @@ function PureChatInterfaceComponent({
                     variant="ghost"
                     onClick={() => {
                       if (window.location.pathname !== '/') {
+                        try {
+                          window.history.replaceState({}, '', '/')
+                        } catch {}
                         router.replace('/')
                         setUiMessages([])
                         setInput('')

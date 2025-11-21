@@ -355,6 +355,11 @@ export const Sidebar = memo(
         ...prev,
       ])
       setSelectedChatId(tempId)
+      if (typeof window !== 'undefined') {
+        try {
+          window.history.replaceState({}, '', '/')
+        } catch {}
+      }
       router.push('/')
     }, [router, setChats])
 

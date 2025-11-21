@@ -282,6 +282,7 @@ class APIClient {
     const events = rawText.split('\n\n').filter(Boolean)
     let reasoning = ''
     let text = ''
+    const toolResults: any[] = []
 
     for (const event of events) {
       for (const line of event.split('\n')) {
@@ -304,6 +305,9 @@ class APIClient {
           case 'text-delta':
             text += chunk.delta || ''
             break
+          case 'tool-result':
+            toolResults.push(chunk)
+            break
           case 'error':
             console.error('stream error chunk:', chunk.errorText || chunk.error)
             break
@@ -313,7 +317,20 @@ class APIClient {
       }
     }
 
-    return { text: text.trim(), reasoning: reasoning.trim() }
+    let finalText = text.trim()
+    if (!finalText && toolResults.length > 0) {
+      for (const tr of toolResults) {
+        const result = tr.result || tr.data || tr
+        const candidate =
+          result?.formatted_content || result?.summary || result?.content || result?.text
+        if (candidate && typeof candidate === 'string') {
+          finalText = candidate.trim()
+          if (finalText) break
+        }
+      }
+    }
+
+    return { text: finalText, reasoning: reasoning.trim() }
   }
 
   async healthCheck(): Promise<boolean> {

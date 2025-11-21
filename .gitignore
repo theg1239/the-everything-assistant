@@ -38,3 +38,5 @@ node_modules
 dist
 .wrangler
 .open-next
+
+prisma/generated

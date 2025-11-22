@@ -343,6 +343,13 @@ export const Sidebar = memo(
     )
 
     const startNewChat = useCallback(() => {
+      const existingTemp = chats.find(chat => chat.id.startsWith('temp-'))
+
+      if (existingTemp) {
+        setSelectedChatId(existingTemp.id)
+        return
+      }
+
       const tempId = `temp-${Date.now()}`
       setChats(prev => [
         {
@@ -361,7 +368,7 @@ export const Sidebar = memo(
         } catch {}
       }
       router.push('/')
-    }, [router, setChats])
+    }, [router, setChats, chats, pathname])
 
     const handleChatClick = useCallback(
       (chatId: string) => {
@@ -424,7 +431,7 @@ export const Sidebar = memo(
                 initial="closed"
                 animate="open"
                 exit="closed"
-                className="fixed left-0 top-0 z-50 h-full w-[280px] bg-background/80 backdrop-blur-sm border-r border-border/30 flex flex-col shadow-2xl"
+                className="fixed left-0 top-0 z-50 h-full w-[280px] bg-background/80 backdrop-blur-sm border-r border-border/50 flex flex-col shadow-2xl"
                 onMouseEnter={() => setHovering(true)}
                 onMouseLeave={() => setHovering(false)}
                 onClick={e => e.stopPropagation()}
@@ -439,7 +446,7 @@ export const Sidebar = memo(
                 }}
               >
 
-                <div className="p-4 border-b border-border flex items-center justify-between bg-transparent">
+                <div className="h-14 px-4 border-b border-border/50 flex items-center justify-between bg-transparent">
                   <div className="flex items-center space-x-2">
                     {loading ? (
                       <div className="h-7 w-32 bg-muted/60 rounded animate-pulse"></div>
@@ -461,7 +468,7 @@ export const Sidebar = memo(
                 </div>
 
 
-                <div className="p-4 border-b border-border bg-transparent">
+                <div className="h-14 px-4 border-b border-border/50 bg-transparent flex items-center">
                   {loading ? (
                     <div className="h-10 bg-muted/60 rounded-lg animate-pulse"></div>
                   ) : (

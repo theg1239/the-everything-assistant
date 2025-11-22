@@ -262,7 +262,7 @@ export async function POST(req: Request) {
         model: resolvedModel,
         messages: finalMessages,
         tools,
-        temperature: 1.0,
+        temperature: 0.3,
         maxTokens: 10000,
         ...(providerOptions ? { providerOptions } : {}),
         experimental_transform: smoothStream({ chunking: 'word' }),

@@ -609,9 +609,20 @@ function PureChatInterfaceComponent({
 
       const contextRateLimit = !!rateLimitError?.isRateLimit
 
-      try {
-        // eslint-disable-next-line no-console
-      } catch {}
+      const friendlyError =
+        typeof responseBody === 'string' && responseBody
+          ? responseBody
+          : errorMessage || 'Sorry, something went wrong while streaming the reply.'
+
+      setUiMessages(prev => [
+        ...prev,
+        {
+          id: generateUUID(),
+          role: 'assistant',
+          parts: [{ type: 'text', text: friendlyError }],
+          metadata: { error: true },
+        },
+      ])
 
       if (!localRateLimitDetected && !isRateLimit && !contextRateLimit && !isGeminiStreamingError) {
         toast.error('Something went wrong. Please try again.')

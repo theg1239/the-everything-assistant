@@ -86,7 +86,12 @@ export const MobilePdfDockButton: React.FC = () => {
                     </button>
                     <button
                       className="text-muted-foreground hover:text-foreground p-1 rounded"
-                      onClick={() => removePdf && removePdf(item.id)}
+                      onClick={e => {
+                        e.stopPropagation()
+                        e.preventDefault()
+                        removePdf && removePdf(item.id)
+                        setOpen(false)
+                      }}
                       aria-label="Close PDF"
                     >
                       <X className="h-4 w-4" />
@@ -227,7 +232,13 @@ export const DesktopPdfDockButton: React.FC = () => {
                   <button
                     className="text-muted-foreground hover:text-foreground p-1 rounded bg-transparent outline-none"
                     style={{ border: 'none', boxShadow: 'none' }}
-                    onClick={() => removePdf && removePdf(item.id)}
+                    onClick={e => {
+                      e.stopPropagation()
+                      e.preventDefault()
+                      removePdf && removePdf(item.id)
+                      setShowPreview(false)
+                      setPreviewUrl(null)
+                    }}
                     aria-label="Close PDF"
                   >
                     <X className="h-4 w-4" />
@@ -304,7 +315,10 @@ const PreviewPortal: React.FC<{
             <div className="flex items-center gap-2">
               <button
                 className="text-muted-foreground hover:text-foreground p-1 rounded"
-                onClick={onClose}
+                onClick={e => {
+                  e.stopPropagation()
+                  onClose && onClose()
+                }}
                 aria-label="Close preview"
               >
                 <X className="h-4 w-4" />

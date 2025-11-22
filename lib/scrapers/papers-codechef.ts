@@ -55,6 +55,8 @@ interface ScraperResult {
 
 type PapersApiResponse = ApiPaper[] | { papers?: ApiPaper[] }
 
+type PapersCountEntry = { name: string; count: number }
+
 function deduplicatePapers(papers: Paper[]): Paper[] {
   const seen = new Set<string>()
   const uniquePapers: Paper[] = []
@@ -113,168 +115,20 @@ async function tryAPIApproach(
     const fullCourseName = findFullCourseName(courseCode)
     dbg('tryAPIApproach fullCourseName', { courseCode, fullCourseName })
     const searchUrl = `https://papers.codechefvit.com/api/papers?subject=${encodeURIComponent(fullCourseName)}`
-    dbg('fetch fullCourseName url', searchUrl)
-    const response = await fetch(searchUrl, {
-      headers: {
-        accept: 'application/json, text/plain, */*',
-        'accept-language': 'en-US,en;q=0.9',
-        'sec-ch-ua': '"Brave";v="137", "Chromium";v="137", "Not/A)Brand";v="24"',
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': '"Windows"',
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'same-origin',
-        'sec-gpc': '1',
-        Referer: `https://papers.codechefvit.com/catalogue?subject=${encodeURIComponent(fullCourseName)}`,
-        'Referrer-Policy': 'strict-origin-when-cross-origin',
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-      },
-    })
+    const fullNameResult = await fetchAndParsePapers(searchUrl, courseCode, examType, year)
+    if (fullNameResult?.success && fullNameResult.papers.length > 0) {
+      return fullNameResult
+    }
 
-    if (response.ok) {
-      dbg('response ok for fullCourseName search')
-      const data = (await response.json()) as PapersApiResponse
-
-      const papersArray = Array.isArray(data) ? data : data.papers || []
-      dbg('api returned items', papersArray.length)
-
-      if (papersArray && papersArray.length > 0) {
-        let skippedNoFinalUrl = 0
-        let headFailCount = 0
-        let headOkCount = 0
-        const validatedPapers = await Promise.all(
-          papersArray.map(async (paper: ApiPaper) => {
-            const title =
-              paper.title ||
-              paper.name ||
-              paper.paperName ||
-              `${paper.subject || courseCode} ${paper.exam || ''} ${paper.slot || ''} ${paper.year || ''} ${paper.semester || ''}`.trim()
-
-            let extractedExamType =
-              paper.examType || paper.exam || (paper as any).paperType || examType || ''
-            if (!extractedExamType || extractedExamType === 'unknown') {
-              const titleLower = title.toLowerCase()
-              if (titleLower.includes('cat-1') || titleLower.includes('cat 1'))
-                extractedExamType = 'CAT-1'
-              else if (titleLower.includes('cat-2') || titleLower.includes('cat 2'))
-                extractedExamType = 'CAT-2'
-              else if (titleLower.includes('fat') || titleLower.includes('final'))
-                extractedExamType = 'FAT'
-              else if (titleLower.includes('quiz')) extractedExamType = 'Quiz'
-            }
-
-            let extractedYear = paper.year || paper.academicYear || year || ''
-            if (!extractedYear || extractedYear === 'unknown') {
-              const yearMatch = title.match(/20\d{2}/)
-              if (yearMatch) extractedYear = yearMatch[0]
-            }
-
-            const finalUrlCandidate =
-              paper.finalUrl ||
-              (paper as any).final_url ||
-              paper.downloadUrl ||
-              (paper as any).file_url
-            const paperUrl =
-              finalUrlCandidate ||
-              paper.paperUrl ||
-              paper.url ||
-              paper.link ||
-              (paper._id ? `https://papers.codechefvit.com/paper/${paper._id}` : '')
-
-            let isValid = true
-            if (finalUrlCandidate) {
-              try {
-                const validateResponse = await fetch(finalUrlCandidate, { method: 'HEAD' })
-                isValid = validateResponse.ok
-                if (isValid) headOkCount++
-                else headFailCount++
-              } catch (error) {
-                console.warn(`Paper validation failed for ${title}:`, error)
-                isValid = false
-                headFailCount++
-              }
-            }
-
-            if (!finalUrlCandidate || !isValid) {
-              if (!finalUrlCandidate) skippedNoFinalUrl++
-              return null
-            }
-
-            return {
-              title,
-              url: paperUrl,
-              source: 'papers.codechefvit.com',
-              metadata:
-                paper.metadata ||
-                paper.description ||
-                `${paper.slot || ''} ${paper.semester || ''}`.trim(),
-              examType: extractedExamType,
-              year: extractedYear,
-            }
-          })
-        )
-
-        let papers = validatedPapers.filter((paper): paper is Paper => paper !== null)
-        dbg('post-validate counts', {
-          totalIn: papersArray.length,
-          keptAfterValidate: papers.length,
-          skippedNoFinalUrl,
-          headOkCount,
-          headFailCount,
-        })
-        const beforeDedupe = papers.length
-        papers = deduplicatePapers(papers)
-        if (beforeDedupe !== papers.length)
-          dbg('deduped', { before: beforeDedupe, after: papers.length })
-
-        if (examType) {
-          const before = papers.length
-          papers = papers.filter(paper => {
-            const paperTitle = paper.title.toLowerCase()
-            const paperMeta = paper.metadata.toLowerCase()
-            const examTypeLower = examType.toLowerCase()
-
-            return (
-              paperTitle.includes(examTypeLower) ||
-              paperMeta.includes(examTypeLower) ||
-              (paper.examType && paper.examType.toLowerCase().includes(examTypeLower))
-            )
-          })
-          dbg('examType filter', { examType, before, after: papers.length })
-        }
-
-        if (year) {
-          const before = papers.length
-          papers = papers.filter(paper => {
-            const paperTitle = paper.title.toLowerCase()
-            const paperMeta = paper.metadata.toLowerCase()
-
-            return (
-              paperTitle.includes(year) ||
-              paperMeta.includes(year) ||
-              (paper.year && paper.year.includes(year))
-            )
-          })
-          dbg('year filter', { year, before, after: papers.length })
-        }
-
-        return {
-          success: true,
-          papers: papers,
-          source: 'papers.codechefvit.com',
-          searchUrl: searchUrl,
-        }
+    const countSubject = await findSubjectFromCounts(courseCode, fullCourseName)
+    if (countSubject) {
+      const countSearchUrl = `https://papers.codechefvit.com/api/papers?subject=${encodeURIComponent(
+        countSubject
+      )}`
+      const countResult = await fetchAndParsePapers(countSearchUrl, courseCode, examType, year)
+      if (countResult?.success && countResult.papers.length > 0) {
+        return countResult
       }
-    } else {
-      let text = ''
-      try {
-        text = await response.text()
-      } catch {}
-      dbg('response not ok for fullCourseName search', {
-        status: response.status,
-        bodySnippet: text?.slice(0, 200),
-      })
     }
 
     const codeOnlyUrl = `https://papers.codechefvit.com/api/papers?subject=${encodeURIComponent(courseCode)}`
@@ -404,6 +258,180 @@ async function tryAPIApproach(
   } catch (error) {
     console.error('API approach error:', error)
     return { success: false, papers: [], source: 'papers.codechefvit.com' }
+  }
+}
+
+async function findSubjectFromCounts(courseCode: string, fullCourseName: string) {
+  try {
+    const res = await fetch('https://papers.codechefvit.com/api/papers/count', {
+      headers: {
+        accept: 'application/json, text/plain, */*',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      signal: AbortSignal.timeout(8000),
+    })
+
+    if (!res.ok) return null
+
+    const data = (await res.json()) as PapersCountEntry[]
+    const targetCode = courseCode.toUpperCase()
+    const targetName = fullCourseName.toLowerCase()
+
+    const bestMatch = data
+      .filter(entry => {
+        const nameLower = entry.name.toLowerCase()
+        return nameLower.includes(targetCode.toLowerCase()) || nameLower.includes(targetName)
+      })
+      .sort((a, b) => b.count - a.count)[0]
+
+    return bestMatch?.name || null
+  } catch (error) {
+    dbg('count endpoint failed', error)
+    return null
+  }
+}
+
+async function fetchAndParsePapers(
+  searchUrl: string,
+  courseCode: string,
+  examType?: string,
+  year?: string
+): Promise<ScraperResult | null> {
+  dbg('fetch url', searchUrl)
+  const response = await fetch(searchUrl, {
+    headers: {
+      accept: 'application/json, text/plain, */*',
+      'accept-language': 'en-US,en;q=0.9',
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    },
+  })
+
+  if (!response.ok) {
+    let text = ''
+    try {
+      text = await response.text()
+    } catch {}
+    dbg('response not ok', { status: response.status, bodySnippet: text?.slice(0, 200) })
+    return null
+  }
+
+  const data = (await response.json()) as PapersApiResponse
+  const papersArray = Array.isArray(data) ? data : data.papers || []
+  dbg('api returned items', papersArray.length)
+
+  if (!papersArray || papersArray.length === 0) return { success: true, papers: [], source: 'papers.codechefvit.com', searchUrl }
+
+  let skippedNoFinalUrl = 0
+  let headFailCount = 0
+  let headOkCount = 0
+  const validatedPapers = await Promise.all(
+    papersArray.map(async (paper: ApiPaper) => {
+      const title =
+        paper.title ||
+        paper.name ||
+        paper.paperName ||
+        `${paper.subject || courseCode} ${paper.exam || ''} ${paper.slot || ''} ${paper.year || ''} ${paper.semester || ''}`.trim()
+
+      let extractedExamType =
+        paper.examType || paper.exam || (paper as any).paperType || examType || ''
+      if (!extractedExamType || extractedExamType === 'unknown') {
+        const titleLower = title.toLowerCase()
+        if (titleLower.includes('cat-1') || titleLower.includes('cat 1')) extractedExamType = 'CAT-1'
+        else if (titleLower.includes('cat-2') || titleLower.includes('cat 2'))
+          extractedExamType = 'CAT-2'
+        else if (titleLower.includes('fat') || titleLower.includes('final')) extractedExamType = 'FAT'
+        else if (titleLower.includes('quiz')) extractedExamType = 'Quiz'
+      }
+
+      let extractedYear = paper.year || paper.academicYear || year || ''
+      if (!extractedYear || extractedYear === 'unknown') {
+        const yearMatch = title.match(/20\d{2}/)
+        if (yearMatch) extractedYear = yearMatch[0]
+      }
+
+      const finalUrlCandidate =
+        paper.finalUrl || (paper as any).final_url || paper.downloadUrl || (paper as any).file_url
+      const paperUrl =
+        finalUrlCandidate ||
+        paper.paperUrl ||
+        paper.url ||
+        paper.link ||
+        (paper._id ? `https://papers.codechefvit.com/paper/${paper._id}` : '')
+
+      let isValid = true
+      if (finalUrlCandidate) {
+        try {
+          const validateResponse = await fetch(finalUrlCandidate, { method: 'HEAD' })
+          isValid = validateResponse.ok
+          if (isValid) headOkCount++
+          else headFailCount++
+        } catch (error) {
+          console.warn(`Paper validation failed for ${title}:`, error)
+          isValid = false
+          headFailCount++
+        }
+      }
+
+      if (!finalUrlCandidate || !isValid) {
+        if (!finalUrlCandidate) skippedNoFinalUrl++
+        return null
+      }
+
+      return {
+        title,
+        url: paperUrl,
+        source: 'papers.codechefvit.com',
+        metadata: paper.metadata || paper.description || `${paper.slot || ''} ${paper.semester || ''}`.trim(),
+        examType: extractedExamType,
+        year: extractedYear,
+      }
+    })
+  )
+
+  let papers = validatedPapers.filter((paper): paper is Paper => paper !== null)
+  dbg('post-validate counts', {
+    totalIn: papersArray.length,
+    keptAfterValidate: papers.length,
+    skippedNoFinalUrl,
+    headOkCount,
+    headFailCount,
+  })
+  const beforeDedupe = papers.length
+  papers = deduplicatePapers(papers)
+  if (beforeDedupe !== papers.length) dbg('deduped', { before: beforeDedupe, after: papers.length })
+
+  if (examType) {
+    const before = papers.length
+    const examTypeLower = examType.toLowerCase()
+    papers = papers.filter(paper => {
+      const paperTitle = paper.title.toLowerCase()
+      const paperMeta = paper.metadata.toLowerCase()
+      return (
+        paperTitle.includes(examTypeLower) ||
+        paperMeta.includes(examTypeLower) ||
+        (paper.examType && paper.examType.toLowerCase().includes(examTypeLower))
+      )
+    })
+    dbg('examType filter', { examType, before, after: papers.length })
+  }
+
+  if (year) {
+    const before = papers.length
+    papers = papers.filter(paper => {
+      const paperTitle = paper.title.toLowerCase()
+      const paperMeta = paper.metadata.toLowerCase()
+
+      return paperTitle.includes(year) || paperMeta.includes(year) || (paper.year && paper.year.includes(year))
+    })
+    dbg('year filter', { year, before, after: papers.length })
+  }
+
+  return {
+    success: true,
+    papers,
+    source: 'papers.codechefvit.com',
+    searchUrl,
   }
 }
 

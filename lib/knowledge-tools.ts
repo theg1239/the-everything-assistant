@@ -3,6 +3,7 @@ import * as z from 'zod'
 import { getContextForAIPrompt } from './data/context-integration'
 import { rateLimitedAI } from './rate-limited-ai'
 import { searchRedditWithContext } from './tools'
+import { modelIds } from './model-registry'
 
 let _ragPool: import('pg').Pool | null = null
 export async function getRagPool() {
@@ -39,7 +40,7 @@ export function createKnowledgeTools() {
       console.debug('[knowledgeBase] max_chunks:', max_chunks)
       try {
         const { embedding: vector } = await rateLimitedAI.google.embed({
-          model: { modelId: 'gemini-embedding-001' },
+          model: { modelId: modelIds.embedding },
           value: query,
         })
 

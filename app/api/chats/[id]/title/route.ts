@@ -16,11 +16,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return new Response('Chat not found', { status: 404 })
     }
 
-    return Response.json({
-      id: chat.id,
-      title: chat.title,
-      updatedAt: chat.updated_at,
-    })
+    return Response.json(
+      {
+        id: chat.id,
+        title: chat.title,
+        updatedAt: chat.updated_at,
+      },
+      { headers: { 'Cache-Control': 'no-store' } }
+    )
   } catch (error) {
     console.error('Error fetching chat title:', error)
     return new Response('Internal Server Error', { status: 500 })

@@ -1,6 +1,7 @@
 import * as z from 'zod'
 
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
+import { getModelConfig } from '@/lib/model-registry'
 
 import { jsonValueSchema, structuredDataSchema, stripSchemaPlaceholders } from './request'
 
@@ -18,9 +19,15 @@ export async function parseVTOPData(
       summary: z.string(),
     })
 
-    const result = await rateLimitedAI.google.generateObject(
+    const parserModel = getModelConfig('vtopParser')
+    const providerClient = rateLimitedAI[parserModel.provider as keyof typeof rateLimitedAI]
+    if (!providerClient) {
+      throw new Error(`Unsupported model provider for VTOP parser: ${parserModel.provider}`)
+    }
+
+    const result = await providerClient.generateObject(
       {
-        model: await rateLimitedAI.google.model(),
+        model: await providerClient.model(parserModel.modelId),
         schema: vtopParseSchema,
         prompt: `
 You are a helpful assistant that parses VTOP (VIT Online Portal) data and formats it in a clean, natural language format.
@@ -82,7 +89,7 @@ RESPONSE FORMAT:
     return {
       ...parsed,
       raw: rawData,
-      parser: 'gemini-object',
+      parser: parserModel.modelId,
     }
   } catch (error: any) {
     console.error('VTOP parsing failed, returning fallback structure:', error)
@@ -97,4 +104,3 @@ RESPONSE FORMAT:
     return fallbackResult
   }
 }
-

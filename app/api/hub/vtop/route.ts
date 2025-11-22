@@ -6,6 +6,7 @@ import { streamObject, type LanguageModel } from 'ai'
 import { vtopResultSchema } from './schema'
 import { saveTokenUsage } from '@/lib/db'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
+import { getModelConfig } from '@/lib/model-registry'
 import * as z from 'zod'
 import type { VtopCommandFlags } from '@/types/tools'
 
@@ -50,8 +51,12 @@ export async function POST(req: Request) {
 
     const raw = await vtop.execute(args, { toolCallId: `vtop-${Date.now()}`, messages: [] })
 
-    const modelName = 'gemini-flash-latest'
-    const model = (await rateLimitedAI.google.model(modelName)) as LanguageModel
+    const modelConfig = getModelConfig('hubVtopFormatter')
+    const providerClient = rateLimitedAI[modelConfig.provider as keyof typeof rateLimitedAI]
+    if (!providerClient) {
+      throw new Error(`Unsupported model provider for hub vtop: ${modelConfig.provider}`)
+    }
+    const model = (await providerClient.model(modelConfig.modelId)) as LanguageModel
     const result = streamObject({
       model,
       schema: vtopResultSchema,
@@ -75,13 +80,13 @@ export async function POST(req: Request) {
         try {
           const usage = (final && final.usage) || final?.response?.usage || null
           if (usage && typeof usage === 'object') {
-            await saveTokenUsage({
-              userId: session.user.id,
-              chatId: null,
-              model: modelName,
-              stepIndex: null,
-              promptTokens: usage.promptTokens || 0,
-              completionTokens: usage.completionTokens || 0,
+              await saveTokenUsage({
+                userId: session.user.id,
+                chatId: null,
+                model: modelConfig.modelId,
+                stepIndex: null,
+                promptTokens: usage.promptTokens || 0,
+                completionTokens: usage.completionTokens || 0,
               totalTokens:
                 usage.totalTokens || (usage.promptTokens || 0) + (usage.completionTokens || 0),
               meta: { type: 'hub-vtop', command },

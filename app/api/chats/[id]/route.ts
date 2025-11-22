@@ -18,32 +18,35 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     const messages = await getMessages(id)
 
-    return Response.json({
-      id: chat.id,
-      title: chat.title,
-      path: chat.path,
-      createdAt: chat.created_at,
-      updatedAt: chat.updated_at,
-      messages: messages.map(msg => ({
-        id: msg.id,
-        role: msg.role,
-        content: msg.content,
-        toolInvocations: msg.toolInvocations,
-        parts:
-          msg.toolInvocations && msg.toolInvocations.length > 0
-            ? [
-                ...(msg.content ? [{ type: 'text', text: msg.content }] : []),
-                ...msg.toolInvocations.map((toolInvocation: any) => ({
-                  type: 'tool-invocation',
-                  toolInvocation,
-                })),
-              ]
-            : msg.content
-              ? [{ type: 'text', text: msg.content }]
-              : [],
-        createdAt: msg.created_at,
-      })),
-    })
+    return Response.json(
+      {
+        id: chat.id,
+        title: chat.title,
+        path: chat.path,
+        createdAt: chat.created_at,
+        updatedAt: chat.updated_at,
+        messages: messages.map(msg => ({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+          toolInvocations: msg.toolInvocations,
+          parts:
+            msg.toolInvocations && msg.toolInvocations.length > 0
+              ? [
+                  ...(msg.content ? [{ type: 'text', text: msg.content }] : []),
+                  ...msg.toolInvocations.map((toolInvocation: any) => ({
+                    type: 'tool-invocation',
+                    toolInvocation,
+                  })),
+                ]
+              : msg.content
+                ? [{ type: 'text', text: msg.content }]
+                : [],
+          createdAt: msg.created_at,
+        })),
+      },
+      { headers: { 'Cache-Control': 'no-store' } }
+    )
   } catch (error) {
     console.error('Error fetching chat:', error)
     return new Response('Internal Server Error', { status: 500 })

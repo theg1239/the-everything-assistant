@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import * as z from 'zod'
 import { generateId, type UIMessage } from 'ai'
+import { getModelConfig } from '@/lib/model-registry'
 
 type ConversationMessage = {
   role: string
@@ -259,9 +260,15 @@ CRITICAL TOOL CONTINUATION RULES:
       tagName: 'reasoning',
     })
 
-    const resultStream = await rateLimitedAI.google.streamText(
+    const botModel = getModelConfig('whatsappBot')
+    const providerClient = rateLimitedAI[botModel.provider as keyof typeof rateLimitedAI]
+    if (!providerClient) {
+      throw new Error(`Unsupported model provider for bot: ${botModel.provider}`)
+    }
+
+    const resultStream = await providerClient.streamText(
       {
-        model: await rateLimitedAI.google.model('gemini-flash-latest'),
+        model: await providerClient.model(botModel.modelId),
         messages: finalMessagesForAI,
         tools,
         temperature: 0.7,
@@ -278,7 +285,7 @@ CRITICAL TOOL CONTINUATION RULES:
               await saveTokenUsage({
                 userId: user.id,
                 chatId: null, // No specific chat for bot users
-                model: 'gemini-flash-latest',
+                model: botModel.modelId,
                 stepIndex: typeof stepIndex === 'number' ? stepIndex : null,
                 promptTokens: usage.promptTokens || 0,
                 completionTokens: usage.completionTokens || 0,

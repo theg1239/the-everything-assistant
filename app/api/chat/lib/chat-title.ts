@@ -1,5 +1,6 @@
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { extractTitleFromContent } from '@/lib/utils'
+import { getModelConfig } from '@/lib/model-registry'
 
 export async function generateChatTitle(userMessage: string, userId?: string): Promise<string> {
   try {
@@ -12,9 +13,15 @@ export async function generateChatTitle(userMessage: string, userId?: string): P
       (_, reject) => setTimeout(() => reject(new Error('Title generation timeout')), 5000)
     )
 
-    const modelPromise = rateLimitedAI.groq.generateText(
+    const chatTitleModel = getModelConfig('chatTitle')
+    const providerClient = rateLimitedAI[chatTitleModel.provider as keyof typeof rateLimitedAI]
+    if (!providerClient) {
+      throw new Error(`Unsupported model provider for chat title: ${chatTitleModel.provider}`)
+    }
+
+    const modelPromise = providerClient.generateText(
       {
-        model: await rateLimitedAI.groq.model('meta-llama/llama-4-scout-17b-16e-instruct'),
+        model: await providerClient.model(chatTitleModel.modelId),
         prompt: `Generate a concise, descriptive title for a chat conversation based on the user's first message. The title should:
 - Be 3-8 words maximum
 - Capture the main topic or intent
@@ -50,4 +57,3 @@ Respond with ONLY the title, nothing else.`,
     return extractTitleFromContent(userMessage)
   }
 }
-

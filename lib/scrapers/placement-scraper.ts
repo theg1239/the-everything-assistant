@@ -3,6 +3,7 @@ import path from 'path'
 import Papa from 'papaparse'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import * as z from 'zod'
+import { getModelConfig } from '@/lib/model-registry'
 
 interface Company {
   name: string
@@ -234,9 +235,15 @@ export async function parsePlacementData(rawData: any, userContext: string = '',
       summary: z.string(),
     })
 
-    const result = await rateLimitedAI.google.generateObject(
+    const placementModel = getModelConfig('placementFormatter')
+    const providerClient = rateLimitedAI[placementModel.provider as keyof typeof rateLimitedAI]
+    if (!providerClient) {
+      throw new Error(`Unsupported model provider for placements: ${placementModel.provider}`)
+    }
+
+    const result = await providerClient.generateObject(
       {
-        model: await rateLimitedAI.google.model('gemini-flash-latest'),
+        model: await providerClient.model(placementModel.modelId),
         schema: placementParseSchema,
         prompt: `You are a friendly and insightful university career advisor. Your goal is to summarize placement data in a clear, engaging, and easy-to-understand way for students.
 

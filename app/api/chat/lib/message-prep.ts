@@ -1,4 +1,5 @@
 import type { LegacyMessage } from '@/lib/ai-message-conversion'
+import { getModelConfig, type ModelConfig } from '@/lib/model-registry'
 
 import { getToolInputPayload, getToolOutputPayload } from './tool-helpers'
 
@@ -128,14 +129,15 @@ export function enhanceMessagesWithToolContext(
 
 type PreparedMessagesResult = {
   finalMessages: any[]
-  modelName: string
+  model: ModelConfig
   attachmentAware: boolean
 }
 
 export async function prepareFinalMessages(
   enhancedMessages: any[],
   combinedSystemPrompt: string,
-  prefersWebSearch: boolean
+  prefersWebSearch: boolean,
+  includeSystemPrompt: boolean = true
 ): Promise<PreparedMessagesResult> {
   const attachmentAware = enhancedMessages.some(
     (m: any) =>
@@ -145,13 +147,14 @@ export async function prepareFinalMessages(
       )
   )
 
-  let modelName = 'gemini-flash-latest'
+  let model = getModelConfig('chat')
   const hasPdf =
     attachmentAware &&
     enhancedMessages.some((m: any) => m.attachments?.some((a: any) => a?.contentType === 'application/pdf'))
-  if (hasPdf) modelName = 'gemini-flash-latest'
+  if (hasPdf) model = getModelConfig('chatAttachment')
 
-  const finalMessages: any[] = prefersWebSearch ? [] : [{ role: 'system', content: combinedSystemPrompt }]
+  const finalMessages: any[] =
+    prefersWebSearch || !includeSystemPrompt ? [] : [{ role: 'system', content: combinedSystemPrompt }]
 
   if (!attachmentAware) {
     for (const m of enhancedMessages) {
@@ -215,6 +218,5 @@ export async function prepareFinalMessages(
     return Boolean(msg.content)
   })
 
-  return { finalMessages: filtered, modelName, attachmentAware }
+  return { finalMessages: filtered, model, attachmentAware }
 }
-

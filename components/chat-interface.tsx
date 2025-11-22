@@ -512,7 +512,7 @@ function PureChatInterfaceComponent({
           new CustomEvent('newChatCreated', {
             detail: {
               id: metadataChatId,
-              title: extractTitleFromContent(messages[0]?.content || 'New Chat'),
+              title: (metadata as any).chatTitle || extractTitleFromContent(messages[0]?.content || 'New Chat'),
               path: targetPath,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
@@ -537,31 +537,50 @@ function PureChatInterfaceComponent({
       }
       if ((currentChatId || metadata.chatId) && isFirstMessageInNewChat) {
         setIsFirstMessageInNewChat(false)
-        const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
-          try {
-            const targetChatId = currentChatId || metadata.chatId
-            if (!targetChatId) return
-            const response = await fetch(`/api/chats/${targetChatId}`)
-            if (!response.ok) {
-              throw new Error('Failed to load chat metadata')
-            }
-            const chatData = await readJson<ChatSummaryResponse>(response)
-            if (chatData.title && chatData.title !== 'New Chat') {
-              window.dispatchEvent(
-                new CustomEvent('chatTitleUpdated', {
-                  detail: { chatId: targetChatId, title: chatData.title },
-                })
-              )
-            } else if (attempt < maxAttempts) {
-              setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
-            }
-          } catch (error) {
-            if (attempt < maxAttempts) {
-              setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
+        const targetChatId = currentChatId || metadata.chatId
+        if (targetChatId) {
+          const newTitle = metadata.chatTitle || 'New Chat'
+          window.dispatchEvent(
+            new CustomEvent('chatTitleUpdated', {
+              detail: { chatId: targetChatId, title: newTitle },
+            })
+          )
+          const fetchAndDispatchTitle = async () => {
+            try {
+              const res = await fetch(`/api/chats/${targetChatId}/title`, { cache: 'no-store' })
+              if (res.ok) {
+                const data = await readJson<{ id: string; title: string }>(res)
+                if (data?.title) {
+                  window.dispatchEvent(
+                    new CustomEvent('chatTitleUpdated', {
+                      detail: { chatId: targetChatId, title: data.title },
+                    })
+                  )
+                }
+              }
+            } catch {}
+          }
+          fetchAndDispatchTitle()
+          const checkTitleUpdate = async (attempt = 1, maxAttempts = 3) => {
+            try {
+              const response = await fetch(`/api/chats/${targetChatId}`)
+              if (!response.ok) throw new Error('Failed to load chat metadata')
+              const chatData = await readJson<ChatSummaryResponse>(response)
+              if (chatData.title && chatData.title !== 'New Chat') {
+                window.dispatchEvent(
+                  new CustomEvent('chatTitleUpdated', {
+                    detail: { chatId: targetChatId, title: chatData.title },
+                  })
+                )
+                return
+              }
+              if (attempt < maxAttempts) setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
+            } catch (error) {
+              if (attempt < maxAttempts) setTimeout(() => checkTitleUpdate(attempt + 1, maxAttempts), 2000)
             }
           }
+          setTimeout(() => checkTitleUpdate(), 1500)
         }
-        setTimeout(() => checkTitleUpdate(), 3000)
       }
     },
     onError: err => {

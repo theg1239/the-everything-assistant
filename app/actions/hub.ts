@@ -14,6 +14,7 @@ import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { saveTokenUsage } from '@/lib/db'
 import { listVTOPSnapshots, upsertVTOPSnapshot } from '@/lib/vtop-snapshots'
 import { toJsonValue } from '@/lib/json'
+import { getModelConfig } from '@/lib/model-registry'
 import type {
   HubVTOPCommand,
   PersonalHubState,
@@ -37,8 +38,6 @@ const HUB_CORE_COMMANDS: HubVTOPCommand[] = [
 ]
 
 const VTOP_PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001'
-const MODEL_NAME = 'gemini-flash-latest'
-
 async function requireUser() {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
@@ -107,6 +106,7 @@ async function formatAndPersistVTOPResult(
 ): Promise<VTOPFormattedResult> {
   let object: z.infer<typeof vtopResultSchema> | null = parseHubCommandResult(command, raw)
   let usage: any = null
+  let modelConfig: ReturnType<typeof getModelConfig> | null = null
 
   if (!object) {
     const prompt = [
@@ -117,9 +117,15 @@ async function formatAndPersistVTOPResult(
       JSON.stringify(raw || {}, null, 2),
     ].join('\n')
 
-    const response = await rateLimitedAI.google.generateObject(
+    modelConfig = getModelConfig('hubVtop')
+    const providerClient = rateLimitedAI[modelConfig.provider as keyof typeof rateLimitedAI]
+    if (!providerClient) {
+      throw new Error(`Unsupported model provider for hub actions: ${modelConfig.provider}`)
+    }
+
+    const response = await providerClient.generateObject(
       {
-        model: await rateLimitedAI.google.model(MODEL_NAME),
+        model: await providerClient.model(modelConfig.modelId),
         schema: vtopResultSchema,
         prompt,
       },
@@ -137,10 +143,11 @@ async function formatAndPersistVTOPResult(
   await upsertVTOPSnapshot(userId, command, object)
 
   if (usage) {
+    const modelIdForUsage = modelConfig?.modelId ?? getModelConfig('hubVtop').modelId
     await saveTokenUsage({
       userId,
       chatId: null,
-      model: MODEL_NAME,
+      model: modelIdForUsage,
       stepIndex: null,
       promptTokens: usage.promptTokens || 0,
       completionTokens: usage.completionTokens || 0,

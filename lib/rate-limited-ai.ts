@@ -3,8 +3,10 @@ import { googleTools } from '@ai-sdk/google/internal'
 import { createGroq } from '@ai-sdk/groq' // Groq provider
 import { createCerebras } from '@ai-sdk/cerebras' // Cerebras provider
 import { createOpenRouter } from '@openrouter/ai-sdk-provider' // OpenRouter provider
+import { createOpenAI } from '@ai-sdk/openai' // OpenAI provider
 import { ApiKeyManager, ApiKeyConfig, DEFAULT_API_KEY_CONFIG } from './api-key-manager'
 import { UserRateLimiter, UserRateLimitConfig, loadUserRateLimitConfig } from './user-rate-limiter'
+import { modelIds } from './model-registry'
 import {
   streamText,
   generateText,
@@ -16,7 +18,7 @@ import {
 } from 'ai'
 import type { EmbeddingModel } from 'ai'
 
-type Provider = 'google' | 'groq' | 'cerebras' | 'openrouter'
+type Provider = 'google' | 'groq' | 'cerebras' | 'openrouter' | 'openai'
 
 type GoogleProvider = ReturnType<typeof createGoogleGenerativeAI>
 type GoogleToolset = GoogleProvider['tools']
@@ -142,6 +144,26 @@ export class RateLimitedAI {
         }
         break
       }
+      case 'openai': {
+        if (process.env.OPENAI_API_KEY) {
+          keys.push(process.env.OPENAI_API_KEY)
+        }
+        for (let i = 2; i <= 10; i++) {
+          const k = process.env[`OPENAI_API_KEY_${i}`]
+          if (k) keys.push(k)
+        }
+        if (keys.length === 0 && process.env.OPENAI_API_KEYS) {
+          keys.push(
+            ...process.env.OPENAI_API_KEYS.split(',')
+              .map(x => x.trim())
+              .filter(Boolean)
+          )
+        }
+        if (keys.length === 0) {
+          throw new Error('No OpenAI API keys found. Please set OPENAI_API_KEY or OPENAI_API_KEYS.')
+        }
+        break
+      }
       default: {
         throw new Error(`Unsupported provider: ${this.provider}`)
       }
@@ -161,6 +183,9 @@ export class RateLimitedAI {
     if (this.provider === 'openrouter') {
       return createOpenRouter({ apiKey })
     }
+    if (this.provider === 'openai') {
+      return createOpenAI({ apiKey })
+    }
     return createCerebras({ apiKey })
   }
 
@@ -178,7 +203,7 @@ export class RateLimitedAI {
     return fn(provider)
   }
 
-  getEmbeddingModel(modelName: string = 'gemini-embedding-001	'): () => Promise<any> {
+  getEmbeddingModel(modelName: string = modelIds.embedding): () => Promise<any> {
     return async () => {
       const key = await this.apiKeyManager.getCurrentKey()
       const google = createGoogleGenerativeAI({ apiKey: key })
@@ -244,7 +269,7 @@ export class RateLimitedAI {
     return this.apiKeyManager.executeWithRateLimit(async key => {
       const google = createGoogleGenerativeAI({ apiKey: key })
       const modelFn = google.textEmbeddingModel(
-        options.model?.modelId || 'gemini-embedding-001'
+        options.model?.modelId || modelIds.embedding
       ) as unknown as EmbeddingModel<string>
 
       if (Array.isArray(options.values)) {
@@ -332,8 +357,8 @@ export async function getEmbeddingModel(provider: Provider, modelName: string) {
 
 export const rateLimitedAI = {
   google: {
-    model: (n = 'gemini-flash-latest') => getModel('google', n),
-    embedding: (n = 'gemini-embedding-001') => getEmbeddingModel('google', n),
+    model: (n = modelIds.chat) => getModel('google', n),
+    embedding: (n = modelIds.embedding) => getEmbeddingModel('google', n),
     streamText: (o: any, u?: string) => getRateLimitedAI('google').streamText(o, u),
     generateText: (o: any, u?: string) => getRateLimitedAI('google').generateText(o, u),
     generateObject: (o: any, u?: string) => getRateLimitedAI('google').generateObject(o, u),
@@ -358,7 +383,7 @@ export const rateLimitedAI = {
   },
   groq: {
     model: (n = 'gemma2-9b-it') => getModel('groq', n),
-    embedding: (n = 'gemini-embedding-001') => getEmbeddingModel('google', n),
+    embedding: (n = modelIds.embedding) => getEmbeddingModel('google', n),
     streamText: (o: any, u?: string) => getRateLimitedAI('groq').streamText(o, u),
     generateText: (o: any, u?: string) => getRateLimitedAI('groq').generateText(o, u),
     generateObject: (o: any, u?: string) => getRateLimitedAI('groq').generateObject(o, u),
@@ -376,7 +401,7 @@ export const rateLimitedAI = {
   },
   cerebras: {
     model: (n = 'llama-3.3-70b') => getModel('cerebras', n),
-    embedding: (n = 'gemini-embedding-001') => getEmbeddingModel('google', n),
+    embedding: (n = modelIds.embedding) => getEmbeddingModel('google', n),
     streamText: (o: any, u?: string) => getRateLimitedAI('cerebras').streamText(o, u),
     generateText: (o: any, u?: string) => getRateLimitedAI('cerebras').generateText(o, u),
     generateObject: (o: any, u?: string) => getRateLimitedAI('cerebras').generateObject(o, u),
@@ -394,7 +419,7 @@ export const rateLimitedAI = {
   },
   openrouter: {
     model: (n = 'openrouter/sherlock-think-alpha') => getModel('openrouter', n),
-    embedding: (n = 'gemini-embedding-001') => getEmbeddingModel('google', n),
+    embedding: (n = modelIds.embedding) => getEmbeddingModel('google', n),
     streamText: (o: any, u?: string) => getRateLimitedAI('openrouter').streamText(o, u),
     generateText: (o: any, u?: string) => getRateLimitedAI('openrouter').generateText(o, u),
     generateObject: (o: any, u?: string) => getRateLimitedAI('openrouter').generateObject(o, u),
@@ -409,6 +434,24 @@ export const rateLimitedAI = {
     getUserConfig: () => getRateLimitedAI('openrouter').getUserConfig(),
     updateUserConfig: (c: any) => getRateLimitedAI('openrouter').updateUserConfig(c),
     getFullStatus: (u?: string) => getRateLimitedAI('openrouter').getFullStatus(u),
+  },
+  openai: {
+    model: (n = 'gpt-5-mini') => getModel('openai', n),
+    embedding: (n = modelIds.embedding) => getEmbeddingModel('google', n),
+    streamText: (o: any, u?: string) => getRateLimitedAI('openai').streamText(o, u),
+    generateText: (o: any, u?: string) => getRateLimitedAI('openai').generateText(o, u),
+    generateObject: (o: any, u?: string) => getRateLimitedAI('openai').generateObject(o, u),
+    embed: (o: any, u?: string) => getRateLimitedAI('openai').embed(o, u),
+    getUsageStats: () => getRateLimitedAI('openai').getUsageStats(),
+    rotateKey: () => getRateLimitedAI('openai').rotateKey(),
+    resetRateLimits: () => getRateLimitedAI('openai').resetRateLimits(),
+    updateConfig: (c: Partial<ApiKeyConfig>) => getRateLimitedAI('openai').updateConfig(c),
+    getUserUsageStats: (u: string) => getRateLimitedAI('openai').getUserUsageStats(u),
+    checkUserRateLimit: (u: string) => getRateLimitedAI('openai').checkUserRateLimit(u),
+    resetUserRateLimits: (u: string) => getRateLimitedAI('openai').resetUserRateLimits(u),
+    getUserConfig: () => getRateLimitedAI('openai').getUserConfig(),
+    updateUserConfig: (c: any) => getRateLimitedAI('openai').updateUserConfig(c),
+    getFullStatus: (u?: string) => getRateLimitedAI('openai').getFullStatus(u),
   },
 }
 

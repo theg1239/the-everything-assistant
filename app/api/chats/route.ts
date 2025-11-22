@@ -31,7 +31,8 @@ export async function GET(request: Request) {
         path: chat.path,
         createdAt: chat.created_at,
         updatedAt: chat.updated_at,
-      }))
+      })),
+      { headers: { 'Cache-Control': 'no-store' } }
     )
   } catch (error) {
     console.error('Error fetching chats:', error)

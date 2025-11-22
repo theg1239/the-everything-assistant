@@ -9,6 +9,7 @@ import 'dotenv/config'
 import pg from 'pg'
 import { randomUUID } from 'crypto'
 import { rateLimitedAI } from '../lib/rate-limited-ai'
+import { modelIds } from '../lib/model-registry'
 const { Pool } = pg
 
 async function promptForChunkSize(defaultSize: number): Promise<number> {
@@ -82,7 +83,7 @@ async function main() {
     console.log('Inserting custom chunk:', customText)
     try {
       const { embedding } = await rateLimitedAI.google.embed({
-        model: { modelId: 'gemini-embedding-001' },
+        model: { modelId: modelIds.embedding },
         value: customText,
       })
       const id = randomUUID()
@@ -125,7 +126,7 @@ async function main() {
   for (const [idx, doc] of docs.entries()) {
     try {
       const { embedding } = await rateLimitedAI.google.embed({
-        model: { modelId: 'gemini-embedding-001' },
+        model: { modelId: modelIds.embedding },
         value: doc.pageContent,
       })
 

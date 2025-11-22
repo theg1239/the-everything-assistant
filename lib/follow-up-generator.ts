@@ -2,6 +2,7 @@ import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getCurrentVITContext } from '@/lib/data/context-integration'
+import { getModelConfig } from '@/lib/model-registry'
 
 export async function generateFollowUpSuggestions(
   assistantMessage: string,
@@ -19,7 +20,7 @@ export async function generateFollowUpSuggestions(
 
     const currentVITInfo = getCurrentVITContext()
 
-    const prompt = `You are a VIT assistant that helps students with various queries. Based on the conversation context and your available capabilities, generate 3 relevant follow-up questions that a VIT student might realistically ask next.
+    const prompt = `You are a VIT assistant that suggests clickable follow-up buttons to the student. These will appear directly to the user; each line must be phrased as a user query they would tap, not as instructions to them. Based on the conversation context and your available capabilities, generate 3 relevant follow-up questions that a VIT student might realistically ask next.
 
 CONVERSATION CONTEXT:
 ${contextPrompt}
@@ -82,12 +83,19 @@ Generate exactly 3 follow-up questions that:
 4. Are concise (under 12 words each)
 5. Cover different aspects of VIT student life
 6. Use natural, conversational language (lowercase)
+7. Read as the user speaking/asking; no instructions or meta text
 
 Output exactly 3 questions, one per line, without numbering or bullet points.`
 
-    const result = await rateLimitedAI.google.generateText(
+    const followUpModel = getModelConfig('followUps')
+    const providerClient = rateLimitedAI[followUpModel.provider as keyof typeof rateLimitedAI]
+    if (!providerClient) {
+      throw new Error(`Unsupported model provider for follow ups: ${followUpModel.provider}`)
+    }
+
+    const result = await providerClient.generateText(
       {
-        model: await rateLimitedAI.google.model('gemini-flash-lite-latest'),
+        model: await providerClient.model(followUpModel.modelId),
         prompt,
         maxTokens: 150,
         temperature: 0.7,

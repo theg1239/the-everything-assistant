@@ -57,6 +57,7 @@ export async function POST(req: Request) {
         : generateId()
 
     let chat = normalizedChatId ? await getChat(normalizedChatId, session.user.id) : null
+    const isExistingChat = !!chat
     if (!chat) {
       const initialContent = getMessageText(messages[0])
       const tempTitle = extractTitleFromContent(initialContent || 'New Chat')
@@ -65,18 +66,16 @@ export async function POST(req: Request) {
 
       const userMessage = initialContent
       if (userMessage.trim()) {
-        setTimeout(() => {
-          generateChatTitle(userMessage, session.user.id)
-            .then(async properTitle => {
-              if (properTitle !== tempTitle) {
-                await updateChat(chat!.id, properTitle)
-                console.log('Chat title updated successfully:', properTitle)
-              }
-            })
-            .catch(error => {
-              console.error('Failed to update chat title:', error)
-            })
-        }, 2000)
+        try {
+          const properTitle = await generateChatTitle(userMessage, session.user.id)
+          if (properTitle !== tempTitle) {
+            await updateChat(chat!.id, properTitle)
+            chat.title = properTitle
+            console.debug('Chat title updated successfully')
+          }
+        } catch (error) {
+          console.error('Failed to update chat title:', error)
+        }
       }
     }
 
@@ -167,26 +166,32 @@ export async function POST(req: Request) {
             safeInvocations,
             responseId
           )
-          console.log('Direct tool call message saved with tool invocation')
+            console.debug('Direct tool call message saved with tool invocation')
         } catch (error) {
           console.error('Failed to save direct tool call message:', error)
         }
 
-        return createUIMessageStreamResponse({
-          headers: {
-            'X-Chat-Id': chat.id,
-            'X-Chat-Path': chat.path,
-          },
-          stream,
-        })
-      }
+      return createUIMessageStreamResponse({
+        headers: {
+          'X-Chat-Id': chat.id,
+          'X-Chat-Path': chat.path,
+          'X-Chat-Title': chat.title,
+        },
+        stream,
+      })
+    }
     }
 
-    const { finalMessages, modelName, attachmentAware } = await prepareFinalMessages(
+    const { finalMessages, model, attachmentAware } = await prepareFinalMessages(
       enhancedMessages,
       combinedSystemPrompt,
-      prefersWebSearch
+      prefersWebSearch,
+      !isExistingChat
     )
+    const promptCacheKey =
+      model.provider === 'openai'
+        ? `pc:v1:${chat.id.slice(0, 40)}`
+        : undefined
 
     const hasConversationContent = finalMessages.some(msg => msg.role !== 'system')
 
@@ -210,6 +215,7 @@ export async function POST(req: Request) {
           'Content-Type': 'text/plain; charset=utf-8',
           'X-Chat-Id': chat.id,
           'X-Chat-Path': `/chat/${chat.id}`,
+          'X-Chat-Title': chat.title,
         },
       })
     }
@@ -220,21 +226,45 @@ export async function POST(req: Request) {
       tagName: 'reasoning',
     })
 
-    const resultStream = await rateLimitedAI.google.streamText(
+    const providerClient = rateLimitedAI[model.provider as keyof typeof rateLimitedAI]
+    if (!providerClient) {
+      throw new Error(`Unsupported model provider: ${model.provider}`)
+    }
+
+    const resolvedModel = await providerClient.model(model.modelId)
+
+    const providerOptions =
+      model.provider === 'google'
+        ? {
+            google: {
+              thinkingConfig: {
+                thinkingBudget: 4096,
+                includeThoughts: true,
+              },
+            },
+          }
+        : model.provider === 'openai'
+          ? {
+              openai: {
+                parallelToolCalls: true,
+                store: false,
+                maxToolCalls: 4,
+                promptCacheKey,
+                ...(model.modelId.startsWith('gpt-5.1')
+                  ? { promptCacheRetention: '24h' }
+                  : {}),
+              },
+            }
+          : undefined
+
+    const resultStream = await providerClient.streamText(
       {
-        model: await rateLimitedAI.google.model(modelName),
+        model: resolvedModel,
         messages: finalMessages,
         tools,
         temperature: 1.0,
         maxTokens: 10000,
-        providerOptions: {
-          google: {
-            thinkingConfig: {
-              thinkingBudget: 4096,
-              includeThoughts: true,
-            },
-          },
-        },
+        ...(providerOptions ? { providerOptions } : {}),
         experimental_transform: smoothStream({ chunking: 'word' }),
         middleware: [reasoningMiddleware],
         stopWhen: stepCountIs(10),
@@ -249,7 +279,7 @@ export async function POST(req: Request) {
               [],
               `error-${Date.now()}`
             )
-            console.log('Streaming error saved to database')
+            console.debug('Streaming error saved to database')
           } catch (saveError) {
             console.error('Failed to save streaming error:', saveError)
           }
@@ -263,31 +293,13 @@ export async function POST(req: Request) {
           stepIndex,
           reasoning,
         }: any) => {
-          console.log(`Step finished:`, {
-            model: modelName,
-            hasText: !!text,
-            toolCallsCount: toolCalls?.length || 0,
-            toolResultsCount: toolResults?.length || 0,
-            finishReason,
-            stepIndex,
-            usage,
-          })
-
-          if (reasoning) {
-            try {
-              console.log('Extracted reasoning (step):', reasoning)
-            } catch (e) {
-              console.warn('Failed to log extracted reasoning (step):', e)
-            }
-          }
-
           try {
             if (usage && typeof usage === 'object') {
               const { saveTokenUsage } = await import('@/lib/db')
               await saveTokenUsage({
                 userId: session.user.id,
                 chatId: chat.id,
-                model: modelName,
+                model: model.modelId,
                 stepIndex: typeof stepIndex === 'number' ? stepIndex : null,
                 promptTokens: usage.promptTokens || 0,
                 completionTokens: usage.completionTokens || 0,
@@ -305,70 +317,8 @@ export async function POST(req: Request) {
 
           const knowledgeBaseCalls =
             toolCalls?.filter((tc: any) => tc.toolName === 'knowledgeBase') || []
-          if (knowledgeBaseCalls.length > 0) {
-            console.log('Knowledge base tool called, model should continue automatically...')
-          }
         },
         onFinish: async (result: any, { reasoning }: any = {}) => {
-          console.log('Stream finished, processing final result...')
-
-          try {
-            console.log('Full model response:', inspect(result, { depth: null }))
-          } catch (e) {
-            console.warn('Failed to log full model response:', e)
-          }
-
-          try {
-            const reasoningParts: string[] = []
-
-            if (reasoning) {
-              if (typeof reasoning === 'string') reasoningParts.push(reasoning)
-              else if (Array.isArray(reasoning)) reasoningParts.push(...reasoning)
-              else if (typeof reasoning === 'object') reasoningParts.push(JSON.stringify(reasoning))
-            }
-
-            const resp = (result && (result.response || result)) || null
-            if (resp && Array.isArray(resp.messages)) {
-              for (const msg of resp.messages) {
-                const content = msg.content
-                if (Array.isArray(content)) {
-                  for (const part of content) {
-                    if (part && (part.type === 'reasoning' || part.type === 'thought')) {
-                      if (part.text) reasoningParts.push(part.text)
-                      else reasoningParts.push(JSON.stringify(part))
-                    }
-                  }
-                }
-              }
-            }
-
-            if ((result as any)?.candidates) {
-              const candidates = (result as any).candidates
-              for (const cand of candidates) {
-                if (cand?.content?.parts && Array.isArray(cand.content.parts)) {
-                  for (const p of cand.content.parts) {
-                    if (p && (p.thought || p.type === 'reasoning' || p.type === 'thought')) {
-                      if (p.text) reasoningParts.push(p.text)
-                      else if (p.content) reasoningParts.push(p.content)
-                      else reasoningParts.push(JSON.stringify(p))
-                    }
-                  }
-                }
-              }
-            }
-
-            if (reasoningParts.length > 0) {
-              console.log('Extracted reasoning parts (final):')
-              for (const [i, r] of reasoningParts.entries()) {
-                console.log(`[reasoning #${i + 1}]\n${r}`)
-              }
-            } else {
-              console.log('No reasoning parts found in final result')
-            }
-          } catch (e) {
-            console.warn('Failed to extract/log reasoning parts (final):', e)
-          }
-
           const allToolResults: any[] = []
 
           const finalToolResults = (result as any).toolResults ?? result.toolCalls ?? []
@@ -396,10 +346,6 @@ export async function POST(req: Request) {
               uniqueToolResults[existingIndex] = directToolCallResult
             }
           }
-
-          console.log(
-            `Collected ${uniqueToolResults.length} unique tool results from all steps${directToolCallResult ? ' (including direct tool call)' : ''}`
-          )
 
           for (const tr of uniqueToolResults) {
             const toolOutput = getToolOutputPayload(tr)
@@ -458,12 +404,12 @@ export async function POST(req: Request) {
               safeInvocations,
               result.response.id
             )
-            console.log(`Final message saved with ${safeInvocations.length} tool invocations`)
+            console.debug('Final message saved with tool invocations')
           } catch (error) {
             console.error('Failed to save final message:', error)
             try {
               await saveMessage(chat.id, 'assistant', result.text, [], result.response.id)
-              console.log('Final message saved without tool invocations (fallback)')
+              console.debug('Final message saved without tool invocations (fallback)')
             } catch (fallbackError) {
               console.error(
                 'Failed to save final message even without tool invocations:',
@@ -479,7 +425,7 @@ export async function POST(req: Request) {
               await saveTokenUsage({
                 userId: session.user.id,
                 chatId: chat.id,
-                model: modelName,
+                model: model.modelId,
                 stepIndex: null,
                 promptTokens: finalUsage.promptTokens || 0,
                 completionTokens: finalUsage.completionTokens || 0,
@@ -503,12 +449,14 @@ export async function POST(req: Request) {
       headers: {
         'X-Chat-Id': chat.id,
         'X-Chat-Path': `/chat/${chat.id}`,
+        'X-Chat-Title': chat.title,
       },
       messageMetadata: ({ part }) => {
         if (part.type === 'finish') {
           return {
             chatId: chat.id,
             chatPath: `/chat/${chat.id}`,
+            chatTitle: chat.title,
           }
         }
       },

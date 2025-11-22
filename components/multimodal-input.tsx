@@ -15,6 +15,8 @@ interface MultimodalInputProps {
   setInput: (value: string) => void
   handleSubmit: (e: React.FormEvent<HTMLFormElement>) => void
   isLoading: boolean
+  lastPrompt?: string
+  promptHistory?: string[]
   placeholder?: string
   className?: string
   stop?: () => void
@@ -30,6 +32,8 @@ const PureMultimodalInput = ({
   setInput,
   handleSubmit,
   isLoading,
+  lastPrompt,
+  promptHistory = [],
   placeholder,
   className,
   stop,
@@ -42,6 +46,7 @@ const PureMultimodalInput = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [isFocused, setIsFocused] = useState(false)
   const [introPlayed, setIntroPlayed] = useState(false)
+  const [historyIndex, setHistoryIndex] = useState<number>(-1)
   const borderRef = useRef<HTMLDivElement | null>(null)
   const [borderMetrics, setBorderMetrics] = useState<{
     width: number
@@ -143,6 +148,69 @@ const PureMultimodalInput = ({
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if ((e as any).isComposing || (e as any).keyCode === 229) return
+
+      if (
+        e.key === 'ArrowUp' &&
+        !e.shiftKey &&
+        !e.altKey &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        promptHistory.length > 0
+      ) {
+        e.preventDefault()
+        const baseline = historyIndex < 0 && input.trim() ? promptHistory.length : historyIndex
+        const nextIndex = baseline < 0 ? promptHistory.length - 1 : Math.max(0, baseline - 1)
+        const nextValue = promptHistory[nextIndex] ?? lastPrompt ?? ''
+        setHistoryIndex(nextIndex)
+        setInput(nextValue)
+        requestAnimationFrame(() => {
+          adjustHeight()
+          const el = textareaRef.current
+          if (el) {
+            const len = nextValue.length
+            el.selectionStart = len
+            el.selectionEnd = len
+            el.focus()
+          }
+        })
+        return
+      }
+
+      if (
+        e.key === 'ArrowDown' &&
+        !e.shiftKey &&
+        !e.altKey &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        promptHistory.length > 0
+      ) {
+        e.preventDefault()
+        const nextIndex = historyIndex < 0 ? -1 : historyIndex + 1
+        if (nextIndex >= promptHistory.length) {
+          setHistoryIndex(-1)
+          setInput('')
+          requestAnimationFrame(() => {
+            adjustHeight()
+            textareaRef.current?.focus()
+          })
+          return
+        }
+        const nextValue = promptHistory[nextIndex] ?? ''
+        setHistoryIndex(nextIndex)
+        setInput(nextValue)
+        requestAnimationFrame(() => {
+          adjustHeight()
+          const el = textareaRef.current
+          if (el) {
+            const len = nextValue.length
+            el.selectionStart = len
+            el.selectionEnd = len
+            el.focus()
+          }
+        })
+        return
+      }
+
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
         if (input.trim() && !isLoading) {
@@ -154,7 +222,7 @@ const PureMultimodalInput = ({
         }
       }
     },
-    [input, isLoading]
+    [input, isLoading, lastPrompt, promptHistory, historyIndex, adjustHeight, setInput]
   )
 
   const onSubmit = useCallback(

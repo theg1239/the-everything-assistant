@@ -215,6 +215,7 @@ function PureChatInterfaceComponent({
   const [canInstall, setCanInstall] = useState(false)
   const [isInstalled, setIsInstalled] = useState(false)
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
+  const [promptHistory, setPromptHistory] = useState<string[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -841,6 +842,10 @@ function PureChatInterfaceComponent({
       const trimmed = input.trim()
       if (!trimmed) return
 
+      setPromptHistory(prev =>
+        prev.length && prev[prev.length - 1] === trimmed ? prev : [...prev, trimmed]
+      )
+
       setShowFollowUpSuggestions(false)
       setLastUserMessage(trimmed)
 
@@ -877,6 +882,9 @@ function PureChatInterfaceComponent({
       setInput('')
       setShowFollowUpSuggestions(false)
       setLastUserMessage(question)
+      setPromptHistory(prev =>
+        prev.length && prev[prev.length - 1] === question ? prev : [...prev, question]
+      )
 
       if (!showFullChat) {
         setShowFullChat(true)
@@ -1438,6 +1446,8 @@ function PureChatInterfaceComponent({
                   setInput={setInput}
                   handleSubmit={handleFormSubmit}
                   isLoading={isLoading}
+                  lastPrompt={lastUserMessage}
+                  promptHistory={promptHistory}
                   onToolSelect={handleToolSelection}
                   selectedTool={selectedTool || 'general'}
                   placeholder="ask anything..."
@@ -1782,6 +1792,8 @@ function PureChatInterfaceComponent({
                   setInput={setInput}
                   handleSubmit={handleFormSubmit}
                   isLoading={isLoading}
+                  lastPrompt={lastUserMessage}
+                  promptHistory={promptHistory}
                   placeholder="ask anything..."
                   stop={stop}
                   onToolSelect={handleToolSelection}

@@ -21,7 +21,7 @@ const redditAskResponseSchema = z.object({
   confidence: z.number().optional(),
   totalResults: z.number().optional(),
   searchResults: z.number().optional(),
-  searchAttempts: z.number().optional(),
+  searchAttempts: z.union([z.number(), z.array(z.number())]).optional(),
   refinedQueries: z.array(z.string()).optional(),
   serviceUsed: z.string().optional(),
   error: z.string().optional(),
@@ -56,13 +56,17 @@ async function searchRedditKnowledge(query: string, limit: number = 10) {
 
     const data = redditAskResponseSchema.parse(await response.json())
     if (data.success) {
+      const attempts = Array.isArray(data.searchAttempts)
+        ? data.searchAttempts.length
+        : data.searchAttempts || 1
+
       return {
         success: true,
         response: data.response,
         sources: data.sources || [],
         confidence: data.confidence || 0,
         totalResults: data.searchResults || 0,
-        searchAttempts: data.searchAttempts || 1,
+        searchAttempts: attempts,
         refinedQueries: data.refinedQueries || [],
         serviceUsed: data.serviceUsed || 'agentic',
       }

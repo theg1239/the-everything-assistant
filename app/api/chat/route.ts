@@ -249,6 +249,7 @@ export async function POST(req: Request) {
                 parallelToolCalls: true,
                 store: false,
                 maxToolCalls: 4,
+                // reasoningSummary: 'detailed',
                 promptCacheKey,
                 ...(model.modelId.startsWith('gpt-5.1')
                   ? { promptCacheRetention: '24h' }

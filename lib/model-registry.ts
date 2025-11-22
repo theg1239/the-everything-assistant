@@ -4,6 +4,7 @@ export type ModelKey =
   | 'chat'
   | 'chatLite'
   | 'chatAttachment'
+  | 'chatAutocomplete'
   | 'embedding'
   | 'knowledgeEmbedding'
   | 'followUps'
@@ -23,6 +24,7 @@ const registry: Record<ModelKey, ModelConfig> = {
   chat: { provider: 'google', modelId: 'gemini-flash-latest' },
   chatLite: { provider: 'google', modelId: 'gemini-flash-lite-latest' },
   chatAttachment: { provider: 'google', modelId: 'gemini-flash-latest' },
+  chatAutocomplete: { provider: 'cerebras', modelId: 'llama-3.1-8b' },
   embedding: { provider: 'google', modelId: 'gemini-embedding-001' },
   knowledgeEmbedding: { provider: 'google', modelId: 'gemini-embedding-001' },
   followUps: { provider: 'groq', modelId: 'meta-llama/llama-4-scout-17b-16e-instruct' },

@@ -621,6 +621,15 @@ function PureChatInterfaceComponent({
 
   const messages = useMemo(() => uiMessagesToLegacyMessages(uiMessages), [uiMessages])
 
+  const recentMessages = useMemo(
+    () =>
+      messages
+        .filter(m => m.role === 'user' || m.role === 'assistant')
+        .slice(-6)
+        .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content ?? '' })),
+    [messages]
+  )
+
   const setMessages = useCallback(
     (next: Message[] | ((prev: Message[]) => Message[])) => {
       setUiMessages(prevUi => {
@@ -1470,6 +1479,7 @@ function PureChatInterfaceComponent({
                   onToolSelect={handleToolSelection}
                   selectedTool={selectedTool || 'general'}
                   placeholder="ask anything..."
+                  recentMessages={recentMessages}
                 />{' '}
               </motion.div>
 
@@ -1817,6 +1827,7 @@ function PureChatInterfaceComponent({
                   stop={stop}
                   onToolSelect={handleToolSelection}
                   selectedTool={selectedTool || 'general'}
+                  recentMessages={recentMessages}
                 />
                 <div className="px-2 sm:px-4 pb-0.5">
                   <p className="text-[10px] sm:text-xs text-muted-foreground text-center leading-tight">

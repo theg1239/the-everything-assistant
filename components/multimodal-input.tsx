@@ -1,7 +1,7 @@
 'use client'
 
 import type React from 'react'
-import { useRef, useEffect, useCallback, memo, useState } from 'react'
+import { useRef, useEffect, useCallback, memo, useState, useTransition } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowUpIcon, StopCircleIcon, PaperclipIcon, MicIcon, ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { ToolsDropdown } from '@/components/tools-dropdown'
+import { getAutocompleteSuggestionAction } from '@/app/actions/autocomplete'
 
 interface MultimodalInputProps {
   input: string
@@ -25,6 +26,7 @@ interface MultimodalInputProps {
   showAttachments?: boolean
   onToolSelect?: (toolId: string) => void
   selectedTool?: string
+  recentMessages?: { role: 'user' | 'assistant'; content: string }[]
 }
 
 const PureMultimodalInput = ({
@@ -42,12 +44,16 @@ const PureMultimodalInput = ({
   showAttachments = true,
   onToolSelect,
   selectedTool,
+  recentMessages = [],
 }: MultimodalInputProps) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [isFocused, setIsFocused] = useState(false)
   const [introPlayed, setIntroPlayed] = useState(false)
   const [historyIndex, setHistoryIndex] = useState<number>(-1)
+  const [ghostSuggestion, setGhostSuggestion] = useState('')
+  const [, startSuggestionTransition] = useTransition()
   const borderRef = useRef<HTMLDivElement | null>(null)
+  const suggestionRequestRef = useRef(0)
   const [borderMetrics, setBorderMetrics] = useState<{
     width: number
     height: number
@@ -90,6 +96,8 @@ const PureMultimodalInput = ({
         return placeholder || 'ask anything...'
     }
   }
+
+  const safeInput = input ?? ''
 
   const adjustHeight = useCallback(() => {
     if (textareaRef.current) {
@@ -139,15 +147,48 @@ const PureMultimodalInput = ({
       const value = e.target.value
       if (maxLength && value.length <= maxLength) {
         setInput(value)
+        setGhostSuggestion('')
         adjustHeight()
       }
     },
     [setInput, adjustHeight, maxLength]
   )
 
+  const acceptSuggestion = useCallback(() => {
+    if (!ghostSuggestion) return
+    const nextValue = `${safeInput}${ghostSuggestion}`
+    setInput(nextValue)
+    setGhostSuggestion('')
+    requestAnimationFrame(() => {
+      adjustHeight()
+      const el = textareaRef.current
+      if (el) {
+        const len = nextValue.length
+        el.selectionStart = len
+        el.selectionEnd = len
+        el.focus()
+      }
+    })
+  }, [ghostSuggestion, safeInput, setInput, adjustHeight])
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if ((e as any).isComposing || (e as any).keyCode === 229) return
+
+      const caretAtEnd =
+        textareaRef.current &&
+        textareaRef.current.selectionStart === safeInput.length &&
+        textareaRef.current.selectionEnd === safeInput.length
+
+      const isTabAccept = e.key === 'Tab' && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey
+      const isArrowAccept =
+        e.key === 'ArrowRight' && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey
+
+      if (ghostSuggestion && caretAtEnd && (isTabAccept || isArrowAccept)) {
+        e.preventDefault()
+        acceptSuggestion()
+        return
+      }
 
       if (
         e.key === 'ArrowUp' &&
@@ -222,7 +263,18 @@ const PureMultimodalInput = ({
         }
       }
     },
-    [input, isLoading, lastPrompt, promptHistory, historyIndex, adjustHeight, setInput]
+    [
+      input,
+      isLoading,
+      lastPrompt,
+      promptHistory,
+      historyIndex,
+      adjustHeight,
+      setInput,
+      ghostSuggestion,
+      safeInput,
+      acceptSuggestion,
+    ]
   )
 
   const onSubmit = useCallback(
@@ -231,13 +283,12 @@ const PureMultimodalInput = ({
       if (input.trim() && !isLoading) {
         handleSubmit(e)
         setInput('')
+        setGhostSuggestion('')
         resetHeight()
       }
     },
     [input, isLoading, handleSubmit, resetHeight, setInput]
   )
-
-  const safeInput = input ?? ''
   const characterCount = safeInput.length
   const showCharacterCount = Boolean(maxLength) && characterCount > 0
   const isNearLimit = Boolean(maxLength) && maxLength ? characterCount > maxLength * 0.8 : false
@@ -279,6 +330,50 @@ const PureMultimodalInput = ({
       window.removeEventListener('resize', compute)
     }
   }, [])
+
+  useEffect(() => {
+    if (!isFocused || isLoading) {
+      setGhostSuggestion('')
+      return
+    }
+
+    const trimmed = safeInput.trim()
+    if (trimmed.length < 6) {
+      setGhostSuggestion('')
+      return
+    }
+
+    const caretAtEnd =
+      textareaRef.current &&
+      textareaRef.current.selectionStart === safeInput.length &&
+      textareaRef.current.selectionEnd === safeInput.length
+
+    if (!caretAtEnd) return
+
+    const requestId = ++suggestionRequestRef.current
+    const timer = window.setTimeout(() => {
+      startSuggestionTransition(async () => {
+        setGhostSuggestion('')
+        try {
+          const suggestion = await getAutocompleteSuggestionAction({
+            partial: trimmed,
+            recentMessages,
+          })
+          if (suggestionRequestRef.current === requestId) {
+            setGhostSuggestion(suggestion)
+          }
+        } catch (error) {
+          if (suggestionRequestRef.current === requestId) {
+            setGhostSuggestion('')
+          }
+        }
+      })
+    }, 180)
+
+    return () => {
+      clearTimeout(timer)
+    }
+  }, [safeInput, isFocused, isLoading, startSuggestionTransition, recentMessages])
 
   return (
     <motion.div
@@ -352,6 +447,27 @@ const PureMultimodalInput = ({
             </motion.svg>
           )}{' '}
           <div className="relative flex items-end w-full">
+            <div className="relative flex-1">
+              {ghostSuggestion && isFocused && !isLoading && (
+                <div
+                  aria-hidden
+                  className={cn(
+                    'absolute inset-0 px-4 text-sm whitespace-pre-wrap break-words text-muted-foreground/55 [overflow-wrap:anywhere]',
+                    'pb-2 pt-3',
+                    showAttachments ? 'pt-1' : 'pt-3'
+                  )}
+                >
+                  <span className="invisible">{safeInput || ' '}</span>
+                  <button
+                    type="button"
+                    className="pointer-events-auto inline-block px-2 py-1 -mx-1 -my-1 border-0 bg-transparent text-left align-baseline rounded-sm"
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={acceptSuggestion}
+                  >
+                    {ghostSuggestion}
+                  </button>
+                </div>
+              )}
               <Textarea
                 ref={textareaRef}
                 value={safeInput}
@@ -373,6 +489,7 @@ const PureMultimodalInput = ({
                 aria-label="Message input"
                 aria-describedby={showCharacterCount && maxLength ? 'composer-charcount' : undefined}
               />
+            </div>
 
             <div className="flex items-end gap-2 p-2">
 

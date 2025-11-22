@@ -60,7 +60,7 @@ const redditAskResponseSchema = z.object({
   confidence: z.number().optional(),
   totalResults: z.number().optional(),
   searchResults: z.number().optional(),
-  searchAttempts: z.union([z.number(), z.array(z.number())]).optional(),
+  searchAttempts: z.union([z.number(), z.array(z.any())]).optional(),
   refinedQueries: z.array(z.string()).optional(),
   serviceUsed: z.string().optional(),
   error: z.string().optional(),

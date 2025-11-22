@@ -1,10 +1,36 @@
+const safeJsonClone = (value: any) => {
+  const seen = new WeakSet()
+  try {
+    const json = JSON.stringify(
+      value,
+      (_key, val) => {
+        if (typeof val === 'function') return undefined
+        if (typeof val === 'bigint') return Number(val)
+        if (val && typeof val === 'object') {
+          if (seen.has(val)) return undefined
+          const ctor = (val as any)?.constructor?.name
+          if (ctor && ['Response', 'Request', 'ReadableStream', 'Blob', 'FormData'].includes(ctor))
+            return undefined
+          seen.add(val)
+        }
+        return val
+      },
+      2
+    )
+    return JSON.parse(json)
+  } catch (e) {
+    console.warn('sanitizeToolInvocations: safe clone failed, returning empty object', e)
+    return {}
+  }
+}
+
 export function sanitizeToolInvocations(toolInvocations: any[]): any[] {
   if (!Array.isArray(toolInvocations)) {
     return toolInvocations
   }
 
   return toolInvocations.map(tool => {
-    const sanitizedTool = JSON.parse(JSON.stringify(tool))
+    const sanitizedTool = safeJsonClone(tool)
 
     if (tool.toolName === 'queryVTOP' || tool.function?.name === 'queryVTOP') {
       if (sanitizedTool.args) {

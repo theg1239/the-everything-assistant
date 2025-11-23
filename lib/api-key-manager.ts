@@ -357,6 +357,16 @@ export class ApiKeyManager {
     return healthy[randIdx]
   }
 
+  private isServerError(error: any): boolean {
+    const code = error?.statusCode || error?.code || error?.status
+    const message = (error?.message || '').toLowerCase()
+    return (
+      (typeof code === 'number' && code >= 500 && code < 600) ||
+      code === 'INTERNAL' ||
+      message.includes('internal error')
+    )
+  }
+
   async executeWithRateLimit<T>(
     apiCall: (apiKey: string) => Promise<T>,
     options: { retryOnRateLimit?: boolean; maxRetries?: number } = {}
@@ -367,9 +377,19 @@ export class ApiKeyManager {
     let lastErr: any = null
     const tried = new Set<number>()
 
-    while (attempt <= maxRetries && tried.size < this.config.keys.length) {
+    // Try every key at least once; if maxRetries is higher, allow another full round.
+    const maxAttempts = Math.max(this.config.keys.length, maxRetries * this.config.keys.length)
+
+    while (attempt < maxAttempts) {
       const idx = await this.getRandomHealthyKeyIndex(tried)
-      if (idx === null) break
+      if (idx === null) {
+        // All keys exhausted for this round; start a fresh round if attempts remain.
+        if (tried.size >= this.config.keys.length && attempt < maxAttempts) {
+          tried.clear()
+          continue
+        }
+        break
+      }
       tried.add(idx)
       const key = this.config.keys[idx]
       const hash = this.hashKey(key)
@@ -384,10 +404,15 @@ export class ApiKeyManager {
         return await apiCall(key)
       } catch (err: any) {
         lastErr = err
-        await this.recordRateLimitEvent(hash, err)
-        await this.incrementFailure(hash)
+        if (this.isRateLimitError(err)) {
+          await this.recordRateLimitEvent(hash, err)
+          await this.incrementFailure(hash)
+        } else if (!this.isServerError(err)) {
+          // Only count client-side / auth errors towards banning; server 5xx should be retried.
+          await this.incrementFailure(hash)
+        }
         attempt++
-        if (attempt > maxRetries) break
+        if (attempt >= maxAttempts) break
         console.warn(`[ApiKeyManager] Error with key index ${idx}, retrying with another key...`)
         await new Promise(r => setTimeout(r, backoff))
         backoff = Math.min(

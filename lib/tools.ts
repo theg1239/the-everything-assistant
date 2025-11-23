@@ -17,6 +17,7 @@ import {
 import { getCourseData, School } from './ffcs-tool'
 import { createKnowledgeTools } from './knowledge-tools'
 import { createMemoryTool } from './memory/memory-tools'
+import { createFeedbackIssue } from './feedback'
 import { hasVTOPCredentials, getFormattedVTOPCredentials } from './server-vtop-credentials'
 import { getUserMcpToken, refreshUserMcpToken, isExpired as isMcpExpired } from './mcp-tokens'
 // import {
@@ -175,6 +176,7 @@ type McpClientConfig = {
 type VITToolsOptions = {
   channel?: 'web' | 'whatsapp' | 'discord' | 'hub' | string
   mcp?: McpClientConfig
+  sessionUser?: { name?: string | null; email?: string | null; isGuest?: boolean }
 }
 
 async function callVtopViaMcp(options: {
@@ -984,6 +986,7 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
   const toolOptions = options
   const mcpConfig = options.mcp
   const channel = options.channel
+  const sessionUser = options.sessionUser
   const webTools =
     process.env.PARALLEL_API_KEY && process.env.PARALLEL_API_KEY.trim().length > 0
       ? {
@@ -1000,10 +1003,75 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
     year: z.string().optional().describe('academic year like 2023, 2022'),
   })
 
+  const feedbackSubmissionSchema = z.object({
+    title: z
+      .string()
+      .min(3, 'include a short title for the feedback or bug report')
+      .describe('short title for the feedback or bug report'),
+    body: z
+      .string()
+      .min(10, 'include a clear description of the feedback or issue')
+      .describe('detailed feedback, bug reproduction steps, or feature request'),
+  })
+
+  const kbContributionInputSchema = z.object({
+    title: z
+      .string()
+      .optional()
+      .describe('optional concise title for the knowledge-base update'),
+    body: z
+      .string()
+      .min(20, 'include the proposed knowledge chunk or correction')
+      .describe('the new knowledge content, correction, or source link'),
+  })
+
   return {
     ...webTools,
     ...createKnowledgeTools(),
     ...createMemoryTool(userId),
+    submitFeedback: tool({
+      description:
+        'file product feedback, feature requests, or bug reports directly from chat; creates a GitHub issue for maintainers.',
+      inputSchema: feedbackSubmissionSchema,
+      execute: async ({ title, body }) => {
+        const result = await createFeedbackIssue({
+          type: 'feedback',
+          title,
+          body,
+        }, sessionUser)
+
+        if (!result.success) {
+          return { success: false, error: result.error, details: result.details }
+        }
+
+        return {
+          success: true,
+          issueUrl: result.issueUrl,
+          message: 'feedback submitted to GitHub issues',
+        }
+      },
+    }),
+    contributeKnowledge: tool({
+      description:
+        'capture knowledge-base contributions or corrections from the user and open a GitHub issue so maintainers can review.',
+      inputSchema: kbContributionInputSchema,
+      execute: async ({ title, body }) => {
+        const result = await createFeedbackIssue({
+          type: 'contribution',
+          contribution: { title: title || 'knowledge update', body },
+        }, sessionUser)
+
+        if (!result.success) {
+          return { success: false, error: result.error, details: result.details }
+        }
+
+        return {
+          success: true,
+          issueUrl: result.issueUrl,
+          message: 'knowledge contribution logged for review',
+        }
+      },
+    }),
     findPastPapers: tool({
       description:
         "find past examination papers for VIT courses from real repositories. You can use course names or codes. You don' need the user to specify the year, when no year is specified, the tool will search for all available years.",

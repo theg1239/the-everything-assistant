@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { signIn } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -49,9 +50,16 @@ export function LoginForm() {
               </svg>
               continue with google
             </Button>
+            <Button
+              asChild
+              variant="outline"
+              className="w-full border-slate-700/70 bg-transparent text-slate-100 hover:bg-slate-800/70"
+            >
+              <Link href="/?guest=1">try the assistant</Link>
+            </Button>
 
             <div className="text-xs text-slate-300 text-center">
-              by signing in, you agree to our{' '}
+              by continuing, you agree to our{' '}
               <a
                 href="/guidelines/terms"
                 className="underline hover:text-slate-100 transition-colors"

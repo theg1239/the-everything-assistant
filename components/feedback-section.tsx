@@ -152,7 +152,6 @@ export function FeedbackSection() {
         body: JSON.stringify({
           type: 'contribution',
           contribution: { title: 'Knowledge Base Update', body },
-          user: session?.user,
         }),
       })
 
@@ -186,7 +185,6 @@ export function FeedbackSection() {
           type: 'feedback',
           title: feedbackTitle,
           body: feedbackBody,
-          user: session?.user,
         }),
       })
 

@@ -26,18 +26,24 @@ async function getLatestBroadcast() {
   }
 }
 
-export default async function Home() {
-  const session = await getServerSession(authOptions)
+interface HomeProps {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+}
 
-  if (!session?.user) {
+export default async function Home({ searchParams }: HomeProps) {
+  const resolvedSearchParams = searchParams ? await searchParams : {}
+  const session = await getServerSession(authOptions)
+  const guestMode = resolvedSearchParams?.guest === '1'
+  if (!session?.user && !guestMode) {
     redirect('/login')
   }
 
   const initialChatId = generateUUID()
   const fallbackHubState: PersonalHubState = { isLinked: false, snapshots: [], lastSyncedAt: null }
+  const isAuthenticated = Boolean(session?.user)
   const [latestBroadcast, initialHubState] = await Promise.all([
-    getLatestBroadcast(),
-    loadPersonalHubState().catch(() => fallbackHubState),
+    isAuthenticated ? getLatestBroadcast() : Promise.resolve(null),
+    isAuthenticated ? loadPersonalHubState().catch(() => fallbackHubState) : Promise.resolve(fallbackHubState),
   ])
 
   return (
@@ -49,12 +55,16 @@ export default async function Home() {
             key={initialChatId}
             autoResume={false}
             initialHubState={initialHubState}
-            hubActions={{
-              refreshState: loadPersonalHubState,
-              syncCore: syncCoreHubSnapshots,
-              refreshVTOP: refreshVTOPSnapshotAction,
-              runTool: runHubToolAction,
-            }}
+            hubActions={
+              isAuthenticated
+                ? {
+                    refreshState: loadPersonalHubState,
+                    syncCore: syncCoreHubSnapshots,
+                    refreshVTOP: refreshVTOPSnapshotAction,
+                    runTool: runHubToolAction,
+                  }
+                : undefined
+            }
           />
         </div>
       </div>

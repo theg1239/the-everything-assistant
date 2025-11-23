@@ -110,7 +110,9 @@ export async function POST(req: Request) {
     const { context: memoryContext, isEnabled: isMemoryEnabled } =
       await buildMemoryContext(session.user.id)
 
-    const baseTools = createVITTools(session.user.id)
+    const baseTools = createVITTools(session.user.id, {
+      sessionUser: { name: session.user.name, email: session.user.email },
+    })
     const prefersWebSearch = effectivePreferredTool === 'web-search'
     let tools: Record<string, any> = baseTools
 
@@ -129,13 +131,16 @@ export async function POST(req: Request) {
       }
     }
 
-    const combinedSystemPrompt = buildSystemPrompt({
+    const { systemMessages, prefersWebSearch: finalPrefersWebSearch } = buildSystemPrompt({
       prefersWebSearch,
       effectivePreferredTool,
       memoryContext,
       isMemoryEnabled,
+      sessionUser: { name: session.user.name, email: session.user.email },
+      channel: 'web',
     })
 
+    const combinedSystemPrompt = systemMessages.map(m => m.content).join('\n\n')
 
     const enhancedMessages = enhanceMessagesWithToolContext(messages, directToolCallResult)
 
@@ -184,8 +189,8 @@ export async function POST(req: Request) {
 
     const { finalMessages, model, attachmentAware } = await prepareFinalMessages(
       enhancedMessages,
-      combinedSystemPrompt,
-      prefersWebSearch,
+      systemMessages,
+      finalPrefersWebSearch,
       !isExistingChat
     )
     const promptCacheKey =

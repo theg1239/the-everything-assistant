@@ -56,7 +56,9 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    const tools = createVITTools(session.user.id)
+    const tools = createVITTools(session.user.id, {
+      sessionUser: { name: session.user.name, email: session.user.email },
+    })
     const tool = (tools as Record<string, unknown>)[toolName] as
       | { execute: (toolArgs: Record<string, JsonValue>) => Promise<unknown> }
       | undefined

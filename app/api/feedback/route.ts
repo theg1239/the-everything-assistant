@@ -1,70 +1,26 @@
 import { NextResponse } from 'next/server'
-import { Octokit } from '@octokit/rest'
-import { feedbackRequestSchema } from '@/types/api/feedback'
+import { createFeedbackIssue } from '@/lib/feedback'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
 
 export async function POST(req: Request) {
+  const session = await getServerSession(authOptions)
   const rawBody = await req.json().catch(() => null)
   if (!rawBody) {
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 })
   }
-  const parsed = feedbackRequestSchema.safeParse(rawBody)
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'Invalid submission payload.', details: parsed.error.flatten() },
-      { status: 400 }
-    )
-  }
-  const { type, title, body, contribution, user } = parsed.data
 
-  if (
-    !process.env.GITHUB_TOKEN ||
-    !process.env.GITHUB_REPO_OWNER ||
-    !process.env.GITHUB_REPO_NAME
-  ) {
-    console.error('GitHub environment variables are not set.')
-    return NextResponse.json({ error: 'Server configuration error.' }, { status: 500 })
+  const result = await createFeedbackIssue(rawBody, {
+    name: session?.user?.name,
+    email: session?.user?.email,
+  })
+
+  if (result.success) {
+    return NextResponse.json({ success: true, issueUrl: result.issueUrl })
   }
 
-  const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN })
-
-  const repoDetails = {
-    owner: process.env.GITHUB_REPO_OWNER,
-    repo: process.env.GITHUB_REPO_NAME,
-  }
-
-  let issueTitle: string
-  let issueBody: string
-  const submittedBy = user
-    ? `**Submitted by:** ${user.name} (${user.email})`
-    : '**Submitted by:** An anonymous user'
-  let labels: string[]
-
-  if (type === 'contribution' && contribution) {
-    issueTitle = `KB Contribution: ${contribution.title || 'Chunk Updates'}`
-    issueBody = `${submittedBy}\n\n${contribution.body}`
-    labels = ['knowledge-base-contribution']
-  } else if (type === 'feedback') {
-    issueTitle = `Feedback: ${title}`
-    issueBody = `${submittedBy}\n\n${body}`
-    labels = ['feedback']
-  } else {
-    return NextResponse.json({ error: 'Invalid submission type.' }, { status: 400 })
-  }
-
-  try {
-    const response = await octokit.issues.create({
-      ...repoDetails,
-      title: issueTitle,
-      body: issueBody,
-      labels: labels,
-    })
-
-    return NextResponse.json({ success: true, issueUrl: response.data.html_url })
-  } catch (error: any) {
-    console.error('Failed to create GitHub issue:', error)
-    return NextResponse.json(
-      { error: 'Failed to create GitHub issue.', details: error.message },
-      { status: 500 }
-    )
-  }
+  return NextResponse.json(
+    { error: result.error, details: result.details },
+    { status: result.status || 500 }
+  )
 }

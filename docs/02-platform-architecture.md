@@ -119,6 +119,8 @@ Below is a non-exhaustive, categorized table—refer to the path column while de
 |  | `GET/POST /mgmt/rate-limit-status` | `.../(mgmt)/rate-limit-status/route.ts` | Env validation + API key controls. |
 |  | `POST /mgmt/hub/send-briefing` | `.../hub/send-briefing/route.ts` | Trigger daily briefing for any user ID/email. |
 
+Chat now exposes two internal tools (`submitFeedback`, `contributeKnowledge`) that wrap `POST /feedback` to create GitHub issues directly from the conversation.
+
 > ⚠️ `lib/stats.ts:getToolCallStats` is currently empty, so `/api/(mgmt)/stats` returns `toolCallStats: undefined`. Fill it to unlock per-tool charts in the admin UI.
 
 ---

@@ -61,6 +61,13 @@ function buildToolContextFromInvocation(toolCall: any): string {
     return `\n\n[MESS MENU DATA CONTEXT]:\nRetrieved mess menu for ${toolCall.result.data.messType}`
   }
 
+  if (
+    (toolCall.toolName === 'submitFeedback' || toolCall.toolName === 'contributeKnowledge') &&
+    toolCall.result?.issueUrl
+  ) {
+    return `\n\n[PROJECT META]:\nFeedback/KB entry logged at ${toolCall.result.issueUrl}`
+  }
+
   return ''
 }
 
@@ -135,7 +142,7 @@ type PreparedMessagesResult = {
 
 export async function prepareFinalMessages(
   enhancedMessages: any[],
-  combinedSystemPrompt: string,
+  systemMessages: { role: 'system'; content: string }[],
   prefersWebSearch: boolean,
   includeSystemPrompt: boolean = true
 ): Promise<PreparedMessagesResult> {
@@ -153,8 +160,13 @@ export async function prepareFinalMessages(
     enhancedMessages.some((m: any) => m.attachments?.some((a: any) => a?.contentType === 'application/pdf'))
   if (hasPdf) model = getModelConfig('chatAttachment')
 
-  const finalMessages: any[] =
-    prefersWebSearch || !includeSystemPrompt ? [] : [{ role: 'system', content: combinedSystemPrompt }]
+  const finalMessages: any[] = []
+
+  if (!prefersWebSearch && includeSystemPrompt) {
+    finalMessages.push(...systemMessages)
+  } else if (prefersWebSearch && includeSystemPrompt && systemMessages?.length) {
+    finalMessages.push(systemMessages[0])
+  }
 
   if (!attachmentAware) {
     for (const m of enhancedMessages) {

@@ -42,6 +42,10 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     return null
   }
 
+  if (toolName === 'submitFeedback' || toolName === 'contributeKnowledge') {
+    return null
+  }
+
   if (toolName === 'queryVTOP') {
     if (result.data || result.output) {
       const vtopData = result.data || result.output
@@ -657,7 +661,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
 
     return {
       type: 'error' as const,
-      title: 'Search Error',
+      title: 'Error',
       icon: <AlertCircle className="h-5 w-5 text-red-400" />,
       data: {
         error: result.error,

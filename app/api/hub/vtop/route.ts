@@ -34,7 +34,9 @@ export async function POST(req: Request) {
   const extras = parsedBody.data.extras || {}
 
   try {
-    const tools = createVITTools(session.user.id)
+    const tools = createVITTools(session.user.id, {
+      sessionUser: { name: session.user.name, email: session.user.email },
+    })
     const vtop = (tools as any)['queryVTOP']
     if (!vtop || typeof vtop.execute !== 'function') {
       return new Response(JSON.stringify({ error: 'vtop tool not available' }), { status: 500 })

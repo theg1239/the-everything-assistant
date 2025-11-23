@@ -27,6 +27,7 @@ interface MultimodalInputProps {
   onToolSelect?: (toolId: string) => void
   selectedTool?: string
   recentMessages?: { role: 'user' | 'assistant'; content: string }[]
+  disabled?: boolean
 }
 
 const PureMultimodalInput = ({
@@ -45,6 +46,7 @@ const PureMultimodalInput = ({
   onToolSelect,
   selectedTool,
   recentMessages = [],
+  disabled = false,
 }: MultimodalInputProps) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [isFocused, setIsFocused] = useState(false)
@@ -98,6 +100,7 @@ const PureMultimodalInput = ({
   }
 
   const safeInput = input ?? ''
+  const inputDisabled = disabled || isLoading
 
   const adjustHeight = useCallback(() => {
     if (textareaRef.current) {
@@ -144,6 +147,7 @@ const PureMultimodalInput = ({
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      if (inputDisabled) return
       const value = e.target.value
       if (maxLength && value.length <= maxLength) {
         setInput(value)
@@ -151,7 +155,7 @@ const PureMultimodalInput = ({
         adjustHeight()
       }
     },
-    [setInput, adjustHeight, maxLength]
+    [setInput, adjustHeight, maxLength, inputDisabled]
   )
 
   const acceptSuggestion = useCallback(() => {
@@ -173,6 +177,7 @@ const PureMultimodalInput = ({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (inputDisabled) return
       if ((e as any).isComposing || (e as any).keyCode === 229) return
 
       const caretAtEnd =
@@ -274,12 +279,14 @@ const PureMultimodalInput = ({
       ghostSuggestion,
       safeInput,
       acceptSuggestion,
+      inputDisabled,
     ]
   )
 
   const onSubmit = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault()
+      if (inputDisabled) return
       if (input.trim() && !isLoading) {
         handleSubmit(e)
         setInput('')
@@ -287,7 +294,7 @@ const PureMultimodalInput = ({
         resetHeight()
       }
     },
-    [input, isLoading, handleSubmit, resetHeight, setInput]
+    [input, isLoading, handleSubmit, resetHeight, setInput, inputDisabled]
   )
   const characterCount = safeInput.length
   const showCharacterCount = Boolean(maxLength) && characterCount > 0
@@ -332,7 +339,7 @@ const PureMultimodalInput = ({
   }, [])
 
   useEffect(() => {
-    if (!isFocused || isLoading) {
+    if (!isFocused || isLoading || disabled) {
       setGhostSuggestion('')
       return
     }
@@ -373,7 +380,7 @@ const PureMultimodalInput = ({
     return () => {
       clearTimeout(timer)
     }
-  }, [safeInput, isFocused, isLoading, startSuggestionTransition, recentMessages])
+  }, [safeInput, isFocused, isLoading, disabled, startSuggestionTransition, recentMessages])
 
   return (
     <motion.div
@@ -482,7 +489,7 @@ const PureMultimodalInput = ({
                   'pb-2 pt-3',
                   showAttachments ? 'pt-1' : 'pt-3'
                 )}
-                disabled={isLoading}
+                disabled={inputDisabled}
                 autoComplete="off"
                 style={{ height: '60px' }}
                 maxLength={maxLength}
@@ -493,7 +500,9 @@ const PureMultimodalInput = ({
 
             <div className="flex items-end gap-2 p-2">
 
-              <ToolsDropdown onToolSelect={onToolSelect} selectedTool={selectedTool} />
+              <div className={cn(disabled && 'pointer-events-none opacity-50')}>
+                <ToolsDropdown onToolSelect={onToolSelect} selectedTool={selectedTool} />
+              </div>
 
               <AnimatePresence mode="wait">
                 {isLoading ? (
@@ -536,7 +545,7 @@ const PureMultimodalInput = ({
                           <Button
                             type="submit"
                             size="sm"
-                            disabled={!safeInput.trim() || isLoading}
+                            disabled={!safeInput.trim() || inputDisabled}
                             className="size-10 sm:size-9 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 shadow-sm"
                             aria-label="Send message"
                           >

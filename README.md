@@ -18,6 +18,7 @@ The Everything Assistant is an AI-native campus companion that blends chat, work
 - **Tool Handling**: Integrate and utilize external tools or services.
 - **Modular Structure**: Organized codebase with clear separation of concerns.
 - **Microservices**: Some tools are built as microservices.
+- **Chat-native feedback & KB contributions**: Anything you share in chat can be filed as GitHub feedback or knowledge-base updates without leaving the conversation.
 
 ## Technology Stack
 

@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { useSession } from 'next-auth/react'
+import { useSession, signIn } from 'next-auth/react'
 import { useMemory } from '@/contexts/memory-context'
 import { VirtualizedMessages } from '@/components/virtualized-messages'
 import { motion } from 'framer-motion'
@@ -39,6 +39,7 @@ import { useAutoResume } from '@/hooks/use-auto-resume'
 import { useSidebar } from '@/contexts/sidebar-context'
 import { StreamingErrorDisplay } from '@/components/streaming-error-display'
 import { DynamicLoadingIndicator } from '@/components/dynamic-loading-indicator'
+import { GuestLimitDialog } from '@/components/guest-limit-dialog'
 import {
   HUB_BRIEFING_ACTION_EVENT,
   HUB_BRIEFING_ACTION_PARAM,
@@ -164,6 +165,8 @@ interface ChatInterfaceProps {
 }
 
 const DAILY_BRIEFING_STORAGE_KEY = 'ea.hub.daily-briefing-date'
+const GUEST_STORAGE_KEY = 'ea.guest-session'
+const GUEST_MESSAGE_LIMIT = 2
 
 function PureChatInterfaceComponent({
   initialMessages = [],
@@ -216,6 +219,8 @@ function PureChatInterfaceComponent({
   const [isInstalled, setIsInstalled] = useState(false)
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
   const [promptHistory, setPromptHistory] = useState<string[]>([])
+  const [showGuestLimitModal, setShowGuestLimitModal] = useState(false)
+  const [guestTotalUserMessages, setGuestTotalUserMessages] = useState(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -236,17 +241,15 @@ function PureChatInterfaceComponent({
   const persistedChatId = chatId ?? optimisticChatId
   const resolvedChatId = persistedChatId ?? fallbackChatIdRef.current
   const currentChatIdRef = useRef<string | undefined>(chatId)
+  const guestImportingRef = useRef(false)
   const { updateToolResult, clearToolResult } = useVTOP()
   const { rateLimitError, clearRateLimitError, checkForRateLimitError } = useRateLimit()
   const { data: session } = useSession()
+  const isGuest = !session?.user
   const memory = useMemory()
   const { showOnboarding, closeOnboarding } = useOnboarding()
 
   const mainRef = useViewportHeight()
-
-  useEffect(() => {
-    setShowFullChat(initialMessages.length > 0)
-  }, [initialMessages.length, setShowFullChat])
 
   const [vtopDisclaimer, setVtopDisclaimer] = useState<{
     toolCallId: string
@@ -444,7 +447,7 @@ function PureChatInterfaceComponent({
 
   const chatTransport = useMemo(() => {
     return new DefaultChatTransport<AppUIMessage>({
-      api: '/api/chat',
+      api: isGuest ? '/api/guest-chat' : '/api/chat',
       credentials: 'same-origin',
       prepareSendMessagesRequest: ({ messages: outgoingMessages, body, ...rest }) => {
         const messagesWithMetadata =
@@ -469,7 +472,7 @@ function PureChatInterfaceComponent({
         }
       },
     })
-  }, [resolvedChatId, selectedTool])
+  }, [resolvedChatId, selectedTool, isGuest])
 
   const {
     messages: uiMessages = [],
@@ -583,10 +586,22 @@ function PureChatInterfaceComponent({
         }
       }
     },
-    onError: err => {
+  onError: err => {
       const errorMessage = err.message || err.toString()
       const hasResponseBody = typeof err === 'object' && err !== null && 'responseBody' in err
       const responseBody = hasResponseBody ? (err as any).responseBody : ''
+      const bodyString = typeof responseBody === 'string' ? responseBody : ''
+
+      if (isGuest) {
+        const guestLimitError =
+          /guest limit/i.test(errorMessage) ||
+          bodyString.includes('GUEST_LIMIT') ||
+          bodyString.toLowerCase().includes('guest mode includes 2')
+        if (guestLimitError) {
+          setShowGuestLimitModal(true)
+          return
+        }
+      }
 
       const isGeminiStreamingError =
         errorMessage.includes('contents.parts must not be empty') ||
@@ -640,6 +655,124 @@ function PureChatInterfaceComponent({
         .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content ?? '' })),
     [messages]
   )
+
+  const guestMessagesRemaining = Math.max(0, GUEST_MESSAGE_LIMIT - guestTotalUserMessages)
+
+  useEffect(() => {
+    setShowFullChat(initialMessages.length > 0)
+  }, [initialMessages.length, setShowFullChat])
+
+  useEffect(() => {
+    if (!isGuest) return
+    if (typeof window === 'undefined') return
+    const guestParam = searchParams?.get('guest') === '1'
+    if (guestParam) {
+      try {
+        const url = new URL(window.location.href)
+        url.searchParams.delete('guest')
+        window.history.replaceState({}, '', url.toString())
+      } catch (error) {
+        console.error('failed to clean guest param', error)
+      }
+    }
+  }, [isGuest, searchParams])
+
+  useEffect(() => {
+    if (!isGuest) return
+    if (typeof window === 'undefined') return
+    try {
+      const stored = window.localStorage.getItem(GUEST_STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (parsed?.chatId) {
+          setOptimisticChatId(parsed.chatId)
+          fallbackChatIdRef.current = parsed.chatId
+          currentChatIdRef.current = parsed.chatId
+        }
+        if (Array.isArray(parsed?.messages) && parsed.messages.length > 0) {
+          setUiMessages(parsed.messages)
+          setShowFullChat(true)
+        }
+        if (typeof parsed?.userMessageCount === 'number') {
+          setGuestTotalUserMessages(parsed.userMessageCount)
+        }
+        return
+      }
+      const seedId = resolvedChatId || generateUUID()
+      window.localStorage.setItem(
+        GUEST_STORAGE_KEY,
+        JSON.stringify({
+          chatId: seedId,
+          messages: [],
+          userMessageCount: 0,
+          lastUpdated: new Date().toISOString(),
+        })
+      )
+      setOptimisticChatId(seedId)
+      fallbackChatIdRef.current = seedId
+      currentChatIdRef.current = seedId
+    } catch (error) {
+      console.error('Failed to restore guest session', error)
+    }
+  }, [isGuest, resolvedChatId, setUiMessages, setShowFullChat])
+
+  useEffect(() => {
+    if (!isGuest) return
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(
+        GUEST_STORAGE_KEY,
+        JSON.stringify({
+          chatId: resolvedChatId,
+          messages: uiMessages,
+          userMessageCount: guestTotalUserMessages,
+          lastUpdated: new Date().toISOString(),
+        })
+      )
+    } catch (error) {
+      console.error('Failed to persist guest chat', error)
+    }
+  }, [isGuest, uiMessages, resolvedChatId, guestTotalUserMessages])
+
+  useEffect(() => {
+    if (!session?.user?.id) return
+    if (typeof window === 'undefined') return
+    const stored = window.localStorage.getItem(GUEST_STORAGE_KEY)
+    if (!stored || guestImportingRef.current) return
+    try {
+      const parsed = JSON.parse(stored)
+      if (!Array.isArray(parsed?.messages) || parsed.messages.length === 0) {
+        window.localStorage.removeItem(GUEST_STORAGE_KEY)
+        return
+      }
+      guestImportingRef.current = true
+      ;(async () => {
+        try {
+          const res = await fetch('/api/guest/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chatId: parsed.chatId, messages: parsed.messages }),
+          })
+          if (res.ok) {
+            const data = await res.json() as { chatId: string; path?: string }
+            window.localStorage.removeItem(GUEST_STORAGE_KEY)
+            toast.success('moved your guest chat into your account')
+            router.push(data.path || `/chat/${data.chatId}`)
+          } else {
+            console.error('Guest import failed', await res.text())
+          }
+        } catch (error) {
+          console.error('Error importing guest chat', error)
+        } finally {
+          guestImportingRef.current = false
+        }
+      })()
+    } catch (error) {
+      console.error('Failed to parse guest chat storage', error)
+      guestImportingRef.current = false
+      window.localStorage.removeItem(GUEST_STORAGE_KEY)
+    }
+  }, [session?.user?.id, router, isGuest])
 
   const setMessages = useCallback(
     (next: Message[] | ((prev: Message[]) => Message[])) => {
@@ -880,6 +1013,10 @@ function PureChatInterfaceComponent({
       e.preventDefault()
       const trimmed = input.trim()
       if (!trimmed) return
+      if (isGuest && guestTotalUserMessages >= GUEST_MESSAGE_LIMIT) {
+        setShowGuestLimitModal(true)
+        return
+      }
 
       setPromptHistory(prev =>
         prev.length && prev[prev.length - 1] === trimmed ? prev : [...prev, trimmed]
@@ -898,6 +1035,9 @@ function PureChatInterfaceComponent({
 
       try {
         await sendMessage({ text: trimmed })
+        if (isGuest) {
+          setGuestTotalUserMessages(prev => prev + 1)
+        }
         setInput('')
       } catch (err) {
         console.error('Error submitting message:', err)
@@ -913,11 +1053,18 @@ function PureChatInterfaceComponent({
       setErrorMessage,
       setHasUserInitiatedConversation,
       sendMessage,
+      isGuest,
+      guestTotalUserMessages,
+      setShowGuestLimitModal,
     ]
   )
 
   const handleSuggestedQuestion = useCallback(
     async (question: string) => {
+      if (isGuest && guestTotalUserMessages >= GUEST_MESSAGE_LIMIT) {
+        setShowGuestLimitModal(true)
+        return
+      }
       setInput('')
       setShowFollowUpSuggestions(false)
       setLastUserMessage(question)
@@ -935,6 +1082,9 @@ function PureChatInterfaceComponent({
 
       try {
         await sendMessage({ text: question })
+        if (isGuest) {
+          setGuestTotalUserMessages(prev => prev + 1)
+        }
       } catch (err) {
         console.error('Error sending suggested question:', err)
         setErrorMessage('Failed to send message. Please try again.')
@@ -949,6 +1099,9 @@ function PureChatInterfaceComponent({
       setErrorMessage,
       setHasUserInitiatedConversation,
       sendMessage,
+      isGuest,
+      guestTotalUserMessages,
+      setShowGuestLimitModal,
     ]
   )
 
@@ -984,6 +1137,10 @@ function PureChatInterfaceComponent({
   }
 
   const handleLoginClick = () => {
+    if (isGuest) {
+      signIn('google', { callbackUrl: '/' })
+      return
+    }
     const command = 'attendance'
     window.dispatchEvent(
       new CustomEvent('vtopLoginTrigger', {
@@ -1451,14 +1608,16 @@ function PureChatInterfaceComponent({
       >
         <UpsellBanner />
         <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
-        <Hub
-          isOpen={hubOpen}
-          actions={hubActionHandlers}
-          onLink={handleLoginClick}
-          onClose={() => {
-            setHubOpen(false)
-          }}
-        />
+        {!isGuest && (
+          <Hub
+            isOpen={hubOpen}
+            actions={hubActionHandlers}
+            onLink={handleLoginClick}
+            onClose={() => {
+              setHubOpen(false)
+            }}
+          />
+        )}
         <div
           className={cn(
             'flex flex-col h-[100dvh] bg-transparent text-foreground relative overflow-hidden mobile-viewport-fix transition-[padding] duration-200 ease-in-out',
@@ -1469,7 +1628,9 @@ function PureChatInterfaceComponent({
           <div className="relative z-10 flex flex-col h-full">
             <header className="flex-shrink-0 sticky top-0 z-40">
               <div className="flex h-14 items-center px-4 gap-2">
-                {!sidebarOpen && <HamburgerButton onClick={toggleSidebar} className="md:hidden" />}
+                {!sidebarOpen && !isGuest && (
+                  <HamburgerButton onClick={toggleSidebar} className="md:hidden" />
+                )}
               </div>
             </header>
             <div className="flex-1 flex flex-col items-center justify-center px-4 space-y-8 overflow-y-auto overflow-fix pt-6 md:pt-0">
@@ -1489,9 +1650,16 @@ function PureChatInterfaceComponent({
                   promptHistory={promptHistory}
                   onToolSelect={handleToolSelection}
                   selectedTool={selectedTool || 'general'}
-                  placeholder="ask anything..."
+                  placeholder={isGuest ? 'ask anything...' : 'ask anything...'}
+                  disabled={isGuest && showGuestLimitModal}
                   recentMessages={recentMessages}
-                />{' '}
+                />
+                {isGuest && (
+                  <p className="mt-2 text-center text-xs text-amber-200/80">
+                    guest mode · {guestMessagesRemaining} message
+                    {guestMessagesRemaining === 1 ? '' : 's'} left · conversations move over when you sign in
+                  </p>
+                )}{' '}
               </motion.div>
 
               <div className="w-full max-w-5xl flex justify-center -mt-3">
@@ -1502,6 +1670,10 @@ function PureChatInterfaceComponent({
                 >
                   <button
                     onClick={() => {
+                      if (isGuest) {
+                        handleLoginClick()
+                        return
+                      }
                       setHubOpen(true)
                       if (showDailyBriefingLabel && typeof window !== 'undefined') {
                         window.setTimeout(() => {
@@ -1521,7 +1693,13 @@ function PureChatInterfaceComponent({
                   >
                     <span className="hub-gradient-inner">
                       <GraduationCap className="h-4 w-4 mr-2" />
-                      <span>{showDailyBriefingLabel ? 'daily briefing' : 'hub'}</span>
+                      <span>
+                        {isGuest
+                          ? 'sign in'
+                          : showDailyBriefingLabel
+                            ? 'daily briefing'
+                            : 'hub'}
+                      </span>
                     </span>
                   </button>
                 </motion.div>
@@ -1640,14 +1818,16 @@ function PureChatInterfaceComponent({
       >
         <UpsellBanner />
         <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
-        <Hub
-          isOpen={hubOpen}
-          actions={hubActionHandlers}
-          onLink={handleLoginClick}
-          onClose={() => {
-            setHubOpen(false)
-          }}
-        />
+        {!isGuest && (
+          <Hub
+            isOpen={hubOpen}
+            actions={hubActionHandlers}
+            onLink={handleLoginClick}
+            onClose={() => {
+              setHubOpen(false)
+            }}
+          />
+        )}
         <div
           ref={mainRef}
           className={cn(
@@ -1670,10 +1850,14 @@ function PureChatInterfaceComponent({
             <div className="flex h-14 items-center px-4 gap-2">
               {!sidebarOpen && (
                 <>
-                  <HamburgerButton onClick={toggleSidebar} className="md:block" />
+                  {!isGuest && <HamburgerButton onClick={toggleSidebar} className="md:block" />}
                   <Button
                     variant="ghost"
                     onClick={() => {
+                      if (isGuest && guestTotalUserMessages >= GUEST_MESSAGE_LIMIT) {
+                        setShowGuestLimitModal(true)
+                        return
+                      }
                       if (window.location.pathname !== '/') {
                         try {
                           window.history.replaceState({}, '', '/')
@@ -1834,12 +2018,19 @@ function PureChatInterfaceComponent({
                   isLoading={isLoading}
                   lastPrompt={lastUserMessage}
                   promptHistory={promptHistory}
-                  placeholder="ask anything..."
+                  placeholder={isGuest ? 'ask anything...' : 'ask anything...'}
                   stop={stop}
                   onToolSelect={handleToolSelection}
                   selectedTool={selectedTool || 'general'}
                   recentMessages={recentMessages}
+                  disabled={isGuest && showGuestLimitModal}
                 />
+                {isGuest && (
+                  <p className="px-2 sm:px-4 pt-2 text-center text-[11px] text-amber-200/80">
+                    guest mode · {guestMessagesRemaining} message
+                    {guestMessagesRemaining === 1 ? '' : 's'} left · we&apos;ll carry this chat into your account when you sign in
+                  </p>
+                )}
                 <div className="px-2 sm:px-4 pb-0.5">
                   <p className="text-[10px] sm:text-xs text-muted-foreground text-center leading-tight">
                     the assistant can make mistakes. please verify information.
@@ -1876,7 +2067,16 @@ function PureChatInterfaceComponent({
     )
   }
 
-  return <HubStoreProvider initialState={hubSeed}>{hubLayout}</HubStoreProvider>
+  return (
+    <HubStoreProvider initialState={hubSeed}>
+      {hubLayout}
+      <GuestLimitDialog
+        open={showGuestLimitModal}
+        onClose={() => setShowGuestLimitModal(false)}
+        remainingMessages={guestMessagesRemaining}
+      />
+    </HubStoreProvider>
+  )
 }
 
 const PureChatInterface = memo(PureChatInterfaceComponent, (prevProps, nextProps) => {

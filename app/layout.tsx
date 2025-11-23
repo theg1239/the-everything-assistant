@@ -19,6 +19,7 @@ import ScrollToTop from '@/components/scroll-to-top'
 import CustomBackground from '@/components/backgrounds/custom-background'
 import { PdfDockProvider } from '@/contexts/pdf-dock-context'
 import PdfDock from '@/components/pdf-dock'
+import SpotifyBubble from '@/components/spotify-bubble'
 import { PerformanceMonitor } from '@/components/performance-monitor'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
@@ -282,6 +283,7 @@ export default async function RootLayout({
                       <SidebarWrapper />
                       {children}
                       <PdfDock />
+                      <SpotifyBubble />
                     </PdfDockProvider>
                   </MFAGate>
                 </SidebarProvider>

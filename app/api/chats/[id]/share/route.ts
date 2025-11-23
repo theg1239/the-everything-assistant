@@ -1,18 +1,18 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createChatShare, getChat } from '@/lib/db'
 
 export async function POST(
-  req: Request,
-  { params }: { params: { id: string } }
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions)
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
-  const chatId = params.id
+  const { id: chatId } = await params
   const chat = await getChat(chatId, session.user.id)
 
   if (!chat) {

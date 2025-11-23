@@ -8,7 +8,7 @@ import { useSidebar } from '@/contexts/sidebar-context'
 import { useMFA } from '@/contexts/mfa-context'
 
 export const SidebarWrapper = memo(function SidebarWrapper() {
-  const { isOpen, toggle, setIsOpen } = useSidebar()
+  const { isOpen, toggle, setIsOpen, pdfOpen } = useSidebar()
   const { data: session, status } = useSession()
   const pathname = usePathname()
   const { requiresMFA, isMFAVerified } = useMFA()
@@ -28,5 +28,7 @@ export const SidebarWrapper = memo(function SidebarWrapper() {
     return null
   }
 
-  return <Sidebar isOpen={isOpen} onToggle={toggle} />
+  const effectiveOpen = isOpen && !pdfOpen
+
+  return <Sidebar isOpen={effectiveOpen} onToggle={() => (!pdfOpen ? toggle() : setIsOpen(false))} />
 })

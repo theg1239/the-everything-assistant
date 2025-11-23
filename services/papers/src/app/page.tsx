@@ -13,25 +13,27 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50 dark:from-gray-950 dark:via-blue-950/20 dark:to-indigo-950/30">
+    <div className="min-h-screen bg-background text-foreground">
       <PapersHeader />
 
-      <div className="relative">
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute left-1/4 top-20 h-96 w-96 rounded-full bg-gradient-to-br from-blue-100/20 to-purple-100/20 blur-3xl animate-float dark:from-blue-900/10 dark:to-purple-900/10" />
-          <div
-            className="absolute right-1/4 bottom-20 h-96 w-96 rounded-full bg-gradient-to-br from-green-100/20 to-blue-100/20 blur-3xl animate-float dark:from-green-900/10 dark:to-blue-900/10"
-            style={{ animationDelay: '3s' }}
-          />
-        </div>
-
-        <div className="relative mx-auto max-w-7xl px-6 py-16 lg:px-8">
-          <div className="space-y-20">
-            <UploadForm onUploadSuccess={handleUploadSuccess} />
-            <PapersList ref={papersListRef} />
+      <main className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-10">
+        <section className="modern-card p-6">
+          <div className="flex flex-col gap-2">
+            <p className="pill w-fit">Upload & Search</p>
+            <h2 className="text-xl font-semibold">Drop a paper and keep working.</h2>
+            <p className="text-sm text-muted-foreground">
+              Mirrors the chat UI: simple borders, neutral background, minimal chrome.
+            </p>
           </div>
-        </div>
-      </div>
+          <div className="mt-6">
+            <UploadForm onUploadSuccess={handleUploadSuccess} />
+          </div>
+        </section>
+
+        <section className="modern-card p-6">
+          <PapersList ref={papersListRef} />
+        </section>
+      </main>
     </div>
   )
 }

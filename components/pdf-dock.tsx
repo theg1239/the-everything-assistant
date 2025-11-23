@@ -5,7 +5,7 @@ import ReactDOM from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Drawer } from 'vaul'
 import { usePdfDock } from '@/contexts/pdf-dock-context'
-import { X, FileSearch } from 'lucide-react'
+import { X, FileText } from 'lucide-react'
 
 export const PdfDock: React.FC = () => {
   return null
@@ -28,27 +28,7 @@ export const MobilePdfDockButton: React.FC = () => {
             title={hasItems ? `${items.length} open PDFs` : 'Open PDFs'}
             className="relative inline-flex items-center h-8 px-3 gap-2 rounded-md text-sm"
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-4 w-4"
-              aria-hidden
-            >
-              <rect
-                x="3"
-                y="4"
-                width="18"
-                height="16"
-                rx="2"
-                stroke="currentColor"
-                strokeWidth="1.5"
-              />
-              <path d="M3 9h18" stroke="currentColor" strokeWidth="1.5" />
-              <path d="M7 5v4" stroke="currentColor" strokeWidth="1.5" />
-            </svg>
+            <FileText className="h-4 w-4" aria-hidden />
             <span className="sr-only">Open PDFs</span>
             {hasItems && (
               <span className="absolute -top-1 -right-2 inline-flex items-center justify-center h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-medium">
@@ -60,7 +40,10 @@ export const MobilePdfDockButton: React.FC = () => {
 
         <Drawer.Portal>
           <Drawer.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
-          <Drawer.Content className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-w-md flex-col rounded-t-3xl border border-border/40 bg-background/95 p-4 shadow-2xl">
+          <Drawer.Content
+            aria-label="Open PDFs"
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-w-md flex-col rounded-t-3xl border border-border/40 bg-background/95 p-4 shadow-2xl"
+          >
             <Drawer.Handle className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-border/60" />
             <div className="flex items-center justify-between text-xs uppercase tracking-wider text-muted-foreground/80">
               <span>Open PDFs</span>
@@ -152,27 +135,7 @@ export const DesktopPdfDockButton: React.FC = () => {
           title={`${items.length} open PDFs`}
           className="relative inline-flex items-center h-8 px-3 gap-2 rounded-md text-sm"
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-4 w-4"
-            aria-hidden
-          >
-            <rect
-              x="3"
-              y="4"
-              width="18"
-              height="16"
-              rx="2"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            />
-            <path d="M3 9h18" stroke="currentColor" strokeWidth="1.5" />
-            <path d="M7 5v4" stroke="currentColor" strokeWidth="1.5" />
-          </svg>
+          <FileText className="h-4 w-4" aria-hidden />
 
           <span className="sr-only">Open PDFs</span>
 
@@ -226,7 +189,7 @@ export const DesktopPdfDockButton: React.FC = () => {
                     }}
                     title={item.title || item.url}
                   >
-                    <FileSearch className="border-none h-4 w-10 text-primary" />
+                    <FileText className="border-none h-4 w-10 text-primary" />
                     <span className="truncate">{item.title || 'PDF Document'}</span>
                   </button>
                   <button
@@ -308,7 +271,7 @@ const PreviewPortal: React.FC<{
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <div className="flex items-center gap-3">
               <div className="inline-flex items-center justify-center h-7 w-7 rounded-md bg-muted/60 text-primary">
-                <FileSearch className="h-4 w-4" />
+                <FileText className="h-4 w-4" />
               </div>
               <div className="text-sm font-semibold truncate max-w-[60vw]">{title}</div>
             </div>

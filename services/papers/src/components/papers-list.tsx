@@ -140,7 +140,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.8, delay: 0.4 }}
-      className="mx-auto max-w-7xl space-y-8"
+      className="space-y-8"
     >
 
       <div className="space-y-6">
@@ -222,7 +222,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
               transition={{ duration: 0.4 }}
               className="overflow-hidden"
             >
-              <Card className="border-0 bg-gray-50/80 backdrop-blur-sm dark:bg-gray-800/80">
+              <Card className="border border-border bg-card">
                 <CardContent className="p-8">
                   <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
                     {[
@@ -347,7 +347,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
                 className="modern-card group"
               >
 
-                <div className="relative aspect-[3/4] overflow-hidden rounded-t-3xl bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700">
+                <div className="relative aspect-[3/4] overflow-hidden rounded-t-2xl bg-muted">
                   <img
                     src={paper.thumbnailUrl || '/placeholder.svg?height=400&width=300'}
                     alt={paper.title}
@@ -355,7 +355,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
                   />
 
 
-                  <div className="absolute inset-0 flex items-center justify-center gap-3 bg-black/0 opacity-0 transition-all duration-500 group-hover:bg-black/20 group-hover:opacity-100">
+                  <div className="absolute inset-0 flex items-center justify-center gap-3 bg-black/0 opacity-0 transition-all duration-300 group-hover:bg-black/10 group-hover:opacity-100">
                     <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
                       <Button
                         size="sm"
@@ -465,7 +465,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
           transition={{ duration: 0.6 }}
           className="flex justify-center pt-8"
         >
-          <Card className="border-0 bg-white/90 backdrop-blur-sm shadow-xl dark:bg-gray-900/90">
+          <Card className="border border-border bg-card shadow-sm">
             <CardContent className="flex items-center gap-2 p-4">
               <Button
                 variant="outline"

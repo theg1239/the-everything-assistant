@@ -318,11 +318,15 @@ This conversation is happening via Discord. The user is using slash commands.
 - user: ${userInfo.userName || 'Discord User'} (${userInfo.userId})
 </discord_context>`
 
-    const systemPrompt = `${VIT_SYSTEM_PROMPT}
+const systemPrompt = `${VIT_SYSTEM_PROMPT}
 
 ${contextPrompt}
 
 ${memoryContext ? `\n\n<memory_context>\n  <instructions>Use the following information to provide more personalized and relevant responses.</instructions>\n  ${memoryContext}\n</memory_context>` : ''}
+
+WHATSAPP RESPONSE REQUIREMENTS:
+- When source is WhatsApp, respond in plain text only. Do NOT use markdown, bullets, or code fences. Keep replies short and mobile-friendly. Avoid links unless the user explicitly asks.
+- When source is Discord, keep responses concise and helpful; minimal formatting is fine but avoid heavy markdown.
 
 CRITICAL TOOL CONTINUATION RULES:
 - YOU MUST NEVER STOP AFTER CALLING A TOOL
@@ -342,6 +346,18 @@ CRITICAL TOOL CONTINUATION RULES:
     if (!providerClient) {
       throw new Error(`Unsupported model provider for bot: ${botModel.provider}`)
     }
+
+    const isCommand =
+      typeof userMessage === 'string' && userMessage.trim().length > 0
+        ? /^[/.#!]/.test(userMessage.trim())
+        : false
+
+    const rateLimitKey =
+      requestSource === 'whatsapp'
+        ? isCommand && userInfo.userId
+          ? `wa-bot:cmd:${userInfo.userId}`
+          : undefined // normal messages shouldn't burn command rate limits
+        : user.id
 
     const resultStream = await providerClient.streamText(
       {
@@ -376,7 +392,7 @@ CRITICAL TOOL CONTINUATION RULES:
           }
         },
       },
-      user.id
+      rateLimitKey
     )
 
     const forceTextStream =

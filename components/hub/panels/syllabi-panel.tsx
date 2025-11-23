@@ -6,11 +6,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { useHubTool } from '../use-hub-tool'
+import { useSidebar } from '@/contexts/sidebar-context'
 import { FileText, Search, X } from 'lucide-react'
 import PdfViewer from '@/components/pdf-viewer'
 
 export default function SyllabiPanel() {
   const { run, loading, error, result, reset } = useHubTool<any>('getSyllabus')
+  const { setIsOpen: setSidebarOpen } = useSidebar()
   const [query, setQuery] = useState('')
 
   const onRun = async () => {
@@ -94,6 +96,7 @@ export default function SyllabiPanel() {
                             ? `https://storage.googleapis.com/examcooker/syllabi/${s.filename}`
                             : null)
                         const title = s.title || s.filename || s.code
+                        setSidebarOpen(false)
                         window.dispatchEvent(
                           new CustomEvent('pdfViewerOpen', { detail: { url, title } })
                         )

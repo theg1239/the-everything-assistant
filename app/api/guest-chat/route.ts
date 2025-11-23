@@ -26,7 +26,9 @@ export async function POST(req: Request) {
 
     const uiMessages = payload.messages ?? []
     const legacyMessages = uiMessagesToLegacyMessages(uiMessages)
-    const userMessageCount = legacyMessages.filter(m => m.role === 'user').length
+    const userMessageCount = legacyMessages.filter(
+      m => m.role === 'user' && !(m.metadata as any)?.sharedHistory
+    ).length
 
     if (userMessageCount > GUEST_MESSAGE_LIMIT) {
       return new Response(

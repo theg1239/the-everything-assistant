@@ -41,6 +41,17 @@ export function useOnboarding() {
     setShowOnboarding(false)
   }
 
+  // mark as seen the first time the dialog shows up
+  useEffect(() => {
+    if (showOnboarding && !hasSeenOnboarding) {
+      localStorage.setItem('onboarding-completed', 'true')
+      setHasSeenOnboarding(true)
+      try {
+        window.dispatchEvent(new CustomEvent('onboardingCompleted'))
+      } catch {}
+    }
+  }, [showOnboarding, hasSeenOnboarding])
+
 
   const resetOnboarding = () => {
     localStorage.removeItem('onboarding-completed')

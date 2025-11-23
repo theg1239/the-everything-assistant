@@ -4,10 +4,12 @@ import React, { useEffect, useState, useRef } from 'react'
 import { X, Maximize2, Minimize2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { createPortal } from 'react-dom'
+import { useSidebar } from '@/contexts/sidebar-context'
 
 interface PdfViewerProps {}
 
 export default function PdfViewer(_: PdfViewerProps) {
+  const { setIsOpen: setSidebarOpen } = useSidebar()
   const [isLoading, setIsLoading] = useState(false)
   const [embedUrl, setEmbedUrl] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
@@ -29,6 +31,7 @@ export default function PdfViewer(_: PdfViewerProps) {
         setTitle(theTitle)
         setIsLoading(true)
         setOpen(true)
+        setSidebarOpen(false)
         setTimeout(() => setIsLoading(false), 800)
       }
     }
@@ -38,13 +41,26 @@ export default function PdfViewer(_: PdfViewerProps) {
       setTitle(undefined)
       setIsLoading(false)
     }
+    const escHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeHandler()
+      }
+    }
     window.addEventListener('pdfViewerOpen', openHandler)
     window.addEventListener('pdfViewerClose', closeHandler)
+    window.addEventListener('keydown', escHandler)
     return () => {
       window.removeEventListener('pdfViewerOpen', openHandler)
       window.removeEventListener('pdfViewerClose', closeHandler)
+      window.removeEventListener('keydown', escHandler)
     }
   }, [])
+
+  useEffect(() => {
+    if (open) {
+      setSidebarOpen(false)
+    }
+  }, [open, setSidebarOpen])
 
   if (!open) return null
 

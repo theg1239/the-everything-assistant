@@ -21,6 +21,15 @@ export interface Chat {
   path: string
 }
 
+export interface ChatShare {
+  id: string
+  chatId: string
+  userId: string
+  title?: string | null
+  revoked: boolean
+  createdAt: Date
+}
+
 export interface Message {
   id: string
   chatId: string
@@ -135,6 +144,59 @@ export async function getChat(id: string, userId: string): Promise<Chat | null> 
   }
 }
 
+export async function createChatShare(
+  chatId: string,
+  userId: string,
+  title?: string | null
+): Promise<ChatShare | null> {
+  try {
+    const existing = await prisma.chatShare.findFirst({
+      where: { chatId, userId, revoked: false },
+      orderBy: { createdAt: 'desc' },
+    })
+    if (existing) return existing as unknown as ChatShare
+
+    const share = await prisma.chatShare.create({
+      data: { chatId, userId, title },
+    })
+    return share as unknown as ChatShare
+  } catch (error) {
+    console.error('Error creating chat share:', error)
+    return null
+  }
+}
+
+export async function getChatShareWithMessages(
+  shareId: string
+): Promise<{ share: ChatShare; chat: Chat; messages: Message[] } | null> {
+  try {
+    const share = await prisma.chatShare.findFirst({
+      where: { id: shareId, revoked: false },
+      include: {
+        chat: {
+          select: {
+            id: true,
+            userId: true,
+            title: true,
+            created_at: true,
+            updated_at: true,
+            path: true,
+          },
+        },
+      },
+    })
+    if (!share || !share.chat) return null
+    const messages = await getMessages(share.chatId)
+    return {
+      share: share as unknown as ChatShare,
+      chat: share.chat as unknown as Chat,
+      messages,
+    }
+  } catch (error) {
+    console.error('Error loading shared chat:', error)
+    return null
+  }
+}
 export async function createChat(
   userId: string,
   title: string,
@@ -552,6 +614,74 @@ export async function saveMessage(
     },
   })
   return { ...message, toolInvocations: message.tool_invocations } as Message
+}
+
+export async function createChatFromMessages(
+  userId: string,
+  title: string,
+  messages: Message[]
+): Promise<Chat> {
+  const path = generateChatPath()
+
+  const chat = await prisma.$transaction(
+    async tx => {
+      const createdChat = await tx.chat.create({
+        data: { userId, title, path },
+        select: {
+          id: true,
+          userId: true,
+          title: true,
+          created_at: true,
+          updated_at: true,
+          path: true,
+        },
+      })
+
+      if (messages.length > 0) {
+        const preparedMessages = messages.map(msg => {
+          let safeToolInvocations = undefined
+          if (msg.toolInvocations) {
+            try {
+              const sanitized = sanitizeToolInvocations(
+                Array.isArray(msg.toolInvocations) ? msg.toolInvocations : [msg.toolInvocations]
+              )
+              safeToolInvocations = JSON.parse(JSON.stringify(sanitized))
+            } catch (error) {
+              console.warn('Failed to sanitize shared tool invocations', error)
+            }
+          }
+          const createdAt = (msg as any).created_at || (msg as any).createdAt || new Date()
+          return {
+            chatId: createdChat.id,
+            role: msg.role,
+            content: msg.content,
+            tool_invocations: safeToolInvocations,
+            created_at: createdAt instanceof Date ? createdAt : new Date(createdAt),
+          }
+        })
+
+        await tx.message.createMany({
+          data: preparedMessages,
+        })
+      }
+
+      return createdChat
+    },
+    {
+      isolationLevel: 'ReadCommitted',
+      maxWait: 5000,
+      timeout: 10000,
+    }
+  )
+
+  return { ...chat, path } as Chat
+}
+
+export async function forkSharedChatToUser(shareId: string, userId: string): Promise<Chat | null> {
+  const shared = await getChatShareWithMessages(shareId)
+  if (!shared) return null
+  const title = shared.share.title || shared.chat.title || 'Shared chat'
+  return createChatFromMessages(userId, title, shared.messages)
 }
 
 export async function getCanvasDocuments(chatId: string): Promise<CanvasDocument[]> {

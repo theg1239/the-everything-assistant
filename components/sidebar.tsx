@@ -67,7 +67,7 @@ const overlayVariants = {
 export const Sidebar = memo(
   function Sidebar(props: SidebarProps) {
     const { isOpen, onToggle } = props as { isOpen: boolean; onToggle: () => void }
-    const { isInitialized, chats, setChats, chatsLoaded, setChatsLoaded } = useSidebar()
+    const { isInitialized, chats, setChats, chatsLoaded, setChatsLoaded, pdfOpen } = useSidebar()
 
     const hasLoadedOnceRef = useRef(chatsLoaded)
     useEffect(() => {
@@ -406,8 +406,8 @@ export const Sidebar = memo(
           )}
         </AnimatePresence>
 
-        <AnimatePresence mode="sync">
-          {isOpen && (
+    <AnimatePresence mode="sync">
+          {isOpen && !pdfOpen && (
             <>
               <motion.div
                 key="overlay"

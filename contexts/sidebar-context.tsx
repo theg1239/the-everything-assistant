@@ -15,6 +15,7 @@ interface SidebarContextType {
   setIsOpen: (open: boolean) => void
   toggle: () => void
   isInitialized: boolean
+  pdfOpen: boolean
   chats: Chat[]
   setChats: (chats: Chat[] | ((prev: Chat[]) => Chat[])) => void
   chatsLoaded: boolean
@@ -29,6 +30,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     const saved = localStorage.getItem('sidebarOpen')
     return saved !== null ? saved === 'true' : false
   })
+  const [pdfOpen, setPdfOpen] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
   const [chats, setChats] = useState<Chat[]>([])
   const [chatsLoaded, setChatsLoaded] = useState(false)
@@ -41,6 +43,21 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === 'undefined') return
     localStorage.setItem('sidebarOpen', String(isOpen))
   }, [isOpen])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handlePdfOpen = () => {
+      setPdfOpen(true)
+      setIsOpenState(false)
+    }
+    const handlePdfClose = () => setPdfOpen(false)
+    window.addEventListener('pdfViewerOpen', handlePdfOpen as EventListener)
+    window.addEventListener('pdfViewerClosed', handlePdfClose as EventListener)
+    return () => {
+      window.removeEventListener('pdfViewerOpen', handlePdfOpen as EventListener)
+      window.removeEventListener('pdfViewerClosed', handlePdfClose as EventListener)
+    }
+  }, [])
 
   const setIsOpen = useCallback((open: boolean) => {
     setIsOpenState(open)
@@ -57,6 +74,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
         setIsOpen,
         toggle,
         isInitialized,
+        pdfOpen,
         chats,
         setChats,
         chatsLoaded,

@@ -9,7 +9,7 @@ import { useSession, signIn } from 'next-auth/react'
 import { useMemory } from '@/contexts/memory-context'
 import { VirtualizedMessages } from '@/components/virtualized-messages'
 import { motion } from 'framer-motion'
-import { Download, Plus, ChevronDown, GraduationCap } from 'lucide-react'
+import { Download, Plus, ChevronDown, GraduationCap, Share2 } from 'lucide-react'
 import { HamburgerButton } from '@/components/hamburger-button'
 import { Button } from '@/components/ui/button'
 import { SuggestedQuestions } from '@/components/suggested-questions'
@@ -19,6 +19,7 @@ import { MobilePdfDockButton, DesktopPdfDockButton } from '@/components/pdf-dock
 import { MultimodalInput } from '@/components/multimodal-input'
 import Hub, { type HubActionHandlers } from '@/components/hub/hub'
 import { HubStoreProvider } from '@/components/hub/hub-store'
+import { ShareModal } from '@/components/share-modal'
 import { HUB_COMMANDS } from '@/types/hub'
 import type { PersonalHubState, HubVTOPCommand } from '@/types/hub'
 import { extractTitleFromContent, generateUUID } from '@/lib/utils'
@@ -162,6 +163,7 @@ interface ChatInterfaceProps {
   autoResume?: boolean
   initialHubState?: PersonalHubState
   hubActions?: HubActionHandlers
+  chatTitle?: string
 }
 
 const DAILY_BRIEFING_STORAGE_KEY = 'ea.hub.daily-briefing-date'
@@ -174,6 +176,7 @@ function PureChatInterfaceComponent({
   autoResume = false,
   initialHubState,
   hubActions,
+  chatTitle,
 }: ChatInterfaceProps) {
   const [input, setInput] = useState('')
   const showFullChat = useChatStore(state => state.showFullChat)
@@ -246,8 +249,16 @@ function PureChatInterfaceComponent({
   const { rateLimitError, clearRateLimitError, checkForRateLimitError } = useRateLimit()
   const { data: session } = useSession()
   const isGuest = !session?.user
+  const shareableChatId = !isGuest ? currentChatIdRef.current || persistedChatId : undefined
   const memory = useMemory()
   const { showOnboarding, closeOnboarding } = useOnboarding()
+  const fallbackTitle = useMemo(
+    () => chatTitle || extractTitleFromContent(initialMessages[0]?.content || 'shared chat'),
+    [chatTitle, initialMessages]
+  )
+  const [currentChatTitle, setCurrentChatTitle] = useState(fallbackTitle)
+  const [shareOpen, setShareOpen] = useState(false)
+  const headerButtonClass = 'h-9 px-4 border border-border/60 hover:bg-border/10'
 
   const mainRef = useViewportHeight()
 
@@ -291,6 +302,30 @@ function PureChatInterfaceComponent({
     window.addEventListener('hubShareToChat', handleShare as EventListener)
     return () => window.removeEventListener('hubShareToChat', handleShare as EventListener)
   }, [])
+
+  useEffect(() => {
+    if (shareOpen && (!shareableChatId || isGuest)) {
+      setShareOpen(false)
+    }
+  }, [shareOpen, shareableChatId, isGuest])
+
+  useEffect(() => {
+    setCurrentChatTitle(fallbackTitle)
+  }, [fallbackTitle])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handleTitleUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<{ chatId?: string; title?: string }>).detail
+      if (!detail?.title) return
+      const targetChatId = detail.chatId || currentChatIdRef.current || resolvedChatId
+      if (!targetChatId) return
+      if (detail.chatId && detail.chatId !== currentChatIdRef.current) return
+      setCurrentChatTitle(detail.title)
+    }
+    window.addEventListener('chatTitleUpdated', handleTitleUpdate as EventListener)
+    return () => window.removeEventListener('chatTitleUpdated', handleTitleUpdate as EventListener)
+  }, [resolvedChatId])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -759,10 +794,13 @@ function PureChatInterfaceComponent({
             toast.success('moved your guest chat into your account')
             router.push(data.path || `/chat/${data.chatId}`)
           } else {
-            console.error('Guest import failed', await res.text())
+            const msg = await res.text()
+            console.warn('Guest import skipped', res.status, msg)
+            window.localStorage.removeItem(GUEST_STORAGE_KEY)
           }
         } catch (error) {
           console.error('Error importing guest chat', error)
+          window.localStorage.removeItem(GUEST_STORAGE_KEY)
         } finally {
           guestImportingRef.current = false
         }
@@ -1842,15 +1880,15 @@ function PureChatInterfaceComponent({
           }}
         >
           <header
-            className={cn(
-              'flex-shrink-0 sticky top-0 z-40 bg-black/20 backdrop-blur-sm border-b border-border/50 chat-page-header',
-              isMobile && 'mobile-header-sticky'
-            )}
+          className={cn(
+            'flex-shrink-0 sticky top-0 z-40 bg-black/20 backdrop-blur-sm border-b border-border/50 chat-page-header',
+            isMobile && 'mobile-header-sticky'
+          )}
           >
             <div className="flex h-14 items-center px-4 gap-2">
-              {!sidebarOpen && (
-                <>
-                  {!isGuest && <HamburgerButton onClick={toggleSidebar} className="md:block" />}
+              {!sidebarOpen && !isGuest && <HamburgerButton onClick={toggleSidebar} className="md:block" />}
+              <div className="flex items-center gap-2 ml-auto">
+                {!sidebarOpen && (
                   <Button
                     variant="ghost"
                     onClick={() => {
@@ -1880,34 +1918,51 @@ function PureChatInterfaceComponent({
                         router.push('/')
                       }
                     }}
-                    className="h-9 ml-auto"
+                    className={`${headerButtonClass} ${isMobile ? 'px-2 w-9 justify-center' : ''}`}
+                    title="new chat"
                   >
-                    <Plus className="h-4 w-4 mr-2" />
-                    new chat
+                    <Plus className="h-4 w-4" />
+                    {!isMobile && <span className="ml-2">new chat</span>}
                   </Button>
-                </>
-              )}
-              {canInstall && !isInstalled && (
-                <Button
-                  variant="ghost"
-                  onClick={handleInstallClick}
-                  className="h-9 ml-2 hidden md:inline-flex"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  install app
-                </Button>
-              )}
-              {canInstall && !isInstalled && (
-                <Button variant="ghost" onClick={handleInstallClick} className="h-9 ml-2 md:hidden">
-                  <Download className="h-4 w-4 mr-2" />
-                  install
-                </Button>
-              )}
-              <div className="hidden md:block ml-2">
-                <DesktopPdfDockButton />
-              </div>
-              <div className="ml-2 md:hidden">
-                <MobilePdfDockButton />
+                )}
+                {!isGuest && (
+                  <Button
+                    variant="ghost"
+                    onClick={() => setShareOpen(true)}
+                    className={`${headerButtonClass} ${isMobile ? 'px-2 w-9 justify-center' : ''}`}
+                    disabled={!shareableChatId || messages.length === 0}
+                    title={
+                      messages.length === 0
+                        ? 'send a message first to generate a shareable link'
+                        : 'share this chat'
+                    }
+                  >
+                    <Share2 className="h-4 w-4" />
+                    {!isMobile && <span className="ml-2">share</span>}
+                  </Button>
+                )}
+                {canInstall && !isInstalled && (
+                  <Button
+                    variant="ghost"
+                    onClick={handleInstallClick}
+                    className="h-9 hidden md:inline-flex"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    install app
+                  </Button>
+                )}
+                {canInstall && !isInstalled && (
+                  <Button variant="ghost" onClick={handleInstallClick} className="h-9 md:hidden">
+                    <Download className="h-4 w-4 mr-2" />
+                    install
+                  </Button>
+                )}
+                <div className="hidden md:block">
+                  <DesktopPdfDockButton />
+                </div>
+                <div className="md:hidden">
+                  <MobilePdfDockButton />
+                </div>
               </div>
             </div>
           </header>{' '}
@@ -2075,6 +2130,13 @@ function PureChatInterfaceComponent({
         onClose={() => setShowGuestLimitModal(false)}
         remainingMessages={guestMessagesRemaining}
       />
+      <ShareModal
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        chatId={shareableChatId || resolvedChatId || ''}
+        title={currentChatTitle}
+        previewMessages={messages}
+      />
     </HubStoreProvider>
   )
 }
@@ -2083,6 +2145,7 @@ const PureChatInterface = memo(PureChatInterfaceComponent, (prevProps, nextProps
   return (
     prevProps.chatId === nextProps.chatId &&
     prevProps.autoResume === nextProps.autoResume &&
+    prevProps.chatTitle === nextProps.chatTitle &&
     prevProps.initialHubState === nextProps.initialHubState &&
     areHubActionsEqual(prevProps.hubActions, nextProps.hubActions) &&
     prevProps.initialMessages?.length === nextProps.initialMessages?.length &&
@@ -2100,6 +2163,7 @@ export const ChatInterface = memo(
     autoResume = true,
     initialHubState,
     hubActions,
+    chatTitle,
   }: ChatInterfaceProps) => {
     return (
       <RateLimitProvider>
@@ -2110,6 +2174,7 @@ export const ChatInterface = memo(
             autoResume={autoResume}
             initialHubState={initialHubState}
             hubActions={hubActions}
+            chatTitle={chatTitle}
           />
         </VTOPProvider>
       </RateLimitProvider>
@@ -2119,6 +2184,7 @@ export const ChatInterface = memo(
     return (
       prevProps.chatId === nextProps.chatId &&
       prevProps.autoResume === nextProps.autoResume &&
+      prevProps.chatTitle === nextProps.chatTitle &&
       prevProps.initialHubState === nextProps.initialHubState &&
       areHubActionsEqual(prevProps.hubActions, nextProps.hubActions) &&
       prevProps.initialMessages?.length === nextProps.initialMessages?.length &&

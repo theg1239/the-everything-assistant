@@ -151,7 +151,7 @@ export default function UploadForm({ onUploadSuccess }: UploadFormProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
     >
-      <Card className="mx-auto max-w-xl border-0 bg-white/80 backdrop-blur-sm dark:bg-gray-900/80">
+      <Card className="w-full max-w-xl border border-border bg-card shadow-sm">
         <CardHeader className="text-center pb-4">
           <CardTitle className="text-xl font-medium text-gray-900 dark:text-white">
             upload paper

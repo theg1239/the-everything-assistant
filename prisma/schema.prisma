@@ -65,6 +65,7 @@ model User {
   webAuthnCredentials WebAuthnCredential[]
   whatsappConversations WhatsAppConversation[]
   vtopSnapshots VTOPSnapshot[]
+  shares ChatShare[]
 
   @@index([email])
   @@map("users")
@@ -93,11 +94,28 @@ model Chat {
   canvas_documents  CanvasDocument[]
   votes             Vote[]
   streamIds         StreamId[]
+  shares            ChatShare[]
 
   @@index([userId, archived, updated_at(sort: Desc)])
   @@index([userId, updated_at(sort: Desc)])
   @@index([archived])
   @@map("chats")
+}
+
+model ChatShare {
+  id        String   @id @default(cuid())
+  chatId    String
+  userId    String
+  title     String?
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([chatId, revoked])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("chat_shares")
 }
 
 model Message {

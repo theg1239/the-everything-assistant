@@ -14,11 +14,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useHubTool } from '../use-hub-tool'
+import { useSidebar } from '@/contexts/sidebar-context'
 import { FileText, Search, X } from 'lucide-react'
 import PdfViewer from '@/components/pdf-viewer'
 
 export default function PastPapersPanel() {
   const { run, loading, error, result, reset } = useHubTool<any>('findPastPapers')
+  const { setIsOpen: setSidebarOpen } = useSidebar()
   const [courseCode, setCourseCode] = useState('')
   const [examType, setExamType] = useState('')
   const [year, setYear] = useState('')
@@ -114,8 +116,9 @@ export default function PastPapersPanel() {
                       onClick={() => {
                         const url = p.url
                         const title = p.title || p.fileName || p.year
+                        setSidebarOpen(false)
                         window.dispatchEvent(
-                          new CustomEvent('pdfViewerOpen', { detail: { url, title } })
+                          new CustomEvent('pdfViewerOpen', { detail: { url, title, source: 'papers' } })
                         )
                       }}
                     >

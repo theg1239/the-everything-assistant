@@ -252,7 +252,7 @@ export async function POST(req: Request) {
                 parallelToolCalls: true,
                 store: false,
                 maxToolCalls: 4,
-                // reasoningSummary: 'detailed',
+                reasoningSummary: 'detailed',
                 promptCacheKey,
                 ...(model.modelId.startsWith('gpt-5.1')
                   ? { promptCacheRetention: '24h' }
@@ -270,7 +270,7 @@ export async function POST(req: Request) {
         maxTokens: 10000,
         ...(providerOptions ? { providerOptions } : {}),
         experimental_transform: smoothStream({ chunking: 'word' }),
-        middleware: [reasoningMiddleware],
+        middleware: model.provider === 'openai' ? [] : [reasoningMiddleware],
         stopWhen: stepCountIs(10),
         onError: async (error: any) => {
           console.error('Streaming error occurred:', error)

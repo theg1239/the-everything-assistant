@@ -419,9 +419,14 @@ export function DynamicLoadingIndicator({
     }
   }, [isLoading, isAssistantStreaming, paperStatus])
 
-  if (isAssistantStreaming) return null
+  const lastAssistantHasReasoningPanel =
+    lastMessage?.role === 'assistant' &&
+    Array.isArray(lastMessage?.parts) &&
+    lastMessage.parts.some((p: any) => p?.type === 'reasoning')
+
   if (!isActive) return null
   if (hideAfterDone || hideAfterNoProgress) return null
+  if (isAssistantStreaming && lastAssistantHasReasoningPanel) return null
 
   const labelMap: Record<string, string> = {
     start: 'Starting smart paper search...',

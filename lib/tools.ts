@@ -220,6 +220,8 @@ async function callVtopViaMcp(options: {
   })
 
   if (!initRes.ok) {
+    const text = await initRes.text().catch(() => '')
+    console.error('MCP initialize failed', { status: initRes.status, text })
     throw new Error(`MCP initialize failed (${initRes.status})`)
   }
 
@@ -269,7 +271,9 @@ async function callVtopViaMcp(options: {
   }
 
   if (!callRes.ok) {
-    const message = parsed?.error?.message || `MCP call failed: ${callRes.status}`
+    const message =
+      parsed?.error?.message || parsed?.message || `MCP call failed: ${callRes.status}`
+    console.error('MCP call failed', { status: callRes.status, message, parsed })
     return {
       success: false,
       error: message,

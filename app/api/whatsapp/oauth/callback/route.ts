@@ -108,6 +108,13 @@ export async function GET(req: NextRequest) {
     clientId,
   })
 
+  console.log('MCP token saved', {
+    userId,
+    tokenUrl,
+    hasRefresh: Boolean(json.refresh_token),
+    expiresAt,
+  })
+
   const successHtml = `
 <!DOCTYPE html>
 <html>

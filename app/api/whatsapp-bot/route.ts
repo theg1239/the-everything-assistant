@@ -197,11 +197,10 @@ ${memories
       }
     }
 
-    const vtopMcpEndpoint =
-      process.env.VTOP_MCP_URL ||
-      (process.env.VTOP_PROXY_URL
-        ? `${process.env.VTOP_PROXY_URL.replace(/\/$/, '')}/mcp`
-        : undefined)
+    const rawMcpBase = process.env.VTOP_MCP_URL || process.env.VTOP_PROXY_URL
+    const vtopMcpEndpoint = rawMcpBase
+      ? `${rawMcpBase.replace(/\/$/, '').replace(/\/mcp$/, '')}/mcp`
+      : undefined
 
     let mcpToken = await getUserMcpToken(user.id)
     if (mcpToken && isExpired(mcpToken)) {
@@ -222,6 +221,17 @@ ${memories
             }
           : undefined,
     })
+
+    if (requestSource === 'whatsapp') {
+      console.log('WA MCP debug', {
+        userId: user.id,
+        phone: userInfo.userId,
+        endpoint: vtopMcpEndpoint,
+        hasToken: Boolean(mcpToken?.accessToken),
+        usedFallback: !mcpToken?.accessToken && Boolean(fallbackToken),
+        expiresAt: mcpToken?.expiresAt,
+      })
+    }
 
     const contextPrompt =
       requestSource === 'whatsapp'

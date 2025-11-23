@@ -1,11 +1,11 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getChatShareWithMessages } from '@/lib/db'
 
 export async function GET(
-  _req: Request,
-  { params }: { params: { id: string } }
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const shareId = params.id
+  const { id: shareId } = await params
   const shared = await getChatShareWithMessages(shareId)
 
   if (!shared) {

@@ -196,7 +196,7 @@ async function callVtopViaMcp(options: {
   const baseHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${mcp.accessToken}`,
-    Accept: 'application/json',
+    Accept: 'application/json, text/event-stream',
   }
 
   const initializeBody = {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
 import * as z from 'zod'
 import { generateId, type UIMessage } from 'ai'
@@ -51,11 +52,35 @@ function validateAPIKey(request: NextRequest): boolean {
   return token === apiKey
 }
 
+function timingSafeEqual(a: string, b: string): boolean {
+  try {
+    return Buffer.from(a).length === Buffer.from(b).length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b))
+  } catch {
+    return false
+  }
+}
+
+function validateSignature(rawBody: string, request: NextRequest): boolean {
+  const secret = process.env.WHATSAPP_BOT_SIGNING_SECRET || process.env.WA_SIGNING_SECRET
+  if (!secret) return true // signature enforcement disabled
+
+  const ts = request.headers.get('x-wa-timestamp')
+  const sig = request.headers.get('x-wa-signature')
+  const phone = request.headers.get('x-wa-phone')
+  if (!ts || !sig || !phone) return false
+
+  const now = Date.now()
+  const tsNum = Number(ts)
+  if (!Number.isFinite(tsNum) || Math.abs(now - tsNum) > 5 * 60 * 1000) return false // 5 min window
+
+  const expected = crypto.createHmac('sha256', secret).update(`${ts}.${rawBody}`).digest('hex')
+  return timingSafeEqual(expected, sig)
+}
+
 async function getOrCreateBotUser(source: string, userId: string, userName?: string) {
   const emailPrefix = source === 'whatsapp' ? 'whatsapp' : 'discord'
   const email = `${emailPrefix}-${userId}@${source}-bot.local`
 
-  // First try to match the WhatsApp user created during the OAuth link flow (email-based).
   let user =
     source === 'whatsapp'
       ? await prisma.user.findUnique({
@@ -63,7 +88,6 @@ async function getOrCreateBotUser(source: string, userId: string, userName?: str
         })
       : null
 
-  // Fallback to JSON-path lookup (works on Postgres) for existing records.
   if (!user) {
     user = await prisma.user.findFirst({
       where: {
@@ -121,12 +145,21 @@ async function getOrCreateBotUser(source: string, userId: string, userName?: str
 
 export async function POST(request: NextRequest) {
   try {
-    if (!validateAPIKey(request)) {
+    const rawBody = await request.text()
+
+    if (!validateAPIKey(request) || !validateSignature(rawBody, request)) {
       return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
     }
 
-    const rawBody = await request.json().catch(() => null)
-    const parsedBody = botRequestSchema.safeParse(rawBody)
+    const parsed = (() => {
+      try {
+        return JSON.parse(rawBody || '{}')
+      } catch {
+        return null
+      }
+    })()
+
+    const parsedBody = botRequestSchema.safeParse(parsed)
     if (!parsedBody.success) {
       return NextResponse.json({ error: 'Invalid request format' }, { status: 400 })
     }
@@ -176,11 +209,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!userInfo.userId) {
-      return NextResponse.json({ error: 'userId is required' }, { status: 400 })
+    const missingPhone = requestSource === 'whatsapp' && !userContext?.phoneNumber
+    if (!userInfo.userId || missingPhone) {
+      return NextResponse.json({ error: 'userId/phoneNumber is required' }, { status: 400 })
     }
 
-    const user = await getOrCreateBotUser(requestSource, userInfo.userId, userInfo.userName)
+    const resolvedUserId = userInfo.userId as string
+
+    const user = await getOrCreateBotUser(requestSource, resolvedUserId, userInfo.userName)
 
     const fakeSession = {
       user: {
@@ -236,8 +272,10 @@ ${memories
       mcpToken = await refreshUserMcpToken(user.id)
     }
 
-    const fallbackToken =
-      process.env.WHATSAPP_VTOP_MCP_ACCESS_TOKEN || process.env.VTOP_MCP_ACCESS_TOKEN
+    const allowFallback = process.env.ALLOW_MCP_FALLBACK_TOKEN === 'true'
+    const fallbackToken = allowFallback
+      ? process.env.WHATSAPP_VTOP_MCP_ACCESS_TOKEN || process.env.VTOP_MCP_ACCESS_TOKEN
+      : undefined
 
     const tools = createVITTools(user.id, {
       channel: requestSource,
@@ -371,8 +409,8 @@ CRITICAL TOOL CONTINUATION RULES:
         headers: {
           'X-Source': requestSource,
           'X-User-Id': user.id,
-          'X-Bot-User-Id': userInfo.userId,
-        },
+          'X-Bot-User-Id': userInfo.userId ?? '',
+        } as HeadersInit,
         onError: () => 'An error occurred while processing your request.',
       })
     }
@@ -381,8 +419,8 @@ CRITICAL TOOL CONTINUATION RULES:
       headers: {
         'X-Source': requestSource,
         'X-User-Id': user.id,
-        'X-Bot-User-Id': userInfo.userId,
-      },
+        'X-Bot-User-Id': userInfo.userId ?? '',
+      } as HeadersInit,
     })
   } catch (error: any) {
     console.error('Bot API error:', error)

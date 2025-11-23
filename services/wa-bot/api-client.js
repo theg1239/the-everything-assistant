@@ -1,9 +1,11 @@
 const fetch = require('node-fetch')
+const crypto = require('crypto')
 
 class APIClient {
   constructor(baseUrl, apiKey) {
     this.baseUrl = baseUrl
     this.apiKey = apiKey
+    this.signingSecret = process.env.MAIN_APP_SIGNING_SECRET || process.env.WA_SIGNING_SECRET
   }
 
   async sendChatRequest(userQuestion, userContext = {}, conversationHistory = []) {
@@ -29,7 +31,22 @@ class APIClient {
         `📋 Sending ${messages.length} messages (${recentHistory.length} history + 1 current)`
       )
 
-      const response = await fetch(`${this.baseUrl}/api/whatsapp-bot`, {
+      const body = JSON.stringify({
+        messages,
+        source: 'whatsapp',
+        userContext,
+      })
+
+      const timestamp = Date.now().toString()
+      const signature =
+        this.signingSecret && userContext.phoneNumber
+          ? crypto
+              .createHmac('sha256', this.signingSecret)
+              .update(`${timestamp}.${body}`)
+              .digest('hex')
+          : undefined
+
+      const headers = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -38,13 +55,17 @@ class APIClient {
           Authorization: `Bearer ${this.apiKey}`,
           'User-Agent': 'WhatsApp-Bot-Service/1.0.0',
         },
-        body: JSON.stringify({
-          messages,
-          source: 'whatsapp',
-          userContext,
-        }),
+        body,
         timeout: 30000, // 30 second timeout
-      })
+      }
+
+      if (signature) {
+        headers.headers['X-WA-Timestamp'] = timestamp
+        headers.headers['X-WA-Signature'] = signature
+        headers.headers['X-WA-Phone'] = userContext.phoneNumber
+      }
+
+      const response = await fetch(`${this.baseUrl}/api/whatsapp-bot`, headers)
 
       if (!response.ok) {
         throw new Error(`API request failed: ${response.status} ${response.statusText}`)

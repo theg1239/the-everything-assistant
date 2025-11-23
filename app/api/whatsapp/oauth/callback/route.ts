@@ -49,9 +49,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
 
-  const oauthBase =
+  const rawOauthBase =
+    process.env.VTOP_PROXY_URL ||
     process.env.VTOP_MCP_URL ||
-    (process.env.VTOP_PROXY_URL ? process.env.VTOP_PROXY_URL.replace(/\/$/, '') : '')
+    ''
+  const oauthBase = rawOauthBase
+    .replace(/\/$/, '')
+    .replace(/\/mcp$/, '')
   const tokenUrl = oauthBase ? `${oauthBase}/oauth/token` : ''
 
   if (!tokenUrl) {

@@ -61,7 +61,13 @@ export async function refreshUserMcpToken(userId: string, provider: string = PRO
   const bundle = await getUserMcpToken(userId, provider)
   if (!bundle?.refreshToken) return null
 
-  const oauthBase = process.env.VTOP_PROXY_URL?.replace(/\/$/, '') || 'http://localhost:3001'
+  const rawOauthBase =
+    process.env.VTOP_PROXY_URL ||
+    process.env.VTOP_MCP_URL ||
+    'http://localhost:3001'
+  const oauthBase = rawOauthBase
+    .replace(/\/$/, '')
+    .replace(/\/mcp$/, '')
   const tokenUrl = `${oauthBase}/oauth/token`
   const clientId = bundle.clientId || process.env.VTOP_MCP_CLIENT_ID || 'default-client'
 

@@ -27,11 +27,19 @@ const formatTime = (ms: number) => {
   return `${minutes}:${seconds}`
 }
 
-const SpotifyGlyph = () => (
-  <svg viewBox="0 0 168 168" className="h-6 w-6" role="img" aria-hidden>
+const SpotifyGlyph = ({ size = 24 }: { size?: number }) => (
+  <svg
+    viewBox="0 0 168 168"
+    width={size}
+    height={size}
+    role="img"
+    aria-hidden
+    focusable="false"
+  >
+    <circle cx="84" cy="84" r="84" fill="#1DB954" />
     <path
-      fill="currentColor"
-      d="M84 0a84 84 0 1 0 84 84A84 84 0 0 0 84 0Zm38.52 120.6a6 6 0 0 1-8.27 2c-22.63-13.8-51.1-16.93-84.66-9.36a6 6 0 1 1-2.64-11.7c36.55-8.26 67.94-4.7 93.25 11.08a6 6 0 0 1 2.32 7.98Zm10.7-23.93a7.5 7.5 0 0 1-10.3 2.48c-25.92-15.85-65.4-20.45-96.15-11.3A7.5 7.5 0 1 1 23 65.16c35.06-10.09 77.89-5 107.73 13.28a7.5 7.5 0 0 1 2.49 10.23Zm1.05-25.77C103.8 52.13 62.05 47.88 33.67 56.12a9 9 0 0 1-5.21-17.23c32.84-9.94 79.85-4.92 113.9 15.68a9 9 0 1 1-9.45 15.9Z"
+      fill="#fff"
+      d="M119.9 116.8a5.02 5.02 0 0 1-6.91 1.71c-18.9-11.55-42.74-14.14-71.03-7.69a5.02 5.02 0 1 1-2.31-9.77c31.45-7.43 58.45-4.39 80.25 9.05a5.02 5.02 0 0 1 2 6.7Zm8.96-21.06a6.28 6.28 0 0 1-8.65 2.14c-21.08-13.05-53.2-16.86-78.22-9.35a6.28 6.28 0 1 1-3.15-12.12c28.28-7.35 63.42-3.1 87.54 11.43a6.28 6.28 0 0 1 2.48 7.9Zm.89-23.02c-24.4-14.48-61.17-15.81-83.15-9.07a7.54 7.54 0 0 1-4.57-14.42c25.07-7.94 66.08-6.38 93.97 10.2a7.54 7.54 0 1 1-7.25 13.29Z"
     />
   </svg>
 )
@@ -187,8 +195,8 @@ export function SpotifyBubble() {
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-green-500/10 text-green-400 flex items-center justify-center">
-                  <SpotifyGlyph />
+                <div className="h-10 w-10 rounded-full bg-white/90 flex items-center justify-center shadow-inner">
+                  <SpotifyGlyph size={22} />
                 </div>
                 <div className="leading-tight">
                   <div className="text-sm font-semibold text-foreground">Spotify mini</div>
@@ -346,13 +354,13 @@ export function SpotifyBubble() {
         whileHover={{ scale: 1.02 }}
         onClick={() => setOpen(o => !o)}
         className={cn(
-          'relative h-12 w-12 rounded-full shadow-lg flex items-center justify-center text-white',
-          connected ? 'bg-green-500' : 'bg-foreground/70'
+          'relative h-12 w-12 rounded-full shadow-lg flex items-center justify-center bg-white',
+          connected ? 'ring-2 ring-emerald-400/70' : 'ring-1 ring-foreground/20'
         )}
         aria-pressed={open}
         aria-label="Spotify controls"
       >
-        <SpotifyGlyph />
+        <SpotifyGlyph size={26} />
         <span
           className={cn(
             'absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full border border-background',

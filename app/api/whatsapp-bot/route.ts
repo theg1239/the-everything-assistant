@@ -55,14 +55,25 @@ async function getOrCreateBotUser(source: string, userId: string, userName?: str
   const emailPrefix = source === 'whatsapp' ? 'whatsapp' : 'discord'
   const email = `${emailPrefix}-${userId}@${source}-bot.local`
 
-  let user = await prisma.user.findFirst({
-    where: {
-      preferences: {
-        path: [source, source === 'whatsapp' ? 'phoneNumber' : 'userId'],
-        equals: userId,
+  // First try to match the WhatsApp user created during the OAuth link flow (email-based).
+  let user =
+    source === 'whatsapp'
+      ? await prisma.user.findUnique({
+          where: { email },
+        })
+      : null
+
+  // Fallback to JSON-path lookup (works on Postgres) for existing records.
+  if (!user) {
+    user = await prisma.user.findFirst({
+      where: {
+        preferences: {
+          path: [source, source === 'whatsapp' ? 'phoneNumber' : 'userId'],
+          equals: userId,
+        },
       },
-    },
-  })
+    })
+  }
 
   if (!user) {
     const name =
@@ -85,6 +96,24 @@ async function getOrCreateBotUser(source: string, userId: string, userName?: str
     })
 
     console.log(`Created new ${source} user: ${name} (${userId})`)
+  } else if (source === 'whatsapp') {
+    const prefs = (user.preferences as any) || {}
+    const whatsappPrefs = prefs.whatsapp || {}
+    if (whatsappPrefs.phoneNumber !== userId) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          preferences: {
+            ...prefs,
+            whatsapp: {
+              ...whatsappPrefs,
+              phoneNumber: userId,
+              isWhatsappUser: true,
+            },
+          },
+        },
+      })
+    }
   }
 
   return user

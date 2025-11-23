@@ -140,8 +140,6 @@ export async function POST(req: Request) {
       channel: 'web',
     })
 
-    const combinedSystemPrompt = systemMessages.map(m => m.content).join('\n\n')
-
     const enhancedMessages = enhanceMessagesWithToolContext(messages, directToolCallResult)
 
     if (directToolCallResult && directToolCallExecuted) {

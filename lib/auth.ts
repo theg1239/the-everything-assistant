@@ -8,7 +8,9 @@ import type { PrismaClient as NextAuthPrismaClient } from '@/prisma/generated/cl
 
 const prismaForAuth = prisma as unknown as NextAuthPrismaClient
 
-type AuthProvider = ReturnType<typeof GoogleProvider> | ReturnType<typeof SpotifyProvider>
+type GoogleAuthProvider = ReturnType<typeof GoogleProvider>
+type SpotifyAuthProvider = ReturnType<typeof SpotifyProvider>
+type AuthProvider = GoogleAuthProvider | SpotifyAuthProvider
 
 const providers: AuthProvider[] = [
   GoogleProvider({
@@ -21,7 +23,7 @@ const providers: AuthProvider[] = [
         response_type: 'code',
       },
     },
-  }),
+  }) satisfies GoogleAuthProvider,
 ]
 
 const hasSpotifyCreds = Boolean(process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET)
@@ -33,7 +35,7 @@ if (hasSpotifyCreds) {
       clientSecret: process.env.SPOTIFY_CLIENT_SECRET ?? '',
       authorization:
         'https://accounts.spotify.com/authorize?scope=user-read-currently-playing%20user-read-playback-state%20user-modify-playback-state',
-    })
+    }) satisfies SpotifyAuthProvider
   )
 } else {
   if (process.env.NODE_ENV !== 'production') {

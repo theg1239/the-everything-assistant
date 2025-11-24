@@ -1404,6 +1404,7 @@ const PureToolCallDisplay = ({
         tc.toolName === 'knowledgeBase' ||
         tc.toolName === 'saveMemory' ||
         tc.toolName === 'resolveCourseCode' ||
+        tc.toolName === 'musicPlayer' ||
         (tc.result && tc.result.hidden)
       ) {
         continue
@@ -1529,6 +1530,7 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
         tc.toolName === 'knowledgeBase' ||
         tc.toolName === 'saveMemory' ||
         tc.toolName === 'resolveCourseCode' ||
+        tc.toolName === 'musicPlayer' ||
         (tc.result && tc.result.hidden)
       ) {
         continue

@@ -112,6 +112,7 @@ export async function POST(req: Request) {
 
     const baseTools = createVITTools(session.user.id, {
       sessionUser: { name: session.user.name, email: session.user.email },
+      musicPlayerState: payload.musicPlayerState,
     })
     const prefersWebSearch = effectivePreferredTool === 'web-search'
     let tools: Record<string, any> = baseTools

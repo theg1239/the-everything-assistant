@@ -37,6 +37,7 @@ import {
   MessageSquarePlus,
   Brain,
   Fingerprint,
+  Music,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -49,6 +50,7 @@ import { MemoryManagement } from '@/components/memory-management'
 import { VTOPSettings } from '@/components/vtop-settings'
 import { deleteAccountAction } from '@/app/actions/account'
 import { readJson } from '@/lib/http'
+import { useMiniPlayerStore } from '@/lib/stores/useMiniPlayerStore'
 import type { UserPreferences, UserPreferencesResponse } from '@/types/preferences'
 import type { MemorySettings } from '@/hooks/use-memories'
 import type {
@@ -182,6 +184,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
   const { data: session } = useSession()
   const { setBackgroundType, toggleBackground } = useCustomBackground()
   const { setIsOpen: setSidebarOpen } = useSidebar()
+  const { enabled: miniPlayerEnabled, setEnabled: setMiniPlayerEnabled } = useMiniPlayerStore()
   const [activeSection, setActiveSection] = useState('general')
   const [pendingSection, setPendingSection] = useState<string | null>(null)
   const [followUpSuggestions, setFollowUpSuggestions] = useState(true)
@@ -205,6 +208,11 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
   const [touchStartY, setTouchStartY] = useState(0)
   const [touchStartScrollTop, setTouchStartScrollTop] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
+
+  const handleMiniPlayerToggle = (enabled: boolean) => {
+    setMiniPlayerEnabled(enabled)
+    toast.success(enabled ? 'Mini player enabled' : 'Mini player disabled')
+  }
 
   const BackgroundPreview = ({ type }: { type: BackgroundType }) => {
     const beamsComponent = useMemo(
@@ -1698,6 +1706,30 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
               <h3 className="text-lg md:text-xl font-semibold mb-4">personalization</h3>
 
               <div className="space-y-6">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Music className="w-5 h-5 text-primary" />
+                    <h4 className="font-semibold text-base">mini player</h4>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-lg border border-border">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="mini-player-enabled" className="text-sm md:text-base">
+                        enable mini player
+                      </Label>
+                      <p className="text-xs md:text-sm text-muted-foreground">
+                        show the floating music player bubble for YouTube playback
+                      </p>
+                    </div>
+                    <Switch
+                      id="mini-player-enabled"
+                      checked={miniPlayerEnabled}
+                      onCheckedChange={handleMiniPlayerToggle}
+                      className="flex-shrink-0"
+                    />
+                  </div>
+                </div>
+
                 <div className="space-y-4">
                   <div className="flex items-center gap-3 mb-4">
                     <Palette className="w-5 h-5 text-primary" />

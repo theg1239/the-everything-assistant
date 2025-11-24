@@ -27,6 +27,7 @@ function ShareContent({
   onLinkedIn,
   onReddit,
   previewMessages,
+  isMobile,
 }: {
   title?: string
   shareUrl: string
@@ -36,6 +37,7 @@ function ShareContent({
   onLinkedIn: () => void
   onReddit: () => void
   previewMessages: LegacyMessage[]
+  isMobile?: boolean
 }) {
   return (
     <div className="space-y-5">
@@ -43,7 +45,9 @@ function ShareContent({
         <DialogTitle className="text-2xl font-semibold tracking-tight">{title || 'Share chat'}</DialogTitle>
       </div>
 
-      <SharePreviewCard title={title || 'Shared chat'} messages={previewMessages} hideTitle />
+      <div className={isMobile ? 'max-h-[30vh] overflow-y-auto' : ''}>
+        <SharePreviewCard title={title || 'Shared chat'} messages={previewMessages} hideTitle />
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Button
@@ -199,6 +203,7 @@ export function ShareModal({
       onLinkedIn={handleLinkedIn}
       onReddit={handleReddit}
       previewMessages={previewMessages}
+      isMobile={isMobile}
     />
   )
 
@@ -209,11 +214,13 @@ export function ShareModal({
           <Drawer.Overlay className="fixed inset-0 bg-black/70 backdrop-blur-sm" />
           <Drawer.Content
             aria-label="Share chat"
-            className="fixed inset-x-0 bottom-0 z-[70] rounded-t-3xl border border-border/50 bg-background/95 p-5 shadow-2xl"
+            className="fixed inset-x-0 bottom-0 z-[70] max-h-[85vh] rounded-t-3xl border border-border/50 bg-background/95 p-5 shadow-2xl"
           >
-            <div className="mx-auto max-w-xl">
-              <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-border/60" />
-              {content}
+            <div className="mx-auto max-w-xl flex flex-col max-h-[calc(85vh-40px)]">
+              <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-border/60 flex-shrink-0" />
+              <div className="overflow-y-auto flex-1 min-h-0">
+                {content}
+              </div>
             </div>
           </Drawer.Content>
         </Drawer.Portal>

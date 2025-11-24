@@ -9,11 +9,25 @@ export type ToolCallPayload = {
   toolCallId?: string
 }
 
+export type MusicPlayerState = {
+  isPlaying: boolean
+  currentTrack: { id: string; title: string; artist: string } | null
+  progress: string
+  duration: string
+  progressPercent: number
+  trackPosition: string | null
+  loopMode: 'none' | 'all' | 'current'
+  shuffle: boolean
+  trackCount: number
+  tracks: Array<{ id: string; title: string; artist: string }>
+}
+
 export type ChatRequestPayload = {
   id?: string
   directToolCall?: ToolCallPayload
   preferredTool?: string
   messages?: AppUIMessage[]
+  musicPlayerState?: MusicPlayerState
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -117,6 +131,12 @@ export const parseChatRequestPayload = (value: unknown): ChatRequestPayload | nu
   const rawMessages = (value as { messages?: unknown }).messages
   if (Array.isArray(rawMessages)) {
     payload.messages = rawMessages as AppUIMessage[]
+  }
+
+  // Parse music player state
+  const musicPlayerState = (value as { musicPlayerState?: unknown }).musicPlayerState
+  if (musicPlayerState && isRecord(musicPlayerState)) {
+    payload.musicPlayerState = musicPlayerState as unknown as MusicPlayerState
   }
 
   return payload

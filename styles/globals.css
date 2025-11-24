@@ -173,6 +173,36 @@
     letter-spacing: 0.01em;
   }
 
+  .prose table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .prose table tbody,
+  .prose table thead {
+    display: table;
+    width: 100%;
+    min-width: max-content;
+  }
+
+  .prose th,
+  .prose td {
+    white-space: nowrap;
+  }
+
+  @media (max-width: 768px) {
+    .prose table {
+      font-size: 0.875rem;
+    }
+    
+    .prose th,
+    .prose td {
+      padding: 0.5rem 0.75rem;
+    }
+  }
+
   .markdown-table-wrapper {
     width: 100%;
     overflow-x: auto;

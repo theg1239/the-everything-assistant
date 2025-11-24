@@ -56,6 +56,7 @@ const PureMultimodalInput = ({
   const [, startSuggestionTransition] = useTransition()
   const borderRef = useRef<HTMLDivElement | null>(null)
   const suggestionRequestRef = useRef(0)
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [borderMetrics, setBorderMetrics] = useState<{
     width: number
     height: number
@@ -151,7 +152,10 @@ const PureMultimodalInput = ({
       const value = e.target.value
       if (maxLength && value.length <= maxLength) {
         setInput(value)
+        // Clear ghost suggestion immediately on input change to avoid stale suggestions
         setGhostSuggestion('')
+        // Cancel any pending autocomplete request
+        suggestionRequestRef.current++
         adjustHeight()
       }
     },
@@ -339,6 +343,12 @@ const PureMultimodalInput = ({
   }, [])
 
   useEffect(() => {
+    // Clear any pending debounce timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+      debounceTimerRef.current = null
+    }
+
     if (!isFocused || isLoading || disabled) {
       setGhostSuggestion('')
       return
@@ -358,14 +368,17 @@ const PureMultimodalInput = ({
     if (!caretAtEnd) return
 
     const requestId = ++suggestionRequestRef.current
-    const timer = window.setTimeout(() => {
+    
+    // Debounce: wait 400ms after user stops typing before fetching suggestion
+    debounceTimerRef.current = setTimeout(() => {
       startSuggestionTransition(async () => {
-        setGhostSuggestion('')
+        // Don't clear suggestion immediately to avoid flicker
         try {
           const suggestion = await getAutocompleteSuggestionAction({
             partial: trimmed,
             recentMessages,
           })
+          // Only update if this is still the latest request
           if (suggestionRequestRef.current === requestId) {
             setGhostSuggestion(suggestion)
           }
@@ -375,10 +388,13 @@ const PureMultimodalInput = ({
           }
         }
       })
-    }, 180)
+    }, 400)
 
     return () => {
-      clearTimeout(timer)
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+        debounceTimerRef.current = null
+      }
     }
   }, [safeInput, isFocused, isLoading, disabled, startSuggestionTransition, recentMessages])
 

@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { Streamdown } from 'streamdown'
 import { OptimizedMarkdown } from './optimized-markdown'
 import { ToolCallDisplay } from './tool-call-display'
+import { MusicPlayerToolHandler } from './music-player-tool-handler'
 import { MessageActions } from './message-actions'
 import { memo, useMemo, useState, useEffect, useId } from 'react'
 import type { LegacyMessage } from '@/lib/ai-message-conversion'
@@ -285,6 +286,9 @@ const PureMessageBubble = ({
               setMaximizedItem={setMaximizedItem}
             />
           )}
+
+          {/* Handle music player tool commands */}
+          <MusicPlayerToolHandler toolInvocations={toolInvocations} />
 
           <div
             className={cn('flex flex-col gap-4 break-words', {

@@ -48,6 +48,7 @@ import {
   HUB_BRIEFING_TRIGGER_VALUE,
 } from '@/lib/hub/constants'
 import { useChatStore } from '@/hooks/use-chat-store'
+import { useMiniPlayerStore, formatTime } from '@/lib/stores/useMiniPlayerStore'
 
 type Message = LegacyMessage
 
@@ -496,6 +497,31 @@ function PureChatInterfaceComponent({
                   : msg
               )
             : outgoingMessages
+        
+        // Get current music player state to pass to tools
+        const playerStore = useMiniPlayerStore.getState()
+        const currentTrack = playerStore.currentIndex >= 0 && playerStore.currentIndex < playerStore.tracks.length 
+          ? playerStore.tracks[playerStore.currentIndex] 
+          : null
+        const musicPlayerState = {
+          isPlaying: playerStore.isPlaying,
+          currentTrack: currentTrack ? {
+            id: currentTrack.id,
+            title: currentTrack.title,
+            artist: currentTrack.artist || 'Unknown Artist',
+          } : null,
+          progress: formatTime(playerStore.progressMs),
+          duration: formatTime(playerStore.durationMs),
+          progressPercent: playerStore.durationMs > 0 
+            ? Math.round((playerStore.progressMs / playerStore.durationMs) * 100) 
+            : 0,
+          trackPosition: currentTrack ? `${playerStore.currentIndex + 1}/${playerStore.tracks.length}` : null,
+          loopMode: playerStore.loopCurrent ? 'current' : playerStore.loopAll ? 'all' : 'none',
+          shuffle: playerStore.isShuffled,
+          trackCount: playerStore.tracks.length,
+          tracks: playerStore.tracks.slice(0, 20).map(t => ({ id: t.id, title: t.title, artist: t.artist || 'Unknown' })),
+        }
+        
         return {
           ...rest,
           body: {
@@ -503,6 +529,7 @@ function PureChatInterfaceComponent({
             messages: messagesWithMetadata,
             id: resolvedChatId,
             ...(selectedTool ? { preferredTool: selectedTool } : {}),
+            musicPlayerState,
           },
         }
       },

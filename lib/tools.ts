@@ -20,6 +20,7 @@ import { createMemoryTool } from './memory/memory-tools'
 import { createFeedbackIssue } from './feedback'
 import { hasVTOPCredentials, getFormattedVTOPCredentials } from './server-vtop-credentials'
 import { getUserMcpToken, refreshUserMcpToken, isExpired as isMcpExpired } from './mcp-tokens'
+import { createMusicPlayerTool, type MusicPlayerToolState } from './music-player-tool'
 // import {
 //   indexPastPapers,
 //   askIndexedPaperQuestion,
@@ -177,6 +178,7 @@ type VITToolsOptions = {
   channel?: 'web' | 'whatsapp' | 'discord' | 'hub' | string
   mcp?: McpClientConfig
   sessionUser?: { name?: string | null; email?: string | null; isGuest?: boolean }
+  musicPlayerState?: MusicPlayerToolState | null
 }
 
 async function callVtopViaMcp(options: {
@@ -1033,6 +1035,7 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
     ...webTools,
     ...createKnowledgeTools(),
     ...createMemoryTool(userId),
+    ...createMusicPlayerTool(options.musicPlayerState),
     submitFeedback: tool({
       description:
         'file product feedback, feature requests, or bug reports directly from chat; creates a GitHub issue for maintainers.',

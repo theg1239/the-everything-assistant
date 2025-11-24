@@ -235,9 +235,8 @@ export const useMiniPlayerStore = create<MiniPlayerState>()(
               ? choices[Math.floor(Math.random() * choices.length)]
               : state.currentIndex
           } else {
-            const nextPos = (currentPos + 1 + total) % total
+            const nextPos = (currentPos + 1) % total
             nextIndex = availableIndices[nextPos]
-            if (!state.loopAll && nextPos === 0) return { isPlaying: false }
           }
           return { currentIndex: nextIndex, isPlaying: true, progressMs: 0 }
         }),

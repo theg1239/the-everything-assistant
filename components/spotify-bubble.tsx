@@ -1353,30 +1353,6 @@ export default function SpotifyBubble() {
         </div>
       </div>
 
-      {/* Video/Lyrics toggle buttons */}
-      <div className="flex items-center justify-center gap-2 px-3 py-2 border-b border-border/30">
-        <button
-          className={cn(
-            'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
-            showVideo ? 'bg-foreground text-background' : 'bg-foreground/10 text-muted-foreground hover:text-foreground'
-          )}
-          onClick={() => toggleVideo()}
-        >
-          <Video className="h-3.5 w-3.5" />
-          Video
-        </button>
-        <button
-          className={cn(
-            'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
-            showLyrics ? 'bg-foreground text-background' : 'bg-foreground/10 text-muted-foreground hover:text-foreground'
-          )}
-          onClick={() => toggleLyrics()}
-        >
-          <Captions className="h-3.5 w-3.5" />
-          Lyrics
-        </button>
-      </div>
-
       {/* Progress bar */}
       <div className="px-3 pt-2">
         <div className="relative h-1.5 w-full rounded-full bg-foreground/10 overflow-hidden">

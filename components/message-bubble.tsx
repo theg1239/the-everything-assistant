@@ -349,33 +349,54 @@ const PureMessageBubble = ({
             ) : null}
 
             {attachments.length > 0 && (
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-2 mt-2">
                 {attachments.map(att => {
                   const isImage = att.contentType?.startsWith('image/')
-                  const label = att.name || att.url.split('/').pop() || 'file'
+                  const isPdf = att.contentType === 'application/pdf'
+                  const fileName = att.name || att.url.split('/').pop() || 'file'
+                  const fileType = isPdf ? 'PDF' : isImage ? 'Image' : 'File'
+                  
+                  if (isImage) {
+                    return (
+                      <a
+                        key={att.url}
+                        href={att.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="group relative w-32 overflow-hidden rounded-xl border border-border/40 bg-muted/30 hover:border-primary/50 transition-all"
+                      >
+                        <div className="h-24 w-full bg-background/40 flex items-center justify-center overflow-hidden">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={att.url}
+                            alt={fileName}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        </div>
+                      </a>
+                    )
+                  }
+                  
+                  // PDF and other files - horizontal card style
                   return (
                     <a
                       key={att.url}
                       href={att.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="group relative w-32 overflow-hidden rounded-lg border border-border/60 bg-muted/40 hover:border-primary/60 transition"
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border/40 bg-muted/30 hover:bg-muted/50 hover:border-primary/50 transition-all max-w-[280px]"
                     >
-                      <div className="h-24 w-full bg-background/60 flex items-center justify-center overflow-hidden">
-                        {isImage ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={att.url}
-                            alt={label}
-                            className="h-full w-full object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <FileIcon className="h-6 w-6 text-muted-foreground" />
-                        )}
+                      <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-red-500/90 flex items-center justify-center">
+                        <FileIcon className="h-4 w-4 text-white" />
                       </div>
-                      <div className="px-2 py-1 text-[11px] text-foreground truncate" title={label}>
-                        {label}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-foreground truncate" title={fileName}>
+                          {fileName}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {fileType}
+                        </div>
                       </div>
                     </a>
                   )

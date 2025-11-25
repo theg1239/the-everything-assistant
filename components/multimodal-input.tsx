@@ -41,7 +41,7 @@ interface MultimodalInputProps {
   attachments?: Attachment[]
   onSelectFiles?: (files: FileList | File[]) => Promise<void> | void
   onRemoveAttachment?: (url: string) => void
-  uploadingAttachments?: boolean
+  uploadingAttachments?: Array<{ id: string; name: string; contentType: string }>
   maxAttachments?: number
   allowAttachments?: boolean
 }
@@ -66,7 +66,7 @@ const PureMultimodalInput = ({
   attachments = [],
   onSelectFiles,
   onRemoveAttachment,
-  uploadingAttachments = false,
+  uploadingAttachments = [],
   maxAttachments = 6,
   allowAttachments = true,
 }: MultimodalInputProps) => {
@@ -512,8 +512,8 @@ const PureMultimodalInput = ({
           )}
 
           {/* Attachments row - above the input */}
-          {allowAttachments && (attachments.length > 0 || uploadingAttachments) && (
-            <div className="flex flex-wrap gap-2 px-3 pt-3 pb-2 border-b border-border/30">
+          {allowAttachments && (attachments.length > 0 || uploadingAttachments.length > 0) && (
+            <div className="flex flex-wrap gap-3 px-4 pt-4 pb-3 border-b border-border/30">
               {attachments.map(att => (
                 <AttachmentPreview
                   key={att.url}
@@ -521,12 +521,17 @@ const PureMultimodalInput = ({
                   onRemove={onRemoveAttachment}
                 />
               ))}
-              {uploadingAttachments && (
+              {uploadingAttachments.map(uploading => (
                 <AttachmentPreview
-                  attachment={{ url: 'uploading', name: '', contentType: 'application/octet-stream' }}
+                  key={uploading.id}
+                  attachment={{ 
+                    url: uploading.id, 
+                    name: uploading.name, 
+                    contentType: uploading.contentType 
+                  }}
                   isUploading
                 />
-              )}
+              ))}
             </div>
           )}
 

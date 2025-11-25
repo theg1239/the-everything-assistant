@@ -227,7 +227,7 @@ function PureChatInterfaceComponent({
   const [showGuestLimitModal, setShowGuestLimitModal] = useState(false)
   const [guestTotalUserMessages, setGuestTotalUserMessages] = useState(0)
   const [attachments, setAttachments] = useState<Attachment[]>([])
-  const [uploadingAttachments, setUploadingAttachments] = useState(false)
+  const [uploadingAttachments, setUploadingAttachments] = useState<Array<{ id: string; name: string; contentType: string }>>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -1102,13 +1102,23 @@ function PureChatInterfaceComponent({
       const remaining = Math.max(0, 6 - attachments.length)
       const limited = incoming.slice(0, remaining)
 
-      setUploadingAttachments(true)
+      // Create uploading placeholders for each file
+      const uploadingFiles = limited.map((file, i) => ({
+        id: `uploading-${Date.now()}-${i}`,
+        name: file.name,
+        contentType: file.type || 'application/octet-stream',
+      }))
+      setUploadingAttachments(uploadingFiles)
+
       try {
         const uploaded: Attachment[] = []
-        for (const file of limited) {
+        for (let i = 0; i < limited.length; i++) {
+          const file = limited[i]
+          const uploadId = uploadingFiles[i].id
           const sizeMb = file.size / (1024 * 1024)
           if (sizeMb > 25) {
             toast.error(`${file.name} is too large (max 25MB)`, { position: 'top-center' })
+            setUploadingAttachments(prev => prev.filter(u => u.id !== uploadId))
             continue
           }
           const formData = new FormData()
@@ -1117,10 +1127,13 @@ function PureChatInterfaceComponent({
           if (!res.ok) {
             const err = await res.json().catch(() => ({ error: undefined })) as { error?: string }
             toast.error(err.error || `Failed to upload ${file.name}`)
+            setUploadingAttachments(prev => prev.filter(u => u.id !== uploadId))
             continue
           }
           const data = (await res.json()) as { url: string; name?: string; contentType: string }
           uploaded.push({ url: data.url, name: data.name || file.name, contentType: data.contentType })
+          // Remove this file from uploading state
+          setUploadingAttachments(prev => prev.filter(u => u.id !== uploadId))
         }
         if (uploaded.length) {
           setAttachments(prev => [...prev, ...uploaded])
@@ -1129,7 +1142,7 @@ function PureChatInterfaceComponent({
         console.error('attachment upload failed', err)
         toast.error('upload failed — please try again')
       } finally {
-        setUploadingAttachments(false)
+        setUploadingAttachments([])
       }
     },
     [attachments.length, isGuest]
@@ -1173,7 +1186,7 @@ function PureChatInterfaceComponent({
       e.preventDefault()
       const trimmed = input.trim()
       if (!trimmed) return
-      if (uploadingAttachments) {
+      if (uploadingAttachments.length > 0) {
         toast.info('hold on — files are still uploading')
         return
       }
@@ -1214,16 +1227,18 @@ function PureChatInterfaceComponent({
         }
         parts.push({ type: 'text', text: trimmed })
 
+        // Clear attachments and input BEFORE sending to prevent them from persisting during navigation
+        setAttachments([])
+        setUploadingAttachments([])
+        setInput('')
+
         await sendMessage({
           role: 'user',
           parts,
         } as any)
-        setAttachments([])
         if (isGuest) {
           setGuestTotalUserMessages(prev => prev + 1)
         }
-        setInput('')
-        setUploadingAttachments(false)
       } catch (err) {
         console.error('Error submitting message:', err)
         setErrorMessage('Failed to send message. Please try again.')

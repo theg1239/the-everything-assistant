@@ -1038,6 +1038,90 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
     ...createKnowledgeTools(),
     ...createMemoryTool(userId),
     ...createMusicPlayerTool(options.musicPlayerState),
+    // generateImage: tool({
+    //   description:
+    //     'Generate an image based on a text prompt using Google Gemini\'s image generation model. Use this when users ask you to create, generate, draw, or make an image, picture, illustration, artwork, or visual content. The generated image will be returned as base64 data.',
+    //   inputSchema: z.object({
+    //     prompt: z
+    //       .string()
+    //       .min(3, 'Provide a description of the image you want to generate')
+    //       .describe('A detailed description of the image to generate. Be specific about style, colors, composition, and subject matter for best results.'),
+    //     aspectRatio: z
+    //       .enum(['1:1', '16:9', '9:16', '4:3', '3:4'])
+    //       .optional()
+    //       .describe('Aspect ratio of the generated image. Defaults to 1:1 (square).'),
+    //   }),
+    //   execute: async ({ prompt, aspectRatio }) => {        
+    //     try {
+    //       const startTime = Date.now()
+          
+    //       const result = await rateLimitedAI.google.generateImage({
+    //         prompt,
+    //         aspectRatio: aspectRatio,
+    //       }, userId)
+
+    //       const duration = Date.now() - startTime
+    //       console.log(`[generateImage] API call completed in ${duration}ms`)
+
+    //       if (!result.image || !result.image.base64) {
+    //         console.log('[generateImage] No image returned from API')
+    //         return {
+    //           success: false,
+    //           error: 'No image was generated',
+    //           message: 'The image generation model did not return an image. Please try again with a different prompt.',
+    //         }
+    //       }
+
+    //       console.log('[generateImage] Image generated successfully')
+    //       console.log('[generateImage] Image count:', result.images?.length || 1)
+    //       console.log('[generateImage] Primary image MIME type:', result.image.mimeType || 'image/png')
+          
+    //       return {
+    //         success: true,
+    //         image: {
+    //           base64: result.image.base64,
+    //           mimeType: result.image.mimeType || 'image/png',
+    //         },
+    //         images: result.images?.map(img => ({
+    //           base64: img.base64,
+    //           mimeType: img.mimeType || 'image/png',
+    //         })) || [{ base64: result.image.base64, mimeType: result.image.mimeType || 'image/png' }],
+    //         prompt,
+    //         aspectRatio: aspectRatio || '1:1',
+    //         message: `Successfully generated image for: "${prompt}"`,
+    //       }
+    //     } catch (error: any) {
+    //       const errorMessage = error?.message || 'Unknown error occurred'
+    //       console.error('[generateImage] Error occurred:', errorMessage)
+    //       console.error('[generateImage] Full error:', error)
+          
+    //       if (errorMessage.includes('rate limit') || errorMessage.includes('quota')) {
+    //         console.log('[generateImage] Rate limit error detected')
+    //         return {
+    //           success: false,
+    //           error: 'Rate limit exceeded',
+    //           message: 'Image generation rate limit reached. Please try again in a few moments.',
+    //         }
+    //       }
+          
+    //       if (errorMessage.includes('safety') || errorMessage.includes('blocked') || errorMessage.includes('policy')) {
+    //         console.log('[generateImage] Content policy violation detected')
+    //         return {
+    //           success: false,
+    //           error: 'Content policy violation',
+    //           message: 'The prompt was blocked due to content safety policies. Please try a different prompt.',
+    //         }
+    //       }
+
+    //       console.error('[generateImage] Unhandled error type')
+    //       return {
+    //         success: false,
+    //         error: errorMessage,
+    //         message: 'Failed to generate image. Please try again with a different prompt.',
+    //       }
+    //     }
+    //   },
+    // }),
     submitFeedback: tool({
       description:
         'file product feedback, feature requests, or bug reports directly from chat; creates a GitHub issue for maintainers.',
@@ -1131,7 +1215,7 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
           const results = await Promise.allSettled([
             scrapePapersService(resolvedCourseCode, examType, year),
             scrapePapersCodeChef(resolvedCourseCode, examType, year),
-            scrapeVITPaperVault(resolvedCourseCode, examType, year),
+            // scrapeVITPaperVault(resolvedCourseCode, examType, year),
             scrapeExamCooker(resolvedCourseCode, examType, year),
           ])
 

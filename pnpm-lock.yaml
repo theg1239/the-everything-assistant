@@ -218,6 +218,9 @@ importers:
       recharts:
         specifier: ^3.1.2
         version: 3.4.1(@types/react@18.3.26)(react-dom@19.2.0(react@19.2.0))(react-is@16.13.1)(react@19.2.0)(redux@5.0.1)
+      remark-math:
+        specifier: ^6.0.0
+        version: 6.0.0
       resend:
         specifier: ^6.4.2
         version: 6.4.2(@react-email/render@2.0.0(react-dom@19.2.0(react@19.2.0))(react@19.2.0))
@@ -245,6 +248,9 @@ importers:
       three-mesh-bvh:
         specifier: 0.9.2
         version: 0.9.2(three@0.177.0)
+      unified:
+        specifier: ^11.0.5
+        version: 11.0.5
       uuid:
         specifier: ^9.0.1
         version: 9.0.1

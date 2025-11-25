@@ -404,12 +404,23 @@ export class ApiKeyManager {
         return await apiCall(key)
       } catch (err: any) {
         lastErr = err
+        console.error(`[ApiKeyManager] Error details for key index ${idx}:`, err?.message || err)
+        if (err?.cause) {
+          console.error(`[ApiKeyManager] Error cause:`, err.cause)
+        }
+        if (err?.status || err?.code) {
+          console.error(`[ApiKeyManager] Error status/code:`, err?.status || err?.code)
+        }
         if (this.isRateLimitError(err)) {
+          console.log(`[ApiKeyManager] Rate limit error detected for key index ${idx}`)
           await this.recordRateLimitEvent(hash, err)
           await this.incrementFailure(hash)
         } else if (!this.isServerError(err)) {
           // Only count client-side / auth errors towards banning; server 5xx should be retried.
+          console.log(`[ApiKeyManager] Client/auth error detected for key index ${idx}`)
           await this.incrementFailure(hash)
+        } else {
+          console.log(`[ApiKeyManager] Server error (5xx) detected for key index ${idx}, will retry`)
         }
         attempt++
         if (attempt >= maxAttempts) break

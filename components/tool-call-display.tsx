@@ -489,6 +489,36 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     }
   }
 
+  if (toolName === 'generateImage') {
+    if (result.success && result.image) {
+      return {
+        type: 'generated-image' as const,
+        title: 'Generated Image',
+        icon: <Sparkles className="h-5 w-5 text-purple-400" />,
+        data: {
+          image: result.image,
+          images: result.images || [result.image],
+          prompt: result.prompt,
+          aspectRatio: result.aspectRatio,
+          message: result.message,
+        },
+        source: 'Image Generation',
+      }
+    } else {
+      return {
+        type: 'error' as const,
+        title: 'Image Generation Failed',
+        icon: <AlertCircle className="h-5 w-5 text-red-400" />,
+        data: {
+          error: result.error,
+          message: result.message,
+          success: false,
+        },
+        source: 'Image Generation',
+      }
+    }
+  }
+
   if (result.data && result.data.todayMenu && result.data.messType) {
     return {
       type: 'mess-menu' as const,
@@ -913,6 +943,7 @@ const ToolCallResultsSummary = ({
           config.type === 'placements' ||
           config.type === 'interactive-course-page' ||
           config.type === 'reddit-overview' ||
+          config.type === 'generated-image' ||
           ('data' in config &&
             (config as { data?: unknown }).data !== undefined &&
             (config as { data?: unknown }).data !== null))

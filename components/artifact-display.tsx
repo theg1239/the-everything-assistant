@@ -37,6 +37,9 @@ import {
   Briefcase,
   School,
   Award,
+  ImageIcon,
+  Download,
+  Sparkles,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
@@ -84,6 +87,7 @@ interface ArtifactDisplayProps {
     | 'question-patterns'
     | 'gravitas-events'
     | 'gravitas-event-registration'
+    | 'generated-image'
     | 'general'
   className?: string
   onLoginClick?: () => void
@@ -3062,7 +3066,8 @@ const PureArtifactDisplay = ({
               type === 'general' ||
               type === 'error' ||
               type === 'campus-info' ||
-              type === 'faculty'
+              type === 'faculty' ||
+              type === 'generated-image'
               ? 'grid-cols-1 w-full max-w-full gap-4'
               : type === 'papers'
                 ? isMobile
@@ -3131,6 +3136,8 @@ const PureArtifactDisplay = ({
                 return <GravitasEventRegistrationArtifact key={index} data={item} />
               case 'general':
                 return <GeneralCard key={index} data={item} />
+              case 'generated-image':
+                return <GeneratedImageCard key={index} data={item} />
               default:
                 return (
                   <Card key={index} className="hover:shadow-md transition-shadow">
@@ -3397,6 +3404,198 @@ const PureArtifactDisplay = ({
         )}
       </AnimatePresence>
     </motion.div>
+  )
+}
+
+function GeneratedImageCard({ data }: { data: any }) {
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [selectedImage, setSelectedImage] = useState<{
+    base64: string
+    mimeType: string
+  } | null>(null)
+
+  // Handle single image or multiple images
+  const images = data?.images || (data?.image ? [data.image] : [])
+
+  const handleDownload = (image: { base64: string; mimeType: string }, index: number) => {
+    const link = document.createElement('a')
+    link.href = `data:${image.mimeType};base64,${image.base64}`
+    const extension = image.mimeType.split('/')[1] || 'png'
+    link.download = `generated-image-${index + 1}.${extension}`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const handleCopyPrompt = async () => {
+    if (data?.prompt) {
+      try {
+        await navigator.clipboard.writeText(data.prompt)
+      } catch {}
+    }
+  }
+
+  if (images.length === 0) {
+    return (
+      <Card className="hover:shadow-md transition-shadow">
+        <CardContent className="p-4">
+          <div className="text-sm text-muted-foreground">No images generated</div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <>
+      <Card className="hover:shadow-md transition-shadow overflow-hidden">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ImageIcon className="h-4 w-4 text-purple-500" />
+              <CardTitle className="text-sm font-medium">Generated Image{images.length > 1 ? 's' : ''}</CardTitle>
+            </div>
+            {images.length > 1 && (
+              <Badge variant="secondary" className="text-xs">
+                {images.length} images
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="p-4 pt-0 space-y-3">
+          {data?.prompt && (
+            <div className="flex items-start gap-2 p-2 rounded bg-muted/50 border border-border/40">
+              <Sparkles className="h-3.5 w-3.5 text-purple-500 mt-0.5 shrink-0" />
+              <p className="text-xs text-muted-foreground flex-1 line-clamp-2">{data.prompt}</p>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0"
+                onClick={handleCopyPrompt}
+              >
+                <Copy className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
+
+          <div className={cn(
+            'grid gap-2',
+            images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'
+          )}>
+            {images.map((image: { base64: string; mimeType: string }, index: number) => (
+              <div
+                key={index}
+                className="relative group rounded-lg overflow-hidden border border-border/50 bg-muted/30"
+              >
+                <img
+                  src={`data:${image.mimeType};base64,${image.base64}`}
+                  alt={data?.prompt || `Generated image ${index + 1}`}
+                  className="w-full h-auto object-contain max-h-[400px] cursor-pointer transition-transform hover:scale-[1.02]"
+                  onClick={() => {
+                    setSelectedImage(image)
+                    setIsFullscreen(true)
+                  }}
+                />
+                <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center justify-end gap-1">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="h-7 text-xs bg-white/90 hover:bg-white text-black"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDownload(image, index)
+                      }}
+                    >
+                      <Download className="h-3 w-3 mr-1" />
+                      Download
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="h-7 text-xs bg-white/90 hover:bg-white text-black"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedImage(image)
+                        setIsFullscreen(true)
+                      }}
+                    >
+                      <Maximize2 className="h-3 w-3 mr-1" />
+                      View
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {(data?.aspectRatio || data?.style) && (
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              {data.aspectRatio && (
+                <Badge variant="outline" className="text-[10px]">
+                  {data.aspectRatio}
+                </Badge>
+              )}
+              {data.style && (
+                <Badge variant="outline" className="text-[10px]">
+                  {data.style}
+                </Badge>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Fullscreen Modal */}
+      <AnimatePresence>
+        {isFullscreen && selectedImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+            onClick={() => setIsFullscreen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              className="relative max-w-[90vw] max-h-[90vh]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <img
+                src={`data:${selectedImage.mimeType};base64,${selectedImage.base64}`}
+                alt={data?.prompt || 'Generated image'}
+                className="max-w-full max-h-[85vh] object-contain rounded-lg"
+              />
+              <div className="absolute top-2 right-2 flex gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="bg-white/90 hover:bg-white text-black"
+                  onClick={() => handleDownload(selectedImage, 0)}
+                >
+                  <Download className="h-4 w-4 mr-1" />
+                  Download
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className="bg-white/90 hover:bg-white text-black"
+                  onClick={() => setIsFullscreen(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              {data?.prompt && (
+                <div className="absolute bottom-2 left-2 right-2 p-3 bg-black/70 rounded-lg">
+                  <p className="text-sm text-white">{data.prompt}</p>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   )
 }
 

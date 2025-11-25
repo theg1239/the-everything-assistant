@@ -172,7 +172,7 @@ export function ToolsDropdown({ onToolSelect, selectedTool, onMCPConfigsChange }
         <span className="text-muted-foreground">
           <Plug className="w-4 h-4" />
         </span>
-        <span className="flex-1 truncate">MCP Servers</span>
+        <span className="flex-1 truncate">MCP servers</span>
         {enabledMcpCount > 0 && (
           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400 font-medium">
             {enabledMcpCount}
@@ -220,7 +220,7 @@ export function ToolsDropdown({ onToolSelect, selectedTool, onMCPConfigsChange }
             <Drawer.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
             <Drawer.Content className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-w-md flex-col rounded-t-3xl border border-border/40 bg-background/95 p-4 shadow-2xl">
               <Drawer.Handle className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-border/60" />
-              <div className="text-sm font-medium text-center text-muted-foreground">Select mode</div>
+              <div className="text-sm font-medium text-center text-muted-foreground">select mode</div>
               <div className="mt-3 space-y-2 max-h-[60vh] overflow-y-auto" data-allow-touch-scroll>
                 {renderOptions()}
               </div>

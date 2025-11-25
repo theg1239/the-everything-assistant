@@ -3,10 +3,9 @@
 import * as React from 'react'
 import { useState, useEffect, useCallback } from 'react'
 import { Drawer } from 'vaul'
-import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { Plus, Trash2, Settings2, Globe, Zap, ExternalLink, ChevronDown, ChevronUp, Edit2, X } from 'lucide-react'
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -494,10 +493,10 @@ export function MCPConfigDialog({ open, onOpenChange, onConfigsChange }: MCPConf
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden border border-border/50 bg-background/95 p-0 shadow-2xl">
-        <VisuallyHidden>
+        <DialogHeader className="sr-only">
           <DialogTitle>mcp server configuration</DialogTitle>
           <DialogDescription>connect model context protocol servers to extend the assistant with custom tools.</DialogDescription>
-        </VisuallyHidden>
+        </DialogHeader>
         <div className="max-h-[90vh] overflow-y-auto">
           {bodyContent}
         </div>

@@ -993,6 +993,7 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
   const mcpConfig = options.mcp
   const channel = options.channel
   const sessionUser = options.sessionUser
+
   const webTools =
     process.env.PARALLEL_API_KEY && process.env.PARALLEL_API_KEY.trim().length > 0
       ? {
@@ -1000,6 +1001,7 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
           webExtract: extractTool,
         }
       : {}
+
   const findPastPapersInputSchema = z.object({
     courseCode: z
       .string()

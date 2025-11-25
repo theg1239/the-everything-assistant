@@ -1,9 +1,51 @@
 import type { LegacyMessage } from '@/lib/ai-message-conversion'
 import { getModelConfig, type ModelConfig } from '@/lib/model-registry'
+import type { Attachment } from '@/types/attachment'
 
 import { getToolInputPayload, getToolOutputPayload } from './tool-helpers'
 
 type DirectToolCallResult = any
+
+
+function extractPdfUrlsFromToolResult(toolCall: any): Attachment[] {
+  if (!toolCall?.result) return []
+
+  const attachments: Attachment[] = []
+
+  if (toolCall.result.papers?.length) {
+    for (const paper of toolCall.result.papers.slice(0, 5)) {
+      if (paper.url && (paper.url.endsWith('.pdf') || paper.url.includes('.pdf'))) {
+        attachments.push({
+          url: paper.url,
+          name: paper.title || 'paper.pdf',
+          contentType: 'application/pdf',
+        })
+      }
+    }
+  }
+
+  if (toolCall.result.url && toolCall.result.url.includes('.pdf')) {
+    attachments.push({
+      url: toolCall.result.url,
+      name: toolCall.result.filename || toolCall.result.title || 'syllabus.pdf',
+      contentType: 'application/pdf',
+    })
+  }
+
+  if (toolCall.result.matches?.length) {
+    for (const match of toolCall.result.matches.slice(0, 3)) {
+      if (match.url && match.url.includes('.pdf')) {
+        attachments.push({
+          url: match.url,
+          name: match.filename || match.title || 'syllabus.pdf',
+          contentType: 'application/pdf',
+        })
+      }
+    }
+  }
+
+  return attachments
+}
 
 function buildToolContextFromInvocation(toolCall: any): string {
   if (!toolCall?.result) return ''
@@ -46,7 +88,16 @@ function buildToolContextFromInvocation(toolCall: any): string {
   }
 
   if (toolCall.result.papers?.length) {
-    return `\n\n[PAPERS DATA CONTEXT]:\nFound ${toolCall.result.papers.length} past papers`
+    const papers = toolCall.result.papers
+    const paperDetails = papers.slice(0, 10).map((p: any, i: number) => {
+      const parts = [`${i + 1}. ${p.title || 'Untitled'}`]
+      if (p.examType) parts.push(`Type: ${p.examType}`)
+      if (p.year) parts.push(`Year: ${p.year}`)
+      if (p.url) parts.push(`PDF URL: ${p.url}`)
+      return parts.join(' | ')
+    }).join('\n')
+    
+    return `\n\n[PAPERS DATA CONTEXT]:\nFound ${papers.length} past papers:\n${paperDetails}\n\n[NOTE]: The PDF files are attached to this conversation. You can read and analyze their content directly to answer questions about topics, questions, and patterns in these papers.`
   }
 
   if (toolCall.result.faculty?.length) {
@@ -71,12 +122,39 @@ function buildToolContextFromInvocation(toolCall: any): string {
   return ''
 }
 
+/**
+ * Collect PDF attachments from all tool invocations in the conversation
+ */
+function collectPdfAttachmentsFromMessages(messages: LegacyMessage[]): Attachment[] {
+  const attachments: Attachment[] = []
+  
+  for (const message of messages) {
+    if (message.role === 'assistant' && (message as any).toolInvocations?.length) {
+      for (const toolCall of (message as any).toolInvocations) {
+        attachments.push(...extractPdfUrlsFromToolResult(toolCall))
+      }
+    }
+  }
+  
+  return attachments
+}
+
 export function enhanceMessagesWithToolContext(
   messages: LegacyMessage[],
   directToolCallResult?: DirectToolCallResult
 ): LegacyMessage[] {
+  const pdfAttachments = collectPdfAttachmentsFromMessages(messages)
+  
   const enhanced = messages.map((message: any, index: number) => {
-    if (message.role === 'user' && index === messages.length - 1) return message
+    if (message.role === 'user' && index === messages.length - 1) {
+
+      if (pdfAttachments.length > 0) {
+        const existingAttachments = message.attachments || []
+        const newAttachments = [...existingAttachments, ...pdfAttachments]
+        return { ...message, attachments: newAttachments }
+      }
+      return message
+    }
 
     if (message.role === 'assistant' && message.toolInvocations?.length) {
       let toolContext = ''
@@ -122,10 +200,14 @@ export function enhanceMessagesWithToolContext(
         }
       }
 
-      if (toolContext) {
+      const directPdfAttachments = extractPdfUrlsFromToolResult(directToolCallResult)
+
+      if (toolContext || directPdfAttachments.length > 0) {
+        const existingAttachments = (lastUserMessage as any).attachments || []
         enhanced[enhanced.length - 1] = {
           ...lastUserMessage,
-          content: (lastUserMessage.content || '') + toolContext,
+          content: toolContext ? (lastUserMessage.content || '') + toolContext : lastUserMessage.content,
+          attachments: [...existingAttachments, ...directPdfAttachments],
         }
       }
     }

@@ -301,7 +301,7 @@ export async function POST(req: Request) {
         messages: finalMessages,
         tools,
         temperature: 0.3,
-        maxTokens: 10000,
+        maxTokens: 40000,
         ...(providerOptions ? { providerOptions } : {}),
         experimental_transform: smoothStream({ chunking: 'word' }),
         middleware: model.provider === 'openai' ? [] : [reasoningMiddleware],

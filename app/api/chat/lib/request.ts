@@ -2,6 +2,7 @@ import * as z from 'zod'
 
 import type { AppUIMessage } from '@/lib/ai-message-conversion'
 import type { JsonValue } from '@/types/tools'
+import type { MCPClientConfig } from '@/lib/mcp-config'
 
 export type ToolCallPayload = {
   toolName: string
@@ -28,6 +29,7 @@ export type ChatRequestPayload = {
   preferredTool?: string
   messages?: AppUIMessage[]
   musicPlayerState?: MusicPlayerState
+  mcpConfigs?: MCPClientConfig[]
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -137,6 +139,20 @@ export const parseChatRequestPayload = (value: unknown): ChatRequestPayload | nu
   const musicPlayerState = (value as { musicPlayerState?: unknown }).musicPlayerState
   if (musicPlayerState && isRecord(musicPlayerState)) {
     payload.musicPlayerState = musicPlayerState as unknown as MusicPlayerState
+  }
+
+  const mcpConfigs = (value as { mcpConfigs?: unknown }).mcpConfigs
+  if (Array.isArray(mcpConfigs)) {
+    payload.mcpConfigs = mcpConfigs.filter((item): item is MCPClientConfig => {
+      return (
+        isRecord(item) &&
+        typeof item.id === 'string' &&
+        typeof item.name === 'string' &&
+        typeof item.url === 'string' &&
+        (item.transportType === 'http' || item.transportType === 'sse') &&
+        typeof item.enabled === 'boolean'
+      )
+    })
   }
 
   return payload

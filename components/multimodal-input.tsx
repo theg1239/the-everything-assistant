@@ -20,6 +20,7 @@ import { ToolsDropdown } from '@/components/tools-dropdown'
 import { getAutocompleteSuggestionAction } from '@/app/actions/autocomplete'
 import type { Attachment } from '@/types/attachment'
 import { AttachmentPreview } from '@/components/attachment-preview'
+import type { MCPClientConfig } from '@/lib/mcp-config'
 
 interface MultimodalInputProps {
   input: string
@@ -36,6 +37,7 @@ interface MultimodalInputProps {
   showAttachments?: boolean
   onToolSelect?: (toolId: string) => void
   selectedTool?: string
+  onMCPConfigsChange?: (configs: MCPClientConfig[]) => void
   recentMessages?: { role: 'user' | 'assistant'; content: string }[]
   disabled?: boolean
   attachments?: Attachment[]
@@ -61,6 +63,7 @@ const PureMultimodalInput = ({
   showAttachments = true,
   onToolSelect,
   selectedTool,
+  onMCPConfigsChange,
   recentMessages = [],
   disabled = false,
   attachments = [],
@@ -605,7 +608,11 @@ const PureMultimodalInput = ({
               </div>
 
               <div className={cn(disabled && 'pointer-events-none opacity-50')}>
-                <ToolsDropdown onToolSelect={onToolSelect} selectedTool={selectedTool} />
+                <ToolsDropdown 
+                  onToolSelect={onToolSelect} 
+                  selectedTool={selectedTool}
+                  onMCPConfigsChange={onMCPConfigsChange}
+                />
               </div>
             </div>
 

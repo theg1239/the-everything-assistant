@@ -1,18 +1,29 @@
 'use client'
 
 import * as React from 'react'
-import { Wrench, Search, FileText, GraduationCap, MessageSquare, UtensilsCrossed } from 'lucide-react'
+import { Wrench, Search, FileText, GraduationCap, MessageSquare, UtensilsCrossed, Settings2, Plug, Flame } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { Drawer } from 'vaul'
+import { MCPConfigDialog } from '@/components/mcp-config-dialog'
+import { getMCPConfigs, type MCPClientConfig } from '@/lib/mcp-config'
 
 interface Tool {
   id: string
   name: string
   description: string
   icon: React.ReactNode
+}
+
+const renderIcon = (icon: React.ReactNode, className = 'w-4 h-4') => {
+  if (React.isValidElement<{ className?: string }>(icon)) {
+    return React.cloneElement(icon, {
+      className: cn(className, icon.props.className),
+    })
+  }
+  return icon
 }
 
 const availableTools: Tool[] = [
@@ -26,7 +37,7 @@ const availableTools: Tool[] = [
     id: 'reddit-search',
     name: 'search reddit',
     description: 'Search Reddit knowledge base for student discussions and academic advice',
-    icon: <MessageSquare className="w-4 h-4" />,
+    icon: <Flame className="w-4 h-4" />,
   },
   {
     id: 'vtop-query',
@@ -51,20 +62,27 @@ const availableTools: Tool[] = [
 interface ToolsDropdownProps {
   onToolSelect?: (toolId: string) => void
   selectedTool?: string
+  onMCPConfigsChange?: (configs: MCPClientConfig[]) => void
 }
 
-export function ToolsDropdown({ onToolSelect, selectedTool }: ToolsDropdownProps) {
+export function ToolsDropdown({ onToolSelect, selectedTool, onMCPConfigsChange }: ToolsDropdownProps) {
   const [popoverOpen, setPopoverOpen] = React.useState(false)
   const [drawerOpen, setDrawerOpen] = React.useState(false)
+  const [mcpDialogOpen, setMcpDialogOpen] = React.useState(false)
+  const [mcpConfigs, setMcpConfigs] = React.useState<MCPClientConfig[]>([])
+  
+  // Load MCP configs on mount
+  React.useEffect(() => {
+    setMcpConfigs(getMCPConfigs())
+  }, [])
+  
+  const enabledMcpCount = mcpConfigs.filter(c => c.enabled).length
 
   const handleToolSelect = (toolId: string) => {
     onToolSelect?.(toolId)
     setPopoverOpen(false)
     setDrawerOpen(false)
   }
-
-  const selectedToolData = availableTools.find(tool => tool.id === selectedTool)
-  const selectedName = selectedToolData?.name || selectedTool || 'general'
 
   const toolEntries: Tool[] = React.useMemo(
     () => [
@@ -79,6 +97,13 @@ export function ToolsDropdown({ onToolSelect, selectedTool }: ToolsDropdownProps
     []
   )
 
+  const activeEntry = React.useMemo(() => {
+    const targetId = selectedTool ?? ''
+    return toolEntries.find(entry => entry.id === targetId) ?? toolEntries[0]
+  }, [selectedTool, toolEntries])
+
+  const selectedName = activeEntry?.name ?? 'general'
+
   const triggerClasses = cn(
     'h-8 px-2 text-muted-foreground hover:text-foreground transition-all',
     selectedTool && 'text-blue-500 hover:text-blue-600 bg-blue-50/50 dark:bg-blue-950/20'
@@ -86,7 +111,9 @@ export function ToolsDropdown({ onToolSelect, selectedTool }: ToolsDropdownProps
 
   const triggerChildren = selectedTool ? (
     <>
-      <Wrench className="w-4 h-4" />
+      <span className="text-muted-foreground">
+        {renderIcon(activeEntry.icon)}
+      </span>
       <span className="ml-1 text-xs font-medium hidden sm:inline">{selectedName}</span>
     </>
   ) : (
@@ -95,6 +122,11 @@ export function ToolsDropdown({ onToolSelect, selectedTool }: ToolsDropdownProps
       <Wrench className="w-4 h-4" />
     </>
   )
+
+  const handleMCPConfigsChange = React.useCallback((configs: MCPClientConfig[]) => {
+    setMcpConfigs(configs)
+    onMCPConfigsChange?.(configs)
+  }, [onMCPConfigsChange])
 
   const renderOptions = () => (
     <div className="flex flex-col gap-1" role="menu">
@@ -115,14 +147,38 @@ export function ToolsDropdown({ onToolSelect, selectedTool }: ToolsDropdownProps
             aria-checked={isActive}
           >
             <span className="text-muted-foreground">
-              {React.isValidElement(entry.icon)
-                ? React.cloneElement(entry.icon as React.ReactElement, { className: 'w-4 h-4' })
-                : entry.icon}
+              {renderIcon(entry.icon)}
             </span>
             <span className="flex-1 truncate">{entry.name}</span>
           </button>
         )
       })}
+      
+      <div className="my-1 h-px bg-border/60" />
+      
+      <button
+        onClick={() => {
+          setPopoverOpen(false)
+          setDrawerOpen(false)
+          setMcpDialogOpen(true)
+        }}
+        className={cn(
+          'inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+          'hover:bg-muted/60 text-foreground/90'
+        )}
+        role="menuitem"
+      >
+        <span className="text-muted-foreground">
+          <Plug className="w-4 h-4" />
+        </span>
+        <span className="flex-1 truncate">MCP Servers</span>
+        {enabledMcpCount > 0 && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400 font-medium">
+            {enabledMcpCount}
+          </span>
+        )}
+      </button>
     </div>
   )
 
@@ -172,6 +228,12 @@ export function ToolsDropdown({ onToolSelect, selectedTool }: ToolsDropdownProps
           </Drawer.Portal>
         </Drawer.Root>
       </div>
+      
+      <MCPConfigDialog
+        open={mcpDialogOpen}
+        onOpenChange={setMcpDialogOpen}
+        onConfigsChange={handleMCPConfigsChange}
+      />
     </>
   )
 }

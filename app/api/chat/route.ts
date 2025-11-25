@@ -13,6 +13,7 @@ import {
   type LegacyMessage,
 } from '@/lib/ai-message-conversion'
 import type { Attachment } from '@/types/attachment'
+import { fetchMCPTools, closeMCPClients } from '@/lib/mcp-server'
 
 import { createDirectToolCallStream } from './lib/messages'
 import { parseChatRequestPayload } from './lib/request'
@@ -149,6 +150,24 @@ export async function POST(req: Request) {
     })
     const prefersWebSearch = effectivePreferredTool === 'web-search'
     let tools: Record<string, any> = baseTools
+
+    let mcpClients: any[] = []
+    if (payload.mcpConfigs && payload.mcpConfigs.length > 0) {
+      try {
+        const mcpResult = await fetchMCPTools(payload.mcpConfigs)
+        if (Object.keys(mcpResult.tools).length > 0) {
+          tools = { ...tools, ...mcpResult.tools }
+          mcpClients = mcpResult.clients
+          console.log(`[MCP] Loaded ${Object.keys(mcpResult.tools).length} tools from ${mcpClients.length} MCP servers`)
+        }
+        if (mcpResult.errors.length > 0) {
+          console.warn('[MCP] Some MCP servers failed to connect:', mcpResult.errors.map(e => `${e.config.name}: ${e.error}`))
+        }
+      } catch (error) {
+        console.error('[MCP] Failed to fetch MCP tools:', error)
+        // Continue without MCP tools - don't fail the request
+      }
+    }
 
     if (prefersWebSearch) {
       try {
@@ -308,6 +327,11 @@ export async function POST(req: Request) {
         stopWhen: stepCountIs(10),
         onError: async (error: any) => {
           console.error('Streaming error occurred:', error)
+
+          if (mcpClients.length > 0) {
+            await closeMCPClients(mcpClients)
+            console.log(`[MCP] Closed ${mcpClients.length} MCP client(s) after error`)
+          }
 
           try {
             await saveMessage(
@@ -475,6 +499,11 @@ export async function POST(req: Request) {
             }
           } catch (e) {
             console.warn('Failed to persist final usage:', e)
+          }
+
+          if (mcpClients.length > 0) {
+            await closeMCPClients(mcpClients)
+            console.log(`[MCP] Closed ${mcpClients.length} MCP client(s)`)
           }
         },
       },

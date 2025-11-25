@@ -50,6 +50,7 @@ import {
 import { useChatStore } from '@/hooks/use-chat-store'
 import { useMiniPlayerStore, formatTime } from '@/lib/stores/useMiniPlayerStore'
 import type { Attachment } from '@/types/attachment'
+import { getEnabledMCPConfigs } from '@/lib/mcp-config'
 
 type Message = LegacyMessage
 
@@ -547,6 +548,7 @@ function PureChatInterfaceComponent({
             id: resolvedChatId,
             ...(selectedTool ? { preferredTool: selectedTool } : {}),
             musicPlayerState,
+            mcpConfigs: getEnabledMCPConfigs(),
           },
         }
       },

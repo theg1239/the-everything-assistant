@@ -1436,6 +1436,7 @@ const PureToolCallDisplay = ({
         tc.toolName === 'saveMemory' ||
         tc.toolName === 'resolveCourseCode' ||
         tc.toolName === 'musicPlayer' ||
+        (tc.toolName && tc.toolName.startsWith('mcp_')) ||
         (tc.result && tc.result.hidden)
       ) {
         continue
@@ -1557,11 +1558,13 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
   const filteredToolCalls = (() => {
     const map = new Map<string, any>()
     for (const tc of toolCalls) {
+      // Filter out internal tools and MCP tools (prefixed with mcp_)
       if (
         tc.toolName === 'knowledgeBase' ||
         tc.toolName === 'saveMemory' ||
         tc.toolName === 'resolveCourseCode' ||
         tc.toolName === 'musicPlayer' ||
+        (tc.toolName && tc.toolName.startsWith('mcp_')) ||
         (tc.result && tc.result.hidden)
       ) {
         continue

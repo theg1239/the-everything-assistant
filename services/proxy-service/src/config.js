@@ -115,7 +115,7 @@ const GLOBAL_RATE_LIMIT = parseInt(process.env.GLOBAL_RATE_LIMIT || '120', 10)
 const VTOP_RATE_LIMIT = parseInt(process.env.VTOP_RATE_LIMIT || '30', 10)
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
-  : ['https://the-everything-assistant.vercel.app', 'http://localhost:3000']
+  : ['https://everything-assistant.com', 'http://localhost:3000']
 
 module.exports = {
   capabilityManifest: () => capabilityManifest,

@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
       rpName: 'The Everything Assistant',
       rpID:
         process.env.NODE_ENV === 'production'
-          ? process.env.WEBAUTHN_RP_ID || 'the-everything-assistant.vercel.app'
+          ? process.env.WEBAUTHN_RP_ID || 'everything-assistant.com'
           : 'localhost',
       userID: new TextEncoder().encode(session.user.email),
       userName: session.user.email,

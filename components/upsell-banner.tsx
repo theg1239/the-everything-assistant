@@ -1,16 +1,33 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
 import { X, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useMediaQuery } from '@/hooks/use-media-query'
 
+
+const AUTO_DISMISS_DURATION = 8000
+
 const UpsellBanner: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false)
   const [isDismissed, setIsDismissed] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
+  const [progress, setProgress] = useState(100)
+  const [isPaused, setIsPaused] = useState(false)
   const isMobile = useMediaQuery('(max-width: 768px)')
+
+  const handleClose = useCallback(() => {
+    if (showFeedback) {
+      localStorage.setItem('has-seen-feedback-banner', 'true')
+      localStorage.setItem('feedback-banner-dismissed', 'true')
+    } else {
+      localStorage.setItem('has-seen-upsell-banner', 'true')
+      localStorage.setItem('research-banner-dismissed', 'true')
+    }
+    setIsDismissed(true)
+    setIsVisible(false)
+  }, [showFeedback])
 
   useEffect(() => {
     const checkAndShowUpsell = () => {
@@ -44,17 +61,24 @@ const UpsellBanner: React.FC = () => {
     }
   }, [])
 
-  const handleClose = () => {
-    if (showFeedback) {
-      localStorage.setItem('has-seen-feedback-banner', 'true')
-      localStorage.setItem('feedback-banner-dismissed', 'true')
-    } else {
-      localStorage.setItem('has-seen-upsell-banner', 'true')
-      localStorage.setItem('research-banner-dismissed', 'true')
-    }
-    setIsDismissed(true)
-    setIsVisible(false)
-  }
+  useEffect(() => {
+    if (!isVisible || isPaused) return
+
+    const startTime = Date.now()
+    const startProgress = progress
+    
+    const intervalId = setInterval(() => {
+      const elapsed = Date.now() - startTime
+      const remaining = Math.max(0, startProgress - (elapsed / AUTO_DISMISS_DURATION) * 100)
+      setProgress(remaining)
+      
+      if (remaining <= 0) {
+        handleClose()
+      }
+    }, 50)
+
+    return () => clearInterval(intervalId)
+  }, [isVisible, isPaused, handleClose, progress])
 
   const handleOpenSettings = () => {
     const event = new CustomEvent('openSettings', { detail: { section: 'feedback' } })
@@ -64,15 +88,31 @@ const UpsellBanner: React.FC = () => {
 
   if (!isVisible || isDismissed) return null
 
+  const ProgressBar = () => (
+    <div className="h-1 bg-slate-200/50 dark:bg-slate-700/50 overflow-hidden">
+      <div 
+        className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-100 ease-linear"
+        style={{ width: `${progress}%` }}
+      />
+    </div>
+  )
+
   if (isMobile) {
     return (
-      <div className="fixed top-12 left-0 right-0 z-40 mx-2 mb-2">
+      <div 
+        className="fixed top-12 left-0 right-0 z-40 mx-2 mb-2"
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => setIsPaused(false)}
+        onTouchStart={() => setIsPaused(true)}
+        onTouchEnd={() => setIsPaused(false)}
+      >
         <div className="relative overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-xl border border-slate-200 dark:border-slate-700">
+          <ProgressBar />
           <Button
             onClick={handleClose}
             variant="ghost"
             size="sm"
-            className="absolute right-2 top-2 rounded-full p-1 bg-black/50 dark:bg-black/60 text-white hover:bg-black/70 border border-white/20 shadow-sm z-20"
+            className="absolute right-2 top-3 rounded-full p-1 bg-black/50 dark:bg-black/60 text-white hover:bg-black/70 border border-white/20 shadow-sm z-20"
             aria-label="close"
           >
             <X className="h-5 w-5" />
@@ -123,13 +163,18 @@ const UpsellBanner: React.FC = () => {
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-40 w-80">
+    <div 
+      className="fixed bottom-6 right-6 z-40 w-80"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+    >
       <div className="relative overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-xl border border-slate-200 dark:border-slate-700">
+        <ProgressBar />
         <Button
           onClick={handleClose}
           variant="ghost"
           size="sm"
-          className="absolute right-3 top-3 rounded-full p-1 bg-black/50 dark:bg-black/60 text-white hover:bg-black/70 border border-white/20 shadow-sm z-20"
+          className="absolute right-3 top-4 rounded-full p-1 bg-black/50 dark:bg-black/60 text-white hover:bg-black/70 border border-white/20 shadow-sm z-20"
           aria-label="close"
         >
           <X className="h-5 w-5" />

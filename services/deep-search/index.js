@@ -18,7 +18,7 @@ const PORT = process.env.PORT || 3002
 app.use(helmet())
 app.use(
   cors({
-    origin: ['http://localhost:3000', 'https://the-everything-assistant.vercel.app'],
+    origin: ['http://localhost:3000', 'https://everything-assistant.com'],
     credentials: true,
   })
 )

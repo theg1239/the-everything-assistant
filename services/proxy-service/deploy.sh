@@ -21,7 +21,7 @@ fi
 echo "⚙️ Setting environment variables..."
 heroku config:set NODE_ENV=production --app $APP_NAME
 heroku config:set CLI_TIMEOUT=120000 --app $APP_NAME
-heroku config:set ALLOWED_ORIGINS=https://the-everything-assistant.vercel.app --app $APP_NAME
+heroku config:set ALLOWED_ORIGINS=https://everything-assistant.com --app $APP_NAME
 
 echo "📦 Deploying application..."
 git add .

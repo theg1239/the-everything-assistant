@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://the-everything-assistant.vercel.app">ask me anything here</a>
+  <a href="https://everything-assistant.com">ask me anything here</a>
 </p>
 
 ---

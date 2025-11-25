@@ -255,7 +255,7 @@ class DiscordService extends EventEmitter {
           .setDescription(
             'for vtop features like checking grades, attendance, timetable, and other academic information, please use the web interface:'
           )
-          .addFields({ name: 'website', value: 'https://the-everything-assistant.vercel.app' })
+          .addFields({ name: 'website', value: 'https://everything-assistant.com' })
           .setFooter({
             text: 'the website provides full access to all vtop features with a better user experience.',
           })
@@ -532,7 +532,7 @@ class DiscordService extends EventEmitter {
           .setDescription(
             'For VTOP features like checking grades, attendance, timetable, and other academic information, please use the web interface:'
           )
-          .addFields({ name: 'Website', value: 'https://the-everything-assistant.vercel.app' })
+          .addFields({ name: 'Website', value: 'https://everything-assistant.com' })
           .setFooter({
             text: 'The website provides full access to all VTOP features with a better user experience.',
           })

@@ -12,7 +12,7 @@ import { HUB_COMMANDS, type HubVTOPCommand } from '@/types/hub'
 const resendApiKey = process.env.RESEND_API_KEY
 const resendFrom = process.env.RESEND_FROM || 'Everything Assistant <assistant@assist.nptelprep.in>'
 const resendClient = resendApiKey ? new Resend(resendApiKey) : null
-const FALLBACK_APP_URL = 'https://the-everything-assistant.vercel.app'
+const FALLBACK_APP_URL = 'https://everything-assistant.com'
 
 type SendableDailyBriefingAction = Partial<DailyBriefingAction> & { label: string }
 

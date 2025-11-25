@@ -62,11 +62,11 @@ export async function POST(request: NextRequest) {
         expectedChallenge: user.tempMfaSecret,
         expectedOrigin:
           process.env.NODE_ENV === 'production'
-            ? process.env.WEBAUTHN_ORIGIN || 'https://the-everything-assistant.vercel.app'
+            ? process.env.WEBAUTHN_ORIGIN || 'https://everything-assistant.com'
             : 'http://localhost:3000',
         expectedRPID:
           process.env.NODE_ENV === 'production'
-            ? process.env.WEBAUTHN_RP_ID || 'the-everything-assistant.vercel.app'
+            ? process.env.WEBAUTHN_RP_ID || 'everything-assistant.com'
             : 'localhost',
         requireUserVerification: false,
       } as VerifyRegistrationResponseOpts)

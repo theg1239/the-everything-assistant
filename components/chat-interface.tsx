@@ -305,6 +305,19 @@ function PureChatInterfaceComponent({
   }, [])
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+    const prefilledQuery = sessionStorage.getItem('prefilled-query')
+    if (prefilledQuery) {
+      setInput(prefilledQuery)
+      sessionStorage.removeItem('prefilled-query')
+      setTimeout(() => {
+        const textarea = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message input"]')
+        textarea?.focus()
+      }, 100)
+    }
+  }, [])
+
+  useEffect(() => {
     if (shareOpen && (!shareableChatId || isGuest)) {
       setShareOpen(false)
     }

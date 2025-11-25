@@ -1416,8 +1416,8 @@ const tempFiles = new Map()
 
 function getBaseUrl() {
   if (process.env.NODE_ENV === 'production') {
-    console.log('Using production API base URL: https://the-everything-assistant.vercel.app')
-    return 'https://the-everything-assistant.vercel.app'
+    console.log('Using production API base URL: https://everything-assistant.com')
+    return 'https://everything-assistant.com'
   } else {
     console.log('Using development API base URL: http://localhost:3000')
     return 'http://localhost:3000'

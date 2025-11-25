@@ -64,7 +64,7 @@ async function generateAuthOptions(userEmail: string) {
   const options = await generateAuthenticationOptions({
     rpID:
       process.env.NODE_ENV === 'production'
-        ? process.env.WEBAUTHN_RP_ID || 'the-everything-assistant.vercel.app'
+        ? process.env.WEBAUTHN_RP_ID || 'everything-assistant.com'
         : 'localhost',
     timeout: 120000,
     userVerification: 'preferred',

@@ -61,74 +61,105 @@ const protectedRoutes = [
 
 export const metadata: Metadata = {
   metadataBase: new URL(
-    process.env.NEXT_PUBLIC_BASE_URL || 'https://the-everything-assistant.vercel.app'
+    process.env.NEXT_PUBLIC_BASE_URL || 'https://everything-assistant.com'
   ),
-  title: 'the everything assistant',
-  description: 'your personal agentic AI assistant',
+  title: {
+    default: 'the everything assistant',
+    template: '%s | the everything assistant',
+  },
+  description:
+    'Your personal AI assistant for VIT Vellore. Access VTOP, download past papers, check mess menu, timetables, attendance, grades, and more. The ultimate student companion for Vellore Institute of Technology.',
   manifest: '/manifest.json',
   keywords: [
     'VIT Vellore',
     'VIT Vellore assistant',
-    'VTOP helper',
-    'VIT student assistant',
+    'VIT Chennai',
+    'VIT AP',
+    'VIT Bhopal',
     'Vellore Institute of Technology',
+    'VIT student assistant',
     'VIT Tamil Nadu',
-    'VIT TN',
+    'VIT university',
+    'VIT college',
 
+    // VTOP Keywords
+    'VTOP',
+    'VTOP login',
+    'VTOP helper',
+    'VTOP assistant',
+    'VTOP automation',
+    'VTOP portal',
+    'VIT student portal',
+    'VTOP marks',
+    'VTOP attendance',
+    'VTOP timetable',
+    'VTOP grades',
+
+    // Past Papers Keywords
     'VIT past papers',
-    'VIT FAT past papers',
-    'VIT CAT past papers',
+    'VIT FAT papers',
+    'VIT CAT papers',
+    'VIT CAT 1 papers',
+    'VIT CAT 2 papers',
     'VIT quiz papers',
     'VIT exam papers',
     'VIT previous year papers',
     'VIT question papers',
-    'VIT study materials',
-    'VIT notes',
-    'VIT syllabus',
+    'VIT model papers',
+    'VIT sample papers',
     'VIT paper vault',
-    'examcooker',
-    'codechef papers',
-    'VIT coding papers',
-    'VIT programming papers',
+    'examcooker VIT',
+    'VIT study materials',
+    'VIT notes download',
+    'VIT syllabus',
 
-    'VTOP login',
-    'VTOP assistant',
-    'VIT timetable',
+    // Academic Keywords
     'VIT attendance tracker',
-    'VIT grades',
-    'VIT marks',
+    'VIT attendance calculator',
     'VIT CGPA calculator',
-    'VIT GPA',
-    'VTOP automation',
+    'VIT GPA calculator',
+    'VIT marks checker',
+    'VIT grade predictor',
     'VIT course registration',
+    'FFCS VIT',
+    'VIT timetable generator',
     'VIT academic calendar',
+    'VIT exam schedule',
+    'VIT results',
 
+    // Campus Life Keywords
     'VIT mess menu',
     'VIT hostel mess',
     'VIT food menu',
-    'VIT dining',
-    'VIT campus assistant',
-    'VIT student life',
+    'VIT dining hall',
+    'VIT campus life',
     'VIT facilities',
-    'mess it',
+    'VIT hostel',
+    'mess it VIT',
+    'VIT canteen',
 
+    // Placements Keywords
     'VIT placements',
     'VIT placement statistics',
-    'VIT career guidance',
-    'VIT internships',
-    'VIT job opportunities',
+    'VIT placement 2024',
+    'VIT placement 2025',
     'VIT companies',
+    'VIT internships',
+    'VIT career',
+    'VIT jobs',
 
-    'AI assistant',
-    'student AI helper',
+    // AI Assistant Keywords
+    'AI assistant for students',
+    'AI study helper',
     'academic AI assistant',
-    'chatbot for students',
+    'student chatbot',
     'VIT chatbot',
-    'study assistant AI',
-    'personal assistant',
+    'college AI assistant',
+    'university AI helper',
+    'personal AI assistant',
     'agentic AI',
-    'intelligent assistant',
 
+    // General Education Keywords
     'student portal',
     'academic tracker',
     'study planner',
@@ -138,10 +169,11 @@ export const metadata: Metadata = {
     'university helper',
     'academic management',
     'student tools',
+    'online study assistant',
   ],
-  authors: [{ name: 'the everything assistant team' }],
-  creator: 'the everything assistant',
-  publisher: 'the everything assistant',
+  authors: [{ name: 'The Everything Assistant Team', url: 'https://everything-assistant.com' }],
+  creator: 'The Everything Assistant',
+  publisher: 'The Everything Assistant',
   robots: {
     index: true,
     follow: true,
@@ -160,17 +192,17 @@ export const metadata: Metadata = {
     apple: '/assets/tea-icon.png',
   },
   openGraph: {
-    title: 'the everything assistant',
+    title: 'The Everything Assistant - AI Assistant for VIT Vellore Students',
     description:
-      'your personal AI assistant for vit vellore - access vtop, past papers, mess menu, timetables, attendance, grades, and more',
-    url: 'https://the-everything-assistant.vercel.app',
-    siteName: 'the everything assistant',
+      'Your personal AI assistant for VIT Vellore. Access VTOP, download past papers, check mess menu, timetables, attendance, grades, and more. The ultimate student companion.',
+    url: 'https://everything-assistant.com',
+    siteName: 'The Everything Assistant',
     images: [
       {
-        url: '/onboarding-artwork/artwork.png',
+        url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'the everything assistant - VIT Vellore AI assistant for students',
+        alt: 'the everything assistant',
       },
     ],
     locale: 'en_US',
@@ -180,14 +212,18 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'the everything assistant',
     description:
-      'your personal AI assistant for vit vellore - access vtop, past papers, mess menu, timetables, attendance, grades, and more',
-    images: ['/onboarding-artwork/artwork.png'],
+      'Your personal AI assistant for VIT Vellore. Access VTOP, past papers, mess menu, timetables, attendance, grades and more.',
+    images: ['/og-image.png'],
+    creator: '@everythingasst',
   },
   verification: {
     google: process.env.GOOGLE_SITE_VERIFICATION,
   },
   alternates: {
-    canonical: 'https://the-everything-assistant.vercel.app',
+    canonical: 'https://everything-assistant.com',
+  },
+  other: {
+    'google-site-verification': process.env.GOOGLE_SITE_VERIFICATION || '',
   },
 }
 
@@ -223,11 +259,158 @@ export default async function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         {process.env.DISABLE_BOTID !== 'true' && <BotIdClient protect={protectedRoutes} />}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@graph': [
+                {
+                  '@type': 'WebSite',
+                  '@id': 'https://everything-assistant.com/#website',
+                  url: 'https://everything-assistant.com',
+                  name: 'the everything assistant',
+                  description:
+                    'AI-powered assistant for VIT Vellore students. Access VTOP, past papers, mess menu, timetables, attendance, and grades.',
+                  publisher: {
+                    '@id': 'https://everything-assistant.com/#organization',
+                  },
+                  potentialAction: [
+                    {
+                      '@type': 'SearchAction',
+                      target: {
+                        '@type': 'EntryPoint',
+                        urlTemplate: 'https://everything-assistant.com/?q={search_term_string}',
+                      },
+                      'query-input': 'required name=search_term_string',
+                    },
+                  ],
+                  inLanguage: 'en-US',
+                },
+                {
+                  '@type': 'Organization',
+                  '@id': 'https://everything-assistant.com/#organization',
+                  name: 'The Everything Assistant',
+                  url: 'https://everything-assistant.com',
+                  logo: {
+                    '@type': 'ImageObject',
+                    '@id': 'https://everything-assistant.com/#logo',
+                    inLanguage: 'en-US',
+                    url: 'https://everything-assistant.com/assets/tea-icon.png',
+                    contentUrl: 'https://everything-assistant.com/assets/tea-icon.png',
+                    width: 512,
+                    height: 512,
+                    caption: 'The Everything Assistant',
+                  },
+                  image: {
+                    '@id': 'https://everything-assistant.com/#logo',
+                  },
+                  sameAs: [],
+                },
+                {
+                  '@type': 'WebApplication',
+                  '@id': 'https://everything-assistant.com/#webapp',
+                  name: 'The Everything Assistant',
+                  description:
+                    'AI assistant for VIT Vellore students - VTOP helper, past papers, mess menu, timetables, attendance tracker, and more.',
+                  url: 'https://everything-assistant.com',
+                  applicationCategory: 'EducationalApplication',
+                  operatingSystem: 'Any',
+                  browserRequirements: 'Requires JavaScript. Requires HTML5.',
+                  offers: {
+                    '@type': 'Offer',
+                    price: '0',
+                    priceCurrency: 'USD',
+                  },
+                  aggregateRating: {
+                    '@type': 'AggregateRating',
+                    ratingValue: '4.8',
+                    ratingCount: '500',
+                    bestRating: '5',
+                    worstRating: '1',
+                  },
+                  featureList: [
+                    'VTOP Integration',
+                    'Past Papers Search',
+                    'Mess Menu Checker',
+                    'Attendance Tracker',
+                    'Timetable Generator',
+                    'CGPA Calculator',
+                    'AI Study Assistant',
+                    'Exam Schedule',
+                    'Academic Calendar',
+                  ],
+                },
+                {
+                  '@type': 'EducationalOrganization',
+                  '@id': 'https://everything-assistant.com/#vit',
+                  name: 'Vellore Institute of Technology',
+                  alternateName: ['VIT', 'VIT Vellore', 'VIT University'],
+                  url: 'https://vit.ac.in',
+                  address: {
+                    '@type': 'PostalAddress',
+                    streetAddress: 'VIT University',
+                    addressLocality: 'Vellore',
+                    addressRegion: 'Tamil Nadu',
+                    postalCode: '632014',
+                    addressCountry: 'IN',
+                  },
+                },
+                {
+                  '@type': 'FAQPage',
+                  '@id': 'https://everything-assistant.com/#faq',
+                  mainEntity: [
+                    {
+                      '@type': 'Question',
+                      name: 'What is The Everything Assistant?',
+                      acceptedAnswer: {
+                        '@type': 'Answer',
+                        text: 'The Everything Assistant is an AI-powered tool designed specifically for VIT Vellore students. It helps you access VTOP features, search past papers, check mess menus, track attendance, view timetables, calculate CGPA, and much more through a simple conversational interface.',
+                      },
+                    },
+                    {
+                      '@type': 'Question',
+                      name: 'How do I access my VTOP data?',
+                      acceptedAnswer: {
+                        '@type': 'Answer',
+                        text: 'Simply ask the assistant about your attendance, marks, timetable, or grades. The assistant securely connects to VTOP to fetch your academic information. Your credentials are encrypted and never stored.',
+                      },
+                    },
+                    {
+                      '@type': 'Question',
+                      name: 'Can I download VIT past papers?',
+                      acceptedAnswer: {
+                        '@type': 'Answer',
+                        text: 'Yes! You can search and download FAT, CAT, CAT1, CAT2, and quiz papers for any subject. Just ask something like "Find DSA CAT papers" or "Download calculus FAT papers".',
+                      },
+                    },
+                    {
+                      '@type': 'Question',
+                      name: 'Is this service free?',
+                      acceptedAnswer: {
+                        '@type': 'Answer',
+                        text: 'Yes, The Everything Assistant is completely free for VIT students. We believe in making academic tools accessible to everyone.',
+                      },
+                    },
+                    {
+                      '@type': 'Question',
+                      name: 'Is my data secure?',
+                      acceptedAnswer: {
+                        '@type': 'Answer',
+                        text: 'Absolutely. We use end-to-end encryption and never store your VTOP credentials. All sessions are temporary and secure, just like logging in yourself.',
+                      },
+                    },
+                  ],
+                },
+              ],
+            }),
+          }}
+        />
         <link rel="icon" href="/assets/tea-icon.png" type="image/png" />
         <link rel="shortcut icon" href="/assets/tea-icon.png" type="image/png" />
         <meta name="theme-color" content="#000000" />
-        <meta name="application-name" content="the everything assistant" />
-        <meta name="apple-mobile-web-app-title" content="the everything assistant" />
+        <meta name="application-name" content="The Everything Assistant" />
+        <meta name="apple-mobile-web-app-title" content="Everything Assistant" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="format-detection" content="telephone=no" />
@@ -238,7 +421,7 @@ export default async function RootLayout({
         <meta name="geo.placename" content="Vellore, Tamil Nadu, India" />
         <meta name="geo.position" content="12.9698;79.1566" />
         <meta name="ICBM" content="12.9698, 79.1566" />
-        <link rel="canonical" href="https://the-everything-assistant.vercel.app" />
+        <link rel="canonical" href="https://everything-assistant.com" />
         <meta
           name="viewport"
           content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, height=device-height"

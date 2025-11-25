@@ -49,6 +49,7 @@ import {
 } from '@/lib/hub/constants'
 import { useChatStore } from '@/hooks/use-chat-store'
 import { useMiniPlayerStore, formatTime } from '@/lib/stores/useMiniPlayerStore'
+import type { Attachment } from '@/types/attachment'
 
 type Message = LegacyMessage
 
@@ -225,6 +226,8 @@ function PureChatInterfaceComponent({
   const [promptHistory, setPromptHistory] = useState<string[]>([])
   const [showGuestLimitModal, setShowGuestLimitModal] = useState(false)
   const [guestTotalUserMessages, setGuestTotalUserMessages] = useState(0)
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [uploadingAttachments, setUploadingAttachments] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -1087,11 +1090,93 @@ function PureChatInterfaceComponent({
     }
   }, [error, checkForRateLimitError])
 
+  const handleAttachmentsSelected = useCallback(
+    async (files: FileList | File[]) => {
+      if (isGuest) {
+        toast.error('File uploads are available after signing in.')
+        return
+      }
+      const incoming = Array.from(files)
+      if (!incoming.length) return
+
+      const remaining = Math.max(0, 6 - attachments.length)
+      const limited = incoming.slice(0, remaining)
+
+      setUploadingAttachments(true)
+      try {
+        const uploaded: Attachment[] = []
+        for (const file of limited) {
+          const sizeMb = file.size / (1024 * 1024)
+          if (sizeMb > 25) {
+            toast.error(`${file.name} is too large (max 25MB)`, { position: 'top-center' })
+            continue
+          }
+          const formData = new FormData()
+          formData.append('file', file)
+          const res = await fetch('/api/files/upload', { method: 'POST', body: formData })
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: undefined })) as { error?: string }
+            toast.error(err.error || `Failed to upload ${file.name}`)
+            continue
+          }
+          const data = (await res.json()) as { url: string; name?: string; contentType: string }
+          uploaded.push({ url: data.url, name: data.name || file.name, contentType: data.contentType })
+        }
+        if (uploaded.length) {
+          setAttachments(prev => [...prev, ...uploaded])
+        }
+      } catch (err) {
+        console.error('attachment upload failed', err)
+        toast.error('upload failed — please try again')
+      } finally {
+        setUploadingAttachments(false)
+      }
+    },
+    [attachments.length, isGuest]
+  )
+
+  const handleRemoveAttachment = useCallback((url: string) => {
+    setAttachments(prev => prev.filter(att => att.url !== url))
+  }, [])
+
+  const extractLinkAttachments = useCallback((text: string): Attachment[] => {
+    const urlRegex = /https?:[^\s)]+/gi
+    const matches = text.match(urlRegex) || []
+    return matches
+      .map(rawUrl => {
+        const url = rawUrl.replace(/[\]\)]$/, '') // trim trailing bracket/paren
+        const lower = url.toLowerCase()
+        const isPdf = lower.endsWith('.pdf')
+        const isPng = lower.endsWith('.png')
+        const isJpg = lower.endsWith('.jpg') || lower.endsWith('.jpeg')
+        const isWebp = lower.endsWith('.webp')
+        const isGif = lower.endsWith('.gif')
+        const isImage = isPng || isJpg || isWebp || isGif
+        if (!isPdf && !isImage) return null
+        const contentType = isPdf
+          ? 'application/pdf'
+          : isPng
+            ? 'image/png'
+            : isJpg
+              ? 'image/jpeg'
+              : isWebp
+                ? 'image/webp'
+                : 'image/gif'
+        const name = url.split('/').pop() || (isPdf ? 'document.pdf' : 'image')
+        return { url, name, contentType }
+      })
+      .filter(Boolean) as Attachment[]
+  }, [])
+
   const handleFormSubmit = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault()
       const trimmed = input.trim()
       if (!trimmed) return
+      if (uploadingAttachments) {
+        toast.info('hold on — files are still uploading')
+        return
+      }
       if (isGuest && guestTotalUserMessages >= GUEST_MESSAGE_LIMIT) {
         setShowGuestLimitModal(true)
         return
@@ -1113,11 +1198,32 @@ function PureChatInterfaceComponent({
       setHasUserInitiatedConversation(true)
 
       try {
-        await sendMessage({ text: trimmed })
+        const parts: any[] = []
+        const linkAttachments = extractLinkAttachments(trimmed)
+        const allAttachments = [...attachments, ...linkAttachments]
+
+        if (allAttachments.length) {
+          parts.push(
+            ...allAttachments.map(att => ({
+              type: 'file',
+              url: att.url,
+              name: att.name,
+              mediaType: att.contentType,
+            }))
+          )
+        }
+        parts.push({ type: 'text', text: trimmed })
+
+        await sendMessage({
+          role: 'user',
+          parts,
+        } as any)
+        setAttachments([])
         if (isGuest) {
           setGuestTotalUserMessages(prev => prev + 1)
         }
         setInput('')
+        setUploadingAttachments(false)
       } catch (err) {
         console.error('Error submitting message:', err)
         setErrorMessage('Failed to send message. Please try again.')
@@ -1135,6 +1241,9 @@ function PureChatInterfaceComponent({
       isGuest,
       guestTotalUserMessages,
       setShowGuestLimitModal,
+      attachments,
+      setAttachments,
+      uploadingAttachments,
     ]
   )
 
@@ -1181,6 +1290,7 @@ function PureChatInterfaceComponent({
       isGuest,
       guestTotalUserMessages,
       setShowGuestLimitModal,
+      extractLinkAttachments,
     ]
   )
 
@@ -1745,6 +1855,11 @@ function PureChatInterfaceComponent({
                   placeholder={isGuest ? 'ask anything...' : 'ask anything...'}
                   disabled={isGuest && showGuestLimitModal}
                   recentMessages={recentMessages}
+                  attachments={attachments}
+                  onSelectFiles={!isGuest ? handleAttachmentsSelected : undefined}
+                  onRemoveAttachment={handleRemoveAttachment}
+                  uploadingAttachments={uploadingAttachments}
+                  allowAttachments={!isGuest}
                 />
                 {isGuest && (
                   <p className="mt-2 text-center text-xs text-amber-200/80">
@@ -2097,6 +2212,12 @@ function PureChatInterfaceComponent({
                   showFollowUpSuggestions={showFollowUpSuggestions && userPreferences.followUpSuggestions !== false}
                   lastAssistantMessage={lastAssistantMessage}
                   lastUserMessage={lastUserMessage}
+                  conversationHistory={messages
+                    .filter((m) => m.role === 'user' || m.role === 'assistant')
+                    .map((m) => ({
+                      role: m.role as 'user' | 'assistant',
+                      content: typeof m.content === 'string' ? m.content : '',
+                    }))}
                   onSuggestionClick={handleSuggestedQuestion}
                   onDismissSuggestions={() => setShowFollowUpSuggestions(false)}
                   isMobile={isMobile}
@@ -2139,6 +2260,12 @@ function PureChatInterfaceComponent({
                   <FollowUpSuggestions
                     lastAssistantMessage={lastAssistantMessage}
                     lastUserMessage={lastUserMessage}
+                    conversationHistory={messages
+                      .filter((m) => m.role === 'user' || m.role === 'assistant')
+                      .map((m) => ({
+                        role: m.role as 'user' | 'assistant',
+                        content: typeof m.content === 'string' ? m.content : '',
+                      }))}
                     isVisible={showFollowUpSuggestions && !isLoading}
                     onSuggestionClick={handleSuggestedQuestion}
                     onDismiss={() => setShowFollowUpSuggestions(false)}
@@ -2158,6 +2285,11 @@ function PureChatInterfaceComponent({
                   selectedTool={selectedTool || 'general'}
                   recentMessages={recentMessages}
                   disabled={isGuest && showGuestLimitModal}
+                  attachments={attachments}
+                  onSelectFiles={!isGuest ? handleAttachmentsSelected : undefined}
+                  onRemoveAttachment={handleRemoveAttachment}
+                  uploadingAttachments={uploadingAttachments}
+                  allowAttachments={!isGuest}
                 />
                 {isGuest && (
                   <p className="px-2 sm:px-4 pt-2 text-center text-[11px] text-amber-200/80">

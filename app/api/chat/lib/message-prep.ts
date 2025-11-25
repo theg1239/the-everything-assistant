@@ -183,42 +183,32 @@ export async function prepareFinalMessages(
       }
 
       const parts: any[] = []
-      if (m.content) parts.push({ type: 'input_text', text: m.content })
+      let hasBinary = false
+      if (m.content) parts.push({ type: 'text', text: m.content })
 
       for (const att of m.attachments) {
         if (!att?.contentType) continue
-        if (att.contentType.startsWith('application/pdf') || att.contentType.startsWith('image/')) {
-          try {
-            const res = await fetch(att.url)
-            if (!res.ok) throw new Error(`fetch ${res.status}`)
-            const ab = await res.arrayBuffer()
-            const sizeMB = ab.byteLength / (1024 * 1024)
-            if (sizeMB > 25) {
-              parts.push({
-                type: 'input_text',
-                text: `Attachment '${att.name || 'file'}' skipped: size ${sizeMB.toFixed(1)}MB exceeds 25MB limit.`,
-              })
-              continue
-            }
-            parts.push({
-              type: 'file',
-              data: Buffer.from(ab),
-              mimeType: att.contentType,
-              name:
-                att.name ||
-                (att.contentType.startsWith('image/') ? 'image' : 'document') + '-' + Date.now(),
-            })
-          } catch (e: any) {
-            parts.push({
-              type: 'input_text',
-              text: `Failed to load attachment '${att.name || 'file'}': ${e.message}`,
-            })
-          }
+        if (att.contentType.startsWith('image/')) {
+          // For images, just pass the URL directly - AI SDK supports image URLs
+          parts.push({
+            type: 'image',
+            image: att.url,
+          })
+          hasBinary = true
+        } else if (att.contentType.startsWith('application/pdf')) {
+          parts.push({
+            type: 'file',
+            data: att.url,
+            mediaType: att.contentType,
+          })
+          hasBinary = true
         }
       }
 
-      if (parts.length > 0) {
+      if (hasBinary) {
         finalMessages.push({ role: m.role, content: parts })
+      } else if (m.content && m.content.trim().length > 0) {
+        finalMessages.push({ role: m.role, content: m.content })
       }
     }
   }

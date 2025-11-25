@@ -57,7 +57,7 @@ export async function POST(req: Request) {
     const content = message.content || ''
     if (!content.trim()) continue
     if (message.role !== 'user' && message.role !== 'assistant') continue
-    await saveMessage(chat.id, message.role, content, message.toolInvocations, message.id)
+    await saveMessage(chat.id, message.role, content, message.toolInvocations, message.id, (message as any).attachments)
   }
 
   return new Response(

@@ -15,6 +15,7 @@ interface VirtualizedMessagesProps {
   showFollowUpSuggestions?: boolean
   lastAssistantMessage?: string
   lastUserMessage?: string
+  conversationHistory?: { role: 'user' | 'assistant'; content: string }[]
   onSuggestionClick?: (suggestion: string) => void
   onDismissSuggestions?: () => void
   isMobile?: boolean
@@ -33,6 +34,7 @@ export const VirtualizedMessages = memo(
     showFollowUpSuggestions = false,
     lastAssistantMessage = '',
     lastUserMessage = '',
+    conversationHistory,
     onSuggestionClick,
     onDismissSuggestions,
     isMobile = false,
@@ -69,6 +71,7 @@ export const VirtualizedMessages = memo(
                   <FollowUpSuggestions
                     lastAssistantMessage={lastAssistantMessage}
                     lastUserMessage={lastUserMessage}
+                    conversationHistory={conversationHistory}
                     isVisible={showFollowUpSuggestions}
                     onSuggestionClick={onSuggestionClick}
                     onDismiss={onDismissSuggestions}

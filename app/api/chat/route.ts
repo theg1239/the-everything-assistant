@@ -12,6 +12,7 @@ import {
   type AppUIMessage,
   type LegacyMessage,
 } from '@/lib/ai-message-conversion'
+import type { Attachment } from '@/types/attachment'
 
 import { createDirectToolCallStream } from './lib/messages'
 import { parseChatRequestPayload } from './lib/request'
@@ -26,9 +27,33 @@ import { executeDirectToolCall } from './lib/direct-tool-call'
 import { buildMemoryContext } from './lib/memory-context'
 import { enhanceMessagesWithToolContext, prepareFinalMessages } from './lib/message-prep'
 import { buildSystemPrompt } from './lib/prompt'
+import type { UIMessagePart } from 'ai'
 
 const getMessageText = (message: LegacyMessage | null | undefined): string =>
   message?.content ?? ''
+
+function extractAttachmentsFromParts(
+  parts: LegacyMessage['parts'] | AppUIMessage['parts']
+): Attachment[] {
+  if (!Array.isArray(parts)) return []
+  return (parts as unknown[])
+    .filter((part): part is Record<string, unknown> => typeof part === 'object' && part !== null)
+    .filter(part => part.type === 'file')
+    .map(part => {
+      const filePart = part as unknown as {
+        url?: string
+        name?: string
+        mediaType?: string
+      }
+      if (!filePart.url || !filePart.mediaType) return null
+      return {
+        url: filePart.url,
+        name: filePart.name,
+        contentType: filePart.mediaType,
+      } as Attachment
+    })
+    .filter((att): att is Attachment => Boolean(att))
+}
 
 export async function POST(req: Request) {
   try {
@@ -104,7 +129,15 @@ export async function POST(req: Request) {
     const userMessage = messages.length > 0 ? messages[messages.length - 1] : null
     if (userMessage?.role === 'user') {
       const persistedContent = getMessageText(userMessage)
-      await saveMessage(chat.id, 'user', persistedContent, undefined, userMessage.id)
+      const persistedAttachments = extractAttachmentsFromParts(userMessage.parts)
+      await saveMessage(
+        chat.id,
+        'user',
+        persistedContent,
+        undefined,
+        userMessage.id,
+        persistedAttachments.length ? persistedAttachments : undefined
+      )
     }
 
     const { context: memoryContext, isEnabled: isMemoryEnabled } =
@@ -163,7 +196,7 @@ export async function POST(req: Request) {
         )
 
         try {
-          await saveMessage(
+        await saveMessage(
             chat.id,
             'assistant',
             responseText,

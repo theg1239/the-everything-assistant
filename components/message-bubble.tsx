@@ -9,8 +9,9 @@ import { MusicPlayerToolHandler } from './music-player-tool-handler'
 import { MessageActions } from './message-actions'
 import { memo, useMemo, useState, useEffect, useId } from 'react'
 import type { LegacyMessage } from '@/lib/ai-message-conversion'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, FileIcon } from 'lucide-react'
 import { generateId } from 'ai'
+import type { Attachment } from '@/types/attachment'
 
 type NormalizedToolInvocation = {
   toolCallId: string
@@ -187,7 +188,7 @@ const ReasoningPanel = memo(function ReasoningPanel({
         )}
       >
         <div className="rounded-xl border border-border/60 bg-muted/30 px-3 py-3 text-muted-foreground max-h-64 overflow-y-auto">
-          <Streamdown className="prose prose-sm dark:prose-invert leading-relaxed">
+          <Streamdown className="streamdown-content text-sm">
             {text}
           </Streamdown>
         </div>
@@ -237,6 +238,46 @@ const PureMessageBubble = ({
       .filter(Boolean)
       .join('\n\n')
   }, [reasoningParts])
+
+  const attachments = useMemo(() => {
+    const partFiles: Attachment[] =
+      Array.isArray(message.parts) && message.parts.length > 0
+        ? (message.parts
+            .filter(part => typeof part === 'object' && part !== null && (part as { type?: string }).type === 'file')
+            .map(part => {
+              const filePart = part as {
+                url?: string
+                name?: string
+                mediaType?: string
+                providerMetadata?: { attachmentName?: string }
+              }
+              if (!filePart.url || !filePart.mediaType) return null
+              return {
+                url: filePart.url,
+                name: filePart.providerMetadata?.attachmentName || filePart.name || null,
+                contentType: filePart.mediaType,
+              }
+            })
+            .filter(att => att !== null) as Attachment[])
+        : []
+
+    const legacyAttachments: Attachment[] =
+      Array.isArray((message as LegacyMessage).attachments) && (message as LegacyMessage).attachments!.length > 0
+        ? (message as LegacyMessage).attachments!.map(att => ({
+            url: (att as { url?: string }).url ?? '',
+            name: (att as { name?: string | null }).name ?? undefined,
+            contentType: (att as { contentType?: string }).contentType ?? '',
+          }))
+        : []
+
+    const mapped = [...partFiles, ...legacyAttachments].filter(att => att.url && att.contentType)
+    const seen = new Set<string>()
+    return mapped.filter(att => {
+      if (seen.has(att.url)) return false
+      seen.add(att.url)
+      return true
+    })
+  }, [message.parts, message.attachments])
 
   const hasContent = useMemo(() => {
     return message.content && (message.content as string).trim() !== ''
@@ -300,8 +341,47 @@ const PureMessageBubble = ({
                 {message.content}
               </p>
             ) : hasContent ? (
-              <OptimizedMarkdown id={message.id} content={message.content as string} />
+              <OptimizedMarkdown 
+                id={message.id} 
+                content={message.content as string} 
+                isAnimating={isLoading && message.role === 'assistant'}
+              />
             ) : null}
+
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap gap-3">
+                {attachments.map(att => {
+                  const isImage = att.contentType?.startsWith('image/')
+                  const label = att.name || att.url.split('/').pop() || 'file'
+                  return (
+                    <a
+                      key={att.url}
+                      href={att.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="group relative w-32 overflow-hidden rounded-lg border border-border/60 bg-muted/40 hover:border-primary/60 transition"
+                    >
+                      <div className="h-24 w-full bg-background/60 flex items-center justify-center overflow-hidden">
+                        {isImage ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={att.url}
+                            alt={label}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <FileIcon className="h-6 w-6 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="px-2 py-1 text-[11px] text-foreground truncate" title={label}>
+                        {label}
+                      </div>
+                    </a>
+                  )
+                })}
+              </div>
+            )}
 
 
             {!isUser && !isLoading && chatId && (hasContent || hasVisibleToolCalls) && (

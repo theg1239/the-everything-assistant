@@ -124,6 +124,7 @@ model Message {
   role            String
   content         String
   tool_invocations Json?
+  attachments     Json?
   created_at      DateTime @default(now())
   
   chat  Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)

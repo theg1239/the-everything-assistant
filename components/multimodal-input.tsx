@@ -3,13 +3,23 @@
 import type React from 'react'
 import { useRef, useEffect, useCallback, memo, useState, useTransition } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowUpIcon, StopCircleIcon, PaperclipIcon, MicIcon, ImageIcon } from 'lucide-react'
+import {
+  ArrowUpIcon,
+  StopCircleIcon,
+  PaperclipIcon,
+  MicIcon,
+  ImageIcon,
+  XIcon,
+  FileIcon,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { ToolsDropdown } from '@/components/tools-dropdown'
 import { getAutocompleteSuggestionAction } from '@/app/actions/autocomplete'
+import type { Attachment } from '@/types/attachment'
+import { AttachmentPreview } from '@/components/attachment-preview'
 
 interface MultimodalInputProps {
   input: string
@@ -28,6 +38,12 @@ interface MultimodalInputProps {
   selectedTool?: string
   recentMessages?: { role: 'user' | 'assistant'; content: string }[]
   disabled?: boolean
+  attachments?: Attachment[]
+  onSelectFiles?: (files: FileList | File[]) => Promise<void> | void
+  onRemoveAttachment?: (url: string) => void
+  uploadingAttachments?: boolean
+  maxAttachments?: number
+  allowAttachments?: boolean
 }
 
 const PureMultimodalInput = ({
@@ -47,6 +63,12 @@ const PureMultimodalInput = ({
   selectedTool,
   recentMessages = [],
   disabled = false,
+  attachments = [],
+  onSelectFiles,
+  onRemoveAttachment,
+  uploadingAttachments = false,
+  maxAttachments = 6,
+  allowAttachments = true,
 }: MultimodalInputProps) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [isFocused, setIsFocused] = useState(false)
@@ -304,6 +326,25 @@ const PureMultimodalInput = ({
   const showCharacterCount = Boolean(maxLength) && characterCount > 0
   const isNearLimit = Boolean(maxLength) && maxLength ? characterCount > maxLength * 0.8 : false
 
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFileButton = useCallback(() => {
+    if (!onSelectFiles) return
+    fileInputRef.current?.click()
+  }, [onSelectFiles])
+
+  const handleFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!onSelectFiles) return
+      const files = e.target.files
+      if (files && files.length > 0) {
+        await onSelectFiles(files)
+      }
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    },
+    [onSelectFiles]
+  )
+
   useEffect(() => {
     const t = setTimeout(() => setIntroPlayed(true), 1600)
     return () => clearTimeout(t)
@@ -468,58 +509,116 @@ const PureMultimodalInput = ({
                 )
               })()}
             </motion.svg>
-          )}{' '}
-          <div className="relative flex items-end w-full">
-            <div className="relative flex-1">
-              {ghostSuggestion && isFocused && !isLoading && (
-                <div
-                  aria-hidden
-                  className={cn(
-                    'absolute inset-0 px-4 text-sm whitespace-pre-wrap break-words text-muted-foreground/55 [overflow-wrap:anywhere]',
-                    'pb-2 pt-3',
-                    showAttachments ? 'pt-1' : 'pt-3'
-                  )}
-                >
-                  <span className="invisible">{safeInput || ' '}</span>
-                  <button
-                    type="button"
-                    className="pointer-events-auto inline-block px-2 py-1 -mx-1 -my-1 border-0 bg-transparent text-left align-baseline rounded-sm"
-                    onMouseDown={e => e.preventDefault()}
-                    onClick={acceptSuggestion}
-                  >
-                    {ghostSuggestion}
-                  </button>
-                </div>
-              )}
-              <Textarea
-                ref={textareaRef}
-                value={safeInput}
-                onChange={handleInputChange}
-                onKeyDown={handleKeyDown}
-                onFocus={() => setIsFocused(true)}
-                onBlur={() => setIsFocused(false)}
-                placeholder={getPlaceholderText()}
-                className={cn(
-                  'min-h-[64px] max-h-[200px] w-full resize-none border-0 bg-transparent px-4 py-4 text-sm',
-                  'ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
-                  'pb-2 pt-3',
-                  showAttachments ? 'pt-1' : 'pt-3'
-                )}
-                disabled={inputDisabled}
-                autoComplete="off"
-                style={{ height: '60px' }}
-                maxLength={maxLength}
-                aria-label="Message input"
-                aria-describedby={showCharacterCount && maxLength ? 'composer-charcount' : undefined}
-              />
-            </div>
+          )}
 
-            <div className="flex items-end gap-2 p-2">
+          {/* Attachments row - above the input */}
+          {allowAttachments && (attachments.length > 0 || uploadingAttachments) && (
+            <div className="flex flex-wrap gap-2 px-3 pt-3 pb-2 border-b border-border/30">
+              {attachments.map(att => (
+                <AttachmentPreview
+                  key={att.url}
+                  attachment={att}
+                  onRemove={onRemoveAttachment}
+                />
+              ))}
+              {uploadingAttachments && (
+                <AttachmentPreview
+                  attachment={{ url: 'uploading', name: '', contentType: 'application/octet-stream' }}
+                  isUploading
+                />
+              )}
+            </div>
+          )}
+
+          {/* Main input area */}
+          <div className="relative flex-1">
+            {ghostSuggestion && isFocused && !isLoading && (
+              <div
+                aria-hidden
+                className="absolute inset-0 px-3 sm:px-4 py-3 text-sm whitespace-pre-wrap break-words text-muted-foreground/55 pointer-events-none"
+              >
+                <span className="invisible">{safeInput || ' '}</span>
+                <button
+                  type="button"
+                  className="pointer-events-auto inline-block px-2 py-1 -mx-1 -my-1 border-0 bg-transparent text-left align-baseline rounded-sm"
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={acceptSuggestion}
+                >
+                  {ghostSuggestion}
+                </button>
+              </div>
+            )}
+            <Textarea
+              ref={textareaRef}
+              value={safeInput}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              placeholder={getPlaceholderText()}
+              className="min-h-[52px] max-h-[200px] w-full resize-none border-0 bg-transparent px-3 sm:px-4 py-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
+              disabled={inputDisabled}
+              autoComplete="off"
+              style={{ height: '52px' }}
+              maxLength={maxLength}
+              aria-label="Message input"
+              aria-describedby={showCharacterCount && maxLength ? 'composer-charcount' : undefined}
+            />
+          </div>
+
+          {/* Bottom toolbar - all buttons in one row */}
+          <div className="flex items-center justify-between gap-2 px-2 sm:px-3 py-1.5 border-t border-border/20">
+            {/* Left side - attachment and tools */}
+            <div className="flex items-center gap-1">
+              <div className={cn((disabled || !allowAttachments) && 'pointer-events-none opacity-50')}>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg hover:bg-muted/50"
+                        onClick={handleFileButton}
+                        disabled={disabled || isLoading || !allowAttachments || attachments.length >= maxAttachments}
+                        aria-label="Attach files"
+                      >
+                        <PaperclipIcon className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>attach image or pdf</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,application/pdf"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </div>
 
               <div className={cn(disabled && 'pointer-events-none opacity-50')}>
                 <ToolsDropdown onToolSelect={onToolSelect} selectedTool={selectedTool} />
               </div>
+            </div>
 
+            {/* Right side - character count and send button */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              {showCharacterCount && maxLength && (
+                <span
+                  className={cn(
+                    'text-[10px] tabular-nums hidden sm:inline',
+                    isNearLimit ? 'text-amber-500' : 'text-muted-foreground/70'
+                  )}
+                  aria-live="polite"
+                  id="composer-charcount"
+                >
+                  {characterCount}/{maxLength}
+                </span>
+              )}
+              
               <AnimatePresence mode="wait">
                 {isLoading ? (
                   <motion.div
@@ -536,10 +635,10 @@ const PureMultimodalInput = ({
                             type="button"
                             size="sm"
                             onClick={stop}
-                            className="size-10 sm:size-9 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm"
+                            className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90"
                             aria-label="Stop generating"
                           >
-                            <StopCircleIcon size={16} />
+                            <StopCircleIcon className="h-4 w-4" />
                             <span className="sr-only">stop generating</span>
                           </Button>
                         </TooltipTrigger>
@@ -562,10 +661,10 @@ const PureMultimodalInput = ({
                             type="submit"
                             size="sm"
                             disabled={!safeInput.trim() || inputDisabled}
-                            className="size-10 sm:size-9 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 shadow-sm"
+                            className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
                             aria-label="Send message"
                           >
-                            <ArrowUpIcon size={16} />
+                            <ArrowUpIcon className="h-4 w-4" />
                             <span className="sr-only">send message</span>
                           </Button>
                         </TooltipTrigger>
@@ -575,22 +674,6 @@ const PureMultimodalInput = ({
                   </motion.div>
                 )}
               </AnimatePresence>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between px-3 pb-2">
-            <p className="hidden sm:block text-[10px] text-muted-foreground">
-              enter to send • shift+enter for newline • / to focus
-            </p>
-            <div
-              className={cn(
-                'ml-auto text-[10px] tabular-nums',
-                isNearLimit ? 'text-amber-500' : 'text-muted-foreground'
-              )}
-              aria-live="polite"
-              id="composer-charcount"
-            >
-              {showCharacterCount && maxLength ? `${characterCount} / ${maxLength}` : null}
             </div>
           </div>
         </motion.div>

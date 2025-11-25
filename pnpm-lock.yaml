@@ -29,6 +29,9 @@ importers:
       '@ai-sdk/react':
         specifier: latest
         version: 2.0.93(react@19.2.0)(zod@4.1.12)
+      '@aws-sdk/client-s3':
+        specifier: ^3.726.1
+        version: 3.932.0
       '@emotion/is-prop-valid':
         specifier: ^1.2.1
         version: 1.4.0
@@ -2748,6 +2751,7 @@ packages:
   '@smithy/core@3.18.3':
     resolution: {integrity: sha512-qqpNskkbHOSfrbFbjhYj5o8VMXO26fvN1K/+HbCzUNlTuxgNcPRouUDNm+7D6CkN244WG7aK533Ne18UtJEgAA==}
     engines: {node: '>=18.0.0'}
+    deprecated: Please upgrade your lockfile to use the latest 3.x version of @smithy/core for various fixes, see https://github.com/smithy-lang/smithy-typescript/blob/main/packages/core/CHANGELOG.md
 
   '@smithy/credential-provider-imds@2.3.0':
     resolution: {integrity: sha512-BWB9mIukO1wjEOo1Ojgl6LrG4avcaC7T/ZP6ptmAaW4xluhSIPZhY+/PI5YKzlk+jsm+4sQZB45Bt1OfMeQa3w==}

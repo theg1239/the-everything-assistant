@@ -46,6 +46,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
               role: msg.role,
               content: msg.content,
               toolInvocations: msg.toolInvocations,
+              attachments: msg.attachments,
               createdAt: msg.created_at,
             }))}
             chatId={id}

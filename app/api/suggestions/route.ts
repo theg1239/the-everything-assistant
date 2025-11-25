@@ -4,9 +4,15 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import * as z from 'zod'
 
+const messageSchema = z.object({
+  role: z.enum(['user', 'assistant']),
+  content: z.string(),
+})
+
 const suggestionRequestSchema = z.object({
   assistantMessage: z.string().min(1),
   userMessage: z.string().optional(),
+  conversationHistory: z.array(messageSchema).optional(),
 })
 
 export const maxDuration = 30
@@ -26,9 +32,13 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    const { assistantMessage, userMessage } = parsedBody.data
+    const { assistantMessage, userMessage, conversationHistory } = parsedBody.data
 
-    const suggestions = await generateFollowUpSuggestions(assistantMessage, userMessage)
+    const suggestions = await generateFollowUpSuggestions(
+      assistantMessage,
+      userMessage,
+      conversationHistory
+    )
 
     return NextResponse.json({ suggestions })
   } catch (error) {

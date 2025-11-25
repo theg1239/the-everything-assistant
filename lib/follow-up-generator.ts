@@ -4,27 +4,48 @@ import { authOptions } from '@/lib/auth'
 import { getCurrentVITContext } from '@/lib/data/context-integration'
 import { getModelConfig } from '@/lib/model-registry'
 
+type ConversationMessage = {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 export async function generateFollowUpSuggestions(
   assistantMessage: string,
-  userMessage?: string
+  userMessage?: string,
+  conversationHistory?: ConversationMessage[]
 ): Promise<string[]> {
   try {
 
     const session = await getServerSession(authOptions)
     const userId = session?.user?.id
 
-
-    const contextPrompt = userMessage
-      ? `User asked: "${userMessage}"\nAssistant replied: "${assistantMessage}"`
-      : `Assistant message: "${assistantMessage}"`
+    // Build conversation context from history
+    let contextPrompt = ''
+    
+    if (conversationHistory && conversationHistory.length > 0) {
+      // Take the last 6 messages for context (3 exchanges)
+      const recentHistory = conversationHistory.slice(-6)
+      contextPrompt = 'RECENT CONVERSATION:\n'
+      for (const msg of recentHistory) {
+        const role = msg.role === 'user' ? 'User' : 'Assistant'
+        // Truncate long messages
+        const content = msg.content.length > 500 ? msg.content.slice(0, 500) + '...' : msg.content
+        contextPrompt += `${role}: ${content}\n`
+      }
+      contextPrompt += '\n'
+    } else if (userMessage) {
+      contextPrompt = `User asked: "${userMessage}"\nAssistant replied: "${assistantMessage}"\n\n`
+    } else {
+      contextPrompt = `Assistant message: "${assistantMessage}"\n\n`
+    }
 
     const currentVITInfo = getCurrentVITContext()
 
-    const prompt = `You are a VIT assistant that suggests clickable follow-up buttons to the student. These will appear directly to the user; each line must be phrased as a user query they would tap, not as instructions to them. Based on the conversation context and your available capabilities, generate 3 relevant follow-up questions that a VIT student might realistically ask next.
+    const prompt = `You are a VIT assistant that suggests clickable follow-up buttons to the student. These will appear directly to the user; each line must be phrased as a user query they would tap, not as instructions to them.
 
-CONVERSATION CONTEXT:
+IMPORTANT: Generate follow-up questions that are SPECIFICALLY relevant to the ongoing conversation. Do NOT generate generic questions - they MUST relate directly to what was just discussed.
+
 ${contextPrompt}
-
 YOUR AVAILABLE CAPABILITIES (what you can actually answer):
 
 VTOP DATA ACCESS:
@@ -77,13 +98,14 @@ CURRENT VIT CONTEXT:
 ${currentVITInfo}
 
 Generate exactly 3 follow-up questions that:
-1. Are specific and actionable based on your actual capabilities
-2. Flow naturally from the conversation
-3. Are relevant to what's currently happening at VIT
+1. DIRECTLY continue or expand on the specific topic just discussed
+2. Reference specific details mentioned in the conversation (course names, subjects, dates, etc.)
+3. Are natural next questions someone would ask after this exact exchange
 4. Are concise (under 12 words each)
-5. Cover different aspects of VIT student life
-6. Use natural, conversational language (lowercase)
-7. Read as the user speaking/asking; no instructions or meta text
+5. Use natural, conversational language (lowercase)
+6. Read as the user speaking/asking; no instructions or meta text
+
+DO NOT generate generic questions like "tell me more" or "what else can you do". Each question must be specifically tied to the conversation content.
 
 Output exactly 3 questions, one per line, without numbering or bullet points.`
 

@@ -20,7 +20,7 @@ export interface LegacyToolInvocation {
 
 export interface LegacyAttachment {
   url: string
-  name?: string
+  name?: string | null
   contentType?: string
 }
 

@@ -14,8 +14,13 @@ export const OptimizedMarkdown = memo(
     return (
       <Streamdown
         key={id}
-        className="text-base leading-relaxed prose prose-sm max-w-none dark:prose-invert"
+        className="streamdown-content"
         isAnimating={isAnimating}
+        mode={isAnimating ? 'streaming' : 'static'}
+        controls={{
+          table: true,
+          code: true,
+        }}
       >
         {content}
       </Streamdown>

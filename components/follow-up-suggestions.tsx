@@ -9,6 +9,7 @@ import { readJson } from '@/lib/http'
 interface FollowUpSuggestionsProps {
   lastAssistantMessage?: string
   lastUserMessage?: string
+  conversationHistory?: { role: 'user' | 'assistant'; content: string }[]
   isVisible: boolean
   onSuggestionClick: (suggestion: string) => void
   onDismiss: () => void
@@ -98,6 +99,7 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
   const {
     lastAssistantMessage = '',
     lastUserMessage = '',
+    conversationHistory,
     isVisible,
     onSuggestionClick,
     onDismiss,
@@ -177,6 +179,10 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
         body: JSON.stringify({
           assistantMessage: lastAssistantMessage,
           userMessage: lastUserMessage,
+          conversationHistory: conversationHistory?.map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
         }),
       })
 

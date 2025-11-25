@@ -1,6 +1,7 @@
 import { prisma } from './prisma'
 import { sanitizeToolInvocations } from './sanitize-tools'
 import { generateChatPath } from './utils'
+import type { Attachment } from '@/types/attachment'
 
 export interface User {
   id: string
@@ -36,6 +37,7 @@ export interface Message {
   role: 'user' | 'assistant' | 'system'
   content: string
   toolInvocations?: any
+  attachments?: Attachment[]
   created_at: Date
 }
 
@@ -558,6 +560,7 @@ export async function getMessages(chatId: string): Promise<Message[]> {
         role: true,
         content: true,
         tool_invocations: true,
+        attachments: true,
         created_at: true,
       },
     })
@@ -569,6 +572,7 @@ export async function getMessages(chatId: string): Promise<Message[]> {
       return {
         ...msg,
         toolInvocations,
+        attachments: (msg.attachments as Attachment[] | null) ?? undefined,
       }
     }) as Message[]
   } catch (error) {
@@ -582,7 +586,8 @@ export async function saveMessage(
   role: 'user' | 'assistant' | 'system',
   content: string,
   toolInvocations?: any,
-  messageId?: string
+  messageId?: string,
+  attachments?: Attachment[]
 ): Promise<Message> {
   let safeToolInvocations = undefined
   if (toolInvocations) {
@@ -603,6 +608,7 @@ export async function saveMessage(
       role,
       content,
       tool_invocations: safeToolInvocations,
+      attachments: attachments ? (attachments as unknown as object) : undefined,
     },
     select: {
       id: true,
@@ -610,10 +616,15 @@ export async function saveMessage(
       role: true,
       content: true,
       tool_invocations: true,
+      attachments: true,
       created_at: true,
     },
   })
-  return { ...message, toolInvocations: message.tool_invocations } as Message
+  return {
+    ...message,
+    toolInvocations: message.tool_invocations,
+    attachments: (message.attachments as Attachment[] | null) ?? undefined,
+  } as Message
 }
 
 export async function createChatFromMessages(
@@ -650,12 +661,16 @@ export async function createChatFromMessages(
               console.warn('Failed to sanitize shared tool invocations', error)
             }
           }
-          const createdAt = (msg as any).created_at || (msg as any).createdAt || new Date()
+          const createdAt =
+            (msg as Partial<Message & { createdAt?: Date }>).created_at ||
+            (msg as Partial<{ createdAt?: Date }>).createdAt ||
+            new Date()
           return {
             chatId: createdChat.id,
             role: msg.role,
             content: msg.content,
             tool_invocations: safeToolInvocations,
+            attachments: (msg as Partial<Message>).attachments || undefined,
             created_at: createdAt instanceof Date ? createdAt : new Date(createdAt),
           }
         })

@@ -18,6 +18,8 @@ import {
   User,
   Calendar,
   GraduationCap,
+  Music,
+  Utensils,
 } from 'lucide-react'
 
 interface ToolInfo {
@@ -50,7 +52,7 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
   knowledgeBase: {
     name: 'Knowledge Base',
     icon: Database,
-    message: 'searching knowledge...',
+    message: 'searching knowledge base...',
     description: 'Looking through VIT knowledge base',
   },
 
@@ -78,13 +80,13 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
   searchWeb: {
     name: 'Web Search',
     icon: Search,
-    message: 'searching web...',
+    message: 'searching the web...',
     description: 'Searching the internet',
   },
   webSearch: {
     name: 'Web Search',
     icon: Search,
-    message: 'searching web...',
+    message: 'searching the web...',
     description: 'Searching the internet',
   },
   webExtract: {
@@ -99,6 +101,13 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
     icon: FileText,
     message: 'finding past papers...',
     description: 'Searching exam paper archives',
+  },
+
+  resolveCourseCode: {
+    name: 'Course Resolver',
+    icon: BookOpen,
+    message: 'resolving course code...',
+    description: 'Finding the correct course',
   },
 
   smartPaperSearch: {
@@ -138,9 +147,16 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
 
   getMessMenu: {
     name: 'Mess Menu',
-    icon: Calendar,
+    icon: Utensils,
     message: 'checking mess menu...',
     description: 'Getting dining hall information',
+  },
+
+  getSyllabus: {
+    name: 'Syllabus',
+    icon: FileText,
+    message: 'fetching syllabus...',
+    description: 'Getting course syllabus',
   },
 
   getCampusInfo: {
@@ -227,6 +243,27 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
     description: 'Accessing schedule information',
   },
 
+  playMusic: {
+    name: 'Music',
+    icon: Music,
+    message: 'finding music...',
+    description: 'Searching for music',
+  },
+
+  submitFeedback: {
+    name: 'Feedback',
+    icon: MessageSquare,
+    message: 'submitting feedback...',
+    description: 'Recording your feedback',
+  },
+
+  contributeKnowledge: {
+    name: 'Knowledge',
+    icon: Database,
+    message: 'contributing knowledge...',
+    description: 'Adding to knowledge base',
+  },
+
   default: {
     name: 'Processing',
     icon: Settings,
@@ -244,6 +281,142 @@ interface DynamicLoadingIndicatorProps {
   isAssistantStreaming?: boolean
 }
 
+interface ActiveToolCall {
+  toolName: string
+  toolCallId: string
+  state: 'call' | 'partial-call' | 'result'
+  args?: any
+  result?: any
+  stepIndex?: number
+}
+
+function getActiveToolCalls(messages: any[]): ActiveToolCall[] {
+  const activeTools: ActiveToolCall[] = []
+  const seenToolCallIds = new Set<string>()
+
+  for (const message of messages) {
+    if (message.role !== 'assistant') continue
+
+    if (message.toolInvocations) {
+      for (const inv of message.toolInvocations) {
+        if (!inv.toolCallId || seenToolCallIds.has(inv.toolCallId)) continue
+        seenToolCallIds.add(inv.toolCallId)
+
+        const isActive = 
+          (inv.state === 'call' || inv.state === 'partial-call') && 
+          inv.result === undefined
+
+        if (isActive) {
+          activeTools.push({
+            toolName: inv.toolName,
+            toolCallId: inv.toolCallId,
+            state: inv.state,
+            args: inv.args,
+          })
+        }
+      }
+    }
+
+    // Also check parts array (for newer AI SDK format)
+    if (message.parts) {
+      for (const part of message.parts) {
+        if (part.type === 'tool-invocation' && part.toolInvocation) {
+          const inv = part.toolInvocation
+          if (!inv.toolCallId || seenToolCallIds.has(inv.toolCallId)) continue
+          seenToolCallIds.add(inv.toolCallId)
+
+          const isActive = 
+            (inv.state === 'call' || inv.state === 'partial-call') && 
+            inv.result === undefined
+
+          if (isActive) {
+            activeTools.push({
+              toolName: inv.toolName,
+              toolCallId: inv.toolCallId,
+              state: inv.state,
+              args: inv.args,
+            })
+          }
+        }
+      }
+    }
+  }
+
+  return activeTools
+}
+
+/**
+ * Get all completed tool calls from the current assistant turn
+ * Used to show what steps have been completed
+ */
+function getCompletedToolCalls(messages: any[]): ActiveToolCall[] {
+  const completedTools: ActiveToolCall[] = []
+  const seenToolCallIds = new Set<string>()
+
+  // Only look at the last assistant message for completed tools in current turn
+  const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant')
+  if (!lastAssistant) return completedTools
+
+  if (lastAssistant.toolInvocations) {
+    for (const inv of lastAssistant.toolInvocations) {
+      if (!inv.toolCallId || seenToolCallIds.has(inv.toolCallId)) continue
+      seenToolCallIds.add(inv.toolCallId)
+
+      if (inv.state === 'result' || inv.result !== undefined) {
+        completedTools.push({
+          toolName: inv.toolName,
+          toolCallId: inv.toolCallId,
+          state: 'result',
+          args: inv.args,
+          result: inv.result,
+        })
+      }
+    }
+  }
+
+  if (lastAssistant.parts) {
+    for (const part of lastAssistant.parts) {
+      if (part.type === 'tool-invocation' && part.toolInvocation) {
+        const inv = part.toolInvocation
+        if (!inv.toolCallId || seenToolCallIds.has(inv.toolCallId)) continue
+        seenToolCallIds.add(inv.toolCallId)
+
+        if (inv.state === 'result' || inv.result !== undefined) {
+          completedTools.push({
+            toolName: inv.toolName,
+            toolCallId: inv.toolCallId,
+            state: 'result',
+            args: inv.args,
+            result: inv.result,
+          })
+        }
+      }
+    }
+  }
+
+  return completedTools
+}
+
+const TOOL_PRIORITIES: Record<string, number> = {
+  queryVTOP: 10,
+  knowledgeBase: 9,
+  smartPaperSearch: 8,
+  findPastPapers: 8,
+  getSyllabus: 8,
+  getCourseInfo: 7,
+  getFacultyInfo: 7,
+  getPlacementInfo: 6,
+  resolveCourseCode: 6,
+  searchRedditKnowledge: 5,
+  searchRedditWithContext: 5,
+  webSearch: 5,
+  searchWeb: 5,
+  webExtract: 4,
+  saveMemory: 4,
+  getMessMenu: 3,
+  getCampusInfo: 3,
+}
+
 export function DynamicLoadingIndicator({
   messages,
   isLoading,
@@ -251,173 +424,19 @@ export function DynamicLoadingIndicator({
   className = '',
   isAssistantStreaming = false,
 }: DynamicLoadingIndicatorProps) {
-
-  const [paperStatus, setPaperStatus] = React.useState<{
-    runId: string
-    lastStep?: string
-    steps: { step: string; detail?: any; ts: number }[]
-  } | null>(null)
-  const activeRunRef = React.useRef<string | null>(null)
   const lastMessage = messages[messages.length - 1]
+  
+  const activeToolCalls = React.useMemo(() => getActiveToolCalls(messages), [messages])
+  const completedToolCalls = React.useMemo(() => getCompletedToolCalls(messages), [messages])
+
   const thinkingFallback =
     !isAssistantStreaming &&
-    !isLoading &&
-    !paperStatus &&
+    isLoading &&
     messages.length > 0 &&
     lastMessage?.role === 'user'
 
-  const isActive = isLoading || !!paperStatus || thinkingFallback
-
-  React.useEffect(() => {
-    if (lastMessage?.role === 'user') {
-      setPaperStatus(null)
-      activeRunRef.current = null
-      return
-    }
-
-    let runId: string | undefined
-    let foundActiveCall = false
-
-    const assistantMessages = [...messages].filter(m => m.role === 'assistant')
-    const recentMessages = assistantMessages.slice(-2)
-
-    for (const message of recentMessages.reverse()) {
-      if (message.toolInvocations) {
-        for (const inv of message.toolInvocations) {
-          if (inv.toolName === 'smartPaperSearch') {
-            if (inv.state === 'call' && !inv.result) {
-              foundActiveCall = true
-              console.log(`[DLI] Found active smartPaperSearch call:`, inv)
-
-              const args = inv.args as any
-              if (args?.course && args?.question) {
-                const params = `${args.course}-${args.question}`
-                  .replace(/[^a-zA-Z0-9]/g, '')
-                  .toLowerCase()
-                runId = `smartpaper_${params}`.slice(0, 60)
-                console.log(`[DLI] Generated deterministic runId for active call: ${runId}`)
-              } else {
-                runId = `smartpaper_${Math.random().toString(36).slice(2, 10)}`
-                console.log(`[DLI] Generated fallback runId for active call: ${runId}`)
-              }
-              break
-            }
-          }
-        }
-        if (runId) break
-      }
-    }
-
-    if (runId) {
-      if (activeRunRef.current === runId && paperStatus && paperStatus.steps.length > 0) {
-        return
-      }
-      console.log(`[DLI] Setting up progress tracking for runId: ${runId}`)
-      setPaperStatus(prev => (prev && prev.runId === runId ? prev : { runId, steps: [] }))
-      activeRunRef.current = runId
-
-      const source = new EventSource(`/api/paper-progress/${runId}`)
-
-      source.onopen = () => {
-        console.log(`[DLI] Connected to SSE for runId: ${runId}`)
-      }
-
-      source.onmessage = event => {
-        try {
-          const data = JSON.parse(event.data)
-          console.log(`[DLI] Received SSE event:`, data)
-
-          if (data.step && data.step !== 'connected') {
-            setPaperStatus(prev => {
-              if (!prev || prev.runId !== runId) {
-                return { runId, steps: [data], lastStep: data.step }
-              }
-
-              const existingIndex = prev.steps.findIndex(s => s.step === data.step)
-              const newSteps = [...prev.steps]
-
-              if (existingIndex >= 0) {
-                newSteps[existingIndex] = data
-              } else {
-                newSteps.push(data)
-              }
-
-              return { ...prev, steps: newSteps, lastStep: data.step }
-            })
-          }
-        } catch (e) {
-          console.error('[DLI] Error parsing SSE event:', e)
-        }
-      }
-
-      source.onerror = error => {
-        console.error('[DLI] SSE connection error:', error)
-        source.close()
-      }
-
-      const handleGlobalProgress = (event: CustomEvent) => {
-        const data = event.detail
-        if (data.runId === runId && data.step) {
-          console.log(`[DLI] Received global progress for ${runId}:`, data)
-          setPaperStatus(prev => {
-            if (!prev || prev.runId !== runId) {
-              return { runId, steps: [data], lastStep: data.step }
-            }
-
-            const existingIndex = prev.steps.findIndex(s => s.step === data.step)
-            const newSteps = [...prev.steps]
-
-            if (existingIndex >= 0) {
-              newSteps[existingIndex] = data
-            } else {
-              newSteps.push(data)
-            }
-
-            return { ...prev, steps: newSteps, lastStep: data.step }
-          })
-        }
-      }
-
-      window.addEventListener('paper-progress' as any, handleGlobalProgress)
-
-      const cleanup = () => {
-        source.close()
-        window.removeEventListener('paper-progress' as any, handleGlobalProgress)
-        console.log(`[DLI] Cleaned up progress tracking for runId: ${runId}`)
-      }
-
-      setTimeout(cleanup, 30000)
-
-      return cleanup
-    } else if (!foundActiveCall) {
-      setPaperStatus(null)
-      activeRunRef.current = null
-    }
-
-    return undefined
-  }, [messages])
-
-  const isDoneStep = paperStatus?.lastStep === 'done'
-  const [hideAfterDone, setHideAfterDone] = React.useState(false)
-  const [hideAfterNoProgress, setHideAfterNoProgress] = React.useState(false)
-
-  React.useEffect(() => {
-    if (isDoneStep) {
-      const t = setTimeout(() => setHideAfterDone(true), 800)
-      return () => clearTimeout(t)
-    } else if (hideAfterDone) {
-      setHideAfterDone(false)
-    }
-  }, [isDoneStep])
-
-  React.useEffect(() => {
-    if (!isLoading && !isAssistantStreaming && paperStatus && paperStatus.steps.length === 0) {
-      const t = setTimeout(() => setHideAfterNoProgress(true), 1000)
-      return () => clearTimeout(t)
-    } else if (hideAfterNoProgress) {
-      setHideAfterNoProgress(false)
-    }
-  }, [isLoading, isAssistantStreaming, paperStatus])
+  const hasActiveTools = activeToolCalls.length > 0
+  const isActive = isLoading || hasActiveTools || thinkingFallback
 
   const lastAssistantHasReasoningPanel =
     lastMessage?.role === 'assistant' &&
@@ -425,132 +444,147 @@ export function DynamicLoadingIndicator({
     lastMessage.parts.some((p: any) => p?.type === 'reasoning')
 
   if (!isActive) return null
-  if (hideAfterDone || hideAfterNoProgress) return null
   if (isAssistantStreaming && lastAssistantHasReasoningPanel) return null
 
-  const labelMap: Record<string, string> = {
-    start: 'Starting smart paper search...',
-    resolveCourse: 'Identifying course code...',
-    fetchedMetadata: 'Found candidate papers...',
-    selectedSubset: 'Picking the most relevant papers...',
-    processPaperStart: 'Analyzing paper...',
-    paperDownloadFailed: 'Could not download a paper (skipped)',
-    duplicateContent: 'Skipping duplicate content...',
-    paperTextInsufficient: 'Paper text too small (skipped)',
-    extractedQuestions: 'Extracting possible questions...',
-    chunked: 'Breaking content into chunks...',
-    chunkEmbeddings: 'Creating vector embeddings...',
-    questionEmbeddings: 'Embedding your question...',
-    questionEmbeddingsFailed: 'Question embedding failed (retrying)...',
-    questionEmbedded: 'Preparing similarity search...',
-    indexBuilt: 'Index ready for search...',
-    rankingComplete: 'Ranking most relevant papers...',
-    ranking: 'Ranking papers...',
-    done: 'All set — results ready.',
+  const sortedActiveTools = [...activeToolCalls].sort((a, b) => {
+    const aPriority = TOOL_PRIORITIES[a.toolName] || 1
+    const bPriority = TOOL_PRIORITIES[b.toolName] || 1
+    return bPriority - aPriority
+  })
+
+  // Get the current tool info
+  const getCurrentToolInfo = (): { toolInfo: ToolInfo; args?: any } => {
+    if (sortedActiveTools.length > 0) {
+      const activeTool = sortedActiveTools[0]
+      const toolInfo = TOOL_CONFIGS[activeTool.toolName] || TOOL_CONFIGS.default
+      return { toolInfo, args: activeTool.args }
+    }
+
+    if (thinkingFallback) {
+      return { toolInfo: TOOL_CONFIGS.thinking }
+    }
+
+    return { toolInfo: TOOL_CONFIGS.thinking }
   }
 
-  const currentPaperLabel = paperStatus?.lastStep
-    ? labelMap[paperStatus.lastStep] || paperStatus.lastStep
-    : null
+  const { toolInfo, args } = getCurrentToolInfo()
 
-  const getCurrentToolInfo = (): ToolInfo => {
-    if (messages.length === 0) {
-      return TOOL_CONFIGS.thinking
-    }
+  // Generate a more specific message based on tool args
+  const getDetailedMessage = (): string => {
+    if (!args) return toolInfo.message
 
-    const lastMessage = messages[messages.length - 1]
+    const toolName = sortedActiveTools[0]?.toolName
 
-    if (thinkingFallback || lastMessage?.role === 'user') {
-      return TOOL_CONFIGS.thinking
-    }
-    if (lastMessage?.role === 'assistant' && lastMessage.toolInvocations) {
-      const activeTools = lastMessage.toolInvocations.filter((tool: any) => {
-        return tool.state === 'call' || tool.state !== 'result' || !tool.result
-      })
-
-      activeTools.sort((a: any, b: any) => {
-        const aPriority = getPriority(a.toolName)
-        const bPriority = getPriority(b.toolName)
-
-        if (aPriority !== bPriority) return bPriority - aPriority
-        if (a.state === 'call' && b.state !== 'call') return -1
-        if (b.state === 'call' && a.state !== 'call') return 1
-        return 0
-      })
-
-      if (activeTools.length > 0 && activeTools[0].toolName) {
-        return TOOL_CONFIGS[activeTools[0].toolName] || TOOL_CONFIGS.default
-      }
-
-      if (lastMessage.toolInvocations.length > 0) {
-        const latestTool = lastMessage.toolInvocations[lastMessage.toolInvocations.length - 1]
-        if (latestTool.toolName) {
-          return TOOL_CONFIGS[latestTool.toolName] || TOOL_CONFIGS.default
+    switch (toolName) {
+      case 'findPastPapers':
+        if (args.courseCode) {
+          return `finding papers for ${args.courseCode}...`
         }
-      }
-    }
+        return toolInfo.message
 
-    if (showForFirstMessage && messages.length === 1) {
-      return TOOL_CONFIGS.thinking
-    }
+      case 'resolveCourseCode':
+        if (args.query) {
+          return `resolving "${args.query}"...`
+        }
+        return toolInfo.message
 
-    return TOOL_CONFIGS.thinking
+      case 'getSyllabus':
+        if (args.query) {
+          return `fetching syllabus for "${args.query}"...`
+        }
+        return toolInfo.message
+
+      case 'knowledgeBase':
+        if (args.query) {
+          const shortQuery = args.query.length > 30 
+            ? args.query.substring(0, 30) + '...' 
+            : args.query
+          return `searching for "${shortQuery}"...`
+        }
+        return toolInfo.message
+
+      case 'queryVTOP':
+        if (args.command) {
+          return `accessing ${args.command}...`
+        }
+        return toolInfo.message
+
+      case 'getCourseInfo':
+        if (args.courseQuery) {
+          return `looking up ${args.courseQuery}...`
+        }
+        return toolInfo.message
+
+      case 'getFacultyInfo':
+        if (args.facultyName) {
+          return `finding ${args.facultyName}...`
+        }
+        if (args.department) {
+          return `finding ${args.department} faculty...`
+        }
+        return toolInfo.message
+
+      case 'getMessMenu':
+        return 'fetching mess menu...'
+
+      case 'webSearch':
+      case 'searchWeb':
+        if (args.query) {
+          const shortQuery = args.query.length > 25 
+            ? args.query.substring(0, 25) + '...' 
+            : args.query
+          return `searching "${shortQuery}"...`
+        }
+        return toolInfo.message
+
+      default:
+        return toolInfo.message
+    }
   }
 
-  const getPriority = (toolName: string): number => {
-    const priorities: Record<string, number> = {
-      queryVTOP: 10,
-      knowledgeBase: 9,
-      smartPaperSearch: 8,
-      findPastPapers: 8,
-      getCourseInfo: 7,
-      getFacultyInfo: 7,
-      getPlacementInfo: 6,
-      searchRedditKnowledge: 5,
-      searchRedditWithContext: 5,
-      webSearch: 5,
-      webExtract: 4,
-      saveMemory: 4,
-      getMessMenu: 3,
-      getCampusInfo: 3,
-    }
-    return priorities[toolName] || 1
-  }
+  const primaryMessage = getDetailedMessage()
 
-  const toolInfo = getCurrentToolInfo()
-
-  const isSmartPaperSearch =
-    toolInfo.name === 'Smart Paper Search' ||
-    (messages.length > 0 &&
-      messages[messages.length - 1]?.role === 'assistant' &&
-      messages[messages.length - 1]?.toolInvocations?.some(
-        (inv: any) => inv.toolName === 'smartPaperSearch'
-      ))
-
-  let primaryMessage = toolInfo.message
-  if (currentPaperLabel) {
-    primaryMessage = currentPaperLabel
-  } else if (isSmartPaperSearch) {
-    primaryMessage = 'searching papers semantically...'
-  }
   const getDotColor = (toolName: string) => {
-    if (toolName === 'VTOP') return 'bg-blue-500'
+    if (toolName === 'VTOP' || toolName === 'queryVTOP') return 'bg-blue-500'
     if (toolName.includes('Reddit')) return 'bg-orange-500'
-    if (['Knowledge Base', 'Past Papers', 'Course Info', 'Smart Paper Search'].includes(toolName))
+    if (['Knowledge Base', 'Past Papers', 'Course Info', 'Smart Paper Search', 'Syllabus', 'knowledgeBase', 'findPastPapers', 'getSyllabus'].includes(toolName))
       return 'bg-green-500'
-    if (['Faculty Info', 'Placement Info'].includes(toolName)) return 'bg-purple-500'
-    if (toolName === 'Memory') return 'bg-yellow-500'
+    if (['Faculty Info', 'Placement Info', 'getFacultyInfo', 'getPlacementInfo'].includes(toolName)) return 'bg-purple-500'
+    if (toolName === 'Memory' || toolName === 'saveMemory') return 'bg-yellow-500'
+    if (toolName.includes('Web') || toolName.includes('web')) return 'bg-cyan-500'
     return 'bg-primary'
   }
-  const dotColor = getDotColor(toolInfo.name)
+
+  const currentToolName = sortedActiveTools[0]?.toolName || 'thinking'
+  const dotColor = getDotColor(currentToolName)
+
+  // Show completed steps if there are any
+  const showSteps = completedToolCalls.length > 0 && activeToolCalls.length > 0
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      className={`flex items-center justify-center space-x-3 text-muted-foreground py-4 ${className}`}
+      className={`flex flex-col items-center justify-center text-muted-foreground py-4 ${className}`}
     >
+      {/* Show completed steps */}
+      {showSteps && (
+        <div className="flex flex-wrap items-center justify-center gap-2 mb-2 text-xs text-muted-foreground/70">
+          {completedToolCalls.slice(-3).map((tool, idx) => {
+            const info = TOOL_CONFIGS[tool.toolName] || TOOL_CONFIGS.default
+            return (
+              <span key={tool.toolCallId} className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-green-500/50 rounded-full" />
+                <span>{info.name}</span>
+                {idx < Math.min(completedToolCalls.length - 1, 2) && <span className="mx-1">→</span>}
+              </span>
+            )
+          })}
+        </div>
+      )}
+      
+      {/* Current active tool */}
       <div className="flex items-center space-x-3">
         <div className="flex space-x-1">
           <div className={`w-2 h-2 ${dotColor} rounded-full animate-pulse`}></div>
@@ -565,6 +599,12 @@ export function DynamicLoadingIndicator({
         </div>
         <div className="flex flex-col">
           <span className="text-sm font-medium">{primaryMessage}</span>
+          {/* Show count if multiple tools are active */}
+          {activeToolCalls.length > 1 && (
+            <span className="text-xs text-muted-foreground/60">
+              +{activeToolCalls.length - 1} more in progress
+            </span>
+          )}
         </div>
       </div>
     </motion.div>
@@ -572,44 +612,15 @@ export function DynamicLoadingIndicator({
 }
 
 export function getCurrentActiveTool(messages: any[]): string | null {
-  if (messages.length === 0) return null
+  const activeTools = getActiveToolCalls(messages)
+  if (activeTools.length === 0) return null
 
-  const lastMessage = messages[messages.length - 1]
+  // Sort by priority and return the highest priority tool
+  const sorted = [...activeTools].sort((a, b) => {
+    const aPriority = TOOL_PRIORITIES[a.toolName] || 1
+    const bPriority = TOOL_PRIORITIES[b.toolName] || 1
+    return bPriority - aPriority
+  })
 
-  if (lastMessage?.role === 'assistant' && lastMessage.toolInvocations) {
-    const activeTools = lastMessage.toolInvocations.filter((tool: any) => {
-      return tool.state === 'call' || tool.state !== 'result' || !tool.result
-    })
-
-    activeTools.sort((a: any, b: any) => {
-      const priorities: Record<string, number> = {
-        queryVTOP: 10,
-        knowledgeBase: 9,
-        smartPaperSearch: 8,
-        findPastPapers: 8,
-        getCourseInfo: 7,
-        getFacultyInfo: 7,
-        getPlacementInfo: 6,
-        searchRedditKnowledge: 5,
-        searchRedditWithContext: 5,
-        webSearch: 5,
-        webExtract: 4,
-        saveMemory: 4,
-        getMessMenu: 3,
-        getCampusInfo: 3,
-      }
-
-      const aPriority = priorities[a.toolName] || 1
-      const bPriority = priorities[b.toolName] || 1
-
-      if (aPriority !== bPriority) return bPriority - aPriority
-      if (a.state === 'call' && b.state !== 'call') return -1
-      if (b.state === 'call' && a.state !== 'call') return 1
-      return 0
-    })
-
-    return activeTools.length > 0 ? activeTools[0].toolName : null
-  }
-
-  return null
+  return sorted[0]?.toolName || null
 }

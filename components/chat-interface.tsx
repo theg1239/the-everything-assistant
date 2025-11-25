@@ -9,7 +9,7 @@ import { useSession, signIn } from 'next-auth/react'
 import { useMemory } from '@/contexts/memory-context'
 import { VirtualizedMessages } from '@/components/virtualized-messages'
 import { motion } from 'framer-motion'
-import { Download, Plus, ChevronDown, GraduationCap, Share2 } from 'lucide-react'
+import { Download, Plus, ChevronDown, GraduationCap, Share2, LogIn } from 'lucide-react'
 import { HamburgerButton } from '@/components/hamburger-button'
 import { Button } from '@/components/ui/button'
 import { SuggestedQuestions } from '@/components/suggested-questions'
@@ -1696,6 +1696,19 @@ function PureChatInterfaceComponent({
                 {!sidebarOpen && !isGuest && (
                   <HamburgerButton onClick={toggleSidebar} className="md:hidden" />
                 )}
+                {isGuest && (
+                  <div className="flex items-center gap-2 ml-auto">
+                    <Button
+                      variant="ghost"
+                      onClick={() => signIn()}
+                      className={`${headerButtonClass} ${isMobile ? 'px-2 w-9 justify-center' : ''}`}
+                      title="sign in"
+                    >
+                      <LogIn className="h-4 w-4" />
+                      {!isMobile && <span className="ml-2">sign in</span>}
+                    </Button>
+                  </div>
+                )}
               </div>
             </header>
             <div className="flex-1 flex flex-col items-center justify-center px-4 space-y-8 overflow-y-auto overflow-fix pt-6 md:pt-0">
@@ -1990,6 +2003,17 @@ function PureChatInterfaceComponent({
                 <div className="md:hidden">
                   <MobilePdfDockButton />
                 </div>
+                {isGuest && (
+                  <Button
+                    variant="ghost"
+                    onClick={() => signIn()}
+                    className={`${headerButtonClass} ${isMobile ? 'px-2 w-9 justify-center' : ''}`}
+                    title="sign in"
+                  >
+                    <LogIn className="h-4 w-4" />
+                    {!isMobile && <span className="ml-2">sign in</span>}
+                  </Button>
+                )}
               </div>
             </div>
           </header>{' '}
@@ -2110,7 +2134,7 @@ function PureChatInterfaceComponent({
                 {isGuest && (
                   <p className="px-2 sm:px-4 pt-2 text-center text-[11px] text-amber-200/80">
                     guest mode · {guestMessagesRemaining} message
-                    {guestMessagesRemaining === 1 ? '' : 's'} left · we&apos;ll carry this chat into your account when you sign in
+                    {guestMessagesRemaining === 1 ? '' : 's'} left 
                   </p>
                 )}
                 <div className="px-2 sm:px-4 pb-0.5">

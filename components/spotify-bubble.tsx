@@ -396,11 +396,7 @@ export default function SpotifyBubble() {
   }, [showLyrics, lines, currentLine])
 
   const panel = (
-    <motion.div
-      initial={{ opacity: 0, y: 10, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 10, scale: 0.98 }}
-      transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+    <div
       className="relative w-full max-w-[460px] max-h-[78vh] overflow-y-auto rounded-2xl border border-border/70 bg-background/95 shadow-2xl backdrop-blur-xl"
     >
       <AnimatePresence>{status && <StatusToast message={status} />}</AnimatePresence>
@@ -1079,7 +1075,7 @@ export default function SpotifyBubble() {
         </div>
       </div>
       </div>
-    </motion.div>
+    </div>
   )
 
   const isMobile = useMediaQuery('(max-width: 640px)')
@@ -1087,10 +1083,12 @@ export default function SpotifyBubble() {
   // Minimized view - compact now playing with progress and controls
   const minimizedView = (
     <motion.div
-      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 10, scale: 0.95 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+      key="minimized"
+      layoutId="player-panel"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2, ease: 'easeInOut' }}
       className={cn(
         'rounded-2xl border border-border/70 bg-background/95 shadow-xl backdrop-blur-xl overflow-hidden',
         isMobile ? 'w-[280px]' : 'w-[300px]'
@@ -1207,10 +1205,12 @@ export default function SpotifyBubble() {
   // Screen view - video/lyrics display with controls
   const screenView = (
     <motion.div
-      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 10, scale: 0.95 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+      key="screen"
+      layoutId="player-panel"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2, ease: 'easeInOut' }}
       className={cn(
         'rounded-2xl border border-border/70 bg-background/95 shadow-xl backdrop-blur-xl overflow-hidden',
         isMobile ? 'w-[300px]' : 'w-[340px]'
@@ -1522,13 +1522,9 @@ export default function SpotifyBubble() {
           </div>
         )}
         <div className="fixed top-4 right-4 z-[60] flex flex-col items-end gap-2">
-          {/* Screen view for mobile */}
-          <AnimatePresence>
+          {/* All player views for mobile - using single AnimatePresence with mode='wait' */}
+          <AnimatePresence mode="wait">
             {viewState === 'screen' && screenView}
-          </AnimatePresence>
-          
-          {/* Minimized view for mobile */}
-          <AnimatePresence>
             {viewState === 'minimized' && minimizedView}
           </AnimatePresence>
           
@@ -1775,7 +1771,7 @@ export default function SpotifyBubble() {
                       </div>
 
                       {/* Tab content - compact height */}
-                      <div className="h-[160px] relative">
+                      <div className="h-[200px] relative">
                         {activeTab === 'add' && (
                           <div className="absolute inset-0 flex flex-col justify-start pt-1 space-y-2">
                             <div className="flex gap-2">
@@ -1821,7 +1817,7 @@ export default function SpotifyBubble() {
                                 {playlists.find(p => p.id === selectedPlaylist)?.name}
                               </div>
                             )}
-                            <div className="flex-1 overflow-y-auto space-y-0.5 min-h-0 -mx-1 px-1">
+                            <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y space-y-0.5 min-h-0 -mx-1 px-1">
                               {displayTracks.length === 0 ? (
                                 <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
                                   {search ? 'No matches' : selectedPlaylist ? 'Empty playlist' : 'Library empty'}
@@ -1997,27 +1993,21 @@ export default function SpotifyBubble() {
         </div>
       )}
 
-      {/* Full panel - only when expanded */}
-      <AnimatePresence>
+      {/* All player views - using single AnimatePresence with mode='wait' to prevent layout shifts */}
+      <AnimatePresence mode="wait">
         {viewState === 'expanded' && (
           <motion.div
-            initial={{ opacity: 0, y: 10, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.98 }}
-            transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+            key="expanded"
+            layoutId="player-panel"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
           >
             {panel}
           </motion.div>
         )}
-      </AnimatePresence>
-      
-      {/* Screen view - video/lyrics with controls */}
-      <AnimatePresence>
         {viewState === 'screen' && screenView}
-      </AnimatePresence>
-      
-      {/* Minimized view - compact now playing */}
-      <AnimatePresence>
         {viewState === 'minimized' && minimizedView}
       </AnimatePresence>
       

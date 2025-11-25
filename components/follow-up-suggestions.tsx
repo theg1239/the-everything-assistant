@@ -13,6 +13,7 @@ interface FollowUpSuggestionsProps {
   onSuggestionClick: (suggestion: string) => void
   onDismiss: () => void
   isMobile?: boolean
+  inline?: boolean
 }
 
 function generateFollowUpQuestions(assistantMessage: string): string[] {
@@ -101,6 +102,7 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
     onSuggestionClick,
     onDismiss,
     isMobile = false,
+    inline = false,
   } = props
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -201,17 +203,61 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
     return null
   }
 
-  return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 10 }}
-        transition={{ duration: 0.2 }}
-        className={`w-full ${isMobile ? 'mb-2' : 'mb-3'}`}
-      >
-        {' '}
-        {isMobile ? (
+  if (inline && !isMobile) {
+    return (
+      <AnimatePresence>
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 8 }}
+          transition={{ duration: 0.25, ease: 'easeOut' }}
+          className="mt-4 pt-3 border-t border-border/30"
+        >
+          <div className="flex items-center gap-2 mb-2.5">
+            <Lightbulb className="h-3.5 w-3.5 text-muted-foreground/60" />
+            <span className="text-xs font-medium text-muted-foreground/70">follow up</span>
+            <button
+              onClick={onDismiss}
+              className="ml-auto p-1 rounded-md hover:bg-muted/50 transition-colors opacity-60 hover:opacity-100"
+              aria-label="Dismiss suggestions"
+            >
+              <X className="h-3 w-3 text-muted-foreground" />
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {suggestions.map((suggestion, index) => (
+              <motion.div
+                key={suggestion}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.15, delay: index * 0.04 }}
+              >
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-sm font-normal text-muted-foreground bg-muted/40 border border-border/40 hover:bg-muted/70 hover:text-foreground hover:border-border/60 transition-all duration-150 rounded-full px-3.5 py-1.5 h-auto"
+                  onClick={() => onSuggestionClick(suggestion)}
+                >
+                  {suggestion}
+                </Button>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      </AnimatePresence>
+    )
+  }
+
+  if (isMobile) {
+    return (
+      <AnimatePresence>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 10 }}
+          transition={{ duration: 0.2 }}
+          className="w-full mb-2"
+        >
           <div className="relative bg-background/95 backdrop-blur-sm border-t border-border/50">
             <div className="flex items-center gap-2 px-4 py-2">
               <ChevronRight className="h-3 w-3 text-muted-foreground/70 flex-shrink-0" />
@@ -223,35 +269,22 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
               >
                 <X className="h-3 w-3 text-muted-foreground/60" />
               </button>
-            </div>{' '}
+            </div>
             <div className="relative">
               {canScrollLeft && (
                 <button
                   onClick={prevSlide}
-                  className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-1.5 rounded-full bg-background/90 backdrop-blur-sm border border-border/50 hover:bg-muted/90 transition-all duration-200 shadow-md"
+                  className="absolute left-1 top-1/2 -translate-y-1/2 z-10 p-1.5 rounded-full bg-background/95 backdrop-blur-sm border border-border/50 hover:bg-muted/90 transition-all duration-200 shadow-md"
                   aria-label="Scroll left"
-                  style={{ marginTop: '-2px' }}
                 >
                   <ChevronLeft className="h-3 w-3 text-muted-foreground" />
                 </button>
               )}
 
               <div
-                className="absolute left-0 top-1/2 -translate-y-1/2 p-1.5 pointer-events-none opacity-0"
-                aria-hidden="true"
-              >
-                <ChevronLeft className="h-3 w-3" />
-              </div>
-
-              <div
                 ref={scrollContainerRef}
-                className="flex gap-2 px-10 pb-3 overflow-x-auto scrollbar-hide"
-                style={{
-                  maskImage:
-                    'linear-gradient(to right, transparent 0px, black 32px, black calc(100% - 32px), transparent 100%)',
-                  WebkitMaskImage:
-                    'linear-gradient(to right, transparent 0px, black 32px, black calc(100% - 32px), transparent 100%)',
-                }}
+                className="flex gap-2 px-4 pb-3 horizontal-scroll-touch"
+                data-allow-touch-scroll="true"
               >
                 {suggestions.map((suggestion, index) => (
                   <motion.div
@@ -264,7 +297,7 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-xs font-normal text-muted-foreground bg-background/90 border-border/40 hover:bg-muted/80 hover:text-foreground transition-colors rounded-full px-3 py-1 h-7 whitespace-nowrap shadow-sm"
+                      className="text-xs font-normal text-muted-foreground bg-background/90 border-border/40 hover:bg-muted/80 hover:text-foreground transition-colors rounded-full px-3 py-1 h-7 whitespace-nowrap shadow-sm active:scale-95"
                       onClick={() => onSuggestionClick(suggestion)}
                     >
                       {suggestion}
@@ -273,60 +306,63 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
                 ))}
               </div>
 
-              <div
-                className="absolute right-0 top-1/2 -translate-y-1/2 p-1.5 pointer-events-none opacity-0"
-                aria-hidden="true"
-              >
-                <ChevronRight className="h-3 w-3" />
-              </div>
-
               {canScrollRight && (
                 <button
                   onClick={nextSlide}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-1.5 rounded-full bg-background/90 backdrop-blur-sm border border-border/50 hover:bg-muted/90 transition-all duration-200 shadow-md"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 z-10 p-1.5 rounded-full bg-background/95 backdrop-blur-sm border border-border/50 hover:bg-muted/90 transition-all duration-200 shadow-md"
                   aria-label="Scroll right"
-                  style={{ marginTop: '-2px' }}
                 >
                   <ChevronRight className="h-3 w-3 text-muted-foreground" />
                 </button>
               )}
             </div>
           </div>
-        ) : (
-          <div className="max-w-3xl mx-auto px-4">
-            <div className="bg-muted/30 border border-border/50 rounded-lg p-3 relative">
-              <button
-                onClick={onDismiss}
-                className="absolute top-2 right-2 p-1 rounded-md hover:bg-background/50 transition-colors"
-                aria-label="Dismiss suggestions"
-              >
-                <X className="h-3 w-3 text-muted-foreground" />
-              </button>
+        </motion.div>
+      </AnimatePresence>
+    )
+  }
 
+  // Fallback desktop mode (above input) - should not be used anymore but kept for safety
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 10 }}
+        transition={{ duration: 0.2 }}
+        className="w-full mb-3"
+      >
+        <div className="max-w-3xl mx-auto px-4">
+          <div className="bg-muted/30 border border-border/50 rounded-lg p-3 relative">
+            <button
+              onClick={onDismiss}
+              className="absolute top-2 right-2 p-1 rounded-md hover:bg-background/50 transition-colors"
+              aria-label="Dismiss suggestions"
+            >
+              <X className="h-3 w-3 text-muted-foreground" />
+            </button>
 
-
-              <div className="flex flex-wrap gap-2">
-                {suggestions.map((suggestion, index) => (
-                  <motion.div
-                    key={suggestion}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.15, delay: index * 0.05 }}
+            <div className="flex flex-wrap gap-2">
+              {suggestions.map((suggestion, index) => (
+                <motion.div
+                  key={suggestion}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.15, delay: index * 0.05 }}
+                >
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-sm font-normal text-muted-foreground bg-background/60 border border-border/40 hover:bg-background hover:text-foreground transition-colors rounded-full px-3 py-1.5 h-auto"
+                    onClick={() => onSuggestionClick(suggestion)}
                   >
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-sm font-normal text-muted-foreground bg-background/60 border border-border/40 hover:bg-background hover:text-foreground transition-colors rounded-full px-3 py-1.5 h-auto"
-                      onClick={() => onSuggestionClick(suggestion)}
-                    >
-                      {suggestion}
-                    </Button>
-                  </motion.div>
-                ))}
-              </div>
+                    {suggestion}
+                  </Button>
+                </motion.div>
+              ))}
             </div>
           </div>
-        )}
+        </div>
       </motion.div>
     </AnimatePresence>
   )

@@ -26,12 +26,12 @@ export const MobilePdfDockButton: React.FC = () => {
             whileTap={{ scale: 0.96 }}
             aria-expanded={open}
             title={hasItems ? `${items.length} open PDFs` : 'Open PDFs'}
-            className="relative inline-flex items-center h-8 px-3 gap-2 rounded-md text-sm"
+            className="relative inline-flex items-center justify-center h-9 w-9 rounded-md border border-border/60 hover:bg-border/10 text-foreground transition-colors"
           >
             <FileText className="h-4 w-4" aria-hidden />
             <span className="sr-only">Open PDFs</span>
             {hasItems && (
-              <span className="absolute -top-1 -right-2 inline-flex items-center justify-center h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-medium">
+              <span className="absolute -top-1 -right-1 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-medium">
                 {items.length}
               </span>
             )}
@@ -133,13 +133,13 @@ export const DesktopPdfDockButton: React.FC = () => {
           }}
           aria-expanded={open}
           title={`${items.length} open PDFs`}
-          className="relative inline-flex items-center h-8 px-3 gap-2 rounded-md text-sm"
+          className="relative inline-flex items-center justify-center h-9 px-3 gap-2 rounded-md border border-border/60 hover:bg-border/10 text-foreground text-sm transition-colors"
         >
           <FileText className="h-4 w-4" aria-hidden />
-
+          <span>PDFs</span>
           <span className="sr-only">Open PDFs</span>
 
-          <span className="absolute -top-1 -right-2 inline-flex items-center justify-center h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-medium">
+          <span className="absolute -top-1 -right-1 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-medium">
             {items.length}
           </span>
         </motion.button>

@@ -40,13 +40,18 @@ import { useMediaQuery } from '@/hooks/use-media-query'
 // View states: collapsed (bubble only), minimized (compact now playing), screen (video/lyrics), expanded (full panel)
 type ViewState = 'collapsed' | 'minimized' | 'screen' | 'expanded'
 
-const BubbleGlyph = ({ size = 24 }: { size?: number }) => (
+const BubbleGlyph = ({ size = 24, isPlaying = false }: { size?: number; isPlaying?: boolean }) => (
   <div
     aria-hidden
-    className="flex items-center justify-center rounded-full bg-gradient-to-br from-zinc-900 to-zinc-700 text-white shadow-inner"
+    className={cn(
+      "flex items-center justify-center rounded-full transition-all duration-300",
+      isPlaying 
+        ? "bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-lg shadow-emerald-500/30" 
+        : "bg-gradient-to-br from-zinc-800 to-zinc-900 text-zinc-300 shadow-inner"
+    )}
     style={{ width: size, height: size }}
   >
-    <Music2 className="h-5 w-5" />
+    <Music2 className={cn("transition-transform", isPlaying ? "h-4 w-4" : "h-5 w-5")} />
   </div>
 )
 
@@ -1451,7 +1456,8 @@ export default function SpotifyBubble() {
 
   const bubbleButton = (
     <motion.button
-      whileTap={{ scale: 0.96 }}
+      whileTap={{ scale: 0.92 }}
+      whileHover={{ scale: 1.05 }}
       onClick={() => {
         // Single click cycles: collapsed -> minimized -> collapsed
         // To get to expanded, use the expand button in minimized view
@@ -1462,17 +1468,85 @@ export default function SpotifyBubble() {
         }
       }}
       className={cn(
-        'rounded-full shadow-lg flex items-center justify-center border relative transition-colors',
-        isMobile ? 'h-10 w-10' : 'h-12 w-12',
-        isPlaying && currentTrack 
-          ? 'bg-emerald-500 border-emerald-400/50 text-white' 
-          : 'bg-background border-border/50',
-        currentTrack && !isPlaying ? 'ring-2 ring-foreground/30' : ''
+        'relative rounded-full flex items-center justify-center transition-all duration-300',
+        isMobile ? 'h-12 w-12' : 'h-14 w-14',
+        // Base styling
+        'shadow-xl',
+        // Playing state - vibrant green glow
+        isPlaying && currentTrack && [
+          'bg-gradient-to-br from-emerald-400 via-emerald-500 to-emerald-600',
+          'border-2 border-emerald-300/50',
+          'shadow-emerald-500/40 shadow-2xl',
+          'ring-4 ring-emerald-400/20',
+        ],
+        // Paused with track - subtle indication
+        currentTrack && !isPlaying && [
+          'bg-gradient-to-br from-zinc-800 via-zinc-850 to-zinc-900',
+          'border-2 border-zinc-600/50',
+          'shadow-zinc-900/50',
+          'ring-2 ring-zinc-500/20',
+        ],
+        // No track - neutral state
+        !currentTrack && [
+          'bg-gradient-to-br from-zinc-800 to-zinc-900',
+          'border border-zinc-700/50',
+          'shadow-zinc-900/30',
+        ]
       )}
       aria-label="Mini player"
-      title="Click to toggle mini player"
+      title={currentTrack ? (isPlaying ? 'Now playing - Click to minimize' : 'Paused - Click to open') : 'Open mini player'}
     >
-      <BubbleGlyph size={isMobile ? 22 : 26} />
+      {/* Animated ring for playing state */}
+      {isPlaying && currentTrack && (
+        <motion.div
+          className="absolute inset-0 rounded-full border-2 border-emerald-400/60"
+          animate={{
+            scale: [1, 1.15, 1],
+            opacity: [0.6, 0, 0.6],
+          }}
+          transition={{
+            duration: 2,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        />
+      )}
+      
+      {/* Inner glyph */}
+      <div className={cn(
+        "flex items-center justify-center rounded-full transition-all duration-300",
+        isMobile ? "h-8 w-8" : "h-10 w-10",
+        isPlaying && currentTrack
+          ? "bg-white/20 backdrop-blur-sm"
+          : currentTrack
+            ? "bg-zinc-700/50"
+            : "bg-zinc-800/50"
+      )}>
+        {isPlaying && currentTrack ? (
+          <motion.div
+            animate={{ scale: [1, 1.1, 1] }}
+            transition={{ duration: 0.8, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <Music2 className={cn("text-white", isMobile ? "h-4 w-4" : "h-5 w-5")} />
+          </motion.div>
+        ) : (
+          <Music2 className={cn(
+            isMobile ? "h-4 w-4" : "h-5 w-5",
+            currentTrack ? "text-zinc-300" : "text-zinc-400"
+          )} />
+        )}
+      </div>
+      
+      {/* Playing indicator dot */}
+      {currentTrack && (
+        <span className={cn(
+          "absolute -bottom-0.5 -right-0.5 rounded-full border-2 border-background transition-all duration-300",
+          isMobile ? "h-3 w-3" : "h-3.5 w-3.5",
+          isPlaying 
+            ? "bg-emerald-400 shadow-lg shadow-emerald-400/50" 
+            : "bg-zinc-500"
+        )} />
+      )}
     </motion.button>
   )
 

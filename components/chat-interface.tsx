@@ -9,7 +9,7 @@ import { useSession, signIn } from 'next-auth/react'
 import { useMemory } from '@/contexts/memory-context'
 import { VirtualizedMessages } from '@/components/virtualized-messages'
 import { motion } from 'framer-motion'
-import { Download, Plus, ChevronDown, GraduationCap, Share2, LogIn } from 'lucide-react'
+import { Download, Plus, ChevronDown, GraduationCap, Share, LogIn } from 'lucide-react'
 import { HamburgerButton } from '@/components/hamburger-button'
 import { Button } from '@/components/ui/button'
 import { SuggestedQuestions } from '@/components/suggested-questions'
@@ -259,7 +259,8 @@ function PureChatInterfaceComponent({
   )
   const [currentChatTitle, setCurrentChatTitle] = useState(fallbackTitle)
   const [shareOpen, setShareOpen] = useState(false)
-  const headerButtonClass = 'h-9 px-4 border border-border/60 hover:bg-border/10'
+  const headerButtonClass = 'h-9 px-4 rounded-md border border-border/60 hover:bg-border/10 disabled:opacity-100 disabled:text-muted-foreground/50 disabled:cursor-not-allowed'
+  const headerIconButtonClass = 'h-9 w-9 !px-0 rounded-md border border-border/60 hover:bg-border/10 disabled:opacity-100 disabled:text-muted-foreground/50 disabled:cursor-not-allowed flex items-center justify-center'
 
   const mainRef = useViewportHeight()
 
@@ -1714,7 +1715,7 @@ function PureChatInterfaceComponent({
                     <Button
                       variant="ghost"
                       onClick={() => signIn()}
-                      className={`${headerButtonClass} ${isMobile ? 'px-2 w-9 justify-center' : ''}`}
+                      className={isMobile ? headerIconButtonClass : headerButtonClass}
                       title="sign in"
                     >
                       <LogIn className="h-4 w-4" />
@@ -1971,7 +1972,7 @@ function PureChatInterfaceComponent({
                         router.push('/')
                       }
                     }}
-                    className={`${headerButtonClass} ${isMobile ? 'px-2 w-9 justify-center' : ''}`}
+                    className={isMobile ? headerIconButtonClass : headerButtonClass}
                     title="new chat"
                   >
                     <Plus className="h-4 w-4" />
@@ -1982,7 +1983,7 @@ function PureChatInterfaceComponent({
                   <Button
                     variant="ghost"
                     onClick={() => setShareOpen(true)}
-                    className={`${headerButtonClass} ${isMobile ? 'px-2 w-9 justify-center' : ''}`}
+                    className={isMobile ? headerIconButtonClass : headerButtonClass}
                     disabled={!shareableChatId || messages.length === 0}
                     title={
                       messages.length === 0
@@ -1990,7 +1991,7 @@ function PureChatInterfaceComponent({
                         : 'share this chat'
                     }
                   >
-                    <Share2 className="h-4 w-4" />
+                    <Share className="h-4 w-4" />
                     {!isMobile && <span className="ml-2">share</span>}
                   </Button>
                 )}
@@ -1998,16 +1999,20 @@ function PureChatInterfaceComponent({
                   <Button
                     variant="ghost"
                     onClick={handleInstallClick}
-                    className="h-9 hidden md:inline-flex"
+                    className={`${headerButtonClass} hidden md:inline-flex`}
                   >
                     <Download className="h-4 w-4 mr-2" />
                     install app
                   </Button>
                 )}
                 {canInstall && !isInstalled && (
-                  <Button variant="ghost" onClick={handleInstallClick} className="h-9 md:hidden">
-                    <Download className="h-4 w-4 mr-2" />
-                    install
+                  <Button
+                    variant="ghost"
+                    onClick={handleInstallClick}
+                    className={`${headerIconButtonClass} md:hidden`}
+                    title="install app"
+                  >
+                    <Download className="h-4 w-4" />
                   </Button>
                 )}
                 <div className="hidden md:block">
@@ -2020,7 +2025,7 @@ function PureChatInterfaceComponent({
                   <Button
                     variant="ghost"
                     onClick={() => signIn()}
-                    className={`${headerButtonClass} ${isMobile ? 'px-2 w-9 justify-center' : ''}`}
+                    className={isMobile ? headerIconButtonClass : headerButtonClass}
                     title="sign in"
                   >
                     <LogIn className="h-4 w-4" />
@@ -2088,6 +2093,13 @@ function PureChatInterfaceComponent({
                   onPlacementSearch={handlePlacementSearch}
                   maximizedItem={maximizedArtifact}
                   setMaximizedItem={setMaximizedArtifact}
+                  // Pass follow-up suggestions props for desktop inline display
+                  showFollowUpSuggestions={showFollowUpSuggestions && userPreferences.followUpSuggestions !== false}
+                  lastAssistantMessage={lastAssistantMessage}
+                  lastUserMessage={lastUserMessage}
+                  onSuggestionClick={handleSuggestedQuestion}
+                  onDismissSuggestions={() => setShowFollowUpSuggestions(false)}
+                  isMobile={isMobile}
                 />
                 <DynamicLoadingIndicator
                   messages={messages}
@@ -2122,14 +2134,17 @@ function PureChatInterfaceComponent({
             )}
             {!maximizedArtifact && (
               <div className="relative z-10">
-                <FollowUpSuggestions
-                  lastAssistantMessage={lastAssistantMessage}
-                  lastUserMessage={lastUserMessage}
-                  isVisible={showFollowUpSuggestions && !isLoading}
-                  onSuggestionClick={handleSuggestedQuestion}
-                  onDismiss={() => setShowFollowUpSuggestions(false)}
-                  isMobile={isMobile}
-                />
+                {/* Mobile only: show follow-up suggestions above input */}
+                {isMobile && (
+                  <FollowUpSuggestions
+                    lastAssistantMessage={lastAssistantMessage}
+                    lastUserMessage={lastUserMessage}
+                    isVisible={showFollowUpSuggestions && !isLoading}
+                    onSuggestionClick={handleSuggestedQuestion}
+                    onDismiss={() => setShowFollowUpSuggestions(false)}
+                    isMobile={true}
+                  />
+                )}
                 <MultimodalInput
                   input={input}
                   setInput={setInput}

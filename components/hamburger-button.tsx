@@ -2,6 +2,8 @@
 
 import React from 'react'
 import { Button } from '@/components/ui/button'
+import { Menu } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface HamburgerButtonProps {
   onClick: React.MouseEventHandler<HTMLButtonElement>
@@ -14,34 +16,12 @@ export function HamburgerButton({ onClick, className = '' }: HamburgerButtonProp
       variant="ghost"
       size="icon"
       onClick={onClick}
-      className={`text-foreground hover:bg-muted ${className}`}
-      style={{
-        zIndex: 100,
-        position: 'relative',
-        minWidth: '40px',
-        minHeight: '40px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        border: '1px solid hsl(var(--border))',
-      }}
+      className={cn(
+        'h-9 w-9 border border-border/60 hover:bg-border/10 text-foreground',
+        className
+      )}
     >
-      {' '}
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <line x1="4" y1="6" x2="20" y2="6"></line>
-        <line x1="4" y1="12" x2="20" y2="12"></line>
-        <line x1="4" y1="18" x2="20" y2="18"></line>
-      </svg>
+      <Menu className="h-4 w-4" />
     </Button>
   )
 }

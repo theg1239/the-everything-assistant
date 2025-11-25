@@ -51,15 +51,15 @@ export function ResponsiveTable({
   return (
     <div className={cn('w-full overflow-hidden', className)}>
 
-      <div className="hidden md:block overflow-x-auto">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="border-b border-border">
+      <div className="hidden md:block overflow-x-auto -webkit-overflow-scrolling-touch">
+        <table className="w-full border-collapse border border-border/50 rounded-lg overflow-hidden">
+          <thead className="bg-muted/50">
+            <tr>
               {columns.map(column => (
                 <th
                   key={column.key}
                   className={cn(
-                    'px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider',
+                    'px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/70 whitespace-nowrap',
                     column.className
                   )}
                 >
@@ -73,14 +73,14 @@ export function ResponsiveTable({
               <tr
                 key={rowIndex}
                 className={cn(
-                  'border-b border-border hover:bg-muted/50 transition-colors',
+                  'border-b border-border/30 last:border-b-0 hover:bg-muted/30 transition-colors',
                   rowClassName
                 )}
               >
                 {columns.map(column => (
                   <td
                     key={`${rowIndex}-${column.key}`}
-                    className={cn('px-4 py-3 text-sm', column.className)}
+                    className={cn('px-4 py-3 text-sm align-top', column.className)}
                   >
                     {column.render ? column.render(row[column.key], row) : row[column.key]}
                   </td>

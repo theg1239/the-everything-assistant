@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { broadcastSlidesSchema, type BroadcastSlide } from '@/types/api/broadcast'
 import { formatDistanceToNow, format } from 'date-fns'
 import Link from 'next/link'
+import Image from 'next/image'
 import { ArrowLeft } from 'lucide-react'
 
 interface BroadcastWithMeta {
@@ -42,7 +43,7 @@ export default async function UpdatesPage() {
             className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-8"
           >
             <ArrowLeft className="w-4 h-4" />
-            back
+            chat
           </Link>
           <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">updates</h1>
           <p className="text-muted-foreground mt-2 text-lg">what&apos;s new and noteworthy</p>
@@ -64,11 +65,13 @@ export default async function UpdatesPage() {
 
                   <div className="mt-5 space-y-5">
                     <div className="relative aspect-[2.5/1] w-full overflow-hidden rounded-2xl bg-muted shadow-sm">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+                      <Image
                         src={firstSlide.image}
                         alt={firstSlide.title}
-                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                        fill
+                        sizes="(max-width: 768px) 100vw, 768px"
+                        loading="lazy"
+                        className="object-cover transition-transform duration-500 group-hover:scale-[1.02]"
                       />
                       <div className="absolute inset-0 flex items-center justify-center px-6">
                         <h2 className="text-xl sm:text-2xl font-semibold text-white text-center drop-shadow-lg max-w-lg">

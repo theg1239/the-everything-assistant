@@ -2,13 +2,14 @@
 
 import Link from 'next/link'
 import { signIn } from 'next-auth/react'
+import { Megaphone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { motion } from 'framer-motion'
 
 export function LoginForm() {
   return (
-    <div className="relative w-full max-w-md">
+    <div className="relative w-full max-w-md px-4 sm:px-0">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -16,21 +17,18 @@ export function LoginForm() {
         className="relative z-10"
       >
         <Card className="bg-slate-900/80 backdrop-blur-xl border-slate-600/60 shadow-2xl shadow-purple-500/30 relative">
-          <CardHeader className="text-center space-y-4">
-            <CardTitle className="text-2xl font-light text-white drop-shadow-lg">
+          <CardHeader className="text-center space-y-3 sm:space-y-4 px-4 sm:px-6">
+            <CardTitle className="text-xl sm:text-2xl font-light text-white drop-shadow-lg">
               the everything assistant
             </CardTitle>
-            <CardDescription className="text-slate-200">
-              sign in to access your personalized assistant, ask anything!
-            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3 sm:space-y-4 px-4 sm:px-6">
             <Button
               onClick={() => signIn('google', { callbackUrl: '/' })}
-              className="w-full bg-white/95 hover:bg-white text-gray-900 font-medium py-3 shadow-lg hover:shadow-xl transition-all duration-200"
+              className="w-full bg-white/95 hover:bg-white text-gray-900 font-medium py-2.5 sm:py-3 h-11 sm:h-12 shadow-lg hover:shadow-xl transition-all duration-200"
               size="lg"
             >
-              <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 mr-2 shrink-0" viewBox="0 0 24 24">
                 <path
                   fill="currentColor"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -48,17 +46,25 @@ export function LoginForm() {
                   d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                 />
               </svg>
-              continue with google
+              <span className="text-sm sm:text-base">continue with google</span>
             </Button>
             <Button
               asChild
               variant="outline"
-              className="w-full border-slate-700/70 bg-transparent text-slate-100 hover:bg-slate-800/70"
+              className="w-full h-10 sm:h-11 border-slate-700/70 bg-transparent text-slate-100 hover:bg-slate-800/70 text-sm sm:text-base"
             >
               <Link href="/?guest=1">try the assistant</Link>
             </Button>
 
-            <div className="text-xs text-slate-300 text-center">
+            <Link 
+              href="/updates" 
+              className="flex items-center justify-center gap-2 text-xs sm:text-sm text-slate-400 hover:text-slate-200 transition-colors py-2"
+            >
+              <Megaphone className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span>view updates & announcements</span>
+            </Link>
+
+            <div className="text-[10px] sm:text-xs text-slate-300 text-center pt-1">
               by continuing, you agree to our{' '}
               <a
                 href="/guidelines/terms"

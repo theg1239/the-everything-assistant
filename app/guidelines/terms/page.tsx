@@ -4,7 +4,7 @@ import React from 'react'
 
 export default function TermsOfServicePage() {
   return (
-    <div className="bg-zinc-900 text-white font-sans min-h-screen py-10">
+    <div className="bg-zinc-900 text-white font-sans min-h-screen py-10 overflow-y-auto" data-allow-touch-scroll>
       <main className="max-w-2xl mx-auto px-4">
         <h1 className="text-3xl font-bold mb-4">Terms of Service</h1>
         <p className="mb-6">Effective Date: June 25, 2025</p>

@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import ReactPlayer from 'react-player'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useMotionValue } from 'framer-motion'
+import type { PanInfo } from 'framer-motion'
 import { Drawer } from 'vaul'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import {
@@ -28,6 +29,7 @@ import {
   Trash2,
   ChevronUp,
   ChevronDown,
+  Waves,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -36,9 +38,11 @@ import { cn } from '@/lib/utils'
 import { useMiniPlayerStore, formatTime } from '@/lib/stores/useMiniPlayerStore'
 import { useMiniLyrics } from '@/hooks/useMiniLyrics'
 import { useMediaQuery } from '@/hooks/use-media-query'
+import { useSession } from 'next-auth/react'
 
 // View states: collapsed (bubble only), minimized (compact now playing), screen (video/lyrics), expanded (full panel)
 type ViewState = 'collapsed' | 'minimized' | 'screen' | 'expanded'
+type CornerPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 
 const BubbleGlyph = ({ size = 24, isPlaying = false }: { size?: number; isPlaying?: boolean }) => (
   <div
@@ -96,6 +100,14 @@ export default function SpotifyBubble() {
   const playerRef = useRef<ReactPlayer>(null)
   // Visual player ref for mobile drawer (muted, synced with audio player)
   const visualPlayerRef = useRef<ReactPlayer>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const dragX = useMotionValue(0)
+  const dragY = useMotionValue(0)
+  const { data: session } = useSession()
+  const [desktopCorner, setDesktopCorner] = useState<CornerPosition>('bottom-right')
+  const [mobilePosition, setMobilePosition] = useState<{ x: number; y: number } | null>(null)
+  const [mobileAlignEnd, setMobileAlignEnd] = useState(true)
+  const [mobilePreferDown, setMobilePreferDown] = useState(true)
   
   // Local state for elapsed/total time (matching ryos pattern)
   const [elapsedTime, setElapsedTime] = useState(0)
@@ -110,6 +122,7 @@ export default function SpotifyBubble() {
     // eslint-disable-next-line no-console
     console.debug('[MiniPlayer]', ...args)
   }, [])
+  const clamp = useCallback((value: number, min: number, max: number) => Math.min(Math.max(value, min), max), [])
   const {
     enabled,
     tracks,
@@ -125,8 +138,10 @@ export default function SpotifyBubble() {
     toggleLoopCurrent,
     toggleVideo,
     toggleLyrics,
+    toggleSynthwave,
     showVideo,
     showLyrics,
+    showSynthwave,
     nextTrack,
     previousTrack,
     addTrackFromUrl,
@@ -149,6 +164,73 @@ export default function SpotifyBubble() {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'add' | 'library' | 'playlists'>('add')
+
+  const isMobile = useMediaQuery('(max-width: 640px)')
+  useEffect(() => {
+    if (!isMobile || mobilePosition !== null) return
+    if (typeof window === 'undefined') return
+    const spacing = 16
+    const rect = containerRef.current?.getBoundingClientRect()
+    const width = rect?.width ?? 120
+    setMobilePosition({
+      x: Math.max(spacing, window.innerWidth - width - spacing),
+      y: spacing,
+    })
+    setMobileAlignEnd(true)
+    setMobilePreferDown(true)
+  }, [isMobile, mobilePosition])
+
+  const desktopPositionStyle = useMemo(() => {
+    const verticalSpacing = 20
+    const horizontalSpacing = 16
+    return {
+      top: desktopCorner.startsWith('top') ? verticalSpacing : undefined,
+      bottom: desktopCorner.startsWith('bottom') ? verticalSpacing : undefined,
+      left: desktopCorner.endsWith('left') ? horizontalSpacing : undefined,
+      right: desktopCorner.endsWith('right') ? horizontalSpacing : undefined,
+    }
+  }, [desktopCorner])
+
+  const mobileContainerStyle = useMemo(() => {
+    if (mobilePosition) {
+      return {
+        top: mobilePosition.y,
+        left: mobilePosition.x,
+      }
+    }
+    return { top: 16, right: 16 }
+  }, [mobilePosition])
+  const isAuthenticated = Boolean(session?.user)
+  const isDesktopTop = desktopCorner.startsWith('top')
+  const desktopAlignmentClass = desktopCorner.endsWith('left') ? 'items-start' : 'items-end'
+  const mobileAlignmentClass = mobileAlignEnd ? 'items-end' : 'items-start'
+  const handleDragEnd = useCallback(
+    (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+      dragX.set(0)
+      dragY.set(0)
+      if (typeof window === 'undefined') return
+
+      if (isMobile) {
+        const rect = containerRef.current?.getBoundingClientRect()
+        const width = rect?.width ?? 120
+        const height = rect?.height ?? 120
+        const safePadding = 12
+        const newLeft = clamp(info.point.x - width / 2, safePadding, window.innerWidth - width - safePadding)
+        const newTop = clamp(info.point.y - height / 2, safePadding, window.innerHeight - height - safePadding)
+        setMobilePosition({ x: newLeft, y: newTop })
+        const midPoint = newLeft + width / 2
+        setMobileAlignEnd(midPoint >= window.innerWidth / 2)
+        setMobilePreferDown(newTop < window.innerHeight / 2)
+        return
+      }
+
+      const { innerWidth, innerHeight } = window
+      const horizontal = info.point.x < innerWidth / 2 ? 'left' : 'right'
+      const vertical = info.point.y < innerHeight / 2 ? 'top' : 'bottom'
+      setDesktopCorner(`${vertical}-${horizontal}` as CornerPosition)
+    },
+    [clamp, dragX, dragY, isMobile]
+  )
 
   const currentTrack = useMemo(() => {
     if (currentIndex >= 0 && currentIndex < tracks.length) return tracks[currentIndex]
@@ -488,6 +570,23 @@ export default function SpotifyBubble() {
               >
                 <Captions className="h-3.5 w-3.5" />
                 Lyrics
+              </button>
+              <button
+                className={cn(
+                  'flex items-center justify-center gap-1 rounded-full px-2 py-1 text-[11px] min-w-[52px] transition-colors',
+                  showSynthwave 
+                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
+                    : 'bg-foreground/10 text-foreground'
+                )}
+                onClick={() => {
+                  toggleSynthwave()
+                  showStatus(showSynthwave ? 'Synthwave off' : 'Synthwave on')
+                  log('toggle synthwave', !showSynthwave)
+                }}
+                title="Synthwave visualizer"
+              >
+                <Waves className="h-3.5 w-3.5" />
+                Synth
               </button>
           </div>
           <div className="text-[11px] text-muted-foreground">
@@ -1083,7 +1182,6 @@ export default function SpotifyBubble() {
     </div>
   )
 
-  const isMobile = useMediaQuery('(max-width: 640px)')
 
   // Minimized view - compact now playing with progress and controls
   const minimizedView = (
@@ -1550,8 +1648,8 @@ export default function SpotifyBubble() {
     </motion.button>
   )
 
-  // Return null if mini player is disabled
-  if (!enabled) return null
+  // Return null if not signed in or if the mini player is disabled
+  if (!isAuthenticated || !enabled) return null
 
   // Mobile: use drawer positioned at top-right corner (away from input box at bottom)
   if (isMobile) {
@@ -1595,26 +1693,39 @@ export default function SpotifyBubble() {
             />
           </div>
         )}
-        <div className="fixed top-4 right-4 z-[60] flex flex-col items-end gap-2">
-          {/* All player views for mobile - using single AnimatePresence with mode='wait' */}
-          <AnimatePresence mode="wait">
-            {viewState === 'screen' && screenView}
-            {viewState === 'minimized' && minimizedView}
-          </AnimatePresence>
-          
-          <Drawer.Root open={viewState === 'expanded'} onOpenChange={(isOpen) => setViewState(isOpen ? 'expanded' : 'collapsed')}>
-            <Drawer.Trigger asChild>
-              {bubbleButton}
-            </Drawer.Trigger>
-            <Drawer.Portal>
-              <Drawer.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70]" />
-              <Drawer.Content className="fixed bottom-0 left-0 right-0 z-[70] outline-none">
-                <VisuallyHidden>
-                  <Drawer.Title>Mini Music Player</Drawer.Title>
-                  <Drawer.Description>
-                    Play music from YouTube with lyrics and playlists
-                  </Drawer.Description>
-                </VisuallyHidden>
+        <motion.div
+          ref={containerRef}
+          className={cn(
+            'fixed z-[60] flex flex-col gap-2 transition-[top,left,right,bottom] duration-200 ease-out',
+            mobileAlignmentClass
+          )}
+          style={{ ...mobileContainerStyle, x: dragX, y: dragY }}
+          drag
+          dragMomentum={false}
+          dragElastic={0.2}
+          onDragEnd={handleDragEnd}
+        >
+          <div
+            className={cn(
+              'flex gap-2',
+              mobilePreferDown ? 'flex-col' : 'flex-col-reverse',
+              mobileAlignmentClass
+            )}
+          >
+            <Drawer.Root
+              open={viewState === 'expanded'}
+              onOpenChange={(isOpen) => setViewState(isOpen ? 'expanded' : 'collapsed')}
+            >
+              <Drawer.Trigger asChild>{bubbleButton}</Drawer.Trigger>
+              <Drawer.Portal>
+                <Drawer.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[70]" />
+                <Drawer.Content className="fixed bottom-0 left-0 right-0 z-[70] outline-none">
+                  <VisuallyHidden>
+                    <Drawer.Title>Mini Music Player</Drawer.Title>
+                    <Drawer.Description>
+                      Play music from YouTube with lyrics and playlists
+                    </Drawer.Description>
+                  </VisuallyHidden>
                 <div className="bg-background rounded-t-3xl border-t border-border/50 shadow-xl">
                   <Drawer.Handle className="mx-auto mt-3 mb-2 h-1 w-10 rounded-full bg-muted-foreground/30" />
                   <div className="max-h-[90vh] overflow-y-auto px-5 pb-safe-bottom pt-1">
@@ -1730,7 +1841,7 @@ export default function SpotifyBubble() {
                         )}
                       </div>
                       
-                      {/* Video/Lyrics toggle buttons inside screen area */}
+                      {/* Video/Lyrics/Synthwave toggle buttons inside screen area */}
                       <div className="flex items-center justify-center gap-2 mt-2">
                         <button
                           className={cn(
@@ -1751,6 +1862,19 @@ export default function SpotifyBubble() {
                         >
                           <Captions className="h-3.5 w-3.5" />
                           Lyrics
+                        </button>
+                        <button
+                          className={cn(
+                            'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
+                            showSynthwave 
+                              ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
+                              : 'bg-foreground/10 text-muted-foreground'
+                          )}
+                          onClick={() => toggleSynthwave()}
+                          title="Toggle synthwave visualizer background"
+                        >
+                          <Waves className="h-3.5 w-3.5" />
+                          Synth
                         </button>
                       </div>
                     </div>
@@ -2019,15 +2143,33 @@ export default function SpotifyBubble() {
                 </div>
               </Drawer.Content>
             </Drawer.Portal>
-          </Drawer.Root>
-        </div>
+            </Drawer.Root>
+
+            {/* All player views for mobile - using single AnimatePresence with mode='wait' */}
+            <AnimatePresence mode="wait">
+              {viewState === 'screen' && screenView}
+              {viewState === 'minimized' && minimizedView}
+            </AnimatePresence>
+          </div>
+        </motion.div>
       </>
     )
   }
 
   // Desktop: use floating panel with minimized state
   return (
-    <div className="fixed bottom-5 right-4 z-[60] flex flex-col items-end gap-3">
+    <motion.div
+      ref={containerRef}
+      className={cn(
+        'fixed z-[60] flex flex-col gap-3 transition-[top,left,right,bottom] duration-200 ease-out',
+        desktopAlignmentClass
+      )}
+      style={{ ...desktopPositionStyle, x: dragX, y: dragY }}
+      drag
+      dragMomentum={false}
+      dragElastic={0.08}
+      onDragEnd={handleDragEnd}
+    >
       {/* Persistent audio player for desktop - keeps playing across all view states */}
       {currentTrack && trackUrl && (
         <div className="sr-only pointer-events-none" aria-hidden="true">
@@ -2067,25 +2209,33 @@ export default function SpotifyBubble() {
         </div>
       )}
 
-      {/* All player views - using single AnimatePresence with mode='wait' to prevent layout shifts */}
-      <AnimatePresence mode="wait">
-        {viewState === 'expanded' && (
-          <motion.div
-            key="expanded"
-            layoutId="player-panel"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2, ease: 'easeInOut' }}
-          >
-            {panel}
-          </motion.div>
+      <div
+        className={cn(
+          'flex gap-3',
+          isDesktopTop ? 'flex-col' : 'flex-col-reverse',
+          desktopAlignmentClass
         )}
-        {viewState === 'screen' && screenView}
-        {viewState === 'minimized' && minimizedView}
-      </AnimatePresence>
-      
-      {bubbleButton}
-    </div>
+      >
+        {bubbleButton}
+
+        {/* All player views - using single AnimatePresence with mode='wait' to prevent layout shifts */}
+        <AnimatePresence mode="wait">
+          {viewState === 'expanded' && (
+            <motion.div
+              key="expanded"
+              layoutId="player-panel"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeInOut' }}
+            >
+              {panel}
+            </motion.div>
+          )}
+          {viewState === 'screen' && screenView}
+          {viewState === 'minimized' && minimizedView}
+        </AnimatePresence>
+      </div>
+    </motion.div>
   )
 }

@@ -34,6 +34,7 @@ interface MiniPlayerState {
   durationMs: number
   showVideo: boolean
   showLyrics: boolean
+  showSynthwave: boolean
   statusMessage: string | null
   libraryState: LibraryState
   initializing: boolean
@@ -48,6 +49,7 @@ interface MiniPlayerState {
   toggleLoopAll: () => void
   toggleVideo: () => void
   toggleLyrics: () => void
+  toggleSynthwave: () => void
   setStatusMessage: (msg: string | null) => void
   adjustLyricOffset: (trackId: string, deltaMs: number) => void
   initializeLibrary: () => Promise<void>
@@ -154,6 +156,7 @@ export const useMiniPlayerStore = create<MiniPlayerState>()(
       durationMs: 0,
       showVideo: true,
       showLyrics: true,
+      showSynthwave: false,
       statusMessage: null,
       libraryState: 'uninitialized',
       initializing: false,
@@ -172,6 +175,7 @@ export const useMiniPlayerStore = create<MiniPlayerState>()(
       toggleLoopAll: () => set((s) => ({ loopAll: !s.loopAll })),
       toggleVideo: () => set((s) => ({ showVideo: !s.showVideo })),
       toggleLyrics: () => set((s) => ({ showLyrics: !s.showLyrics })),
+      toggleSynthwave: () => set((s) => ({ showSynthwave: !s.showSynthwave })),
       setStatusMessage: (msg) => set({ statusMessage: msg }),
       adjustLyricOffset: (trackId, deltaMs) =>
         set((state) => {

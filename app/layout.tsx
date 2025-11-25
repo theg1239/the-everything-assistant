@@ -20,6 +20,7 @@ import CustomBackground from '@/components/backgrounds/custom-background'
 import { PdfDockProvider } from '@/contexts/pdf-dock-context'
 import PdfDock from '@/components/pdf-dock'
 import SpotifyBubble from '@/components/spotify-bubble'
+import { SynthwaveBackground } from '@/components/synthwave-background'
 import { PerformanceMonitor } from '@/components/performance-monitor'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
@@ -455,6 +456,7 @@ export default async function RootLayout({
             <div className="fixed inset-0 w-full h-full z-[-10]">
               <CustomBackground />
             </div>
+            <SynthwaveBackground className="z-[-5]" />
             <MobileViewportFix />
             <ScrollToTop />
             {process.env.NODE_ENV === 'development' && <PerformanceMonitor />}

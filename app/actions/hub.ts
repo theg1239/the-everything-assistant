@@ -227,8 +227,12 @@ export async function syncCoreHubSnapshots(commands: HubVTOPCommand[] = [...HUB_
   const userId = await requireUser()
   const creds = await resolveVTOPCredentials()
 
+  let updatedCount = 0
+
   try {
     const entries = await runProxySyncBatch(commands, creds)
+    console.log('[hub/actions] sync batch returned', entries.length, 'entries')
+    
     for (const entry of entries) {
       const command = entry.command as HubVTOPCommand
       if (!commands.includes(command)) continue
@@ -238,9 +242,16 @@ export async function syncCoreHubSnapshots(commands: HubVTOPCommand[] = [...HUB_
       }
       try {
         await formatAndPersistVTOPResult(userId, command, entry.result)
+        updatedCount++
+        console.log('[hub/actions] persisted sync result for', command)
       } catch (error) {
         console.error('[hub/actions] failed to store sync result', command, error)
       }
+    }
+    
+    if (updatedCount === 0 && entries.length === 0) {
+      console.log('[hub/actions] no batch results, falling back to sequential refresh')
+      throw new Error('Empty batch results')
     }
   } catch (error) {
     console.error('[hub/actions] batch sync failed, falling back to sequential refresh:', error)
@@ -248,6 +259,7 @@ export async function syncCoreHubSnapshots(commands: HubVTOPCommand[] = [...HUB_
       commands.map(async command => {
         try {
           await executeVTOPCommand(userId, command, {}, creds)
+          updatedCount++
         } catch (fallbackError) {
           console.error('[hub/actions] fallback refresh failed', command, fallbackError)
         }
@@ -255,6 +267,7 @@ export async function syncCoreHubSnapshots(commands: HubVTOPCommand[] = [...HUB_
     )
   }
 
+  console.log('[hub/actions] sync complete, updated', updatedCount, 'snapshots')
   return buildHubState(userId)
 }
 

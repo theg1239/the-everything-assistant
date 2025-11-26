@@ -58,7 +58,7 @@ function buildToolContextFromInvocation(toolCall: any): string {
       .slice(0, 6000)
 
     if (knowledgeContext) {
-      return `\n\n[KNOWLEDGE BASE CONTEXT]:\n${knowledgeContext}\n\n[IMPORTANT]: Use the above knowledge base information to answer the user's question. Format your response naturally with proper markdown formatting, bullet points, and lowercase text (except for proper nouns and course codes).`
+      return `\n\n[INTERNAL - KNOWLEDGE BASE]:\n${knowledgeContext}\n\nUse this to answer the user. Do not include this block in your response.`
     }
     return ''
   }
@@ -83,40 +83,33 @@ function buildToolContextFromInvocation(toolCall: any): string {
     }
 
     return dataContext
-      ? `\n\n[VTOP ${command.toUpperCase()} DATA CONTEXT]:\n${dataContext}\n\n[IMPORTANT]: VTOP ${command} data was successfully retrieved above. Use this data to answer any follow-up questions about ${command}.`
+      ? `\n\n[INTERNAL - VTOP ${command.toUpperCase()}]:\n${dataContext}\n\nUse this to answer the user. Do not include this block in your response.`
       : ''
   }
 
   if (toolCall.result.papers?.length) {
     const papers = toolCall.result.papers
-    const paperDetails = papers.slice(0, 10).map((p: any, i: number) => {
-      const parts = [`${i + 1}. ${p.title || 'Untitled'}`]
-      if (p.examType) parts.push(`Type: ${p.examType}`)
-      if (p.year) parts.push(`Year: ${p.year}`)
-      if (p.url) parts.push(`PDF URL: ${p.url}`)
-      return parts.join(' | ')
-    }).join('\n')
-    
-    return `\n\n[PAPERS DATA CONTEXT]:\nFound ${papers.length} past papers:\n${paperDetails}\n\n[NOTE]: The PDF files are attached to this conversation. You can read and analyze their content directly to answer questions about topics, questions, and patterns in these papers.`
+
+    return `\n\n[INTERNAL - PAPERS]: ${papers.length} past papers attached. Use their content to answer the user. Do not include this block in your response.`
   }
 
   if (toolCall.result.faculty?.length) {
-    return `\n\n[FACULTY DATA CONTEXT]:\nFound ${toolCall.result.faculty.length} faculty members`
+    return `\n\n[INTERNAL - FACULTY]: Found ${toolCall.result.faculty.length} faculty members. Do not include this block in your response.`
   }
 
   if (toolCall.result.companies?.length) {
-    return `\n\n[COMPANIES DATA CONTEXT]:\nFound ${toolCall.result.companies.length} companies`
+    return `\n\n[INTERNAL - COMPANIES]: Found ${toolCall.result.companies.length} companies. Do not include this block in your response.`
   }
 
   if (toolCall.result.data?.todayMenu) {
-    return `\n\n[MESS MENU DATA CONTEXT]:\nRetrieved mess menu for ${toolCall.result.data.messType}`
+    return `\n\n[INTERNAL - MESS MENU]: Retrieved menu for ${toolCall.result.data.messType}. Do not include this block in your response.`
   }
 
   if (
     (toolCall.toolName === 'submitFeedback' || toolCall.toolName === 'contributeKnowledge') &&
     toolCall.result?.issueUrl
   ) {
-    return `\n\n[PROJECT META]:\nFeedback/KB entry logged at ${toolCall.result.issueUrl}`
+    return `\n\n[INTERNAL - META]: Feedback logged at ${toolCall.result.issueUrl}. Do not include this block in your response.`
   }
 
   return ''
@@ -195,7 +188,7 @@ export function enhanceMessagesWithToolContext(
           }
 
           if (dataContext) {
-            toolContext = `\n\n[VTOP ${command.toUpperCase()} DATA CONTEXT]:\n${dataContext}\n\n[IMPORTANT]: VTOP ${command} data was successfully retrieved above. Use this data to answer the user's question about ${command}.`
+            toolContext = `\n\n[INTERNAL - VTOP ${command.toUpperCase()}]:\n${dataContext}\n\nUse this to answer the user. Do not include this block in your response.`
           }
         }
       }

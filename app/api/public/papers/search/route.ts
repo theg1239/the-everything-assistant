@@ -12,7 +12,11 @@ export async function GET(req: NextRequest) {
   const started = Date.now()
   try {
     const { searchParams } = new URL(req.url)
-    const courseInput = searchParams.get('courseCode') || searchParams.get('course')
+    const courseInput =
+      searchParams.get('courseCode') ||
+      searchParams.get('course') ||
+      searchParams.get('q') ||
+      searchParams.get('query')
     const examType = searchParams.get('examType') || searchParams.get('exam') || undefined
     const year = searchParams.get('year') || undefined
 

@@ -28,14 +28,24 @@ interface Paper {
   year?: string
 }
 
+interface RawPaper extends Partial<Paper> {
+  url?: string
+  downloadUrl?: string
+  paperUrl?: string
+  description?: string
+  metadata?: string
+  name?: string
+  paperName?: string
+}
+
 interface CourseClientProps {
   courseCode: string
   courseName: string
 }
 
 // Parse exam type from title/snippet
-function parseExamType(title: string, snippet?: string): string {
-  const text = `${title} ${snippet || ''}`.toLowerCase()
+function parseExamType(title?: string, snippet?: string): string {
+  const text = `${title || ''} ${snippet || ''}`.toLowerCase()
   if (text.includes('fat') || text.includes('final')) return 'FAT'
   if (text.includes('cat2') || text.includes('cat 2') || text.includes('cat-2')) return 'CAT 2'
   if (text.includes('cat1') || text.includes('cat 1') || text.includes('cat-1')) return 'CAT 1'
@@ -46,10 +56,35 @@ function parseExamType(title: string, snippet?: string): string {
 }
 
 // Parse year from title/snippet
-function parseYear(title: string, snippet?: string): string | undefined {
-  const text = `${title} ${snippet || ''}`
+function parseYear(title?: string, snippet?: string): string | undefined {
+  const text = `${title || ''} ${snippet || ''}`
   const match = text.match(/20\d{2}/)
   return match ? match[0] : undefined
+}
+
+function normalizePaper(raw: RawPaper): Paper {
+  const rawTitle =
+    raw.title || raw.paperName || raw.name || raw.description || raw.metadata || 'Untitled paper'
+  const title = typeof rawTitle === 'string' ? rawTitle : String(rawTitle)
+
+  const rawLink = raw.link ?? raw.url ?? raw.downloadUrl ?? raw.paperUrl ?? '#'
+  const link = typeof rawLink === 'string' ? rawLink : String(rawLink)
+
+  const rawSnippet = raw.snippet ?? raw.description ?? raw.metadata
+  const snippet =
+    typeof rawSnippet === 'string' || rawSnippet === undefined ? rawSnippet : String(rawSnippet)
+
+  const source = typeof raw.source === 'string' && raw.source.length > 0 ? raw.source : 'Unknown source'
+
+  return {
+    ...raw,
+    title,
+    link,
+    source,
+    snippet,
+    examType: parseExamType(title, snippet),
+    year: (raw.year ? String(raw.year) : undefined) || parseYear(title, snippet),
+  }
 }
 
 export default function CourseClient({ courseCode, courseName }: CourseClientProps) {
@@ -67,13 +102,11 @@ export default function CourseClient({ courseCode, courseName }: CourseClientPro
         `/api/public/papers/search?q=${encodeURIComponent(courseCode)}&limit=20`
       )
       if (!response.ok) throw new Error('Failed to fetch papers')
-      const data = (await response.json()) as { papers?: Paper[] }
+      const data = (await response.json()) as { papers?: RawPaper[] }
 
-      const enrichedPapers = (data.papers || []).map((p: Paper) => ({
-        ...p,
-        examType: parseExamType(p.title, p.snippet),
-        year: parseYear(p.title, p.snippet),
-      }))
+      const enrichedPapers = (data.papers || [])
+        .map(normalizePaper)
+        .filter(p => p.link && p.title)
 
       setPapers(enrichedPapers)
     } catch (err) {

@@ -115,9 +115,6 @@ function buildToolContextFromInvocation(toolCall: any): string {
   return ''
 }
 
-/**
- * Collect PDF attachments from all tool invocations in the conversation
- */
 function collectPdfAttachmentsFromMessages(messages: LegacyMessage[]): Attachment[] {
   const attachments: Attachment[] = []
   

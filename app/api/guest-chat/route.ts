@@ -1,10 +1,11 @@
-import { generateId } from 'ai'
+import { generateId, stepCountIs } from 'ai'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { parseChatRequestPayload } from '@/app/api/chat/lib/request'
 import { uiMessagesToLegacyMessages } from '@/lib/ai-message-conversion'
 import { buildSystemPrompt } from '@/app/api/chat/lib/prompt'
 import { getModelConfig } from '@/lib/model-registry'
 import { createVITTools } from '@/lib/tools'
+import { saveTokenUsage } from '@/lib/db'
 
 const GUEST_MESSAGE_LIMIT = 2
 
@@ -87,6 +88,8 @@ export async function POST(req: Request) {
       }
     })
 
+    let savedFinalStepUsage = false
+
     const streamResult = await providerClient.streamText(
       {
         model: await providerClient.model(model.modelId),
@@ -94,6 +97,60 @@ export async function POST(req: Request) {
         tools,
         maxTokens: 800,
         temperature: 0.4,
+        stopWhen: stepCountIs(5),
+        onError: async (error: any) => {
+          console.error('Guest chat streaming error:', error)
+        },
+        onStepFinish: async ({
+          text,
+          toolCalls,
+          toolResults,
+          finishReason,
+          usage,
+          stepIndex,
+        }: any) => {
+          try {
+            if (usage && typeof usage === 'object') {
+              await saveTokenUsage({
+                userId: guestUserId,
+                chatId: guestChatId,
+                model: model.modelId,
+                stepIndex: typeof stepIndex === 'number' ? stepIndex : null,
+                promptTokens: usage.promptTokens || 0,
+                completionTokens: usage.completionTokens || 0,
+                totalTokens:
+                  usage.totalTokens || (usage.promptTokens || 0) + (usage.completionTokens || 0),
+                meta: { finishReason, channel: 'guest' },
+              })
+              if (finishReason === 'stop') {
+                savedFinalStepUsage = true
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to persist guest step usage:', e)
+          }
+        },
+        onFinish: async (result: any) => {
+          try {
+            const finalUsage = (result as any)?.usage
+            if (!savedFinalStepUsage && finalUsage && typeof finalUsage === 'object') {
+              await saveTokenUsage({
+                userId: guestUserId,
+                chatId: guestChatId,
+                model: model.modelId,
+                stepIndex: null,
+                promptTokens: finalUsage.promptTokens || 0,
+                completionTokens: finalUsage.completionTokens || 0,
+                totalTokens:
+                  finalUsage.totalTokens ||
+                  (finalUsage.promptTokens || 0) + (finalUsage.completionTokens || 0),
+                meta: { type: 'final', channel: 'guest' },
+              })
+            }
+          } catch (e) {
+            console.warn('Failed to persist guest final usage:', e)
+          }
+        },
       },
       guestUserId
     )

@@ -61,7 +61,7 @@ export async function POST(req: Request) {
     })
 
     const guestContext = {
-      role: 'system',
+      role: 'system' as const,
       content: 'guest preview mode: keep answers concise, no personal data or memory, feedback/KB submissions allowed and attributed as guest.',
     }
 
@@ -70,7 +70,7 @@ export async function POST(req: Request) {
       guestContext,
       ...legacyMessages
         .filter(m => m.content && m.content.trim().length > 0)
-        .map(m => ({ role: m.role, content: (m.content ?? '').trim() })),
+        .map(m => ({ role: m.role as 'user' | 'assistant' | 'system', content: (m.content ?? '').trim() })),
     ]
 
     const model = getModelConfig('chat')

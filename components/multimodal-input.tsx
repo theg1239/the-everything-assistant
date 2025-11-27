@@ -22,6 +22,7 @@ import { getAutocompleteSuggestionAction } from '@/app/actions/autocomplete'
 import type { Attachment } from '@/types/attachment'
 import { AttachmentPreview } from '@/components/attachment-preview'
 import type { MCPClientConfig } from '@/lib/mcp-config'
+import { Streamdown } from 'streamdown'
 
 interface MultimodalInputProps {
   input: string
@@ -50,6 +51,8 @@ interface MultimodalInputProps {
   thinkHarder?: boolean
   onThinkHarderChange?: (value: boolean) => void
   isSignedIn?: boolean
+  quotedText?: string | null
+  onClearQuote?: () => void
 }
 
 const PureMultimodalInput = ({
@@ -79,6 +82,8 @@ const PureMultimodalInput = ({
   thinkHarder = false,
   onThinkHarderChange,
   isSignedIn = false,
+  quotedText,
+  onClearQuote,
 }: MultimodalInputProps) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [isFocused, setIsFocused] = useState(false)
@@ -522,6 +527,23 @@ const PureMultimodalInput = ({
           )}
 
           {/* Attachments row - above the input */}
+          {quotedText && (
+            <div className="flex items-start gap-3 px-4 pt-4 pb-3 border-b border-border/30 bg-muted/20">
+              <div className="flex-1 text-sm text-muted-foreground border-l-2 border-primary/50 pl-3 py-1 line-clamp-3">
+                <Streamdown className="streamdown-content">{quotedText}</Streamdown>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 -mt-1 hover:bg-background/50"
+                onClick={onClearQuote}
+              >
+                <XIcon className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
+
           {allowAttachments && (attachments.length > 0 || uploadingAttachments.length > 0) && (
             <div className="flex flex-wrap gap-3 px-4 pt-4 pb-3 border-b border-border/30">
               {attachments.map(att => (

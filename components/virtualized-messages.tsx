@@ -19,6 +19,7 @@ interface VirtualizedMessagesProps {
   onSuggestionClick?: (suggestion: string) => void
   onDismissSuggestions?: () => void
   isMobile?: boolean
+  onQuote?: (text: string) => void
 }
 
 export const VirtualizedMessages = memo(
@@ -38,6 +39,7 @@ export const VirtualizedMessages = memo(
     onSuggestionClick,
     onDismissSuggestions,
     isMobile = false,
+    onQuote,
   }: VirtualizedMessagesProps) => {
     const visibleMessages = messages.slice(-50)
     
@@ -59,6 +61,7 @@ export const VirtualizedMessages = memo(
               onPlacementSearch={onPlacementSearch}
               maximizedItem={maximizedItem}
               setMaximizedItem={setMaximizedItem}
+              onQuote={onQuote}
             />
             {!isMobile &&
               idx === lastAssistantIndex &&

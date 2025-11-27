@@ -15,6 +15,7 @@ import {
   embedMany,
   type EmbedResult,
   type EmbedManyResult,
+  type ModelMessage,
 } from 'ai'
 import type { EmbeddingModel } from 'ai'
 
@@ -26,6 +27,44 @@ type GoogleSearchToolOptions = Parameters<GoogleToolset['googleSearch']>[0]
 type GoogleUrlContextOptions = Parameters<GoogleToolset['urlContext']>[0]
 type GoogleFileSearchOptions = Parameters<GoogleToolset['fileSearch']>[0]
 type GoogleCodeExecutionOptions = Parameters<GoogleToolset['codeExecution']>[0]
+
+// Type definitions for API error responses
+interface APIError {
+  statusCode?: number
+  status?: number | string
+  code?: number | string
+  message?: string
+  responseBody?: string
+  data?: {
+    error?: {
+      status?: string
+      message?: string
+      code?: number
+    }
+  }
+}
+
+// Type for streamText/generateText options - uses SDK's own types internally
+interface TextGenerationOptions {
+  model?: { modelId: string }
+  messages?: ModelMessage[]
+  tools?: Record<string, unknown>
+  temperature?: number
+  maxTokens?: number
+  providerOptions?: {
+    google?: Record<string, unknown>
+    openai?: Record<string, unknown>
+  }
+  [key: string]: unknown
+}
+
+// Type for embed options
+interface EmbedOptions {
+  model?: { modelId: string }
+  value?: string
+  values?: string[]
+}
+
 export class RateLimitedAI {
   private apiKeyManager: ApiKeyManager
   private userRateLimiter: UserRateLimiter
@@ -197,53 +236,140 @@ export class RateLimitedAI {
     }
   }
 
-  async withProvider<T>(fn: (provider: any) => T | Promise<T>) {
+  async withProvider<T>(fn: (provider: ReturnType<typeof this.createProviderInstance>) => T | Promise<T>): Promise<T> {
     const key = await this.apiKeyManager.getCurrentKey()
     const provider = this.createProviderInstance(key)
     return fn(provider)
   }
 
-  getEmbeddingModel(modelName: string = modelIds.embedding): () => Promise<any> {
+  getEmbeddingModel(modelName: string = modelIds.embedding): () => Promise<EmbeddingModel<string>> {
     return async () => {
       const key = await this.apiKeyManager.getCurrentKey()
       const google = createGoogleGenerativeAI({ apiKey: key })
-      return google.textEmbeddingModel(modelName) as any
+      return google.textEmbeddingModel(modelName) as unknown as EmbeddingModel<string>
     }
   }
 
-  async streamText(options: any, userId?: string) {
+  private isGoogleInternalError(error: unknown): boolean {
+    // Check if this is an AI SDK RetryError wrapping the actual error
+    const retryError = error as { reason?: string; lastError?: APIError; errors?: APIError[] }
+    if (retryError?.reason === 'maxRetriesExceeded' && retryError?.lastError) {
+      return this.checkInternalError(retryError.lastError)
+    }
+    
+    // Also check the errors array for retry errors
+    if (retryError?.errors?.length) {
+      return retryError.errors.some(e => this.checkInternalError(e))
+    }
+    
+    // Direct error check
+    return this.checkInternalError(error as APIError)
+  }
+  
+  private checkInternalError(apiError: APIError): boolean {
+    const statusCode = apiError?.statusCode || apiError?.status || apiError?.code
+    const message = (apiError?.message || '').toLowerCase()
+    const responseBody = apiError?.responseBody || ''
+    
+    // Check for Google's specific 500 internal error pattern
+    const is500 = statusCode === 500
+    const isInternalStatus = apiError?.data?.error?.status === 'INTERNAL' || 
+                             (typeof responseBody === 'string' && responseBody.includes('"status": "INTERNAL"'))
+    const isInternalMessage = message.includes('internal error') || 
+                              message.includes('an internal error has occurred')
+    
+    return is500 && (isInternalStatus || isInternalMessage)
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async streamText(options: TextGenerationOptions, userId?: string): Promise<any> {
+    if (userId && this.userConfig.enabled) {
+      const u = await this.userRateLimiter.checkRateLimit(userId)
+      if (!u.allowed) throw new Error(`Rate limit: ${u.error}`)
+    }
+    
+    try {
+      return await this.apiKeyManager.executeWithRateLimit(async key => {
+        const provider = this.createProviderInstance(key)
+        const modelFn = provider(options.model?.modelId ?? '')
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return streamText({ ...options, model: modelFn } as any)
+      })
+    } catch (error: unknown) {
+      // Check if this is a Google provider with a 500 internal error
+      if (this.provider === 'google' && this.isGoogleInternalError(error)) {
+        console.log('[RateLimitedAI] Google 500 internal error detected, falling back to OpenAI gpt-4o-mini')
+        
+        // Fallback to OpenAI gpt-4o-mini - directly call streamText to avoid circular reference
+        const openaiKey = process.env.OPENAI_API_KEY
+        if (!openaiKey) throw error // Can't fallback without OpenAI key
+        
+        const openai = createOpenAI({ apiKey: openaiKey })
+        const fallbackOptions = {
+          ...options,
+          model: openai('gpt-4o-mini'),
+          providerOptions: options.providerOptions?.openai 
+            ? { openai: options.providerOptions.openai }
+            : undefined,
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return streamText(fallbackOptions as any)
+      }
+      
+      // Re-throw if not a Google internal error or not Google provider
+      throw error
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async generateText(options: TextGenerationOptions, userId?: string): Promise<any> {
+    if (userId && this.userConfig.enabled) {
+      const u = await this.userRateLimiter.checkRateLimit(userId)
+      if (!u.allowed) throw new Error(`Rate limit: ${u.error}`)
+    }
+    
+    try {
+      return await this.apiKeyManager.executeWithRateLimit(async key => {
+        const provider = this.createProviderInstance(key)
+        const modelFn = provider(options.model?.modelId ?? '')
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return generateText({ ...options, model: modelFn } as any)
+      })
+    } catch (error: unknown) {
+      // Check if this is a Google provider with a 500 internal error
+      if (this.provider === 'google' && this.isGoogleInternalError(error)) {
+        console.log('[RateLimitedAI] Google 500 internal error detected in generateText, falling back to OpenAI gpt-4o-mini')
+        
+        // Fallback to OpenAI gpt-4o-mini - directly call generateText to avoid circular reference
+        const openaiKey = process.env.OPENAI_API_KEY
+        if (!openaiKey) throw error // Can't fallback without OpenAI key
+        
+        const openai = createOpenAI({ apiKey: openaiKey })
+        const fallbackOptions = {
+          ...options,
+          model: openai('gpt-4o-mini'),
+          providerOptions: options.providerOptions?.openai 
+            ? { openai: options.providerOptions.openai }
+            : undefined,
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return generateText(fallbackOptions as any)
+      }
+      
+      throw error
+    }
+  }
+
+  async generateObject<T>(options: TextGenerationOptions & { schema?: unknown }, userId?: string) {
     if (userId && this.userConfig.enabled) {
       const u = await this.userRateLimiter.checkRateLimit(userId)
       if (!u.allowed) throw new Error(`Rate limit: ${u.error}`)
     }
     return this.apiKeyManager.executeWithRateLimit(async key => {
       const provider = this.createProviderInstance(key)
-      const modelFn = provider(options.model?.modelId)
-      return streamText({ ...options, model: modelFn })
-    })
-  }
-
-  async generateText(options: any, userId?: string) {
-    if (userId && this.userConfig.enabled) {
-      const u = await this.userRateLimiter.checkRateLimit(userId)
-      if (!u.allowed) throw new Error(`Rate limit: ${u.error}`)
-    }
-    return this.apiKeyManager.executeWithRateLimit(async key => {
-      const provider = this.createProviderInstance(key)
-      const modelFn = provider(options.model?.modelId)
-      return generateText({ ...options, model: modelFn })
-    })
-  }
-
-  async generateObject(options: any, userId?: string) {
-    if (userId && this.userConfig.enabled) {
-      const u = await this.userRateLimiter.checkRateLimit(userId)
-      if (!u.allowed) throw new Error(`Rate limit: ${u.error}`)
-    }
-    return this.apiKeyManager.executeWithRateLimit(async key => {
-      const provider = this.createProviderInstance(key)
-      const modelFn = provider(options.model?.modelId)
-      return generateObject({ ...options, model: modelFn })
+      const modelFn = provider(options.model?.modelId ?? '')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return generateObject({ ...options, model: modelFn } as any)
     })
   }
 
@@ -411,11 +537,11 @@ export const rateLimitedAI = {
   google: {
     model: (n = modelIds.chat) => getModel('google', n),
     embedding: (n = modelIds.embedding) => getEmbeddingModel('google', n),
-    streamText: (o: any, u?: string) => getRateLimitedAI('google').streamText(o, u),
-    generateText: (o: any, u?: string) => getRateLimitedAI('google').generateText(o, u),
-    generateObject: (o: any, u?: string) => getRateLimitedAI('google').generateObject(o, u),
+    streamText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('google').streamText(o, u),
+    generateText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('google').generateText(o, u),
+    generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) => getRateLimitedAI('google').generateObject<T>(o, u),
     generateImage: (o: { model?: string; prompt: string; aspectRatio?: string }, u?: string) => getRateLimitedAI('google').generateImage(o, u),
-    embed: (o: any, u?: string) => getRateLimitedAI('google').embed(o, u),
+    embed: (o: EmbedOptions, u?: string) => getRateLimitedAI('google').embed(o as { model?: { modelId: string }; value: string }, u),
     getUsageStats: () => getRateLimitedAI('google').getUsageStats(),
     rotateKey: () => getRateLimitedAI('google').rotateKey(),
     resetRateLimits: () => getRateLimitedAI('google').resetRateLimits(),
@@ -424,7 +550,7 @@ export const rateLimitedAI = {
     checkUserRateLimit: (u: string) => getRateLimitedAI('google').checkUserRateLimit(u),
     resetUserRateLimits: (u: string) => getRateLimitedAI('google').resetUserRateLimits(u),
     getUserConfig: () => getRateLimitedAI('google').getUserConfig(),
-    updateUserConfig: (c: any) => getRateLimitedAI('google').updateUserConfig(c),
+    updateUserConfig: (c: Partial<UserRateLimitConfig>) => getRateLimitedAI('google').updateUserConfig(c),
     getFullStatus: (u?: string) => getRateLimitedAI('google').getFullStatus(u),
     tools: {
       google_search: (options?: GoogleSearchToolOptions) => googleTools.googleSearch(options ?? {}),
@@ -437,10 +563,10 @@ export const rateLimitedAI = {
   groq: {
     model: (n = 'gemma2-9b-it') => getModel('groq', n),
     embedding: (n = modelIds.embedding) => getEmbeddingModel('google', n),
-    streamText: (o: any, u?: string) => getRateLimitedAI('groq').streamText(o, u),
-    generateText: (o: any, u?: string) => getRateLimitedAI('groq').generateText(o, u),
-    generateObject: (o: any, u?: string) => getRateLimitedAI('groq').generateObject(o, u),
-    embed: (o: any, u?: string) => getRateLimitedAI('groq').embed(o, u),
+    streamText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('groq').streamText(o, u),
+    generateText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('groq').generateText(o, u),
+    generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) => getRateLimitedAI('groq').generateObject<T>(o, u),
+    embed: (o: EmbedOptions, u?: string) => getRateLimitedAI('groq').embed(o as { model?: { modelId: string }; value: string }, u),
     getUsageStats: () => getRateLimitedAI('groq').getUsageStats(),
     rotateKey: () => getRateLimitedAI('groq').rotateKey(),
     resetRateLimits: () => getRateLimitedAI('groq').resetRateLimits(),
@@ -449,16 +575,16 @@ export const rateLimitedAI = {
     checkUserRateLimit: (u: string) => getRateLimitedAI('groq').checkUserRateLimit(u),
     resetUserRateLimits: (u: string) => getRateLimitedAI('groq').resetUserRateLimits(u),
     getUserConfig: () => getRateLimitedAI('groq').getUserConfig(),
-    updateUserConfig: (c: any) => getRateLimitedAI('groq').updateUserConfig(c),
+    updateUserConfig: (c: Partial<UserRateLimitConfig>) => getRateLimitedAI('groq').updateUserConfig(c),
     getFullStatus: (u?: string) => getRateLimitedAI('groq').getFullStatus(u),
   },
   cerebras: {
     model: (n = 'llama-3.3-70b') => getModel('cerebras', n),
     embedding: (n = modelIds.embedding) => getEmbeddingModel('google', n),
-    streamText: (o: any, u?: string) => getRateLimitedAI('cerebras').streamText(o, u),
-    generateText: (o: any, u?: string) => getRateLimitedAI('cerebras').generateText(o, u),
-    generateObject: (o: any, u?: string) => getRateLimitedAI('cerebras').generateObject(o, u),
-    embed: (o: any, u?: string) => getRateLimitedAI('cerebras').embed(o, u),
+    streamText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('cerebras').streamText(o, u),
+    generateText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('cerebras').generateText(o, u),
+    generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) => getRateLimitedAI('cerebras').generateObject<T>(o, u),
+    embed: (o: EmbedOptions, u?: string) => getRateLimitedAI('cerebras').embed(o as { model?: { modelId: string }; value: string }, u),
     getUsageStats: () => getRateLimitedAI('cerebras').getUsageStats(),
     rotateKey: () => getRateLimitedAI('cerebras').rotateKey(),
     resetRateLimits: () => getRateLimitedAI('cerebras').resetRateLimits(),
@@ -467,16 +593,16 @@ export const rateLimitedAI = {
     checkUserRateLimit: (u: string) => getRateLimitedAI('cerebras').checkUserRateLimit(u),
     resetUserRateLimits: (u: string) => getRateLimitedAI('cerebras').resetUserRateLimits(u),
     getUserConfig: () => getRateLimitedAI('cerebras').getUserConfig(),
-    updateUserConfig: (c: any) => getRateLimitedAI('cerebras').updateUserConfig(c),
+    updateUserConfig: (c: Partial<UserRateLimitConfig>) => getRateLimitedAI('cerebras').updateUserConfig(c),
     getFullStatus: (u?: string) => getRateLimitedAI('cerebras').getFullStatus(u),
   },
   openrouter: {
     model: (n = 'openrouter/sherlock-think-alpha') => getModel('openrouter', n),
     embedding: (n = modelIds.embedding) => getEmbeddingModel('google', n),
-    streamText: (o: any, u?: string) => getRateLimitedAI('openrouter').streamText(o, u),
-    generateText: (o: any, u?: string) => getRateLimitedAI('openrouter').generateText(o, u),
-    generateObject: (o: any, u?: string) => getRateLimitedAI('openrouter').generateObject(o, u),
-    embed: (o: any, u?: string) => getRateLimitedAI('openrouter').embed(o, u),
+    streamText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('openrouter').streamText(o, u),
+    generateText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('openrouter').generateText(o, u),
+    generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) => getRateLimitedAI('openrouter').generateObject<T>(o, u),
+    embed: (o: EmbedOptions, u?: string) => getRateLimitedAI('openrouter').embed(o as { model?: { modelId: string }; value: string }, u),
     getUsageStats: () => getRateLimitedAI('openrouter').getUsageStats(),
     rotateKey: () => getRateLimitedAI('openrouter').rotateKey(),
     resetRateLimits: () => getRateLimitedAI('openrouter').resetRateLimits(),
@@ -485,16 +611,16 @@ export const rateLimitedAI = {
     checkUserRateLimit: (u: string) => getRateLimitedAI('openrouter').checkUserRateLimit(u),
     resetUserRateLimits: (u: string) => getRateLimitedAI('openrouter').resetUserRateLimits(u),
     getUserConfig: () => getRateLimitedAI('openrouter').getUserConfig(),
-    updateUserConfig: (c: any) => getRateLimitedAI('openrouter').updateUserConfig(c),
+    updateUserConfig: (c: Partial<UserRateLimitConfig>) => getRateLimitedAI('openrouter').updateUserConfig(c),
     getFullStatus: (u?: string) => getRateLimitedAI('openrouter').getFullStatus(u),
   },
   openai: {
     model: (n = 'gpt-5-mini') => getModel('openai', n),
     embedding: (n = modelIds.embedding) => getEmbeddingModel('google', n),
-    streamText: (o: any, u?: string) => getRateLimitedAI('openai').streamText(o, u),
-    generateText: (o: any, u?: string) => getRateLimitedAI('openai').generateText(o, u),
-    generateObject: (o: any, u?: string) => getRateLimitedAI('openai').generateObject(o, u),
-    embed: (o: any, u?: string) => getRateLimitedAI('openai').embed(o, u),
+    streamText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('openai').streamText(o, u),
+    generateText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('openai').generateText(o, u),
+    generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) => getRateLimitedAI('openai').generateObject<T>(o, u),
+    embed: (o: EmbedOptions, u?: string) => getRateLimitedAI('openai').embed(o as { model?: { modelId: string }; value: string }, u),
     getUsageStats: () => getRateLimitedAI('openai').getUsageStats(),
     rotateKey: () => getRateLimitedAI('openai').rotateKey(),
     resetRateLimits: () => getRateLimitedAI('openai').resetRateLimits(),
@@ -503,7 +629,7 @@ export const rateLimitedAI = {
     checkUserRateLimit: (u: string) => getRateLimitedAI('openai').checkUserRateLimit(u),
     resetUserRateLimits: (u: string) => getRateLimitedAI('openai').resetUserRateLimits(u),
     getUserConfig: () => getRateLimitedAI('openai').getUserConfig(),
-    updateUserConfig: (c: any) => getRateLimitedAI('openai').updateUserConfig(c),
+    updateUserConfig: (c: Partial<UserRateLimitConfig>) => getRateLimitedAI('openai').updateUserConfig(c),
     getFullStatus: (u?: string) => getRateLimitedAI('openai').getFullStatus(u),
   },
 }

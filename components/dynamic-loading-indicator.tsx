@@ -1,6 +1,6 @@
 'use client'
 
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   Brain,
   Database,
@@ -20,7 +20,11 @@ import {
   GraduationCap,
   Music,
   Utensils,
+  Check,
+  PenLine,
 } from 'lucide-react'
+import React, { useEffect, useRef, useState } from 'react'
+import { cn } from '@/lib/utils'
 
 interface ToolInfo {
   name: string
@@ -30,7 +34,6 @@ interface ToolInfo {
   retryMessage?: string
   retryDescription?: string
 }
-import React from 'react'
 
 const TOOL_CONFIGS: Record<string, ToolInfo> = {
   thinking: {
@@ -288,6 +291,17 @@ interface ActiveToolCall {
   args?: any
   result?: any
   stepIndex?: number
+  timestamp?: number
+}
+
+interface FlowStep {
+  id: string
+  type: 'thinking' | 'tool' | 'writing'
+  toolName?: string
+  args?: any
+  status: 'pending' | 'active' | 'completed'
+  startTime?: number
+  endTime?: number
 }
 
 function getActiveToolCalls(messages: any[]): ActiveToolCall[] {
@@ -417,6 +431,205 @@ const TOOL_PRIORITIES: Record<string, number> = {
   getCampusInfo: 3,
 }
 
+function buildFlowSteps(
+  messages: any[],
+  isLoading: boolean,
+  isAssistantStreaming: boolean
+): FlowStep[] {
+  const steps: FlowStep[] = []
+  const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant')
+  const lastMessage = messages[messages.length - 1]
+  
+  const justSentMessage = lastMessage?.role === 'user' && isLoading
+  
+  const hasTextContent = lastAssistant?.parts?.some(
+    (p: any) => p?.type === 'text' && typeof p.text === 'string' && p.text.trim().length > 0
+  ) || (typeof lastAssistant?.content === 'string' && lastAssistant.content.trim().length > 0)
+  
+  const hasReasoning = lastAssistant?.parts?.some(
+    (p: any) => p?.type === 'reasoning' && typeof p.text === 'string'
+  )
+
+  const toolInvocations: Array<{
+    toolCallId: string
+    toolName: string
+    state: string
+    args?: any
+    result?: any
+  }> = []
+
+  if (lastAssistant?.toolInvocations) {
+    for (const inv of lastAssistant.toolInvocations) {
+      if (inv.toolCallId) {
+        toolInvocations.push({
+          toolCallId: inv.toolCallId,
+          toolName: inv.toolName,
+          state: inv.state,
+          args: inv.args,
+          result: inv.result,
+        })
+      }
+    }
+  }
+
+  if (lastAssistant?.parts) {
+    for (const part of lastAssistant.parts) {
+      if (part.type === 'tool-invocation' && part.toolInvocation) {
+        const inv = part.toolInvocation
+        if (inv.toolCallId && !toolInvocations.some(t => t.toolCallId === inv.toolCallId)) {
+          toolInvocations.push({
+            toolCallId: inv.toolCallId,
+            toolName: inv.toolName,
+            state: inv.state,
+            args: inv.args,
+            result: inv.result,
+          })
+        }
+      }
+    }
+  }
+
+  if (justSentMessage || (hasReasoning && !hasTextContent && toolInvocations.length === 0)) {
+    steps.push({
+      id: 'thinking',
+      type: 'thinking',
+      status: toolInvocations.length > 0 || hasTextContent ? 'completed' : 'active',
+    })
+  } else if (toolInvocations.length > 0 || hasTextContent) {
+    steps.push({
+      id: 'thinking',
+      type: 'thinking',
+      status: 'completed',
+    })
+  }
+
+  for (const inv of toolInvocations) {
+    const isActive = (inv.state === 'call' || inv.state === 'partial-call') && inv.result === undefined
+    const isCompleted = inv.state === 'result' || inv.result !== undefined
+    
+    steps.push({
+      id: inv.toolCallId,
+      type: 'tool',
+      toolName: inv.toolName,
+      args: inv.args,
+      status: isActive ? 'active' : isCompleted ? 'completed' : 'pending',
+    })
+  }
+
+  const allToolsCompleted = toolInvocations.length > 0 && toolInvocations.every(
+    inv => inv.state === 'result' || inv.result !== undefined
+  )
+  const hasActiveTool = toolInvocations.some(
+    inv => (inv.state === 'call' || inv.state === 'partial-call') && inv.result === undefined
+  )
+  
+  if (allToolsCompleted && isAssistantStreaming && hasTextContent) {
+    steps.push({
+      id: 'writing',
+      type: 'writing',
+      status: 'active',
+    })
+  } else if (allToolsCompleted && !isLoading && hasTextContent) {
+    steps.push({
+      id: 'writing',
+      type: 'writing',
+      status: 'completed',
+    })
+  } else if (allToolsCompleted && isLoading && !hasActiveTool) {
+    steps.push({
+      id: 'writing',
+      type: 'writing',
+      status: 'active',
+    })
+  }
+
+  return steps
+}
+
+function getDetailedToolMessage(toolName: string, args?: any): string {
+  const toolInfo = TOOL_CONFIGS[toolName] || TOOL_CONFIGS.default
+  const baseMessage = toolInfo.message.replace(/\.{3}$/, '')
+  
+  if (!args) return baseMessage
+
+  switch (toolName) {
+    case 'findPastPapers':
+      if (args.courseCode) {
+        return `finding papers for ${args.courseCode}`
+      }
+      return baseMessage
+
+    case 'resolveCourseCode':
+      if (args.query) {
+        return `resolving "${args.query}"`
+      }
+      return baseMessage
+
+    case 'getSyllabus':
+      if (args.query) {
+        return `fetching syllabus for "${args.query}"`
+      }
+      return baseMessage
+
+    case 'knowledgeBase':
+      if (args.query) {
+        const shortQuery = args.query.length > 30 
+          ? args.query.substring(0, 30) + '…' 
+          : args.query
+        return `searching "${shortQuery}"`
+      }
+      return baseMessage
+
+    case 'queryVTOP':
+      if (args.command) {
+        return `accessing ${args.command}`
+      }
+      return baseMessage
+
+    case 'getCourseInfo':
+      if (args.courseQuery) {
+        return `looking up ${args.courseQuery}`
+      }
+      return baseMessage
+
+    case 'getFacultyInfo':
+      if (args.facultyName) {
+        return `finding ${args.facultyName}`
+      }
+      if (args.department) {
+        return `finding ${args.department} faculty`
+      }
+      return baseMessage
+
+    case 'getMessMenu':
+      return 'fetching mess menu'
+
+    case 'webSearch':
+    case 'searchWeb':
+      if (args.query) {
+        const shortQuery = args.query.length > 25 
+          ? args.query.substring(0, 25) + '…' 
+          : args.query
+        return `searching "${shortQuery}"`
+      }
+      return baseMessage
+
+    default:
+      return baseMessage
+  }
+}
+
+function getToolColorClass(toolName: string): string {
+  if (toolName === 'queryVTOP') return 'text-blue-500'
+  if (toolName.includes('Reddit')) return 'text-orange-500'
+  if (['knowledgeBase', 'findPastPapers', 'getSyllabus', 'smartPaperSearch'].includes(toolName))
+    return 'text-emerald-500'
+  if (['getFacultyInfo', 'getPlacementInfo'].includes(toolName)) return 'text-purple-500'
+  if (toolName === 'saveMemory') return 'text-amber-500'
+  if (toolName.includes('web') || toolName.includes('Web')) return 'text-cyan-500'
+  return 'text-muted-foreground'
+}
+
 export function DynamicLoadingIndicator({
   messages,
   isLoading,
@@ -425,9 +638,15 @@ export function DynamicLoadingIndicator({
   isAssistantStreaming = false,
 }: DynamicLoadingIndicatorProps) {
   const lastMessage = messages[messages.length - 1]
+  const [elapsedTime, setElapsedTime] = useState(0)
+  const startTimeRef = useRef<number | null>(null)
   
   const activeToolCalls = React.useMemo(() => getActiveToolCalls(messages), [messages])
   const completedToolCalls = React.useMemo(() => getCompletedToolCalls(messages), [messages])
+  const flowSteps = React.useMemo(
+    () => buildFlowSteps(messages, isLoading, isAssistantStreaming),
+    [messages, isLoading, isAssistantStreaming]
+  )
 
   const thinkingFallback =
     !isAssistantStreaming &&
@@ -436,178 +655,111 @@ export function DynamicLoadingIndicator({
     lastMessage?.role === 'user'
 
   const hasActiveTools = activeToolCalls.length > 0
-  const isActive = isLoading || hasActiveTools || thinkingFallback
+  const hasActiveSteps = flowSteps.some(s => s.status === 'active')
+  const isActive = isLoading || hasActiveTools || thinkingFallback || hasActiveSteps
+
+  useEffect(() => {
+    if (isActive && !startTimeRef.current) {
+      startTimeRef.current = Date.now()
+    }
+    
+    if (!isActive) {
+      startTimeRef.current = null
+      setElapsedTime(0)
+      return
+    }
+
+    const interval = setInterval(() => {
+      if (startTimeRef.current) {
+        setElapsedTime(Math.floor((Date.now() - startTimeRef.current) / 1000))
+      }
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [isActive])
 
   const lastAssistantHasReasoningPanel =
     lastMessage?.role === 'assistant' &&
     Array.isArray(lastMessage?.parts) &&
     lastMessage.parts.some((p: any) => p?.type === 'reasoning')
 
+  const activeStep = flowSteps.find(s => s.status === 'active')
+  
+  const completedSteps = flowSteps.filter(s => 
+    s.status === 'completed' && 
+    !(s.type === 'tool' && s.toolName && ['knowledgeBase', 'saveMemory'].includes(s.toolName))
+  )
+
+  const primaryMessage = activeStep?.type === 'tool' && activeStep.toolName
+    ? getDetailedToolMessage(activeStep.toolName, activeStep.args)
+    : activeStep?.type === 'writing'
+      ? 'writing response'
+      : 'thinking'
+
+  const stepColor = React.useMemo(() => {
+    if (!activeStep) return 'text-muted-foreground'
+    if (activeStep.type === 'thinking') return 'text-purple-500'
+    if (activeStep.type === 'writing') return 'text-blue-500'
+    if (activeStep.type === 'tool' && activeStep.toolName) {
+      return getToolColorClass(activeStep.toolName)
+    }
+    return 'text-muted-foreground'
+  }, [activeStep])
+
+  const CurrentIcon = activeStep?.type === 'tool' && activeStep.toolName
+    ? (TOOL_CONFIGS[activeStep.toolName]?.icon || Settings)
+    : activeStep?.type === 'writing'
+      ? PenLine
+      : Brain
+
   if (!isActive) return null
-  if (isAssistantStreaming && lastAssistantHasReasoningPanel) return null
-
-  const sortedActiveTools = [...activeToolCalls].sort((a, b) => {
-    const aPriority = TOOL_PRIORITIES[a.toolName] || 1
-    const bPriority = TOOL_PRIORITIES[b.toolName] || 1
-    return bPriority - aPriority
-  })
-
-  // Get the current tool info
-  const getCurrentToolInfo = (): { toolInfo: ToolInfo; args?: any } => {
-    if (sortedActiveTools.length > 0) {
-      const activeTool = sortedActiveTools[0]
-      const toolInfo = TOOL_CONFIGS[activeTool.toolName] || TOOL_CONFIGS.default
-      return { toolInfo, args: activeTool.args }
-    }
-
-    if (thinkingFallback) {
-      return { toolInfo: TOOL_CONFIGS.thinking }
-    }
-
-    return { toolInfo: TOOL_CONFIGS.thinking }
-  }
-
-  const { toolInfo, args } = getCurrentToolInfo()
-
-  // Generate a more specific message based on tool args
-  const getDetailedMessage = (): string => {
-    if (!args) return toolInfo.message
-
-    const toolName = sortedActiveTools[0]?.toolName
-
-    switch (toolName) {
-      case 'findPastPapers':
-        if (args.courseCode) {
-          return `finding papers for ${args.courseCode}...`
-        }
-        return toolInfo.message
-
-      case 'resolveCourseCode':
-        if (args.query) {
-          return `resolving "${args.query}"...`
-        }
-        return toolInfo.message
-
-      case 'getSyllabus':
-        if (args.query) {
-          return `fetching syllabus for "${args.query}"...`
-        }
-        return toolInfo.message
-
-      case 'knowledgeBase':
-        if (args.query) {
-          const shortQuery = args.query.length > 30 
-            ? args.query.substring(0, 30) + '...' 
-            : args.query
-          return `searching for "${shortQuery}"...`
-        }
-        return toolInfo.message
-
-      case 'queryVTOP':
-        if (args.command) {
-          return `accessing ${args.command}...`
-        }
-        return toolInfo.message
-
-      case 'getCourseInfo':
-        if (args.courseQuery) {
-          return `looking up ${args.courseQuery}...`
-        }
-        return toolInfo.message
-
-      case 'getFacultyInfo':
-        if (args.facultyName) {
-          return `finding ${args.facultyName}...`
-        }
-        if (args.department) {
-          return `finding ${args.department} faculty...`
-        }
-        return toolInfo.message
-
-      case 'getMessMenu':
-        return 'fetching mess menu...'
-
-      case 'webSearch':
-      case 'searchWeb':
-        if (args.query) {
-          const shortQuery = args.query.length > 25 
-            ? args.query.substring(0, 25) + '...' 
-            : args.query
-          return `searching "${shortQuery}"...`
-        }
-        return toolInfo.message
-
-      default:
-        return toolInfo.message
-    }
-  }
-
-  const primaryMessage = getDetailedMessage()
-
-  const getDotColor = (toolName: string) => {
-    if (toolName === 'VTOP' || toolName === 'queryVTOP') return 'bg-blue-500'
-    if (toolName.includes('Reddit')) return 'bg-orange-500'
-    if (['Knowledge Base', 'Past Papers', 'Course Info', 'Smart Paper Search', 'Syllabus', 'knowledgeBase', 'findPastPapers', 'getSyllabus'].includes(toolName))
-      return 'bg-green-500'
-    if (['Faculty Info', 'Placement Info', 'getFacultyInfo', 'getPlacementInfo'].includes(toolName)) return 'bg-purple-500'
-    if (toolName === 'Memory' || toolName === 'saveMemory') return 'bg-yellow-500'
-    if (toolName.includes('Web') || toolName.includes('web')) return 'bg-cyan-500'
-    return 'bg-primary'
-  }
-
-  const currentToolName = sortedActiveTools[0]?.toolName || 'thinking'
-  const dotColor = getDotColor(currentToolName)
-
-  // Show completed steps if there are any
-  const showSteps = completedToolCalls.length > 0 && activeToolCalls.length > 0
+  
+  if (isAssistantStreaming && lastAssistantHasReasoningPanel && !hasActiveTools) return null
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      className={`flex flex-col items-center justify-center text-muted-foreground py-4 ${className}`}
-    >
-      {/* Show completed steps */}
-      {showSteps && (
-        <div className="flex flex-wrap items-center justify-center gap-2 mb-2 text-xs text-muted-foreground/70">
-          {completedToolCalls.slice(-3).map((tool, idx) => {
-            const info = TOOL_CONFIGS[tool.toolName] || TOOL_CONFIGS.default
-            return (
-              <span key={tool.toolCallId} className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-green-500/50 rounded-full" />
-                <span>{info.name}</span>
-                {idx < Math.min(completedToolCalls.length - 1, 2) && <span className="mx-1">→</span>}
-              </span>
-            )
-          })}
+    <AnimatePresence mode="wait">
+      <motion.div
+        key="loading-indicator"
+        initial={{ opacity: 0, y: 5 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 5 }}
+        transition={{ duration: 0.2 }}
+        className={cn(
+          'flex items-center gap-3 py-4 px-1',
+          className
+        )}
+      >
+        {/* Icon */}
+        <div className="relative flex items-center justify-center">
+          <CurrentIcon className={cn("w-4 h-4", stepColor)} />
         </div>
-      )}
-      
-      {/* Current active tool */}
-      <div className="flex items-center space-x-3">
-        <div className="flex space-x-1">
-          <div className={`w-2 h-2 ${dotColor} rounded-full animate-pulse`}></div>
-          <div
-            className={`w-2 h-2 ${dotColor} rounded-full animate-pulse`}
-            style={{ animationDelay: '0.2s' }}
-          ></div>
-          <div
-            className={`w-2 h-2 ${dotColor} rounded-full animate-pulse`}
-            style={{ animationDelay: '0.4s' }}
-          ></div>
+
+        {/* Message with smooth transition */}
+        <div className="relative h-5 flex items-center overflow-hidden">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={primaryMessage}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="text-sm text-muted-foreground/80 font-medium truncate"
+            >
+              {primaryMessage}
+            </motion.span>
+          </AnimatePresence>
         </div>
-        <div className="flex flex-col">
-          <span className="text-sm font-medium">{primaryMessage}</span>
-          {/* Show count if multiple tools are active */}
-          {activeToolCalls.length > 1 && (
-            <span className="text-xs text-muted-foreground/60">
-              +{activeToolCalls.length - 1} more in progress
-            </span>
-          )}
-        </div>
-      </div>
-    </motion.div>
+        {elapsedTime >= 2 && (
+          <motion.span
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-xs text-muted-foreground/40 tabular-nums ml-1"
+          >
+            {elapsedTime}s
+          </motion.span>
+        )}
+      </motion.div>
+    </AnimatePresence>
   )
 }
 

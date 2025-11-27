@@ -231,6 +231,7 @@ function PureChatInterfaceComponent({
   const [guestTotalUserMessages, setGuestTotalUserMessages] = useState(0)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [uploadingAttachments, setUploadingAttachments] = useState<Array<{ id: string; name: string; contentType: string }>>([])
+  const [quotedText, setQuotedText] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
@@ -1190,7 +1191,7 @@ function PureChatInterfaceComponent({
     async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault()
       const trimmed = input.trim()
-      if (!trimmed) return
+      if (!trimmed && !quotedText) return
       if (uploadingAttachments.length > 0) {
         toast.info('hold on — files are still uploading')
         return
@@ -1230,12 +1231,18 @@ function PureChatInterfaceComponent({
             }))
           )
         }
-        parts.push({ type: 'text', text: trimmed })
+
+        const finalContent = quotedText 
+          ? `> ${quotedText.replace(/\n/g, '\n> ')}\n\n${trimmed}`
+          : trimmed
+
+        parts.push({ type: 'text', text: finalContent })
 
         // Clear attachments and input BEFORE sending to prevent them from persisting during navigation
         setAttachments([])
         setUploadingAttachments([])
         setInput('')
+        setQuotedText(null)
 
         await sendMessage({
           role: 'user',
@@ -1371,6 +1378,12 @@ function PureChatInterfaceComponent({
       setErrorMessage('Failed to send message. Please try again.')
     })
   }
+
+  const handleQuote = useCallback((text: string) => {
+    setQuotedText(text)
+    const textarea = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message input"]')
+    textarea?.focus()
+  }, [])
 
   const handleVTOPCredentials = async (
     credentials: { username: string; encryptedPassword: string },
@@ -1883,6 +1896,8 @@ function PureChatInterfaceComponent({
                   thinkHarder={thinkHarder}
                   onThinkHarderChange={setThinkHarder}
                   isSignedIn={!isGuest}
+                  quotedText={quotedText}
+                  onClearQuote={() => setQuotedText(null)}
                 />
                 {isGuest && (
                   <p className="mt-2 text-center text-xs text-amber-200/80">
@@ -2244,6 +2259,7 @@ function PureChatInterfaceComponent({
                   onSuggestionClick={handleSuggestedQuestion}
                   onDismissSuggestions={() => setShowFollowUpSuggestions(false)}
                   isMobile={isMobile}
+                  onQuote={handleQuote}
                 />
                 <DynamicLoadingIndicator
                   messages={messages}
@@ -2316,6 +2332,8 @@ function PureChatInterfaceComponent({
                   thinkHarder={thinkHarder}
                   onThinkHarderChange={setThinkHarder}
                   isSignedIn={!isGuest}
+                  quotedText={quotedText}
+                  onClearQuote={() => setQuotedText(null)}
                 />
                 {isGuest && (
                   <p className="px-2 sm:px-4 pt-2 text-center text-[11px] text-amber-200/80">

@@ -1104,6 +1104,55 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
   )
 }
 
+// Regex patterns for parsing paper metadata from title
+const SLOT_REGEX = /\b([A-G][12])\b/gi
+const YEAR_REGEX = /\b(20\d{2}[-–]\d{2,4}|\d{2}[-–]\d{2}|20\d{2})\b/g
+const COURSE_CODE_REGEX = /\b([A-Z]{2,4}\d{3,4}[A-Z]?)\b/gi
+const EXAM_TYPE_REGEX = /\b(FAT|CAT[-\s]?[12]|CAT)\b/gi
+
+// Parse metadata from paper title if not provided
+const parsePaperMetadata = (paper: any) => {
+  const title = paper.title || ''
+  
+  // Extract slot if not provided
+  let slot = paper.slot
+  if (!slot) {
+    const slotMatch = title.match(SLOT_REGEX)
+    if (slotMatch) {
+      slot = slotMatch[0].toUpperCase()
+    }
+  }
+  
+  // Extract year if not provided
+  let year = paper.year
+  if (!year) {
+    const yearMatch = title.match(YEAR_REGEX)
+    if (yearMatch) {
+      year = yearMatch[0]
+    }
+  }
+  
+  // Extract exam type if not provided
+  let examType = paper.examType
+  if (!examType) {
+    const examMatch = title.match(EXAM_TYPE_REGEX)
+    if (examMatch) {
+      examType = examMatch[0].toUpperCase().replace(/[-\s]/g, '-')
+    }
+  }
+  
+  // Extract course code if not provided (for display purposes)
+  let courseCode = paper.courseCode
+  if (!courseCode) {
+    const codeMatch = title.match(COURSE_CODE_REGEX)
+    if (codeMatch) {
+      courseCode = codeMatch[0].toUpperCase()
+    }
+  }
+  
+  return { slot, year, examType, courseCode }
+}
+
 const PaperCard = ({
   paper,
   onViewPdf,
@@ -1112,7 +1161,6 @@ const PaperCard = ({
   onViewPdf: (url: string, title?: string) => void
 }) => {
   const isMobile = useMediaQuery('(max-width: 640px)')
-  const [expanded, setExpanded] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
   const handleViewPaper = async () => {
@@ -1135,171 +1183,75 @@ const PaperCard = ({
     }
   }
 
+  // Parse metadata from title using regex if not provided
+  const { slot, year, examType, courseCode } = parsePaperMetadata(paper)
+
+  // Compute a minimal, readable header line
+  const metaLabels = [examType, year, slot].filter(Boolean)
+
+  // Remove slot/year/exam markers from the title to avoid duplication
+  const cleanedTitle = React.useMemo(() => {
+    let t = paper.title || ''
+
+    if (!t) return t
+
+    // Strip exam type tokens
+    t = t.replace(EXAM_TYPE_REGEX, '').trim()
+
+    // Strip year patterns
+    t = t.replace(YEAR_REGEX, '').trim()
+
+    // Strip slot tokens like C1, F2 when they appear as standalone words
+    if (slot) {
+      const slotPattern = new RegExp(`\\b${slot}\\b`, 'gi')
+      t = t.replace(slotPattern, '').trim()
+    }
+
+    // Collapse extra separators like extra dashes or spaces
+    t = t.replace(/[-–]+\s*$/g, '').replace(/\s{2,}/g, ' ').trim()
+
+    return t || (courseCode || paper.title || '')
+  }, [paper.title, slot, courseCode])
+
   return (
-    <Card className="w-full hover:shadow-md transition-all duration-200 border-border bg-card group flex flex-col h-full">
-      <CardHeader className="pb-3 flex-shrink-0">
-        <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-sm font-medium line-clamp-3 text-card-foreground group-hover:text-primary transition-colors leading-snug">
-            {paper.title}
-          </CardTitle>
-          {paper.rank && (
-            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 shrink-0">
-              #{paper.rank}
-            </Badge>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="pt-0 space-y-3 flex-1 flex flex-col">
-        <div className="space-y-2 text-xs text-muted-foreground flex-1">
-          {(paper.examType || paper.year || paper.slot) && (
-            <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground/80">
-              {paper.examType && (
-                <Badge variant="secondary" className="text-[10px] h-5 px-2">
-                  {paper.examType}
-                </Badge>
-              )}
-              {paper.year && (
-                <span className="inline-flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  {paper.year}
-                </span>
-              )}
-              {paper.slot && (
-                <span className="inline-flex items-center gap-1">
-                  <Badge variant="outline" className="text-[10px] h-5 px-2">
-                    Slot {paper.slot}
-                  </Badge>
-                </span>
-              )}
-            </div>
-          )}
-          {paper.authors && (
-            <div className="flex items-start gap-2">
-              <Users className="h-3 w-3 shrink-0 mt-0.5" />
-              {isMobile && !expanded ? (
-                <span className="line-clamp-1">
-                  {Array.isArray(paper.authors)
-                    ? paper.authors.length > 2
-                      ? `${paper.authors[0]} + ${paper.authors.length - 1} more`
-                      : paper.authors.join(', ')
-                    : paper.authors}
-                </span>
-              ) : (
-                <span className="line-clamp-2">
-                  {Array.isArray(paper.authors) ? paper.authors.join(', ') : paper.authors}
-                </span>
-              )}
-            </div>
-          )}
-          {(paper.journal || paper.venue || paper.conference || paper.metadata) && (
-            <div className="flex items-start gap-2">
-              <FileSearch className="h-3 w-3 shrink-0 mt-0.5" />
-              <span className={isMobile && !expanded ? 'line-clamp-1' : 'line-clamp-2'}>
-                {paper.journal || paper.venue || paper.conference || paper.metadata}
-              </span>
-            </div>
-          )}
-          {typeof paper.score === 'number' && (
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-3 w-3 shrink-0" />
-              <span>Relevance: {(paper.score * 100).toFixed(1)}%</span>
-            </div>
-          )}
+    <button
+      type="button"
+      onClick={handleViewPaper}
+      disabled={isLoading}
+      className="group flex w-full flex-col items-start rounded-xl border border-border/40 bg-card/40 px-3 py-2 text-left transition-colors hover:bg-card hover:border-border/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+    >
+      <span
+        className="mb-1.5 line-clamp-2 text-sm font-medium text-card-foreground group-hover:text-primary"
+        title={paper.title}
+      >
+        {cleanedTitle}
+      </span>
 
-          {Array.isArray(paper.matchedQuestions) && paper.matchedQuestions.length > 0 && (
-            <div className="mt-1 space-y-1">
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
-                Matched Questions
-              </div>
-              <ul className="list-disc pl-4 space-y-0.5">
-                {paper.matchedQuestions.slice(0, expanded ? 6 : 3).map((mq: string, i: number) => (
-                  <li key={i} className="text-[11px] leading-snug line-clamp-2" title={mq}>
-                    {mq}
-                  </li>
-                ))}
-              </ul>
-              {paper.matchedQuestions.length > 3 && !expanded && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 px-2 text-[10px]"
-                  onClick={() => setExpanded(true)}
-                >
-                  Show Matches
-                </Button>
-              )}
-            </div>
-          )}
+      {metaLabels.length > 0 && (
+        <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground/75">
+          {metaLabels.map((label, idx) => (
+            <span key={`${label}-${idx}`}>
+              {idx > 0 && <span className="mx-0.5 opacity-60">•</span>}
+              <span className="opacity-80">{label}</span>
+            </span>
+          ))}
         </div>
+      )}
 
-        {paper.indexId && (
-          <div className="text-[10px] text-muted-foreground/70">Index: {paper.indexId}</div>
+      <div className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary group-hover:bg-primary/15">
+        {isLoading ? (
+          <>
+            <div className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            <span>Opening…</span>
+          </>
+        ) : (
+          <>
+            <FileSearch className="h-3 w-3" />
+            <span>View paper</span>
+          </>
         )}
-        {paper.source && (
-          <div className="text-[10px] text-muted-foreground/70">Source: {paper.source}</div>
-        )}
-
-        <div className="flex-shrink-0 pt-1">
-          {isMobile &&
-            (paper.authors?.length > 2 ||
-              (paper.journal || paper.venue || paper.conference)?.length > 30) && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setExpanded(!expanded)}
-                className="w-full text-xs h-7 mb-2"
-              >
-                {expanded ? (
-                  <>
-                    <ChevronUp className="h-3 w-3 mr-1" />
-                    Show Less
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown className="h-3 w-3 mr-1" />
-                    Show More
-                  </>
-                )}
-              </Button>
-            )}
-
-          <div className="flex flex-col gap-2">
-            {(paper.link || paper.url || paper.pdfUrl || paper.downloadUrl) && (
-              <Button
-                variant="default"
-                size="sm"
-                className="h-8 text-xs font-medium bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm transition-all duration-200 hover:shadow-md"
-                onClick={handleViewPaper}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <>
-                    <div className="animate-spin h-3 w-3 mr-2 border-2 border-current border-t-transparent rounded-full" />
-                    Loading...
-                  </>
-                ) : (
-                  <>
-                    <FileSearch className="h-3 w-3 mr-2" />
-                    View Paper
-                  </>
-                )}
-              </Button>
-            )}
-            {paper.doi && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 px-3 text-xs transition-all duration-200 hover:bg-muted"
-                onClick={() => window.open(`https://doi.org/${paper.doi}`, '_blank')}
-              >
-                <Globe className="h-3 w-3 mr-1" />
-                DOI
-              </Button>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+    </button>
   )
 }
 

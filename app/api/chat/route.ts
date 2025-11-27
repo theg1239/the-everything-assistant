@@ -28,7 +28,6 @@ import { executeDirectToolCall } from './lib/direct-tool-call'
 import { buildMemoryContext } from './lib/memory-context'
 import { enhanceMessagesWithToolContext, prepareFinalMessages } from './lib/message-prep'
 import { buildSystemPrompt } from './lib/prompt'
-import type { UIMessagePart } from 'ai'
 
 const getMessageText = (message: LegacyMessage | null | undefined): string =>
   message?.content ?? ''
@@ -523,7 +522,7 @@ export async function POST(req: Request) {
         'X-Chat-Path': `/chat/${chat.id}`,
         'X-Chat-Title': chat.title,
       },
-      messageMetadata: ({ part }) => {
+      messageMetadata: ({ part }: { part: { type: string } }) => {
         if (part.type === 'finish') {
           return {
             chatId: chat.id,

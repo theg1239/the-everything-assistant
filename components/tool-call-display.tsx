@@ -1256,8 +1256,10 @@ const ToolCallResultsSummary = ({
                     key={tool.toolCallId || `${tool.toolName}-${Math.random()}`}
                     className="flex items-start gap-2 rounded-md border border-border/50 bg-background/60 px-3 py-2"
                   >
-                    <div
+                    <motion.div
                       className={`mt-1 h-2 w-2 rounded-full ${status.color}`}
+                      animate={status.label === 'running' ? { opacity: [0.4, 1, 0.4] } : { opacity: 1 }}
+                      transition={status.label === 'running' ? { duration: 1.5, repeat: Infinity, ease: "easeInOut" } : {}}
                       aria-hidden="true"
                     />
                     <div className="flex-1 min-w-0">
@@ -1405,13 +1407,6 @@ const ToolCallResultsSummary = ({
               maximizedItem={maximizedItem}
               setMaximizedItem={setMaximizedItem}
             />
-            {artifact.source && (
-              <div className="mt-2 flex justify-end">
-                <Badge variant="outline" className="text-xs">
-                  Source: {artifact.source}
-                </Badge>
-              </div>
-            )}
           </motion.div>
         ))}
       </AnimatePresence>

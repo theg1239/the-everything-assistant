@@ -14,6 +14,8 @@ export type ModelKey =
   | 'placementFormatter'
   | 'vtopParser'
   | 'chatTitle'
+  | 'thinkHarder'
+  | 'thinkHarderAdmin'
 
 export type ModelConfig = {
   provider: ModelProvider
@@ -34,6 +36,8 @@ const registry: Record<ModelKey, ModelConfig> = {
   placementFormatter: { provider: 'google', modelId: 'gemini-flash-latest' },
   vtopParser: { provider: 'google', modelId: 'gemini-flash-latest' },
   chatTitle: { provider: 'google', modelId: 'gemini-flash-lite-latest' },
+  thinkHarder: { provider: 'openai', modelId: 'gpt-5-mini' },
+  thinkHarderAdmin: { provider: 'openai', modelId: 'gpt-5.1' },
 }
 
 export const modelRegistry = registry

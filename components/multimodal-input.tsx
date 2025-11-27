@@ -11,6 +11,7 @@ import {
   ImageIcon,
   XIcon,
   FileIcon,
+  BrainIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -46,6 +47,9 @@ interface MultimodalInputProps {
   uploadingAttachments?: Array<{ id: string; name: string; contentType: string }>
   maxAttachments?: number
   allowAttachments?: boolean
+  thinkHarder?: boolean
+  onThinkHarderChange?: (value: boolean) => void
+  isSignedIn?: boolean
 }
 
 const PureMultimodalInput = ({
@@ -72,6 +76,9 @@ const PureMultimodalInput = ({
   uploadingAttachments = [],
   maxAttachments = 6,
   allowAttachments = true,
+  thinkHarder = false,
+  onThinkHarderChange,
+  isSignedIn = false,
 }: MultimodalInputProps) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [isFocused, setIsFocused] = useState(false)
@@ -574,9 +581,7 @@ const PureMultimodalInput = ({
             />
           </div>
 
-          {/* Bottom toolbar - all buttons in one row */}
           <div className="flex items-center justify-between gap-2 px-2 sm:px-3 py-1.5 border-t border-border/20">
-            {/* Left side - attachment and tools */}
             <div className="flex items-center gap-1">
               <div className={cn((disabled || !allowAttachments) && 'pointer-events-none opacity-50')}>
                 <TooltipProvider>
@@ -614,6 +619,33 @@ const PureMultimodalInput = ({
                   onMCPConfigsChange={onMCPConfigsChange}
                 />
               </div>
+
+              {isSignedIn && onThinkHarderChange && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className={cn(
+                          "h-8 px-2 text-muted-foreground hover:text-foreground transition-all",
+                          thinkHarder && "text-blue-500 hover:text-blue-600 bg-blue-50/50 dark:bg-blue-950/20"
+                        )}
+                        onClick={() => onThinkHarderChange(!thinkHarder)}
+                        disabled={disabled || isLoading}
+                        aria-label={thinkHarder ? "Disable think harder mode" : "Enable think harder mode"}
+                        aria-pressed={thinkHarder}
+                      >
+                        <BrainIcon className="w-4 h-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {thinkHarder ? "think harder mode enabled" : "think harder"}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
 
             {/* Right side - character count and send button */}

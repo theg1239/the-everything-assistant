@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     if (!payload) {
       return new Response('Invalid request body', { status: 400 })
     }
-    const { id: requestedChatId, directToolCall, preferredTool } = payload
+    const { id: requestedChatId, directToolCall, preferredTool, thinkHarder } = payload
     const uiMessages: AppUIMessage[] = payload.messages ?? []
     const messages = uiMessagesToLegacyMessages(uiMessages)
     const metadataPreferredTool =
@@ -238,11 +238,16 @@ export async function POST(req: Request) {
     }
     }
 
+    // Determine if user is admin for thinkHarder model selection
+    const adminEmail = process.env.RATE_LIMIT_ADMIN_EMAIL
+    const isAdmin = Boolean(adminEmail && session.user.email === adminEmail)
+
     const { finalMessages, model, attachmentAware } = await prepareFinalMessages(
       enhancedMessages,
       systemMessages,
       finalPrefersWebSearch,
-      !isExistingChat
+      !isExistingChat,
+      { thinkHarder: thinkHarder ?? false, isAdmin }
     )
     const promptCacheKey =
       model.provider === 'openai'

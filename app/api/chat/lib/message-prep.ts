@@ -212,12 +212,19 @@ type PreparedMessagesResult = {
   attachmentAware: boolean
 }
 
+export type PrepareMessagesOptions = {
+  thinkHarder?: boolean
+  isAdmin?: boolean
+}
+
 export async function prepareFinalMessages(
   enhancedMessages: any[],
   systemMessages: { role: 'system'; content: string }[],
   prefersWebSearch: boolean,
-  includeSystemPrompt: boolean = true
+  includeSystemPrompt: boolean = true,
+  options: PrepareMessagesOptions = {}
 ): Promise<PreparedMessagesResult> {
+  const { thinkHarder = false, isAdmin = false } = options
   const attachmentAware = enhancedMessages.some(
     (m: any) =>
       Array.isArray(m.attachments) &&
@@ -227,10 +234,14 @@ export async function prepareFinalMessages(
   )
 
   let model = getModelConfig('chat')
-  const hasPdf =
-    attachmentAware &&
-    enhancedMessages.some((m: any) => m.attachments?.some((a: any) => a?.contentType === 'application/pdf'))
-  if (hasPdf) model = getModelConfig('chatAttachment')
+  if (thinkHarder) {
+    model = isAdmin ? getModelConfig('thinkHarderAdmin') : getModelConfig('thinkHarder')
+  } else {
+    const hasPdf =
+      attachmentAware &&
+      enhancedMessages.some((m: any) => m.attachments?.some((a: any) => a?.contentType === 'application/pdf'))
+    if (hasPdf) model = getModelConfig('chatAttachment')
+  }
 
   const finalMessages: any[] = []
 

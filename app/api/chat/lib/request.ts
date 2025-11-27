@@ -30,6 +30,7 @@ export type ChatRequestPayload = {
   messages?: AppUIMessage[]
   musicPlayerState?: MusicPlayerState
   mcpConfigs?: MCPClientConfig[]
+  thinkHarder?: boolean
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -153,6 +154,11 @@ export const parseChatRequestPayload = (value: unknown): ChatRequestPayload | nu
         typeof item.enabled === 'boolean'
       )
     })
+  }
+
+  const thinkHarder = (value as { thinkHarder?: unknown }).thinkHarder
+  if (typeof thinkHarder === 'boolean') {
+    payload.thinkHarder = thinkHarder
   }
 
   return payload

@@ -188,6 +188,8 @@ function PureChatInterfaceComponent({
   const setSelectedTool = useChatStore(state => state.setSelectedTool)
   const lastUserMessage = useChatStore(state => state.lastUserMessage)
   const setLastUserMessage = useChatStore(state => state.setLastUserMessage)
+  const thinkHarder = useChatStore(state => state.thinkHarder)
+  const setThinkHarder = useChatStore(state => state.setThinkHarder)
   const resetChatStore = useChatStore(state => state.reset)
   const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebar()
   const [hubOpen, setHubOpen] = useState(false)
@@ -549,6 +551,7 @@ function PureChatInterfaceComponent({
             ...(selectedTool ? { preferredTool: selectedTool } : {}),
             musicPlayerState,
             mcpConfigs: getEnabledMCPConfigs(),
+            thinkHarder: useChatStore.getState().thinkHarder,
           },
         }
       },
@@ -1812,7 +1815,7 @@ function PureChatInterfaceComponent({
         toolInvocations={messages[messages.length - 1]?.toolInvocations}
         onCredentialsSubmit={handleVTOPCredentials}
       >
-        <UpsellBanner />
+        {/*<UpsellBanner /> */}
         <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
         {!isGuest && (
           <Hub
@@ -1877,6 +1880,9 @@ function PureChatInterfaceComponent({
                   onRemoveAttachment={handleRemoveAttachment}
                   uploadingAttachments={uploadingAttachments}
                   allowAttachments={!isGuest}
+                  thinkHarder={thinkHarder}
+                  onThinkHarderChange={setThinkHarder}
+                  isSignedIn={!isGuest}
                 />
                 {isGuest && (
                   <p className="mt-2 text-center text-xs text-amber-200/80">
@@ -2307,6 +2313,9 @@ function PureChatInterfaceComponent({
                   onRemoveAttachment={handleRemoveAttachment}
                   uploadingAttachments={uploadingAttachments}
                   allowAttachments={!isGuest}
+                  thinkHarder={thinkHarder}
+                  onThinkHarderChange={setThinkHarder}
+                  isSignedIn={!isGuest}
                 />
                 {isGuest && (
                   <p className="px-2 sm:px-4 pt-2 text-center text-[11px] text-amber-200/80">

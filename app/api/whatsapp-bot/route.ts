@@ -335,7 +335,14 @@ CRITICAL TOOL CONTINUATION RULES:
 - When you call a tool, that's step 1 - step 2 is ALWAYS providing your answer using that information
 - The conversation flow is: [user question] → [tool call] → [YOUR RESPONSE USING TOOL RESULTS]`
 
-    const finalMessagesForAI = [{ role: 'system', content: systemPrompt }, ...processedMessages]
+    const finalMessagesForAI = [
+      { role: 'system' as const, content: systemPrompt },
+      ...processedMessages.map(m => ({
+        role: (m.role as 'user' | 'assistant' | 'system'),
+        content: m.content,
+        id: m.id,
+      })),
+    ]
 
     const reasoningMiddleware = extractReasoningMiddleware({
       tagName: 'reasoning',

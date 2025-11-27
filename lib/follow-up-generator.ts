@@ -128,8 +128,8 @@ Output exactly 3 questions, one per line, without numbering or bullet points.`
 
     const suggestions = result.text
       .split('\n')
-      .filter(line => line.trim().length > 0)
-      .map(line =>
+      .filter((line: string) => line.trim().length > 0)
+      .map((line: string) =>
         line
           .trim()
           .replace(/^[-•*]\s*/, '')
@@ -138,7 +138,7 @@ Output exactly 3 questions, one per line, without numbering or bullet points.`
       .slice(0, 3)
 
 
-    if (suggestions.length < 2 || suggestions.some(s => s.length < 5)) {
+    if (suggestions.length < 2 || suggestions.some((s: string) => s.length < 5)) {
       console.warn('Generated suggestions were invalid, falling back to static ones')
       return getStaticFollowUpSuggestions(assistantMessage)
     }

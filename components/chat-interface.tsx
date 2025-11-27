@@ -2323,7 +2323,7 @@ function PureChatInterfaceComponent({
                     {guestMessagesRemaining === 1 ? '' : 's'} left 
                   </p>
                 )}
-                <div className="px-2 sm:px-4 pb-0.5">
+                <div className="px-2 sm:px-4 pb-0.5 hidden sm:block">
                   <p className="text-[10px] sm:text-xs text-muted-foreground text-center leading-tight">
                     the assistant can make mistakes. please verify information.
                   </p>

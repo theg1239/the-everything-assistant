@@ -251,18 +251,15 @@ export class RateLimitedAI {
   }
 
   private isGoogleInternalError(error: unknown): boolean {
-    // Check if this is an AI SDK RetryError wrapping the actual error
     const retryError = error as { reason?: string; lastError?: APIError; errors?: APIError[] }
     if (retryError?.reason === 'maxRetriesExceeded' && retryError?.lastError) {
       return this.checkInternalError(retryError.lastError)
     }
     
-    // Also check the errors array for retry errors
     if (retryError?.errors?.length) {
       return retryError.errors.some(e => this.checkInternalError(e))
     }
     
-    // Direct error check
     return this.checkInternalError(error as APIError)
   }
   
@@ -271,7 +268,6 @@ export class RateLimitedAI {
     const message = (apiError?.message || '').toLowerCase()
     const responseBody = apiError?.responseBody || ''
     
-    // Check for Google's specific 500 internal error pattern
     const is500 = statusCode === 500
     const isInternalStatus = apiError?.data?.error?.status === 'INTERNAL' || 
                              (typeof responseBody === 'string' && responseBody.includes('"status": "INTERNAL"'))
@@ -281,7 +277,6 @@ export class RateLimitedAI {
     return is500 && (isInternalStatus || isInternalMessage)
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async streamText(options: TextGenerationOptions, userId?: string): Promise<any> {
     if (userId && this.userConfig.enabled) {
       const u = await this.userRateLimiter.checkRateLimit(userId)
@@ -292,36 +287,30 @@ export class RateLimitedAI {
       return await this.apiKeyManager.executeWithRateLimit(async key => {
         const provider = this.createProviderInstance(key)
         const modelFn = provider(options.model?.modelId ?? '')
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return streamText({ ...options, model: modelFn } as any)
       })
     } catch (error: unknown) {
-      // Check if this is a Google provider with a 500 internal error
       if (this.provider === 'google' && this.isGoogleInternalError(error)) {
-        console.log('[RateLimitedAI] Google 500 internal error detected, falling back to OpenAI gpt-4o-mini')
+        console.log('[RateLimitedAI] Google 500 internal error detected, falling back to OpenAI')
         
-        // Fallback to OpenAI gpt-4o-mini - directly call streamText to avoid circular reference
         const openaiKey = process.env.OPENAI_API_KEY
-        if (!openaiKey) throw error // Can't fallback without OpenAI key
+        if (!openaiKey) throw error
         
         const openai = createOpenAI({ apiKey: openaiKey })
         const fallbackOptions = {
           ...options,
-          model: openai('gpt-4o-mini'),
+          model: openai('gpt-5-nano'),
           providerOptions: options.providerOptions?.openai 
             ? { openai: options.providerOptions.openai }
             : undefined,
         }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return streamText(fallbackOptions as any)
       }
       
-      // Re-throw if not a Google internal error or not Google provider
       throw error
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async generateText(options: TextGenerationOptions, userId?: string): Promise<any> {
     if (userId && this.userConfig.enabled) {
       const u = await this.userRateLimiter.checkRateLimit(userId)
@@ -332,17 +321,14 @@ export class RateLimitedAI {
       return await this.apiKeyManager.executeWithRateLimit(async key => {
         const provider = this.createProviderInstance(key)
         const modelFn = provider(options.model?.modelId ?? '')
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return generateText({ ...options, model: modelFn } as any)
       })
     } catch (error: unknown) {
-      // Check if this is a Google provider with a 500 internal error
       if (this.provider === 'google' && this.isGoogleInternalError(error)) {
         console.log('[RateLimitedAI] Google 500 internal error detected in generateText, falling back to OpenAI gpt-4o-mini')
         
-        // Fallback to OpenAI gpt-4o-mini - directly call generateText to avoid circular reference
         const openaiKey = process.env.OPENAI_API_KEY
-        if (!openaiKey) throw error // Can't fallback without OpenAI key
+        if (!openaiKey) throw error
         
         const openai = createOpenAI({ apiKey: openaiKey })
         const fallbackOptions = {
@@ -352,7 +338,6 @@ export class RateLimitedAI {
             ? { openai: options.providerOptions.openai }
             : undefined,
         }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return generateText(fallbackOptions as any)
       }
       
@@ -368,7 +353,6 @@ export class RateLimitedAI {
     return this.apiKeyManager.executeWithRateLimit(async key => {
       const provider = this.createProviderInstance(key)
       const modelFn = provider(options.model?.modelId ?? '')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return generateObject({ ...options, model: modelFn } as any)
     })
   }

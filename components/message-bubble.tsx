@@ -190,8 +190,10 @@ const ReasoningPanel = memo(function ReasoningPanel({
       <div
         id={panelId}
         className={cn(
-          'overflow-hidden transition-[max-height,opacity] duration-300 ease-out',
-          isOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
+          'transition-[max-height,opacity] duration-300 ease-out',
+          isOpen
+            ? 'max-h-[70vh] opacity-100 overflow-y-auto'
+            : 'max-h-0 opacity-0 overflow-hidden'
         )}
       >
         <div className="pl-4 border-l-2 border-primary/10 mt-1 ml-[5px] hover:border-primary/20 transition-colors">

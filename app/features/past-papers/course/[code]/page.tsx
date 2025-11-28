@@ -7,20 +7,17 @@ interface PageProps {
   params: Promise<{ code: string }>
 }
 
-// Generate static params for all courses
 export async function generateStaticParams() {
   return Object.keys(COURSE_MAP).map(code => ({
     code: code.toLowerCase(),
   }))
 }
 
-// Find course by case-insensitive code
 function findCourse(code: string): { code: string; name: string } | null {
   const upperCode = code.toUpperCase()
   if (COURSE_MAP[upperCode]) {
     return { code: upperCode, name: COURSE_MAP[upperCode] }
   }
-  // Try to find with different casing patterns
   const found = Object.entries(COURSE_MAP).find(
     ([k]) => k.toLowerCase() === code.toLowerCase()
   )
@@ -47,7 +44,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return {
     title,
     description,
-    keywords: [
+      keywords: [
       course.code,
       course.name,
       `${course.code} past papers`,
@@ -58,6 +55,19 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       'VIT past papers',
       'CAT papers',
       'FAT papers',
+      `VIT Vellore ${course.name} past papers`,
+      `${course.name} VIT Vellore past papers`,
+      `${course.name} previous year papers`,
+      `${course.code} CAT1 papers`,
+      `${course.code} CAT2 papers`,
+      `${course.code} FAT papers`,
+      `${course.name} CAT1 papers`,
+      `${course.name} CAT2 papers`,
+      `${course.name} FAT papers`,
+      `${course.name} CAT-1 papers`,
+      `${course.name} CAT-2 papers`,
+      `${course.code} CAT-1 papers`,
+      `${course.code} CAT-2 papers`,
     ],
     openGraph: {
       title,

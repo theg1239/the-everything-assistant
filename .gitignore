@@ -40,3 +40,4 @@ dist
 .open-next
 
 prisma/generated
+.env*.local

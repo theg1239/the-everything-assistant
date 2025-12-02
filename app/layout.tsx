@@ -69,7 +69,7 @@ export const metadata: Metadata = {
     template: '%s | the everything assistant',
   },
   description:
-    'Your personal AI assistant for VIT Vellore. Access VTOP, download past papers, check mess menu, timetables, attendance, grades, and more. The ultimate student companion for Vellore Institute of Technology.',
+    'your personal AI agent for vit vellore. access vtop, download past papers, check mess menu, timetables, attendance, grades, and more. the ultimate student companion for vellore institute of technology.',
   manifest: '/manifest.json',
   keywords: [
     'VIT Vellore',
@@ -193,11 +193,11 @@ export const metadata: Metadata = {
     apple: '/assets/tea-icon.png',
   },
   openGraph: {
-    title: 'The Everything Assistant - AI Assistant for VIT Vellore Students',
+    title: 'the everything assistant',
     description:
-      'Your personal AI assistant for VIT Vellore. Access VTOP, download past papers, check mess menu, timetables, attendance, grades, and more. The ultimate student companion.',
+      'your personal AI agent for VIT Vellore. access VTOP, download past papers, check mess menu, timetables, attendance, grades, and more. The ultimate student companion.',
     url: 'https://everything-assistant.com',
-    siteName: 'The Everything Assistant',
+    siteName: 'the everything assistant',
     images: [
       {
         url: '/og-image.png',
@@ -213,7 +213,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'the everything assistant',
     description:
-      'Your personal AI assistant for VIT Vellore. Access VTOP, past papers, mess menu, timetables, attendance, grades and more.',
+      'your personal AI agent for VIT Vellore. access VTOP, past papers, mess menu, timetables, attendance, grades and more.',
     images: ['/og-image.png'],
     creator: '@everythingasst',
   },
@@ -272,7 +272,7 @@ export default async function RootLayout({
                   url: 'https://everything-assistant.com',
                   name: 'the everything assistant',
                   description:
-                    'AI-powered assistant for VIT Vellore students. Access VTOP, past papers, mess menu, timetables, attendance, and grades.',
+                    'your personal AI agent for VIT Vellore. Access VTOP, past papers, mess menu, timetables, attendance, and grades.',
                   publisher: {
                     '@id': 'https://everything-assistant.com/#organization',
                   },
@@ -366,7 +366,7 @@ export default async function RootLayout({
                       name: 'What is The Everything Assistant?',
                       acceptedAnswer: {
                         '@type': 'Answer',
-                        text: 'The Everything Assistant is an AI-powered tool designed specifically for VIT Vellore students. It helps you access VTOP features, search past papers, check mess menus, track attendance, view timetables, calculate CGPA, and much more through a simple conversational interface.',
+                        text: 'the everything assistant is an AI-powered tool designed specifically for VIT Vellore students. It helps you access VTOP features, search past papers, check mess menus, track attendance, view timetables, calculate CGPA, and much more through a simple conversational interface.',
                       },
                     },
                     {
@@ -390,7 +390,7 @@ export default async function RootLayout({
                       name: 'Is this service free?',
                       acceptedAnswer: {
                         '@type': 'Answer',
-                        text: 'Yes, The Everything Assistant is completely free for VIT students. We believe in making academic tools accessible to everyone.',
+                        text: 'Yes, the everything assistant is completely free for VIT students. We believe in making academic tools accessible to everyone.',
                       },
                     },
                     {

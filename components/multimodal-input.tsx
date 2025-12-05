@@ -343,6 +343,46 @@ const PureMultimodalInput = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const handlePaste = useCallback(
+    async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      if (!onSelectFiles || !allowAttachments || inputDisabled) return
+      const dt = e.clipboardData
+      if (!dt) return
+
+      const pastedFiles = Array.from(dt.items || [])
+        .filter(item => item.kind === 'file')
+        .map(item => item.getAsFile())
+        .filter((file): file is File => Boolean(file))
+
+      if (pastedFiles.length === 0 && dt.files?.length) {
+        pastedFiles.push(...Array.from(dt.files))
+      }
+
+      const eligible = pastedFiles.filter(file => {
+        const type = (file.type || '').toLowerCase()
+        return type.startsWith('image/') || type === 'application/pdf'
+      })
+
+      if (!eligible.length) return
+
+      const availableSlots = Math.max(0, maxAttachments - attachments.length - uploadingAttachments.length)
+      if (availableSlots <= 0) return
+
+      // Prevent inserting the image blob url into the textarea when only files are being pasted
+      if (!dt.getData('text')) {
+        e.preventDefault()
+      }
+
+      const toUpload = eligible.slice(0, availableSlots)
+      try {
+        await onSelectFiles(toUpload)
+      } catch (error) {
+        console.error('failed to add pasted files', error)
+      }
+    },
+    [onSelectFiles, allowAttachments, inputDisabled, maxAttachments, attachments.length, uploadingAttachments.length]
+  )
+
   const handleFileButton = useCallback(() => {
     if (!onSelectFiles) return
     fileInputRef.current?.click()
@@ -590,6 +630,7 @@ const PureMultimodalInput = ({
               value={safeInput}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               placeholder={getPlaceholderText()}

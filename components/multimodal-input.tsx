@@ -24,6 +24,11 @@ import { AttachmentPreview } from '@/components/attachment-preview'
 import type { MCPClientConfig } from '@/lib/mcp-config'
 import { Streamdown } from 'streamdown'
 
+type PdfLibModule = typeof import('pdf-lib')
+type MammothModule = typeof import('mammoth/mammoth.browser')
+type Html2CanvasModule = typeof import('html2canvas')
+type DocxPreviewModule = typeof import('docx-preview')
+
 interface MultimodalInputProps {
   input: string
   setInput: (value: string) => void
@@ -101,6 +106,207 @@ const PureMultimodalInput = ({
     borderWidth: number
     borderColor: string
   } | null>(null)
+
+  const wrapTextToLines = useCallback(
+    (text: string, font: { widthOfTextAtSize: (t: string, size: number) => number }, fontSize: number, maxWidth: number) => {
+      const words = text.replace(/\s+/g, ' ').trim().split(' ')
+      const lines: string[] = []
+      let current = ''
+
+      for (const word of words) {
+        if (!word) continue
+        const candidate = current ? `${current} ${word}` : word
+        const candidateWidth = font.widthOfTextAtSize(candidate, fontSize)
+        if (candidateWidth <= maxWidth) {
+          current = candidate
+          continue
+        }
+
+        if (current) {
+          lines.push(current)
+          current = ''
+        }
+
+        const wordWidth = font.widthOfTextAtSize(word, fontSize)
+        if (wordWidth <= maxWidth) {
+          current = word
+          continue
+        }
+
+        let slice = ''
+        for (const char of word) {
+          const nextSlice = slice ? `${slice}${char}` : char
+          const sliceWidth = font.widthOfTextAtSize(nextSlice, fontSize)
+          if (sliceWidth <= maxWidth) {
+            slice = nextSlice
+          } else {
+            if (slice) lines.push(slice)
+            slice = char
+          }
+        }
+        if (slice) current = slice
+      }
+
+      if (current) lines.push(current)
+      return lines
+    },
+    []
+  )
+
+  const isDocLikeFile = useCallback((file: File) => {
+    const lowerName = file.name.toLowerCase()
+    const type = (file.type || '').toLowerCase()
+    return (
+      lowerName.endsWith('.doc') ||
+      lowerName.endsWith('.docx') ||
+      type === 'application/msword' ||
+      type.includes('officedocument.wordprocessingml')
+    )
+  }, [])
+
+  const convertDocLikeToPdf = useCallback(
+    async (file: File): Promise<File | null> => {
+      const cleanUpNode = (node: HTMLElement | null) => {
+        if (node && node.parentNode) {
+          node.parentNode.removeChild(node)
+        }
+      }
+
+      try {
+        const isDocx = file.name.toLowerCase().endsWith('.docx')
+        const [pdfLib, html2canvas, docxPreview] = await Promise.all([
+          import('pdf-lib') as Promise<PdfLibModule>,
+          import('html2canvas') as Promise<Html2CanvasModule>,
+          (isDocx ? import('docx-preview') : Promise.resolve(null)) as Promise<DocxPreviewModule | null>,
+        ])
+
+        const { PDFDocument, StandardFonts, rgb } = pdfLib
+
+        const buffer = await file.arrayBuffer()
+
+        if (isDocx && docxPreview) {
+          const container = document.createElement('div')
+          container.style.position = 'absolute'
+          container.style.left = '-99999px'
+          container.style.top = '0'
+          container.style.width = '816px' // 8.5" at 96dpi - letter size
+          container.style.background = '#ffffff'
+          container.style.pointerEvents = 'none'
+          container.style.overflow = 'visible'
+          document.body.appendChild(container)
+
+          try {
+            await docxPreview.renderAsync(buffer, container, undefined, {
+              inWrapper: true,
+              ignoreWidth: false,
+              ignoreHeight: false,
+              className: 'docx-render',
+            })
+
+            // Wait for images/fonts to load
+            await new Promise(resolve => setTimeout(resolve, 300))
+
+            // Try to find individual pages first
+            let pageNodes = Array.from(container.querySelectorAll('.docx-render section.docx')) as HTMLElement[]
+            
+            // If no section pages, try wrapper articles or the main wrapper
+            if (!pageNodes.length) {
+              pageNodes = Array.from(container.querySelectorAll('.docx-wrapper > article, .docx-wrapper section')) as HTMLElement[]
+            }
+
+            // Fallback: render the entire container as one page
+            if (!pageNodes.length) {
+              const wrapper = container.querySelector('.docx-wrapper') as HTMLElement
+              if (wrapper) {
+                pageNodes = [wrapper]
+              } else if (container.children.length) {
+                pageNodes = [container]
+              }
+            }
+
+            if (pageNodes.length) {
+              const pdf = await PDFDocument.create()
+
+              for (const pageNode of pageNodes) {
+                pageNode.style.display = 'block'
+                pageNode.style.visibility = 'visible'
+                
+                const canvas = await html2canvas.default(pageNode, {
+                  scale: 2,
+                  backgroundColor: '#ffffff',
+                  useCORS: true,
+                  logging: false,
+                  allowTaint: true,
+                  windowWidth: 816,
+                })
+
+                const dataUrl = canvas.toDataURL('image/png')
+                const pngBytes = await (await fetch(dataUrl)).arrayBuffer()
+                const png = await pdf.embedPng(new Uint8Array(pngBytes))
+                const { width, height } = png.size()
+                const page = pdf.addPage([width, height])
+                page.drawImage(png, { x: 0, y: 0, width, height })
+              }
+
+              const pdfBytes = await pdf.save()
+              const pdfBuffer = pdfBytes.buffer.slice(
+                pdfBytes.byteOffset,
+                pdfBytes.byteOffset + pdfBytes.byteLength
+              ) as ArrayBuffer
+              const pdfName = file.name.replace(/\.docx?$/i, '.pdf') || `${file.name}.pdf`
+              return new File([pdfBuffer], pdfName, { type: 'application/pdf' })
+            }
+          } finally {
+            cleanUpNode(container)
+          }
+        }
+
+        // Fallback: text-based conversion (DOC or if rendering failed)
+        const decoder = new TextDecoder('utf-8', { fatal: false })
+        const textContent = decoder
+          .decode(new Uint8Array(buffer))
+          .replace(/[^\x09\x0A\x0D\x20-\x7E]+/g, ' ')
+          .trim() || 'Converted document — formatting may be reduced.'
+
+        const pdf = await PDFDocument.create()
+        const font = await pdf.embedFont(StandardFonts.Helvetica)
+        const pageSize: [number, number] = [595.28, 841.89]
+        let page = pdf.addPage(pageSize)
+        const margin = 36
+        const fontSize = 12
+        const maxWidth = page.getSize().width - margin * 2
+        let y = page.getSize().height - margin
+
+        const lines = wrapTextToLines(textContent, font, fontSize, maxWidth)
+        for (const line of lines) {
+          if (y < margin) {
+            page = pdf.addPage(pageSize)
+            y = page.getSize().height - margin
+          }
+          page.drawText(line, {
+            x: margin,
+            y,
+            size: fontSize,
+            font,
+            color: rgb(0, 0, 0),
+          })
+          y -= fontSize * 1.4
+        }
+
+        const pdfBytes = await pdf.save()
+        const pdfBuffer = pdfBytes.buffer.slice(
+          pdfBytes.byteOffset,
+          pdfBytes.byteOffset + pdfBytes.byteLength
+        ) as ArrayBuffer
+        const pdfName = file.name.replace(/\.docx?$/i, '.pdf') || `${file.name}.pdf`
+        return new File([pdfBuffer], pdfName, { type: 'application/pdf' })
+      } catch (error) {
+        console.error('doc->pdf conversion failed', error)
+        return null
+      }
+    },
+    [wrapTextToLines]
+  )
 
   const lightenColor = (color: string, amount = 0.22) => {
     const m = color.replace(/\s+/g, '').match(/^rgba?\((\d+),(\d+),(\d+)(?:,(\d*\.?\d+))?\)$/i)
@@ -360,7 +566,11 @@ const PureMultimodalInput = ({
 
       const eligible = pastedFiles.filter(file => {
         const type = (file.type || '').toLowerCase()
-        return type.startsWith('image/') || type === 'application/pdf'
+        return (
+          type.startsWith('image/') ||
+          type === 'application/pdf' ||
+          isDocLikeFile(file)
+        )
       })
 
       if (!eligible.length) return
@@ -374,13 +584,37 @@ const PureMultimodalInput = ({
       }
 
       const toUpload = eligible.slice(0, availableSlots)
+      const processed: File[] = []
+
+      for (const file of toUpload) {
+        if (isDocLikeFile(file)) {
+          const converted = await convertDocLikeToPdf(file)
+          if (converted) {
+            processed.push(converted)
+          }
+          continue
+        }
+        processed.push(file)
+      }
+
+      if (!processed.length) return
+
       try {
-        await onSelectFiles(toUpload)
+        await onSelectFiles(processed)
       } catch (error) {
         console.error('failed to add pasted files', error)
       }
     },
-    [onSelectFiles, allowAttachments, inputDisabled, maxAttachments, attachments.length, uploadingAttachments.length]
+    [
+      onSelectFiles,
+      allowAttachments,
+      inputDisabled,
+      maxAttachments,
+      attachments.length,
+      uploadingAttachments.length,
+      isDocLikeFile,
+      convertDocLikeToPdf,
+    ]
   )
 
   const handleFileButton = useCallback(() => {
@@ -393,11 +627,27 @@ const PureMultimodalInput = ({
       if (!onSelectFiles) return
       const files = e.target.files
       if (files && files.length > 0) {
-        await onSelectFiles(files)
+        const incoming = Array.from(files)
+        const processed: File[] = []
+
+        for (const file of incoming) {
+          if (isDocLikeFile(file)) {
+            const converted = await convertDocLikeToPdf(file)
+            if (converted) {
+              processed.push(converted)
+            }
+            continue
+          }
+          processed.push(file)
+        }
+
+        if (processed.length) {
+          await onSelectFiles(processed)
+        }
       }
       if (fileInputRef.current) fileInputRef.current.value = ''
     },
-    [onSelectFiles]
+    [onSelectFiles, convertDocLikeToPdf, isDocLikeFile]
   )
 
   useEffect(() => {
@@ -668,7 +918,7 @@ const PureMultimodalInput = ({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*,application/pdf"
+                  accept="image/*,application/pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                   multiple
                   className="hidden"
                   onChange={handleFileChange}

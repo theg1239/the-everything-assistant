@@ -29,7 +29,6 @@ import {
   Trash2,
   ChevronUp,
   ChevronDown,
-  Waves,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -138,10 +137,8 @@ export default function SpotifyBubble() {
     toggleLoopCurrent,
     toggleVideo,
     toggleLyrics,
-    toggleSynthwave,
     showVideo,
     showLyrics,
-    showSynthwave,
     nextTrack,
     previousTrack,
     addTrackFromUrl,
@@ -570,23 +567,6 @@ export default function SpotifyBubble() {
               >
                 <Captions className="h-3.5 w-3.5" />
                 Lyrics
-              </button>
-              <button
-                className={cn(
-                  'flex items-center justify-center gap-1 rounded-full px-2 py-1 text-[11px] min-w-[52px] transition-colors',
-                  showSynthwave 
-                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
-                    : 'bg-foreground/10 text-foreground'
-                )}
-                onClick={() => {
-                  toggleSynthwave()
-                  showStatus(showSynthwave ? 'Synthwave off' : 'Synthwave on')
-                  log('toggle synthwave', !showSynthwave)
-                }}
-                title="Synthwave visualizer"
-              >
-                <Waves className="h-3.5 w-3.5" />
-                Synth
               </button>
           </div>
           <div className="text-[11px] text-muted-foreground">
@@ -1862,19 +1842,6 @@ export default function SpotifyBubble() {
                         >
                           <Captions className="h-3.5 w-3.5" />
                           Lyrics
-                        </button>
-                        <button
-                          className={cn(
-                            'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
-                            showSynthwave 
-                              ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white' 
-                              : 'bg-foreground/10 text-muted-foreground'
-                          )}
-                          onClick={() => toggleSynthwave()}
-                          title="Toggle synthwave visualizer background"
-                        >
-                          <Waves className="h-3.5 w-3.5" />
-                          Synth
                         </button>
                       </div>
                     </div>

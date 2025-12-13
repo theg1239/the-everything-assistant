@@ -87,7 +87,7 @@
     "lucide-react": "latest",
     "mammoth": "^1.8.0",
     "nanoid": "latest",
-    "next": "^16.0.9",
+    "next": "^16.0.10",
     "next-auth": "^4.24.11",
     "next-themes": "latest",
     "nodemailer": "^7.0.3",

@@ -7,7 +7,7 @@ class RAGService {
   constructor() {
     this.knowledgeBase = new KnowledgeBase()
     this.maxContextLength = parseInt(process.env.MAX_CONTEXT_LENGTH) || 4000
-    this.chatModel = google('gemini-flash-latest')
+    this.chatModel = google('gemini-3-flash-preview')
   }
   async generateResponse(query, conversationHistory = []) {
     try {

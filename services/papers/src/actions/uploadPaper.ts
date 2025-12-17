@@ -181,7 +181,7 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
 
       try {
         const { object: extractedData } = await generateObject({
-          model: google('gemini-flash-latest'),
+          model: google('gemini-3-flash-preview'),
           schema: z.object({
             metadata: PaperMetadataSchema,
             text: z.string().describe('Full text content of the document'),
@@ -231,7 +231,7 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
 
       try {
         const { object: extractedData } = await generateObject({
-          model: google('gemini-flash-latest'),
+          model: google('gemini-3-flash-preview'),
           schema: z.object({
             metadata: PaperMetadataSchema,
             text: z.string().describe('Full text content of the document'),

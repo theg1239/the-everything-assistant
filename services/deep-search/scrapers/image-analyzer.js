@@ -5,7 +5,7 @@ const logger = require('../utils/logger')
 
 class ImageAnalyzer {
   constructor() {
-    this.visionModel = google('gemini-flash-latest')
+    this.visionModel = google('gemini-3-flash-preview')
   }
 
   async analyzeImage(imageBuffer) {

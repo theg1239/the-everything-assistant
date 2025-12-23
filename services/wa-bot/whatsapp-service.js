@@ -17,6 +17,8 @@ class WhatsAppService extends EventEmitter {
     this.rateLimits = new Map() // Rate limiting per user
     this.recentBotMessages = new Set() // Track recent bot messages to prevent loops
     this.conversationContext = new Map() // Store recent conversation history per user
+    this.contactLookupDisabled = false
+    this.contactLookupDisabledReason = null
     this.contextConfig = {
       maxMessages: 10, // Keep last 10 messages per user
       maxAge: 30 * 60 * 1000, // 30 minutes in milliseconds
@@ -320,6 +322,23 @@ class WhatsAppService extends EventEmitter {
     }
   }
 
+  shouldDisableContactLookup(error) {
+    const message = error?.message || ''
+    return message.includes('ContactMethods.getIsMyContact') || message.includes('getIsMyContact is not a function')
+  }
+
+  disableContactLookup(error) {
+    if (this.contactLookupDisabled) {
+      return
+    }
+
+    this.contactLookupDisabled = true
+    this.contactLookupDisabledReason = error?.message || 'Unknown contact lookup error'
+    console.warn('⚠️ Disabling contact lookups due to WhatsApp Web API mismatch', {
+      error: this.contactLookupDisabledReason,
+    })
+  }
+
   async resolveContact(message, normalizedId = null) {
     if (!normalizedId) {
       normalizedId = this.getNormalizedContactId(message)
@@ -332,22 +351,32 @@ class WhatsAppService extends EventEmitter {
       }
     }
 
-    try {
-      return await message.getContact()
-    } catch (error) {
-      console.warn('⚠️ Failed to get contact via message.getContact', {
-        messageId: message?.id?._serialized,
-        rawAuthor: message?.author,
-        rawFrom: message?.from,
-        rawTo: message?.to,
-        error: error?.message,
-      })
+    if (!this.contactLookupDisabled) {
+      try {
+        return await message.getContact()
+      } catch (error) {
+        if (this.shouldDisableContactLookup(error)) {
+          this.disableContactLookup(error)
+        }
+
+        console.warn('⚠️ Failed to get contact via message.getContact', {
+          messageId: message?.id?._serialized,
+          rawAuthor: message?.author,
+          rawFrom: message?.from,
+          rawTo: message?.to,
+          error: error?.message,
+        })
+      }
     }
 
-    if (normalizedId) {
+    if (normalizedId && !this.contactLookupDisabled) {
       try {
         return await this.resolveContactById(normalizedId)
       } catch (fallbackError) {
+        if (this.shouldDisableContactLookup(fallbackError)) {
+          this.disableContactLookup(fallbackError)
+        }
+
         console.warn('⚠️ Fallback contact lookup failed', {
           normalizedId,
           error: fallbackError?.message,
@@ -359,7 +388,7 @@ class WhatsAppService extends EventEmitter {
   }
 
   async resolveContactById(contactId) {
-    if (!contactId || !this.client) {
+    if (!contactId || !this.client || this.contactLookupDisabled) {
       return null
     }
 

@@ -2061,7 +2061,7 @@ function PureChatInterfaceComponent({
         toolInvocations={messages[messages.length - 1]?.toolInvocations}
         onCredentialsSubmit={handleVTOPCredentials}
       >
-        <UpsellBanner />
+        {/* <UpsellBanner /> */}
         <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
         {!isGuest && (
           <Hub

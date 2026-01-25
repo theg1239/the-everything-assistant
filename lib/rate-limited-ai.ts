@@ -4,7 +4,7 @@ import { createGroq } from '@ai-sdk/groq' // Groq provider
 import { createCerebras } from '@ai-sdk/cerebras' // Cerebras provider
 import { createOpenRouter } from '@openrouter/ai-sdk-provider' // OpenRouter provider
 import { createOpenAI } from '@ai-sdk/openai' // OpenAI provider
-import { ApiKeyManager, ApiKeyConfig, DEFAULT_API_KEY_CONFIG } from './api-key-manager'
+import { ApiKeyManager, ApiKeyConfig, DEFAULT_API_KEY_CONFIG, ApiKeyManagerError } from './api-key-manager'
 import { UserRateLimiter, UserRateLimitConfig, loadUserRateLimitConfig } from './user-rate-limiter'
 import { modelIds } from './model-registry'
 import {
@@ -277,6 +277,91 @@ export class RateLimitedAI {
     return is500 && (isInternalStatus || isInternalMessage)
   }
 
+  private shouldFallbackToOpenAI(error: unknown): boolean {
+    const err = error as { code?: string; message?: string; cause?: { code?: string } }
+    if (err?.cause?.code === 'ALL_KEYS_EXHAUSTED') return true
+    if (err instanceof ApiKeyManagerError && err.code === 'ALL_KEYS_EXHAUSTED') return true
+    if (err?.code === 'ALL_KEYS_EXHAUSTED') return true
+    const msg = (err?.message || '').toLowerCase()
+    return (
+      msg.includes('all api keys failed') ||
+      msg.includes('all_keys_rate_limited') ||
+      msg.includes('no_valid_api_keys_available')
+    )
+  }
+
+  private withGoogleRetryOptions(options: TextGenerationOptions): TextGenerationOptions {
+    if (this.provider !== 'google') return options
+    const providerOptions = options.providerOptions ?? {}
+    const googleOptions = providerOptions.google ?? {}
+    const hasMaxRetries = Object.prototype.hasOwnProperty.call(googleOptions, 'maxRetries')
+    return {
+      ...options,
+      providerOptions: {
+        ...providerOptions,
+        google: hasMaxRetries ? googleOptions : { ...googleOptions, maxRetries: 2 },
+      },
+    }
+  }
+
+  private buildOpenAIFallbackOptions(options: TextGenerationOptions, modelId: string) {
+    const openaiKey = process.env.OPENAI_API_KEY
+    if (!openaiKey) return null
+    const openai = createOpenAI({ apiKey: openaiKey })
+    return {
+      ...options,
+      model: openai(modelId),
+      providerOptions: options.providerOptions?.openai
+        ? { openai: options.providerOptions.openai }
+        : undefined,
+    }
+  }
+
+  private normalizeWarnings<T extends { warnings?: unknown }>(result: T): T {
+    if (result && !Array.isArray(result.warnings)) {
+      return { ...result, warnings: [] }
+    }
+    return result
+  }
+
+  private wrapModelWithWarningDefaults(model: any): any {
+    if (!model || typeof model !== 'object') return model
+    const wrapped = Object.create(model)
+
+    if (typeof model.doGenerate === 'function') {
+      const original = model.doGenerate.bind(model)
+      wrapped.doGenerate = async (args: any) => this.normalizeWarnings(await original(args))
+    }
+
+    if (typeof model.doEmbed === 'function') {
+      const original = model.doEmbed.bind(model)
+      wrapped.doEmbed = async (args: any) => this.normalizeWarnings(await original(args))
+    }
+
+    if (typeof model.doStream === 'function') {
+      const original = model.doStream.bind(model)
+      wrapped.doStream = async (args: any) => {
+        const res = this.normalizeWarnings(await original(args))
+        const stream = res?.stream as any
+        if (stream && typeof stream.pipeThrough === 'function') {
+          const transformer = new TransformStream({
+            transform: (chunk, controller) => {
+              if (chunk && !Array.isArray((chunk as any).warnings)) {
+                controller.enqueue({ ...(chunk as any), warnings: [] })
+              } else {
+                controller.enqueue(chunk)
+              }
+            },
+          })
+          res.stream = stream.pipeThrough(transformer)
+        }
+        return res
+      }
+    }
+
+    return wrapped
+  }
+
   async streamText(options: TextGenerationOptions, userId?: string): Promise<any> {
     if (userId && this.userConfig.enabled) {
       const u = await this.userRateLimiter.checkRateLimit(userId)
@@ -284,26 +369,20 @@ export class RateLimitedAI {
     }
     
     try {
+      const enrichedOptions = this.withGoogleRetryOptions(options)
       return await this.apiKeyManager.executeWithRateLimit(async key => {
         const provider = this.createProviderInstance(key)
-        const modelFn = provider(options.model?.modelId ?? '')
-        return streamText({ ...options, model: modelFn } as any)
+        const modelFn = this.wrapModelWithWarningDefaults(provider(enrichedOptions.model?.modelId ?? ''))
+        return streamText({ ...enrichedOptions, model: modelFn } as any)
       })
     } catch (error: unknown) {
-      if (this.provider === 'google' && this.isGoogleInternalError(error)) {
-        console.log('[RateLimitedAI] Google 500 internal error detected, falling back to OpenAI')
-        
-        const openaiKey = process.env.OPENAI_API_KEY
-        if (!openaiKey) throw error
-        
-        const openai = createOpenAI({ apiKey: openaiKey })
-        const fallbackOptions = {
-          ...options,
-          model: openai('gpt-5-nano'),
-          providerOptions: options.providerOptions?.openai 
-            ? { openai: options.providerOptions.openai }
-            : undefined,
-        }
+      if (
+        this.provider === 'google' &&
+        (this.isGoogleInternalError(error) || this.shouldFallbackToOpenAI(error))
+      ) {
+        console.log('[RateLimitedAI] Google failure detected, falling back to OpenAI streamText')
+        const fallbackOptions = this.buildOpenAIFallbackOptions(options, 'gpt-5-nano')
+        if (!fallbackOptions) throw error
         return streamText(fallbackOptions as any)
       }
       
@@ -318,26 +397,20 @@ export class RateLimitedAI {
     }
     
     try {
+      const enrichedOptions = this.withGoogleRetryOptions(options)
       return await this.apiKeyManager.executeWithRateLimit(async key => {
         const provider = this.createProviderInstance(key)
-        const modelFn = provider(options.model?.modelId ?? '')
-        return generateText({ ...options, model: modelFn } as any)
+        const modelFn = this.wrapModelWithWarningDefaults(provider(enrichedOptions.model?.modelId ?? ''))
+        return generateText({ ...enrichedOptions, model: modelFn } as any)
       })
     } catch (error: unknown) {
-      if (this.provider === 'google' && this.isGoogleInternalError(error)) {
-        console.log('[RateLimitedAI] Google 500 internal error detected in generateText, falling back to OpenAI gpt-4o-mini')
-        
-        const openaiKey = process.env.OPENAI_API_KEY
-        if (!openaiKey) throw error
-        
-        const openai = createOpenAI({ apiKey: openaiKey })
-        const fallbackOptions = {
-          ...options,
-          model: openai('gpt-4o-mini'),
-          providerOptions: options.providerOptions?.openai 
-            ? { openai: options.providerOptions.openai }
-            : undefined,
-        }
+      if (
+        this.provider === 'google' &&
+        (this.isGoogleInternalError(error) || this.shouldFallbackToOpenAI(error))
+      ) {
+        console.log('[RateLimitedAI] Google failure detected in generateText, falling back to OpenAI')
+        const fallbackOptions = this.buildOpenAIFallbackOptions(options, 'gpt-4o-mini')
+        if (!fallbackOptions) throw error
         return generateText(fallbackOptions as any)
       }
       
@@ -350,11 +423,25 @@ export class RateLimitedAI {
       const u = await this.userRateLimiter.checkRateLimit(userId)
       if (!u.allowed) throw new Error(`Rate limit: ${u.error}`)
     }
-    return this.apiKeyManager.executeWithRateLimit(async key => {
-      const provider = this.createProviderInstance(key)
-      const modelFn = provider(options.model?.modelId ?? '')
-      return generateObject({ ...options, model: modelFn } as any)
-    })
+    try {
+      const enrichedOptions = this.withGoogleRetryOptions(options)
+      return await this.apiKeyManager.executeWithRateLimit(async key => {
+        const provider = this.createProviderInstance(key)
+        const modelFn = this.wrapModelWithWarningDefaults(provider(enrichedOptions.model?.modelId ?? ''))
+        return generateObject({ ...enrichedOptions, model: modelFn } as any)
+      })
+    } catch (error: unknown) {
+      if (
+        this.provider === 'google' &&
+        (this.isGoogleInternalError(error) || this.shouldFallbackToOpenAI(error))
+      ) {
+        console.log('[RateLimitedAI] Google failure detected in generateObject, falling back to OpenAI')
+        const fallbackOptions = this.buildOpenAIFallbackOptions(options, 'gpt-4o-mini')
+        if (!fallbackOptions) throw error
+        return generateObject({ ...(fallbackOptions as any), schema: options.schema } as any)
+      }
+      throw error
+    }
   }
 
 
@@ -376,20 +463,32 @@ export class RateLimitedAI {
     },
     userId?: string
   ): Promise<EmbedResult<string> | EmbedManyResult<string>> {
+    if (process.env.AI_EMBED_DEBUG === 'true') {
+      const valueLen = typeof options.value === 'string' ? options.value.length : undefined
+      const valuesCount = Array.isArray(options.values) ? options.values.length : undefined
+      console.debug('[RateLimitedAI] embed debug', {
+        provider: this.provider,
+        modelId: options.model?.modelId || modelIds.embedding,
+        valueType: typeof options.value,
+        valueLength: valueLen,
+        valuesCount,
+      })
+    }
     return this.apiKeyManager.executeWithRateLimit(async key => {
       const google = createGoogleGenerativeAI({ apiKey: key })
       const modelFn = google.textEmbeddingModel(
         options.model?.modelId || modelIds.embedding
       ) as unknown as EmbeddingModel<string>
+      const safeModel = this.wrapModelWithWarningDefaults(modelFn as any)
 
       if (Array.isArray(options.values)) {
         return embedMany({
-          model: modelFn,
+          model: safeModel,
           values: options.values,
         })
       } else {
         return embed({
-          model: modelFn,
+          model: safeModel,
           value: options.value ?? '',
         })
       }

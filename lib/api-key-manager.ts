@@ -31,6 +31,18 @@ export interface ApiKeyUsageSnapshot {
   isCurrent: boolean
 }
 
+export class ApiKeyManagerError extends Error {
+  code: string
+  constructor(code: string, message: string, cause?: unknown) {
+    super(message)
+    this.code = code
+    this.name = 'ApiKeyManagerError'
+    if (cause) {
+      ;(this as { cause?: unknown }).cause = cause
+    }
+  }
+}
+
 export class TokenBucket {
   private capacity: number
   private tokens: number
@@ -193,6 +205,11 @@ export class ApiKeyManager {
   }
 
   private async isKeyRateLimited(keyHash: string): Promise<boolean> {
+    const banKey = `rate_limit:${keyHash}`
+    const limitedUntil = await this.redis.get(banKey)
+    if (limitedUntil && Date.now() < parseInt(limitedUntil as string)) {
+      return true
+    }
     const m = this.keyBuckets.get(`${keyHash}:minute`)
     const h = this.keyBuckets.get(`${keyHash}:hour`)
     const d = this.keyBuckets.get(`${keyHash}:day`)
@@ -203,6 +220,75 @@ export class ApiKeyManager {
       d.getAvailableTokens(),
     ])
     return mt < 1 || ht < 1 || dt < 1
+  }
+
+  private collectErrorCandidates(error: any): any[] {
+    const candidates: any[] = []
+    if (error) candidates.push(error)
+    if (error?.lastError) candidates.push(error.lastError)
+    if (Array.isArray(error?.errors)) {
+      candidates.push(...error.errors)
+    }
+    return candidates
+  }
+
+  private parseRetryAfterHeader(headers?: Record<string, string>): number | null {
+    if (!headers) return null
+    const value = headers['retry-after'] || headers['Retry-After']
+    if (!value) return null
+    const seconds = Number(value)
+    if (!Number.isNaN(seconds)) {
+      return Math.max(0, Math.ceil(seconds * 1000))
+    }
+    const parsedDate = Date.parse(value)
+    if (!Number.isNaN(parsedDate)) {
+      return Math.max(0, parsedDate - Date.now())
+    }
+    return null
+  }
+
+  private parseRetryDelayFromText(text?: string): number | null {
+    if (!text || typeof text !== 'string') return null
+    const retryDelayMatch = text.match(/"retryDelay"\s*:\s*"([\d.]+)s"/i)
+    if (retryDelayMatch?.[1]) {
+      const seconds = Number(retryDelayMatch[1])
+      if (!Number.isNaN(seconds)) {
+        return Math.max(0, Math.ceil(seconds * 1000))
+      }
+    }
+    const retryInMatch = text.match(/retry(?:\s+in)?\s+([\d.]+)s/i)
+    if (retryInMatch?.[1]) {
+      const seconds = Number(retryInMatch[1])
+      if (!Number.isNaN(seconds)) {
+        return Math.max(0, Math.ceil(seconds * 1000))
+      }
+    }
+    return null
+  }
+
+  private getRateLimitCooldownMs(error: any): number | null {
+    for (const candidate of this.collectErrorCandidates(error)) {
+      const headerDelay = this.parseRetryAfterHeader(candidate?.responseHeaders as any)
+      if (headerDelay !== null) return headerDelay
+      const messageDelay = this.parseRetryDelayFromText(candidate?.message)
+      if (messageDelay !== null) return messageDelay
+      const bodyDelay = this.parseRetryDelayFromText(candidate?.responseBody)
+      if (bodyDelay !== null) return bodyDelay
+    }
+    return null
+  }
+
+  private async markKeyRateLimited(keyHash: string, cooldownMs: number): Promise<void> {
+    const cooldown = Math.max(1000, cooldownMs)
+    const until = Date.now() + cooldown
+    await this.redis.set(`rate_limit:${keyHash}`, until.toString(), {
+      ex: Math.ceil(cooldown / 1000),
+    })
+    const status = this.keyStatuses.get(keyHash)
+    if (status) {
+      status.isRateLimited = true
+      status.resetTime = until
+    }
   }
 
   private async consumeTokens(keyHash: string): Promise<boolean> {
@@ -376,15 +462,17 @@ export class ApiKeyManager {
     let backoff = 1000
     let lastErr: any = null
     const tried = new Set<number>()
+    const exhausted = new Set<number>()
 
     // Try every key at least once; if maxRetries is higher, allow another full round.
     const maxAttempts = Math.max(this.config.keys.length, maxRetries * this.config.keys.length)
 
     while (attempt < maxAttempts) {
-      const idx = await this.getRandomHealthyKeyIndex(tried)
+      const exclude = new Set<number>([...tried, ...exhausted])
+      const idx = await this.getRandomHealthyKeyIndex(exclude)
       if (idx === null) {
         // All keys exhausted for this round; start a fresh round if attempts remain.
-        if (tried.size >= this.config.keys.length && attempt < maxAttempts) {
+        if (tried.size + exhausted.size >= this.config.keys.length && attempt < maxAttempts) {
           tried.clear()
           continue
         }
@@ -405,6 +493,13 @@ export class ApiKeyManager {
       } catch (err: any) {
         lastErr = err
         console.error(`[ApiKeyManager] Error details for key index ${idx}:`, err?.message || err)
+        if (process.env.API_KEY_MANAGER_DEBUG === 'true' && err?.stack) {
+          console.error(`[ApiKeyManager] Stack for key index ${idx}:`, err.stack)
+        }
+        if (process.env.API_KEY_MANAGER_DEBUG === 'true' && err?.responseBody) {
+          const bodyPreview = String(err.responseBody).slice(0, 1000)
+          console.error(`[ApiKeyManager] Response body preview for key index ${idx}:`, bodyPreview)
+        }
         if (err?.cause) {
           console.error(`[ApiKeyManager] Error cause:`, err.cause)
         }
@@ -415,6 +510,9 @@ export class ApiKeyManager {
           console.log(`[ApiKeyManager] Rate limit error detected for key index ${idx}`)
           await this.recordRateLimitEvent(hash, err)
           await this.incrementFailure(hash)
+          const cooldownMs = this.getRateLimitCooldownMs(err) ?? 60000
+          await this.markKeyRateLimited(hash, cooldownMs)
+          exhausted.add(idx)
         } else if (!this.isServerError(err)) {
           // Only count client-side / auth errors towards banning; server 5xx should be retried.
           console.log(`[ApiKeyManager] Client/auth error detected for key index ${idx}`)
@@ -433,8 +531,10 @@ export class ApiKeyManager {
         continue
       }
     }
-    throw new Error(
-      `All API keys failed, are rate limited, or are temporarily banned. Last error: ${lastErr?.message || 'Unknown'}`
+    throw new ApiKeyManagerError(
+      'ALL_KEYS_EXHAUSTED',
+      `All API keys failed, are rate limited, or are temporarily banned. Last error: ${lastErr?.message || 'Unknown'}`,
+      lastErr
     )
   }
 
@@ -513,6 +613,9 @@ export class ApiKeyManager {
   async resetAllRateLimits(): Promise<void> {
     for (const bucket of this.keyBuckets.values()) {
       await bucket.reset()
+    }
+    for (const keyHash of this.keyStatuses.keys()) {
+      await this.redis.del(`rate_limit:${keyHash}`)
     }
     for (const status of this.keyStatuses.values()) {
       status.isRateLimited = false

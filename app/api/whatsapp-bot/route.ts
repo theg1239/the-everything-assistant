@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import * as z from 'zod'
 import { generateId, type UIMessage } from 'ai'
 import { getModelConfig } from '@/lib/model-registry'
+import { normalizeTokenUsage } from '@/lib/token-usage'
 
 type ConversationMessage = {
   role: string
@@ -381,16 +382,16 @@ CRITICAL TOOL CONTINUATION RULES:
         onStepFinish: async ({ usage, stepIndex }: any) => {
           try {
             if (usage && typeof usage === 'object') {
+              const usageTotals = normalizeTokenUsage(usage)
               const { saveTokenUsage } = await import('@/lib/db')
               await saveTokenUsage({
                 userId: user.id,
                 chatId: null, // No specific chat for bot users
                 model: botModel.modelId,
                 stepIndex: typeof stepIndex === 'number' ? stepIndex : null,
-                promptTokens: usage.promptTokens || 0,
-                completionTokens: usage.completionTokens || 0,
-                totalTokens:
-                  usage.totalTokens || (usage.promptTokens || 0) + (usage.completionTokens || 0),
+                promptTokens: usageTotals.promptTokens,
+                completionTokens: usageTotals.completionTokens,
+                totalTokens: usageTotals.totalTokens,
                 meta: { source: requestSource, userId: userInfo.userId },
               })
             }

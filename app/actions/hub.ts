@@ -12,6 +12,7 @@ import { parseHubCommandResult } from '@/lib/hub/parsers'
 import type { RawVTOPResult } from '@/lib/hub/parsers/attendance'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { saveTokenUsage } from '@/lib/db'
+import { normalizeTokenUsage } from '@/lib/token-usage'
 import { listVTOPSnapshots, upsertVTOPSnapshot } from '@/lib/vtop-snapshots'
 import { toJsonValue } from '@/lib/json'
 import { getModelConfig } from '@/lib/model-registry'
@@ -143,15 +144,16 @@ async function formatAndPersistVTOPResult(
   await upsertVTOPSnapshot(userId, command, object)
 
   if (usage) {
+    const usageTotals = normalizeTokenUsage(usage)
     const modelIdForUsage = modelConfig?.modelId ?? getModelConfig('hubVtop').modelId
     await saveTokenUsage({
       userId,
       chatId: null,
       model: modelIdForUsage,
       stepIndex: null,
-      promptTokens: usage.promptTokens || 0,
-      completionTokens: usage.completionTokens || 0,
-      totalTokens: usage.totalTokens || (usage.promptTokens || 0) + (usage.completionTokens || 0),
+      promptTokens: usageTotals.promptTokens,
+      completionTokens: usageTotals.completionTokens,
+      totalTokens: usageTotals.totalTokens,
       meta: { type: 'hub-vtop', command },
     })
   }

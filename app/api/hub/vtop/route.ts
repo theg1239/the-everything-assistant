@@ -7,6 +7,7 @@ import { vtopResultSchema } from './schema'
 import { saveTokenUsage } from '@/lib/db'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { getModelConfig } from '@/lib/model-registry'
+import { normalizeTokenUsage } from '@/lib/token-usage'
 import * as z from 'zod'
 import type { VtopCommandFlags } from '@/types/tools'
 
@@ -82,15 +83,15 @@ export async function POST(req: Request) {
         try {
           const usage = (final && final.usage) || final?.response?.usage || null
           if (usage && typeof usage === 'object') {
-              await saveTokenUsage({
-                userId: session.user.id,
-                chatId: null,
-                model: modelConfig.modelId,
-                stepIndex: null,
-                promptTokens: usage.promptTokens || 0,
-                completionTokens: usage.completionTokens || 0,
-              totalTokens:
-                usage.totalTokens || (usage.promptTokens || 0) + (usage.completionTokens || 0),
+            const usageTotals = normalizeTokenUsage(usage)
+            await saveTokenUsage({
+              userId: session.user.id,
+              chatId: null,
+              model: modelConfig.modelId,
+              stepIndex: null,
+              promptTokens: usageTotals.promptTokens,
+              completionTokens: usageTotals.completionTokens,
+              totalTokens: usageTotals.totalTokens,
               meta: { type: 'hub-vtop', command },
             })
           }

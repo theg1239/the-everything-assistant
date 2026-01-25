@@ -6,6 +6,7 @@ import { buildSystemPrompt } from '@/app/api/chat/lib/prompt'
 import { getModelConfig } from '@/lib/model-registry'
 import { createVITTools } from '@/lib/tools'
 import { saveTokenUsage } from '@/lib/db'
+import { normalizeTokenUsage } from '@/lib/token-usage'
 
 const GUEST_MESSAGE_LIMIT = 2
 
@@ -111,15 +112,15 @@ export async function POST(req: Request) {
         }: any) => {
           try {
             if (usage && typeof usage === 'object') {
+              const usageTotals = normalizeTokenUsage(usage)
               await saveTokenUsage({
                 userId: guestUserId,
                 chatId: guestChatId,
                 model: model.modelId,
                 stepIndex: typeof stepIndex === 'number' ? stepIndex : null,
-                promptTokens: usage.promptTokens || 0,
-                completionTokens: usage.completionTokens || 0,
-                totalTokens:
-                  usage.totalTokens || (usage.promptTokens || 0) + (usage.completionTokens || 0),
+                promptTokens: usageTotals.promptTokens,
+                completionTokens: usageTotals.completionTokens,
+                totalTokens: usageTotals.totalTokens,
                 meta: { finishReason, channel: 'guest' },
               })
               if (finishReason === 'stop') {
@@ -134,16 +135,15 @@ export async function POST(req: Request) {
           try {
             const finalUsage = (result as any)?.usage
             if (!savedFinalStepUsage && finalUsage && typeof finalUsage === 'object') {
+              const usageTotals = normalizeTokenUsage(finalUsage)
               await saveTokenUsage({
                 userId: guestUserId,
                 chatId: guestChatId,
                 model: model.modelId,
                 stepIndex: null,
-                promptTokens: finalUsage.promptTokens || 0,
-                completionTokens: finalUsage.completionTokens || 0,
-                totalTokens:
-                  finalUsage.totalTokens ||
-                  (finalUsage.promptTokens || 0) + (finalUsage.completionTokens || 0),
+                promptTokens: usageTotals.promptTokens,
+                completionTokens: usageTotals.completionTokens,
+                totalTokens: usageTotals.totalTokens,
                 meta: { type: 'final', channel: 'guest' },
               })
             }

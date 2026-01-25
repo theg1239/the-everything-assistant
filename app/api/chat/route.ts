@@ -7,6 +7,7 @@ import { authOptions } from '@/lib/auth'
 import { getChat, createChat, saveMessage, updateChat } from '@/lib/db'
 import { extractTitleFromContent } from '@/lib/utils'
 import { sanitizeToolInvocations } from '@/lib/sanitize-tools'
+import { normalizeTokenUsage } from '@/lib/token-usage'
 import {
   uiMessagesToLegacyMessages,
   type AppUIMessage,
@@ -361,16 +362,16 @@ export async function POST(req: Request) {
         }: any) => {
           try {
             if (usage && typeof usage === 'object') {
+              const usageTotals = normalizeTokenUsage(usage)
               const { saveTokenUsage } = await import('@/lib/db')
               await saveTokenUsage({
                 userId: session.user.id,
                 chatId: chat.id,
                 model: model.modelId,
                 stepIndex: typeof stepIndex === 'number' ? stepIndex : null,
-                promptTokens: usage.promptTokens || 0,
-                completionTokens: usage.completionTokens || 0,
-                totalTokens:
-                  usage.totalTokens || (usage.promptTokens || 0) + (usage.completionTokens || 0),
+                promptTokens: usageTotals.promptTokens,
+                completionTokens: usageTotals.completionTokens,
+                totalTokens: usageTotals.totalTokens,
                 meta: { finishReason },
               })
               if (finishReason === 'stop') {
@@ -487,17 +488,16 @@ export async function POST(req: Request) {
           try {
             const finalUsage = (result as any)?.usage
             if (!savedFinalStepUsage && finalUsage && typeof finalUsage === 'object') {
+              const usageTotals = normalizeTokenUsage(finalUsage)
               const { saveTokenUsage } = await import('@/lib/db')
               await saveTokenUsage({
                 userId: session.user.id,
                 chatId: chat.id,
                 model: model.modelId,
                 stepIndex: null,
-                promptTokens: finalUsage.promptTokens || 0,
-                completionTokens: finalUsage.completionTokens || 0,
-                totalTokens:
-                  finalUsage.totalTokens ||
-                  (finalUsage.promptTokens || 0) + (finalUsage.completionTokens || 0),
+                promptTokens: usageTotals.promptTokens,
+                completionTokens: usageTotals.completionTokens,
+                totalTokens: usageTotals.totalTokens,
                 meta: { type: 'final' },
               })
             }

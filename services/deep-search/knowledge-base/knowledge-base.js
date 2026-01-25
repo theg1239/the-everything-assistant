@@ -313,22 +313,13 @@ class KnowledgeBase {
       const textContent = `${postData.title} ${postData.content} ${postData.extracted_text}`.trim()
       const embedding = await this.generateEmbedding(textContent)
 
-      if (!Array.isArray(embedding)) {
-        throw new Error(`Invalid embedding: expected array, got ${typeof embedding}`)
-      }
-
-      if (embedding.length !== this.embeddingDim) {
-        logger.error(
-          `Embedding dimension mismatch for post ${postData.reddit_id}: got ${embedding.length}, expected ${this.embeddingDim}`
-        )
-        throw new Error(
-          `Invalid embedding dimension: got ${embedding.length}, expected ${this.embeddingDim}. This usually means the database vector columns need to be migrated.`
+      if (!embedding) {
+        logger.warn(`Skipping embedding for post ${postData.reddit_id}; text search fallback only`)
+      } else {
+        logger.debug(
+          `Generated embedding with ${embedding.length} dimensions for post ${postData.reddit_id}`
         )
       }
-
-      logger.debug(
-        `Generated embedding with ${embedding.length} dimensions for post ${postData.reddit_id}`
-      )
 
       const insertPostSQL = `
         INSERT INTO reddit_posts (
@@ -341,11 +332,23 @@ class KnowledgeBase {
           $13, $14, $15, $16, $17, $18, $19
         )
         ON CONFLICT (reddit_id) DO UPDATE SET
+          title       = EXCLUDED.title,
+          content     = EXCLUDED.content,
+          author      = EXCLUDED.author,
+          created_utc = EXCLUDED.created_utc,
+          url         = EXCLUDED.url,
+          permalink   = EXCLUDED.permalink,
+          is_video    = EXCLUDED.is_video,
+          post_type   = EXCLUDED.post_type,
+          images      = EXCLUDED.images,
+          extracted_text = EXCLUDED.extracted_text,
+          tags        = EXCLUDED.tags,
           upvotes     = EXCLUDED.upvotes,
           downvotes   = EXCLUDED.downvotes,
           score       = EXCLUDED.score,
           num_comments= EXCLUDED.num_comments,
           video       = EXCLUDED.video,
+          embedding   = COALESCE(EXCLUDED.embedding, reddit_posts.embedding),
           updated_at  = CURRENT_TIMESTAMP
         RETURNING id
       `
@@ -368,7 +371,7 @@ class KnowledgeBase {
         JSON.stringify(postData.video || null), // Store video data as JSON
         postData.extracted_text,
         postData.tags,
-        `[${embedding.join(',')}]`,
+        embedding ? `[${embedding.join(',')}]` : null,
       ])
 
       const postId = result.rows[0].id
@@ -380,15 +383,6 @@ class KnowledgeBase {
       return postId
     } catch (error) {
       await client.query('ROLLBACK')
-
-      if (error.message && error.message.includes('expected 768 dimensions')) {
-        logger.error(
-          `Vector dimension error for post ${postData.reddit_id}: Database expects 768 dimensions but code is using ${this.embeddingDim}. Run database migration to fix this.`
-        )
-        throw new Error(
-          `Database vector dimension mismatch: expected 768, got ${this.embeddingDim}. Please run the migration to update database schema.`
-        )
-      }
 
       logger.error(`Error storing post ${postData.reddit_id}:`, error)
       throw error
@@ -409,9 +403,9 @@ class KnowledgeBase {
       }
 
       const embedding = await this.generateEmbedding(commentData.content)
-      if (!Array.isArray(embedding) || embedding.length !== this.embeddingDim) {
-        throw new Error(
-          `Invalid embedding dimension: got ${embedding.length}, expected ${this.embeddingDim}`
+      if (!embedding) {
+        logger.warn(
+          `Skipping embedding for comment ${commentData.reddit_id}; text search fallback only`
         )
       }
 
@@ -426,9 +420,15 @@ class KnowledgeBase {
           $11, $12, $13, $14
         )
         ON CONFLICT (reddit_id) DO UPDATE SET
+          post_reddit_id = EXCLUDED.post_reddit_id,
+          parent_comment_id = EXCLUDED.parent_comment_id,
+          author      = EXCLUDED.author,
+          content     = EXCLUDED.content,
+          created_utc = EXCLUDED.created_utc,
           upvotes     = EXCLUDED.upvotes,
           downvotes   = EXCLUDED.downvotes,
-          score       = EXCLUDED.score
+          score       = EXCLUDED.score,
+          embedding   = COALESCE(EXCLUDED.embedding, reddit_comments.embedding)
         RETURNING id
       `
       const result = await client.query(insertCommentSQL, [
@@ -445,7 +445,7 @@ class KnowledgeBase {
         commentData.depth,
         commentData.is_submitter,
         commentData.tags,
-        `[${embedding.join(',')}]`,
+        embedding ? `[${embedding.join(',')}]` : null,
       ])
 
       const commentId = result.rows[0].id
@@ -483,7 +483,7 @@ class KnowledgeBase {
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i]
       const embedding = await this.generateEmbedding(chunk)
-      if (!Array.isArray(embedding) || embedding.length !== this.embeddingDim) continue
+      if (!embedding) continue
 
       const insertChunkSQL = `
         INSERT INTO knowledge_chunks (
@@ -517,17 +517,27 @@ class KnowledgeBase {
 
   async generateEmbedding(text) {
     if (!text || !text.trim()) {
-      return new Array(this.embeddingDim).fill(0)
+      return null
     }
     try {
       const { embedding } = await embed({
         model: this.embeddingModel,
         value: text.substring(0, this.maxContextLength),
       })
+      if (!Array.isArray(embedding) || embedding.length !== this.embeddingDim) {
+        logger.error(
+          `Embedding dimension mismatch: got ${embedding?.length}, expected ${this.embeddingDim}`
+        )
+        return null
+      }
+      if (this.isZeroEmbedding(embedding)) {
+        logger.warn('Generated a zero embedding; skipping vector storage/search')
+        return null
+      }
       return embedding
     } catch (error) {
       logger.error('Error generating embedding:', error)
-      return new Array(this.embeddingDim).fill(0)
+      return null
     }
   }
   async search(query, limit = 10) {
@@ -572,8 +582,9 @@ class KnowledgeBase {
   }
   async vectorSearch(query, limit = 10) {
     const queryEmbedding = await this.generateEmbedding(query)
-    if (!Array.isArray(queryEmbedding) || queryEmbedding.length !== this.embeddingDim) {
-      throw new Error(`Invalid search embedding dimension: got ${queryEmbedding.length}`)
+    if (!queryEmbedding) {
+      logger.warn('Skipping vector search because query embedding is unavailable')
+      return []
     }
 
     const postLimit = Math.ceil(limit * 0.5)
@@ -949,6 +960,16 @@ class KnowledgeBase {
     }
 
     return unique
+  }
+
+  isZeroEmbedding(embedding) {
+    if (!Array.isArray(embedding) || embedding.length === 0) return true
+    let sum = 0
+    for (const val of embedding) {
+      sum += Math.abs(val)
+      if (sum > 1e-6) return false
+    }
+    return true
   }
 }
 

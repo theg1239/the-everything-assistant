@@ -56,6 +56,16 @@ const UI_TO_LEGACY_STATE: Record<AppToolState, LegacyToolInvocation['state']> = 
   'output-error': 'error',
 }
 
+const DYNAMIC_TO_LEGACY_STATE: Record<string, LegacyToolInvocation['state']> = {
+  'input-streaming': 'partial-call',
+  'input-available': 'call',
+  'approval-requested': 'call',
+  'approval-responded': 'call',
+  'output-available': 'result',
+  'output-error': 'error',
+  'output-denied': 'error',
+}
+
 type AppToolState = 'input-streaming' | 'input-available' | 'output-available' | 'output-error'
 
 export function legacyMessagesToUiMessages(messages: LegacyMessage[]): AppUIMessage[] {
@@ -129,20 +139,20 @@ export function uiMessageToLegacyMessage(message: AppUIMessage): LegacyMessage {
   if (Array.isArray(message.parts)) {
     for (const part of message.parts) {
       if (isToolUIPart(part)) {
-        const state = UI_TO_LEGACY_STATE[(part.state as AppToolState) || 'output-available']
+        const state =
+          part.type === 'dynamic-tool'
+            ? DYNAMIC_TO_LEGACY_STATE[part.state] ??
+              (part.errorText
+                ? 'error'
+                : part.output !== undefined
+                  ? 'result'
+                  : part.input !== undefined
+                    ? 'call'
+                    : undefined)
+            : UI_TO_LEGACY_STATE[(part.state as AppToolState) || 'output-available']
         toolInvocations.push({
           toolCallId: part.toolCallId || generateId(),
           toolName: getToolName(part) as string,
-          args: part.input as Record<string, any>,
-          result: part.output,
-          state,
-          error: part.errorText,
-        })
-      } else if (part.type === 'dynamic-tool') {
-        const state = part.output ? 'result' : 'call'
-        toolInvocations.push({
-          toolCallId: part.toolCallId || generateId(),
-          toolName: part.toolName,
           args: part.input as Record<string, any>,
           result: part.output,
           state,

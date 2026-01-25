@@ -30,7 +30,7 @@ import SystemStatistics from './components/system-statistics'
 import APIKeyManagement from './components/api-key-mgmt'
 import UserRateLimiting from './components/user-rate-limiting'
 import ManagementActions from './components/mgmt-actions'
-import BriefingDispatch from './components/briefing-dispatch'
+// import BriefingDispatch from './components/briefing-dispatch'
 import MgmtLayout from './components/mgmt-layout'
 import MgmtTabBar from './components/mgmt-tabbar'
 import Overview from './components/overview'
@@ -592,7 +592,7 @@ export default function ManagementClient() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.12 }}
               >
-                <BriefingDispatch />
+                {/* <BriefingDispatch /> */}
               </motion.div>
 
               <motion.div

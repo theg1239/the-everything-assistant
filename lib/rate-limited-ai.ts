@@ -242,11 +242,11 @@ export class RateLimitedAI {
     return fn(provider)
   }
 
-  getEmbeddingModel(modelName: string = modelIds.embedding): () => Promise<EmbeddingModel<string>> {
+  getEmbeddingModel(modelName: string = modelIds.embedding): () => Promise<EmbeddingModel> {
     return async () => {
       const key = await this.apiKeyManager.getCurrentKey()
       const google = createGoogleGenerativeAI({ apiKey: key })
-      return google.textEmbeddingModel(modelName) as unknown as EmbeddingModel<string>
+      return google.textEmbeddingModel(modelName) as unknown as EmbeddingModel
     }
   }
 
@@ -448,12 +448,12 @@ export class RateLimitedAI {
   async embed(
     options: { model?: { modelId: string }; value: string },
     userId?: string
-  ): Promise<EmbedResult<string>>
+  ): Promise<EmbedResult>
 
   async embed(
     options: { model?: { modelId: string }; values: string[] },
     userId?: string
-  ): Promise<EmbedManyResult<string>>
+  ): Promise<EmbedManyResult>
 
   async embed(
     options: {
@@ -462,7 +462,7 @@ export class RateLimitedAI {
       values?: string[]
     },
     userId?: string
-  ): Promise<EmbedResult<string> | EmbedManyResult<string>> {
+  ): Promise<EmbedResult | EmbedManyResult> {
     if (process.env.AI_EMBED_DEBUG === 'true') {
       const valueLen = typeof options.value === 'string' ? options.value.length : undefined
       const valuesCount = Array.isArray(options.values) ? options.values.length : undefined
@@ -478,7 +478,7 @@ export class RateLimitedAI {
       const google = createGoogleGenerativeAI({ apiKey: key })
       const modelFn = google.textEmbeddingModel(
         options.model?.modelId || modelIds.embedding
-      ) as unknown as EmbeddingModel<string>
+      ) as unknown as EmbeddingModel
       const safeModel = this.wrapModelWithWarningDefaults(modelFn as any)
 
       if (Array.isArray(options.values)) {

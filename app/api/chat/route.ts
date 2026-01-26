@@ -80,13 +80,6 @@ const isContentChunk = (chunk: UIMessageChunk): boolean => {
   switch (chunk.type) {
     case 'text-delta':
     case 'reasoning-delta':
-    case 'tool-input-start':
-    case 'tool-input-delta':
-    case 'tool-input-available':
-    case 'tool-input-error':
-    case 'tool-output-available':
-    case 'tool-output-error':
-    case 'tool-output-denied':
     case 'source-url':
     case 'source-document':
     case 'file':
@@ -574,8 +567,10 @@ export async function POST(req: Request) {
       await persistStreamError(error)
     }
 
-    const handleStreamChunk = () => {
-      markStreamContent()
+    const handleStreamChunk = ({ chunk }: { chunk: { type?: string } }) => {
+      if (chunk?.type === 'text-delta' || chunk?.type === 'reasoning-delta' || chunk?.type === 'source') {
+        markStreamContent()
+      }
     }
 
     const handleStepFinish = async ({

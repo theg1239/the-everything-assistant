@@ -39,6 +39,8 @@ import { buildSystemPrompt } from './lib/prompt'
 const getMessageText = (message: LegacyMessage | null | undefined): string =>
   message?.content ?? ''
 
+const CLIENT_ERROR_MESSAGE = 'An error occurred.'
+
 const getErrorText = (error: unknown): string => {
   if (typeof error === 'string') return error
   if (error && typeof error === 'object' && 'message' in error) {
@@ -525,19 +527,19 @@ export async function POST(req: Request) {
         console.log(`[MCP] Closed ${mcpClients.length} MCP client(s) after error`)
       }
 
-      try {
-        await saveMessage(
-          chat.id,
-          'assistant',
-          `I encountered an error while processing your request: ${
-            getErrorText(error) || 'Unknown streaming error'
-          }`,
-          [],
-          `error-${Date.now()}`
-        )
-        console.debug('Streaming error saved to database')
-      } catch (saveError) {
-        console.error('Failed to save streaming error:', saveError)
+      if (process.env.STREAM_ERRORS_TO_CHAT === 'true') {
+        try {
+          await saveMessage(
+            chat.id,
+            'assistant',
+            CLIENT_ERROR_MESSAGE,
+            [],
+            `error-${Date.now()}`
+          )
+          console.debug('Streaming error saved to database')
+        } catch (saveError) {
+          console.error('Failed to save streaming error:', saveError)
+        }
       }
     }
 
@@ -773,7 +775,7 @@ export async function POST(req: Request) {
     const uiStreamOnError = (error: unknown) => {
       const errorText = getErrorText(error)
       if (errorText) fallbackState.lastErrorText = errorText
-      return 'An error occurred while processing your request.'
+      return CLIENT_ERROR_MESSAGE
     }
 
     const uiStreamOptions = {
@@ -878,7 +880,7 @@ export async function POST(req: Request) {
       return new Response(
         JSON.stringify({
           error: 'RATE_LIMIT_EXCEEDED',
-          message: error.message,
+          message: CLIENT_ERROR_MESSAGE,
           type: 'user_rate_limit',
         }),
         { status: 429, headers: { 'Content-Type': 'application/json' } }
@@ -889,7 +891,7 @@ export async function POST(req: Request) {
       return new Response(
         JSON.stringify({
           error: 'RATE_LIMIT_EXCEEDED',
-          message: 'The model is currently overloaded. Please try again later.',
+          message: CLIENT_ERROR_MESSAGE,
           type: 'model_rate_limit',
         }),
         { status: 429, headers: { 'Content-Type': 'application/json' } }
@@ -897,7 +899,7 @@ export async function POST(req: Request) {
     }
 
     return new Response(
-      JSON.stringify({ error: error.message || 'An unexpected error occurred' }),
+      JSON.stringify({ error: CLIENT_ERROR_MESSAGE }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     )
   }

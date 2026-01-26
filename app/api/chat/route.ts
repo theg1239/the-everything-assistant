@@ -121,6 +121,14 @@ const isContentChunk = (chunk: UIMessageChunk): boolean => {
     case 'source-url':
     case 'source-document':
     case 'file':
+    case 'tool-input-available':
+    case 'tool-input-error':
+    case 'tool-approval-request':
+    case 'tool-output-available':
+    case 'tool-output-error':
+    case 'tool-output-denied':
+    case 'tool-input-start':
+    case 'tool-input-delta':
       return true
     default:
       return false
@@ -142,6 +150,96 @@ const streamToAsyncIterable = async function* <T>(
   }
 }
 
+const chunkText = (text: string, chunkSize = 1000): string[] => {
+  if (!text) return []
+  const chunks: string[] = []
+  for (let i = 0; i < text.length; i += chunkSize) {
+    chunks.push(text.slice(i, i + chunkSize))
+  }
+  return chunks
+}
+
+const enqueueTextFallback = (
+  controller: ReadableStreamDefaultController<UIMessageChunk>,
+  text: string,
+  messageMetadata?: unknown
+) => {
+  const textId = generateId()
+  controller.enqueue({ type: 'start' })
+  controller.enqueue({ type: 'start-step' })
+  controller.enqueue({ type: 'text-start', id: textId })
+  for (const chunk of chunkText(text)) {
+    controller.enqueue({ type: 'text-delta', id: textId, delta: chunk })
+  }
+  controller.enqueue({ type: 'text-end', id: textId })
+  controller.enqueue({ type: 'finish-step' })
+  controller.enqueue(
+    messageMetadata ? { type: 'finish', messageMetadata } : { type: 'finish' }
+  )
+}
+
+const ensureUiStreamHasContent = (
+  stream: ReadableStream<UIMessageChunk>,
+  fallbackTextFactory: () => Promise<string>,
+  getMessageMetadata?: () => unknown
+): ReadableStream<UIMessageChunk> => {
+  return new ReadableStream<UIMessageChunk>({
+    async start(controller) {
+      let hasContent = false
+      let sawChunk = false
+      let sawErrorChunk = false
+      let errorChunk: UIMessageChunk | null = null
+      const buffer: UIMessageChunk[] = []
+
+      for await (const chunk of streamToAsyncIterable(stream)) {
+        sawChunk = true
+        if (chunk?.type === 'error' && !hasContent) {
+          sawErrorChunk = true
+          errorChunk = chunk
+          break
+        }
+
+        if (!hasContent && isContentChunk(chunk)) {
+          hasContent = true
+          while (buffer.length > 0) {
+            controller.enqueue(buffer.shift()!)
+          }
+        }
+
+        if (!hasContent) {
+          buffer.push(chunk)
+          continue
+        }
+
+        controller.enqueue(chunk)
+      }
+
+      if (!hasContent) {
+        let fallbackText = ''
+        try {
+          fallbackText = await fallbackTextFactory()
+        } catch (error) {
+          console.warn('[Chat] fallback text generation failed', error)
+        }
+
+        if (fallbackText && fallbackText.trim().length > 0) {
+          enqueueTextFallback(controller, fallbackText, getMessageMetadata?.())
+        } else if (sawErrorChunk && errorChunk) {
+          controller.enqueue(errorChunk)
+        } else if (sawChunk) {
+          while (buffer.length > 0) {
+            controller.enqueue(buffer.shift()!)
+          }
+        } else {
+          controller.enqueue({ type: 'error', errorText: CLIENT_ERROR_MESSAGE })
+        }
+      }
+
+      controller.close()
+    },
+  })
+}
+
 const createFallbackUIStream = (
   primaryStream: ReadableStream<UIMessageChunk>,
   fallbackFactory: () => Promise<ReadableStream<UIMessageChunk>>,
@@ -151,6 +249,8 @@ const createFallbackUIStream = (
     async start(controller) {
       let hasContent = false
       let fallbackTriggered = false
+      let receivedChunk = false
+      let sawErrorChunk = false
       const buffer: UIMessageChunk[] = []
 
       const resolveFallbackErrorText = (
@@ -182,6 +282,10 @@ const createFallbackUIStream = (
 
       try {
         for await (const chunk of streamToAsyncIterable(primaryStream)) {
+          receivedChunk = true
+          if (chunk?.type === 'error') {
+            sawErrorChunk = true
+          }
           if (
             chunk?.type === 'error' &&
             !hasContent &&
@@ -211,6 +315,13 @@ const createFallbackUIStream = (
         }
 
         if (fallbackTriggered) {
+          await attemptFallback()
+        } else if (!hasContent && !sawErrorChunk) {
+          console.warn(
+            receivedChunk
+              ? '[Chat] Fallback triggered by stream with no content chunks'
+              : '[Chat] Fallback triggered by empty stream before content'
+          )
           await attemptFallback()
         } else if (!hasContent) {
           flushBuffer()
@@ -968,6 +1079,9 @@ export async function POST(req: Request) {
       console.warn(`[Chat] Falling back to OpenAI model ${fallbackModelId}`)
       const fallbackProvider = rateLimitedAI.openai
       const fallbackModel = await fallbackProvider.model(fallbackModelId)
+      const fallbackMessageMetadata = uiStreamOptions.messageMetadata
+        ? uiStreamOptions.messageMetadata({ part: { type: 'finish' } as any })
+        : undefined
       const fallbackStreamOptions = {
         ...baseStreamOptionsFor('openai', fallbackModelId),
         model: fallbackModel,
@@ -980,7 +1094,30 @@ export async function POST(req: Request) {
         fallbackStreamOptions,
         session.user.id
       )
-      return fallbackResult.toUIMessageStream(uiStreamOptions)
+      const fallbackUiStream = fallbackResult.toUIMessageStream(uiStreamOptions)
+      return ensureUiStreamHasContent(
+        fallbackUiStream,
+        async () => {
+          const generateOptions = {
+            model: fallbackModel,
+            messages: finalMessages,
+            tools,
+            maxRetries: 0,
+            maxOutputTokens: 40000,
+            ...(shouldIncludeTemperature('openai', fallbackModelId)
+              ? { temperature: 0.3 }
+              : {}),
+            providerOptions: buildOpenAIProviderOptions(fallbackModelId),
+            middleware: [],
+          }
+          const generated = await fallbackProvider.generateText(
+            generateOptions,
+            session.user.id
+          )
+          return generated?.text ?? ''
+        },
+        () => fallbackMessageMetadata
+      )
     }
 
     const fallbackFactory = async () => {

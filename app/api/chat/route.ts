@@ -76,7 +76,15 @@ const isFallbackErrorText = (errorText: string): boolean => {
     msg.includes('no_valid_api_keys_available') ||
     msg.includes('all_keys_exhausted') ||
     msg.includes('maxretriesexceeded') ||
-    msg.includes('max retries exceeded')
+    msg.includes('max retries exceeded') ||
+    msg.includes('overloaded') ||
+    msg.includes('unavailable') ||
+    msg.includes('service unavailable') ||
+    msg.includes('temporarily unavailable') ||
+    msg.includes('503') ||
+    msg.includes('internal error') ||
+    msg.includes('backend error') ||
+    msg.includes('server error')
   )
 }
 
@@ -89,7 +97,16 @@ const isRetrySkippableErrorText = (errorText: string): boolean => {
     msg.includes('resource_exhausted') ||
     msg.includes('429') ||
     msg.includes('timeout') ||
-    msg.includes('timed out')
+    msg.includes('timed out') ||
+    msg.includes('overloaded') ||
+    msg.includes('unavailable') ||
+    msg.includes('service unavailable') ||
+    msg.includes('temporarily unavailable') ||
+    msg.includes('503') ||
+    msg.includes('internal error') ||
+    msg.includes('backend error') ||
+    msg.includes('server error') ||
+    msg.includes('model_overloaded')
   )
 }
 

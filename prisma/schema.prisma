@@ -1,7 +1,7 @@
 generator client {
-  provider = "prisma-client"
+  provider        = "prisma-client"
   previewFeatures = ["relationJoins"]
-  output   = "./generated"
+  output          = "./generated"
 }
 
 datasource db {
@@ -47,7 +47,7 @@ model User {
   preferences   Json?     @default("{}")
   created_at    DateTime  @default(now())
   updated_at    DateTime  @default(now()) @updatedAt
-  
+
   mfaEnabled     Boolean   @default(false)
   mfaMethod      String?
   mfaSecret      String?
@@ -55,17 +55,17 @@ model User {
   tempMfaSecret  String?
   tempMfaMethod  String?
   tempMfaExpires DateTime?
-  
-  accounts    Account[]
-  sessions    Session[]
-  chats       Chat[]
-  securityLogs SecurityLog[]
-  memories     Memory[]
-  memorySettings MemorySettings?
-  webAuthnCredentials WebAuthnCredential[]
+
+  accounts              Account[]
+  sessions              Session[]
+  chats                 Chat[]
+  securityLogs          SecurityLog[]
+  memories              Memory[]
+  memorySettings        MemorySettings?
+  webAuthnCredentials   WebAuthnCredential[]
   whatsappConversations WhatsAppConversation[]
-  vtopSnapshots VTOPSnapshot[]
-  shares ChatShare[]
+  vtopSnapshots         VTOPSnapshot[]
+  shares                ChatShare[]
 
   @@index([email])
   @@map("users")
@@ -88,13 +88,13 @@ model Chat {
   archived   Boolean  @default(false)
   created_at DateTime @default(now())
   updated_at DateTime @default(now()) @updatedAt
-  
-  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages          Message[]
-  canvas_documents  CanvasDocument[]
-  votes             Vote[]
-  streamIds         StreamId[]
-  shares            ChatShare[]
+
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages         Message[]
+  canvas_documents CanvasDocument[]
+  votes            Vote[]
+  streamIds        StreamId[]
+  shares           ChatShare[]
 
   @@index([userId, archived, updated_at(sort: Desc)])
   @@index([userId, updated_at(sort: Desc)])
@@ -119,14 +119,14 @@ model ChatShare {
 }
 
 model Message {
-  id              String   @id @default(cuid())
-  chatId          String
-  role            String
-  content         String
+  id               String   @id @default(cuid())
+  chatId           String
+  role             String
+  content          String
   tool_invocations Json?
-  attachments     Json?
-  created_at      DateTime @default(now())
-  
+  attachments      Json?
+  created_at       DateTime @default(now())
+
   chat  Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
   votes Vote[]
 
@@ -143,7 +143,7 @@ model CanvasDocument {
   type       String
   created_at DateTime @default(now())
   updated_at DateTime @default(now()) @updatedAt
-  
+
   chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
 
   @@index([chatId, created_at(sort: Desc)])
@@ -154,7 +154,7 @@ model Vote {
   chatId     String
   messageId  String
   is_upvoted Boolean
-  
+
   chat    Chat    @relation(fields: [chatId], references: [id], onDelete: Cascade)
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
@@ -186,24 +186,24 @@ model Migration {
 }
 
 model Memory {
-  id          String   @id @default(cuid())
-  userId      String
-  content     String
-  tags        String[] @default([])
-  importance  Int      @default(1)
-  lastUsedAt  DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  id         String   @id @default(cuid())
+  userId     String
+  content    String
+  tags       String[] @default([])
+  importance Int      @default(1)
+  lastUsedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, importance, lastUsedAt(sort: Desc)])
   @@index([userId, updatedAt(sort: Desc)])
   @@map("memories")
 }
 
 model MemorySettings {
-  id              String   @id @default(cuid())
+  id             String   @id @default(cuid())
   userId         String   @unique
   isEnabled      Boolean  @default(true)
   maxTokens      Int      @default(2000)
@@ -211,9 +211,9 @@ model MemorySettings {
   autoSaveFilter String   @default("medium")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-  
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@map("memory_settings")
 }
 
@@ -222,26 +222,26 @@ model StreamId {
   streamId  String   @unique
   chatId    String
   createdAt DateTime @default(now())
-  
+
   chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  
+
   @@index([chatId, createdAt])
   @@map("stream_ids")
 }
 
 model WebAuthnCredential {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   userId       String
-  credentialId String   @unique
+  credentialId String    @unique
   publicKey    Bytes
   counter      BigInt
-  transports   String[] @default([])
+  transports   String[]  @default([])
   name         String?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
   lastUsedAt   DateTime?
-  
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@map("webauthn_credentials")
 }
@@ -274,18 +274,18 @@ model TokenUsage {
 }
 
 model WhatsAppConversation {
-  id          String   @id @default(cuid())
-  phoneNumber String   @unique
-  userName    String?
-  userId      String?
-  isActive    Boolean  @default(true)
+  id            String   @id @default(cuid())
+  phoneNumber   String   @unique
+  userName      String?
+  userId        String?
+  isActive      Boolean  @default(true)
   lastMessageAt DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  messages    WhatsAppMessage[]
-  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user     User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  messages WhatsAppMessage[]
+
   @@index([phoneNumber])
   @@index([userId])
   @@index([lastMessageAt(sort: Desc)])
@@ -293,20 +293,20 @@ model WhatsAppConversation {
 }
 
 model WhatsAppMessage {
-  id             String   @id @default(cuid())
-  conversationId String
-  messageId      String   @unique
-  direction      String
-  content        String
-  messageType    String   @default("text")
-  status         String   @default("sent")
-  isCommand      Boolean  @default(false)
-  command        String?
-  aiResponse     String?
+  id               String   @id @default(cuid())
+  conversationId   String
+  messageId        String   @unique
+  direction        String
+  content          String
+  messageType      String   @default("text")
+  status           String   @default("sent")
+  isCommand        Boolean  @default(false)
+  command          String?
+  aiResponse       String?
   processingTimeMs Int?
-  createdAt      DateTime @default(now())
-  
-  conversation   WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+
+  conversation WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
   @@index([direction, createdAt])

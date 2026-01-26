@@ -1,5 +1,11 @@
-import { smoothStream, extractReasoningMiddleware, createUIMessageStreamResponse, generateId, stepCountIs } from 'ai'
-import { inspect } from 'util'
+import {
+  smoothStream,
+  extractReasoningMiddleware,
+  createUIMessageStreamResponse,
+  generateId,
+  stepCountIs,
+  type UIMessageChunk,
+} from 'ai'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { createVITTools } from '@/lib/tools'
 import { getServerSession } from 'next-auth'
@@ -32,6 +38,164 @@ import { buildSystemPrompt } from './lib/prompt'
 
 const getMessageText = (message: LegacyMessage | null | undefined): string =>
   message?.content ?? ''
+
+const getErrorText = (error: unknown): string => {
+  if (typeof error === 'string') return error
+  if (error && typeof error === 'object' && 'message' in error) {
+    const msg = (error as { message?: unknown }).message
+    if (typeof msg === 'string') return msg
+  }
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return String(error)
+  }
+}
+
+const isFallbackErrorText = (errorText: string): boolean => {
+  const msg = (errorText || '').toLowerCase()
+  return (
+    msg.includes('quota') ||
+    msg.includes('rate limit') ||
+    msg.includes('rate-limit') ||
+    msg.includes('too many requests') ||
+    msg.includes('resource_exhausted') ||
+    msg.includes('429') ||
+    msg.includes('all api keys failed') ||
+    msg.includes('all_keys_rate_limited') ||
+    msg.includes('no_valid_api_keys_available') ||
+    msg.includes('all_keys_exhausted') ||
+    msg.includes('maxretriesexceeded') ||
+    msg.includes('max retries exceeded')
+  )
+}
+
+const isContentChunk = (chunk: UIMessageChunk): boolean => {
+  if (!chunk || typeof chunk !== 'object') return false
+  if ('type' in chunk && typeof chunk.type === 'string' && chunk.type.startsWith('data-')) {
+    return true
+  }
+  switch (chunk.type) {
+    case 'text-delta':
+    case 'reasoning-delta':
+    case 'tool-input-start':
+    case 'tool-input-delta':
+    case 'tool-input-available':
+    case 'tool-input-error':
+    case 'tool-output-available':
+    case 'tool-output-error':
+    case 'tool-output-denied':
+    case 'source-url':
+    case 'source-document':
+    case 'file':
+      return true
+    default:
+      return false
+  }
+}
+
+const streamToAsyncIterable = async function* <T>(
+  stream: ReadableStream<T>
+): AsyncIterable<T> {
+  const reader = stream.getReader()
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      yield value
+    }
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+const createFallbackUIStream = (
+  primaryStream: ReadableStream<UIMessageChunk>,
+  fallbackFactory: () => Promise<ReadableStream<UIMessageChunk>>,
+  getFallbackErrorText?: () => string | null
+): ReadableStream<UIMessageChunk> => {
+  return new ReadableStream<UIMessageChunk>({
+    async start(controller) {
+      let hasContent = false
+      let fallbackTriggered = false
+      const buffer: UIMessageChunk[] = []
+
+      const resolveFallbackErrorText = (
+        chunk?: UIMessageChunk,
+        error?: unknown
+      ): string => {
+        const candidate = getFallbackErrorText?.()
+        if (candidate) return candidate
+        if (chunk?.type === 'error' && typeof chunk.errorText === 'string') {
+          return chunk.errorText
+        }
+        if (error) return getErrorText(error)
+        return ''
+      }
+
+      const flushBuffer = () => {
+        while (buffer.length > 0) {
+          controller.enqueue(buffer.shift()!)
+        }
+      }
+
+      const attemptFallback = async () => {
+        const fallbackStream = await fallbackFactory()
+        for await (const chunk of streamToAsyncIterable(fallbackStream)) {
+          controller.enqueue(chunk)
+        }
+      }
+
+      try {
+        for await (const chunk of streamToAsyncIterable(primaryStream)) {
+          if (
+            chunk?.type === 'error' &&
+            !hasContent &&
+            isFallbackErrorText(resolveFallbackErrorText(chunk))
+          ) {
+            fallbackTriggered = true
+            try {
+              await primaryStream.cancel()
+            } catch {}
+            break
+          }
+
+          if (!hasContent && isContentChunk(chunk)) {
+            hasContent = true
+            flushBuffer()
+          }
+
+          if (!hasContent && chunk?.type !== 'error') {
+            buffer.push(chunk)
+            continue
+          }
+
+          controller.enqueue(chunk)
+        }
+
+        if (fallbackTriggered) {
+          await attemptFallback()
+        } else if (!hasContent) {
+          flushBuffer()
+        }
+      } catch (error) {
+        if (!hasContent && isFallbackErrorText(resolveFallbackErrorText(undefined, error))) {
+          try {
+            await attemptFallback()
+          } catch (fallbackError) {
+            controller.error(fallbackError)
+            return
+          }
+        } else {
+          controller.error(error)
+          return
+        }
+      }
+
+      controller.close()
+    },
+  })
+}
 
 function extractAttachmentsFromParts(
   parts: LegacyMessage['parts'] | AppUIMessage['parts']
@@ -249,10 +413,7 @@ export async function POST(req: Request) {
       !isExistingChat,
       { thinkHarder: thinkHarder ?? false, isAdmin }
     )
-    const promptCacheKey =
-      model.provider === 'openai'
-        ? `pc:v1:${chat.id.slice(0, 40)}`
-        : undefined
+    const openaiPromptCacheKey = `pc:v1:${chat.id.slice(0, 40)}`
 
     const hasConversationContent = finalMessages.some(msg => msg.role !== 'system')
 
@@ -287,6 +448,35 @@ export async function POST(req: Request) {
       tagName: 'reasoning',
     })
 
+    const hasOpenAIKeys = (() => {
+      if (process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEYS) return true
+      for (let i = 2; i <= 10; i++) {
+        if (process.env[`OPENAI_API_KEY_${i}`]) return true
+      }
+      return false
+    })()
+
+    const canFallbackToOpenAI = model.provider === 'google' && hasOpenAIKeys
+    const fallbackState = {
+      hasContent: false,
+      lastErrorText: '',
+    }
+
+    const markStreamContent = () => {
+      if (!fallbackState.hasContent) fallbackState.hasContent = true
+    }
+
+    const buildOpenAIProviderOptions = (modelId: string) => ({
+      openai: {
+        parallelToolCalls: true,
+        store: false,
+        maxToolCalls: 4,
+        reasoningSummary: 'detailed',
+        promptCacheKey: openaiPromptCacheKey,
+        ...(modelId.startsWith('gpt-5.1') ? { promptCacheRetention: '24h' } : {}),
+      },
+    })
+
     const providerClient = rateLimitedAI[model.provider as keyof typeof rateLimitedAI]
     if (!providerClient) {
       throw new Error(`Unsupported model provider: ${model.provider}`)
@@ -305,223 +495,246 @@ export async function POST(req: Request) {
             },
           }
         : model.provider === 'openai'
-          ? {
-              openai: {
-                parallelToolCalls: true,
-                store: false,
-                maxToolCalls: 4,
-                reasoningSummary: 'detailed',
-                promptCacheKey,
-                ...(model.modelId.startsWith('gpt-5.1')
-                  ? { promptCacheRetention: '24h' }
-                  : {}),
-              },
-            }
+          ? buildOpenAIProviderOptions(model.modelId)
           : undefined
 
-    const resultStream = await providerClient.streamText(
-      {
-        model: resolvedModel,
-        messages: finalMessages,
-        tools,
-        temperature: 0.3,
-        maxTokens: 40000,
-        ...(providerOptions ? { providerOptions } : {}),
-        experimental_transform: smoothStream({ chunking: 'word' }),
-        middleware: model.provider === 'openai' ? [] : [reasoningMiddleware],
-        stopWhen: stepCountIs(10),
-        onError: async (error: any) => {
-          console.error('Streaming error occurred:', error)
+    const persistStreamError = async (error: any) => {
+      console.error('Streaming error occurred:', error)
 
-          if (mcpClients.length > 0) {
-            await closeMCPClients(mcpClients)
-            console.log(`[MCP] Closed ${mcpClients.length} MCP client(s) after error`)
-          }
+      if (mcpClients.length > 0) {
+        await closeMCPClients(mcpClients)
+        console.log(`[MCP] Closed ${mcpClients.length} MCP client(s) after error`)
+      }
 
-          try {
-            await saveMessage(
-              chat.id,
-              'assistant',
-              `I encountered an error while processing your request: ${error.message || 'Unknown streaming error'}`,
-              [],
-              `error-${Date.now()}`
-            )
-            console.debug('Streaming error saved to database')
-          } catch (saveError) {
-            console.error('Failed to save streaming error:', saveError)
-          }
-        },
-        onStepFinish: async ({
-          text,
-          toolCalls,
-          toolResults,
-          finishReason,
-          usage,
-          stepIndex,
-          reasoning,
-        }: any) => {
-          try {
-            if (usage && typeof usage === 'object') {
-              const usageTotals = normalizeTokenUsage(usage)
-              const { saveTokenUsage } = await import('@/lib/db')
-              await saveTokenUsage({
-                userId: session.user.id,
-                chatId: chat.id,
-                model: model.modelId,
-                stepIndex: typeof stepIndex === 'number' ? stepIndex : null,
-                promptTokens: usageTotals.promptTokens,
-                completionTokens: usageTotals.completionTokens,
-                totalTokens: usageTotals.totalTokens,
-                meta: { finishReason },
-              })
-              if (finishReason === 'stop') {
-                savedFinalStepUsage = true
-              }
-            }
-          } catch (e) {
-            console.warn('Failed to persist step usage:', e)
-          }
+      try {
+        await saveMessage(
+          chat.id,
+          'assistant',
+          `I encountered an error while processing your request: ${
+            getErrorText(error) || 'Unknown streaming error'
+          }`,
+          [],
+          `error-${Date.now()}`
+        )
+        console.debug('Streaming error saved to database')
+      } catch (saveError) {
+        console.error('Failed to save streaming error:', saveError)
+      }
+    }
 
-          const knowledgeBaseCalls =
-            toolCalls?.filter((tc: any) => tc.toolName === 'knowledgeBase') || []
-        },
-        onFinish: async (result: any, { reasoning }: any = {}) => {
-          const allToolResults: any[] = []
+    const handlePrimaryStreamError = async (error: any) => {
+      const errorText = getErrorText(error)
+      fallbackState.lastErrorText = errorText
+      const shouldFallback =
+        canFallbackToOpenAI && !fallbackState.hasContent && isFallbackErrorText(errorText)
+      if (shouldFallback) {
+        console.warn('[Chat] Primary stream error before content; attempting OpenAI fallback')
+        return
+      }
+      await persistStreamError(error)
+    }
 
-          const finalToolResults = (result as any).toolResults ?? result.toolCalls ?? []
-          allToolResults.push(...finalToolResults)
+    const handleFallbackStreamError = async (error: any) => {
+      fallbackState.lastErrorText = getErrorText(error)
+      await persistStreamError(error)
+    }
 
-          if ((result as any).steps) {
-            for (const step of (result as any).steps) {
-              const stepToolResults = step.toolResults ?? step.toolCalls ?? []
-              allToolResults.push(...stepToolResults)
-            }
-          }
+    const handleStreamChunk = () => {
+      markStreamContent()
+    }
 
-          const uniqueToolResults = allToolResults.filter(
-            (result, index, array) =>
-              index === array.findIndex(r => r.toolCallId === result.toolCallId)
-          )
-
-          if (directToolCallResult) {
-            const existingIndex = uniqueToolResults.findIndex(
-              r => r.toolCallId === directToolCallResult.toolCallId
-            )
-            if (existingIndex === -1) {
-              uniqueToolResults.push(directToolCallResult)
-            } else {
-              uniqueToolResults[existingIndex] = directToolCallResult
-            }
-          }
-
-          for (const tr of uniqueToolResults) {
-            const toolOutput = getToolOutputPayload(tr)
-            if (
-              tr.toolName === 'queryVTOP' &&
-              toolOutput?.success &&
-              toolOutput.data &&
-              !toolOutput.parsedData
-            ) {
-              try {
-                const userContext =
-                  messages && messages.length > 0
-                    ? messages
-                        .filter((m: any) => m.role === 'user')
-                        .slice(-3)
-                        .map((m: any) => m.content)
-                        .join(' | ')
-                    : ''
-                const parsed = await parseVTOPData(
-                  toolOutput,
-                  getToolInputPayload(tr)?.command || 'data',
-                  userContext,
-                  session.user.id
-                )
-                Object.assign(toolOutput, {
-                  parsedData: parsed,
-                  formatted_content: (parsed as any).formatted_content,
-                  structured_data: (parsed as any).structured_data,
-                  summary: (parsed as any).summary,
-                })
-              } catch (e) {
-                console.error('Failed to parse VTOP data in final result:', e)
-              }
-            }
-          }
-
-          const allInvocations = uniqueToolResults.map((tr: any) => {
-            const toolOutput = getToolOutputPayload(tr)
-            const toolArgs = getToolInputPayload(tr) || {}
-            return {
-              toolCallId: tr.toolCallId || `${tr.toolName}-${Date.now()}`,
-              toolName: tr.toolName,
-              args: toolArgs,
-              result: toolOutput || null,
-              state: inferLegacyToolState(tr, toolOutput),
-            }
+    const handleStepFinish = async ({
+      text,
+      toolCalls,
+      toolResults,
+      finishReason,
+      usage,
+      stepIndex,
+      reasoning,
+    }: any) => {
+      try {
+        if (usage && typeof usage === 'object') {
+          const usageTotals = normalizeTokenUsage(usage)
+          const { saveTokenUsage } = await import('@/lib/db')
+          await saveTokenUsage({
+            userId: session.user.id,
+            chatId: chat.id,
+            model: model.modelId,
+            stepIndex: typeof stepIndex === 'number' ? stepIndex : null,
+            promptTokens: usageTotals.promptTokens,
+            completionTokens: usageTotals.completionTokens,
+            totalTokens: usageTotals.totalTokens,
+            meta: { finishReason },
           })
+          if (finishReason === 'stop') {
+            savedFinalStepUsage = true
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to persist step usage:', e)
+      }
 
-          const safeInvocations = sanitizeToolInvocations(allInvocations)
+      const knowledgeBaseCalls =
+        toolCalls?.filter((tc: any) => tc.toolName === 'knowledgeBase') || []
+    }
 
+    const handleFinish = async (result: any, { reasoning }: any = {}) => {
+      const allToolResults: any[] = []
+
+      const finalToolResults = (result as any).toolResults ?? result.toolCalls ?? []
+      allToolResults.push(...finalToolResults)
+
+      if ((result as any).steps) {
+        for (const step of (result as any).steps) {
+          const stepToolResults = step.toolResults ?? step.toolCalls ?? []
+          allToolResults.push(...stepToolResults)
+        }
+      }
+
+      const uniqueToolResults = allToolResults.filter(
+        (result, index, array) =>
+          index === array.findIndex(r => r.toolCallId === result.toolCallId)
+      )
+
+      if (directToolCallResult) {
+        const existingIndex = uniqueToolResults.findIndex(
+          r => r.toolCallId === directToolCallResult.toolCallId
+        )
+        if (existingIndex === -1) {
+          uniqueToolResults.push(directToolCallResult)
+        } else {
+          uniqueToolResults[existingIndex] = directToolCallResult
+        }
+      }
+
+      for (const tr of uniqueToolResults) {
+        const toolOutput = getToolOutputPayload(tr)
+        if (
+          tr.toolName === 'queryVTOP' &&
+          toolOutput?.success &&
+          toolOutput.data &&
+          !toolOutput.parsedData
+        ) {
           try {
-            await saveMessage(
-              chat.id,
-              'assistant',
-              result.text,
-              safeInvocations,
-              result.response.id
+            const userContext =
+              messages && messages.length > 0
+                ? messages
+                    .filter((m: any) => m.role === 'user')
+                    .slice(-3)
+                    .map((m: any) => m.content)
+                    .join(' | ')
+                : ''
+            const parsed = await parseVTOPData(
+              toolOutput,
+              getToolInputPayload(tr)?.command || 'data',
+              userContext,
+              session.user.id
             )
-            console.debug('Final message saved with tool invocations')
-          } catch (error) {
-            console.error('Failed to save final message:', error)
-            try {
-              await saveMessage(chat.id, 'assistant', result.text, [], result.response.id)
-              console.debug('Final message saved without tool invocations (fallback)')
-            } catch (fallbackError) {
-              console.error(
-                'Failed to save final message even without tool invocations:',
-                fallbackError
-              )
-            }
-          }
-
-          try {
-            const finalUsage = (result as any)?.usage
-            if (!savedFinalStepUsage && finalUsage && typeof finalUsage === 'object') {
-              const usageTotals = normalizeTokenUsage(finalUsage)
-              const { saveTokenUsage } = await import('@/lib/db')
-              await saveTokenUsage({
-                userId: session.user.id,
-                chatId: chat.id,
-                model: model.modelId,
-                stepIndex: null,
-                promptTokens: usageTotals.promptTokens,
-                completionTokens: usageTotals.completionTokens,
-                totalTokens: usageTotals.totalTokens,
-                meta: { type: 'final' },
-              })
-            }
+            Object.assign(toolOutput, {
+              parsedData: parsed,
+              formatted_content: (parsed as any).formatted_content,
+              structured_data: (parsed as any).structured_data,
+              summary: (parsed as any).summary,
+            })
           } catch (e) {
-            console.warn('Failed to persist final usage:', e)
+            console.error('Failed to parse VTOP data in final result:', e)
           }
+        }
+      }
 
-          if (mcpClients.length > 0) {
-            await closeMCPClients(mcpClients)
-            console.log(`[MCP] Closed ${mcpClients.length} MCP client(s)`)
-          }
-        },
-      },
-      session.user.id
-    )
+      const allInvocations = uniqueToolResults.map((tr: any) => {
+        const toolOutput = getToolOutputPayload(tr)
+        const toolArgs = getToolInputPayload(tr) || {}
+        return {
+          toolCallId: tr.toolCallId || `${tr.toolName}-${Date.now()}`,
+          toolName: tr.toolName,
+          args: toolArgs,
+          result: toolOutput || null,
+          state: inferLegacyToolState(tr, toolOutput),
+        }
+      })
 
-    return resultStream.toUIMessageStreamResponse({
+      const safeInvocations = sanitizeToolInvocations(allInvocations)
+
+      try {
+        await saveMessage(
+          chat.id,
+          'assistant',
+          result.text,
+          safeInvocations,
+          result.response.id
+        )
+        console.debug('Final message saved with tool invocations')
+      } catch (error) {
+        console.error('Failed to save final message:', error)
+        try {
+          await saveMessage(chat.id, 'assistant', result.text, [], result.response.id)
+          console.debug('Final message saved without tool invocations (fallback)')
+        } catch (fallbackError) {
+          console.error(
+            'Failed to save final message even without tool invocations:',
+            fallbackError
+          )
+        }
+      }
+
+      try {
+        const finalUsage = (result as any)?.usage
+        if (!savedFinalStepUsage && finalUsage && typeof finalUsage === 'object') {
+          const usageTotals = normalizeTokenUsage(finalUsage)
+          const { saveTokenUsage } = await import('@/lib/db')
+          await saveTokenUsage({
+            userId: session.user.id,
+            chatId: chat.id,
+            model: model.modelId,
+            stepIndex: null,
+            promptTokens: usageTotals.promptTokens,
+            completionTokens: usageTotals.completionTokens,
+            totalTokens: usageTotals.totalTokens,
+            meta: { type: 'final' },
+          })
+        }
+      } catch (e) {
+        console.warn('Failed to persist final usage:', e)
+      }
+
+      if (mcpClients.length > 0) {
+        await closeMCPClients(mcpClients)
+        console.log(`[MCP] Closed ${mcpClients.length} MCP client(s)`)
+      }
+    }
+
+    const baseStreamOptions = {
+      messages: finalMessages,
+      tools,
+      temperature: 0.3,
+      maxTokens: 40000,
+      experimental_transform: smoothStream({ chunking: 'word' }),
+      stopWhen: stepCountIs(10),
+      onChunk: handleStreamChunk,
+      onStepFinish: handleStepFinish,
+      onFinish: handleFinish,
+    }
+
+    const primaryStreamOptions = {
+      ...baseStreamOptions,
+      model: resolvedModel,
+      ...(providerOptions ? { providerOptions } : {}),
+      middleware: model.provider === 'openai' ? [] : [reasoningMiddleware],
+      onError: handlePrimaryStreamError,
+    }
+
+    const resultStream = await providerClient.streamText(primaryStreamOptions, session.user.id)
+
+    const uiStreamOnError = (error: unknown) => {
+      const errorText = getErrorText(error)
+      if (errorText) fallbackState.lastErrorText = errorText
+      return 'An error occurred while processing your request.'
+    }
+
+    const uiStreamOptions = {
       originalMessages: uiMessages,
       generateMessageId: generateId,
-      headers: {
-        'X-Chat-Id': chat.id,
-        'X-Chat-Path': `/chat/${chat.id}`,
-        'X-Chat-Title': chat.title,
-      },
       messageMetadata: ({ part }: { part: { type: string } }) => {
         if (part.type === 'finish') {
           return {
@@ -531,7 +744,41 @@ export async function POST(req: Request) {
           }
         }
       },
-      onError: () => 'An error occurred while processing your request.',
+      onError: uiStreamOnError,
+    }
+
+    const primaryUIStream = resultStream.toUIMessageStream(uiStreamOptions)
+
+    const fallbackFactory = async () => {
+      const fallbackModelId = process.env.OPENAI_FALLBACK_MODEL || 'gpt-5-nano'
+      console.warn(`[Chat] Falling back to OpenAI model ${fallbackModelId}`)
+      const fallbackProvider = rateLimitedAI.openai
+      const fallbackModel = await fallbackProvider.model(fallbackModelId)
+      const fallbackStreamOptions = {
+        ...baseStreamOptions,
+        model: fallbackModel,
+        providerOptions: buildOpenAIProviderOptions(fallbackModelId),
+        middleware: [],
+        onError: handleFallbackStreamError,
+      }
+      const fallbackResult = await fallbackProvider.streamText(
+        fallbackStreamOptions,
+        session.user.id
+      )
+      return fallbackResult.toUIMessageStream(uiStreamOptions)
+    }
+
+    const stream = canFallbackToOpenAI
+      ? createFallbackUIStream(primaryUIStream, fallbackFactory, () => fallbackState.lastErrorText)
+      : primaryUIStream
+
+    return createUIMessageStreamResponse({
+      headers: {
+        'X-Chat-Id': chat.id,
+        'X-Chat-Path': `/chat/${chat.id}`,
+        'X-Chat-Title': chat.title,
+      },
+      stream,
     })
   } catch (error: any) {
     console.error('Chat API error:', error)

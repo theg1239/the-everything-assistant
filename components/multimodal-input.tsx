@@ -23,6 +23,7 @@ import type { Attachment } from '@/types/attachment'
 import { AttachmentPreview } from '@/components/attachment-preview'
 import type { MCPClientConfig } from '@/lib/mcp-config'
 import { Streamdown } from 'streamdown'
+import { streamdownRemarkPlugins } from '@/lib/streamdown-config'
 
 type PdfLibModule = typeof import('pdf-lib')
 type MammothModule = typeof import('mammoth/mammoth.browser')
@@ -820,7 +821,9 @@ const PureMultimodalInput = ({
           {quotedText && (
             <div className="flex items-start gap-3 px-4 pt-4 pb-3 border-b border-border/30 bg-muted/20">
               <div className="flex-1 text-sm text-muted-foreground border-l-2 border-primary/50 pl-3 py-1 line-clamp-3">
-                <Streamdown className="streamdown-content">{quotedText}</Streamdown>
+                <Streamdown className="streamdown-content" remarkPlugins={streamdownRemarkPlugins}>
+                  {quotedText}
+                </Streamdown>
               </div>
               <Button
                 type="button"

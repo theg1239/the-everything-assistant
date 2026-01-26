@@ -2,7 +2,6 @@
 
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
-import { Streamdown } from 'streamdown'
 import { OptimizedMarkdown } from './optimized-markdown'
 import { ToolCallDisplay } from './tool-call-display'
 import { MusicPlayerToolHandler } from './music-player-tool-handler'
@@ -127,6 +126,7 @@ const ReasoningPanel = memo(function ReasoningPanel({
   const [startTime, setStartTime] = useState<number | null>(null)
   const [manuallyToggled, setManuallyToggled] = useState(false)
   const panelId = useId()
+  const markdownId = useId()
 
   useEffect(() => {
     if (isStreaming) {
@@ -198,9 +198,7 @@ const ReasoningPanel = memo(function ReasoningPanel({
       >
         <div className="pl-4 border-l-2 border-primary/10 mt-1 ml-[5px] hover:border-primary/20 transition-colors">
           <div className="text-muted-foreground text-sm leading-relaxed py-1">
-            <Streamdown className="streamdown-content">
-              {text}
-            </Streamdown>
+            <OptimizedMarkdown id={markdownId} content={text} isAnimating={isStreaming} />
           </div>
         </div>
       </div>

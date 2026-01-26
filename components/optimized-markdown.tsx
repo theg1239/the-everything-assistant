@@ -1,9 +1,8 @@
 'use client'
 
-import { memo, useMemo } from 'react'
-import { Streamdown, defaultRemarkPlugins } from 'streamdown'
-import remarkMath from 'remark-math'
-import type { PluggableList } from 'unified'
+import { memo } from 'react'
+import { Streamdown } from 'streamdown'
+import { streamdownRemarkPlugins } from '@/lib/streamdown-config'
 
 type OptimizedMarkdownProps = {
   id: string
@@ -13,23 +12,13 @@ type OptimizedMarkdownProps = {
 
 export const OptimizedMarkdown = memo(
   function PureOptimizedMarkdown({ id, content, isAnimating = false }: OptimizedMarkdownProps) {
-    const remarkPlugins = useMemo<PluggableList>(
-      () => [
-        defaultRemarkPlugins.gfm,
-        [remarkMath, { singleDollarTextMath: true }],
-        defaultRemarkPlugins.cjkFriendly,
-        defaultRemarkPlugins.cjkFriendlyGfmStrikethrough,
-      ],
-      []
-    )
-
     return (
       <Streamdown
         key={id}
         className="streamdown-content"
         isAnimating={isAnimating}
         mode={isAnimating ? 'streaming' : 'static'}
-        remarkPlugins={remarkPlugins}
+        remarkPlugins={streamdownRemarkPlugins}
         controls={{
           table: true,
           code: true,

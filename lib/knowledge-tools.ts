@@ -3,7 +3,7 @@ import * as z from 'zod/v3';
 import { getContextForAIPrompt } from './data/context-integration'
 import { rateLimitedAI } from './rate-limited-ai'
 import { searchRedditWithContext } from './tools'
-import { modelIds } from './model-registry'
+import { ragEmbeddingModelId, ragEmbeddingProvider } from './rag-config'
 
 let _ragPool: import('pg').Pool | null = null
 export async function getRagPool() {
@@ -39,8 +39,10 @@ export function createKnowledgeTools() {
       console.info('[knowledgeBase] incoming query:', query)
       console.debug('[knowledgeBase] max_chunks:', max_chunks)
       try {
-        const { embedding: vector } = await rateLimitedAI.google.embed({
-          model: { modelId: modelIds.embedding },
+        const embedClient =
+          rateLimitedAI[ragEmbeddingProvider as keyof typeof rateLimitedAI] || rateLimitedAI.google
+        const { embedding: vector } = await embedClient.embed({
+          model: { modelId: ragEmbeddingModelId },
           value: query,
         })
 

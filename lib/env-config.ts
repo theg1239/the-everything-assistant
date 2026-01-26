@@ -23,9 +23,15 @@ export function loadApiKeyConfigFromEnv(): ApiKeyConfig {
 export function validateEnvironmentConfig(): { isValid: boolean; errors: string[] } {
   const errors: string[] = []
 
-  if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY && !process.env.GOOGLE_AI_API_KEYS) {
+  const hasGoogleKeys = Boolean(
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GOOGLE_AI_API_KEYS
+  )
+  const hasOpenAIKeys = Boolean(
+    process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEYS
+  )
+  if (!hasGoogleKeys && !hasOpenAIKeys) {
     errors.push(
-      'No Google AI API keys found. Set GOOGLE_GENERATIVE_AI_API_KEY or GOOGLE_AI_API_KEYS'
+      'No Google/OpenAI API keys found. Set GOOGLE_GENERATIVE_AI_API_KEY or OPENAI_API_KEY.'
     )
   }
 
@@ -83,6 +89,14 @@ export function getEnvironmentSummary() {
   }
 
   const multipleKeys = process.env.GOOGLE_AI_API_KEYS
+  const openaiPrimary = process.env.OPENAI_API_KEY
+  const openaiAdditional = []
+  for (let i = 2; i <= 10; i++) {
+    if (process.env[`OPENAI_API_KEY_${i}`]) {
+      openaiAdditional.push(`OPENAI_API_KEY_${i}`)
+    }
+  }
+  const openaiMultiple = process.env.OPENAI_API_KEYS
   return {
     hasRedis: !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN),
     apiKeys: {
@@ -93,6 +107,9 @@ export function getEnvironmentSummary() {
         primaryKey,
         ...additionalKeys.map(key => process.env[key]),
         ...(multipleKeys?.split(',') || []),
+        openaiPrimary,
+        ...openaiAdditional.map(key => process.env[key]),
+        ...(openaiMultiple?.split(',') || []),
       ].filter(Boolean).length,
     },
     rateLimit: {

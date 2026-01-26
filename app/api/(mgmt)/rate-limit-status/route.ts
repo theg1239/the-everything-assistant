@@ -29,13 +29,20 @@ export async function GET(req: NextRequest) {
       groqAI.getConfig(),
     ])
 
+    const prefixUsageStats = (
+      stats: Record<string, ApiKeyUsageSnapshot>,
+      fallbackProvider: string
+    ) =>
+      Object.fromEntries(
+        Object.entries(stats).map(([key, value]) => {
+          const provider = value.provider || fallbackProvider
+          return [`${provider}_${key}`, value]
+        })
+      )
+
     const combinedUsageStats: Record<string, ApiKeyUsageSnapshot> = {
-      ...Object.fromEntries(
-        Object.entries(googleUsageStats).map(([key, value]) => [`google_${key}`, value])
-      ),
-      ...Object.fromEntries(
-        Object.entries(groqUsageStats).map(([key, value]) => [`groq_${key}`, value])
-      ),
+      ...prefixUsageStats(googleUsageStats, 'google'),
+      ...prefixUsageStats(groqUsageStats, 'groq'),
     }
 
     const totalKeyCount = googleConfig.keys.length + groqConfig.keys.length

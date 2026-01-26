@@ -4,7 +4,7 @@ import { createGroq } from '@ai-sdk/groq' // Groq provider
 import { createCerebras } from '@ai-sdk/cerebras' // Cerebras provider
 import { createOpenRouter } from '@openrouter/ai-sdk-provider' // OpenRouter provider
 import { createOpenAI } from '@ai-sdk/openai' // OpenAI provider
-import { ApiKeyManager, ApiKeyConfig, DEFAULT_API_KEY_CONFIG, ApiKeyManagerError } from './api-key-manager'
+import { ApiKeyEntry, ApiKeyManager, ApiKeyConfig, DEFAULT_API_KEY_CONFIG } from './api-key-manager'
 import { UserRateLimiter, UserRateLimitConfig, loadUserRateLimitConfig } from './user-rate-limiter'
 import { modelIds } from './model-registry'
 import {
@@ -28,22 +28,6 @@ type GoogleUrlContextOptions = Parameters<GoogleToolset['urlContext']>[0]
 type GoogleFileSearchOptions = Parameters<GoogleToolset['fileSearch']>[0]
 type GoogleCodeExecutionOptions = Parameters<GoogleToolset['codeExecution']>[0]
 
-// Type definitions for API error responses
-interface APIError {
-  statusCode?: number
-  status?: number | string
-  code?: number | string
-  message?: string
-  responseBody?: string
-  data?: {
-    error?: {
-      status?: string
-      message?: string
-      code?: number
-    }
-  }
-}
-
 // Type for streamText/generateText options - uses SDK's own types internally
 interface TextGenerationOptions {
   model?: { modelId: string }
@@ -55,12 +39,15 @@ interface TextGenerationOptions {
     google?: Record<string, unknown>
     openai?: Record<string, unknown>
   }
+  providerOverrides?: Partial<Record<Provider, Partial<TextGenerationOptions>>>
   [key: string]: unknown
 }
 
 interface ApiKeySelectionOptions {
   excludeIndices?: number[]
-  onKeySelected?: (keyIndex: number) => void
+  allowedProviders?: Provider[]
+  preferredProviders?: Provider[]
+  onKeySelected?: (keyIndex: number, entry?: ApiKeyEntry) => void
 }
 
 // Type for embed options
@@ -68,11 +55,6 @@ interface EmbedOptions {
   model?: { modelId: string }
   value?: string
   values?: string[]
-}
-
-const truncateErrorText = (text: string, max = 500): string => {
-  if (!text) return ''
-  return text.length > max ? `${text.slice(0, max)}…` : text
 }
 
 export class RateLimitedAI {
@@ -94,6 +76,7 @@ export class RateLimitedAI {
       ...DEFAULT_API_KEY_CONFIG,
       ...customConfig,
       keys: apiKeys,
+      primaryProvider: provider,
     }
     this.userConfig = {
       ...loadUserRateLimitConfig(),
@@ -103,136 +86,119 @@ export class RateLimitedAI {
     this.userRateLimiter = new UserRateLimiter(this.userConfig)
   }
 
-  private loadApiKeysFromEnvironment(): string[] {
-    const keys: string[] = []
+  private loadKeysForProvider(provider: Provider): string[] {
+    const config = {
+      google: {
+        primary: 'GOOGLE_GENERATIVE_AI_API_KEY',
+        list: 'GOOGLE_AI_API_KEYS',
+        label: 'Google AI',
+      },
+      groq: {
+        primary: 'GROQ_API_KEY',
+        list: 'GROQ_API_KEYS',
+        label: 'Groq',
+      },
+      cerebras: {
+        primary: 'CEREBRAS_API_KEY',
+        list: 'CEREBRAS_API_KEYS',
+        label: 'Cerebras',
+      },
+      openrouter: {
+        primary: 'OPENROUTER_API_KEY',
+        list: 'OPENROUTER_API_KEYS',
+        label: 'OpenRouter',
+      },
+      openai: {
+        primary: 'OPENAI_API_KEY',
+        list: 'OPENAI_API_KEYS',
+        label: 'OpenAI',
+      },
+    } as const
 
-    switch (this.provider) {
-      case 'google': {
-        if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-          keys.push(process.env.GOOGLE_GENERATIVE_AI_API_KEY)
-        }
-        for (let i = 2; i <= 10; i++) {
-          const k = process.env[`GOOGLE_GENERATIVE_AI_API_KEY_${i}`]
-          if (k) keys.push(k)
-        }
-        if (keys.length === 0 && process.env.GOOGLE_AI_API_KEYS) {
-          keys.push(
-            ...process.env.GOOGLE_AI_API_KEYS.split(',')
-              .map(x => x.trim())
-              .filter(Boolean)
-          )
-        }
-        if (keys.length === 0) {
+    const entry = config[provider]
+    if (!entry) return []
+    const keys = new Set<string>()
+    const primaryValue = process.env[entry.primary]
+    if (primaryValue) keys.add(primaryValue)
+    for (let i = 2; i <= 10; i++) {
+      const value = process.env[`${entry.primary}_${i}`]
+      if (value) keys.add(value)
+    }
+    const listValue = process.env[entry.list]
+    if (listValue) {
+      for (const value of listValue.split(',').map(v => v.trim()).filter(Boolean)) {
+        keys.add(value)
+      }
+    }
+    return [...keys]
+  }
+
+  private loadApiKeysFromEnvironment(): ApiKeyEntry[] {
+    const entries: ApiKeyEntry[] = []
+    const primaryKeys = this.loadKeysForProvider(this.provider)
+    for (const key of primaryKeys) {
+      entries.push({ key, provider: this.provider })
+    }
+
+    if (this.provider === 'google') {
+      const openaiKeys = this.loadKeysForProvider('openai')
+      for (const key of openaiKeys) {
+        entries.push({ key, provider: 'openai' })
+      }
+      if (primaryKeys.length === 0 && openaiKeys.length > 0) {
+        console.warn(
+          '[RateLimitedAI] No Google keys found; using OpenAI keys as fallback for text-only calls.'
+        )
+      }
+    }
+
+    if (entries.length === 0) {
+      switch (this.provider) {
+        case 'google':
           throw new Error(
-            'No Google AI API keys found. Please set GOOGLE_GENERATIVE_AI_API_KEY or GOOGLE_AI_API_KEYS.'
+            'No Google/OpenAI API keys found. Set GOOGLE_GENERATIVE_AI_API_KEY or OPENAI_API_KEY.'
           )
-        }
-        break
-      }
-      case 'groq': {
-        if (process.env.GROQ_API_KEY) {
-          keys.push(process.env.GROQ_API_KEY)
-        }
-        for (let i = 2; i <= 10; i++) {
-          const k = process.env[`GROQ_API_KEY_${i}`]
-          if (k) keys.push(k)
-        }
-        if (keys.length === 0 && process.env.GROQ_API_KEYS) {
-          keys.push(
-            ...process.env.GROQ_API_KEYS.split(',')
-              .map(x => x.trim())
-              .filter(Boolean)
-          )
-        }
-        if (keys.length === 0) {
+        case 'groq':
           throw new Error('No Groq API keys found. Please set GROQ_API_KEY or GROQ_API_KEYS.')
-        }
-        break
-      }
-      case 'cerebras': {
-        if (process.env.CEREBRAS_API_KEY) {
-          keys.push(process.env.CEREBRAS_API_KEY)
-        }
-        for (let i = 2; i <= 10; i++) {
-          const k = process.env[`CEREBRAS_API_KEY_${i}`]
-          if (k) keys.push(k)
-        }
-        if (keys.length === 0 && process.env.CEREBRAS_API_KEYS) {
-          keys.push(
-            ...process.env.CEREBRAS_API_KEYS.split(',')
-              .map(x => x.trim())
-              .filter(Boolean)
-          )
-        }
-        if (keys.length === 0) {
+        case 'cerebras':
           throw new Error(
             'No Cerebras API keys found. Please set CEREBRAS_API_KEY or CEREBRAS_API_KEYS.'
           )
-        }
-        break
-      }
-      case 'openrouter': {
-        if (process.env.OPENROUTER_API_KEY) {
-          keys.push(process.env.OPENROUTER_API_KEY)
-        }
-        for (let i = 2; i <= 10; i++) {
-          const k = process.env[`OPENROUTER_API_KEY_${i}`]
-          if (k) keys.push(k)
-        }
-        if (keys.length === 0 && process.env.OPENROUTER_API_KEYS) {
-          keys.push(
-            ...process.env.OPENROUTER_API_KEYS.split(',')
-              .map(x => x.trim())
-              .filter(Boolean)
-          )
-        }
-        if (keys.length === 0) {
+        case 'openrouter':
           throw new Error(
             'No OpenRouter API keys found. Please set OPENROUTER_API_KEY or OPENROUTER_API_KEYS.'
           )
-        }
-        break
-      }
-      case 'openai': {
-        if (process.env.OPENAI_API_KEY) {
-          keys.push(process.env.OPENAI_API_KEY)
-        }
-        for (let i = 2; i <= 10; i++) {
-          const k = process.env[`OPENAI_API_KEY_${i}`]
-          if (k) keys.push(k)
-        }
-        if (keys.length === 0 && process.env.OPENAI_API_KEYS) {
-          keys.push(
-            ...process.env.OPENAI_API_KEYS.split(',')
-              .map(x => x.trim())
-              .filter(Boolean)
-          )
-        }
-        if (keys.length === 0) {
+        case 'openai':
           throw new Error('No OpenAI API keys found. Please set OPENAI_API_KEY or OPENAI_API_KEYS.')
-        }
-        break
-      }
-      default: {
-        throw new Error(`Unsupported provider: ${this.provider}`)
+        default:
+          throw new Error(`Unsupported provider: ${this.provider}`)
       }
     }
 
-    console.log(`Loaded ${keys.length} ${this.provider} API key(s)`)
-    return keys
+    const counts: Record<string, number> = {}
+    for (const entry of entries) {
+      const key = entry.provider || 'unknown'
+      counts[key] = (counts[key] || 0) + 1
+    }
+    const countSummary = Object.entries(counts)
+      .map(([provider, count]) => `${provider}:${count}`)
+      .join(', ')
+    console.log(`[RateLimitedAI] Loaded API keys (${countSummary})`)
+    return entries
   }
 
-  private createProviderInstance(apiKey: string) {
-    if (this.provider === 'google') {
+  private createProviderInstance(apiKey: string, providerOverride?: Provider) {
+    const provider = providerOverride ?? this.provider
+    if (provider === 'google') {
       return createGoogleGenerativeAI({ apiKey })
     }
-    if (this.provider === 'groq') {
+    if (provider === 'groq') {
       return createGroq({ apiKey })
     }
-    if (this.provider === 'openrouter') {
+    if (provider === 'openrouter') {
       return createOpenRouter({ apiKey })
     }
-    if (this.provider === 'openai') {
+    if (provider === 'openai') {
       return createOpenAI({ apiKey })
     }
     return createCerebras({ apiKey })
@@ -240,95 +206,94 @@ export class RateLimitedAI {
 
   getModel(modelName: string) {
     return async () => {
-      const key = await this.apiKeyManager.getCurrentKey()
-      const provider = this.createProviderInstance(key)
+      const entry = await this.apiKeyManager.getCurrentKey({
+        allowedProviders: [this.provider],
+        preferredProviders: [this.provider],
+      })
+      const provider = this.createProviderInstance(entry.key, entry.provider as Provider)
       return provider(modelName)
     }
   }
 
   async withProvider<T>(fn: (provider: ReturnType<typeof this.createProviderInstance>) => T | Promise<T>): Promise<T> {
-    const key = await this.apiKeyManager.getCurrentKey()
-    const provider = this.createProviderInstance(key)
+    const entry = await this.apiKeyManager.getCurrentKey({
+      allowedProviders: [this.provider],
+      preferredProviders: [this.provider],
+    })
+    const provider = this.createProviderInstance(entry.key, entry.provider as Provider)
     return fn(provider)
   }
 
   getEmbeddingModel(modelName: string = modelIds.embedding): () => Promise<EmbeddingModel> {
     return async () => {
-      const key = await this.apiKeyManager.getCurrentKey()
-      const google = createGoogleGenerativeAI({ apiKey: key })
-      return google.textEmbeddingModel(modelName) as unknown as EmbeddingModel;
-    };
-  }
-
-  private isGoogleInternalError(error: unknown): boolean {
-    const retryError = error as { reason?: string; lastError?: APIError; errors?: APIError[] }
-    if (retryError?.reason === 'maxRetriesExceeded' && retryError?.lastError) {
-      return this.checkInternalError(retryError.lastError)
+      const allowedProviders =
+        this.provider === 'google'
+          ? ['google', 'openai']
+          : this.provider === 'openai'
+            ? ['openai']
+            : ['google']
+      const preferredProviders = allowedProviders
+      const entry = await this.apiKeyManager.getCurrentKey({
+        allowedProviders,
+        preferredProviders,
+      })
+      const provider = (entry.provider as Provider) ?? this.provider
+      const resolvedModelId = this.resolveEmbeddingModelId(modelName, provider)
+      if (provider === 'openai') {
+        const openai = createOpenAI({ apiKey: entry.key })
+        return openai.textEmbeddingModel(resolvedModelId) as unknown as EmbeddingModel
+      }
+      const google = createGoogleGenerativeAI({ apiKey: entry.key })
+      return google.textEmbeddingModel(resolvedModelId) as unknown as EmbeddingModel
     }
-    
-    if (retryError?.errors?.length) {
-      return retryError.errors.some(e => this.checkInternalError(e))
+  }
+
+  private getAllowedProvidersForText(): Provider[] {
+    if (this.provider === 'google') return ['google', 'openai']
+    return [this.provider]
+  }
+
+  private getPreferredProvidersForText(): Provider[] {
+    if (this.provider === 'google') return ['google', 'openai']
+    return [this.provider]
+  }
+
+  private resolveModelId(baseModelId: string | undefined, provider: Provider): string {
+    if (provider === this.provider) return baseModelId ?? ''
+    if (this.provider === 'google' && provider === 'openai') {
+      return process.env.OPENAI_FALLBACK_MODEL || 'gpt-5-mini'
     }
-    
-    return this.checkInternalError(error as APIError)
+    return baseModelId ?? ''
   }
 
-  private isGoogleQuotaError(error: unknown): boolean {
-    const retryError = error as { reason?: string; lastError?: APIError; errors?: APIError[] }
-    if (retryError?.reason === 'maxRetriesExceeded' && retryError?.lastError) {
-      return this.checkQuotaError(retryError.lastError)
+  private resolveEmbeddingModelId(
+    requestedModelId: string | undefined,
+    provider: Provider
+  ): string {
+    if (provider === 'openai') {
+      return process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-large'
     }
+    return requestedModelId ?? modelIds.embedding
+  }
 
-    if (retryError?.errors?.length) {
-      return retryError.errors.some(e => this.checkQuotaError(e))
+  private buildOptionsForProvider(options: TextGenerationOptions, provider: Provider): TextGenerationOptions {
+    const { providerOverrides, ...rest } = options as TextGenerationOptions & {
+      providerOverrides?: Partial<Record<Provider, Partial<TextGenerationOptions>>>
     }
-
-    return this.checkQuotaError(error as APIError)
-  }
-  
-  private checkInternalError(apiError: APIError): boolean {
-    const statusCode = apiError?.statusCode || apiError?.status || apiError?.code
-    const message = (apiError?.message || '').toLowerCase()
-    const responseBody = apiError?.responseBody || ''
-    
-    const is500 = statusCode === 500
-    const isInternalStatus = apiError?.data?.error?.status === 'INTERNAL' || 
-                             (typeof responseBody === 'string' && responseBody.includes('"status": "INTERNAL"'))
-    const isInternalMessage = message.includes('internal error') || 
-                              message.includes('an internal error has occurred')
-    
-    return is500 && (isInternalStatus || isInternalMessage)
-  }
-
-  private checkQuotaError(apiError: APIError): boolean {
-    const statusCode = apiError?.statusCode || apiError?.status || apiError?.code
-    const message = (apiError?.message || '').toLowerCase()
-    const responseBody = apiError?.responseBody || ''
-    const status = apiError?.data?.error?.status
-
-    const is429 = statusCode === 429
-    const isResourceExhausted =
-      status === 'RESOURCE_EXHAUSTED' ||
-      (typeof responseBody === 'string' && responseBody.includes('"status": "RESOURCE_EXHAUSTED"'))
-    const isQuotaMessage =
-      message.includes('quota exceeded') ||
-      message.includes('exceeded your current quota') ||
-      message.includes('rate limit')
-
-    return is429 && (isResourceExhausted || isQuotaMessage)
-  }
-
-  private shouldFallbackToOpenAI(error: unknown): boolean {
-    const err = error as { code?: string; message?: string; cause?: { code?: string } }
-    if (err?.cause?.code === 'ALL_KEYS_EXHAUSTED') return true
-    if (err instanceof ApiKeyManagerError && err.code === 'ALL_KEYS_EXHAUSTED') return true
-    if (err?.code === 'ALL_KEYS_EXHAUSTED') return true
-    const msg = (err?.message || '').toLowerCase()
-    return (
-      msg.includes('all api keys failed') ||
-      msg.includes('all_keys_rate_limited') ||
-      msg.includes('no_valid_api_keys_available')
-    )
+    const override = providerOverrides?.[provider] ?? {}
+    const baseProviderOptions = rest.providerOptions ?? {}
+    const overrideProviderOptions = (override as TextGenerationOptions).providerOptions ?? {}
+    const mergedProviderOptions = { ...baseProviderOptions, ...overrideProviderOptions }
+    const merged = { ...rest, ...override, providerOptions: mergedProviderOptions } as TextGenerationOptions
+    if (merged.providerOptions && typeof merged.providerOptions === 'object') {
+      const selected = (merged.providerOptions as any)[provider]
+      merged.providerOptions = selected ? { [provider]: selected } : undefined
+    }
+    if (provider === 'openai' && Object.prototype.hasOwnProperty.call(merged, 'temperature')) {
+      delete (merged as { temperature?: number }).temperature
+    }
+    delete (merged as any).providerOverrides
+    return merged
   }
 
   private withGoogleRetryOptions(options: TextGenerationOptions): TextGenerationOptions {
@@ -343,34 +308,6 @@ export class RateLimitedAI {
         google: hasMaxRetries ? googleOptions : { ...googleOptions, maxRetries: 2 },
       },
     }
-  }
-
-  private buildOpenAIFallbackOptions(options: TextGenerationOptions, modelId: string) {
-    const openaiKey = this.loadOpenAIFallbackKey()
-    if (!openaiKey) return null
-    const openai = createOpenAI({ apiKey: openaiKey })
-    return {
-      ...options,
-      model: openai(modelId),
-      providerOptions: options.providerOptions?.openai
-        ? { openai: options.providerOptions.openai }
-        : undefined,
-    }
-  }
-
-  private loadOpenAIFallbackKey(): string | null {
-    if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY
-    for (let i = 2; i <= 10; i++) {
-      const key = process.env[`OPENAI_API_KEY_${i}`]
-      if (key) return key
-    }
-    if (process.env.OPENAI_API_KEYS) {
-      const [first] = process.env.OPENAI_API_KEYS.split(',')
-        .map(x => x.trim())
-        .filter(Boolean)
-      return first ?? null
-    }
-    return null
   }
 
   private normalizeWarnings<T extends { warnings?: unknown }>(result: T): T {
@@ -450,46 +387,35 @@ export class RateLimitedAI {
     try {
       scheduleSlowLog()
       const enrichedOptions = this.withGoogleRetryOptions(options)
-      const result = await this.apiKeyManager.executeWithRateLimit(async key => {
-        const keyIndex = this.config.keys.indexOf(key)
-        if (keyIndex >= 0) {
-          keyOptions.onKeySelected?.(keyIndex)
+      const allowedProviders = keyOptions.allowedProviders ?? this.getAllowedProvidersForText()
+      const preferredProviders = keyOptions.preferredProviders ?? this.getPreferredProvidersForText()
+      let selectedProvider: Provider | undefined
+      let selectedIndex: number | undefined
+      const result = await this.apiKeyManager.executeWithRateLimit(
+        async (entry, index) => {
+          const provider = (entry.provider as Provider) ?? this.provider
+          selectedProvider = provider
+          selectedIndex = index
+          keyOptions.onKeySelected?.(index, entry)
+          const providerInstance = this.createProviderInstance(entry.key, provider)
+          const modelId = this.resolveModelId(enrichedOptions.model?.modelId, provider)
+          const finalOptions = this.buildOptionsForProvider(enrichedOptions, provider)
+          const modelFn = this.wrapModelWithWarningDefaults(providerInstance(modelId))
+          return streamText({ ...finalOptions, model: modelFn } as any)
+        },
+        {
+          excludeIndices: keyOptions.excludeIndices,
+          allowedProviders,
+          preferredProviders,
         }
-        const provider = this.createProviderInstance(key)
-        const modelFn = this.wrapModelWithWarningDefaults(provider(enrichedOptions.model?.modelId ?? ''))
-        return streamText({ ...enrichedOptions, model: modelFn } as any)
-      }, { excludeIndices: keyOptions.excludeIndices })
+      )
       console.warn('[RateLimitedAI] streamText provider responded', {
-        provider: this.provider,
+        provider: selectedProvider ?? this.provider,
+        keyIndex: selectedIndex,
         modelId: options.model?.modelId,
         elapsedMs: Date.now() - streamStart,
       })
       return result
-    } catch (error: unknown) {
-      clearSlowLog()
-      const errorText =
-        typeof error === 'string'
-          ? error
-          : (error as { message?: string })?.message || String(error)
-      const isInternal = this.isGoogleInternalError(error)
-      const isQuota = this.isGoogleQuotaError(error)
-      const shouldFallback = this.shouldFallbackToOpenAI(error)
-      if (
-        this.provider === 'google' &&
-        (isInternal || isQuota || shouldFallback)
-      ) {
-        console.warn('[RateLimitedAI] Google failure detected, falling back to OpenAI streamText', {
-          isInternal,
-          isQuota,
-          shouldFallback,
-          errorText: truncateErrorText(errorText),
-        })
-        const fallbackOptions = this.buildOpenAIFallbackOptions(options, 'gpt-5-nano')
-        if (!fallbackOptions) throw error
-        return streamText(fallbackOptions as any)
-      }
-      
-      throw error
     } finally {
       clearSlowLog()
     }
@@ -500,39 +426,25 @@ export class RateLimitedAI {
       const u = await this.userRateLimiter.checkRateLimit(userId)
       if (!u.allowed) throw new Error(`Rate limit: ${u.error}`)
     }
-    
-    try {
-      const enrichedOptions = this.withGoogleRetryOptions(options)
-      return await this.apiKeyManager.executeWithRateLimit(async key => {
-        const provider = this.createProviderInstance(key)
-        const modelFn = this.wrapModelWithWarningDefaults(provider(enrichedOptions.model?.modelId ?? ''))
-        return generateText({ ...enrichedOptions, model: modelFn } as any)
-      })
-    } catch (error: unknown) {
-      const errorText =
-        typeof error === 'string'
-          ? error
-          : (error as { message?: string })?.message || String(error)
-      const isInternal = this.isGoogleInternalError(error)
-      const isQuota = this.isGoogleQuotaError(error)
-      const shouldFallback = this.shouldFallbackToOpenAI(error)
-      if (
-        this.provider === 'google' &&
-        (isInternal || isQuota || shouldFallback)
-      ) {
-        console.warn('[RateLimitedAI] Google failure detected in generateText, falling back to OpenAI', {
-          isInternal,
-          isQuota,
-          shouldFallback,
-          errorText: truncateErrorText(errorText),
-        })
-        const fallbackOptions = this.buildOpenAIFallbackOptions(options, 'gpt-4o-mini')
-        if (!fallbackOptions) throw error
-        return generateText(fallbackOptions as any)
+
+    const enrichedOptions = this.withGoogleRetryOptions(options)
+    const allowedProviders = this.getAllowedProvidersForText()
+    const preferredProviders = this.getPreferredProvidersForText()
+
+    return this.apiKeyManager.executeWithRateLimit(
+      async (entry, index) => {
+        const provider = (entry.provider as Provider) ?? this.provider
+        const providerInstance = this.createProviderInstance(entry.key, provider)
+        const modelId = this.resolveModelId(enrichedOptions.model?.modelId, provider)
+        const finalOptions = this.buildOptionsForProvider(enrichedOptions, provider)
+        const modelFn = this.wrapModelWithWarningDefaults(providerInstance(modelId))
+        return generateText({ ...finalOptions, model: modelFn } as any)
+      },
+      {
+        allowedProviders,
+        preferredProviders,
       }
-      
-      throw error
-    }
+    )
   }
 
   async generateObject<T>(options: TextGenerationOptions & { schema?: unknown }, userId?: string) {
@@ -540,39 +452,26 @@ export class RateLimitedAI {
       const u = await this.userRateLimiter.checkRateLimit(userId)
       if (!u.allowed) throw new Error(`Rate limit: ${u.error}`)
     }
-    try {
-      const enrichedOptions = this.withGoogleRetryOptions(options)
-      return await this.apiKeyManager.executeWithRateLimit(async key => {
-        const provider = this.createProviderInstance(key)
-        const modelFn = this.wrapModelWithWarningDefaults(provider(enrichedOptions.model?.modelId ?? ''))
-        return generateObject({ ...enrichedOptions, model: modelFn } as any)
-      })
-    } catch (error: unknown) {
-      const errorText =
-        typeof error === 'string'
-          ? error
-          : (error as { message?: string })?.message || String(error)
-      const isInternal = this.isGoogleInternalError(error)
-      const isQuota = this.isGoogleQuotaError(error)
-      const shouldFallback = this.shouldFallbackToOpenAI(error)
-      if (
-        this.provider === 'google' &&
-        (isInternal || isQuota || shouldFallback)
-      ) {
-        console.warn('[RateLimitedAI] Google failure detected in generateObject, falling back to OpenAI', {
-          isInternal,
-          isQuota,
-          shouldFallback,
-          errorText: truncateErrorText(errorText),
-        })
-        const fallbackOptions = this.buildOpenAIFallbackOptions(options, 'gpt-4o-mini')
-        if (!fallbackOptions) throw error
-        return generateObject({ ...(fallbackOptions as any), schema: options.schema } as any)
-      }
-      throw error
-    }
-  }
 
+    const enrichedOptions = this.withGoogleRetryOptions(options)
+    const allowedProviders = this.getAllowedProvidersForText()
+    const preferredProviders = this.getPreferredProvidersForText()
+
+    return this.apiKeyManager.executeWithRateLimit(
+      async (entry, index) => {
+        const provider = (entry.provider as Provider) ?? this.provider
+        const providerInstance = this.createProviderInstance(entry.key, provider)
+        const modelId = this.resolveModelId(enrichedOptions.model?.modelId, provider)
+        const finalOptions = this.buildOptionsForProvider(enrichedOptions, provider)
+        const modelFn = this.wrapModelWithWarningDefaults(providerInstance(modelId))
+        return generateObject({ ...finalOptions, model: modelFn, schema: options.schema } as any)
+      },
+      {
+        allowedProviders,
+        preferredProviders,
+      }
+    )
+  }
 
   async embed(
     options: { model?: { modelId: string }; value: string },
@@ -603,25 +502,43 @@ export class RateLimitedAI {
         valuesCount,
       })
     }
-    return this.apiKeyManager.executeWithRateLimit(async key => {
-      const google = createGoogleGenerativeAI({ apiKey: key })
-      const modelFn = google.textEmbeddingModel(
-        options.model?.modelId || modelIds.embedding
-      ) as unknown as EmbeddingModel
-      const safeModel = this.wrapModelWithWarningDefaults(modelFn as any)
+    const allowedProviders =
+      this.provider === 'google'
+        ? ['google', 'openai']
+        : this.provider === 'openai'
+          ? ['openai']
+          : ['google']
+    const preferredProviders = allowedProviders
+    return this.apiKeyManager.executeWithRateLimit(
+      async entry => {
+        const provider = (entry.provider as Provider) ?? this.provider
+        const resolvedModelId = this.resolveEmbeddingModelId(
+          options.model?.modelId,
+          provider
+        )
+        const modelFn =
+          provider === 'openai'
+            ? createOpenAI({ apiKey: entry.key }).textEmbeddingModel(resolvedModelId)
+            : createGoogleGenerativeAI({ apiKey: entry.key }).textEmbeddingModel(resolvedModelId)
+        const safeModel = this.wrapModelWithWarningDefaults(modelFn as any)
 
-      if (Array.isArray(options.values)) {
-        return embedMany({
-          model: safeModel,
-          values: options.values,
-        })
-      } else {
-        return embed({
-          model: safeModel,
-          value: options.value ?? '',
-        })
+        if (Array.isArray(options.values)) {
+          return embedMany({
+            model: safeModel,
+            values: options.values,
+          })
+        } else {
+          return embed({
+            model: safeModel,
+            value: options.value ?? '',
+          })
+        }
+      },
+      {
+        allowedProviders,
+        preferredProviders,
       }
-    });
+    )
   }
 
   async generateImage(
@@ -641,8 +558,9 @@ export class RateLimitedAI {
       if (!u.allowed) throw new Error(`Rate limit: ${u.error}`)
     }
 
-    return this.apiKeyManager.executeWithRateLimit(async key => {
-      const google = createGoogleGenerativeAI({ apiKey: key })
+    return this.apiKeyManager.executeWithRateLimit(
+      async entry => {
+        const google = createGoogleGenerativeAI({ apiKey: entry.key })
       const modelId = options.model || 'gemini-2.5-flash-image'
 
       let fullPrompt = options.prompt
@@ -673,7 +591,12 @@ export class RateLimitedAI {
           mimeType: img.mediaType,
         })),
       }
-    })
+      },
+      {
+        allowedProviders: ['google'],
+        preferredProviders: ['google'],
+      }
+    )
   }
 
   async getUsageStats() {
@@ -686,6 +609,10 @@ export class RateLimitedAI {
 
   async resetRateLimits() {
     return this.apiKeyManager.resetAllRateLimits()
+  }
+
+  async banKeyByIndex(index: number, cooldownMs?: number) {
+    return this.apiKeyManager.banKeyByIndex(index, cooldownMs)
   }
 
   getConfig() {
@@ -758,6 +685,7 @@ export const rateLimitedAI = {
     getUsageStats: () => getRateLimitedAI('google').getUsageStats(),
     rotateKey: () => getRateLimitedAI('google').rotateKey(),
     resetRateLimits: () => getRateLimitedAI('google').resetRateLimits(),
+    banKeyByIndex: (i: number, c?: number) => getRateLimitedAI('google').banKeyByIndex(i, c),
     updateConfig: (c: Partial<ApiKeyConfig>) => getRateLimitedAI('google').updateConfig(c),
     getUserUsageStats: (u: string) => getRateLimitedAI('google').getUserUsageStats(u),
     checkUserRateLimit: (u: string) => getRateLimitedAI('google').checkUserRateLimit(u),
@@ -784,6 +712,7 @@ export const rateLimitedAI = {
     getUsageStats: () => getRateLimitedAI('groq').getUsageStats(),
     rotateKey: () => getRateLimitedAI('groq').rotateKey(),
     resetRateLimits: () => getRateLimitedAI('groq').resetRateLimits(),
+    banKeyByIndex: (i: number, c?: number) => getRateLimitedAI('groq').banKeyByIndex(i, c),
     updateConfig: (c: Partial<ApiKeyConfig>) => getRateLimitedAI('groq').updateConfig(c),
     getUserUsageStats: (u: string) => getRateLimitedAI('groq').getUserUsageStats(u),
     checkUserRateLimit: (u: string) => getRateLimitedAI('groq').checkUserRateLimit(u),
@@ -803,6 +732,7 @@ export const rateLimitedAI = {
     getUsageStats: () => getRateLimitedAI('cerebras').getUsageStats(),
     rotateKey: () => getRateLimitedAI('cerebras').rotateKey(),
     resetRateLimits: () => getRateLimitedAI('cerebras').resetRateLimits(),
+    banKeyByIndex: (i: number, c?: number) => getRateLimitedAI('cerebras').banKeyByIndex(i, c),
     updateConfig: (c: Partial<ApiKeyConfig>) => getRateLimitedAI('cerebras').updateConfig(c),
     getUserUsageStats: (u: string) => getRateLimitedAI('cerebras').getUserUsageStats(u),
     checkUserRateLimit: (u: string) => getRateLimitedAI('cerebras').checkUserRateLimit(u),
@@ -822,6 +752,7 @@ export const rateLimitedAI = {
     getUsageStats: () => getRateLimitedAI('openrouter').getUsageStats(),
     rotateKey: () => getRateLimitedAI('openrouter').rotateKey(),
     resetRateLimits: () => getRateLimitedAI('openrouter').resetRateLimits(),
+    banKeyByIndex: (i: number, c?: number) => getRateLimitedAI('openrouter').banKeyByIndex(i, c),
     updateConfig: (c: Partial<ApiKeyConfig>) => getRateLimitedAI('openrouter').updateConfig(c),
     getUserUsageStats: (u: string) => getRateLimitedAI('openrouter').getUserUsageStats(u),
     checkUserRateLimit: (u: string) => getRateLimitedAI('openrouter').checkUserRateLimit(u),
@@ -832,7 +763,7 @@ export const rateLimitedAI = {
   },
   openai: {
     model: (n = 'gpt-5-mini') => getModel('openai', n),
-    embedding: (n = modelIds.embedding) => getEmbeddingModel('google', n),
+    embedding: (n = modelIds.embedding) => getEmbeddingModel('openai', n),
     streamText: (o: TextGenerationOptions, u?: string, k?: ApiKeySelectionOptions) =>
       getRateLimitedAI('openai').streamText(o, u, k),
     generateText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('openai').generateText(o, u),
@@ -841,6 +772,7 @@ export const rateLimitedAI = {
     getUsageStats: () => getRateLimitedAI('openai').getUsageStats(),
     rotateKey: () => getRateLimitedAI('openai').rotateKey(),
     resetRateLimits: () => getRateLimitedAI('openai').resetRateLimits(),
+    banKeyByIndex: (i: number, c?: number) => getRateLimitedAI('openai').banKeyByIndex(i, c),
     updateConfig: (c: Partial<ApiKeyConfig>) => getRateLimitedAI('openai').updateConfig(c),
     getUserUsageStats: (u: string) => getRateLimitedAI('openai').getUserUsageStats(u),
     checkUserRateLimit: (u: string) => getRateLimitedAI('openai').checkUserRateLimit(u),

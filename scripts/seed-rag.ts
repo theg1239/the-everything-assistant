@@ -9,7 +9,7 @@ import 'dotenv/config'
 import pg from 'pg'
 import { randomUUID } from 'crypto'
 import { rateLimitedAI } from '../lib/rate-limited-ai'
-import { modelIds } from '../lib/model-registry'
+import { ragEmbeddingDim, ragEmbeddingModelId, ragEmbeddingProvider } from '../lib/rag-config'
 import fs from 'fs'
 import path from 'path'
 const { Pool } = pg
@@ -112,15 +112,21 @@ async function main() {
       id uuid PRIMARY KEY,
       chunk text NOT NULL,
       metadata jsonb,
-      embedding vector(3072) NOT NULL
+      embedding vector(${ragEmbeddingDim}) NOT NULL
     );
   `)
+
+  console.log(
+    `Using RAG embedding provider "${ragEmbeddingProvider}" with model "${ragEmbeddingModelId}" (${ragEmbeddingDim} dims)`
+  )
 
   if (customText) {
     console.log('Inserting custom chunk:', customText)
     try {
-      const { embedding } = await rateLimitedAI.google.embed({
-        model: { modelId: modelIds.embedding },
+      const embedClient =
+        rateLimitedAI[ragEmbeddingProvider as keyof typeof rateLimitedAI] || rateLimitedAI.google
+      const { embedding } = await embedClient.embed({
+        model: { modelId: ragEmbeddingModelId },
         value: customText,
       })
       const id = randomUUID()
@@ -170,8 +176,11 @@ async function main() {
 
           for (const [idx, doc] of pdfDocs.entries()) {
             try {
-              const { embedding } = await rateLimitedAI.google.embed({
-                model: { modelId: modelIds.embedding },
+              const embedClient =
+                rateLimitedAI[ragEmbeddingProvider as keyof typeof rateLimitedAI] ||
+                rateLimitedAI.google
+              const { embedding } = await embedClient.embed({
+                model: { modelId: ragEmbeddingModelId },
                 value: doc.pageContent,
               })
 
@@ -225,8 +234,10 @@ async function main() {
 
   for (const [idx, doc] of docs.entries()) {
     try {
-      const { embedding } = await rateLimitedAI.google.embed({
-        model: { modelId: modelIds.embedding },
+      const embedClient =
+        rateLimitedAI[ragEmbeddingProvider as keyof typeof rateLimitedAI] || rateLimitedAI.google
+      const { embedding } = await embedClient.embed({
+        model: { modelId: ragEmbeddingModelId },
         value: doc.pageContent,
       })
 

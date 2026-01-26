@@ -28,7 +28,7 @@ const registry: Record<ModelKey, ModelConfig> = {
   chatAttachment: { provider: 'google', modelId: 'gemini-3-flash-preview' },
   chatAutocomplete: { provider: 'cerebras', modelId: 'llama-3.1-8b' },
   embedding: { provider: 'google', modelId: 'gemini-embedding-001' },
-  knowledgeEmbedding: { provider: 'google', modelId: 'gemini-embedding-001' },
+  knowledgeEmbedding: { provider: 'openai', modelId: 'text-embedding-3-large' },
   followUps: { provider: 'groq', modelId: 'meta-llama/llama-4-scout-17b-16e-instruct' },
   whatsappBot: { provider: 'google', modelId: 'gemini-3-flash-preview' },
   hubVtop: { provider: 'google', modelId: 'gemini-3-flash-preview' },

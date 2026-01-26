@@ -14,7 +14,16 @@ const retryConfigSchema = z.object({
 })
 
 const apiKeyConfigBaseSchema = z.object({
-  keys: z.array(z.string().min(1)),
+  keys: z.array(
+    z.union([
+      z.string().min(1),
+      z.object({
+        key: z.string().min(1),
+        provider: z.string().optional(),
+        label: z.string().optional(),
+      }),
+    ])
+  ),
   rateLimit: rateLimitWindowSchema,
   retryConfig: retryConfigSchema,
   enableRotation: z.boolean(),

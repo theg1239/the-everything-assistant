@@ -23,7 +23,7 @@ export type ModelConfig = {
 }
 
 const registry: Record<ModelKey, ModelConfig> = {
-  chat: { provider: 'google', modelId: 'gemini-3-flash-preview' },
+  chat: { provider: 'google', modelId: 'gemini-flash-lite-latest' },
   chatLite: { provider: 'google', modelId: 'gemini-flash-lite-latest' },
   chatAttachment: { provider: 'google', modelId: 'gemini-3-flash-preview' },
   chatAutocomplete: { provider: 'cerebras', modelId: 'llama-3.1-8b' },

@@ -455,13 +455,26 @@ export class ApiKeyManager {
 
   async executeWithRateLimit<T>(
     apiCall: (apiKey: string) => Promise<T>,
-    options: { retryOnRateLimit?: boolean; maxRetries?: number } = {}
+    options: { retryOnRateLimit?: boolean; maxRetries?: number; excludeIndices?: number[] } = {}
   ): Promise<T> {
-    const { retryOnRateLimit = true, maxRetries = this.config.retryConfig.maxRetries } = options
+    const {
+      retryOnRateLimit = true,
+      maxRetries = this.config.retryConfig.maxRetries,
+      excludeIndices = [],
+    } = options
     let attempt = 0
     let backoff = 1000
     let lastErr: any = null
-    const tried = new Set<number>()
+    const normalizedExclude = new Set<number>()
+    for (const idx of excludeIndices) {
+      if (Number.isInteger(idx) && idx >= 0 && idx < this.config.keys.length) {
+        normalizedExclude.add(idx)
+      }
+    }
+    if (normalizedExclude.size >= this.config.keys.length) {
+      normalizedExclude.clear()
+    }
+    const tried = new Set<number>(normalizedExclude)
     const exhausted = new Set<number>()
 
     // Try every key at least once; if maxRetries is higher, allow another full round.
@@ -512,6 +525,9 @@ export class ApiKeyManager {
           await this.incrementFailure(hash)
           const cooldownMs = this.getRateLimitCooldownMs(err) ?? 60000
           await this.markKeyRateLimited(hash, cooldownMs)
+          if (!retryOnRateLimit) {
+            throw err
+          }
           exhausted.add(idx)
         } else if (!this.isServerError(err)) {
           // Only count client-side / auth errors towards banning; server 5xx should be retried.

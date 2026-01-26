@@ -448,6 +448,23 @@ export async function POST(req: Request) {
       tagName: 'reasoning',
     })
 
+    const hasMultipleGoogleKeys = (() => {
+      const keys = new Set<string>()
+      if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+        keys.add(process.env.GOOGLE_GENERATIVE_AI_API_KEY)
+      }
+      for (let i = 2; i <= 10; i++) {
+        const key = process.env[`GOOGLE_GENERATIVE_AI_API_KEY_${i}`]
+        if (key) keys.add(key)
+      }
+      if (process.env.GOOGLE_AI_API_KEYS) {
+        for (const key of process.env.GOOGLE_AI_API_KEYS.split(',').map(k => k.trim())) {
+          if (key) keys.add(key)
+        }
+      }
+      return keys.size > 1
+    })()
+
     const hasOpenAIKeys = (() => {
       if (process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEYS) return true
       for (let i = 2; i <= 10; i++) {
@@ -457,6 +474,8 @@ export async function POST(req: Request) {
     })()
 
     const canFallbackToOpenAI = model.provider === 'google' && hasOpenAIKeys
+    const canRetryGoogleKey = model.provider === 'google' && hasMultipleGoogleKeys
+    let googleRetryAttempted = false
     const fallbackState = {
       hasContent: false,
       lastErrorText: '',
@@ -473,7 +492,7 @@ export async function POST(req: Request) {
         maxToolCalls: 4,
         reasoningSummary: 'detailed',
         promptCacheKey: openaiPromptCacheKey,
-        ...(modelId.startsWith('gpt-5.1') ? { promptCacheRetention: '24h' } : {}),
+        ...(modelId.startsWith('gpt-5-mini') ? { promptCacheRetention: '24h' } : {}),
       },
     })
 
@@ -526,9 +545,23 @@ export async function POST(req: Request) {
       const errorText = getErrorText(error)
       fallbackState.lastErrorText = errorText
       const shouldFallback =
+        (canRetryGoogleKey || canFallbackToOpenAI) &&
+        !fallbackState.hasContent &&
+        isFallbackErrorText(errorText)
+      if (shouldFallback) {
+        console.warn('[Chat] Primary stream error before content; attempting fallback chain')
+        return
+      }
+      await persistStreamError(error)
+    }
+
+    const handleRetryStreamError = async (error: any) => {
+      const errorText = getErrorText(error)
+      fallbackState.lastErrorText = errorText
+      const shouldFallback =
         canFallbackToOpenAI && !fallbackState.hasContent && isFallbackErrorText(errorText)
       if (shouldFallback) {
-        console.warn('[Chat] Primary stream error before content; attempting OpenAI fallback')
+        console.warn('[Chat] Google retry error before content; attempting OpenAI fallback')
         return
       }
       await persistStreamError(error)
@@ -724,7 +757,18 @@ export async function POST(req: Request) {
       onError: handlePrimaryStreamError,
     }
 
-    const resultStream = await providerClient.streamText(primaryStreamOptions, session.user.id)
+    let primaryKeyIndex: number | null = null
+    const resultStream = await providerClient.streamText(
+      primaryStreamOptions,
+      session.user.id,
+      model.provider === 'google'
+        ? {
+            onKeySelected: idx => {
+              primaryKeyIndex = idx
+            },
+          }
+        : undefined
+    )
 
     const uiStreamOnError = (error: unknown) => {
       const errorText = getErrorText(error)
@@ -749,8 +793,8 @@ export async function POST(req: Request) {
 
     const primaryUIStream = resultStream.toUIMessageStream(uiStreamOptions)
 
-    const fallbackFactory = async () => {
-      const fallbackModelId = process.env.OPENAI_FALLBACK_MODEL || 'gpt-5-nano'
+    const openaiFallbackFactory = async () => {
+      const fallbackModelId = process.env.OPENAI_FALLBACK_MODEL || 'gpt-5-mini'
       console.warn(`[Chat] Falling back to OpenAI model ${fallbackModelId}`)
       const fallbackProvider = rateLimitedAI.openai
       const fallbackModel = await fallbackProvider.model(fallbackModelId)
@@ -768,9 +812,56 @@ export async function POST(req: Request) {
       return fallbackResult.toUIMessageStream(uiStreamOptions)
     }
 
-    const stream = canFallbackToOpenAI
-      ? createFallbackUIStream(primaryUIStream, fallbackFactory, () => fallbackState.lastErrorText)
-      : primaryUIStream
+    const fallbackFactory = async () => {
+      if (!googleRetryAttempted && canRetryGoogleKey) {
+        googleRetryAttempted = true
+        const retryStreamOptions = {
+          ...baseStreamOptions,
+          model: resolvedModel,
+          ...(providerOptions ? { providerOptions } : {}),
+          middleware: [reasoningMiddleware],
+          onError: handleRetryStreamError,
+        }
+        const retryResult = await rateLimitedAI.google.streamText(
+          retryStreamOptions,
+          session.user.id,
+          {
+            excludeIndices:
+              typeof primaryKeyIndex === 'number' ? [primaryKeyIndex] : undefined,
+          }
+        )
+        const retryUIStream = retryResult.toUIMessageStream(uiStreamOptions)
+        if (canFallbackToOpenAI) {
+          return createFallbackUIStream(
+            retryUIStream,
+            openaiFallbackFactory,
+            () => fallbackState.lastErrorText
+          )
+        }
+        return retryUIStream
+      }
+
+      if (!canFallbackToOpenAI) {
+        const fallbackError = new Error(
+          fallbackState.lastErrorText ||
+            'OpenAI fallback unavailable: missing OpenAI API keys.'
+        )
+        await persistStreamError(fallbackError)
+        const errorText = uiStreamOnError(fallbackError)
+        return new ReadableStream<UIMessageChunk>({
+          start(controller) {
+            controller.enqueue({ type: 'error', errorText })
+            controller.close()
+          },
+        })
+      }
+      return openaiFallbackFactory()
+    }
+
+    const stream =
+      canRetryGoogleKey || canFallbackToOpenAI
+        ? createFallbackUIStream(primaryUIStream, fallbackFactory, () => fallbackState.lastErrorText)
+        : primaryUIStream
 
     return createUIMessageStreamResponse({
       headers: {

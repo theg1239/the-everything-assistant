@@ -58,6 +58,11 @@ interface TextGenerationOptions {
   [key: string]: unknown
 }
 
+interface ApiKeySelectionOptions {
+  excludeIndices?: number[]
+  onKeySelected?: (keyIndex: number) => void
+}
+
 // Type for embed options
 interface EmbedOptions {
   model?: { modelId: string }
@@ -362,7 +367,11 @@ export class RateLimitedAI {
     return wrapped
   }
 
-  async streamText(options: TextGenerationOptions, userId?: string): Promise<any> {
+  async streamText(
+    options: TextGenerationOptions,
+    userId?: string,
+    keyOptions: ApiKeySelectionOptions = {}
+  ): Promise<any> {
     if (userId && this.userConfig.enabled) {
       const u = await this.userRateLimiter.checkRateLimit(userId)
       if (!u.allowed) throw new Error(`Rate limit: ${u.error}`)
@@ -371,10 +380,14 @@ export class RateLimitedAI {
     try {
       const enrichedOptions = this.withGoogleRetryOptions(options)
       return await this.apiKeyManager.executeWithRateLimit(async key => {
+        const keyIndex = this.config.keys.indexOf(key)
+        if (keyIndex >= 0) {
+          keyOptions.onKeySelected?.(keyIndex)
+        }
         const provider = this.createProviderInstance(key)
         const modelFn = this.wrapModelWithWarningDefaults(provider(enrichedOptions.model?.modelId ?? ''))
         return streamText({ ...enrichedOptions, model: modelFn } as any)
-      })
+      }, { excludeIndices: keyOptions.excludeIndices })
     } catch (error: unknown) {
       if (
         this.provider === 'google' &&
@@ -620,7 +633,8 @@ export const rateLimitedAI = {
   google: {
     model: (n = modelIds.chat) => getModel('google', n),
     embedding: (n = modelIds.embedding) => getEmbeddingModel('google', n),
-    streamText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('google').streamText(o, u),
+    streamText: (o: TextGenerationOptions, u?: string, k?: ApiKeySelectionOptions) =>
+      getRateLimitedAI('google').streamText(o, u, k),
     generateText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('google').generateText(o, u),
     generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) => getRateLimitedAI('google').generateObject<T>(o, u),
     generateImage: (o: { model?: string; prompt: string; aspectRatio?: string }, u?: string) => getRateLimitedAI('google').generateImage(o, u),
@@ -646,7 +660,8 @@ export const rateLimitedAI = {
   groq: {
     model: (n = 'gemma2-9b-it') => getModel('groq', n),
     embedding: (n = modelIds.embedding) => getEmbeddingModel('google', n),
-    streamText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('groq').streamText(o, u),
+    streamText: (o: TextGenerationOptions, u?: string, k?: ApiKeySelectionOptions) =>
+      getRateLimitedAI('groq').streamText(o, u, k),
     generateText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('groq').generateText(o, u),
     generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) => getRateLimitedAI('groq').generateObject<T>(o, u),
     embed: (o: EmbedOptions, u?: string) => getRateLimitedAI('groq').embed(o as { model?: { modelId: string }; value: string }, u),
@@ -664,7 +679,8 @@ export const rateLimitedAI = {
   cerebras: {
     model: (n = 'llama-3.3-70b') => getModel('cerebras', n),
     embedding: (n = modelIds.embedding) => getEmbeddingModel('google', n),
-    streamText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('cerebras').streamText(o, u),
+    streamText: (o: TextGenerationOptions, u?: string, k?: ApiKeySelectionOptions) =>
+      getRateLimitedAI('cerebras').streamText(o, u, k),
     generateText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('cerebras').generateText(o, u),
     generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) => getRateLimitedAI('cerebras').generateObject<T>(o, u),
     embed: (o: EmbedOptions, u?: string) => getRateLimitedAI('cerebras').embed(o as { model?: { modelId: string }; value: string }, u),
@@ -682,7 +698,8 @@ export const rateLimitedAI = {
   openrouter: {
     model: (n = 'openrouter/sherlock-think-alpha') => getModel('openrouter', n),
     embedding: (n = modelIds.embedding) => getEmbeddingModel('google', n),
-    streamText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('openrouter').streamText(o, u),
+    streamText: (o: TextGenerationOptions, u?: string, k?: ApiKeySelectionOptions) =>
+      getRateLimitedAI('openrouter').streamText(o, u, k),
     generateText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('openrouter').generateText(o, u),
     generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) => getRateLimitedAI('openrouter').generateObject<T>(o, u),
     embed: (o: EmbedOptions, u?: string) => getRateLimitedAI('openrouter').embed(o as { model?: { modelId: string }; value: string }, u),
@@ -700,7 +717,8 @@ export const rateLimitedAI = {
   openai: {
     model: (n = 'gpt-5-mini') => getModel('openai', n),
     embedding: (n = modelIds.embedding) => getEmbeddingModel('google', n),
-    streamText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('openai').streamText(o, u),
+    streamText: (o: TextGenerationOptions, u?: string, k?: ApiKeySelectionOptions) =>
+      getRateLimitedAI('openai').streamText(o, u, k),
     generateText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('openai').generateText(o, u),
     generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) => getRateLimitedAI('openai').generateObject<T>(o, u),
     embed: (o: EmbedOptions, u?: string) => getRateLimitedAI('openai').embed(o as { model?: { modelId: string }; value: string }, u),

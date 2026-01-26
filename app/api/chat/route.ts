@@ -480,6 +480,17 @@ export async function POST(req: Request) {
       if (!fallbackState.hasContent) fallbackState.hasContent = true
     }
 
+    const supportsOpenAIPromptCacheRetention = (modelId: string) =>
+      modelId.startsWith('gpt-5.1')
+
+    const isOpenAIReasoningModel = (modelId: string) =>
+      !(
+        modelId.startsWith('gpt-5.1') ||
+        modelId.startsWith('gpt-5') ||
+        modelId.startsWith('gpt-5-mini') ||
+        modelId.startsWith('gpt-5-chat')
+      )
+
     const buildOpenAIProviderOptions = (modelId: string) => ({
       openai: {
         parallelToolCalls: true,
@@ -487,7 +498,9 @@ export async function POST(req: Request) {
         maxToolCalls: 4,
         reasoningSummary: 'detailed',
         promptCacheKey: openaiPromptCacheKey,
-        ...(modelId.startsWith('gpt-5-mini') ? { promptCacheRetention: '24h' } : {}),
+        ...(supportsOpenAIPromptCacheRetention(modelId)
+          ? { promptCacheRetention: '24h' }
+          : {}),
       },
     })
 
@@ -734,10 +747,13 @@ export async function POST(req: Request) {
       }
     }
 
+    const includeTemperature =
+      !(model.provider === 'openai' && isOpenAIReasoningModel(model.modelId))
+
     const baseStreamOptions = {
       messages: finalMessages,
       tools,
-      temperature: 0.3,
+      ...(includeTemperature ? { temperature: 0.3 } : {}),
       maxTokens: 40000,
       experimental_transform: smoothStream({ chunking: 'word' }),
       stopWhen: stepCountIs(10),

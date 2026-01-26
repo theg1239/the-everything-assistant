@@ -8,7 +8,7 @@ import { saveTokenUsage } from '@/lib/db'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { getModelConfig } from '@/lib/model-registry'
 import { normalizeTokenUsage } from '@/lib/token-usage'
-import * as z from 'zod'
+import * as z from 'zod/v3';
 import type { VtopCommandFlags } from '@/types/tools'
 
 const vtopRequestSchema = z.object({
@@ -89,8 +89,8 @@ export async function POST(req: Request) {
               chatId: null,
               model: modelConfig.modelId,
               stepIndex: null,
-              promptTokens: usageTotals.promptTokens,
-              completionTokens: usageTotals.completionTokens,
+              inputTokens: usageTotals.inputTokens,
+              outputTokens: usageTotals.outputTokens,
               totalTokens: usageTotals.totalTokens,
               meta: { type: 'hub-vtop', command },
             })

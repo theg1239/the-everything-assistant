@@ -230,14 +230,47 @@ function extractAttachmentsFromParts(
     .map(part => {
       const filePart = part as unknown as {
         url?: string
+        filename?: string
         name?: string
         mediaType?: string
+        providerMetadata?: { attachmentName?: string }
+        providerOptions?: { attachmentName?: string }
+        file?: {
+          url?: string
+          filename?: string
+          name?: string
+          mediaType?: string
+          providerMetadata?: { attachmentName?: string }
+          providerOptions?: { attachmentName?: string }
+        }
       }
-      if (!filePart.url || !filePart.mediaType) return null
+      const url =
+        typeof filePart.url === 'string'
+          ? filePart.url
+          : typeof filePart.file?.url === 'string'
+            ? filePart.file.url
+            : undefined
+      const mediaType =
+        typeof filePart.mediaType === 'string'
+          ? filePart.mediaType
+          : typeof filePart.file?.mediaType === 'string'
+            ? filePart.file.mediaType
+            : undefined
+      if (!url || !mediaType) return null
+      const name =
+        filePart.filename ||
+        filePart.providerMetadata?.attachmentName ||
+        filePart.providerOptions?.attachmentName ||
+        filePart.name ||
+        filePart.file?.filename ||
+        filePart.file?.providerMetadata?.attachmentName ||
+        filePart.file?.providerOptions?.attachmentName ||
+        filePart.file?.name ||
+        undefined
       return {
-        url: filePart.url,
-        name: filePart.name,
-        contentType: filePart.mediaType,
+        url,
+        name,
+        contentType: mediaType,
       } as Attachment
     })
     .filter((att): att is Attachment => Boolean(att))
@@ -682,7 +715,7 @@ export async function POST(req: Request) {
       finishReason,
       usage,
       stepIndex,
-      reasoning,
+      reasoningText,
     }: any) => {
       try {
         if (usage && typeof usage === 'object') {
@@ -693,8 +726,8 @@ export async function POST(req: Request) {
             chatId: chat.id,
             model: model.modelId,
             stepIndex: typeof stepIndex === 'number' ? stepIndex : null,
-            promptTokens: usageTotals.promptTokens,
-            completionTokens: usageTotals.completionTokens,
+            inputTokens: usageTotals.inputTokens,
+            outputTokens: usageTotals.outputTokens,
             totalTokens: usageTotals.totalTokens,
             meta: { finishReason },
           })
@@ -710,7 +743,7 @@ export async function POST(req: Request) {
         toolCalls?.filter((tc: any) => tc.toolName === 'knowledgeBase') || []
     }
 
-    const handleFinish = async (result: any, { reasoning }: any = {}) => {
+    const handleFinish = async (result: any, { reasoningText }: any = {}) => {
       clearNoChunkLog()
       const allToolResults: any[] = []
 
@@ -821,8 +854,8 @@ export async function POST(req: Request) {
             chatId: chat.id,
             model: model.modelId,
             stepIndex: null,
-            promptTokens: usageTotals.promptTokens,
-            completionTokens: usageTotals.completionTokens,
+            inputTokens: usageTotals.inputTokens,
+            outputTokens: usageTotals.outputTokens,
             totalTokens: usageTotals.totalTokens,
             meta: { type: 'final' },
           })
@@ -844,7 +877,7 @@ export async function POST(req: Request) {
       messages: finalMessages,
       tools,
       maxRetries: 0,
-      maxTokens: 40000,
+      maxOutputTokens: 40000,
       experimental_transform: smoothStream({ chunking: 'word' }),
       stopWhen: stepCountIs(10),
       onChunk: handleStreamChunk,

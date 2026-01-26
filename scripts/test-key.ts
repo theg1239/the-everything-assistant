@@ -116,7 +116,7 @@ async function testProvider(provider: Provider): Promise<TestResult> {
           const opts: any = {
             model: modelFn,
             prompt: 'Say hello in one short sentence',
-            maxTokens: 24,
+            maxOutputTokens: 24,
           }
           const gResult = await api.generateText(opts)
           console.log('  ✅ generateText succeeded.')

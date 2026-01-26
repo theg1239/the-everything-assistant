@@ -101,13 +101,12 @@ export function legacyMessageToUiMessage(message: LegacyMessage): AppUIMessage {
 
   if (Array.isArray(message.attachments)) {
     for (const attachment of message.attachments) {
+      const filename = attachment.name ?? undefined
       parts.push({
         type: 'file',
         url: attachment.url,
         mediaType: attachment.contentType || 'application/octet-stream',
-        providerMetadata: attachment.name
-          ? ({ attachmentName: attachment.name } as any)
-          : undefined,
+        ...(filename ? { filename } : {}),
       })
     }
   }
@@ -159,13 +158,33 @@ export function uiMessageToLegacyMessage(message: AppUIMessage): LegacyMessage {
           error: part.errorText,
         })
       } else if (part.type === 'file') {
+        const filePart = part as any
+        const url =
+          typeof filePart.url === 'string'
+            ? filePart.url
+            : typeof filePart.file?.url === 'string'
+              ? filePart.file.url
+              : undefined
+        const mediaType =
+          typeof filePart.mediaType === 'string'
+            ? filePart.mediaType
+            : typeof filePart.file?.mediaType === 'string'
+              ? filePart.file.mediaType
+              : undefined
+        const filename =
+          filePart.filename ??
+          filePart.name ??
+          filePart.providerMetadata?.attachmentName ??
+          filePart.providerOptions?.attachmentName ??
+          filePart.file?.filename ??
+          filePart.file?.name ??
+          filePart.file?.providerMetadata?.attachmentName ??
+          filePart.file?.providerOptions?.attachmentName
+        if (!url || !mediaType) continue
         attachments.push({
-          url: part.url,
-          contentType: part.mediaType,
-          name:
-            typeof (part as any).providerMetadata?.attachmentName === 'string'
-              ? (part as any).providerMetadata.attachmentName
-              : undefined,
+          url,
+          contentType: mediaType,
+          name: typeof filename === 'string' && filename.length > 0 ? filename : undefined,
         })
       }
     }

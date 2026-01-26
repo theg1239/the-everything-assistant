@@ -1,5 +1,5 @@
 import { tool } from 'ai'
-import * as z from 'zod'
+import * as z from 'zod/v3';
 
 import { findFullCourseName, searchCoursesByName, getAllCourseMatches, recognizeCourseInText } from '@/lib/course-map'
 import { getCourseData, type School } from '@/lib/ffcs-tool'

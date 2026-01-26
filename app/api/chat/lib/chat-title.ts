@@ -38,7 +38,7 @@ Examples:
 - "What are my exam schedules?" → "Exam Schedule Query"
 
 Respond with ONLY the title, nothing else.`,
-        maxTokens: 50,
+        maxOutputTokens: 50,
       },
       userId
     )

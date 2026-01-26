@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import { memoryService, memorySettingsSchema } from '@/lib/memory/memory-service'
-import * as z from 'zod'
+import * as z from 'zod/v3';
 
 export async function GET() {
   try {

@@ -1,4 +1,4 @@
-import * as z from 'zod'
+import * as z from 'zod/v3';
 
 import type { AppUIMessage } from '@/lib/ai-message-conversion'
 import type { JsonValue } from '@/types/tools'

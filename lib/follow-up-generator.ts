@@ -119,7 +119,7 @@ Output exactly 3 questions, one per line, without numbering or bullet points.`
       {
         model: await providerClient.model(followUpModel.modelId),
         prompt,
-        maxTokens: 150,
+        maxOutputTokens: 150,
         temperature: 0.7,
       },
       userId

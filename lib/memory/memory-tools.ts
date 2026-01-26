@@ -1,5 +1,5 @@
 import { tool } from 'ai'
-import * as z from 'zod'
+import * as z from 'zod/v3';
 import { memoryService } from './memory-service'
 
 export function createMemoryTool(userId: string) {

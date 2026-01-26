@@ -157,7 +157,7 @@ export interface MemorySettings {
   isEnabled: boolean
   autoSave: boolean
   autoSaveFilter: 'low' | 'medium' | 'high'
-  maxTokens: number
+  maxOutputTokens: number
 }
 
 const MEMORY_SETTINGS_STALE_TIME = 1000 * 60 * 10 // 10 minutes
@@ -189,7 +189,7 @@ interface UpdateMemorySettingsData {
   isEnabled?: boolean
   autoSave?: boolean
   autoSaveFilter?: 'low' | 'medium' | 'high'
-  maxTokens?: number
+  maxOutputTokens?: number
 }
 
 export function useUpdateMemorySettings() {

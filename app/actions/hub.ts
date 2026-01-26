@@ -24,7 +24,7 @@ import type {
   ProxySyncResultEntry,
   VTOPCredentialPayload,
 } from '@/types/hub'
-import type { z } from 'zod'
+import { z } from 'zod/v3';
 
 type VTOPFormattedResult = z.infer<typeof vtopResultSchema>
 
@@ -151,8 +151,8 @@ async function formatAndPersistVTOPResult(
       chatId: null,
       model: modelIdForUsage,
       stepIndex: null,
-      promptTokens: usageTotals.promptTokens,
-      completionTokens: usageTotals.completionTokens,
+      inputTokens: usageTotals.inputTokens,
+      outputTokens: usageTotals.outputTokens,
       totalTokens: usageTotals.totalTokens,
       meta: { type: 'hub-vtop', command },
     })

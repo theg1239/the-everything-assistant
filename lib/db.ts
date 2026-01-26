@@ -345,8 +345,8 @@ export async function saveTokenUsage(params: {
   chatId?: string | null
   model?: string | null
   stepIndex?: number | null
-  promptTokens: number
-  completionTokens: number
+  inputTokens: number
+  outputTokens: number
   totalTokens: number
   meta?: any
 }): Promise<TokenUsageLog> {
@@ -356,8 +356,8 @@ export async function saveTokenUsage(params: {
       chatId: params.chatId || null,
       model: params.model || null,
       stepIndex: params.stepIndex ?? null,
-      promptTokens: params.promptTokens,
-      completionTokens: params.completionTokens,
+      inputTokens: params.inputTokens,
+      outputTokens: params.outputTokens,
       totalTokens: params.totalTokens,
       meta: params.meta as any,
     },
@@ -386,12 +386,12 @@ export async function getTokenUsageSummary(days: number = 1): Promise<{
   from.setDate(to.getDate() - Math.max(0, days))
   const rows = await prisma.tokenUsage.findMany({
     where: { createdAt: { gte: from, lte: to } },
-    select: { promptTokens: true, completionTokens: true, totalTokens: true },
+    select: { inputTokens: true, outputTokens: true, totalTokens: true },
   })
   const summary = rows.reduce(
     (acc, r) => {
-      acc.totalPromptTokens += r.promptTokens
-      acc.totalCompletionTokens += r.completionTokens
+      acc.totalPromptTokens += r.inputTokens
+      acc.totalCompletionTokens += r.outputTokens
       acc.totalTokens += r.totalTokens
       acc.count++
       return acc
@@ -413,23 +413,23 @@ export async function getTokenUsageAllTimeSummary(): Promise<{
 }> {
   try {
     const agg = await (prisma as any).tokenUsage.aggregate({
-      _sum: { promptTokens: true, completionTokens: true, totalTokens: true },
+      _sum: { inputTokens: true, outputTokens: true, totalTokens: true },
       _count: { _all: true },
     })
     return {
-      totalPromptTokens: agg._sum?.promptTokens || 0,
-      totalCompletionTokens: agg._sum?.completionTokens || 0,
+      totalPromptTokens: agg._sum?.inputTokens || 0,
+      totalCompletionTokens: agg._sum?.outputTokens || 0,
       totalTokens: agg._sum?.totalTokens || 0,
       count: agg._count?._all || 0,
-    }
+    };
   } catch {
     const rows = await prisma.tokenUsage.findMany({
-      select: { promptTokens: true, completionTokens: true, totalTokens: true },
+      select: { inputTokens: true, outputTokens: true, totalTokens: true },
     })
     const s = rows.reduce(
       (acc, r) => {
-        acc.totalPromptTokens += r.promptTokens
-        acc.totalCompletionTokens += r.completionTokens
+        acc.totalPromptTokens += r.inputTokens
+        acc.totalCompletionTokens += r.outputTokens
         acc.totalTokens += r.totalTokens
         acc.count++
         return acc
@@ -458,14 +458,14 @@ export async function getTokenUsageLifetimeBuckets(granularity: 'day' | 'month' 
       ts: new Date(r.bucket).getTime(),
       date: new Date(r.bucket).toISOString(),
       totalTokens: Number(r.totalTokens || 0),
-      promptTokens: Number(r.promptTokens || 0),
-      completionTokens: Number(r.completionTokens || 0),
+      inputTokens: Number(r.inputTokens || 0),
+      outputTokens: Number(r.outputTokens || 0),
       count: Number(r.count || 0),
-    }))
+    }));
   } catch (err) {
     try {
       const all = await prisma.tokenUsage.findMany({
-        select: { createdAt: true, totalTokens: true, promptTokens: true, completionTokens: true },
+        select: { createdAt: true, totalTokens: true, inputTokens: true, outputTokens: true },
       })
       const buckets: Record<
         string,
@@ -473,8 +473,8 @@ export async function getTokenUsageLifetimeBuckets(granularity: 'day' | 'month' 
           ts: number
           date: string
           totalTokens: number
-          promptTokens: number
-          completionTokens: number
+          inputTokens: number
+          outputTokens: number
           count: number
         }
       > = {}
@@ -489,13 +489,13 @@ export async function getTokenUsageLifetimeBuckets(granularity: 'day' | 'month' 
             ts: new Date(key).getTime(),
             date: key,
             totalTokens: 0,
-            promptTokens: 0,
-            completionTokens: 0,
+            inputTokens: 0,
+            outputTokens: 0,
             count: 0,
           }
         buckets[key].totalTokens += Number(r.totalTokens || 0)
-        buckets[key].promptTokens += Number(r.promptTokens || 0)
-        buckets[key].completionTokens += Number(r.completionTokens || 0)
+        buckets[key].inputTokens += Number(r.inputTokens || 0)
+        buckets[key].outputTokens += Number(r.outputTokens || 0)
         buckets[key].count += 1
       }
       return Object.values(buckets).sort((a, b) => a.ts - b.ts)

@@ -1,4 +1,4 @@
-import * as z from 'zod'
+import * as z from 'zod/v3';
 
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { getModelConfig } from '@/lib/model-registry'

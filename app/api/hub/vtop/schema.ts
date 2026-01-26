@@ -1,4 +1,4 @@
-import * as z from 'zod'
+import * as z from 'zod/v3';
 
 export const vtopResultSchema = z.object({
   command: z.string().describe('vtop command executed'),

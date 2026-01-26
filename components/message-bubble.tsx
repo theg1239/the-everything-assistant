@@ -257,16 +257,48 @@ const PureMessageBubble = ({
             .map(part => {
               const filePart = part as {
                 url?: string
+                filename?: string
                 name?: string
                 mediaType?: string
                 providerMetadata?: { attachmentName?: string }
+                providerOptions?: { attachmentName?: string }
+                file?: {
+                  url?: string
+                  filename?: string
+                  name?: string
+                  mediaType?: string
+                  providerMetadata?: { attachmentName?: string }
+                  providerOptions?: { attachmentName?: string }
+                }
               }
-              if (!filePart.url || !filePart.mediaType) return null
+              const url =
+                typeof filePart.url === 'string'
+                  ? filePart.url
+                  : typeof filePart.file?.url === 'string'
+                    ? filePart.file.url
+                    : undefined
+              const mediaType =
+                typeof filePart.mediaType === 'string'
+                  ? filePart.mediaType
+                  : typeof filePart.file?.mediaType === 'string'
+                    ? filePart.file.mediaType
+                    : undefined
+              if (!url || !mediaType) return null
+              const attachmentName =
+                filePart.filename ||
+                filePart.providerMetadata?.attachmentName ||
+                filePart.providerOptions?.attachmentName ||
+                filePart.name ||
+                filePart.file?.filename ||
+                filePart.file?.providerMetadata?.attachmentName ||
+                filePart.file?.providerOptions?.attachmentName ||
+                filePart.file?.name ||
+                null
               return {
-                url: filePart.url,
-                name: filePart.providerMetadata?.attachmentName || filePart.name || null,
-                contentType: filePart.mediaType,
-              }
+                url,
+                name: attachmentName,
+                contentType: mediaType,
+              };
             })
             .filter(att => att !== null) as Attachment[])
         : []

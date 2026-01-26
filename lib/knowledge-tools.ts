@@ -1,5 +1,5 @@
 import { tool } from 'ai'
-import * as z from 'zod'
+import * as z from 'zod/v3';
 import { getContextForAIPrompt } from './data/context-integration'
 import { rateLimitedAI } from './rate-limited-ai'
 import { searchRedditWithContext } from './tools'

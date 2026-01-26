@@ -1,6 +1,6 @@
 import { tool } from 'ai'
 import { searchTool, extractTool } from '@parallel-web/ai-sdk-tools'
-import * as z from 'zod'
+import * as z from 'zod/v3';
 import { scrapePapersCodeChef } from './scrapers/papers-codechef'
 import { scrapePapersService } from './scrapers/papers-scraper'
 import { scrapeVITPaperVault } from './scrapers/vit-papervault'
@@ -2840,7 +2840,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
         }
       },
     }),
-  }
+  };
 }
 
 function getLevenshteinDistance(a: string, b: string): number {
@@ -2870,5 +2870,5 @@ function normalizeString(str?: string): string {
     .replace(/\p{Diacritic}/gu, '')
     .replace(/[^a-z0-9 ]/g, '')
     .replace(/\s+/g, ' ')
-    .trim()
+    .trim();
 }

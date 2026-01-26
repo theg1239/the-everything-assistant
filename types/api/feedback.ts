@@ -1,4 +1,4 @@
-import * as z from 'zod'
+import * as z from 'zod/v3';
 
 const contributionSchema = z.object({
   title: z.string().optional(),

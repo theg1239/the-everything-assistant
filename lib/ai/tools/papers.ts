@@ -1,5 +1,5 @@
 import { tool } from 'ai'
-import * as z from 'zod'
+import * as z from 'zod/v3';
 
 import { scrapePapersCodeChef } from '@/lib/scrapers/papers-codechef'
 import { scrapePapersService } from '@/lib/scrapers/papers-scraper'

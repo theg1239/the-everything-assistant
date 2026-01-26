@@ -30,7 +30,7 @@ async function main() {
     const result = await ai.generateText({
       model: { modelId: modelIds.chat },
       prompt: 'Reply with the single word "ok".',
-      maxTokens: 5,
+      maxOutputTokens: 5,
       temperature: 0,
     })
     const elapsedMs = Date.now() - startedAt

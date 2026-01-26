@@ -1226,8 +1226,8 @@ function PureChatInterfaceComponent({
             ...allAttachments.map(att => ({
               type: 'file',
               url: att.url,
-              name: att.name,
               mediaType: att.contentType,
+              ...(att.name ? { filename: att.name } : {}),
             }))
           )
         }
@@ -1907,6 +1907,7 @@ function PureChatInterfaceComponent({
                 )}{' '}
               </motion.div>
 
+              {/*
               <div className="w-full max-w-5xl flex justify-center -mt-3">
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
@@ -2034,6 +2035,7 @@ function PureChatInterfaceComponent({
                   }
                 `}</style>
               </div>
+              */}
 
               {errorMessage && <StreamingErrorDisplay message={errorMessage} />}
 

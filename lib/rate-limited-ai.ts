@@ -50,7 +50,7 @@ interface TextGenerationOptions {
   messages?: ModelMessage[]
   tools?: Record<string, unknown>
   temperature?: number
-  maxTokens?: number
+  maxOutputTokens?: number
   providerOptions?: {
     google?: Record<string, unknown>
     openai?: Record<string, unknown>
@@ -256,8 +256,8 @@ export class RateLimitedAI {
     return async () => {
       const key = await this.apiKeyManager.getCurrentKey()
       const google = createGoogleGenerativeAI({ apiKey: key })
-      return google.textEmbeddingModel(modelName) as unknown as EmbeddingModel
-    }
+      return google.textEmbeddingModel(modelName) as unknown as EmbeddingModel;
+    };
   }
 
   private isGoogleInternalError(error: unknown): boolean {
@@ -621,7 +621,7 @@ export class RateLimitedAI {
           value: options.value ?? '',
         })
       }
-    })
+    });
   }
 
   async generateImage(

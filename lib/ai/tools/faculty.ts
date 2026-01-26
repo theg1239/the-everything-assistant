@@ -1,5 +1,5 @@
 import { tool } from 'ai'
-import * as z from 'zod'
+import * as z from 'zod/v3';
 
 import { getCourseData, type School } from '@/lib/ffcs-tool'
 import type { FacultyCourseRecord, FacultyResultEntry, FacultySchoolRecord, JsonValue } from '@/types/tools'
@@ -98,7 +98,7 @@ function normalizeString(str?: string): string {
     .replace(/\p{Diacritic}/gu, '')
     .replace(/[^a-z0-9 ]/g, '')
     .replace(/\s+/g, ' ')
-    .trim()
+    .trim();
 }
 
 function getLevenshteinDistance(a: string, b: string): number {

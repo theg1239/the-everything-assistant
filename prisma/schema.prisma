@@ -260,8 +260,8 @@ model TokenUsage {
   chatId           String?
   model            String?
   stepIndex        Int?
-  promptTokens     Int
-  completionTokens Int
+  inputTokens      Int      @map("promptTokens")
+  outputTokens     Int      @map("completionTokens")
   totalTokens      Int
   meta             Json?
   createdAt        DateTime @default(now())

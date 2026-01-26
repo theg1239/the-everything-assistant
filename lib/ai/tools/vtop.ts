@@ -1,5 +1,5 @@
 import { tool } from 'ai'
-import * as z from 'zod'
+import * as z from 'zod/v3';
 
 import { hasVTOPCredentials, getFormattedVTOPCredentials } from '@/lib/server-vtop-credentials'
 import type {

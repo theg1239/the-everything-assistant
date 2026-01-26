@@ -36,10 +36,10 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
       .reverse()
       .map((u: any) => ({
         time: new Date(u.createdAt).toLocaleTimeString(),
-        prompt: u.promptTokens,
-        completion: u.completionTokens,
+        prompt: u.inputTokens,
+        completion: u.outputTokens,
         tokens: u.totalTokens,
-      }))
+      }));
   }, [usage])
 
   const heatmap: any = useMemo(() => {
@@ -118,7 +118,6 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
           </div>
         </div>
       </div>
-
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <StatCard
           label="24h total tokens"
@@ -132,9 +131,7 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
           accent="text-green-200"
         />
       </div>
-
       <TokenUsageChart data={chartData} />
-
       {showHeatmap && Array.isArray(usage?.detailedStats?.hourlyHeatmap) && (
         <div className="mt-4 p-3 rounded-md bg-black/10">
           <Heatmap
@@ -143,7 +140,6 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
           />
         </div>
       )}
-
       {showPeakHour && (
         <div className="mt-4 p-3 rounded-md bg-black/10">
           <div className="text-sm font-medium lowercase mb-2">peak hours</div>
@@ -200,8 +196,6 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
           )}
         </div>
       )}
-
-
       {Array.isArray(usage?.detailedStats?.movingAverages) && (
         <div className="mt-4 p-3 rounded-md bg-black/10">
           <div className="text-sm font-medium lowercase mb-2">moving average (7d)</div>
@@ -222,7 +216,6 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
           </div>
         </div>
       )}
-
       {usageOpen && (
         <div
           id="usage-table"
@@ -250,10 +243,10 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap lowercase">{u.model || '-'}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
-                      {u.promptTokens.toLocaleString()}
+                      {u.inputTokens.toLocaleString()}
                     </td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
-                      {u.completionTokens.toLocaleString()}
+                      {u.outputTokens.toLocaleString()}
                     </td>
                     <td className="px-3 py-2 text-right font-medium whitespace-nowrap">
                       {u.totalTokens.toLocaleString()}
@@ -289,5 +282,5 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
         </div>
       )}
     </div>
-  )
+  );
 }

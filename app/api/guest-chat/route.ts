@@ -97,7 +97,7 @@ export async function POST(req: Request) {
         messages: finalMessages,
         tools,
         maxRetries: 0,
-        maxTokens: 800,
+        maxOutputTokens: 800,
         temperature: 0.4,
         timeout: model.provider === 'google' ? { chunkMs: 4000, totalMs: 12000 } : undefined,
         providerOptions:
@@ -132,8 +132,8 @@ export async function POST(req: Request) {
                 chatId: guestChatId,
                 model: model.modelId,
                 stepIndex: typeof stepIndex === 'number' ? stepIndex : null,
-                promptTokens: usageTotals.promptTokens,
-                completionTokens: usageTotals.completionTokens,
+                inputTokens: usageTotals.inputTokens,
+                outputTokens: usageTotals.outputTokens,
                 totalTokens: usageTotals.totalTokens,
                 meta: { finishReason, channel: 'guest' },
               })
@@ -155,8 +155,8 @@ export async function POST(req: Request) {
                 chatId: guestChatId,
                 model: model.modelId,
                 stepIndex: null,
-                promptTokens: usageTotals.promptTokens,
-                completionTokens: usageTotals.completionTokens,
+                inputTokens: usageTotals.inputTokens,
+                outputTokens: usageTotals.outputTokens,
                 totalTokens: usageTotals.totalTokens,
                 meta: { type: 'final', channel: 'guest' },
               })

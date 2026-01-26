@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { generateFollowUpSuggestions } from '@/lib/follow-up-generator'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import * as z from 'zod'
+import * as z from 'zod/v3';
 
 const messageSchema = z.object({
   role: z.enum(['user', 'assistant']),

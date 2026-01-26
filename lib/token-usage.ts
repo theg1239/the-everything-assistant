@@ -15,13 +15,13 @@ const firstNumber = (...values: unknown[]): number | undefined => {
 
 export function normalizeTokenUsage(usage: UsageCandidate) {
   const promptTokens = firstNumber(
-    usage?.promptTokens,
+    usage?.inputTokens,
     usage?.inputTokens,
     usage?.inputTokens?.total,
     usage?.prompt_tokens,
     usage?.input_tokens,
     usage?.input_tokens?.total,
-    usage?.raw?.promptTokens,
+    usage?.raw?.inputTokens,
     usage?.raw?.inputTokens,
     usage?.raw?.inputTokens?.total,
     usage?.raw?.prompt_tokens,
@@ -30,13 +30,13 @@ export function normalizeTokenUsage(usage: UsageCandidate) {
   )
 
   const completionTokens = firstNumber(
-    usage?.completionTokens,
+    usage?.outputTokens,
     usage?.outputTokens,
     usage?.outputTokens?.total,
     usage?.completion_tokens,
     usage?.output_tokens,
     usage?.output_tokens?.total,
-    usage?.raw?.completionTokens,
+    usage?.raw?.outputTokens,
     usage?.raw?.outputTokens,
     usage?.raw?.outputTokens?.total,
     usage?.raw?.completion_tokens,
@@ -56,8 +56,8 @@ export function normalizeTokenUsage(usage: UsageCandidate) {
   }
 
   return {
-    promptTokens: promptTokens ?? 0,
-    completionTokens: completionTokens ?? 0,
+    inputTokens: promptTokens ?? 0,
+    outputTokens: completionTokens ?? 0,
     totalTokens: totalTokens ?? 0,
-  }
+  };
 }

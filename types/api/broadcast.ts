@@ -1,4 +1,4 @@
-import * as z from 'zod'
+import * as z from 'zod/v3';
 
 export const broadcastSlideSchema = z.object({
   title: z.string().min(1, 'Slide title is required'),

@@ -67,7 +67,7 @@ export async function getAutocompleteSuggestionAction(input: {
         model: await providerClient.model(modelId),
         system: AUTOCOMPLETE_SYSTEM_PROMPT,
         prompt,
-        maxTokens: 20,
+        maxOutputTokens: 20,
         temperature: 0.25,
         topP: 0.9,
         stopSequences: ['\n', '\n\n'],

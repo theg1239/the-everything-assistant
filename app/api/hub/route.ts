@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createVITTools } from '@/lib/tools'
-import * as z from 'zod'
+import * as z from 'zod/v3';
 import type { JsonValue } from '@/types/tools'
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>

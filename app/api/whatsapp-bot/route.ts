@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
-import * as z from 'zod'
+import * as z from 'zod/v3';
 import { generateId, type UIMessage } from 'ai'
 import { getModelConfig } from '@/lib/model-registry'
 import { normalizeTokenUsage } from '@/lib/token-usage'
@@ -373,7 +373,7 @@ CRITICAL TOOL CONTINUATION RULES:
         messages: finalMessagesForAI,
         tools,
         temperature: 0.7,
-        maxTokens: requestSource === 'whatsapp' ? 2048 : 4096,
+        maxOutputTokens: requestSource === 'whatsapp' ? 2048 : 4096,
         experimental_transform: smoothStream({ chunking: 'word' }),
         middleware: [reasoningMiddleware],
         maxSteps: 5,
@@ -389,8 +389,8 @@ CRITICAL TOOL CONTINUATION RULES:
                 chatId: null, // No specific chat for bot users
                 model: botModel.modelId,
                 stepIndex: typeof stepIndex === 'number' ? stepIndex : null,
-                promptTokens: usageTotals.promptTokens,
-                completionTokens: usageTotals.completionTokens,
+                inputTokens: usageTotals.inputTokens,
+                outputTokens: usageTotals.outputTokens,
                 totalTokens: usageTotals.totalTokens,
                 meta: { source: requestSource, userId: userInfo.userId },
               })

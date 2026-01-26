@@ -2,7 +2,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import Papa from 'papaparse'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
-import * as z from 'zod'
+import * as z from 'zod/v3';
 import { getModelConfig } from '@/lib/model-registry'
 
 interface Company {
@@ -74,10 +74,10 @@ async function readCsvFile(filePath: string): Promise<PlacementRecord[]> {
 function preprocessAndFilterData(records: PlacementRecord[]): PlacementRecord[] {
   const recordsWithNumericCtc = records.map(
     record =>
-      ({
+      (({
         ...record,
-        numericCTC: convertCtcToNumeric(record.CTC),
-      }) as PlacementRecord & { numericCTC: number | null }
+        numericCTC: convertCtcToNumeric(record.CTC)
+      }) as PlacementRecord & { numericCTC: number | null })
   )
 
   const sorted = recordsWithNumericCtc.sort((a, b) => {

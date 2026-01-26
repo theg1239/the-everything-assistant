@@ -70,6 +70,11 @@ interface EmbedOptions {
   values?: string[]
 }
 
+const truncateErrorText = (text: string, max = 500): string => {
+  if (!text) return ''
+  return text.length > max ? `${text.slice(0, max)}…` : text
+}
+
 export class RateLimitedAI {
   private apiKeyManager: ApiKeyManager
   private userRateLimiter: UserRateLimiter
@@ -267,6 +272,19 @@ export class RateLimitedAI {
     
     return this.checkInternalError(error as APIError)
   }
+
+  private isGoogleQuotaError(error: unknown): boolean {
+    const retryError = error as { reason?: string; lastError?: APIError; errors?: APIError[] }
+    if (retryError?.reason === 'maxRetriesExceeded' && retryError?.lastError) {
+      return this.checkQuotaError(retryError.lastError)
+    }
+
+    if (retryError?.errors?.length) {
+      return retryError.errors.some(e => this.checkQuotaError(e))
+    }
+
+    return this.checkQuotaError(error as APIError)
+  }
   
   private checkInternalError(apiError: APIError): boolean {
     const statusCode = apiError?.statusCode || apiError?.status || apiError?.code
@@ -280,6 +298,24 @@ export class RateLimitedAI {
                               message.includes('an internal error has occurred')
     
     return is500 && (isInternalStatus || isInternalMessage)
+  }
+
+  private checkQuotaError(apiError: APIError): boolean {
+    const statusCode = apiError?.statusCode || apiError?.status || apiError?.code
+    const message = (apiError?.message || '').toLowerCase()
+    const responseBody = apiError?.responseBody || ''
+    const status = apiError?.data?.error?.status
+
+    const is429 = statusCode === 429
+    const isResourceExhausted =
+      status === 'RESOURCE_EXHAUSTED' ||
+      (typeof responseBody === 'string' && responseBody.includes('"status": "RESOURCE_EXHAUSTED"'))
+    const isQuotaMessage =
+      message.includes('quota exceeded') ||
+      message.includes('exceeded your current quota') ||
+      message.includes('rate limit')
+
+    return is429 && (isResourceExhausted || isQuotaMessage)
   }
 
   private shouldFallbackToOpenAI(error: unknown): boolean {
@@ -310,7 +346,7 @@ export class RateLimitedAI {
   }
 
   private buildOpenAIFallbackOptions(options: TextGenerationOptions, modelId: string) {
-    const openaiKey = process.env.OPENAI_API_KEY
+    const openaiKey = this.loadOpenAIFallbackKey()
     if (!openaiKey) return null
     const openai = createOpenAI({ apiKey: openaiKey })
     return {
@@ -320,6 +356,21 @@ export class RateLimitedAI {
         ? { openai: options.providerOptions.openai }
         : undefined,
     }
+  }
+
+  private loadOpenAIFallbackKey(): string | null {
+    if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY
+    for (let i = 2; i <= 10; i++) {
+      const key = process.env[`OPENAI_API_KEY_${i}`]
+      if (key) return key
+    }
+    if (process.env.OPENAI_API_KEYS) {
+      const [first] = process.env.OPENAI_API_KEYS.split(',')
+        .map(x => x.trim())
+        .filter(Boolean)
+      return first ?? null
+    }
+    return null
   }
 
   private normalizeWarnings<T extends { warnings?: unknown }>(result: T): T {
@@ -376,10 +427,30 @@ export class RateLimitedAI {
       const u = await this.userRateLimiter.checkRateLimit(userId)
       if (!u.allowed) throw new Error(`Rate limit: ${u.error}`)
     }
-    
+
+    const streamStart = Date.now()
+    let slowTimer: ReturnType<typeof setTimeout> | null = null
+    const scheduleSlowLog = () => {
+      if (slowTimer) return
+      slowTimer = setTimeout(() => {
+        console.warn('[RateLimitedAI] streamText still awaiting provider response', {
+          provider: this.provider,
+          modelId: options.model?.modelId,
+          elapsedMs: Date.now() - streamStart,
+        })
+      }, 15000)
+    }
+    const clearSlowLog = () => {
+      if (slowTimer) {
+        clearTimeout(slowTimer)
+        slowTimer = null
+      }
+    }
+
     try {
+      scheduleSlowLog()
       const enrichedOptions = this.withGoogleRetryOptions(options)
-      return await this.apiKeyManager.executeWithRateLimit(async key => {
+      const result = await this.apiKeyManager.executeWithRateLimit(async key => {
         const keyIndex = this.config.keys.indexOf(key)
         if (keyIndex >= 0) {
           keyOptions.onKeySelected?.(keyIndex)
@@ -388,18 +459,39 @@ export class RateLimitedAI {
         const modelFn = this.wrapModelWithWarningDefaults(provider(enrichedOptions.model?.modelId ?? ''))
         return streamText({ ...enrichedOptions, model: modelFn } as any)
       }, { excludeIndices: keyOptions.excludeIndices })
+      console.warn('[RateLimitedAI] streamText provider responded', {
+        provider: this.provider,
+        modelId: options.model?.modelId,
+        elapsedMs: Date.now() - streamStart,
+      })
+      return result
     } catch (error: unknown) {
+      clearSlowLog()
+      const errorText =
+        typeof error === 'string'
+          ? error
+          : (error as { message?: string })?.message || String(error)
+      const isInternal = this.isGoogleInternalError(error)
+      const isQuota = this.isGoogleQuotaError(error)
+      const shouldFallback = this.shouldFallbackToOpenAI(error)
       if (
         this.provider === 'google' &&
-        (this.isGoogleInternalError(error) || this.shouldFallbackToOpenAI(error))
+        (isInternal || isQuota || shouldFallback)
       ) {
-        console.log('[RateLimitedAI] Google failure detected, falling back to OpenAI streamText')
+        console.warn('[RateLimitedAI] Google failure detected, falling back to OpenAI streamText', {
+          isInternal,
+          isQuota,
+          shouldFallback,
+          errorText: truncateErrorText(errorText),
+        })
         const fallbackOptions = this.buildOpenAIFallbackOptions(options, 'gpt-5-nano')
         if (!fallbackOptions) throw error
         return streamText(fallbackOptions as any)
       }
       
       throw error
+    } finally {
+      clearSlowLog()
     }
   }
 
@@ -417,11 +509,23 @@ export class RateLimitedAI {
         return generateText({ ...enrichedOptions, model: modelFn } as any)
       })
     } catch (error: unknown) {
+      const errorText =
+        typeof error === 'string'
+          ? error
+          : (error as { message?: string })?.message || String(error)
+      const isInternal = this.isGoogleInternalError(error)
+      const isQuota = this.isGoogleQuotaError(error)
+      const shouldFallback = this.shouldFallbackToOpenAI(error)
       if (
         this.provider === 'google' &&
-        (this.isGoogleInternalError(error) || this.shouldFallbackToOpenAI(error))
+        (isInternal || isQuota || shouldFallback)
       ) {
-        console.log('[RateLimitedAI] Google failure detected in generateText, falling back to OpenAI')
+        console.warn('[RateLimitedAI] Google failure detected in generateText, falling back to OpenAI', {
+          isInternal,
+          isQuota,
+          shouldFallback,
+          errorText: truncateErrorText(errorText),
+        })
         const fallbackOptions = this.buildOpenAIFallbackOptions(options, 'gpt-4o-mini')
         if (!fallbackOptions) throw error
         return generateText(fallbackOptions as any)
@@ -444,11 +548,23 @@ export class RateLimitedAI {
         return generateObject({ ...enrichedOptions, model: modelFn } as any)
       })
     } catch (error: unknown) {
+      const errorText =
+        typeof error === 'string'
+          ? error
+          : (error as { message?: string })?.message || String(error)
+      const isInternal = this.isGoogleInternalError(error)
+      const isQuota = this.isGoogleQuotaError(error)
+      const shouldFallback = this.shouldFallbackToOpenAI(error)
       if (
         this.provider === 'google' &&
-        (this.isGoogleInternalError(error) || this.shouldFallbackToOpenAI(error))
+        (isInternal || isQuota || shouldFallback)
       ) {
-        console.log('[RateLimitedAI] Google failure detected in generateObject, falling back to OpenAI')
+        console.warn('[RateLimitedAI] Google failure detected in generateObject, falling back to OpenAI', {
+          isInternal,
+          isQuota,
+          shouldFallback,
+          errorText: truncateErrorText(errorText),
+        })
         const fallbackOptions = this.buildOpenAIFallbackOptions(options, 'gpt-4o-mini')
         if (!fallbackOptions) throw error
         return generateObject({ ...(fallbackOptions as any), schema: options.schema } as any)

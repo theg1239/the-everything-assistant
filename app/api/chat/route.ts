@@ -54,6 +54,11 @@ const getErrorText = (error: unknown): string => {
   }
 }
 
+const truncateErrorText = (text: string, max = 500): string => {
+  if (!text) return ''
+  return text.length > max ? `${text.slice(0, max)}…` : text
+}
+
 const isFallbackErrorText = (errorText: string): boolean => {
   const msg = (errorText || '').toLowerCase()
   return (
@@ -63,12 +68,28 @@ const isFallbackErrorText = (errorText: string): boolean => {
     msg.includes('too many requests') ||
     msg.includes('resource_exhausted') ||
     msg.includes('429') ||
+    msg.includes('timeout') ||
+    msg.includes('timed out') ||
+    msg.includes('abort') ||
     msg.includes('all api keys failed') ||
     msg.includes('all_keys_rate_limited') ||
     msg.includes('no_valid_api_keys_available') ||
     msg.includes('all_keys_exhausted') ||
     msg.includes('maxretriesexceeded') ||
     msg.includes('max retries exceeded')
+  )
+}
+
+const isRetrySkippableErrorText = (errorText: string): boolean => {
+  const msg = (errorText || '').toLowerCase()
+  return (
+    msg.includes('quota') ||
+    msg.includes('rate limit') ||
+    msg.includes('rate-limit') ||
+    msg.includes('resource_exhausted') ||
+    msg.includes('429') ||
+    msg.includes('timeout') ||
+    msg.includes('timed out')
   )
 }
 
@@ -135,6 +156,7 @@ const createFallbackUIStream = (
       }
 
       const attemptFallback = async () => {
+        console.warn('[Chat] Starting fallback stream')
         const fallbackStream = await fallbackFactory()
         for await (const chunk of streamToAsyncIterable(fallbackStream)) {
           controller.enqueue(chunk)
@@ -149,6 +171,9 @@ const createFallbackUIStream = (
             isFallbackErrorText(resolveFallbackErrorText(chunk))
           ) {
             fallbackTriggered = true
+            console.warn('[Chat] Fallback triggered by error chunk before content', {
+              errorText: truncateErrorText(resolveFallbackErrorText(chunk)),
+            })
             try {
               await primaryStream.cancel()
             } catch {}
@@ -175,6 +200,9 @@ const createFallbackUIStream = (
         }
       } catch (error) {
         if (!hasContent && isFallbackErrorText(resolveFallbackErrorText(undefined, error))) {
+          console.warn('[Chat] Fallback triggered by stream error before content', {
+            errorText: truncateErrorText(resolveFallbackErrorText(undefined, error)),
+          })
           try {
             await attemptFallback()
           } catch (fallbackError) {
@@ -469,7 +497,9 @@ export async function POST(req: Request) {
     })()
 
     const canFallbackToOpenAI = model.provider === 'google' && hasOpenAIKeys
-    const canRetryGoogleKey = model.provider === 'google' && hasMultipleGoogleKeys
+    const allowGoogleRetry = process.env.GOOGLE_RETRY_ENABLED === 'true'
+    const canRetryGoogleKey =
+      model.provider === 'google' && hasMultipleGoogleKeys && allowGoogleRetry
     let googleRetryAttempted = false
     const fallbackState = {
       hasContent: false,
@@ -515,9 +545,10 @@ export async function POST(req: Request) {
       model.provider === 'google'
         ? {
             google: {
+              maxRetries: 0,
               thinkingConfig: {
-                thinkingBudget: 4096,
-                includeThoughts: true,
+                thinkingBudget: 512,
+                includeThoughts: false,
               },
             },
           }
@@ -552,10 +583,18 @@ export async function POST(req: Request) {
     const handlePrimaryStreamError = async (error: any) => {
       const errorText = getErrorText(error)
       fallbackState.lastErrorText = errorText
+      clearNoChunkLog()
       const shouldFallback =
         (canRetryGoogleKey || canFallbackToOpenAI) &&
         !fallbackState.hasContent &&
         isFallbackErrorText(errorText)
+      console.warn('[Chat] Primary stream error', {
+        hasContent: fallbackState.hasContent,
+        canRetryGoogleKey,
+        canFallbackToOpenAI,
+        shouldFallback,
+        errorText: truncateErrorText(errorText),
+      })
       if (shouldFallback) {
         console.warn('[Chat] Primary stream error before content; attempting fallback chain')
         return
@@ -566,8 +605,15 @@ export async function POST(req: Request) {
     const handleRetryStreamError = async (error: any) => {
       const errorText = getErrorText(error)
       fallbackState.lastErrorText = errorText
+      clearNoChunkLog()
       const shouldFallback =
         canFallbackToOpenAI && !fallbackState.hasContent && isFallbackErrorText(errorText)
+      console.warn('[Chat] Google retry stream error', {
+        hasContent: fallbackState.hasContent,
+        canFallbackToOpenAI,
+        shouldFallback,
+        errorText: truncateErrorText(errorText),
+      })
       if (shouldFallback) {
         console.warn('[Chat] Google retry error before content; attempting OpenAI fallback')
         return
@@ -576,11 +622,54 @@ export async function POST(req: Request) {
     }
 
     const handleFallbackStreamError = async (error: any) => {
-      fallbackState.lastErrorText = getErrorText(error)
+      const errorText = getErrorText(error)
+      fallbackState.lastErrorText = errorText
+      clearNoChunkLog()
+      console.warn('[Chat] OpenAI fallback stream error', {
+        errorText: truncateErrorText(errorText),
+      })
       await persistStreamError(error)
     }
 
+    let activeStreamProvider = model.provider
+    let activeStreamModelId = model.modelId
+    const streamStartMs = Date.now()
+    let chunkCount = 0
+    let firstChunkAt: number | null = null
+    let noChunkTimer: ReturnType<typeof setTimeout> | null = null
+
+    const scheduleNoChunkLog = () => {
+      if (noChunkTimer) return
+      noChunkTimer = setTimeout(() => {
+        if (chunkCount === 0) {
+          console.warn('[Chat] No chunks received after 15s', {
+            provider: activeStreamProvider,
+            modelId: activeStreamModelId,
+            elapsedMs: Date.now() - streamStartMs,
+          })
+        }
+      }, 15000)
+    }
+
+    const clearNoChunkLog = () => {
+      if (noChunkTimer) {
+        clearTimeout(noChunkTimer)
+        noChunkTimer = null
+      }
+    }
+
     const handleStreamChunk = ({ chunk }: { chunk: { type?: string } }) => {
+      chunkCount += 1
+      if (firstChunkAt === null) {
+        firstChunkAt = Date.now()
+        clearNoChunkLog()
+        console.warn('[Chat] First chunk received', {
+          provider: activeStreamProvider,
+          modelId: activeStreamModelId,
+          chunkType: chunk?.type,
+          elapsedMs: firstChunkAt - streamStartMs,
+        })
+      }
       if (chunk?.type === 'text-delta' || chunk?.type === 'reasoning-delta' || chunk?.type === 'source') {
         markStreamContent()
       }
@@ -622,6 +711,7 @@ export async function POST(req: Request) {
     }
 
     const handleFinish = async (result: any, { reasoning }: any = {}) => {
+      clearNoChunkLog()
       const allToolResults: any[] = []
 
       const finalToolResults = (result as any).toolResults ?? result.toolCalls ?? []
@@ -747,13 +837,13 @@ export async function POST(req: Request) {
       }
     }
 
-    const includeTemperature =
-      !(model.provider === 'openai' && isOpenAIReasoningModel(model.modelId))
+    const shouldIncludeTemperature = (provider: string, modelId: string) =>
+      !(provider === 'openai' && isOpenAIReasoningModel(modelId))
 
     const baseStreamOptions = {
       messages: finalMessages,
       tools,
-      ...(includeTemperature ? { temperature: 0.3 } : {}),
+      maxRetries: 0,
       maxTokens: 40000,
       experimental_transform: smoothStream({ chunking: 'word' }),
       stopWhen: stepCountIs(10),
@@ -762,15 +852,30 @@ export async function POST(req: Request) {
       onFinish: handleFinish,
     }
 
-    const primaryStreamOptions = {
+    const baseStreamOptionsFor = (provider: string, modelId: string) => ({
       ...baseStreamOptions,
+      ...(shouldIncludeTemperature(provider, modelId) ? { temperature: 0.3 } : {}),
+    })
+
+    const googleStreamTimeout = { chunkMs: 4000, totalMs: 12000 }
+
+    const primaryStreamOptions = {
+      ...baseStreamOptionsFor(model.provider, model.modelId),
       model: resolvedModel,
       ...(providerOptions ? { providerOptions } : {}),
+      ...(model.provider === 'google' ? { timeout: googleStreamTimeout } : {}),
       middleware: model.provider === 'openai' ? [] : [reasoningMiddleware],
       onError: handlePrimaryStreamError,
     }
 
     let primaryKeyIndex: number | null = null
+    activeStreamProvider = model.provider
+    activeStreamModelId = model.modelId
+    console.warn('[Chat] Starting primary stream', {
+      provider: model.provider,
+      modelId: model.modelId,
+    })
+    scheduleNoChunkLog()
     const resultStream = await providerClient.streamText(
       primaryStreamOptions,
       session.user.id,
@@ -808,13 +913,16 @@ export async function POST(req: Request) {
 
     const openaiFallbackFactory = async () => {
       const fallbackModelId = process.env.OPENAI_FALLBACK_MODEL || 'gpt-5-mini'
+      activeStreamProvider = 'openai'
+      activeStreamModelId = fallbackModelId
       console.warn(`[Chat] Falling back to OpenAI model ${fallbackModelId}`)
       const fallbackProvider = rateLimitedAI.openai
       const fallbackModel = await fallbackProvider.model(fallbackModelId)
       const fallbackStreamOptions = {
-        ...baseStreamOptions,
+        ...baseStreamOptionsFor('openai', fallbackModelId),
         model: fallbackModel,
         providerOptions: buildOpenAIProviderOptions(fallbackModelId),
+        timeout: { chunkMs: 4000, totalMs: 12000 },
         middleware: [],
         onError: handleFallbackStreamError,
       }
@@ -826,32 +934,47 @@ export async function POST(req: Request) {
     }
 
     const fallbackFactory = async () => {
+      const skipGoogleRetry = isRetrySkippableErrorText(fallbackState.lastErrorText)
       if (!googleRetryAttempted && canRetryGoogleKey) {
         googleRetryAttempted = true
-        const retryStreamOptions = {
-          ...baseStreamOptions,
-          model: resolvedModel,
-          ...(providerOptions ? { providerOptions } : {}),
-          middleware: [reasoningMiddleware],
-          onError: handleRetryStreamError,
-        }
-        const retryResult = await rateLimitedAI.google.streamText(
-          retryStreamOptions,
-          session.user.id,
-          {
+        if (skipGoogleRetry) {
+          console.warn('[Chat] Skipping Google retry due to error type', {
+            errorText: truncateErrorText(fallbackState.lastErrorText),
+          })
+        } else {
+          activeStreamProvider = 'google'
+          activeStreamModelId = model.modelId
+          console.warn('[Chat] Retrying with alternate Google key', {
+            primaryKeyIndex,
             excludeIndices:
               typeof primaryKeyIndex === 'number' ? [primaryKeyIndex] : undefined,
+          })
+          const retryStreamOptions = {
+            ...baseStreamOptionsFor('google', model.modelId),
+            model: resolvedModel,
+            ...(providerOptions ? { providerOptions } : {}),
+            timeout: googleStreamTimeout,
+            middleware: [reasoningMiddleware],
+            onError: handleRetryStreamError,
           }
-        )
-        const retryUIStream = retryResult.toUIMessageStream(uiStreamOptions)
-        if (canFallbackToOpenAI) {
-          return createFallbackUIStream(
-            retryUIStream,
-            openaiFallbackFactory,
-            () => fallbackState.lastErrorText
+          const retryResult = await rateLimitedAI.google.streamText(
+            retryStreamOptions,
+            session.user.id,
+            {
+              excludeIndices:
+                typeof primaryKeyIndex === 'number' ? [primaryKeyIndex] : undefined,
+            }
           )
+          const retryUIStream = retryResult.toUIMessageStream(uiStreamOptions)
+          if (canFallbackToOpenAI) {
+            return createFallbackUIStream(
+              retryUIStream,
+              openaiFallbackFactory,
+              () => fallbackState.lastErrorText
+            )
+          }
+          return retryUIStream
         }
-        return retryUIStream
       }
 
       if (!canFallbackToOpenAI) {
@@ -863,6 +986,9 @@ export async function POST(req: Request) {
         const errorText = uiStreamOnError(fallbackError)
         return new ReadableStream<UIMessageChunk>({
           start(controller) {
+            console.warn('[Chat] OpenAI fallback unavailable', {
+              errorText: truncateErrorText(errorText),
+            })
             controller.enqueue({ type: 'error', errorText })
             controller.close()
           },

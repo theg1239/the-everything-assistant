@@ -96,8 +96,22 @@ export async function POST(req: Request) {
         model: await providerClient.model(model.modelId),
         messages: finalMessages,
         tools,
+        maxRetries: 0,
         maxTokens: 800,
         temperature: 0.4,
+        timeout: model.provider === 'google' ? { chunkMs: 4000, totalMs: 12000 } : undefined,
+        providerOptions:
+          model.provider === 'google'
+            ? {
+                google: {
+                  maxRetries: 0,
+                  thinkingConfig: {
+                    thinkingBudget: 512,
+                    includeThoughts: false,
+                  },
+                },
+              }
+            : undefined,
         stopWhen: stepCountIs(5),
         onError: async (error: any) => {
           console.error('Guest chat streaming error:', error)
@@ -163,7 +177,7 @@ export async function POST(req: Request) {
         'X-Guest-Message-Limit': `${GUEST_MESSAGE_LIMIT}`,
         'X-Chat-Id': guestChatId,
       },
-      onError: () => 'something went wrong while streaming your guest reply.',
+      onError: () => 'something went wrong',
     })
   } catch (error: any) {
     console.error('Guest chat error:', error)

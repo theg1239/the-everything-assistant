@@ -4,6 +4,7 @@ import {
   createUIMessageStreamResponse,
   generateId,
   stepCountIs,
+  consumeStream,
 } from 'ai'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import {
@@ -282,6 +283,7 @@ export async function POST(req: Request) {
           'X-Chat-Title': chat.title,
         },
         stream,
+        consumeSseStream: consumeStream,
       })
     }
     }
@@ -811,6 +813,7 @@ export async function POST(req: Request) {
         'X-Chat-Title': chat.title,
       },
       stream,
+      consumeSseStream: consumeStream,
     })
   } catch (error: any) {
     console.error('Chat API error:', error)

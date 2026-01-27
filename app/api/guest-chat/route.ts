@@ -1,4 +1,4 @@
-import { createUIMessageStreamResponse, generateId, stepCountIs } from 'ai'
+import { createUIMessageStreamResponse, generateId, stepCountIs, consumeStream } from 'ai'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import {
   createFallbackUIStream,
@@ -277,6 +277,7 @@ export async function POST(req: Request) {
         'X-Chat-Id': guestChatId,
       },
       stream,
+      consumeSseStream: consumeStream,
     })
   } catch (error: any) {
     console.error('Guest chat error:', error)

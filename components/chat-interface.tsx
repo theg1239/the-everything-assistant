@@ -253,6 +253,8 @@ function PureChatInterfaceComponent({
   const resolvedChatId = persistedChatId ?? fallbackChatIdRef.current
   const currentChatIdRef = useRef<string | undefined>(chatId)
   const guestImportingRef = useRef(false)
+  const autoRetryRef = useRef(0)
+  const lastUserMessageIdRef = useRef<string | null>(null)
   const { updateToolResult, clearToolResult } = useVTOP()
   const { rateLimitError, clearRateLimitError, checkForRateLimitError } = useRateLimit()
   const { data: session } = useSession()
@@ -502,6 +504,16 @@ function PureChatInterfaceComponent({
     [initialMessages]
   )
 
+  const shouldAutoRetryStreamError = (errorMessage: string, responseBody: string) => {
+    const combined = `${errorMessage || ''} ${responseBody || ''}`.toLowerCase()
+    const isTypeValidation = combined.includes('type validation failed')
+    const isAbort = combined.includes('"type":"abort"') || combined.includes(' abort')
+    const isTimeout = combined.includes('timeout') || combined.includes('timed out')
+    const isUserAbort =
+      combined.includes('user cancelled') || combined.includes('user canceled') || combined.includes('user aborted')
+    return isTypeValidation && isAbort && isTimeout && !isUserAbort
+  }
+
   const chatTransport = useMemo(() => {
     return new DefaultChatTransport<AppUIMessage>({
       api: isGuest ? '/api/guest-chat' : '/api/chat',
@@ -563,10 +575,12 @@ function PureChatInterfaceComponent({
     messages: uiMessages = [],
     sendMessage,
     stop,
+    regenerate,
     setMessages: setUiMessages,
     error,
     status,
     resumeStream,
+    clearError,
   } = useChat<AppUIMessage>({
     id: resolvedChatId,
     messages: initialUiMessages,
@@ -574,6 +588,7 @@ function PureChatInterfaceComponent({
     transport: chatTransport,
     resume: autoResume ?? true,
     onFinish: ({ message }) => {
+      autoRetryRef.current = 0
       const currentChatId = currentChatIdRef.current
       const metadata = (message.metadata || {}) as Record<string, any>
 
@@ -677,6 +692,19 @@ function PureChatInterfaceComponent({
       const responseBody = hasResponseBody ? (err as any).responseBody : ''
       const bodyString = typeof responseBody === 'string' ? responseBody : ''
 
+      if (shouldAutoRetryStreamError(errorMessage, bodyString)) {
+        if (autoRetryRef.current < 1) {
+          autoRetryRef.current += 1
+          try {
+            clearError?.()
+          } catch {}
+          setTimeout(() => {
+            regenerate?.()
+          }, 250)
+        }
+        return
+      }
+
       if (isGuest) {
         const guestLimitError =
           /guest limit/i.test(errorMessage) ||
@@ -731,6 +759,15 @@ function PureChatInterfaceComponent({
   })
 
   const messages = useMemo(() => uiMessagesToLegacyMessages(uiMessages), [uiMessages])
+
+  useEffect(() => {
+    const lastUser = [...uiMessages].reverse().find(m => m.role === 'user')
+    if (!lastUser) return
+    if (lastUserMessageIdRef.current !== lastUser.id) {
+      lastUserMessageIdRef.current = lastUser.id
+      autoRetryRef.current = 0
+    }
+  }, [uiMessages])
 
   const recentMessages = useMemo(
     () =>
@@ -1067,6 +1104,11 @@ function PureChatInterfaceComponent({
       const errorMessage = error.message || error.toString()
       const hasResponseBody = typeof error === 'object' && error !== null && 'responseBody' in error
       const responseBody = hasResponseBody ? (error as any).responseBody : ''
+      const bodyString = typeof responseBody === 'string' ? responseBody : ''
+
+      if (shouldAutoRetryStreamError(errorMessage, bodyString)) {
+        return
+      }
 
       const isGeminiStreamingError =
         errorMessage.includes('contents.parts must not be empty') ||

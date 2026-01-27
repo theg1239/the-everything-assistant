@@ -25,7 +25,7 @@ export type ModelConfig = {
 const registry: Record<ModelKey, ModelConfig> = {
   chat: { provider: 'google', modelId: 'gemini-flash-lite-latest' },
   chatLite: { provider: 'google', modelId: 'gemini-flash-lite-latest' },
-  chatAttachment: { provider: 'google', modelId: 'gemini-3-flash-preview' },
+  chatAttachment: { provider: 'google', modelId: 'gemini-flash-lite-latest' },
   chatAutocomplete: { provider: 'cerebras', modelId: 'llama-3.1-8b' },
   embedding: { provider: 'google', modelId: 'gemini-embedding-001' },
   knowledgeEmbedding: { provider: 'openai', modelId: 'text-embedding-3-large' },

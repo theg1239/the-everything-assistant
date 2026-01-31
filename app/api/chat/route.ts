@@ -300,6 +300,16 @@ export async function POST(req: Request) {
       { thinkHarder: thinkHarder ?? false, isAdmin }
     )
     const openaiPromptCacheKey = `pc:v1:${chat.id.slice(0, 40)}`
+    const parseDirectModelId = (modelId: string) => {
+      const [provider, ...rest] = modelId.split('/')
+      return rest.length > 0
+        ? { provider, modelId: rest.join('/') }
+        : { provider: undefined, modelId }
+    }
+    const directModel =
+      model.provider === 'direct' ? parseDirectModelId(model.modelId) : null
+    const effectiveProvider = directModel?.provider ?? model.provider
+    const effectiveModelId = directModel?.modelId ?? model.modelId
 
     const hasConversationContent = finalMessages.some(msg => msg.role !== 'system')
 
@@ -380,7 +390,7 @@ export async function POST(req: Request) {
     }
 
     const providerOptions =
-      model.provider === 'google'
+      effectiveProvider === 'google'
         ? {
             google: {
               maxRetries: 0,
@@ -389,10 +399,10 @@ export async function POST(req: Request) {
                 includeThoughts: false,
               },
             },
-            ...buildOpenAIProviderOptions(fallbackModelId),
+            ...(allowProviderFallback ? buildOpenAIProviderOptions(fallbackModelId) : {}),
           }
-        : model.provider === 'openai'
-          ? buildOpenAIProviderOptions(model.modelId)
+        : effectiveProvider === 'openai'
+          ? buildOpenAIProviderOptions(effectiveModelId)
           : undefined
 
     const persistStreamError = async (error: any) => {
@@ -419,8 +429,8 @@ export async function POST(req: Request) {
       }
     }
 
-    let activeStreamProvider = model.provider
-    let activeStreamModelId = model.modelId
+    let activeStreamProvider = effectiveProvider
+    let activeStreamModelId = effectiveModelId
     let lastErrorText = ''
 
     const handleStreamError = async (error: any) => {
@@ -673,21 +683,23 @@ export async function POST(req: Request) {
       streamProviderOverrides[provider] = { ...tempOverride, ...maxTokensOverride, ...streamExtras }
     }
 
-    if (model.provider === 'google') {
-      setProviderOverrides('google', model.modelId, {
+    if (effectiveProvider === 'google') {
+      setProviderOverrides('google', effectiveModelId, {
         middleware: [reasoningMiddleware],
         timeout: googleStreamTimeout,
       })
-      setProviderOverrides('openai', fallbackModelId, {
+      if (allowProviderFallback) {
+        setProviderOverrides('openai', fallbackModelId, {
+          middleware: [],
+          timeout: { chunkMs: 4000, totalMs: 12000 },
+        })
+      }
+    } else if (effectiveProvider === 'openai') {
+      setProviderOverrides('openai', effectiveModelId, {
         middleware: [],
-        timeout: { chunkMs: 4000, totalMs: 12000 },
       })
-    } else if (model.provider === 'openai') {
-      setProviderOverrides('openai', model.modelId, {
-        middleware: [],
-      })
-    } else {
-      setProviderOverrides(model.provider, model.modelId)
+    } else if (effectiveProvider && effectiveProvider !== 'direct') {
+      setProviderOverrides(effectiveProvider, effectiveModelId)
     }
 
     const streamOptions = {
@@ -724,16 +736,17 @@ export async function POST(req: Request) {
       value === 'openai' ||
       value === 'groq' ||
       value === 'cerebras' ||
-      value === 'openrouter'
+      value === 'openrouter' ||
+      value === 'direct'
 
     let activeKeyIndex: number | null = null
     const handleKeySelected = (idx: number, entry?: ApiKeyEntry) => {
       activeKeyIndex = idx
-      const provider = isModelProvider(entry?.provider) ? entry?.provider : model.provider
+      const provider = isModelProvider(entry?.provider) ? entry?.provider : effectiveProvider
       activeStreamProvider = provider
       activeStreamModelId = provider === 'openai'
-        ? (model.provider === 'openai' ? model.modelId : fallbackModelId)
-        : model.modelId
+        ? (effectiveProvider === 'openai' ? effectiveModelId : fallbackModelId)
+        : effectiveModelId
     }
 
     const startStream = async () => {

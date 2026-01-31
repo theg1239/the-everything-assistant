@@ -6,7 +6,7 @@ import { createOpenRouter } from '@openrouter/ai-sdk-provider' // OpenRouter pro
 import { createOpenAI } from '@ai-sdk/openai' // OpenAI provider
 import { ApiKeyEntry, ApiKeyManager, ApiKeyConfig, DEFAULT_API_KEY_CONFIG } from './api-key-manager'
 import { UserRateLimiter, UserRateLimitConfig, loadUserRateLimitConfig } from './user-rate-limiter'
-import { modelIds } from './model-registry'
+import { modelIds, modelRegistry } from './model-registry'
 import {
   streamText,
   generateText,
@@ -19,7 +19,7 @@ import {
 } from 'ai'
 import type { EmbeddingModel } from 'ai'
 
-type Provider = 'google' | 'groq' | 'cerebras' | 'openrouter' | 'openai'
+type Provider = 'google' | 'groq' | 'cerebras' | 'openrouter' | 'openai' | 'direct'
 
 type GoogleProvider = ReturnType<typeof createGoogleGenerativeAI>
 type GoogleToolset = GoogleProvider['tools']
@@ -87,6 +87,7 @@ export class RateLimitedAI {
   }
 
   private loadKeysForProvider(provider: Provider): string[] {
+    if (provider === 'direct') return []
     const config = {
       google: {
         primary: 'GOOGLE_GENERATIVE_AI_API_KEY',
@@ -170,6 +171,8 @@ export class RateLimitedAI {
           )
         case 'openai':
           throw new Error('No OpenAI API keys found. Please set OPENAI_API_KEY or OPENAI_API_KEYS.')
+        case 'direct':
+          throw new Error('Direct provider does not use API keys')
         default:
           throw new Error(`Unsupported provider: ${this.provider}`)
       }
@@ -189,6 +192,9 @@ export class RateLimitedAI {
 
   private createProviderInstance(apiKey: string, providerOverride?: Provider) {
     const provider = providerOverride ?? this.provider
+    if (provider === 'direct') {
+      throw new Error('Direct provider does not support provider instances')
+    }
     if (provider === 'google') {
       return createGoogleGenerativeAI({ apiKey })
     }
@@ -249,11 +255,13 @@ export class RateLimitedAI {
   }
 
   private getAllowedProvidersForText(): Provider[] {
+    if (this.provider === 'direct') return ['direct']
     if (this.provider === 'google') return ['google', 'openai']
     return [this.provider]
   }
 
   private getPreferredProvidersForText(): Provider[] {
+    if (this.provider === 'direct') return ['direct']
     if (this.provider === 'google') return ['google', 'openai']
     return [this.provider]
   }
@@ -655,10 +663,150 @@ export class RateLimitedAI {
   }
 }
 
+type DirectModelInput = { modelId: string } | string | undefined
+
+const getDirectModelId = (input: DirectModelInput): string | undefined => {
+  if (!input) return undefined
+  if (typeof input === 'string') return input
+  if (typeof input.modelId === 'string') return input.modelId
+  return undefined
+}
+
+const getProviderFromModelId = (modelId?: string): string | undefined => {
+  if (!modelId) return undefined
+  const [provider, ...rest] = modelId.split('/')
+  return rest.length > 0 ? provider : undefined
+}
+
+class DirectAI {
+  private userRateLimiter: UserRateLimiter
+  private userConfig: UserRateLimitConfig
+
+  constructor(customUserConfig?: Partial<UserRateLimitConfig>) {
+    this.userConfig = {
+      ...loadUserRateLimitConfig(),
+      ...customUserConfig,
+    }
+    this.userRateLimiter = new UserRateLimiter(this.userConfig)
+  }
+
+  private async enforceUserRateLimit(userId?: string) {
+    if (userId && this.userConfig.enabled) {
+      const u = await this.userRateLimiter.checkRateLimit(userId)
+      if (!u.allowed) throw new Error(`Rate limit: ${u.error}`)
+    }
+  }
+
+  private normalizeTextOptions(options: TextGenerationOptions) {
+    const modelId = getDirectModelId(options.model)
+    const provider = getProviderFromModelId(modelId)
+    let providerOverrides = options.providerOverrides as
+      | Record<string, Partial<TextGenerationOptions>>
+      | undefined
+
+    if (providerOverrides && provider) {
+      if (providerOverrides.direct && !providerOverrides[provider]) {
+        providerOverrides = { ...providerOverrides, [provider]: providerOverrides.direct }
+      }
+      if (providerOverrides.direct) {
+        const { direct: _direct, ...rest } = providerOverrides
+        providerOverrides = rest
+      }
+    } else if (providerOverrides?.direct) {
+      const { direct: _direct, ...rest } = providerOverrides
+      providerOverrides = rest
+    }
+
+    return {
+      ...options,
+      model: modelId ?? options.model,
+      providerOverrides,
+    }
+  }
+
+  async streamText(
+    options: TextGenerationOptions,
+    userId?: string,
+    _keyOptions: ApiKeySelectionOptions = {}
+  ): Promise<any> {
+    await this.enforceUserRateLimit(userId)
+    const normalized = this.normalizeTextOptions(options)
+    return streamText(normalized as any)
+  }
+
+  async generateText(options: TextGenerationOptions, userId?: string): Promise<any> {
+    await this.enforceUserRateLimit(userId)
+    const normalized = this.normalizeTextOptions(options)
+    return generateText(normalized as any)
+  }
+
+  async generateObject<T>(options: TextGenerationOptions & { schema?: unknown }, userId?: string) {
+    await this.enforceUserRateLimit(userId)
+    const normalized = this.normalizeTextOptions(options)
+    return generateObject({ ...(normalized as any), schema: options.schema } as any)
+  }
+
+  async embed(
+    options: { model?: DirectModelInput; value: string },
+    userId?: string
+  ): Promise<EmbedResult>
+
+  async embed(
+    options: { model?: DirectModelInput; values: string[] },
+    userId?: string
+  ): Promise<EmbedManyResult>
+
+  async embed(
+    options: { model?: DirectModelInput; value?: string; values?: string[] },
+    userId?: string
+  ): Promise<EmbedResult | EmbedManyResult> {
+    await this.enforceUserRateLimit(userId)
+    const resolvedModel =
+      getDirectModelId(options.model) || modelRegistry.embedding.modelId
+    const model = resolvedModel as any
+
+    if (Array.isArray(options.values)) {
+      return embedMany({
+        model,
+        values: options.values,
+      })
+    }
+
+    return embed({
+      model,
+      value: options.value ?? '',
+    })
+  }
+
+  async getUserUsageStats(userId: string) {
+    return this.userRateLimiter.getUserUsageStats(userId)
+  }
+
+  async checkUserRateLimit(userId: string) {
+    return this.userRateLimiter.checkRateLimit(userId)
+  }
+
+  async resetUserRateLimits(userId: string) {
+    return this.userRateLimiter.resetUserLimits(userId)
+  }
+
+  getUserConfig() {
+    return { ...this.userConfig }
+  }
+
+  updateUserConfig(c: Partial<UserRateLimitConfig>) {
+    this.userConfig = { ...this.userConfig, ...c }
+    this.userRateLimiter.updateConfig(c)
+  }
+}
+
 
 const instances: Partial<Record<Provider, RateLimitedAI>> = {}
 
 export function getRateLimitedAI(provider: Provider, config?: Partial<ApiKeyConfig>) {
+  if (provider === 'direct') {
+    throw new Error('Direct provider does not use rate-limited clients')
+  }
   if (!instances[provider]) {
     instances[provider] = new RateLimitedAI(provider, config)
   }
@@ -672,7 +820,45 @@ export async function getEmbeddingModel(provider: Provider, modelName: string) {
   return (await getRateLimitedAI(provider)).getEmbeddingModel(modelName)()
 }
 
+let directInstance: DirectAI | null = null
+const getDirectAI = () => {
+  if (!directInstance) {
+    directInstance = new DirectAI()
+  }
+  return directInstance
+}
+
 export const rateLimitedAI = {
+  direct: {
+    model: async (n = modelRegistry.chat.modelId) => n,
+    embedding: async (n = modelRegistry.embedding.modelId) => n,
+    streamText: (o: TextGenerationOptions, u?: string, k?: ApiKeySelectionOptions) =>
+      getDirectAI().streamText(o, u, k),
+    generateText: (o: TextGenerationOptions, u?: string) => getDirectAI().generateText(o, u),
+    generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) =>
+      getDirectAI().generateObject<T>(o, u),
+    embed: (
+      o: { model?: DirectModelInput; value: string } | { model?: DirectModelInput; values: string[] },
+      u?: string
+    ) => getDirectAI().embed(o as any, u),
+    banKeyByIndex: async (_i: number) => {},
+    rotateKey: async () => {},
+    resetRateLimits: async () => {},
+    getUsageStats: async () => ({ stats: [], config: { primaryProvider: 'direct' } }),
+    getUserUsageStats: (u: string) => getDirectAI().getUserUsageStats(u),
+    checkUserRateLimit: (u: string) => getDirectAI().checkUserRateLimit(u),
+    resetUserRateLimits: (u: string) => getDirectAI().resetUserRateLimits(u),
+    getUserConfig: () => getDirectAI().getUserConfig(),
+    updateUserConfig: (c: Partial<UserRateLimitConfig>) => getDirectAI().updateUserConfig(c),
+    getFullStatus: async (u?: string) => ({
+      apiKeys: { stats: [], config: { primaryProvider: 'direct' } },
+      userRateLimit: {
+        stats: u ? await getDirectAI().getUserUsageStats(u) : null,
+        config: getDirectAI().getUserConfig(),
+        enabled: getDirectAI().getUserConfig().enabled,
+      },
+    }),
+  },
   google: {
     model: (n = modelIds.chat) => getModel('google', n),
     embedding: (n = modelIds.embedding) => getEmbeddingModel('google', n),

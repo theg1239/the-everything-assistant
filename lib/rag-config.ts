@@ -8,7 +8,8 @@ export const ragEmbeddingProvider: ModelProvider =
   rawProvider === 'openai' ||
   rawProvider === 'groq' ||
   rawProvider === 'cerebras' ||
-  rawProvider === 'openrouter'
+  rawProvider === 'openrouter' ||
+  rawProvider === 'direct'
     ? rawProvider
     : registryProvider
 

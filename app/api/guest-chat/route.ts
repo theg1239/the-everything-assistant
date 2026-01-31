@@ -82,6 +82,15 @@ export async function POST(req: Request) {
     ]
 
     const model = getModelConfig('chat')
+    const parseDirectModelId = (modelId: string) => {
+      const [provider, ...rest] = modelId.split('/')
+      return rest.length > 0
+        ? { provider, modelId: rest.join('/') }
+        : { provider: undefined, modelId }
+    }
+    const directModel =
+      model.provider === 'direct' ? parseDirectModelId(model.modelId) : null
+    const effectiveProvider = directModel?.provider ?? model.provider
     const providerClient = rateLimitedAI[model.provider as keyof typeof rateLimitedAI]
 
     if (!providerClient) {
@@ -115,7 +124,7 @@ export async function POST(req: Request) {
     }
 
     const providerOptions =
-      model.provider === 'google'
+      effectiveProvider === 'google'
         ? {
             google: {
               maxRetries: 0,
@@ -199,7 +208,7 @@ export async function POST(req: Request) {
     const streamOptions = {
       ...baseStreamOptions,
       model: { modelId: model.modelId },
-      timeout: model.provider === 'google' ? { chunkMs: 4000, totalMs: 12000 } : undefined,
+      timeout: effectiveProvider === 'google' ? { chunkMs: 4000, totalMs: 12000 } : undefined,
       ...(providerOptions ? { providerOptions } : {}),
       providerOverrides,
     }

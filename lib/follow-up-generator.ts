@@ -117,7 +117,7 @@ Output exactly 3 questions, one per line, without numbering or bullet points.`
 
     const result = await providerClient.generateText(
       {
-        model: await providerClient.model(followUpModel.modelId),
+        model: { modelId: followUpModel.modelId },
         prompt,
         maxOutputTokens: 150,
         temperature: 0.7,

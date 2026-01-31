@@ -126,7 +126,7 @@ async function formatAndPersistVTOPResult(
 
     const response = await providerClient.generateObject(
       {
-        model: await providerClient.model(modelConfig.modelId),
+        model: { modelId: modelConfig.modelId },
         schema: vtopResultSchema,
         prompt,
       },

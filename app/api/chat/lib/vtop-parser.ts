@@ -27,7 +27,7 @@ export async function parseVTOPData(
 
     const result = await providerClient.generateObject(
       {
-        model: await providerClient.model(parserModel.modelId),
+        model: { modelId: parserModel.modelId },
         schema: vtopParseSchema,
         prompt: `
 You are a helpful assistant that parses VTOP (VIT Online Portal) data and formats it in a clean, natural language format.

@@ -64,7 +64,7 @@ export async function getAutocompleteSuggestionAction(input: {
 
     const result = await providerClient.generateText(
       {
-        model: await providerClient.model(modelId),
+        model: { modelId },
         system: AUTOCOMPLETE_SYSTEM_PROMPT,
         prompt,
         maxOutputTokens: 20,

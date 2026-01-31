@@ -21,7 +21,7 @@ export async function generateChatTitle(userMessage: string, userId?: string): P
 
     const modelPromise = providerClient.generateText(
       {
-        model: await providerClient.model(chatTitleModel.modelId),
+        model: { modelId: chatTitleModel.modelId },
         prompt: `Generate a concise, descriptive title for a chat conversation based on the user's first message. The title should:
 - Be 3-8 words maximum
 - Capture the main topic or intent

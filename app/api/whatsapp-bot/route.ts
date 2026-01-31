@@ -369,7 +369,7 @@ CRITICAL TOOL CONTINUATION RULES:
 
     const resultStream = await providerClient.streamText(
       {
-        model: await providerClient.model(botModel.modelId),
+        model: { modelId: botModel.modelId },
         messages: finalMessagesForAI,
         tools,
         temperature: 0.7,

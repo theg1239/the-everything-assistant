@@ -243,7 +243,7 @@ export async function parsePlacementData(rawData: any, userContext: string = '',
 
     const result = await providerClient.generateObject(
       {
-        model: await providerClient.model(placementModel.modelId),
+        model: { modelId: placementModel.modelId },
         schema: placementParseSchema,
         prompt: `You are a friendly and insightful university career advisor. Your goal is to summarize placement data in a clear, engaging, and easy-to-understand way for students.
 

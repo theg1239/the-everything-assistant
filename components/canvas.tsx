@@ -21,7 +21,7 @@ import {
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Streamdown } from 'streamdown'
-import { streamdownRemarkPlugins } from '@/lib/streamdown-config'
+import { streamdownRehypePlugins, streamdownRemarkPlugins } from '@/lib/streamdown-config'
 import { toast } from 'sonner'
 import { readJson } from '@/lib/http'
 
@@ -396,6 +396,7 @@ function CanvasContent({ isOpen, onClose, chatId, initialDocument }: CanvasProps
                   <Streamdown
                     className="prose prose-slate dark:prose-invert max-w-none prose-sm sm:prose-base"
                     remarkPlugins={streamdownRemarkPlugins}
+                    rehypePlugins={streamdownRehypePlugins}
                     components={{
                       h1: ({ children }) => (
                         <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-4 sm:mb-6 pb-2 border-b border-border">
@@ -493,6 +494,7 @@ function CanvasContent({ isOpen, onClose, chatId, initialDocument }: CanvasProps
                     <Streamdown
                       className="prose prose-slate dark:prose-invert max-w-none prose-sm"
                       remarkPlugins={streamdownRemarkPlugins}
+                      rehypePlugins={streamdownRehypePlugins}
                       components={{
                         h1: ({ children }) => (
                           <h1 className="text-xl font-bold text-foreground mb-3 pb-1 border-b border-border">

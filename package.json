@@ -78,7 +78,7 @@
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "latest",
     "nanoid": "latest",
-    "next": "^16.1.5",
+    "next": "^16.1.6",
     "next-auth": "^4.24.13",
     "next-themes": "latest",
     "node-fetch": "^3.3.2",

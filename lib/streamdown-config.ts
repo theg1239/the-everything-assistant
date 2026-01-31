@@ -1,17 +1,11 @@
-import { defaultRemarkPlugins, defaultRehypePlugins } from 'streamdown'
-import remarkMath from 'remark-math'
-import type { PluggableList } from 'unified'
+import { cjk } from '@streamdown/cjk'
+import { code } from '@streamdown/code'
+import { createMathPlugin } from '@streamdown/math'
+import { mermaid } from '@streamdown/mermaid'
 
-export const streamdownRemarkPlugins: PluggableList = [
-  defaultRemarkPlugins['gfm'],
-  [remarkMath, { singleDollarTextMath: true }],
-  defaultRemarkPlugins['cjkFriendly'],
-  defaultRemarkPlugins['cjkFriendlyGfmStrikethrough'],
-]
-
-export const streamdownRehypePlugins: PluggableList = [
-  defaultRehypePlugins['raw'],
-  defaultRehypePlugins['katex'],
-  defaultRehypePlugins['sanitize'],
-  defaultRehypePlugins['harden'],
-]
+export const streamdownPlugins = {
+  code,
+  mermaid,
+  cjk,
+  math: createMathPlugin({ singleDollarTextMath: true }),
+}

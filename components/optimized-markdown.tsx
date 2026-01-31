@@ -2,7 +2,7 @@
 
 import { memo } from 'react'
 import { Streamdown } from 'streamdown'
-import { streamdownRehypePlugins, streamdownRemarkPlugins } from '@/lib/streamdown-config'
+import { streamdownPlugins } from '@/lib/streamdown-config'
 
 type OptimizedMarkdownProps = {
   id: string
@@ -18,8 +18,7 @@ export const OptimizedMarkdown = memo(
         className="streamdown-content"
         isAnimating={isAnimating}
         mode={isAnimating ? 'streaming' : 'static'}
-        remarkPlugins={streamdownRemarkPlugins}
-        rehypePlugins={streamdownRehypePlugins}
+        plugins={streamdownPlugins}
         controls={{
           table: true,
           code: true,

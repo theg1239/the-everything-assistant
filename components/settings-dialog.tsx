@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { motion } from 'framer-motion'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -44,7 +44,6 @@ import { toast } from 'sonner'
 import { useCustomBackground } from '@/hooks/use-custom-background'
 import type { BackgroundType } from '@/components/backgrounds/custom-background'
 import dynamic from 'next/dynamic'
-import { useMemo } from 'react'
 import { FeedbackSection } from '@/components/feedback-section'
 import { MemoryManagement } from '@/components/memory-management'
 import { VTOPSettings } from '@/components/vtop-settings'
@@ -122,6 +121,45 @@ interface PreferencesUpdateResponse {
   error?: string
 }
 
+type ChatgptAuthMode = 'apiKey' | 'chatgpt' | 'chatgptAuthTokens' | null
+
+interface ChatgptPlanUsageWindow {
+  usedPercent: number | null
+  remainingPercent: number | null
+  windowDurationMins: number | null
+  resetsAt: number | null
+}
+
+interface ChatgptPlanUsage {
+  limitId: string | null
+  limitName: string | null
+  planType: string | null
+  primary: ChatgptPlanUsageWindow | null
+  secondary: ChatgptPlanUsageWindow | null
+  hasCredits: boolean | null
+  unlimitedCredits: boolean | null
+  creditsBalance: string | null
+}
+
+interface ChatgptStatusResponse {
+  available: boolean
+  connected: boolean
+  authMode: ChatgptAuthMode
+  email: string | null
+  planType: string | null
+  planUsage: ChatgptPlanUsage | null
+  pendingLoginId: string | null
+  lastLoginError: string | null
+  requiresOpenaiAuth: boolean | null
+  error?: string
+}
+
+interface ChatgptLoginStartResponse {
+  authUrl: string | null
+  loginId: string | null
+  status: ChatgptStatusResponse
+}
+
 type BasicApiResponse = {
   success?: boolean
   message?: string
@@ -180,6 +218,45 @@ const arrayBufferToBase64url = (buffer: ArrayBuffer | ArrayBufferView): string =
   const base64 = btoa(binary)
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 }
+
+const EMPTY_CHATGPT_STATUS: ChatgptStatusResponse = {
+  available: true,
+  connected: false,
+  authMode: null,
+  email: null,
+  planType: null,
+  planUsage: null,
+  pendingLoginId: null,
+  lastLoginError: null,
+  requiresOpenaiAuth: null,
+}
+
+const clampPercent = (value: number): number => {
+  if (!Number.isFinite(value)) return 0
+  if (value < 0) return 0
+  if (value > 100) return 100
+  return value
+}
+
+const getUsageBarTone = (remainingPercent: number | null): string => {
+  if (remainingPercent === null) return 'bg-muted-foreground/30'
+  if (remainingPercent >= 60) return 'bg-emerald-500'
+  if (remainingPercent >= 30) return 'bg-amber-500'
+  return 'bg-destructive'
+}
+
+const formatRateLimitReset = (resetsAt: number | null): string | null => {
+  if (resetsAt === null || !Number.isFinite(resetsAt)) return null
+  const resetDate = new Date(resetsAt * 1000)
+  if (Number.isNaN(resetDate.getTime())) return null
+  return resetDate.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
 export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any) {
   const { data: session } = useSession()
   const { setBackgroundType, toggleBackground } = useCustomBackground()
@@ -204,6 +281,12 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
   const [updatingBriefing, setUpdatingBriefing] = useState(false)
   const [currentPreferences, setCurrentPreferences] = useState<UserPreferences | null>(null)
   const [sendingTestBriefing, setSendingTestBriefing] = useState(false)
+  const [chatgptStatus, setChatgptStatus] = useState<ChatgptStatusResponse>(EMPTY_CHATGPT_STATUS)
+  const [loadingChatgptStatus, setLoadingChatgptStatus] = useState(false)
+  const [startingChatgptLogin, setStartingChatgptLogin] = useState(false)
+  const [cancelingChatgptLogin, setCancelingChatgptLogin] = useState(false)
+  const [disconnectingChatgpt, setDisconnectingChatgpt] = useState(false)
+  const previousPendingChatgptLoginId = useRef<string | null>(null)
 
   const [touchStartY, setTouchStartY] = useState(0)
   const [touchStartScrollTop, setTouchStartScrollTop] = useState(0)
@@ -561,6 +644,145 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
     return () => controller.abort()
   }, [open, session?.user?.id])
+
+  const fetchChatgptStatus = async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false
+    if (!session?.user?.id) {
+      setChatgptStatus(EMPTY_CHATGPT_STATUS)
+      return EMPTY_CHATGPT_STATUS
+    }
+
+    if (!silent) {
+      setLoadingChatgptStatus(true)
+    }
+
+    try {
+      const response = await fetch('/api/auth/chatgpt/status', { cache: 'no-store' })
+      const data = await readJson<ChatgptStatusResponse>(response)
+      if (!response.ok) {
+        throw new Error(data?.error || 'Unable to read ChatGPT status')
+      }
+      setChatgptStatus(data)
+      return data
+    } catch (error: any) {
+      const fallback: ChatgptStatusResponse = {
+        ...EMPTY_CHATGPT_STATUS,
+        available: false,
+        error: error?.message || 'Unable to reach Codex app-server',
+      }
+      setChatgptStatus(fallback)
+      return fallback
+    } finally {
+      if (!silent) {
+        setLoadingChatgptStatus(false)
+      }
+    }
+  }
+
+  const handleStartChatgptLogin = async () => {
+    setStartingChatgptLogin(true)
+    try {
+      const response = await fetch('/api/auth/chatgpt/start', {
+        method: 'POST',
+      })
+      const data = await readJson<ChatgptLoginStartResponse & { error?: string }>(response)
+      if (!response.ok) {
+        throw new Error(data?.error || 'Unable to start ChatGPT login')
+      }
+
+      setChatgptStatus(data.status)
+
+      if (data.authUrl) {
+        const opened = window.open(data.authUrl, '_blank', 'noopener,noreferrer')
+        if (!opened) {
+          try {
+            await navigator.clipboard.writeText(data.authUrl)
+            toast.info('Popup blocked. ChatGPT login URL copied to clipboard.')
+          } catch {
+            toast.error('Popup blocked. Please allow popups and try again.')
+          }
+        }
+      }
+
+      toast.success('Complete ChatGPT sign-in in the opened browser tab.')
+    } catch (error: any) {
+      console.error('Error starting ChatGPT login:', error)
+      toast.error(error?.message || 'Unable to start ChatGPT login')
+    } finally {
+      setStartingChatgptLogin(false)
+    }
+  }
+
+  const handleCancelChatgptLogin = async () => {
+    setCancelingChatgptLogin(true)
+    try {
+      const response = await fetch('/api/auth/chatgpt/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          loginId: chatgptStatus.pendingLoginId,
+        }),
+      })
+      const data = await readJson<ChatgptStatusResponse & { error?: string }>(response)
+      if (!response.ok) {
+        throw new Error(data?.error || 'Unable to cancel ChatGPT login')
+      }
+      setChatgptStatus(data)
+      toast.success('ChatGPT login canceled')
+    } catch (error: any) {
+      console.error('Error canceling ChatGPT login:', error)
+      toast.error(error?.message || 'Unable to cancel ChatGPT login')
+    } finally {
+      setCancelingChatgptLogin(false)
+    }
+  }
+
+  const handleDisconnectChatgpt = async () => {
+    setDisconnectingChatgpt(true)
+    try {
+      const response = await fetch('/api/auth/chatgpt/disconnect', {
+        method: 'POST',
+      })
+      const data = await readJson<ChatgptStatusResponse & { error?: string }>(response)
+      if (!response.ok) {
+        throw new Error(data?.error || 'Unable to disconnect ChatGPT')
+      }
+      setChatgptStatus(data)
+      toast.success('ChatGPT disconnected')
+    } catch (error: any) {
+      console.error('Error disconnecting ChatGPT:', error)
+      toast.error(error?.message || 'Unable to disconnect ChatGPT')
+    } finally {
+      setDisconnectingChatgpt(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!(open && session?.user?.id)) return
+    void fetchChatgptStatus()
+  }, [open, session?.user?.id])
+
+  useEffect(() => {
+    if (!(open && session?.user?.id && chatgptStatus.pendingLoginId)) return
+
+    const interval = window.setInterval(() => {
+      void fetchChatgptStatus({ silent: true })
+    }, 2500)
+
+    return () => window.clearInterval(interval)
+  }, [open, session?.user?.id, chatgptStatus.pendingLoginId])
+
+  useEffect(() => {
+    const previous = previousPendingChatgptLoginId.current
+    if (previous && !chatgptStatus.pendingLoginId) {
+      if (chatgptStatus.connected) {
+        toast.success('ChatGPT connected to Codex')
+      } else if (chatgptStatus.lastLoginError) {
+        toast.error(chatgptStatus.lastLoginError)
+      }
+    }
+    previousPendingChatgptLoginId.current = chatgptStatus.pendingLoginId
+  }, [chatgptStatus.pendingLoginId, chatgptStatus.connected, chatgptStatus.lastLoginError])
 
   const savePreferences = async (newPreferences: Partial<UserPreferences>) => {
     if (!session?.user?.id) return
@@ -1070,6 +1292,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
   const menuItems = [
     { id: 'general', label: 'general', icon: Settings },
+    { id: 'integrations', label: 'integrations', icon: Globe },
     { id: 'personalization', label: 'personalization', icon: User },
     { id: 'vtop', label: 'VTOP integration', icon: Key },
     { id: 'data', label: 'data controls', icon: Archive },
@@ -1394,6 +1617,235 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
             </div>{' '}
           </div>
         )
+
+      case 'integrations': {
+        const chatgptConnectionState = chatgptStatus.connected
+          ? 'connected'
+          : chatgptStatus.pendingLoginId
+            ? 'pending'
+            : 'not connected'
+        const chatgptStatusTone = chatgptStatus.connected
+          ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+          : chatgptStatus.pendingLoginId
+            ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+            : 'bg-muted text-muted-foreground'
+        const primaryPlanWindow = chatgptStatus.planUsage?.primary ?? null
+        const secondaryPlanWindow = chatgptStatus.planUsage?.secondary ?? null
+        const remainingPercentRaw = primaryPlanWindow?.remainingPercent
+        const usedPercentRaw = primaryPlanWindow?.usedPercent
+        const remainingPercent =
+          typeof remainingPercentRaw === 'number' ? clampPercent(remainingPercentRaw) : null
+        const usedPercent = typeof usedPercentRaw === 'number' ? clampPercent(usedPercentRaw) : null
+        const usageBarTone = getUsageBarTone(remainingPercent)
+        const secondaryRemainingPercentRaw = secondaryPlanWindow?.remainingPercent
+        const secondaryUsedPercentRaw = secondaryPlanWindow?.usedPercent
+        const secondaryRemainingPercent =
+          typeof secondaryRemainingPercentRaw === 'number'
+            ? clampPercent(secondaryRemainingPercentRaw)
+            : null
+        const secondaryUsedPercent =
+          typeof secondaryUsedPercentRaw === 'number' ? clampPercent(secondaryUsedPercentRaw) : null
+        const secondaryUsageBarTone = getUsageBarTone(secondaryRemainingPercent)
+        const planResetsAtLabel = formatRateLimitReset(primaryPlanWindow?.resetsAt ?? null)
+        const secondaryPlanResetsAtLabel = formatRateLimitReset(secondaryPlanWindow?.resetsAt ?? null)
+        const chatgptBusy =
+          loadingChatgptStatus || startingChatgptLogin || cancelingChatgptLogin || disconnectingChatgpt
+
+        return (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg md:text-xl font-semibold mb-4">integrations</h3>
+
+              <div className="overflow-hidden rounded-2xl border border-border bg-background/70 shadow-sm">
+                <div className="relative border-b border-border/60 px-5 py-4">
+                  <div className="absolute inset-0 bg-gradient-to-r from-primary/12 via-primary/5 to-transparent" />
+                  <div className="relative flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 rounded-lg border border-primary/20 bg-primary/10 p-2 text-primary">
+                        <Globe className="h-4 w-4" />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="font-semibold text-base">ChatGPT via Codex app-server</h4>
+                        <p className="text-xs md:text-sm text-muted-foreground">
+                          keep your Google app session active, then link ChatGPT for managed Codex
+                          usage.
+                        </p>
+                      </div>
+                    </div>
+                    <span
+                      className={cn(
+                        'inline-flex h-fit items-center rounded-full px-2.5 py-1 text-[11px] font-semibold',
+                        chatgptStatusTone
+                      )}
+                    >
+                      {chatgptConnectionState}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-4 p-5">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl border border-border/70 bg-muted/20 px-3 py-2.5">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        account
+                      </p>
+                      <p className="mt-1 text-sm font-medium">{chatgptStatus.email || 'not linked yet'}</p>
+                    </div>
+                    <div className="rounded-xl border border-border/70 bg-muted/20 px-3 py-2.5">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        plan
+                      </p>
+                      <p className="mt-1 text-sm font-medium">{chatgptStatus.planType || 'unknown'}</p>
+                    </div>
+                  </div>
+
+                  {chatgptStatus.connected && (
+                    <div className="rounded-xl border border-border/70 bg-muted/20 px-3 py-2.5">
+                      <div className="space-y-3">
+                        <div>
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                              weekly remaining
+                            </p>
+                            <p className="text-xs font-medium">
+                              {remainingPercent === null ? 'unavailable' : `${remainingPercent}%`}
+                            </p>
+                          </div>
+
+                          <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
+                            <div
+                              className={cn('h-full rounded-full transition-all', usageBarTone)}
+                              style={{ width: `${remainingPercent ?? 0}%` }}
+                            />
+                          </div>
+
+                          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                            {usedPercent !== null && <span>{usedPercent}% used</span>}
+                            {typeof primaryPlanWindow?.windowDurationMins === 'number' && (
+                              <span>{primaryPlanWindow.windowDurationMins}m window</span>
+                            )}
+                            {planResetsAtLabel && <span>resets {planResetsAtLabel}</span>}
+                            {chatgptStatus.planUsage?.creditsBalance && (
+                              <span>credits {chatgptStatus.planUsage.creditsBalance}</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {secondaryPlanWindow && (
+                          <div className="border-t border-border/50 pt-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                                5h remaining
+                              </p>
+                              <p className="text-xs font-medium">
+                                {secondaryRemainingPercent === null
+                                  ? 'unavailable'
+                                  : `${secondaryRemainingPercent}%`}
+                              </p>
+                            </div>
+
+                            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
+                              <div
+                                className={cn('h-full rounded-full transition-all', secondaryUsageBarTone)}
+                                style={{ width: `${secondaryRemainingPercent ?? 0}%` }}
+                              />
+                            </div>
+
+                            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                              {secondaryUsedPercent !== null && <span>{secondaryUsedPercent}% used</span>}
+                              {typeof secondaryPlanWindow.windowDurationMins === 'number' && (
+                                <span>{secondaryPlanWindow.windowDurationMins}m window</span>
+                              )}
+                              {secondaryPlanResetsAtLabel && (
+                                <span>resets {secondaryPlanResetsAtLabel}</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="rounded-xl border border-border/60 bg-muted/10 px-3 py-2.5">
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      you stay signed in to this app with Google. ChatGPT login is only used by the
+                      Codex app-server, so managed calls can use your connected ChatGPT access.
+                    </p>
+                  </div>
+
+                  {!chatgptStatus.available && (
+                    <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                      {chatgptStatus.error ||
+                        'Codex app-server is unavailable. Set CODEX_BIN or install codex.'}
+                    </p>
+                  )}
+
+                  {chatgptStatus.lastLoginError && (
+                    <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                      {chatgptStatus.lastLoginError}
+                    </p>
+                  )}
+
+                  <div className="flex flex-wrap gap-2">
+                    {!chatgptStatus.connected && (
+                      <Button
+                        size="sm"
+                        onClick={handleStartChatgptLogin}
+                        disabled={chatgptBusy || !chatgptStatus.available}
+                        className="bg-foreground text-background hover:bg-foreground/90"
+                      >
+                        {(loadingChatgptStatus || startingChatgptLogin) && (
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        )}
+                        login with ChatGPT
+                      </Button>
+                    )}
+
+                    {Boolean(chatgptStatus.pendingLoginId) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCancelChatgptLogin}
+                        disabled={cancelingChatgptLogin || startingChatgptLogin}
+                      >
+                        {cancelingChatgptLogin && (
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        )}
+                        cancel login
+                      </Button>
+                    )}
+
+                    {chatgptStatus.connected && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDisconnectChatgpt}
+                        disabled={disconnectingChatgpt}
+                      >
+                        {disconnectingChatgpt && (
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        )}
+                        disconnect
+                      </Button>
+                    )}
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        void fetchChatgptStatus()
+                      }}
+                      disabled={loadingChatgptStatus}
+                    >
+                      refresh status
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
 
       case 'appearance':
         return (

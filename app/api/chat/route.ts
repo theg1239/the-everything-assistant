@@ -1,4 +1,5 @@
 import {
+  createUIMessageStream,
   smoothStream,
   extractReasoningMiddleware,
   createUIMessageStreamResponse,
@@ -29,6 +30,12 @@ import {
 } from '@/lib/ai-message-conversion'
 import type { Attachment } from '@/types/attachment'
 import { fetchMCPTools, closeMCPClients } from '@/lib/mcp-server'
+import {
+  getChatgptStatus,
+  runChatgptManagedTurn,
+  type CodexToolEvent,
+  type RunChatgptTurnResult,
+} from '@/lib/codex/app-server'
 
 import { createDirectToolCallStream } from './lib/messages'
 import { parseChatRequestPayload } from './lib/request'
@@ -48,6 +55,28 @@ const getMessageText = (message: LegacyMessage | null | undefined): string =>
   message?.content ?? ''
 
 const CLIENT_ERROR_MESSAGE = 'An error occurred.'
+
+const buildCodexPromptFromMessages = (messages: any[]): string => {
+  const conversation = messages
+    .map(message => {
+      const role = typeof message?.role === 'string' ? message.role : 'user'
+      if (role === 'system') return ''
+      return {
+        role,
+        content: message?.content ?? '',
+      }
+    })
+    .filter(Boolean)
+  const serialized = JSON.stringify(conversation)
+
+  return [
+    'Use the conversation payload below as the canonical chat history.',
+    'Answer as the assistant to the latest user message.',
+    serialized,
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+}
 
 function extractAttachmentsFromParts(
   parts: LegacyMessage['parts'] | AppUIMessage['parts']
@@ -167,7 +196,15 @@ export async function POST(req: Request) {
       directToolCallExecuted = executed
     }
 
-    if (!process.env.GROQ_API_KEY) {
+    let useCodexManagedUsage = false
+    try {
+      const chatgptStatus = await getChatgptStatus(session.user.id)
+      useCodexManagedUsage = chatgptStatus.connected
+    } catch (error) {
+      console.warn('[Chat] Unable to read codex ChatGPT status, falling back to API keys', error)
+    }
+
+    if (!useCodexManagedUsage && !process.env.GROQ_API_KEY) {
       return new Response(
         JSON.stringify({
           error: 'API key not configured. Please add GROQ_API_KEY to your environment variables.',
@@ -335,6 +372,223 @@ export async function POST(req: Request) {
           'X-Chat-Path': `/chat/${chat.id}`,
           'X-Chat-Title': chat.title,
         },
+      })
+    }
+
+    if (useCodexManagedUsage) {
+      const codexPrompt = buildCodexPromptFromMessages(finalMessages)
+      const codexBaseInstructions = systemMessages
+        .map(message => message?.content?.trim?.() ?? '')
+        .filter(Boolean)
+        .join('\n\n')
+      const codexDeveloperInstructions =
+        'You are the in-product assistant for The Everything Assistant. Avoid claiming to be Codex unless the user explicitly asks about underlying runtime.'
+
+      const stream = createUIMessageStream({
+        originalMessages: uiMessages,
+        generateId,
+        onError: error => {
+          console.error('[Chat] Codex managed stream error:', error)
+          return CLIENT_ERROR_MESSAGE
+        },
+        execute: async ({ writer }) => {
+          try {
+            const textPartId = `codex-${generateId()}`
+            const reasoningPartId = `codex-reasoning-${generateId()}`
+            let streamedText = ''
+            let reasoningStarted = false
+            let lastSummary = ''
+            const codexToolInvocationsById = new Map<
+              string,
+              {
+                toolCallId: string
+                toolName: string
+                args?: Record<string, unknown>
+                result?: unknown
+                state: 'call' | 'result' | 'error'
+                error?: string
+              }
+            >()
+
+            const emitReasoningDelta = (delta: string) => {
+              if (!delta) return
+              if (!reasoningStarted) {
+                reasoningStarted = true
+                writer.write({
+                  type: 'reasoning-start',
+                  id: reasoningPartId,
+                })
+              }
+              writer.write({
+                type: 'reasoning-delta',
+                id: reasoningPartId,
+                delta,
+              })
+            }
+
+            writer.write({ type: 'text-start', id: textPartId })
+
+            const codexResult: RunChatgptTurnResult = await runChatgptManagedTurn(
+              session.user.id,
+              {
+                prompt: codexPrompt,
+                baseInstructions: codexBaseInstructions || undefined,
+                developerInstructions: codexDeveloperInstructions,
+                personality: 'none',
+                tools,
+                toolExecutionMessages: finalMessages,
+                onToolEvent: (event: CodexToolEvent) => {
+                  if (event.phase === 'input-available') {
+                    writer.write({
+                      type: 'tool-input-available',
+                      toolCallId: event.toolCallId,
+                      toolName: event.toolName,
+                      input: event.input,
+                    })
+                    codexToolInvocationsById.set(event.toolCallId, {
+                      toolCallId: event.toolCallId,
+                      toolName: event.toolName,
+                      args:
+                        event.input && typeof event.input === 'object'
+                          ? (event.input as Record<string, unknown>)
+                          : undefined,
+                      state: 'call',
+                    })
+                    return
+                  }
+
+                  if (event.phase === 'output-available') {
+                    writer.write({
+                      type: 'tool-output-available',
+                      toolCallId: event.toolCallId,
+                      output: event.output,
+                    })
+                    const existing = codexToolInvocationsById.get(event.toolCallId)
+                    codexToolInvocationsById.set(event.toolCallId, {
+                      toolCallId: event.toolCallId,
+                      toolName: event.toolName,
+                      args:
+                        existing?.args ??
+                        (event.input && typeof event.input === 'object'
+                          ? (event.input as Record<string, unknown>)
+                          : undefined),
+                      result: event.output,
+                      state: 'result',
+                    })
+                    return
+                  }
+
+                  writer.write({
+                    type: 'tool-output-error',
+                    toolCallId: event.toolCallId,
+                    errorText: event.errorText,
+                  })
+                  const existing = codexToolInvocationsById.get(event.toolCallId)
+                  codexToolInvocationsById.set(event.toolCallId, {
+                    toolCallId: event.toolCallId,
+                    toolName: event.toolName,
+                    args:
+                      existing?.args ??
+                      (event.input && typeof event.input === 'object'
+                        ? (event.input as Record<string, unknown>)
+                        : undefined),
+                    state: 'error',
+                    error: event.errorText,
+                  })
+                },
+                onTextDelta: delta => {
+                  if (!delta) return
+                  streamedText += delta
+                  writer.write({
+                    type: 'text-delta',
+                    id: textPartId,
+                    delta,
+                  })
+                },
+                onReasoningDelta: delta => {
+                  emitReasoningDelta(delta)
+                },
+                onMessageSummary: summary => {
+                  const trimmedSummary = summary.trim()
+                  if (!trimmedSummary || trimmedSummary === lastSummary) return
+                  lastSummary = trimmedSummary
+                  emitReasoningDelta(`summary: ${trimmedSummary}`)
+                },
+              }
+            )
+
+            if (!streamedText && codexResult.text) {
+              streamedText = codexResult.text
+              writer.write({
+                type: 'text-delta',
+                id: textPartId,
+                delta: codexResult.text,
+              })
+            }
+
+            if (reasoningStarted) {
+              writer.write({
+                type: 'reasoning-end',
+                id: reasoningPartId,
+              })
+            }
+
+            writer.write({ type: 'text-end', id: textPartId })
+
+            const assistantText = (streamedText || codexResult.text || '').trim()
+            const persistedText = assistantText || CLIENT_ERROR_MESSAGE
+            const responseId = `codex-${codexResult.turnId || Date.now()}`
+            const safeInvocations = sanitizeToolInvocations(
+              Array.from(codexToolInvocationsById.values())
+            )
+
+            try {
+              await saveMessage(chat.id, 'assistant', persistedText, safeInvocations, responseId)
+            } catch (error) {
+              console.error('Failed to save codex managed message:', error)
+            }
+
+            if (codexResult.usage) {
+              try {
+                const { saveTokenUsage } = await import('@/lib/db')
+                await saveTokenUsage({
+                  userId: session.user.id,
+                  chatId: chat.id,
+                  model: codexResult.model || 'codex/chatgpt-managed',
+                  stepIndex: null,
+                  inputTokens: codexResult.usage.inputTokens,
+                  outputTokens: codexResult.usage.outputTokens,
+                  totalTokens: codexResult.usage.totalTokens,
+                  meta: {
+                    type: 'final',
+                    provider: 'codex-app-server',
+                    authMode: 'chatgpt',
+                    cachedInputTokens: codexResult.usage.cachedInputTokens,
+                    reasoningOutputTokens: codexResult.usage.reasoningOutputTokens,
+                  },
+                })
+              } catch (error) {
+                console.warn('Failed to persist codex managed usage:', error)
+              }
+            }
+          } finally {
+            if (mcpClients.length > 0) {
+              await closeMCPClients(mcpClients)
+              console.log(`[MCP] Closed ${mcpClients.length} MCP client(s)`)
+            }
+          }
+        },
+      })
+
+      return createUIMessageStreamResponse({
+        headers: {
+          'X-Chat-Id': chat.id,
+          'X-Chat-Path': `/chat/${chat.id}`,
+          'X-Chat-Title': chat.title,
+          'X-Chat-Provider': 'codex-chatgpt',
+        },
+        stream,
+        consumeSseStream: consumeStream,
       })
     }
 

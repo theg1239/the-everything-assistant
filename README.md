@@ -51,6 +51,8 @@ pnpm dev
 
 The dev server runs at `http://localhost:3000`. Sign-in flows rely on NextAuth, so configure an OAuth provider (Google or email magic links) before testing gated routes.
 
+Optional: you can link a ChatGPT account from `settings -> integrations` using Codex app-server. Set `CODEX_BIN` if `codex` is not on your PATH. When linked, `/api/chat` routes through Codex app-server and uses the user’s ChatGPT/Codex usage instead of server-side API keys.
+
 ### Database & Knowledge Base
 
 ```bash

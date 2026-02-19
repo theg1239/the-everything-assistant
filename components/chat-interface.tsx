@@ -41,6 +41,7 @@ import { useSidebar } from '@/contexts/sidebar-context'
 import { StreamingErrorDisplay } from '@/components/streaming-error-display'
 import { DynamicLoadingIndicator } from '@/components/dynamic-loading-indicator'
 import { GuestLimitDialog } from '@/components/guest-limit-dialog'
+import { ChatgptConnectAnnouncementModal } from '@/components/chatgpt-connect-announcement-modal'
 import {
   HUB_BRIEFING_ACTION_EVENT,
   HUB_BRIEFING_ACTION_PARAM,
@@ -2424,6 +2425,7 @@ function PureChatInterfaceComponent({
   return (
     <HubStoreProvider initialState={hubSeed}>
       {hubLayout}
+      <ChatgptConnectAnnouncementModal enabled={!isGuest} />
       <GuestLimitDialog
         open={showGuestLimitModal}
         onClose={() => setShowGuestLimitModal(false)}

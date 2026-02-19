@@ -715,6 +715,14 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
       setChatgptStatus(data.status)
       const verificationUrl = data.verificationUrl ?? data.authUrl
+      const deviceFlowState = data.deviceCode
+        ? {
+            loginId: data.loginId ?? data.status.pendingLoginId ?? null,
+            deviceCode: data.deviceCode,
+            verificationUrl,
+          }
+        : null
+      setChatgptDeviceFlow(deviceFlowState)
 
       if (verificationUrl) {
         const opened = window.open(verificationUrl, '_blank', 'noopener,noreferrer')
@@ -728,14 +736,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         }
       }
 
-      if (data.deviceCode) {
-        setChatgptDeviceFlow({
-          loginId: data.loginId ?? data.status.pendingLoginId ?? null,
-          deviceCode: data.deviceCode,
-          verificationUrl,
-        })
-      } else {
-        setChatgptDeviceFlow(null)
+      if (!data.deviceCode) {
         toast.success('Complete ChatGPT sign-in in the opened browser tab.')
       }
     } catch (error: any) {
@@ -1710,6 +1711,8 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         const secondaryPlanResetsAtLabel = formatRateLimitReset(secondaryPlanWindow?.resetsAt ?? null)
         const chatgptBusy =
           loadingChatgptStatus || startingChatgptLogin || cancelingChatgptLogin || disconnectingChatgpt
+        const activeChatgptDeviceFlow =
+          chatgptStatus.pendingLoginId && chatgptDeviceFlow?.deviceCode ? chatgptDeviceFlow : null
 
         return (
           <div className="space-y-6">
@@ -1846,8 +1849,59 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                     </p>
                   )}
 
+                  {activeChatgptDeviceFlow && (
+                    <div className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-3">
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            step 1
+                          </p>
+                          <p className="mt-1 text-sm font-medium">
+                            open the ChatGPT device sign-in page
+                          </p>
+                          <div className="mt-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handleOpenChatgptVerification}
+                              className="h-8"
+                            >
+                              open sign-in page
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="border-t border-border/50 pt-3">
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            step 2
+                          </p>
+                          <p className="mt-1 text-sm font-medium">enter this code</p>
+                          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <code className="inline-flex min-h-9 items-center rounded-md border border-border bg-background px-3 font-mono text-base tracking-[0.35em]">
+                              {activeChatgptDeviceFlow.deviceCode.toUpperCase()}
+                            </code>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={handleCopyChatgptDeviceCode}
+                              className="h-8"
+                            >
+                              <Copy className="mr-1.5 h-3.5 w-3.5" />
+                              copy code
+                            </Button>
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-muted-foreground">
+                          keep this window open. connection will complete automatically after you
+                          enter the code.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex flex-wrap gap-2">
-                    {!chatgptStatus.connected && (
+                    {!chatgptStatus.connected && !chatgptStatus.pendingLoginId && (
                       <Button
                         size="sm"
                         onClick={handleStartChatgptLogin}

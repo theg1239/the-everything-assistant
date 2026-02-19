@@ -723,6 +723,28 @@ const joinPath = (...parts: string[]): string => {
   return joined
 }
 
+const resolveBunCwd = (): string => {
+  const cwdValue = (Bun as unknown as { cwd?: unknown }).cwd
+  if (typeof cwdValue === 'function') {
+    try {
+      const resolved = cwdValue()
+      if (typeof resolved === 'string' && resolved.trim()) {
+        return resolved
+      }
+    } catch {
+      // fall through to non-function paths
+    }
+  }
+  if (typeof cwdValue === 'string' && cwdValue.trim()) {
+    return cwdValue
+  }
+  const envPwd = Bun.env.PWD?.trim()
+  if (envPwd) {
+    return envPwd
+  }
+  return '.'
+}
+
 class JsonRpcConnection {
   private buffer = ''
   private nextId = 1
@@ -1340,7 +1362,7 @@ class CodexAppServerSession {
 
     const threadResult = (await this.request('thread/start', {
       model: options.model ?? Bun.env.CODEX_APP_SERVER_MODEL ?? undefined,
-      cwd: Bun.env.CODEX_APP_SERVER_CWD ?? options.cwd ?? Bun.cwd(),
+      cwd: Bun.env.CODEX_APP_SERVER_CWD ?? options.cwd ?? resolveBunCwd(),
       approvalPolicy: 'never',
       sandbox: 'read-only',
       baseInstructions: options.baseInstructions ?? undefined,

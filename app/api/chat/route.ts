@@ -394,10 +394,7 @@ export async function POST(req: Request) {
         execute: async ({ writer }) => {
           try {
             const textPartId = `codex-${generateId()}`
-            const reasoningPartId = `codex-reasoning-${generateId()}`
             let streamedText = ''
-            let reasoningStarted = false
-            let lastSummary = ''
             const codexToolInvocationsById = new Map<
               string,
               {
@@ -409,22 +406,6 @@ export async function POST(req: Request) {
                 error?: string
               }
             >()
-
-            const emitReasoningDelta = (delta: string) => {
-              if (!delta) return
-              if (!reasoningStarted) {
-                reasoningStarted = true
-                writer.write({
-                  type: 'reasoning-start',
-                  id: reasoningPartId,
-                })
-              }
-              writer.write({
-                type: 'reasoning-delta',
-                id: reasoningPartId,
-                delta,
-              })
-            }
 
             writer.write({ type: 'text-start', id: textPartId })
 
@@ -505,15 +486,6 @@ export async function POST(req: Request) {
                     delta,
                   })
                 },
-                onReasoningDelta: delta => {
-                  emitReasoningDelta(delta)
-                },
-                onMessageSummary: summary => {
-                  const trimmedSummary = summary.trim()
-                  if (!trimmedSummary || trimmedSummary === lastSummary) return
-                  lastSummary = trimmedSummary
-                  emitReasoningDelta(`summary: ${trimmedSummary}`)
-                },
               }
             )
 
@@ -523,13 +495,6 @@ export async function POST(req: Request) {
                 type: 'text-delta',
                 id: textPartId,
                 delta: codexResult.text,
-              })
-            }
-
-            if (reasoningStarted) {
-              writer.write({
-                type: 'reasoning-end',
-                id: reasoningPartId,
               })
             }
 

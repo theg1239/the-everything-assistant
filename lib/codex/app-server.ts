@@ -439,8 +439,6 @@ export type RunChatgptTurnOptions = {
   toolExecutionMessages?: unknown[]
   onToolEvent?: (event: CodexToolEvent) => void
   onTextDelta?: (delta: string) => void
-  onReasoningDelta?: (delta: string) => void
-  onMessageSummary?: (summary: string) => void
 }
 
 export type RunChatgptTurnResult = {
@@ -577,42 +575,6 @@ const toDynamicToolContentItems = (value: unknown): DynamicToolCallContentItem[]
   return [...textItems, ...imageItems].slice(0, 4)
 }
 
-const readReasoningDelta = (method: string, payload: Record<string, unknown>): string | null => {
-  const lowerMethod = method.toLowerCase()
-  if (!lowerMethod.includes('reasoning')) {
-    return null
-  }
-
-  const directDelta = readString(payload.delta) ?? readString(payload.text)
-  if (directDelta && directDelta.trim().length > 0) {
-    return directDelta
-  }
-
-  const item = readObject(payload.item)
-  if (!item) return null
-  const itemText = readString(item.text)
-  return itemText && itemText.trim().length > 0 ? itemText : null
-}
-
-const readMessageSummary = (method: string, payload: Record<string, unknown>): string | null => {
-  const lowerMethod = method.toLowerCase()
-  const item = readObject(payload.item)
-  const itemType = readString(item?.type)?.toLowerCase() ?? ''
-  const looksLikeSummary = lowerMethod.includes('summary') || itemType.includes('summary')
-  if (!looksLikeSummary) {
-    return null
-  }
-
-  const summary =
-    readString(payload.summary) ??
-    readString(payload.delta) ??
-    readString(payload.text) ??
-    readString(item?.summary) ??
-    readString(item?.text)
-
-  return summary && summary.trim().length > 0 ? summary : null
-}
-
 type ProxyTurnStartPayload = {
   runId: string
   threadId: string
@@ -624,14 +586,6 @@ type ProxyTurnEventPayload =
   | {
       type: 'text-delta'
       delta: string
-    }
-  | {
-      type: 'reasoning-delta'
-      delta: string
-    }
-  | {
-      type: 'message-summary'
-      summary: string
     }
   | {
       type: 'tool-call-request'
@@ -917,8 +871,6 @@ class CodexAppServerSession {
         turnId,
         model: resolvedModel,
         onTextDelta: options.onTextDelta,
-        onReasoningDelta: options.onReasoningDelta,
-        onMessageSummary: options.onMessageSummary,
       })
     } finally {
       this.activeTurns.delete(turnKey)
@@ -945,8 +897,6 @@ class CodexAppServerSession {
     turnId: string
     model: string | null
     onTextDelta?: (delta: string) => void
-    onReasoningDelta?: (delta: string) => void
-    onMessageSummary?: (summary: string) => void
   }): Promise<RunChatgptTurnResult> {
     await this.ensureStarted()
     const connection = this.connection
@@ -954,7 +904,7 @@ class CodexAppServerSession {
       throw new Error('codex app-server is not running')
     }
 
-    const { threadId, turnId, model, onTextDelta, onReasoningDelta, onMessageSummary } = options
+    const { threadId, turnId, model, onTextDelta } = options
     const turnTimeoutMs =
       typeof this.config.turnTimeoutMs === 'number' && Number.isFinite(this.config.turnTimeoutMs)
         ? Math.max(this.config.turnTimeoutMs, 5_000)
@@ -1100,16 +1050,6 @@ class CodexAppServerSession {
         const payload = readObject(notification.params)
         if (!payload) {
           return
-        }
-
-        const reasoningDelta = readReasoningDelta(notification.method, payload)
-        if (reasoningDelta && notification.method !== 'item/agentMessage/delta') {
-          onReasoningDelta?.(reasoningDelta)
-        }
-
-        const messageSummary = readMessageSummary(notification.method, payload)
-        if (messageSummary) {
-          onMessageSummary?.(messageSummary)
         }
 
         switch (notification.method) {
@@ -1723,20 +1663,6 @@ export async function runChatgptManagedTurn(
           if (event.delta) {
             streamedText += event.delta
             options.onTextDelta?.(event.delta)
-          }
-          continue
-        }
-
-        if (event.type === 'reasoning-delta') {
-          if (event.delta) {
-            options.onReasoningDelta?.(event.delta)
-          }
-          continue
-        }
-
-        if (event.type === 'message-summary') {
-          if (event.summary) {
-            options.onMessageSummary?.(event.summary)
           }
           continue
         }

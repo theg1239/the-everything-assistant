@@ -137,14 +137,6 @@ type TurnRunEvent =
       delta: string
     }
   | {
-      type: 'reasoning-delta'
-      delta: string
-    }
-  | {
-      type: 'message-summary'
-      summary: string
-    }
-  | {
       type: 'tool-call-request'
       requestId: string
       toolCallId: string
@@ -337,42 +329,6 @@ const pickPlanUsageSnapshot = (
   }
 
   return parsePlanUsageSnapshot(payload.rateLimits ?? payload.rate_limits ?? null)
-}
-
-const readReasoningDelta = (method: string, payload: Record<string, unknown>): string | null => {
-  const lowerMethod = method.toLowerCase()
-  if (!lowerMethod.includes('reasoning')) {
-    return null
-  }
-
-  const directDelta = readString(payload.delta) ?? readString(payload.text)
-  if (directDelta && directDelta.trim().length > 0) {
-    return directDelta
-  }
-
-  const item = readObject(payload.item)
-  if (!item) return null
-  const itemText = readString(item.text)
-  return itemText && itemText.trim().length > 0 ? itemText : null
-}
-
-const readMessageSummary = (method: string, payload: Record<string, unknown>): string | null => {
-  const lowerMethod = method.toLowerCase()
-  const item = readObject(payload.item)
-  const itemType = readString(item?.type)?.toLowerCase() ?? ''
-  const looksLikeSummary = lowerMethod.includes('summary') || itemType.includes('summary')
-  if (!looksLikeSummary) {
-    return null
-  }
-
-  const summary =
-    readString(payload.summary) ??
-    readString(payload.delta) ??
-    readString(payload.text) ??
-    readString(item?.summary) ??
-    readString(item?.text)
-
-  return summary && summary.trim().length > 0 ? summary : null
 }
 
 const parseJsonArgs = (value: string | undefined): string[] | null => {
@@ -1740,16 +1696,6 @@ class CodexAppServerSession {
     const run = this.getRunByTurn(payloadThreadId, payloadTurnId)
     if (!run) {
       return
-    }
-
-    const reasoningDelta = readReasoningDelta(method, payload)
-    if (reasoningDelta && method !== 'item/agentMessage/delta') {
-      this.enqueueRunEvent(run, { type: 'reasoning-delta', delta: reasoningDelta })
-    }
-
-    const messageSummary = readMessageSummary(method, payload)
-    if (messageSummary) {
-      this.enqueueRunEvent(run, { type: 'message-summary', summary: messageSummary })
     }
 
     if (method === 'thread/tokenUsage/updated') {

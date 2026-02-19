@@ -122,26 +122,26 @@ export function ChatgptConnectAnnouncementModal({ enabled }: ChatgptConnectAnnou
       const loginId = data.loginId ?? null
       setPendingLoginId(loginId)
 
-      if (verificationUrl) {
-        const opened = window.open(verificationUrl, '_blank', 'noopener,noreferrer')
-        if (!opened) {
-          try {
-            await navigator.clipboard.writeText(verificationUrl)
-            toast.info('Popup blocked. ChatGPT login URL copied to clipboard.')
-          } catch {
-            toast.error('Popup blocked. Please allow popups and try again.')
-          }
-        }
-      }
-
       if (data.deviceCode) {
         setChatgptDeviceFlow({
           loginId,
           deviceCode: data.deviceCode,
           verificationUrl,
         })
+        toast.success('device code ready. copy it first, then continue to sign in.')
         return
       } else {
+        if (verificationUrl) {
+          const opened = window.open(verificationUrl, '_blank', 'noopener,noreferrer')
+          if (!opened) {
+            try {
+              await navigator.clipboard.writeText(verificationUrl)
+              toast.info('Popup blocked. ChatGPT login URL copied to clipboard.')
+            } catch {
+              toast.error('Popup blocked. Please allow popups and try again.')
+            }
+          }
+        }
         toast.success('Complete ChatGPT sign-in in the opened browser tab.')
         handleClose()
       }
@@ -276,7 +276,7 @@ export function ChatgptConnectAnnouncementModal({ enabled }: ChatgptConnectAnnou
               </p>
               {!chatgptDeviceFlow && (
                 <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">
-                  we will show your one-time device code here so you can copy and paste it.
+                  we will show your one-time device code first, then you can continue to sign in.
                 </p>
               )}
 
@@ -288,26 +288,7 @@ export function ChatgptConnectAnnouncementModal({ enabled }: ChatgptConnectAnnou
                         step 1
                       </p>
                       <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
-                        open the ChatGPT device sign-in page
-                      </p>
-                      <div className="mt-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleOpenVerificationUrl}
-                          className="h-8"
-                        >
-                          open sign-in page
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-slate-200 pt-3 dark:border-slate-700">
-                      <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                        step 2
-                      </p>
-                      <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
-                        enter this code
+                        copy this code
                       </p>
                       <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
                         <code className="inline-flex min-h-9 items-center rounded-md border border-slate-300 bg-white px-3 font-mono text-base tracking-[0.35em] text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
@@ -321,6 +302,25 @@ export function ChatgptConnectAnnouncementModal({ enabled }: ChatgptConnectAnnou
                         >
                           <Copy className="mr-1.5 h-3.5 w-3.5" />
                           copy code
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="border-t border-slate-200 pt-3 dark:border-slate-700">
+                      <p className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        step 2
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
+                        open the ChatGPT sign-in page
+                      </p>
+                      <div className="mt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleOpenVerificationUrl}
+                          className="h-8"
+                        >
+                          continue to ChatGPT
                         </Button>
                       </div>
                     </div>

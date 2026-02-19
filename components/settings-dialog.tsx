@@ -724,6 +724,11 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         : null
       setChatgptDeviceFlow(deviceFlowState)
 
+      if (deviceFlowState) {
+        toast.success('device code ready. copy it first, then open the sign-in page.')
+        return
+      }
+
       if (verificationUrl) {
         const opened = window.open(verificationUrl, '_blank', 'noopener,noreferrer')
         if (!opened) {
@@ -736,9 +741,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         }
       }
 
-      if (!data.deviceCode) {
-        toast.success('Complete ChatGPT sign-in in the opened browser tab.')
-      }
+      toast.success('Complete ChatGPT sign-in in the opened browser tab.')
     } catch (error: any) {
       console.error('Error starting ChatGPT login:', error)
       toast.error(error?.message || 'Unable to start ChatGPT login')
@@ -1683,8 +1686,8 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         const chatgptConnectionState = chatgptStatus.connected
           ? 'connected'
           : chatgptStatus.pendingLoginId
-            ? 'pending'
-            : 'not connected'
+            ? 'connecting'
+            : 'ready to connect'
         const chatgptStatusTone = chatgptStatus.connected
           ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
           : chatgptStatus.pendingLoginId
@@ -1728,10 +1731,9 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                         <Globe className="h-4 w-4" />
                       </div>
                       <div className="space-y-1">
-                        <h4 className="font-semibold text-base">ChatGPT via Codex app-server</h4>
+                        <h4 className="font-semibold text-base">connect ChatGPT</h4>
                         <p className="text-xs md:text-sm text-muted-foreground">
-                          keep your Google app session active, then link ChatGPT for managed Codex
-                          usage.
+                          use your ChatGPT plan in this app while staying signed in with Google.
                         </p>
                       </div>
                     </div>
@@ -1831,15 +1833,15 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
                   <div className="rounded-xl border border-border/60 bg-muted/10 px-3 py-2.5">
                     <p className="text-xs leading-relaxed text-muted-foreground">
-                      you stay signed in to this app with Google. ChatGPT login is only used by the
-                      Codex app-server, so managed calls can use your connected ChatGPT access.
+                      your Google login keeps this app session active. ChatGPT is used only for
+                      managed AI usage and does not replace your app account login.
                     </p>
                   </div>
 
                   {!chatgptStatus.available && (
                     <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
                       {chatgptStatus.error ||
-                        'Codex app-server is unavailable. Set CODEX_BIN or install codex.'}
+                        'chatgpt connection service is unavailable right now. please try again shortly.'}
                     </p>
                   )}
 
@@ -1850,41 +1852,28 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                   )}
 
                   {activeChatgptDeviceFlow && (
-                    <div className="rounded-xl border border-primary/30 bg-primary/5 px-3 py-3">
+                    <div className="rounded-xl border border-primary/30 bg-primary/[0.06] px-4 py-3.5">
                       <div className="space-y-3">
                         <div>
-                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                            step 1
+                          <p className="text-sm font-semibold">finish ChatGPT sign-in</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            copy your one-time code first, then open the ChatGPT sign-in page.
                           </p>
-                          <p className="mt-1 text-sm font-medium">
-                            open the ChatGPT device sign-in page
-                          </p>
-                          <div className="mt-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={handleOpenChatgptVerification}
-                              className="h-8"
-                            >
-                              open sign-in page
-                            </Button>
-                          </div>
                         </div>
 
-                        <div className="border-t border-border/50 pt-3">
+                        <div className="rounded-lg border border-border/70 bg-background/90 p-3">
                           <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                            step 2
+                            step 1: copy code
                           </p>
-                          <p className="mt-1 text-sm font-medium">enter this code</p>
                           <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-                            <code className="inline-flex min-h-9 items-center rounded-md border border-border bg-background px-3 font-mono text-base tracking-[0.35em]">
+                            <code className="inline-flex min-h-10 items-center rounded-md border border-border bg-background px-3 font-mono text-base tracking-[0.35em]">
                               {activeChatgptDeviceFlow.deviceCode.toUpperCase()}
                             </code>
                             <Button
                               variant="secondary"
                               size="sm"
                               onClick={handleCopyChatgptDeviceCode}
-                              className="h-8"
+                              className="h-9"
                             >
                               <Copy className="mr-1.5 h-3.5 w-3.5" />
                               copy code
@@ -1892,9 +1881,24 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                           </div>
                         </div>
 
+                        <div className="rounded-lg border border-border/70 bg-background/90 p-3">
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            step 2: open sign-in page
+                          </p>
+                          <div className="mt-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={handleOpenChatgptVerification}
+                              className="h-9"
+                            >
+                              continue to ChatGPT
+                            </Button>
+                          </div>
+                        </div>
+
                         <p className="text-xs text-muted-foreground">
-                          keep this window open. connection will complete automatically after you
-                          enter the code.
+                          keep this page open after entering the code. we will connect automatically.
                         </p>
                       </div>
                     </div>
@@ -1911,7 +1915,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
                         {(loadingChatgptStatus || startingChatgptLogin) && (
                           <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                         )}
-                        login with ChatGPT
+                        show device code
                       </Button>
                     )}
 

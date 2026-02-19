@@ -13,6 +13,7 @@ export const memorySchema = z.object({
 
 export const memorySettingsSchema = z.object({
   isEnabled: z.boolean().optional(),
+  maxTokens: z.number().min(100).max(10000).optional(),
   maxOutputTokens: z.number().min(100).max(10000).optional(),
   autoSave: z.boolean().optional(),
   autoSaveFilter: z.enum(['low', 'medium', 'high']).optional(),
@@ -33,7 +34,20 @@ export interface MemorySettings {
   id: string
   userId: string
   isEnabled: boolean
+  maxTokens: number
   maxOutputTokens: number
+  autoSave: boolean
+  autoSaveFilter: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+type MemorySettingsDb = {
+  id: string
+  userId: string
+  isEnabled: boolean
+  maxTokens?: number | null
+  maxOutputTokens?: number | null
   autoSave: boolean
   autoSaveFilter: string
   createdAt: Date
@@ -46,6 +60,21 @@ export class MemoryService {
 
   private estimateTokenCount(text: string): number {
     return Math.ceil(text.length / 4)
+  }
+
+  private toMemorySettingsResponse(settings: MemorySettingsDb): MemorySettings {
+    const maxTokens =
+      typeof settings.maxTokens === 'number'
+        ? settings.maxTokens
+        : typeof settings.maxOutputTokens === 'number'
+          ? settings.maxOutputTokens
+          : this.MAX_MEMORY_TOKENS
+
+    return {
+      ...settings,
+      maxTokens,
+      maxOutputTokens: maxTokens,
+    }
   }
 
   calculateSimilarity(a: string, b: string): number {
@@ -137,7 +166,7 @@ export class MemoryService {
   async getUserMemorySettings(userId: string): Promise<MemorySettings | null> {
     let settings = (await (prisma as any).memorySettings.findUnique({
       where: { userId },
-    })) as Promise<MemorySettings | null>
+    })) as MemorySettingsDb | null
 
     if (!settings) {
       settings = (await (prisma as any).memorySettings.upsert({
@@ -146,14 +175,14 @@ export class MemoryService {
         create: {
           userId,
           isEnabled: true,
-          maxOutputTokens: this.MAX_MEMORY_TOKENS,
+          maxTokens: this.MAX_MEMORY_TOKENS,
           autoSave: true,
           autoSaveFilter: 'medium',
         },
-      })) as Promise<MemorySettings>
+      })) as MemorySettingsDb
     }
 
-    return settings
+    return this.toMemorySettingsResponse(settings)
   }
 
   async updateMemorySettings(
@@ -161,14 +190,20 @@ export class MemoryService {
     data: Partial<z.infer<typeof memorySettingsSchema>>
   ): Promise<MemorySettings> {
     const settings = memorySettingsSchema.partial().parse(data)
-    return (prisma as any).memorySettings.upsert({
+    const resolvedMaxTokens = settings.maxTokens ?? settings.maxOutputTokens
+    const { maxTokens: _maxTokens, maxOutputTokens: _maxOutputTokens, ...rest } = settings
+    const dbSettings = resolvedMaxTokens === undefined ? rest : { ...rest, maxTokens: resolvedMaxTokens }
+
+    const result = (await (prisma as any).memorySettings.upsert({
       where: { userId },
-      update: settings,
+      update: dbSettings,
       create: {
         userId,
-        ...settings,
+        ...dbSettings,
       },
-    }) as Promise<MemorySettings>
+    })) as MemorySettingsDb
+
+    return this.toMemorySettingsResponse(result)
   }
 
   async toggleMemoryEnabled(userId: string, enabled: boolean): Promise<MemorySettings> {

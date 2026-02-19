@@ -163,6 +163,12 @@ interface ChatgptLoginStartResponse {
   verificationUrl?: string | null
 }
 
+interface ChatgptDeviceFlowState {
+  loginId: string | null
+  deviceCode: string
+  verificationUrl: string | null
+}
+
 type BasicApiResponse = {
   success?: boolean
   message?: string
@@ -289,6 +295,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
   const [startingChatgptLogin, setStartingChatgptLogin] = useState(false)
   const [cancelingChatgptLogin, setCancelingChatgptLogin] = useState(false)
   const [disconnectingChatgpt, setDisconnectingChatgpt] = useState(false)
+  const [chatgptDeviceFlow, setChatgptDeviceFlow] = useState<ChatgptDeviceFlowState | null>(null)
   const previousPendingChatgptLoginId = useRef<string | null>(null)
 
   const [touchStartY, setTouchStartY] = useState(0)
@@ -666,6 +673,18 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         throw new Error(data?.error || 'Unable to read ChatGPT status')
       }
       setChatgptStatus(data)
+      setChatgptDeviceFlow(current => {
+        if (!data.pendingLoginId || data.connected) {
+          return null
+        }
+        if (!current) {
+          return null
+        }
+        if (current.loginId && current.loginId !== data.pendingLoginId) {
+          return null
+        }
+        return current
+      })
       return data
     } catch (error: any) {
       const fallback: ChatgptStatusResponse = {
@@ -674,6 +693,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         error: error?.message || 'Unable to reach Codex app-server',
       }
       setChatgptStatus(fallback)
+      setChatgptDeviceFlow(null)
       return fallback
     } finally {
       if (!silent) {
@@ -694,32 +714,28 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       }
 
       setChatgptStatus(data.status)
+      const verificationUrl = data.verificationUrl ?? data.authUrl
 
-      if (data.authUrl) {
-        const opened = window.open(data.authUrl, '_blank', 'noopener,noreferrer')
+      if (verificationUrl) {
+        const opened = window.open(verificationUrl, '_blank', 'noopener,noreferrer')
         if (!opened) {
           try {
-            await navigator.clipboard.writeText(data.authUrl)
+            await navigator.clipboard.writeText(verificationUrl)
             toast.info('Popup blocked. ChatGPT login URL copied to clipboard.')
           } catch {
             toast.error('Popup blocked. Please allow popups and try again.')
           }
         }
       }
+
       if (data.deviceCode) {
-        let copiedCode = false
-        try {
-          await navigator.clipboard.writeText(data.deviceCode)
-          copiedCode = true
-        } catch {
-          copiedCode = false
-        }
-        toast.success(
-          copiedCode
-            ? `Enter code ${data.deviceCode} to finish ChatGPT sign-in (copied).`
-            : `Enter code ${data.deviceCode} to finish ChatGPT sign-in.`
-        )
+        setChatgptDeviceFlow({
+          loginId: data.loginId ?? data.status.pendingLoginId ?? null,
+          deviceCode: data.deviceCode,
+          verificationUrl,
+        })
       } else {
+        setChatgptDeviceFlow(null)
         toast.success('Complete ChatGPT sign-in in the opened browser tab.')
       }
     } catch (error: any) {
@@ -727,6 +743,30 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       toast.error(error?.message || 'Unable to start ChatGPT login')
     } finally {
       setStartingChatgptLogin(false)
+    }
+  }
+
+  const handleCopyChatgptDeviceCode = async () => {
+    if (!chatgptDeviceFlow?.deviceCode) return
+    try {
+      await navigator.clipboard.writeText(chatgptDeviceFlow.deviceCode)
+      toast.success('device code copied')
+    } catch {
+      toast.error('unable to copy device code')
+    }
+  }
+
+  const handleOpenChatgptVerification = async () => {
+    const verificationUrl = chatgptDeviceFlow?.verificationUrl
+    if (!verificationUrl) return
+    const opened = window.open(verificationUrl, '_blank', 'noopener,noreferrer')
+    if (!opened) {
+      try {
+        await navigator.clipboard.writeText(verificationUrl)
+        toast.info('Popup blocked. ChatGPT login URL copied to clipboard.')
+      } catch {
+        toast.error('Popup blocked. Please allow popups and try again.')
+      }
     }
   }
 
@@ -745,6 +785,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         throw new Error(data?.error || 'Unable to cancel ChatGPT login')
       }
       setChatgptStatus(data)
+      setChatgptDeviceFlow(null)
       toast.success('ChatGPT login canceled')
     } catch (error: any) {
       console.error('Error canceling ChatGPT login:', error)
@@ -765,6 +806,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         throw new Error(data?.error || 'Unable to disconnect ChatGPT')
       }
       setChatgptStatus(data)
+      setChatgptDeviceFlow(null)
       toast.success('ChatGPT disconnected')
     } catch (error: any) {
       console.error('Error disconnecting ChatGPT:', error)
@@ -792,6 +834,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
   useEffect(() => {
     const previous = previousPendingChatgptLoginId.current
     if (previous && !chatgptStatus.pendingLoginId) {
+      setChatgptDeviceFlow(null)
       if (chatgptStatus.connected) {
         toast.success('ChatGPT connected to Codex')
       } else if (chatgptStatus.lastLoginError) {

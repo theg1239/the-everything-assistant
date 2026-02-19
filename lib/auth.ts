@@ -12,6 +12,17 @@ type GoogleAuthProvider = ReturnType<typeof GoogleProvider>
 type SpotifyAuthProvider = ReturnType<typeof SpotifyProvider>
 type AuthProvider = GoogleAuthProvider | SpotifyAuthProvider
 
+const inferredNextAuthUrl =
+  process.env.NEXTAUTH_URL?.trim() ||
+  process.env.AUTH_URL?.trim() ||
+  process.env.APP_URL?.trim() ||
+  process.env.NEXT_PUBLIC_BASE_URL?.trim() ||
+  ''
+
+if (!process.env.NEXTAUTH_URL && inferredNextAuthUrl) {
+  process.env.NEXTAUTH_URL = inferredNextAuthUrl
+}
+
 const providers: AuthProvider[] = [
   GoogleProvider({
     clientId: process.env.GOOGLE_CLIENT_ID ?? '',

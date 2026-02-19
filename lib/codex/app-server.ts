@@ -239,6 +239,53 @@ const parseSpaceArgs = (value: string | undefined): string[] => {
     .filter(Boolean)
 }
 
+const sanitizeCodexArgsForReadOnly = (args: string[], source: string): string[] => {
+  const sanitized: string[] = []
+
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i]
+    const lower = arg.toLowerCase()
+
+    const dropCurrentAndMaybeValue = (reason: string) => {
+      console.warn(`[codex-app-server] removed ${arg} from ${source} (${reason})`)
+      const next = args[i + 1]
+      if (next && !next.startsWith('-')) {
+        i += 1
+      }
+    }
+
+    if (
+      lower === '--dangerously-bypass-approvals-and-sandbox' ||
+      lower === '--yolo' ||
+      lower === '--full-auto'
+    ) {
+      console.warn(`[codex-app-server] removed ${arg} from ${source} (unsafe execution mode)`)
+      continue
+    }
+
+    if (lower === '--sandbox' || lower === '-s') {
+      dropCurrentAndMaybeValue('sandbox is hard-enforced as read-only by app-server wrapper')
+      continue
+    }
+
+    if (
+      lower.startsWith('--sandbox=') ||
+      lower === '--ask-for-approval' ||
+      lower.startsWith('--ask-for-approval=') ||
+      lower === '-a'
+    ) {
+      dropCurrentAndMaybeValue(
+        'approval policy is hard-enforced as never by app-server wrapper'
+      )
+      continue
+    }
+
+    sanitized.push(arg)
+  }
+
+  return sanitized
+}
+
 const sanitizePathSegment = (value: string) => value.replace(/[^a-zA-Z0-9._-]/g, '_')
 
 const readObject = (value: unknown): Record<string, unknown> | null => {
@@ -821,7 +868,7 @@ class CodexAppServerSession {
 
     const threadResult = (await this.request('thread/start', {
       model: options.model ?? process.env.CODEX_APP_SERVER_MODEL ?? undefined,
-      cwd: options.cwd ?? process.env.CODEX_APP_SERVER_CWD ?? process.cwd(),
+      cwd: process.env.CODEX_APP_SERVER_CWD ?? options.cwd ?? process.cwd(),
       approvalPolicy: 'never',
       sandbox: 'read-only',
       baseInstructions: options.baseInstructions ?? undefined,
@@ -1466,13 +1513,16 @@ const resolveConfig = (): SessionConfig => {
   const requestTimeoutMs = Number(process.env.CODEX_APP_SERVER_REQUEST_TIMEOUT_MS ?? 45_000)
   const turnTimeoutMs = Number(process.env.CODEX_APP_SERVER_TURN_TIMEOUT_MS ?? 180_000)
 
+  const parsedCodexArgs =
+    parseJsonArgs(process.env.CODEX_FLAGS_JSON) ?? parseSpaceArgs(process.env.CODEX_FLAGS)
+  const parsedAppServerArgs =
+    parseJsonArgs(process.env.CODEX_APP_SERVER_FLAGS_JSON) ??
+    parseSpaceArgs(process.env.CODEX_APP_SERVER_FLAGS)
+
   return {
     codexBin: process.env.CODEX_BIN ?? 'codex',
-    codexArgs:
-      parseJsonArgs(process.env.CODEX_FLAGS_JSON) ?? parseSpaceArgs(process.env.CODEX_FLAGS),
-    appServerArgs:
-      parseJsonArgs(process.env.CODEX_APP_SERVER_FLAGS_JSON) ??
-      parseSpaceArgs(process.env.CODEX_APP_SERVER_FLAGS),
+    codexArgs: sanitizeCodexArgsForReadOnly(parsedCodexArgs, 'CODEX_FLAGS'),
+    appServerArgs: sanitizeCodexArgsForReadOnly(parsedAppServerArgs, 'CODEX_APP_SERVER_FLAGS'),
     codexHomeRoot:
       process.env.CODEX_APP_SERVER_HOME_ROOT ??
       join(homedir(), '.the-everything-assistant', 'codex-app-server'),

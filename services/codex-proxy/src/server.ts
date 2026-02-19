@@ -342,6 +342,132 @@ const parseSpaceArgs = (value: string | undefined): string[] => {
     .filter(Boolean)
 }
 
+const trimTrailingSlashes = (value: string): string => value.replace(/\/+$/gu, '')
+
+const resolvePublicBaseUrl = (): string | null => {
+  const raw = Bun.env.CODEX_PROXY_PUBLIC_BASE_URL?.trim()
+  if (!raw) return null
+
+  try {
+    const parsed = new URL(raw)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      console.warn('[codex-proxy] CODEX_PROXY_PUBLIC_BASE_URL must use http or https')
+      return null
+    }
+    return trimTrailingSlashes(parsed.toString())
+  } catch {
+    console.warn('[codex-proxy] CODEX_PROXY_PUBLIC_BASE_URL is invalid and will be ignored')
+    return null
+  }
+}
+
+const isLoopbackHost = (host: string): boolean => {
+  const normalized = host.trim().toLowerCase()
+  return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1'
+}
+
+const extractRedirectUriParam = (authUrl: string): { key: string; value: string } | null => {
+  try {
+    const parsed = new URL(authUrl)
+    if (parsed.searchParams.has('redirect_uri')) {
+      const value = parsed.searchParams.get('redirect_uri')
+      if (value) return { key: 'redirect_uri', value }
+    }
+    if (parsed.searchParams.has('redirectUri')) {
+      const value = parsed.searchParams.get('redirectUri')
+      if (value) return { key: 'redirectUri', value }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+const rewriteAuthUrlForPublicCallback = (options: {
+  authUrl: string
+  publicBaseUrl: string
+  userId: string
+  loginId: string
+}): { authUrl: string; localRedirectUri: string | null } => {
+  const { authUrl, publicBaseUrl, userId, loginId } = options
+  const redirectParam = extractRedirectUriParam(authUrl)
+  if (!redirectParam) {
+    return { authUrl, localRedirectUri: null }
+  }
+
+  let redirectUrl: URL
+  try {
+    redirectUrl = new URL(redirectParam.value)
+  } catch {
+    return { authUrl, localRedirectUri: null }
+  }
+
+  if (!isLoopbackHost(redirectUrl.hostname)) {
+    return { authUrl, localRedirectUri: null }
+  }
+
+  let parsedAuthUrl: URL
+  try {
+    parsedAuthUrl = new URL(authUrl)
+  } catch {
+    return { authUrl, localRedirectUri: null }
+  }
+
+  const callbackUrl =
+    `${publicBaseUrl}/v1/chatgpt/login/callback` +
+    `?userId=${encodeURIComponent(userId)}&loginId=${encodeURIComponent(loginId)}`
+  parsedAuthUrl.searchParams.set(redirectParam.key, callbackUrl)
+  return {
+    authUrl: parsedAuthUrl.toString(),
+    localRedirectUri: redirectParam.value,
+  }
+}
+
+const sanitizeCodexArgsForReadOnly = (args: string[], source: string): string[] => {
+  const sanitized: string[] = []
+
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i]
+    const lower = arg.toLowerCase()
+
+    const dropCurrentAndMaybeValue = (reason: string) => {
+      console.warn(`[codex-proxy] removed ${arg} from ${source} (${reason})`)
+      const next = args[i + 1]
+      if (next && !next.startsWith('-')) {
+        i += 1
+      }
+    }
+
+    if (
+      lower === '--dangerously-bypass-approvals-and-sandbox' ||
+      lower === '--yolo' ||
+      lower === '--full-auto'
+    ) {
+      console.warn(`[codex-proxy] removed ${arg} from ${source} (unsafe execution mode)`)
+      continue
+    }
+
+    if (lower === '--sandbox' || lower === '-s') {
+      dropCurrentAndMaybeValue('sandbox is hard-enforced as read-only by proxy')
+      continue
+    }
+
+    if (
+      lower.startsWith('--sandbox=') ||
+      lower === '--ask-for-approval' ||
+      lower.startsWith('--ask-for-approval=') ||
+      lower === '-a'
+    ) {
+      dropCurrentAndMaybeValue('approval policy is hard-enforced as never by proxy')
+      continue
+    }
+
+    sanitized.push(arg)
+  }
+
+  return sanitized
+}
+
 const sanitizePathSegment = (value: string) => value.replace(/[^a-zA-Z0-9._-]/g, '_')
 const HOME_DIR = Bun.env.HOME || Bun.env.USERPROFILE || '/tmp'
 
@@ -608,6 +734,7 @@ class CodexAppServerSession {
   private pendingLoginId: string | null = null
   private lastLoginError: string | null = null
   private lastUsedAt = Date.now()
+  private readonly loginCallbackTargets = new Map<string, string>()
   private readonly runsById = new Map<string, TurnRunState>()
   private readonly runIdByTurnKey = new Map<string, string>()
 
@@ -736,6 +863,7 @@ class CodexAppServerSession {
       type: 'chatgpt',
     })) as LoginChatgptResult
 
+    this.loginCallbackTargets.clear()
     this.pendingLoginId = readString(result?.loginId)
     this.lastLoginError = null
 
@@ -756,6 +884,7 @@ class CodexAppServerSession {
     await this.request('account/login/cancel', { loginId: targetLoginId })
     this.pendingLoginId = null
     this.lastLoginError = null
+    this.loginCallbackTargets.delete(targetLoginId)
     return this.getStatus()
   }
 
@@ -764,7 +893,16 @@ class CodexAppServerSession {
     await this.request('account/logout')
     this.pendingLoginId = null
     this.lastLoginError = null
+    this.loginCallbackTargets.clear()
     return this.getStatus()
+  }
+
+  setLoginCallbackTarget(loginId: string, localRedirectUri: string): void {
+    this.loginCallbackTargets.set(loginId, localRedirectUri)
+  }
+
+  getLoginCallbackTarget(loginId: string): string | null {
+    return this.loginCallbackTargets.get(loginId) ?? null
   }
 
   async startTurnRun(options: RunChatgptTurnOptions): Promise<StartTurnRunResult> {
@@ -781,7 +919,7 @@ class CodexAppServerSession {
 
     const threadResult = (await this.request('thread/start', {
       model: options.model ?? Bun.env.CODEX_APP_SERVER_MODEL ?? undefined,
-      cwd: options.cwd ?? Bun.env.CODEX_APP_SERVER_CWD ?? Bun.cwd(),
+      cwd: Bun.env.CODEX_APP_SERVER_CWD ?? options.cwd ?? Bun.cwd(),
       approvalPolicy: 'never',
       sandbox: 'read-only',
       baseInstructions: options.baseInstructions ?? undefined,
@@ -971,6 +1109,7 @@ class CodexAppServerSession {
     }
 
     this.startupPromise = null
+    this.loginCallbackTargets.clear()
     for (const runId of [...this.runsById.keys()]) {
       this.closeRun(runId)
     }
@@ -1119,6 +1258,10 @@ class CodexAppServerSession {
       const loginId = readString(payload?.loginId)
       const success = Boolean(payload?.success)
       const error = readString(payload?.error)
+
+      if (loginId) {
+        this.loginCallbackTargets.delete(loginId)
+      }
 
       if (loginId && loginId === this.pendingLoginId) {
         this.pendingLoginId = null
@@ -1355,12 +1498,16 @@ const resolveConfig = (): SessionConfig => {
   const requestTimeoutMs = Number(Bun.env.CODEX_APP_SERVER_REQUEST_TIMEOUT_MS ?? 45_000)
   const turnTimeoutMs = Number(Bun.env.CODEX_APP_SERVER_TURN_TIMEOUT_MS ?? 180_000)
 
+  const parsedCodexArgs =
+    parseJsonArgs(Bun.env.CODEX_FLAGS_JSON) ?? parseSpaceArgs(Bun.env.CODEX_FLAGS)
+  const parsedAppServerArgs =
+    parseJsonArgs(Bun.env.CODEX_APP_SERVER_FLAGS_JSON) ??
+    parseSpaceArgs(Bun.env.CODEX_APP_SERVER_FLAGS)
+
   return {
     codexBin: Bun.env.CODEX_BIN ?? 'codex',
-    codexArgs: parseJsonArgs(Bun.env.CODEX_FLAGS_JSON) ?? parseSpaceArgs(Bun.env.CODEX_FLAGS),
-    appServerArgs:
-      parseJsonArgs(Bun.env.CODEX_APP_SERVER_FLAGS_JSON) ??
-      parseSpaceArgs(Bun.env.CODEX_APP_SERVER_FLAGS),
+    codexArgs: sanitizeCodexArgsForReadOnly(parsedCodexArgs, 'CODEX_FLAGS'),
+    appServerArgs: sanitizeCodexArgsForReadOnly(parsedAppServerArgs, 'CODEX_APP_SERVER_FLAGS'),
     codexHomeRoot:
       Bun.env.CODEX_APP_SERVER_HOME_ROOT ??
       joinPath(HOME_DIR, '.the-everything-assistant', 'codex-proxy-home'),
@@ -1427,6 +1574,50 @@ const json = (body: unknown, init?: ResponseInit): Response =>
 const badRequest = (message: string): Response => json({ error: message }, { status: 400 })
 const unauthorized = (): Response => json({ error: 'Unauthorized' }, { status: 401 })
 
+const html = (options: { title: string; description: string; success: boolean }): Response => {
+  const { title, description, success } = options
+  const statusColor = success ? '#16a34a' : '#dc2626'
+  const statusBg = success ? '#dcfce7' : '#fee2e2'
+  const titleSafe = title.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const descriptionSafe = description.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  return new Response(
+    `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${titleSafe}</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { margin: 0; font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
+      main { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+      .card { width: 100%; max-width: 520px; border-radius: 14px; border: 1px solid #334155; background: #111827; padding: 20px; }
+      .badge { display: inline-block; font-size: 12px; padding: 4px 10px; border-radius: 999px; background: ${statusBg}; color: ${statusColor}; font-weight: 600; }
+      h1 { margin: 12px 0 8px; font-size: 20px; line-height: 1.2; color: #f8fafc; }
+      p { margin: 0; color: #cbd5e1; line-height: 1.5; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="card">
+        <span class="badge">${success ? 'Success' : 'Error'}</span>
+        <h1>${titleSafe}</h1>
+        <p>${descriptionSafe}</p>
+      </section>
+    </main>
+  </body>
+</html>`,
+    {
+      status: success ? 200 : 400,
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'no-store',
+      },
+    }
+  )
+}
+
 const parseBody = async (request: Request): Promise<Record<string, unknown> | null> => {
   try {
     const payload = await request.json()
@@ -1480,6 +1671,83 @@ const server = Bun.serve({
       })
     }
 
+    if (pathname === '/v1/chatgpt/login/callback' && request.method === 'GET') {
+      const url = new URL(request.url)
+      const userId = url.searchParams.get('userId')?.trim()
+      const loginId = url.searchParams.get('loginId')?.trim()
+
+      if (!userId || !loginId) {
+        return html({
+          title: 'Invalid callback',
+          description: 'Missing userId or loginId in callback URL.',
+          success: false,
+        })
+      }
+
+      const session = registry.sessions.get(userId)
+      if (!session) {
+        return html({
+          title: 'Login session expired',
+          description: 'No active login session was found. Start login again from settings.',
+          success: false,
+        })
+      }
+
+      const localRedirectUri = session.getLoginCallbackTarget(loginId)
+      if (!localRedirectUri) {
+        return html({
+          title: 'Login callback not found',
+          description: 'This login callback is no longer active. Start login again from settings.',
+          success: false,
+        })
+      }
+
+      let callbackUrl: URL
+      try {
+        callbackUrl = new URL(localRedirectUri)
+      } catch {
+        return html({
+          title: 'Callback misconfigured',
+          description: 'Stored callback URL is invalid. Start login again.',
+          success: false,
+        })
+      }
+
+      for (const [key, value] of url.searchParams.entries()) {
+        if (key === 'userId' || key === 'loginId') continue
+        callbackUrl.searchParams.set(key, value)
+      }
+
+      try {
+        const forwarded = await fetch(callbackUrl.toString(), {
+          method: 'GET',
+          redirect: 'manual',
+          cache: 'no-store',
+        })
+
+        if (forwarded.status >= 400) {
+          return html({
+            title: 'ChatGPT login failed',
+            description: 'The local Codex callback returned an error. Retry the login flow.',
+            success: false,
+          })
+        }
+
+        return html({
+          title: 'ChatGPT login received',
+          description:
+            'You can return to The Everything Assistant. Connection status should update shortly.',
+          success: true,
+        })
+      } catch {
+        return html({
+          title: 'ChatGPT login failed',
+          description: 'Unable to forward callback to Codex login server on the VM.',
+          success: false,
+        })
+      }
+    }
+
     if (!isAuthorized(request)) {
       return unauthorized()
     }
@@ -1506,6 +1774,19 @@ const server = Bun.serve({
       try {
         const session = getOrCreateSession(userId)
         const result = await session.startChatgptLogin()
+        const publicBaseUrl = resolvePublicBaseUrl()
+        if (publicBaseUrl && result.authUrl && result.loginId) {
+          const rewritten = rewriteAuthUrlForPublicCallback({
+            authUrl: result.authUrl,
+            publicBaseUrl,
+            userId,
+            loginId: result.loginId,
+          })
+          if (rewritten.localRedirectUri) {
+            session.setLoginCallbackTarget(result.loginId, rewritten.localRedirectUri)
+            result.authUrl = rewritten.authUrl
+          }
+        }
         return json(result)
       } catch (error: any) {
         return json({ error: error?.message || 'Failed to start ChatGPT login' }, { status: 500 })

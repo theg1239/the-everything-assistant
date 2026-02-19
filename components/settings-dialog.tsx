@@ -158,6 +158,9 @@ interface ChatgptLoginStartResponse {
   authUrl: string | null
   loginId: string | null
   status: ChatgptStatusResponse
+  loginMethod?: 'browser' | 'device'
+  deviceCode?: string | null
+  verificationUrl?: string | null
 }
 
 type BasicApiResponse = {
@@ -703,8 +706,22 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
           }
         }
       }
-
-      toast.success('Complete ChatGPT sign-in in the opened browser tab.')
+      if (data.deviceCode) {
+        let copiedCode = false
+        try {
+          await navigator.clipboard.writeText(data.deviceCode)
+          copiedCode = true
+        } catch {
+          copiedCode = false
+        }
+        toast.success(
+          copiedCode
+            ? `Enter code ${data.deviceCode} to finish ChatGPT sign-in (copied).`
+            : `Enter code ${data.deviceCode} to finish ChatGPT sign-in.`
+        )
+      } else {
+        toast.success('Complete ChatGPT sign-in in the opened browser tab.')
+      }
     } catch (error: any) {
       console.error('Error starting ChatGPT login:', error)
       toast.error(error?.message || 'Unable to start ChatGPT login')

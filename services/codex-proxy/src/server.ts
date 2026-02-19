@@ -100,6 +100,9 @@ type ChatgptLoginStartResult = {
   authUrl: string | null
   loginId: string | null
   status: ChatgptStatus
+  loginMethod?: 'browser' | 'device'
+  deviceCode?: string | null
+  verificationUrl?: string | null
 }
 
 type CodexTurnUsage = {
@@ -185,6 +188,54 @@ type StartTurnRunResult = {
   threadId: string
   turnId: string
   model: string | null
+}
+
+type DeviceUserCodeResult = {
+  deviceAuthId: string
+  userCode: string
+  intervalSeconds: number
+  verificationUrl: string
+}
+
+type DeviceTokenPollResult =
+  | { status: 'pending' }
+  | {
+      status: 'ready'
+      authorizationCode: string
+      codeVerifier: string
+    }
+
+type OpenAiTokenResult = {
+  idToken: string | null
+  accessToken: string
+  refreshToken: string | null
+}
+
+type JwtAuthClaims = {
+  email: string | null
+  accountId: string | null
+  planType: string | null
+  exp: number | null
+}
+
+type ExternalAuthState = {
+  accessToken: string
+  refreshToken: string | null
+  idToken: string | null
+  accountId: string
+  planType: string | null
+  email: string | null
+  expMs: number | null
+}
+
+type PendingDeviceLogin = {
+  loginId: string
+  deviceAuthId: string
+  userCode: string
+  intervalSeconds: number
+  verificationUrl: string
+  startedAt: number
+  canceled: boolean
 }
 
 const readObject = (value: unknown): Record<string, unknown> | null => {
@@ -343,83 +394,266 @@ const parseSpaceArgs = (value: string | undefined): string[] => {
 }
 
 const trimTrailingSlashes = (value: string): string => value.replace(/\/+$/gu, '')
+const OPENAI_AUTH_ISSUER = trimTrailingSlashes(
+  Bun.env.CODEX_OPENAI_ISSUER?.trim() || 'https://auth.openai.com'
+)
+const OPENAI_CLIENT_ID = Bun.env.CODEX_CHATGPT_CLIENT_ID?.trim() || 'app_EMoamEEZ73f0CkXaXp7hrann'
+const CHATGPT_LOGIN_MODE = Bun.env.CODEX_PROXY_CHATGPT_LOGIN_MODE?.trim().toLowerCase() || 'device'
+const OPENAI_REQUEST_TIMEOUT_MS = Number(Bun.env.CODEX_PROXY_OPENAI_REQUEST_TIMEOUT_MS ?? 20_000)
+const DEVICE_AUTH_TIMEOUT_MS = Number(Bun.env.CODEX_PROXY_DEVICE_AUTH_TIMEOUT_MS ?? 15 * 60 * 1_000)
+const EXTERNAL_AUTH_REFRESH_LEEWAY_MS = Number(
+  Bun.env.CODEX_PROXY_EXTERNAL_REFRESH_LEEWAY_MS ?? 60_000
+)
 
-const resolvePublicBaseUrl = (): string | null => {
-  const raw = Bun.env.CODEX_PROXY_PUBLIC_BASE_URL?.trim()
-  if (!raw) return null
+const waitMs = (ms: number): Promise<void> =>
+  new Promise(resolve => {
+    setTimeout(resolve, Math.max(1, ms))
+  })
 
-  try {
-    const parsed = new URL(raw)
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      console.warn('[codex-proxy] CODEX_PROXY_PUBLIC_BASE_URL must use http or https')
-      return null
+const parseIntervalSeconds = (value: unknown): number => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(1, Math.floor(value))
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value.trim())
+    if (Number.isFinite(parsed)) {
+      return Math.max(1, Math.floor(parsed))
     }
-    return trimTrailingSlashes(parsed.toString())
+  }
+  return 5
+}
+
+const normalizePlanType = (value: string | null): string | null => {
+  if (!value) return null
+  const normalized = value.trim().toLowerCase()
+  return normalized || null
+}
+
+const decodeBase64UrlJson = (encoded: string): Record<string, unknown> | null => {
+  const normalized = encoded.replace(/-/g, '+').replace(/_/g, '/')
+  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4)
+  try {
+    const decoded = atob(padded)
+    const parsed = JSON.parse(decoded)
+    return readObject(parsed)
   } catch {
-    console.warn('[codex-proxy] CODEX_PROXY_PUBLIC_BASE_URL is invalid and will be ignored')
     return null
   }
 }
 
-const isLoopbackHost = (host: string): boolean => {
-  const normalized = host.trim().toLowerCase()
-  return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1'
-}
-
-const extractRedirectUriParam = (authUrl: string): { key: string; value: string } | null => {
-  try {
-    const parsed = new URL(authUrl)
-    if (parsed.searchParams.has('redirect_uri')) {
-      const value = parsed.searchParams.get('redirect_uri')
-      if (value) return { key: 'redirect_uri', value }
+const parseJwtAuthClaims = (token: string): JwtAuthClaims => {
+  const parts = token.split('.')
+  if (parts.length < 2) {
+    return {
+      email: null,
+      accountId: null,
+      planType: null,
+      exp: null,
     }
-    if (parsed.searchParams.has('redirectUri')) {
-      const value = parsed.searchParams.get('redirectUri')
-      if (value) return { key: 'redirectUri', value }
+  }
+
+  const payload = decodeBase64UrlJson(parts[1])
+  if (!payload) {
+    return {
+      email: null,
+      accountId: null,
+      planType: null,
+      exp: null,
     }
-    return null
-  } catch {
-    return null
-  }
-}
-
-const rewriteAuthUrlForPublicCallback = (options: {
-  authUrl: string
-  publicBaseUrl: string
-  userId: string
-  loginId: string
-}): { authUrl: string; localRedirectUri: string | null } => {
-  const { authUrl, publicBaseUrl, userId, loginId } = options
-  const redirectParam = extractRedirectUriParam(authUrl)
-  if (!redirectParam) {
-    return { authUrl, localRedirectUri: null }
   }
 
-  let redirectUrl: URL
-  try {
-    redirectUrl = new URL(redirectParam.value)
-  } catch {
-    return { authUrl, localRedirectUri: null }
-  }
+  const profile = readObject(payload['https://api.openai.com/profile'])
+  const auth = readObject(payload['https://api.openai.com/auth'])
+  const rawPlanType = readString(auth?.chatgpt_plan_type) ?? readString(auth?.chatgptPlanType)
 
-  if (!isLoopbackHost(redirectUrl.hostname)) {
-    return { authUrl, localRedirectUri: null }
-  }
-
-  let parsedAuthUrl: URL
-  try {
-    parsedAuthUrl = new URL(authUrl)
-  } catch {
-    return { authUrl, localRedirectUri: null }
-  }
-
-  const callbackUrl =
-    `${publicBaseUrl}/v1/chatgpt/login/callback` +
-    `?userId=${encodeURIComponent(userId)}&loginId=${encodeURIComponent(loginId)}`
-  parsedAuthUrl.searchParams.set(redirectParam.key, callbackUrl)
   return {
-    authUrl: parsedAuthUrl.toString(),
-    localRedirectUri: redirectParam.value,
+    email: readString(payload.email) ?? readString(profile?.email),
+    accountId:
+      readString(auth?.chatgpt_account_id) ??
+      readString(auth?.chatgptAccountId) ??
+      readString(payload.account_id) ??
+      null,
+    planType: normalizePlanType(rawPlanType),
+    exp: readNumber(payload.exp),
+  }
+}
+
+const getOpenAiUrl = (path: string): string => `${OPENAI_AUTH_ISSUER}${path}`
+
+const fetchOpenAi = async (
+  path: string,
+  init: RequestInit
+): Promise<{ status: number; data: Record<string, unknown> | null; bodyText: string }> => {
+  const timeoutMs =
+    Number.isFinite(OPENAI_REQUEST_TIMEOUT_MS) && OPENAI_REQUEST_TIMEOUT_MS > 0
+      ? OPENAI_REQUEST_TIMEOUT_MS
+      : 20_000
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const response = await fetch(getOpenAiUrl(path), {
+      ...init,
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+    const bodyText = await response.text()
+    let data: Record<string, unknown> | null = null
+    if (bodyText) {
+      try {
+        data = readObject(JSON.parse(bodyText))
+      } catch {
+        data = null
+      }
+    }
+    return {
+      status: response.status,
+      data,
+      bodyText,
+    }
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`OpenAI auth request timed out after ${timeoutMs}ms`)
+    }
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+const requestDeviceUserCode = async (): Promise<DeviceUserCodeResult> => {
+  const { status, data, bodyText } = await fetchOpenAi('/api/accounts/deviceauth/usercode', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+    },
+    body: JSON.stringify({
+      client_id: OPENAI_CLIENT_ID,
+    }),
+  })
+
+  if (status < 200 || status >= 300) {
+    throw new Error(
+      bodyText || data?.error?.toString() || `device auth user-code request failed with status ${status}`
+    )
+  }
+
+  const deviceAuthId = readString(data?.device_auth_id) ?? readString(data?.deviceAuthId)
+  const userCode = readString(data?.user_code) ?? readString(data?.userCode)
+  const intervalSeconds = parseIntervalSeconds(data?.interval)
+
+  if (!deviceAuthId || !userCode) {
+    throw new Error('device auth response was missing device_auth_id or user_code')
+  }
+
+  return {
+    deviceAuthId,
+    userCode,
+    intervalSeconds,
+    verificationUrl: getOpenAiUrl('/codex/device'),
+  }
+}
+
+const pollDeviceToken = async (options: {
+  deviceAuthId: string
+  userCode: string
+}): Promise<DeviceTokenPollResult> => {
+  const { status, data, bodyText } = await fetchOpenAi('/api/accounts/deviceauth/token', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+    },
+    body: JSON.stringify({
+      device_auth_id: options.deviceAuthId,
+      user_code: options.userCode,
+    }),
+  })
+
+  if (status === 403 || status === 404) {
+    return { status: 'pending' }
+  }
+
+  if (status < 200 || status >= 300) {
+    throw new Error(bodyText || `device auth poll failed with status ${status}`)
+  }
+
+  const authorizationCode =
+    readString(data?.authorization_code) ?? readString(data?.authorizationCode)
+  const codeVerifier = readString(data?.code_verifier) ?? readString(data?.codeVerifier)
+  if (!authorizationCode || !codeVerifier) {
+    throw new Error('device auth poll response was missing authorization_code or code_verifier')
+  }
+
+  return {
+    status: 'ready',
+    authorizationCode,
+    codeVerifier,
+  }
+}
+
+const exchangeAuthorizationCode = async (options: {
+  authorizationCode: string
+  codeVerifier: string
+}): Promise<OpenAiTokenResult> => {
+  const body = new URLSearchParams({
+    grant_type: 'authorization_code',
+    code: options.authorizationCode,
+    redirect_uri: getOpenAiUrl('/deviceauth/callback'),
+    client_id: OPENAI_CLIENT_ID,
+    code_verifier: options.codeVerifier,
+  })
+
+  const { status, data, bodyText } = await fetchOpenAi('/oauth/token', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+    },
+    body: body.toString(),
+  })
+
+  if (status < 200 || status >= 300) {
+    throw new Error(bodyText || `device auth token exchange failed with status ${status}`)
+  }
+
+  const accessToken = readString(data?.access_token) ?? readString(data?.accessToken)
+  if (!accessToken) {
+    throw new Error('token exchange did not return access_token')
+  }
+
+  return {
+    idToken: readString(data?.id_token) ?? readString(data?.idToken),
+    accessToken,
+    refreshToken: readString(data?.refresh_token) ?? readString(data?.refreshToken),
+  }
+}
+
+const refreshAccessToken = async (refreshToken: string): Promise<OpenAiTokenResult> => {
+  const { status, data, bodyText } = await fetchOpenAi('/oauth/token', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+    },
+    body: JSON.stringify({
+      client_id: OPENAI_CLIENT_ID,
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      scope: 'openid profile email',
+    }),
+  })
+
+  if (status < 200 || status >= 300) {
+    throw new Error(bodyText || `access-token refresh failed with status ${status}`)
+  }
+
+  const accessToken = readString(data?.access_token) ?? readString(data?.accessToken)
+  if (!accessToken) {
+    throw new Error('refresh response did not return access_token')
+  }
+
+  return {
+    idToken: readString(data?.id_token) ?? readString(data?.idToken),
+    accessToken,
+    refreshToken: readString(data?.refresh_token) ?? readString(data?.refreshToken),
   }
 }
 
@@ -733,8 +967,10 @@ class CodexAppServerSession {
   private startupPromise: Promise<void> | null = null
   private pendingLoginId: string | null = null
   private lastLoginError: string | null = null
+  private pendingDeviceLogin: PendingDeviceLogin | null = null
+  private externalAuthState: ExternalAuthState | null = null
+  private externalAuthRefreshPromise: Promise<void> | null = null
   private lastUsedAt = Date.now()
-  private readonly loginCallbackTargets = new Map<string, string>()
   private readonly runsById = new Map<string, TurnRunState>()
   private readonly runIdByTurnKey = new Map<string, string>()
 
@@ -820,8 +1056,202 @@ class CodexAppServerSession {
     }
   }
 
+  private isConnectedAuthMode(authMode: string | null): boolean {
+    return authMode === 'chatgpt' || authMode === 'chatgptAuthTokens'
+  }
+
+  private clearPendingDeviceLogin(loginId?: string): void {
+    const pending = this.pendingDeviceLogin
+    if (!pending) return
+    if (loginId && pending.loginId !== loginId) return
+    pending.canceled = true
+    this.pendingDeviceLogin = null
+  }
+
+  private async applyExternalAuthTokens(authState: ExternalAuthState): Promise<void> {
+    await this.request('account/login/start', {
+      type: 'chatgptAuthTokens',
+      accessToken: authState.accessToken,
+      chatgptAccountId: authState.accountId,
+      chatgptPlanType: authState.planType ?? undefined,
+    })
+  }
+
+  private async refreshExternalAuthInternal(state: ExternalAuthState): Promise<void> {
+    const refreshToken = state.refreshToken
+    if (!refreshToken) return
+
+    const refreshed = await refreshAccessToken(refreshToken)
+    const claims = parseJwtAuthClaims(refreshed.idToken ?? refreshed.accessToken)
+    const accountId = claims.accountId ?? state.accountId
+    if (!accountId) {
+      throw new Error('Refreshed ChatGPT token did not include an account id')
+    }
+
+    const nextAuthState: ExternalAuthState = {
+      accessToken: refreshed.accessToken,
+      refreshToken: refreshed.refreshToken ?? refreshToken,
+      idToken: refreshed.idToken ?? state.idToken,
+      accountId,
+      planType: claims.planType ?? state.planType,
+      email: claims.email ?? state.email,
+      expMs: claims.exp !== null ? claims.exp * 1000 : state.expMs,
+    }
+
+    await this.applyExternalAuthTokens(nextAuthState)
+    this.externalAuthState = nextAuthState
+    this.lastLoginError = null
+  }
+
+  private async maybeRefreshExternalAuth(forceRefresh: boolean): Promise<void> {
+    const state = this.externalAuthState
+    if (!state || !state.refreshToken) {
+      return
+    }
+
+    const refreshLeewayMs =
+      Number.isFinite(EXTERNAL_AUTH_REFRESH_LEEWAY_MS) && EXTERNAL_AUTH_REFRESH_LEEWAY_MS >= 0
+        ? EXTERNAL_AUTH_REFRESH_LEEWAY_MS
+        : 60_000
+    const shouldRefresh =
+      forceRefresh || (state.expMs !== null && Date.now() + refreshLeewayMs >= state.expMs)
+    if (!shouldRefresh) {
+      return
+    }
+
+    if (!this.externalAuthRefreshPromise) {
+      this.externalAuthRefreshPromise = this.refreshExternalAuthInternal(state).finally(() => {
+        this.externalAuthRefreshPromise = null
+      })
+    }
+
+    return this.externalAuthRefreshPromise
+  }
+
+  private async startBrowserLoginFlow(): Promise<ChatgptLoginStartResult> {
+    this.clearPendingDeviceLogin()
+
+    const result = (await this.request('account/login/start', {
+      type: 'chatgpt',
+    })) as LoginChatgptResult
+
+    this.pendingLoginId = readString(result?.loginId)
+    this.lastLoginError = null
+
+    return {
+      authUrl: readString(result?.authUrl),
+      loginId: this.pendingLoginId,
+      status: await this.getStatus(),
+      loginMethod: 'browser',
+      deviceCode: null,
+      verificationUrl: null,
+    }
+  }
+
+  private async pollDeviceLogin(pending: PendingDeviceLogin): Promise<void> {
+    const timeoutMs =
+      Number.isFinite(DEVICE_AUTH_TIMEOUT_MS) && DEVICE_AUTH_TIMEOUT_MS > 0
+        ? DEVICE_AUTH_TIMEOUT_MS
+        : 15 * 60 * 1_000
+    const deadline = pending.startedAt + timeoutMs
+
+    while (true) {
+      if (pending.canceled || this.pendingDeviceLogin?.loginId !== pending.loginId) {
+        return
+      }
+
+      if (Date.now() >= deadline) {
+        throw new Error('ChatGPT device auth timed out after 15 minutes')
+      }
+
+      await waitMs(pending.intervalSeconds * 1000)
+      if (pending.canceled || this.pendingDeviceLogin?.loginId !== pending.loginId) {
+        return
+      }
+
+      const pollResult = await pollDeviceToken({
+        deviceAuthId: pending.deviceAuthId,
+        userCode: pending.userCode,
+      })
+      if (pollResult.status === 'pending') {
+        continue
+      }
+
+      const exchanged = await exchangeAuthorizationCode({
+        authorizationCode: pollResult.authorizationCode,
+        codeVerifier: pollResult.codeVerifier,
+      })
+      const claims = parseJwtAuthClaims(exchanged.idToken ?? exchanged.accessToken)
+      const accountId = claims.accountId
+      if (!accountId) {
+        throw new Error('ChatGPT token did not include a workspace/account id')
+      }
+
+      const nextAuthState: ExternalAuthState = {
+        accessToken: exchanged.accessToken,
+        refreshToken: exchanged.refreshToken,
+        idToken: exchanged.idToken,
+        accountId,
+        planType: claims.planType,
+        email: claims.email,
+        expMs: claims.exp !== null ? claims.exp * 1000 : null,
+      }
+
+      await this.applyExternalAuthTokens(nextAuthState)
+      if (pending.canceled || this.pendingDeviceLogin?.loginId !== pending.loginId) {
+        return
+      }
+
+      this.externalAuthState = nextAuthState
+      this.pendingDeviceLogin = null
+      this.pendingLoginId = null
+      this.lastLoginError = null
+      return
+    }
+  }
+
+  private async startDeviceLoginFlow(): Promise<ChatgptLoginStartResult> {
+    this.clearPendingDeviceLogin()
+    const deviceCode = await requestDeviceUserCode()
+    const pending: PendingDeviceLogin = {
+      loginId: deviceCode.deviceAuthId,
+      deviceAuthId: deviceCode.deviceAuthId,
+      userCode: deviceCode.userCode,
+      intervalSeconds: deviceCode.intervalSeconds,
+      verificationUrl: deviceCode.verificationUrl,
+      startedAt: Date.now(),
+      canceled: false,
+    }
+
+    this.pendingDeviceLogin = pending
+    this.pendingLoginId = pending.loginId
+    this.lastLoginError = null
+
+    void this.pollDeviceLogin(pending).catch(error => {
+      if (this.pendingDeviceLogin?.loginId !== pending.loginId) {
+        return
+      }
+      this.pendingDeviceLogin = null
+      this.pendingLoginId = null
+      this.lastLoginError = error instanceof Error ? error.message : String(error)
+    })
+
+    return {
+      authUrl: pending.verificationUrl,
+      loginId: pending.loginId,
+      status: await this.getStatus(),
+      loginMethod: 'device',
+      deviceCode: pending.userCode,
+      verificationUrl: pending.verificationUrl,
+    }
+  }
+
   async getStatus(): Promise<ChatgptStatus> {
     this.touch()
+    await this.maybeRefreshExternalAuth(false).catch(error => {
+      this.lastLoginError = error instanceof Error ? error.message : String(error)
+    })
+
     const [accountResult, rateLimitsResult] = await Promise.all([
       this.request('account/read', {
         refreshToken: false,
@@ -836,17 +1266,18 @@ class CodexAppServerSession {
       | null
     const planUsage = pickPlanUsageSnapshot(rateLimitsResult)
 
-    if (authMode === 'chatgpt') {
+    if (this.isConnectedAuthMode(authMode)) {
       this.pendingLoginId = null
       this.lastLoginError = null
     }
 
     return {
       available: true,
-      connected: authMode === 'chatgpt',
+      connected: this.isConnectedAuthMode(authMode),
       authMode,
-      email: readString(account?.email),
-      planType: readString(account?.planType) ?? planUsage?.planType ?? null,
+      email: readString(account?.email) ?? this.externalAuthState?.email ?? null,
+      planType:
+        readString(account?.planType) ?? planUsage?.planType ?? this.externalAuthState?.planType ?? null,
       planUsage,
       pendingLoginId: this.pendingLoginId,
       lastLoginError: this.lastLoginError,
@@ -859,19 +1290,10 @@ class CodexAppServerSession {
 
   async startChatgptLogin(): Promise<ChatgptLoginStartResult> {
     this.touch()
-    const result = (await this.request('account/login/start', {
-      type: 'chatgpt',
-    })) as LoginChatgptResult
-
-    this.loginCallbackTargets.clear()
-    this.pendingLoginId = readString(result?.loginId)
-    this.lastLoginError = null
-
-    return {
-      authUrl: readString(result?.authUrl),
-      loginId: this.pendingLoginId,
-      status: await this.getStatus(),
+    if (CHATGPT_LOGIN_MODE === 'browser') {
+      return this.startBrowserLoginFlow()
     }
+    return this.startDeviceLoginFlow()
   }
 
   async cancelChatgptLogin(loginId: string | null): Promise<ChatgptStatus> {
@@ -881,28 +1303,27 @@ class CodexAppServerSession {
       return this.getStatus()
     }
 
+    if (this.pendingDeviceLogin?.loginId === targetLoginId) {
+      this.clearPendingDeviceLogin(targetLoginId)
+      this.pendingLoginId = null
+      this.lastLoginError = null
+      return this.getStatus()
+    }
+
     await this.request('account/login/cancel', { loginId: targetLoginId })
     this.pendingLoginId = null
     this.lastLoginError = null
-    this.loginCallbackTargets.delete(targetLoginId)
     return this.getStatus()
   }
 
   async logout(): Promise<ChatgptStatus> {
     this.touch()
+    this.clearPendingDeviceLogin()
     await this.request('account/logout')
     this.pendingLoginId = null
     this.lastLoginError = null
-    this.loginCallbackTargets.clear()
+    this.externalAuthState = null
     return this.getStatus()
-  }
-
-  setLoginCallbackTarget(loginId: string, localRedirectUri: string): void {
-    this.loginCallbackTargets.set(loginId, localRedirectUri)
-  }
-
-  getLoginCallbackTarget(loginId: string): string | null {
-    return this.loginCallbackTargets.get(loginId) ?? null
   }
 
   async startTurnRun(options: RunChatgptTurnOptions): Promise<StartTurnRunResult> {
@@ -1094,6 +1515,9 @@ class CodexAppServerSession {
   }
 
   dispose(): void {
+    this.clearPendingDeviceLogin()
+    this.externalAuthState = null
+
     if (this.connection) {
       this.connection.dispose(new Error('codex app-server session disposed'))
       this.connection = null
@@ -1109,7 +1533,6 @@ class CodexAppServerSession {
     }
 
     this.startupPromise = null
-    this.loginCallbackTargets.clear()
     for (const runId of [...this.runsById.keys()]) {
       this.closeRun(runId)
     }
@@ -1259,10 +1682,6 @@ class CodexAppServerSession {
       const success = Boolean(payload?.success)
       const error = readString(payload?.error)
 
-      if (loginId) {
-        this.loginCallbackTargets.delete(loginId)
-      }
-
       if (loginId && loginId === this.pendingLoginId) {
         this.pendingLoginId = null
       }
@@ -1278,7 +1697,7 @@ class CodexAppServerSession {
     if (method === 'account/updated') {
       const payload = readObject(params)
       const authMode = readString(payload?.authMode)
-      if (authMode === 'chatgpt') {
+      if (this.isConnectedAuthMode(authMode)) {
         this.pendingLoginId = null
         this.lastLoginError = null
       }
@@ -1471,6 +1890,36 @@ class CodexAppServerSession {
       return { result: { answers: {} } }
     }
 
+    if (message.method === 'account/chatgptAuthTokens/refresh') {
+      try {
+        await this.maybeRefreshExternalAuth(true)
+      } catch (error) {
+        return {
+          error: {
+            code: -32000,
+            message: error instanceof Error ? error.message : 'Failed to refresh ChatGPT token',
+          },
+        }
+      }
+
+      if (!this.externalAuthState) {
+        return {
+          error: {
+            code: -32000,
+            message: 'External ChatGPT auth is not configured',
+          },
+        }
+      }
+
+      return {
+        result: {
+          accessToken: this.externalAuthState.accessToken,
+          chatgptAccountId: this.externalAuthState.accountId,
+          chatgptPlanType: this.externalAuthState.planType,
+        },
+      }
+    }
+
     if (message.method === 'execCommandApproval') {
       return { result: { decision: 'denied' } }
     }
@@ -1574,50 +2023,6 @@ const json = (body: unknown, init?: ResponseInit): Response =>
 const badRequest = (message: string): Response => json({ error: message }, { status: 400 })
 const unauthorized = (): Response => json({ error: 'Unauthorized' }, { status: 401 })
 
-const html = (options: { title: string; description: string; success: boolean }): Response => {
-  const { title, description, success } = options
-  const statusColor = success ? '#16a34a' : '#dc2626'
-  const statusBg = success ? '#dcfce7' : '#fee2e2'
-  const titleSafe = title.replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  const descriptionSafe = description.replace(/</g, '&lt;').replace(/>/g, '&gt;')
-
-  return new Response(
-    `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${titleSafe}</title>
-    <style>
-      :root { color-scheme: light dark; }
-      body { margin: 0; font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
-      main { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
-      .card { width: 100%; max-width: 520px; border-radius: 14px; border: 1px solid #334155; background: #111827; padding: 20px; }
-      .badge { display: inline-block; font-size: 12px; padding: 4px 10px; border-radius: 999px; background: ${statusBg}; color: ${statusColor}; font-weight: 600; }
-      h1 { margin: 12px 0 8px; font-size: 20px; line-height: 1.2; color: #f8fafc; }
-      p { margin: 0; color: #cbd5e1; line-height: 1.5; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <section class="card">
-        <span class="badge">${success ? 'Success' : 'Error'}</span>
-        <h1>${titleSafe}</h1>
-        <p>${descriptionSafe}</p>
-      </section>
-    </main>
-  </body>
-</html>`,
-    {
-      status: success ? 200 : 400,
-      headers: {
-        'content-type': 'text/html; charset=utf-8',
-        'cache-control': 'no-store',
-      },
-    }
-  )
-}
-
 const parseBody = async (request: Request): Promise<Record<string, unknown> | null> => {
   try {
     const payload = await request.json()
@@ -1671,83 +2076,6 @@ const server = Bun.serve({
       })
     }
 
-    if (pathname === '/v1/chatgpt/login/callback' && request.method === 'GET') {
-      const url = new URL(request.url)
-      const userId = url.searchParams.get('userId')?.trim()
-      const loginId = url.searchParams.get('loginId')?.trim()
-
-      if (!userId || !loginId) {
-        return html({
-          title: 'Invalid callback',
-          description: 'Missing userId or loginId in callback URL.',
-          success: false,
-        })
-      }
-
-      const session = registry.sessions.get(userId)
-      if (!session) {
-        return html({
-          title: 'Login session expired',
-          description: 'No active login session was found. Start login again from settings.',
-          success: false,
-        })
-      }
-
-      const localRedirectUri = session.getLoginCallbackTarget(loginId)
-      if (!localRedirectUri) {
-        return html({
-          title: 'Login callback not found',
-          description: 'This login callback is no longer active. Start login again from settings.',
-          success: false,
-        })
-      }
-
-      let callbackUrl: URL
-      try {
-        callbackUrl = new URL(localRedirectUri)
-      } catch {
-        return html({
-          title: 'Callback misconfigured',
-          description: 'Stored callback URL is invalid. Start login again.',
-          success: false,
-        })
-      }
-
-      for (const [key, value] of url.searchParams.entries()) {
-        if (key === 'userId' || key === 'loginId') continue
-        callbackUrl.searchParams.set(key, value)
-      }
-
-      try {
-        const forwarded = await fetch(callbackUrl.toString(), {
-          method: 'GET',
-          redirect: 'manual',
-          cache: 'no-store',
-        })
-
-        if (forwarded.status >= 400) {
-          return html({
-            title: 'ChatGPT login failed',
-            description: 'The local Codex callback returned an error. Retry the login flow.',
-            success: false,
-          })
-        }
-
-        return html({
-          title: 'ChatGPT login received',
-          description:
-            'You can return to The Everything Assistant. Connection status should update shortly.',
-          success: true,
-        })
-      } catch {
-        return html({
-          title: 'ChatGPT login failed',
-          description: 'Unable to forward callback to Codex login server on the VM.',
-          success: false,
-        })
-      }
-    }
-
     if (!isAuthorized(request)) {
       return unauthorized()
     }
@@ -1774,19 +2102,6 @@ const server = Bun.serve({
       try {
         const session = getOrCreateSession(userId)
         const result = await session.startChatgptLogin()
-        const publicBaseUrl = resolvePublicBaseUrl()
-        if (publicBaseUrl && result.authUrl && result.loginId) {
-          const rewritten = rewriteAuthUrlForPublicCallback({
-            authUrl: result.authUrl,
-            publicBaseUrl,
-            userId,
-            loginId: result.loginId,
-          })
-          if (rewritten.localRedirectUri) {
-            session.setLoginCallbackTarget(result.loginId, rewritten.localRedirectUri)
-            result.authUrl = rewritten.authUrl
-          }
-        }
         return json(result)
       } catch (error: any) {
         return json({ error: error?.message || 'Failed to start ChatGPT login' }, { status: 500 })

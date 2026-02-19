@@ -415,6 +415,9 @@ export type ChatgptLoginStartResult = {
   authUrl: string | null
   loginId: string | null
   status: ChatgptStatus
+  loginMethod?: 'browser' | 'device'
+  deviceCode?: string | null
+  verificationUrl?: string | null
 }
 
 export type CodexTurnUsage = {
@@ -798,14 +801,14 @@ class CodexAppServerSession {
       | null
     const planUsage = pickPlanUsageSnapshot(rateLimitsResult)
 
-    if (authMode === 'chatgpt') {
+    if (authMode === 'chatgpt' || authMode === 'chatgptAuthTokens') {
       this.pendingLoginId = null
       this.lastLoginError = null
     }
 
     return {
       available: true,
-      connected: authMode === 'chatgpt',
+      connected: authMode === 'chatgpt' || authMode === 'chatgptAuthTokens',
       authMode,
       email: readString(account?.email),
       planType: readString(account?.planType) ?? planUsage?.planType ?? null,
@@ -1449,7 +1452,7 @@ class CodexAppServerSession {
     if (method === 'account/updated') {
       const payload = readObject(params)
       const authMode = readString(payload?.authMode)
-      if (authMode === 'chatgpt') {
+      if (authMode === 'chatgpt' || authMode === 'chatgptAuthTokens') {
         this.pendingLoginId = null
         this.lastLoginError = null
       }

@@ -19,6 +19,9 @@ interface ChatgptStatusResponse {
 
 interface ChatgptLoginStartResponse {
   authUrl: string | null
+  deviceCode?: string | null
+  loginMethod?: 'browser' | 'device'
+  verificationUrl?: string | null
   error?: string
 }
 
@@ -62,7 +65,22 @@ export function ChatgptConnectAnnouncementModal({ enabled }: ChatgptConnectAnnou
         }
       }
 
-      toast.success('Complete ChatGPT sign-in in the opened browser tab.')
+      if (data.deviceCode) {
+        let copiedCode = false
+        try {
+          await navigator.clipboard.writeText(data.deviceCode)
+          copiedCode = true
+        } catch {
+          copiedCode = false
+        }
+        toast.success(
+          copiedCode
+            ? `Enter code ${data.deviceCode} to finish ChatGPT sign-in (copied).`
+            : `Enter code ${data.deviceCode} to finish ChatGPT sign-in.`
+        )
+      } else {
+        toast.success('Complete ChatGPT sign-in in the opened browser tab.')
+      }
       handleClose()
     } catch (error: any) {
       console.error('Error starting ChatGPT login:', error)

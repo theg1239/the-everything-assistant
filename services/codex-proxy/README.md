@@ -15,7 +15,6 @@ Your Next.js/API layer can run serverless while Codex stays on a stateful VM wit
 - `GET /health`
 - `POST /v1/chatgpt/status` `{ userId }`
 - `POST /v1/chatgpt/start` `{ userId }`
-- `GET /v1/chatgpt/login/callback` (public OAuth callback bridge)
 - `POST /v1/chatgpt/cancel` `{ userId, loginId }`
 - `POST /v1/chatgpt/disconnect` `{ userId }`
 - `POST /v1/chatgpt/turn/start` `{ userId, options }`
@@ -37,13 +36,20 @@ The proxy hard-enforces read-only execution for Codex turns:
 - unsafe flags from env args are stripped (`--dangerously-bypass-approvals-and-sandbox`, `--yolo`, `--full-auto`, `--sandbox`, `--ask-for-approval`).
 - if `CODEX_APP_SERVER_CWD` is set, it is always used as the working directory (per-request cwd is ignored).
 
-## OAuth Callback Bridge
+## ChatGPT Login Mode
 
-Codex login URLs use a localhost callback by default. In VM deployments, set:
+Default mode is `device` login, which works in VM/serverless deployments without localhost callback rewriting.
 
-- `CODEX_PROXY_PUBLIC_BASE_URL=https://your-proxy-domain`
+- `CODEX_PROXY_CHATGPT_LOGIN_MODE=device` (default): opens `https://auth.openai.com/codex/device`, user enters one-time code, proxy completes token exchange.
+- `CODEX_PROXY_CHATGPT_LOGIN_MODE=browser`: uses Codex-managed localhost callback flow (`redirect_uri=http://localhost:...`). Only use this when browser and Codex app-server are on the same machine (or you intentionally tunnel localhost).
 
-When set, `/v1/chatgpt/start` rewrites the auth callback to the proxy's public callback endpoint and forwards it internally to the VM-local Codex login server.
+Optional OpenAI auth overrides:
+
+- `CODEX_OPENAI_ISSUER` (default `https://auth.openai.com`)
+- `CODEX_CHATGPT_CLIENT_ID` (default Codex client id)
+- `CODEX_PROXY_OPENAI_REQUEST_TIMEOUT_MS`
+- `CODEX_PROXY_DEVICE_AUTH_TIMEOUT_MS`
+- `CODEX_PROXY_EXTERNAL_REFRESH_LEEWAY_MS`
 
 ## Auth
 

@@ -4,6 +4,7 @@ import { createGroq } from '@ai-sdk/groq' // Groq provider
 import { createCerebras } from '@ai-sdk/cerebras' // Cerebras provider
 import { createOpenRouter } from '@openrouter/ai-sdk-provider' // OpenRouter provider
 import { createOpenAI } from '@ai-sdk/openai' // OpenAI provider
+import { createWebSocketFetch } from 'ai-sdk-openai-websocket-fetch'
 import { ApiKeyEntry, ApiKeyManager, ApiKeyConfig, DEFAULT_API_KEY_CONFIG } from './api-key-manager'
 import { UserRateLimiter, UserRateLimitConfig, loadUserRateLimitConfig } from './user-rate-limiter'
 import { modelIds, modelRegistry } from './model-registry'
@@ -20,6 +21,10 @@ import {
 import type { EmbeddingModel } from 'ai'
 
 type Provider = 'google' | 'groq' | 'cerebras' | 'openrouter' | 'openai' | 'direct'
+
+const openaiWebSocketFetch = createWebSocketFetch()
+const createOpenAIProvider = (apiKey: string) =>
+  createOpenAI({ apiKey, fetch: openaiWebSocketFetch })
 
 type GoogleProvider = ReturnType<typeof createGoogleGenerativeAI>
 type GoogleToolset = GoogleProvider['tools']
@@ -205,7 +210,7 @@ export class RateLimitedAI {
       return createOpenRouter({ apiKey })
     }
     if (provider === 'openai') {
-      return createOpenAI({ apiKey })
+      return createOpenAIProvider(apiKey)
     }
     return createCerebras({ apiKey })
   }
@@ -246,7 +251,7 @@ export class RateLimitedAI {
       const provider = (entry.provider as Provider) ?? this.provider
       const resolvedModelId = this.resolveEmbeddingModelId(modelName, provider)
       if (provider === 'openai') {
-        const openai = createOpenAI({ apiKey: entry.key })
+        const openai = createOpenAIProvider(entry.key)
         return openai.textEmbeddingModel(resolvedModelId) as unknown as EmbeddingModel
       }
       const google = createGoogleGenerativeAI({ apiKey: entry.key })
@@ -526,7 +531,7 @@ export class RateLimitedAI {
         )
         const modelFn =
           provider === 'openai'
-            ? createOpenAI({ apiKey: entry.key }).textEmbeddingModel(resolvedModelId)
+            ? createOpenAIProvider(entry.key).textEmbeddingModel(resolvedModelId)
             : createGoogleGenerativeAI({ apiKey: entry.key }).textEmbeddingModel(resolvedModelId)
         const safeModel = this.wrapModelWithWarningDefaults(modelFn as any)
 

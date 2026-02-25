@@ -116,6 +116,8 @@ export default function SpotifyBubble() {
   const [viewState, setViewState] = useState<ViewState>('collapsed')
   const open = viewState === 'expanded'
   const setOpen = (isOpen: boolean) => setViewState(isOpen ? 'expanded' : 'collapsed')
+  const [hasInteracted, setHasInteracted] = useState(false)
+  const activatePlayer = useCallback(() => setHasInteracted(true), [])
   
   const log = useCallback((...args: any[]) => {
     // eslint-disable-next-line no-console
@@ -151,6 +153,10 @@ export default function SpotifyBubble() {
     playTrack,
     adjustLyricOffset,
   } = useMiniPlayerStore()
+
+  useEffect(() => {
+    if (isPlaying) setHasInteracted(true)
+  }, [isPlaying])
 
   const [pendingAdd, setPendingAdd] = useState(false)
   const [url, setUrl] = useState('')
@@ -279,8 +285,9 @@ export default function SpotifyBubble() {
     }
   }, [trackUrl, currentTrack]) // log intentionally omitted for stable deps
 
+  const lyricsTrack = hasInteracted ? currentTrack : null
   const { lines, currentLine, loading: lyricsLoading, error: lyricsError } = useMiniLyrics(
-    currentTrack,
+    lyricsTrack,
     elapsedTime * 1000 // Convert seconds to ms for lyrics
   )
 
@@ -290,17 +297,19 @@ export default function SpotifyBubble() {
   }
 
   useEffect(() => {
+    if (!hasInteracted) return
     initializeLibrary().catch((e) => console.error('init mini library', e))
     log('initializeLibrary requested')
-  }, [initializeLibrary, log])
+  }, [hasInteracted, initializeLibrary, log])
 
   // If library is empty but flagged as loaded, force a reload
   useEffect(() => {
+    if (!hasInteracted) return
     if (tracks.length === 0) {
       initializeLibrary().catch((e) => console.error('reinit mini library', e))
       log('reinitialize because tracks empty')
     }
-  }, [tracks.length, initializeLibrary, log])
+  }, [hasInteracted, tracks.length, initializeLibrary, log])
 
   // Ensure a current track is selected
   useEffect(() => {
@@ -371,6 +380,7 @@ export default function SpotifyBubble() {
   }, [loopCurrent, nextTrack, setIsPlaying])
 
   const handleAdd = async () => {
+    activatePlayer()
     if (!url.trim()) return
     log('addTrackFromUrl', url)
     setPendingAdd(true)
@@ -595,7 +605,7 @@ export default function SpotifyBubble() {
           )}
 
           {/* Embedded ReactPlayer - visual only (audio handled by persistent player) */}
-          {currentTrack && trackUrl && (
+          {hasInteracted && currentTrack && trackUrl && (
             <div className={cn(
               'absolute inset-0 transition-opacity duration-300 overflow-hidden',
               showVideo ? 'opacity-100' : 'opacity-0 pointer-events-none'
@@ -1317,7 +1327,7 @@ export default function SpotifyBubble() {
         )}
 
         {/* ReactPlayer for video */}
-        {currentTrack && trackUrl && (
+        {hasInteracted && currentTrack && trackUrl && (
           <div className={cn(
             'absolute inset-0 transition-opacity duration-300 overflow-hidden',
             showVideo ? 'opacity-100' : 'opacity-0 pointer-events-none'
@@ -1537,6 +1547,7 @@ export default function SpotifyBubble() {
       whileTap={{ scale: 0.92 }}
       whileHover={{ scale: 1.05 }}
       onClick={() => {
+        activatePlayer()
         // Single click cycles: collapsed -> minimized -> collapsed
         // To get to expanded, use the expand button in minimized view
         if (viewState === 'collapsed') {
@@ -1636,7 +1647,7 @@ export default function SpotifyBubble() {
     return (
       <>
         {/* Persistent player outside drawer - keeps playing when closed */}
-        {currentTrack && trackUrl && (
+        {hasInteracted && currentTrack && trackUrl && (
           <div className="sr-only pointer-events-none" aria-hidden="true">
             <ReactPlayer
               ref={playerRef}
@@ -1753,7 +1764,7 @@ export default function SpotifyBubble() {
                           </>
                         )}
 
-                        {currentTrack && trackUrl && (
+                        {hasInteracted && currentTrack && trackUrl && (
                           <div className={cn(
                             'absolute inset-0 transition-opacity duration-300 overflow-hidden',
                             showVideo ? 'opacity-100' : 'opacity-0 pointer-events-none'
@@ -2138,7 +2149,7 @@ export default function SpotifyBubble() {
       onDragEnd={handleDragEnd}
     >
       {/* Persistent audio player for desktop - keeps playing across all view states */}
-      {currentTrack && trackUrl && (
+      {hasInteracted && currentTrack && trackUrl && (
         <div className="sr-only pointer-events-none" aria-hidden="true">
           <ReactPlayer
             ref={playerRef}

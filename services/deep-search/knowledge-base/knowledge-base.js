@@ -867,7 +867,12 @@ class KnowledgeBase {
           const results = await strategy.fn()
           if (results && results.length > 0) {
             logger.info(`${strategy.name} search found ${results.length} results`)
-            allResults = allResults.concat(results)
+            allResults = allResults.concat(
+              results.map(result => ({
+                ...result,
+                sourceStrategy: strategy.name,
+              }))
+            )
           }
         } catch (error) {
           logger.warn(`${strategy.name} search strategy failed:`, error.message)
@@ -882,8 +887,22 @@ class KnowledgeBase {
       const uniqueResults = this.removeDuplicates(allResults)
       logger.info(`After deduplication: ${uniqueResults.length} unique results`)
 
+      const queryTerms = this.extractSearchTerms(query)
+
       return uniqueResults
-        .sort((a, b) => (b.similarity || 0) - (a.similarity || 0))
+        .map(result => ({
+          ...result,
+          rankingScore: this.scoreSearchResult(result, queryTerms),
+        }))
+        .sort((a, b) => {
+          const rankingDelta = (b.rankingScore || 0) - (a.rankingScore || 0)
+          if (Math.abs(rankingDelta) > 1e-6) return rankingDelta
+
+          const similarityDelta = (b.similarity || 0) - (a.similarity || 0)
+          if (Math.abs(similarityDelta) > 1e-6) return similarityDelta
+
+          return (b.score || 0) - (a.score || 0)
+        })
         .slice(0, limit * 2)
     } catch (error) {
       logger.error('Error in diverse search:', error)
@@ -960,6 +979,61 @@ class KnowledgeBase {
     }
 
     return unique
+  }
+
+  extractSearchTerms(query) {
+    return (query || '')
+      .toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter(term => term.length > 2)
+      .slice(0, 8)
+  }
+
+  countTermMatches(text, terms) {
+    if (!text || !terms.length) return 0
+
+    const haystack = String(text).toLowerCase()
+    let matches = 0
+
+    for (const term of terms) {
+      if (haystack.includes(term)) matches++
+    }
+
+    return matches
+  }
+
+  scoreSearchResult(result, queryTerms) {
+    const strategyWeights = {
+      vector: 1,
+      text: 0.85,
+      keywords: 0.65,
+    }
+
+    const normalizedSimilarity = Math.max(0, Math.min(1, Number(result.similarity) || 0))
+    const titleMatches = this.countTermMatches(result.title, queryTerms)
+    const contentMatches = this.countTermMatches(result.content, queryTerms)
+    const subredditMatches = this.countTermMatches(result.subreddit, queryTerms)
+    const totalPossibleMatches = queryTerms.length * 2 + 1
+    const lexicalScore =
+      totalPossibleMatches > 0
+        ? Math.min(1, (titleMatches * 1.2 + contentMatches + subredditMatches * 0.5) / totalPossibleMatches)
+        : 0
+
+    const engagementBase = Math.max(0, Number(result.upvotes) || Number(result.score) || 0)
+    const engagementScore = Math.min(1, Math.log10(engagementBase + 1) / 3)
+    const strategyWeight = strategyWeights[result.sourceStrategy] || 0.75
+    const exactTitleBonus =
+      titleMatches > 0 && queryTerms.length > 0 && titleMatches >= Math.ceil(queryTerms.length / 2)
+        ? 0.08
+        : 0
+
+    return (
+      normalizedSimilarity * 0.55 +
+      lexicalScore * 0.3 +
+      engagementScore * 0.07 +
+      exactTitleBonus
+    ) * strategyWeight
   }
 
   isZeroEmbedding(embedding) {

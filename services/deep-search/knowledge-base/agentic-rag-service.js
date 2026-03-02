@@ -84,7 +84,7 @@ class AgenticRAGService {
     let bestResults = []
     let maxRelevanceScore = 0
     const attempts = []
-    const queriesUsed = [originalQuery]
+    const queriesUsed = []
 
     let failedRefinements = 0
     const MAX_FAILED_REFINEMENTS = 1 // Allow only 1 failed refinement before giving up
@@ -130,13 +130,14 @@ class AgenticRAGService {
 
       const relevanceScores = await relevanceAgent.analyzeRelevance(originalQuery, searchResults)
 
-      const relevantResults = searchResults
-        .map((result, index) => ({
-          ...result,
-          relevanceScore: relevanceScores[index] || 0,
-        }))
-        .filter(result => result.relevanceScore > this.relevanceThreshold)
-        .sort((a, b) => b.relevanceScore - a.relevanceScore)
+      const relevantResults = this.selectRelevantResults(
+        originalQuery,
+        searchResults
+          .map((result, index) => ({
+            ...result,
+            relevanceScore: relevanceScores[index] || 0,
+          }))
+      )
 
       logger.info(
         `Found ${relevantResults.length} relevant results out of ${searchResults.length} total`
@@ -171,6 +172,32 @@ class AgenticRAGService {
       attempts,
       queriesUsed,
     }
+  }
+
+  selectRelevantResults(originalQuery, scoredResults) {
+    const queryTerms = AgenticRAGService.extractKeyTerms(originalQuery)
+
+    return scoredResults
+        .map((result, index) => ({
+          ...result,
+          resultIndex: index,
+          relevanceScore: this.scoreResultRelevance(result, queryTerms),
+        }))
+        .filter(result => {
+          const titleMatches = this.countTermMatches(result.title, queryTerms)
+          const contentMatches = this.countTermMatches(result.content, queryTerms)
+          const lexicalMatches = titleMatches + contentMatches
+          const similarity = Math.max(0, Math.min(1, Number(result.similarity) || 0))
+
+          if (result.relevanceScore < this.relevanceThreshold) return false
+
+          // Keep semantically very strong hits even without literal overlap, but reject weak fuzzy matches.
+          if (lexicalMatches === 0 && similarity < 0.78) return false
+
+          return true
+        })
+        .sort((a, b) => b.relevanceScore - a.relevanceScore)
+        .slice(0, 12)
   }
 
   async getNextQuery(originalQuery, currentBestResults, refinementAgent, iteration) {
@@ -340,6 +367,48 @@ class AgenticRAGService {
     return context.trim()
   }
 
+  countTermMatches(text, queryTerms) {
+    if (!text || !queryTerms.length) return 0
+
+    const haystack = String(text).toLowerCase()
+    let matches = 0
+
+    for (const term of queryTerms) {
+      if (haystack.includes(term)) matches++
+    }
+
+    return matches
+  }
+
+  scoreResultRelevance(result, queryTerms) {
+    const llmRelevance = Math.max(0, Math.min(1, Number(result.relevanceScore) || 0))
+    const similarity = Math.max(0, Math.min(1, Number(result.similarity) || 0))
+    const rankingScore = Math.max(0, Math.min(1, Number(result.rankingScore) || 0))
+    const titleMatches = this.countTermMatches(result.title, queryTerms)
+    const contentMatches = this.countTermMatches(result.content, queryTerms)
+    const lexicalCoverage =
+      queryTerms.length > 0
+        ? Math.min(1, (titleMatches * 1.4 + contentMatches) / (queryTerms.length * 1.8))
+        : 0
+    const contentLength = (result.content || result.title || '').length
+    const contentQuality = Math.min(1, contentLength / 220)
+    const strategyPenalty =
+      result.sourceStrategy === 'keywords' && lexicalCoverage < 0.5
+        ? 0.9
+        : 1
+
+    return Math.min(
+      1,
+      (
+        llmRelevance * 0.5 +
+        lexicalCoverage * 0.25 +
+        similarity * 0.15 +
+        rankingScore * 0.05 +
+        contentQuality * 0.05
+      ) * strategyPenalty
+    )
+  }
+
   formatResultForContext(result) {
     const sourceType = result.type.toUpperCase()
     const subreddit = `r/${result.subreddit}`
@@ -368,8 +437,8 @@ ${content}
 
   async generateAIResponse(query, context, conversationHistory, agenticResult) {
     const searchInfo =
-      agenticResult.attempts > 1
-        ? `Search refined ${agenticResult.attempts} times to find the most relevant results.`
+      agenticResult.attempts.length > 1
+        ? `Search refined ${agenticResult.attempts.length} times to find the most relevant results.`
         : 'Direct search results found.'
     const systemPrompt = `You are a comprehensive student assistant analyzing Reddit discussions about student life. Your goal is to provide detailed, informative responses that fully cover the topic.
 
@@ -563,19 +632,59 @@ Respond with ONLY a JSON array of relevance scores (0.0-1.0), one for each resul
       try {
         const scores = JSON.parse(result.text)
         if (Array.isArray(scores) && scores.length === searchResults.length) {
-          return scores.map(score => Math.max(0, Math.min(1, parseFloat(score) || 0)))
+          const queryTerms = AgenticRAGService.extractKeyTerms(originalQuery)
+          return scores.map((score, index) => {
+            const llmScore = Math.max(0, Math.min(1, parseFloat(score) || 0))
+            const item = searchResults[index] || {}
+            const titleMatches = this.countTermMatches(item.title, queryTerms)
+            const contentMatches = this.countTermMatches(item.content, queryTerms)
+            const lexicalCoverage =
+              queryTerms.length > 0
+                ? Math.min(1, (titleMatches * 1.4 + contentMatches) / (queryTerms.length * 1.8))
+                : 0
+            const similarity = Math.max(0, Math.min(1, parseFloat(item.similarity) || 0))
+            const rankingScore = Math.max(0, Math.min(1, parseFloat(item.rankingScore) || 0))
+
+            return Math.min(
+              1,
+              llmScore * 0.65 + lexicalCoverage * 0.2 + similarity * 0.1 + rankingScore * 0.05
+            )
+          })
         }
       } catch (e) {
         logger.warn('Failed to parse relevance scores, using fallback')
       }
 
-      return searchResults.map(result =>
-        Math.max(0.3, Math.min(0.9, parseFloat(result.similarity) || 0.5))
-      )
+      const queryTerms = AgenticRAGService.extractKeyTerms(originalQuery)
+      return searchResults.map(result => {
+        const titleMatches = this.countTermMatches(result.title, queryTerms)
+        const contentMatches = this.countTermMatches(result.content, queryTerms)
+        const lexicalCoverage =
+          queryTerms.length > 0
+            ? Math.min(1, (titleMatches * 1.4 + contentMatches) / (queryTerms.length * 1.8))
+            : 0
+        const similarity = Math.max(0, Math.min(1, parseFloat(result.similarity) || 0))
+        const rankingScore = Math.max(0, Math.min(1, parseFloat(result.rankingScore) || 0))
+
+        return Math.min(1, Math.max(0.2, lexicalCoverage * 0.45 + similarity * 0.4 + rankingScore * 0.15))
+      })
     } catch (error) {
       logger.error('Error in relevance analysis:', error)
       return searchResults.map(() => 0.5)
     }
+  }
+
+  countTermMatches(text, queryTerms) {
+    if (!text || !queryTerms.length) return 0
+
+    const haystack = String(text).toLowerCase()
+    let matches = 0
+
+    for (const term of queryTerms) {
+      if (haystack.includes(term)) matches++
+    }
+
+    return matches
   }
 }
 

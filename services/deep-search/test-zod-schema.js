@@ -51,7 +51,7 @@ This is a test analysis for a programming tutorial video with 5 key frames.
 Please analyze and provide structured information about this educational video content.`
 
     const { object } = await generateObject({
-      model: google('gemini-3-flash-preview'),
+      model: google('gemini-3.1-flash-lite'),
       prompt: testPrompt,
       schema: videoAnalysisSchema,
       maxTokens: 1000,

@@ -694,9 +694,9 @@
 // }
 
 // function pickGeminiModel(opts: { pdf?: boolean; ocr?: boolean; fast?: boolean } = {}) {
-//   if (opts.ocr || opts.pdf) return 'gemini-3-flash-preview'
-//   if (opts.fast) return 'gemini-3-flash-preview'
-//   return 'gemini-3-flash-preview'
+//   if (opts.ocr || opts.pdf) return 'gemini-3.1-flash-lite'
+//   if (opts.fast) return 'gemini-3.1-flash-lite'
+//   return 'gemini-3.1-flash-lite'
 // }
 // async function extractTextFromPdf(
 //   pdfData: Buffer,

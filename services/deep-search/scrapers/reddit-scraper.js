@@ -679,7 +679,7 @@ Please provide:
 5. Relevance to students (high/medium/low)`
 
       const { object } = await generateObject({
-        model: google('gemini-3-flash-preview'),
+        model: google('gemini-3.1-flash-lite'),
         prompt,
         schema: contentAnalysisSchema,
         maxTokens: 1000,
@@ -1548,7 +1548,7 @@ Based on the post context, comments, and video frames, please analyze the video 
       ]
 
       const { object: analysis } = await generateObject({
-        model: google('gemini-3-flash-preview'),
+        model: google('gemini-3.1-flash-lite'),
         messages,
         schema: videoAnalysisSchema,
         maxTokens: 2000,

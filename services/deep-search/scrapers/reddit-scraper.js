@@ -21,7 +21,7 @@ class RedditScraper {
       timeout: 30000,
       headers: { 'User-Agent': this.userAgent },
     })
-    this.embeddingModel = google.embedding('text-embedding-004')
+    this.embeddingModel = google.embedding('gemini-embedding-001')
     this.embeddingDim = 768
     this.imageAnalyzer = new ImageAnalyzer()
     this.imageAnalysisEnabled = process.env.IMAGE_ANALYSIS_ENABLED === 'true'
@@ -700,7 +700,7 @@ Please provide:
     }
   }
 
-  async generateEmbedding(text) {
+  async generateEmbedding(text, taskType = 'RETRIEVAL_DOCUMENT') {
     if (!text || !text.trim()) {
       return new Array(this.embeddingDim).fill(0)
     }
@@ -708,6 +708,12 @@ Please provide:
       const { embedding } = await embed({
         model: this.embeddingModel,
         value: text.substring(0, 8000),
+        providerOptions: {
+          google: {
+            outputDimensionality: this.embeddingDim,
+            taskType,
+          },
+        },
       })
       return embedding
     } catch (error) {

@@ -10,7 +10,7 @@ class KnowledgeBase {
     this.pool = new Pool({
       connectionString: process.env.DATABASE_URL,
     })
-    this.embeddingModel = google.embedding('text-embedding-004')
+    this.embeddingModel = google.embedding('gemini-embedding-001')
     this.embeddingDim = 768
     this.similarityThreshold = parseFloat(process.env.SIMILARITY_THRESHOLD) || 0.5
     this.maxContextLength = parseInt(process.env.MAX_CONTEXT_LENGTH) || 4000
@@ -79,6 +79,9 @@ class KnowledgeBase {
               DROP INDEX IF EXISTS reddit_posts_embedding_idx;
               DROP INDEX IF EXISTS reddit_comments_embedding_idx;
               DROP INDEX IF EXISTS knowledge_chunks_embedding_idx;
+              DROP INDEX IF EXISTS idx_posts_embedding;
+              DROP INDEX IF EXISTS idx_comments_embedding;
+              DROP INDEX IF EXISTS idx_chunks_embedding;
               
               -- Drop and recreate embedding columns with 768 dimensions
               ALTER TABLE reddit_posts DROP COLUMN IF EXISTS embedding;
@@ -189,16 +192,57 @@ class KnowledgeBase {
     await this.pool.query(createTablesSQL)
   }
   async createIndexes() {
-    const indexesSQL = `
-      -- Vector similarity indexes (using IVFFlat for 768 dimensions)
-      CREATE INDEX IF NOT EXISTS idx_posts_embedding
-        ON reddit_posts USING ivfflat (embedding vector_cosine_ops);
-      CREATE INDEX IF NOT EXISTS idx_comments_embedding
-        ON reddit_comments USING ivfflat (embedding vector_cosine_ops);
-      CREATE INDEX IF NOT EXISTS idx_chunks_embedding
-        ON knowledge_chunks USING ivfflat (embedding vector_cosine_ops);
-    `
-    await this.pool.query(indexesSQL)
+    const versionResult = await this.pool.query('SELECT version() AS version')
+    const databaseVersion = versionResult.rows[0]?.version || ''
+    const isCockroach = /cockroachdb/i.test(databaseVersion)
+    const methodsToTry = isCockroach ? ['hnsw', 'ivfflat'] : ['ivfflat', 'hnsw']
+
+    for (const method of methodsToTry) {
+      const indexesSQL = `
+        CREATE INDEX IF NOT EXISTS idx_posts_embedding
+          ON reddit_posts USING ${method} (embedding vector_cosine_ops);
+        CREATE INDEX IF NOT EXISTS idx_comments_embedding
+          ON reddit_comments USING ${method} (embedding vector_cosine_ops);
+        CREATE INDEX IF NOT EXISTS idx_chunks_embedding
+          ON knowledge_chunks USING ${method} (embedding vector_cosine_ops);
+      `
+
+      try {
+        await this.pool.query(indexesSQL)
+        logger.info(`Vector indexes are ready using "${method}"`)
+        return
+      } catch (error) {
+        if (this.isUnsupportedVectorIndexError(error, method)) {
+          logger.warn(
+            `Vector index method "${method}" is unavailable on this database; trying fallback...`
+          )
+          continue
+        }
+
+        throw error
+      }
+    }
+
+    logger.warn(
+      'No supported vector index access method was found. Continuing without vector indexes (vector search will be slower).'
+    )
+  }
+
+  isUnsupportedVectorIndexError(error, method) {
+    const message = (error?.message || '').toLowerCase()
+    const detail = (error?.detail || '').toLowerCase()
+    const combined = `${message} ${detail}`
+    const methodName = method.toLowerCase()
+
+    return (
+      combined.includes('unrecognized access method') ||
+      combined.includes(`access method "${methodName}" does not exist`) ||
+      combined.includes('does not support access method') ||
+      (combined.includes('syntax error') && combined.includes(`using ${methodName}`)) ||
+      (combined.includes('operator class') &&
+        combined.includes('vector_cosine_ops') &&
+        combined.includes('does not exist'))
+    )
   }
 
   async upsertRedditPost(post) {
@@ -311,7 +355,7 @@ class KnowledgeBase {
     try {
       await client.query('BEGIN')
       const textContent = `${postData.title} ${postData.content} ${postData.extracted_text}`.trim()
-      const embedding = await this.generateEmbedding(textContent)
+      const embedding = await this.generateEmbedding(textContent, 'RETRIEVAL_DOCUMENT')
 
       if (!embedding) {
         logger.warn(`Skipping embedding for post ${postData.reddit_id}; text search fallback only`)
@@ -402,7 +446,7 @@ class KnowledgeBase {
         throw new Error('Comment content is required')
       }
 
-      const embedding = await this.generateEmbedding(commentData.content)
+      const embedding = await this.generateEmbedding(commentData.content, 'RETRIEVAL_DOCUMENT')
       if (!embedding) {
         logger.warn(
           `Skipping embedding for comment ${commentData.reddit_id}; text search fallback only`
@@ -482,7 +526,7 @@ class KnowledgeBase {
     const chunks = this.splitTextIntoChunks(text)
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i]
-      const embedding = await this.generateEmbedding(chunk)
+      const embedding = await this.generateEmbedding(chunk, 'RETRIEVAL_DOCUMENT')
       if (!embedding) continue
 
       const insertChunkSQL = `
@@ -515,7 +559,7 @@ class KnowledgeBase {
     return chunks
   }
 
-  async generateEmbedding(text) {
+  async generateEmbedding(text, taskType = 'SEMANTIC_SIMILARITY') {
     if (!text || !text.trim()) {
       return null
     }
@@ -523,6 +567,12 @@ class KnowledgeBase {
       const { embedding } = await embed({
         model: this.embeddingModel,
         value: text.substring(0, this.maxContextLength),
+        providerOptions: {
+          google: {
+            outputDimensionality: this.embeddingDim,
+            taskType,
+          },
+        },
       })
       if (!Array.isArray(embedding) || embedding.length !== this.embeddingDim) {
         logger.error(
@@ -581,7 +631,7 @@ class KnowledgeBase {
     }
   }
   async vectorSearch(query, limit = 10) {
-    const queryEmbedding = await this.generateEmbedding(query)
+    const queryEmbedding = await this.generateEmbedding(query, 'RETRIEVAL_QUERY')
     if (!queryEmbedding) {
       logger.warn('Skipping vector search because query embedding is unavailable')
       return []

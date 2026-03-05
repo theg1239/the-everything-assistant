@@ -103,22 +103,62 @@ class KnowledgeBase {
     )
   }
 
-  createEmbeddingModel(legacyOpenAiSettings = false) {
+  createEmbeddingModel() {
     if (this.embeddingProvider === 'google') {
       return google.textEmbeddingModel(this.embeddingModelId)
     }
 
-    if (legacyOpenAiSettings) {
-      // Backwards-compatible with older OpenAI provider API shapes where embedding settings
-      // are passed at model-construction time instead of request-time provider options.
-      const provider = this.openaiProvider || openai
-      return provider.embedding(this.embeddingModelId, {
-        dimensions: this.embeddingDim,
-      })
-    }
-
     const provider = this.openaiProvider || openai
     return provider.embedding(this.embeddingModelId)
+  }
+
+  getHeaderValue(headers, name) {
+    if (!headers || !name) return undefined
+    if (typeof headers.get === 'function') return headers.get(name) || undefined
+    const key = name.toLowerCase()
+    return headers[name] || headers[key]
+  }
+
+  async generateOpenAIEmbeddingDirect(value) {
+    const url = `${this.openaiBaseURL.replace(/\/$/, '')}/embeddings`
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: this.embeddingModelId,
+        input: value,
+        dimensions: this.embeddingDim,
+      }),
+    })
+
+    const raw = await response.text()
+    let parsed
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      parsed = null
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        `Direct OpenAI embeddings call failed (${response.status}): ${parsed?.error?.message || raw.slice(0, 300)}`
+      )
+    }
+
+    const embedding = parsed?.data?.[0]?.embedding
+    if (!Array.isArray(embedding)) {
+      throw new Error('Direct OpenAI embeddings call returned an invalid embedding payload')
+    }
+
+    return {
+      embedding,
+      response: {
+        headers: response.headers,
+      },
+    }
   }
 
   async initialize() {
@@ -676,13 +716,10 @@ class KnowledgeBase {
         embedding.length !== this.embeddingDim
       ) {
         logger.warn(
-          `Embedding mismatch on primary OpenAI path (got ${embedding.length}, expected ${this.embeddingDim}); retrying with model-level dimensions settings`
+          `Embedding mismatch on AI SDK OpenAI path (got ${embedding.length}, expected ${this.embeddingDim}); retrying via direct OpenAI embeddings API`
         )
 
-        result = await embed({
-          model: this.createEmbeddingModel(true),
-          value,
-        })
+        result = await this.generateOpenAIEmbeddingDirect(value)
         embedding = result.embedding
       }
 
@@ -692,7 +729,7 @@ class KnowledgeBase {
         )
         if (this.embeddingProvider === 'openai') {
           logger.error(
-            `OpenAI embedding response headers hint: openai-model=${result?.response?.headers?.['openai-model'] || 'unknown'}, openai-processing-ms=${result?.response?.headers?.['openai-processing-ms'] || 'unknown'}, baseURL=${this.openaiBaseURL}`
+            `OpenAI embedding response headers hint: openai-model=${this.getHeaderValue(result?.response?.headers, 'openai-model') || 'unknown'}, openai-processing-ms=${this.getHeaderValue(result?.response?.headers, 'openai-processing-ms') || 'unknown'}, baseURL=${this.openaiBaseURL}`
           )
         }
         return null

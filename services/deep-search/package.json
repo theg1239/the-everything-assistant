@@ -20,27 +20,28 @@
     "reddit-scraper": "./cli.js"
   },
   "dependencies": {
-    "express": "latest",
-    "node-cron": "latest",
+    "@ai-sdk/google": "latest",
+    "@ai-sdk/openai": "^3.0.39",
+    "ai": "latest",
     "axios": "latest",
     "cheerio": "latest",
-    "sharp": "latest",
-    "ai": "latest",
-    "@ai-sdk/google": "latest",
-    "pg": "latest",
-    "dotenv": "latest",
-    "jimp": "latest",
-    "winston": "latest",
+    "commander": "latest",
     "cors": "latest",
+    "dotenv": "latest",
+    "express": "latest",
     "helmet": "latest",
+    "jimp": "latest",
+    "node-cron": "latest",
+    "pg": "latest",
     "rate-limiter-flexible": "latest",
     "redis": "latest",
-    "commander": "latest",
+    "sharp": "latest",
+    "winston": "latest",
     "zod": "latest"
   },
   "devDependencies": {
-    "nodemon": "latest",
-    "jest": "latest"
+    "jest": "latest",
+    "nodemon": "latest"
   },
   "license": "MIT"
 }

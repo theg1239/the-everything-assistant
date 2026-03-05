@@ -4,39 +4,42 @@ import { ContextData } from './index'
 export const latestEvents: ContextData = {
   section: 'latest-events',
   title: 'Latest Events & Campus Updates',
-  lastUpdated: '2025-11-16',
+  lastUpdated: '2026-03-05',
   priority: 'medium',
   content: `
-WHAT'S HAPPENING NOW (Nov 16, 2025)
-- FAT examinations have begun: laboratories wrapped up this week and theory slots start Nov 17.
-- Hostel quiet hours enforced; movement requires hall ticket/ID.
-- Winter Semester 2025-26 timetable dry-run underway; classrooms will be reassigned by Dec 4 night.
+WHAT'S HAPPENING NOW (Mar 5, 2026)
+- Riviera 2026 has just concluded (Feb 26 - Mar 1, 2026) and campus turnout/response was strong.
+- Focus has shifted to academics as CAT-II (Mar 15 - Mar 23, 2026) approaches.
+- Hostel counselling is currently underway.
+- Current hostel allocation update: S Block has been given to girls in this cycle.
 
 UPCOMING HIGHLIGHTS
-- Dec 5: Winter Semester commencement immediately after FAT.
-- Dec 5-7: Add/drop portal for timetable corrections.
-- Dec 13: Re-registration payment deadline.
-- Feb 26 – Mar 1: Riviera 2026 (plan travel + stage rehearsals well ahead).
+- Mar 15 - Mar 23: CAT-II window.
+- Mar 19: Ramzan holiday.
+- Mar 20: Telugu New Year holiday.
+- Apr 11 - Apr 17: Lab FAT window.
+- Apr 20 onwards: Theory FAT commencement.
 
 REMINDERS
-- Upload any pending projects before vacating campus.
-- Wish list submissions from Oct 13-14 remain locked; only add/drop edits allowed Dec 5-7.
-- Watch out for holiday stretches (Winter Vacation Dec 21-Jan 4, Pongal Jan 14-18).
+- Keep CAT-II prep aligned with faculty-announced portions and slot timings.
+- Track hostel counselling steps closely and verify block-specific notices.
+- Keep assignment/project submissions on track for the Apr 17, 2026 deadline.
 
 CAMPUS LIFE
-- Clubs operating in low-power mode until FAT ends; Riviera core teams recruiting volunteers post exams.
-- Library and labs open extra hours 7 AM–10 PM for FAT; from Dec 5 they revert to semester schedule.
+- Post-Riviera wind-down is ongoing while clubs transition back to regular weekly activities.
+- Library and lab usage has increased again due to CAT-II preparation.
 
 WHERE TO CHECK UPDATES
-- VTOP > Announcements > “Winter Semester 2025-26” board for slotting + hall tickets.
-- CoE circulars emailed nightly for any FAT timetable tweaks.
-- Hostel notice boards for checkout/vacation logistics.
+- VTOP > Announcements > "Winter Semester 2025-26" board for CAT-II/FAT updates.
+- CoE circulars and official mail, VTOP for exam slot communications.
+- VTOP, email + hostel office notice boards for counselling and allotment changes.
 `,
   metadata: {
-    trendingEvent: 'FAT exams in progress',
-    nextBigEvent: 'Winter Semester 2025-26 Opening on 2025-12-05',
-    urgentDeadline: 'Re-registration fee by 2025-12-13',
-    campusLife: 'Exam mode + Riviera planning',
-    updateFrequency: 'Daily during FAT',
+    trendingEvent: 'Post-Riviera campus reset',
+    nextBigEvent: 'CAT-II starting 2026-03-15',
+    urgentDeadline: 'CAT-II begins on 2026-03-15',
+    campusLife: 'Academic focus + hostel counselling',
+    hostelUpdate: 'S Block allotted to girls from next semester',
+    updateFrequency: 'Daily during CAT-II preparation window',
   },
 }

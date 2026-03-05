@@ -5,6 +5,7 @@ const cheerio = require('cheerio')
 const logger = require('../utils/logger')
 const { generateObject, embed } = require('ai')
 const { google } = require('@ai-sdk/google')
+const { openai } = require('@ai-sdk/openai')
 const { z } = require('zod')
 const ImageAnalyzer = require('./image-analyzer')
 const fs = require('fs').promises
@@ -21,10 +22,14 @@ class RedditScraper {
       timeout: 30000,
       headers: { 'User-Agent': this.userAgent },
     })
-    this.embeddingModel = google.embedding('gemini-embedding-001')
+    this.embeddingModel = openai.textEmbeddingModel('text-embedding-3-large')
     this.embeddingDim = 768
     this.imageAnalyzer = new ImageAnalyzer()
     this.imageAnalysisEnabled = process.env.IMAGE_ANALYSIS_ENABLED === 'true'
+
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY environment variable is required for embeddings')
+    }
 
     if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
       throw new Error('GOOGLE_GENERATIVE_AI_API_KEY environment variable is required')
@@ -700,7 +705,7 @@ Please provide:
     }
   }
 
-  async generateEmbedding(text, taskType = 'RETRIEVAL_DOCUMENT') {
+  async generateEmbedding(text) {
     if (!text || !text.trim()) {
       return new Array(this.embeddingDim).fill(0)
     }
@@ -709,9 +714,8 @@ Please provide:
         model: this.embeddingModel,
         value: text.substring(0, 8000),
         providerOptions: {
-          google: {
-            outputDimensionality: this.embeddingDim,
-            taskType,
+          openai: {
+            dimensions: this.embeddingDim,
           },
         },
       })

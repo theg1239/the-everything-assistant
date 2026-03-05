@@ -2,7 +2,7 @@ require('dotenv').config()
 
 const { Pool } = require('pg')
 const { embed } = require('ai')
-const { google } = require('@ai-sdk/google')
+const { openai } = require('@ai-sdk/openai')
 const logger = require('../utils/logger')
 
 class KnowledgeBase {
@@ -10,10 +10,14 @@ class KnowledgeBase {
     this.pool = new Pool({
       connectionString: process.env.DATABASE_URL,
     })
-    this.embeddingModel = google.embedding('gemini-embedding-001')
+    this.embeddingModel = openai.textEmbeddingModel('text-embedding-3-large')
     this.embeddingDim = 768
     this.similarityThreshold = parseFloat(process.env.SIMILARITY_THRESHOLD) || 0.5
     this.maxContextLength = parseInt(process.env.MAX_CONTEXT_LENGTH) || 4000
+
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY environment variable is required for embeddings')
+    }
   }
 
   async initialize() {
@@ -56,47 +60,35 @@ class KnowledgeBase {
 
   async migrateVectorDimensions() {
     try {
-      const checkDimensionsSQL = `
-        SELECT column_name, data_type
-        FROM information_schema.columns 
-        WHERE table_name IN ('reddit_posts', 'reddit_comments', 'knowledge_chunks') 
-          AND column_name = 'embedding'
-          AND data_type LIKE '%vector%'
-      `
+      const columns = [
+        { tableName: 'reddit_posts', attrelid: "'reddit_posts'::regclass" },
+        { tableName: 'reddit_comments', attrelid: "'reddit_comments'::regclass" },
+        { tableName: 'knowledge_chunks', attrelid: "'knowledge_chunks'::regclass" },
+      ]
 
-      const result = await this.pool.query(checkDimensionsSQL)
+      for (const column of columns) {
+        const result = await this.pool.query(
+          `
+          SELECT pg_catalog.format_type(atttypid, atttypmod) AS embedding_type
+          FROM pg_attribute
+          WHERE attrelid = ${column.attrelid}
+            AND attname = 'embedding'
+            AND attnum > 0
+            AND NOT attisdropped
+          `
+        )
 
-      if (result.rows.length > 0) {
-        logger.info('Checking vector dimensions...')
-        try {
-          await this.pool.query('SELECT embedding FROM reddit_posts LIMIT 1')
-        } catch (error) {
-          if (error.message.includes('expected') && error.message.includes('dimensions')) {
-            logger.info('Migrating vector columns to ensure 768 dimensions...')
+        const embeddingType = result.rows[0]?.embedding_type
+        if (!embeddingType) continue
 
-            const migrationSQL = `
-              -- Drop indexes first
-              DROP INDEX IF EXISTS reddit_posts_embedding_idx;
-              DROP INDEX IF EXISTS reddit_comments_embedding_idx;
-              DROP INDEX IF EXISTS knowledge_chunks_embedding_idx;
-              DROP INDEX IF EXISTS idx_posts_embedding;
-              DROP INDEX IF EXISTS idx_comments_embedding;
-              DROP INDEX IF EXISTS idx_chunks_embedding;
-              
-              -- Drop and recreate embedding columns with 768 dimensions
-              ALTER TABLE reddit_posts DROP COLUMN IF EXISTS embedding;
-              ALTER TABLE reddit_posts ADD COLUMN embedding vector(768);
-              
-              ALTER TABLE reddit_comments DROP COLUMN IF EXISTS embedding;
-              ALTER TABLE reddit_comments ADD COLUMN embedding vector(768);
-              
-              ALTER TABLE knowledge_chunks DROP COLUMN IF EXISTS embedding;
-              ALTER TABLE knowledge_chunks ADD COLUMN embedding vector(768);
-            `
+        const match = embeddingType.match(/vector\((\d+)\)/i)
+        const existingDim = match ? Number.parseInt(match[1], 10) : null
 
-            await this.pool.query(migrationSQL)
-            logger.info('Vector dimension migration completed successfully')
-          }
+        if (existingDim && existingDim !== this.embeddingDim) {
+          logger.warn(
+            `Embedding dimension mismatch on ${column.tableName}.embedding: found ${existingDim}, configured ${this.embeddingDim}. ` +
+              'Skipping automatic migration to preserve existing vectors.'
+          )
         }
       }
     } catch (error) {
@@ -130,7 +122,7 @@ class KnowledgeBase {
         video JSONB, -- Store video data and analysis
         extracted_text TEXT,
         tags TEXT[],
-        embedding vector(768),
+        embedding vector(${this.embeddingDim}),
         processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -150,7 +142,7 @@ class KnowledgeBase {
         score INTEGER DEFAULT 0,
         depth INTEGER DEFAULT 0,
         is_submitter BOOLEAN DEFAULT FALSE,        tags TEXT[],
-        embedding vector(768),
+        embedding vector(${this.embeddingDim}),
         processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -162,7 +154,7 @@ class KnowledgeBase {
         chunk_text TEXT NOT NULL,
         chunk_index INTEGER NOT NULL,
         subreddit VARCHAR(100) NOT NULL,        relevance_score FLOAT DEFAULT 0,
-        embedding vector(768),
+        embedding vector(${this.embeddingDim}),
         metadata JSONB,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -559,7 +551,7 @@ class KnowledgeBase {
     return chunks
   }
 
-  async generateEmbedding(text, taskType = 'SEMANTIC_SIMILARITY') {
+  async generateEmbedding(text) {
     if (!text || !text.trim()) {
       return null
     }
@@ -568,9 +560,8 @@ class KnowledgeBase {
         model: this.embeddingModel,
         value: text.substring(0, this.maxContextLength),
         providerOptions: {
-          google: {
-            outputDimensionality: this.embeddingDim,
-            taskType,
+          openai: {
+            dimensions: this.embeddingDim,
           },
         },
       })

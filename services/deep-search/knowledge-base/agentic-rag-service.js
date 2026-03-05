@@ -1,6 +1,6 @@
 const KnowledgeBase = require('./knowledge-base')
 const { generateText } = require('ai')
-const { google } = require('@ai-sdk/google')
+const { openai } = require('@ai-sdk/openai')
 const logger = require('../utils/logger')
 
 class AgenticRAGService {
@@ -10,11 +10,7 @@ class AgenticRAGService {
 
     this.thinkingBudget = options.thinkingBudget !== undefined ? options.thinkingBudget : 1024
 
-    this.chatModel = google('gemini-flash-lite-latest', {
-      thinkingConfig: {
-        thinkingBudget: this.thinkingBudget,
-      },
-    })
+    this.chatModel = openai('gpt-5-mini')
 
     this.maxIterations = 3
     this.relevanceThreshold = 0.6
@@ -515,9 +511,6 @@ Context: ${context}`
     try {
       const result = await generateText({
         model: this.chatModel,
-        thinkingConfig: {
-          thinkingBudget: this.thinkingBudget,
-        },
         messages: messages,
         maxTokens: 4500,
         temperature: 0.7,
@@ -624,9 +617,6 @@ Respond with ONLY a JSON array of relevance scores (0.0-1.0), one for each resul
         prompt: prompt,
         maxTokens: 500,
         temperature: 0.3,
-        thinkingConfig: {
-          thinkingBudget: this.thinkingBudget,
-        },
       })
 
       try {
@@ -737,9 +727,6 @@ Respond with ONLY the improved search query, no explanation or formatting.`
         prompt: prompt,
         maxTokens: 50,
         temperature: 0.3, // Lower temperature for more focused results
-        thinkingConfig: {
-          thinkingBudget: this.thinkingBudget,
-        },
       })
 
       const refinedQuery = result.text.trim().replace(/['"]/g, '')

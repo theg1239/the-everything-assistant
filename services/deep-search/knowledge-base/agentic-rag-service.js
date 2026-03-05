@@ -1,18 +1,21 @@
 const KnowledgeBase = require('./knowledge-base')
-const { generateText } = require('ai')
+const { generateText, Output } = require('ai')
 const { openai } = require('@ai-sdk/openai')
+const { z } = require('zod')
 const logger = require('../utils/logger')
 
 class AgenticRAGService {
   constructor(options = {}) {
     this.knowledgeBase = new KnowledgeBase()
     this.maxContextLength = parseInt(process.env.MAX_CONTEXT_LENGTH) || 6000
+    this.searchLimit = parseInt(process.env.AGENTIC_SEARCH_LIMIT || '20', 10)
+    this.relevanceCandidateLimit = parseInt(process.env.AGENTIC_RELEVANCE_CANDIDATES || '10', 10)
 
     this.thinkingBudget = options.thinkingBudget !== undefined ? options.thinkingBudget : 1024
 
     this.chatModel = openai('gpt-5-mini')
 
-    this.maxIterations = 3
+    this.maxIterations = 2
     this.relevanceThreshold = 0.5
   }
 
@@ -83,7 +86,7 @@ class AgenticRAGService {
     const queriesUsed = []
 
     let failedRefinements = 0
-    const MAX_FAILED_REFINEMENTS = 1 // Allow only 1 failed refinement before giving up
+    const MAX_FAILED_REFINEMENTS = 2
 
     for (let i = 0; i < this.maxIterations; i++) {
       let currentQuery
@@ -117,18 +120,24 @@ class AgenticRAGService {
 
       logger.info(`Iteration ${i + 1}: Searching with query: "${currentQuery}"`)
 
-      const searchResults = await this.knowledgeBase.search(currentQuery, 30)
+      const searchResults = await this.knowledgeBase.search(currentQuery, this.searchLimit)
 
       if (searchResults.length === 0) {
         logger.info(`No results found for query: "${currentQuery}"`)
         continue
       }
 
-      const relevanceScores = await relevanceAgent.analyzeRelevance(originalQuery, searchResults)
+      const relevanceCandidates = searchResults.slice(0, this.relevanceCandidateLimit)
+      const useLlmRelevance = i === 0
+      const relevanceScores = useLlmRelevance
+        ? await relevanceAgent.analyzeRelevance(originalQuery, relevanceCandidates)
+        : relevanceCandidates.map(result =>
+            this.estimateRelevanceFromRetrieval(originalQuery, result)
+          )
 
       const relevantResults = this.selectRelevantResults(
         originalQuery,
-        searchResults
+        relevanceCandidates
           .map((result, index) => ({
             ...result,
             relevanceScore: relevanceScores[index] || 0,
@@ -154,8 +163,11 @@ class AgenticRAGService {
           bestResults = relevantResults
         }
 
-        if (avgRelevance > 0.8 && qualityScore > 0.8 && relevantResults.length >= 5) {
-          logger.info('High-quality results found, stopping search')
+        if (
+          (i === 0 && relevantResults.length >= 5 && avgRelevance >= 0.55) ||
+          (avgRelevance > 0.72 && qualityScore > 0.72 && relevantResults.length >= 4)
+        ) {
+          logger.info('Sufficient quality reached, stopping search early')
           break
         }
       }
@@ -246,121 +258,20 @@ class AgenticRAGService {
     if (!query || typeof query !== 'string') return []
 
     try {
-      const cleaned = query.toLowerCase().replace(/[^\w\s]|_/g, '')
+      const normalized = query
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(/[^\w\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
 
-      const stopWords = new Set([
-        'about',
-        'what',
-        'where',
-        'when',
-        'how',
-        'tell',
-        'need',
-        'want',
-        'with',
-        'from',
-        'into',
-        'during',
-        'including',
-        'until',
-        'against',
-        'among',
-        'throughout',
-        'despite',
-        'towards',
-        'upon',
-        'concerning',
-        'like',
-        'than',
-        'that',
-        'which',
-        'whom',
-        'whose',
-        'whether',
-        'the',
-        'a',
-        'an',
-        'and',
-        'or',
-        'but',
-        'if',
-        'because',
-        'as',
-        'until',
-        'while',
-        'of',
-        'at',
-        'by',
-        'for',
-        'with',
-        'about',
-        'between',
-        'into',
-        'through',
-        'to',
-        'in',
-        'on',
-        'at',
-        'from',
-        'up',
-        'down',
-        'off',
-        'over',
-        'under',
-        'again',
-        'further',
-        'then',
-        'once',
-        'here',
-        'there',
-        'when',
-        'where',
-        'why',
-        'how',
-        'all',
-        'any',
-        'both',
-        'each',
-        'few',
-        'more',
-        'most',
-        'other',
-        'some',
-        'such',
-        'no',
-        'nor',
-        'not',
-        'only',
-        'own',
-        'same',
-        'so',
-        'than',
-        'too',
-        'very',
-        'can',
-        'will',
-        'just',
-        'don',
-        'should',
-        'now',
-        'd',
-      ])
+      if (!normalized) return []
 
-      const terms = cleaned
-        .split(/\s+/)
-        .filter(
-          term => term.length >= 3 && !stopWords.has(term) && !/^\d+$/.test(term) // Exclude numbers
-        )
-        .slice(0, 5) // Limit to 5 key terms
+      const terms = normalized
+        .split(' ')
+        .filter(term => term.length >= 3 && !/^\d+$/.test(term))
 
-      if (terms.length === 0) {
-        return cleaned
-          .split(/\s+/)
-          .filter(term => term.length >= 3)
-          .slice(0, 3)
-      }
-
-      return terms
+      return Array.from(new Set(terms)).slice(0, 8)
     } catch (error) {
       logger.error('Error extracting key terms:', error)
       return (query || '')
@@ -432,6 +343,24 @@ class AgenticRAGService {
         rankingScore * 0.05 +
         contentQuality * 0.05
       ) * strategyPenalty
+    )
+  }
+
+  estimateRelevanceFromRetrieval(originalQuery, result) {
+    const queryTerms = AgenticRAGService.extractKeyTerms(originalQuery)
+    const titleMatches = this.countTermMatches(result.title, queryTerms)
+    const contentMatches = this.countTermMatches(result.content, queryTerms)
+    const lexicalCoverage =
+      queryTerms.length > 0
+        ? Math.min(1, (titleMatches * 1.4 + contentMatches) / (queryTerms.length * 1.8))
+        : 0
+    const similarity = Math.max(0, Math.min(1, parseFloat(result.similarity) || 0))
+    const rankingScore = Math.max(0, Math.min(1, parseFloat(result.rankingScore) || 0))
+    const contentQuality = Math.min(1, String(result.content || result.title || '').length / 220)
+
+    return Math.min(
+      1,
+      Math.max(0.2, lexicalCoverage * 0.45 + similarity * 0.35 + rankingScore * 0.15 + contentQuality * 0.05)
     )
   }
 
@@ -542,10 +471,17 @@ Context: ${context}`
       const result = await generateText({
         model: this.chatModel,
         messages: messages,
-        maxTokens: 4500,
+        maxTokens: 2000,
+        output: Output.text(),
+        providerOptions: {
+          openai: {
+            reasoningEffort: 'minimal',
+          },
+        },
       })
-
-      let cleanResponse = result.text
+ 
+      const generatedText = typeof result.output === 'string' ? result.output : result.text
+      let cleanResponse = generatedText
         .replace(/```html\s*/g, '')
         .replace(/```\s*/g, '')
         .replace(/`/g, '')
@@ -606,6 +542,10 @@ Context: ${context}`
 }
 
 class QueryRelevanceAgent {
+  static RELEVANCE_OUTPUT_SCHEMA = z.object({
+    scores: z.array(z.number().min(0).max(1)),
+  })
+
   constructor(model, thinkingBudget = 512, options = {}) {
     this.model = model
     this.thinkingBudget = thinkingBudget
@@ -622,7 +562,7 @@ class QueryRelevanceAgent {
     try {
       const resultsText = searchResults
         .map((result, index) =>
-          `Result ${index}: ${result.title || ''} ${result.content || ''}`.slice(0, 200)
+          `Result ${index}: ${result.title || ''} ${result.content || ''}`.slice(0, 140)
         )
         .join('\n')
 
@@ -638,40 +578,38 @@ For each result, consider:
 - How specific and useful the information is
 - How recent and credible it appears
 
-Respond with ONLY a JSON array of relevance scores (0.0-1.0), one for each result:
-[0.8, 0.2, 0.9, 0.1, ...]`
+Return relevance scores for all results.`
 
       const result = await generateText({
         model: this.model,
         prompt: prompt,
-        maxTokens: 500,
+        maxTokens: 160,
+        output: Output.object({
+          schema: QueryRelevanceAgent.RELEVANCE_OUTPUT_SCHEMA,
+        }),
+        providerOptions: {
+          openai: {
+            reasoningEffort: 'minimal',
+          },
+        },
       })
 
-      try {
-        const scores = this.parseScores(result.text)
-        if (Array.isArray(scores) && scores.length === searchResults.length) {
-          const queryTerms = AgenticRAGService.extractKeyTerms(originalQuery)
-          return scores.map((score, index) => {
-            const llmScore = Math.max(0, Math.min(1, parseFloat(score) || 0))
-            const item = searchResults[index] || {}
-            const titleMatches = this.countTermMatches(item.title, queryTerms)
-            const contentMatches = this.countTermMatches(item.content, queryTerms)
-            const lexicalCoverage =
-              queryTerms.length > 0
-                ? Math.min(1, (titleMatches * 1.4 + contentMatches) / (queryTerms.length * 1.8))
-                : 0
-            const similarity = Math.max(0, Math.min(1, parseFloat(item.similarity) || 0))
-            const rankingScore = Math.max(0, Math.min(1, parseFloat(item.rankingScore) || 0))
-
-            return Math.min(
-              1,
-              llmScore * 0.65 + lexicalCoverage * 0.2 + similarity * 0.1 + rankingScore * 0.05
-            )
-          })
+      const scores = result.output?.scores
+      if (Array.isArray(scores) && scores.length > 0) {
+        const normalizedScores = scores.slice(0, searchResults.length)
+        const padValue = Math.max(
+          0,
+          Math.min(1, Number(normalizedScores[normalizedScores.length - 1]) || 0.5)
+        )
+        while (normalizedScores.length < searchResults.length) {
+          normalizedScores.push(padValue)
         }
-      } catch (e) {
-        logger.warn('Failed to parse relevance scores, using fallback')
+
+        const queryTerms = AgenticRAGService.extractKeyTerms(originalQuery)
+        return this.blendRelevanceScores(normalizedScores, searchResults, queryTerms)
       }
+
+      logger.warn('Structured relevance output missing, using fallback')
 
       const queryTerms = AgenticRAGService.extractKeyTerms(originalQuery)
       return searchResults.map(result => {
@@ -692,6 +630,26 @@ Respond with ONLY a JSON array of relevance scores (0.0-1.0), one for each resul
     }
   }
 
+  blendRelevanceScores(scores, searchResults, queryTerms) {
+    return scores.map((score, index) => {
+      const llmScore = Math.max(0, Math.min(1, parseFloat(score) || 0))
+      const item = searchResults[index] || {}
+      const titleMatches = this.countTermMatches(item.title, queryTerms)
+      const contentMatches = this.countTermMatches(item.content, queryTerms)
+      const lexicalCoverage =
+        queryTerms.length > 0
+          ? Math.min(1, (titleMatches * 1.4 + contentMatches) / (queryTerms.length * 1.8))
+          : 0
+      const similarity = Math.max(0, Math.min(1, parseFloat(item.similarity) || 0))
+      const rankingScore = Math.max(0, Math.min(1, parseFloat(item.rankingScore) || 0))
+
+      return Math.min(
+        1,
+        llmScore * 0.65 + lexicalCoverage * 0.2 + similarity * 0.1 + rankingScore * 0.05
+      )
+    })
+  }
+
   countTermMatches(text, queryTerms) {
     if (!text || !queryTerms.length) return 0
 
@@ -705,39 +663,15 @@ Respond with ONLY a JSON array of relevance scores (0.0-1.0), one for each resul
     return matches
   }
 
-  parseScores(text) {
-    if (!text) return null
-
-    const cleaned = String(text).trim()
-    const direct = this.tryParseJson(cleaned)
-    if (Array.isArray(direct)) return direct
-
-    const withoutFences = cleaned
-      .replace(/^```(?:json)?/i, '')
-      .replace(/```$/i, '')
-      .trim()
-    const fenceParsed = this.tryParseJson(withoutFences)
-    if (Array.isArray(fenceParsed)) return fenceParsed
-
-    const match = withoutFences.match(/\[[\s\S]*\]/)
-    if (match) {
-      const matchedParsed = this.tryParseJson(match[0])
-      if (Array.isArray(matchedParsed)) return matchedParsed
-    }
-
-    return null
-  }
-
-  tryParseJson(value) {
-    try {
-      return JSON.parse(value)
-    } catch {
-      return null
-    }
-  }
 }
-
+ 
 class QueryRefinementAgent {
+  static QUERY_REFINEMENT_OUTPUT_SCHEMA = z.object({
+    refinedQuery: z.string().min(5),
+    preservesIntent: z.boolean(),
+    confidence: z.number().min(0).max(1),
+  })
+
   constructor(model, thinkingBudget = 512, options = {}) {
     this.model = model
     this.thinkingBudget = thinkingBudget
@@ -765,12 +699,12 @@ class QueryRefinementAgent {
       const prompt = `You are a search query refinement expert. Your task is to IMPROVE the search query while PRESERVING the original intent.
 
 ORIGINAL USER QUERY: "${originalQuery}"
-Key terms to preserve: ${keyTerms.join(', ')}
+Original key terms: ${keyTerms.join(', ')}
 Iteration: ${iteration + 1}
 Current Results: ${resultsSummary}
 
 Create a BETTER search query that:
-1. MUST include ALL key terms from the original query (${keyTerms.join(', ')})
+1. Preserves the core intent
 2. Can add related terms or synonyms to improve results
 3. Should be more specific if results were too broad
 4. Can be more general ONLY if no results were found
@@ -779,34 +713,42 @@ Create a BETTER search query that:
 
 CRITICAL: The refined query MUST still be about: ${originalQuery}
 
-Respond with ONLY the improved search query, no explanation or formatting.`
+Return:
+- refinedQuery
+- preservesIntent
+- confidence (0 to 1)`
 
       const result = await generateText({
         model: this.model,
         prompt: prompt,
-        maxTokens: 50,
+        maxTokens: 80,
+        output: Output.object({
+          schema: QueryRefinementAgent.QUERY_REFINEMENT_OUTPUT_SCHEMA,
+        }),
+        providerOptions: {
+          openai: {
+            reasoningEffort: 'minimal',
+          },
+        },
       })
 
-      const refinedQuery = result.text.trim().replace(/['"]/g, '')
+      const parsed = result.output
+      if (parsed && parsed.refinedQuery && parsed.refinedQuery.length >= 5) {
+        if (parsed.preservesIntent === false && (parsed.confidence || 0) < 0.6) {
+          logger.warn('Refined query flagged as intent drift; using original query')
+          return originalQuery
+        }
 
-      const missingTerms = keyTerms.filter(
-        term => !refinedQuery.toLowerCase().includes(term.toLowerCase())
-      )
-
-      if (missingTerms.length > 0) {
-        logger.warn(
-          `Refined query is missing key terms: ${missingTerms.join(', ')}. Falling back to original query.`
-        )
-        return originalQuery
+        return parsed.refinedQuery.trim()
       }
 
-      return refinedQuery
+      return originalQuery
     } catch (error) {
       logger.error('Error refining query:', error)
-      const keywords = originalQuery.split(' ').filter(word => word.length > 3)
-      return keywords.slice(0, 3).join(' ')
+      return originalQuery
     }
   }
+
 }
 
 class ResultQualityAgent {

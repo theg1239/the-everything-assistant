@@ -800,21 +800,26 @@ class KnowledgeBase {
     const merged = new Map()
     const rrfK = 50
 
-    for (const variant of queryVariants) {
-      const queryEmbedding = await this.generateEmbedding(variant, 'RETRIEVAL_QUERY')
-      if (!queryEmbedding) {
-        logger.warn(`Skipping vector variant "${variant}" because embedding is unavailable`)
-        continue
-      }
+    const variantResponses = await Promise.all(
+      queryVariants.map(async variant => {
+        const queryEmbedding = await this.generateEmbedding(variant, 'RETRIEVAL_QUERY')
+        if (!queryEmbedding) {
+          logger.warn(`Skipping vector variant "${variant}" because embedding is unavailable`)
+          return { variant, rows: [] }
+        }
 
-      const rows = await this.runVectorSearchWithEmbedding(
-        queryEmbedding,
-        postLimit,
-        commentLimit,
-        chunkLimit,
-        perVariantLimit
-      )
+        const rows = await this.runVectorSearchWithEmbedding(
+          queryEmbedding,
+          postLimit,
+          commentLimit,
+          chunkLimit,
+          perVariantLimit
+        )
+        return { variant, rows }
+      })
+    )
 
+    for (const { variant, rows } of variantResponses) {
       rows.forEach((row, index) => {
         const key = `${row.type}:${row.reddit_id}`
         const existing = merged.get(key)

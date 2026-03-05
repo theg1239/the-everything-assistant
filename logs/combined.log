@@ -538,3 +538,177 @@
 {"level":"info","message":"vector search found 45 results","service":"reddit-scraper","timestamp":"2026-03-05T05:38:03.202Z"}
 {"level":"info","message":"text search found 50 results","service":"reddit-scraper","timestamp":"2026-03-05T05:38:03.202Z"}
 {"level":"info","message":"After deduplication: 38 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:38:03.205Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T05:46:08.119Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T05:46:08.121Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T05:46:09.909Z"}
+{"level":"info","message":"Text search indexes are ready","service":"reddit-scraper","timestamp":"2026-03-05T05:46:10.140Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T05:46:10.140Z"}
+{"level":"info","message":"Starting agentic RAG response for query: \"must visit places VIT Vellore campus students\"","service":"reddit-scraper","timestamp":"2026-03-05T05:46:10.140Z"}
+{"level":"info","message":"Starting agentic search for: \"must visit places VIT Vellore campus students\"","service":"reddit-scraper","timestamp":"2026-03-05T05:46:10.141Z"}
+{"level":"info","message":"QueryRelevanceAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:46:10.141Z"}
+{"level":"info","message":"QueryRefinementAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:46:10.141Z"}
+{"level":"info","message":"ResultQualityAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:46:10.141Z"}
+{"level":"info","message":"Iteration 1: Searching with query: \"must visit places VIT Vellore campus students\"","service":"reddit-scraper","timestamp":"2026-03-05T05:46:10.141Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:46:10.141Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:46:10.155Z"}
+{"level":"info","message":"Performing text search for: \"must visit places VIT Vellore campus students\"","service":"reddit-scraper","timestamp":"2026-03-05T05:46:10.155Z"}
+{"level":"info","message":"vector search found 58 results","service":"reddit-scraper","timestamp":"2026-03-05T05:46:14.686Z"}
+{"level":"info","message":"text search found 150 results","service":"reddit-scraper","timestamp":"2026-03-05T05:46:14.686Z"}
+{"level":"info","message":"After deduplication: 121 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:46:14.738Z"}
+{"level":"info","message":"Analyzing relevance for query: \"must visit places VIT Vellore campus students\" with 30 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:46:14.853Z"}
+{"level":"info","message":"Found 1 relevant results out of 30 total","service":"reddit-scraper","timestamp":"2026-03-05T05:46:40.384Z"}
+{"level":"info","message":"Assessing quality for query: \"must visit places VIT Vellore campus students\" with 1 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:46:40.385Z"}
+{"level":"info","message":"Average relevance: 0.76, Quality score: 0.35","service":"reddit-scraper","timestamp":"2026-03-05T05:46:40.385Z"}
+{"level":"info","message":"Refining query: \"must visit places VIT Vellore campus students\" (iteration: 1), thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:46:40.385Z"}
+{"level":"info","message":"Generated refined query: \"Must-visit places for VIT Vellore campus students (on-campus and nearby hangouts)\"","service":"reddit-scraper","timestamp":"2026-03-05T05:46:48.952Z"}
+{"level":"info","message":"Iteration 2: Searching with query: \"Must-visit places for VIT Vellore campus students (on-campus and nearby hangouts)\"","service":"reddit-scraper","timestamp":"2026-03-05T05:46:48.953Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:46:48.953Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:46:48.954Z"}
+{"level":"info","message":"Performing text search for: \"Must-visit places for VIT Vellore campus students (on-campus and nearby hangouts)\"","service":"reddit-scraper","timestamp":"2026-03-05T05:46:48.954Z"}
+{"level":"info","message":"vector search found 48 results","service":"reddit-scraper","timestamp":"2026-03-05T05:46:53.423Z"}
+{"level":"info","message":"text search found 150 results","service":"reddit-scraper","timestamp":"2026-03-05T05:46:53.423Z"}
+{"level":"info","message":"After deduplication: 112 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:46:53.479Z"}
+{"level":"info","message":"Analyzing relevance for query: \"must visit places VIT Vellore campus students\" with 30 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:46:53.652Z"}
+{"level":"info","message":"Found 1 relevant results out of 30 total","service":"reddit-scraper","timestamp":"2026-03-05T05:47:17.565Z"}
+{"level":"info","message":"Assessing quality for query: \"must visit places VIT Vellore campus students\" with 1 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:47:17.566Z"}
+{"level":"info","message":"Average relevance: 0.66, Quality score: 0.33","service":"reddit-scraper","timestamp":"2026-03-05T05:47:17.566Z"}
+{"level":"info","message":"Refining query: \"must visit places VIT Vellore campus students\" (iteration: 2), thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:47:17.566Z"}
+{"level":"info","message":"Generated refined query: \"VIT Vellore students — what are the must-visit places around campus?\"","service":"reddit-scraper","timestamp":"2026-03-05T05:47:23.019Z"}
+{"level":"info","message":"Iteration 3: Searching with query: \"VIT Vellore students — what are the must-visit places around campus?\"","service":"reddit-scraper","timestamp":"2026-03-05T05:47:23.019Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:47:23.019Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:47:23.020Z"}
+{"level":"info","message":"Performing text search for: \"VIT Vellore students — what are the must-visit places around campus?\"","service":"reddit-scraper","timestamp":"2026-03-05T05:47:23.020Z"}
+{"level":"info","message":"vector search found 56 results","service":"reddit-scraper","timestamp":"2026-03-05T05:47:27.611Z"}
+{"level":"info","message":"text search found 150 results","service":"reddit-scraper","timestamp":"2026-03-05T05:47:27.612Z"}
+{"level":"info","message":"After deduplication: 121 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:47:27.673Z"}
+{"level":"info","message":"Analyzing relevance for query: \"must visit places VIT Vellore campus students\" with 30 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:47:27.830Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T05:47:39.226Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T05:47:39.227Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T05:47:40.979Z"}
+{"level":"info","message":"Text search indexes are ready","service":"reddit-scraper","timestamp":"2026-03-05T05:47:41.133Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T05:47:41.134Z"}
+{"level":"info","message":"Starting agentic RAG response for query: \"must visit places VIT Vellore campus students\"","service":"reddit-scraper","timestamp":"2026-03-05T05:47:41.135Z"}
+{"level":"info","message":"Starting agentic search for: \"must visit places VIT Vellore campus students\"","service":"reddit-scraper","timestamp":"2026-03-05T05:47:41.135Z"}
+{"level":"info","message":"QueryRelevanceAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:47:41.135Z"}
+{"level":"info","message":"QueryRefinementAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:47:41.136Z"}
+{"level":"info","message":"ResultQualityAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:47:41.136Z"}
+{"level":"info","message":"Iteration 1: Searching with query: \"must visit places VIT Vellore campus students\"","service":"reddit-scraper","timestamp":"2026-03-05T05:47:41.136Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:47:41.137Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:47:41.161Z"}
+{"level":"info","message":"Performing text search for: \"must visit places VIT Vellore campus students\"","service":"reddit-scraper","timestamp":"2026-03-05T05:47:41.161Z"}
+{"level":"info","message":"vector search found 58 results","service":"reddit-scraper","timestamp":"2026-03-05T05:47:45.033Z"}
+{"level":"info","message":"text search found 150 results","service":"reddit-scraper","timestamp":"2026-03-05T05:47:45.033Z"}
+{"level":"info","message":"After deduplication: 121 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:47:45.100Z"}
+{"level":"info","message":"Analyzing relevance for query: \"must visit places VIT Vellore campus students\" with 30 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:47:45.200Z"}
+{"level":"info","message":"Found 1 relevant results out of 30 total","service":"reddit-scraper","timestamp":"2026-03-05T05:47:51.679Z"}
+{"level":"info","message":"Assessing quality for query: \"must visit places VIT Vellore campus students\" with 1 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:47:51.679Z"}
+{"level":"info","message":"Average relevance: 0.53, Quality score: 0.31","service":"reddit-scraper","timestamp":"2026-03-05T05:47:51.679Z"}
+{"level":"info","message":"Found 1 relevant results out of 30 total","service":"reddit-scraper","timestamp":"2026-03-05T05:48:10.224Z"}
+{"level":"info","message":"Assessing quality for query: \"must visit places VIT Vellore campus students\" with 1 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:48:10.224Z"}
+{"level":"info","message":"Average relevance: 0.65, Quality score: 0.33","service":"reddit-scraper","timestamp":"2026-03-05T05:48:10.224Z"}
+{"level":"info","message":"Refining query: \"must visit places VIT Vellore campus students\" (iteration: 1), thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:48:10.225Z"}
+{"level":"info","message":"Generated refined query: \"What are the must-visit places for VIT Vellore campus students—on campus and nearby? Looking for top hangouts, food joints, study spots, and local attractions (recommendations for new students).\"","service":"reddit-scraper","timestamp":"2026-03-05T05:48:34.689Z"}
+{"level":"info","message":"Iteration 2: Searching with query: \"What are the must-visit places for VIT Vellore campus students—on campus and nearby? Looking for top hangouts, food joints, study spots, and local attractions (recommendations for new students).\"","service":"reddit-scraper","timestamp":"2026-03-05T05:48:34.690Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:48:34.690Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:48:34.691Z"}
+{"level":"info","message":"Performing text search for: \"What are the must-visit places for VIT Vellore campus students—on campus and nearby? Looking for top hangouts, food joints, study spots, and local attractions (recommendations for new students).\"","service":"reddit-scraper","timestamp":"2026-03-05T05:48:34.691Z"}
+{"level":"info","message":"vector search found 72 results","service":"reddit-scraper","timestamp":"2026-03-05T05:48:39.559Z"}
+{"level":"info","message":"text search found 150 results","service":"reddit-scraper","timestamp":"2026-03-05T05:48:39.559Z"}
+{"level":"info","message":"After deduplication: 121 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:48:39.613Z"}
+{"level":"info","message":"Analyzing relevance for query: \"must visit places VIT Vellore campus students\" with 30 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:48:39.712Z"}
+{"level":"info","message":"Found 1 relevant results out of 30 total","service":"reddit-scraper","timestamp":"2026-03-05T05:49:07.057Z"}
+{"level":"info","message":"Assessing quality for query: \"must visit places VIT Vellore campus students\" with 1 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:49:07.057Z"}
+{"level":"info","message":"Average relevance: 0.53, Quality score: 0.31","service":"reddit-scraper","timestamp":"2026-03-05T05:49:07.057Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T05:50:45.486Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T05:50:45.487Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T05:50:47.342Z"}
+{"level":"info","message":"Text search indexes are ready","service":"reddit-scraper","timestamp":"2026-03-05T05:50:47.488Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T05:50:47.488Z"}
+{"level":"info","message":"Starting agentic RAG response for query: \"must visit places VIT Vellore campus students\"","service":"reddit-scraper","timestamp":"2026-03-05T05:50:47.488Z"}
+{"level":"info","message":"Starting agentic search for: \"must visit places VIT Vellore campus students\"","service":"reddit-scraper","timestamp":"2026-03-05T05:50:47.489Z"}
+{"level":"info","message":"QueryRelevanceAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:50:47.489Z"}
+{"level":"info","message":"QueryRefinementAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:50:47.489Z"}
+{"level":"info","message":"ResultQualityAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:50:47.489Z"}
+{"level":"info","message":"Iteration 1: Searching with query: \"must visit places VIT Vellore campus students\"","service":"reddit-scraper","timestamp":"2026-03-05T05:50:47.489Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:50:47.489Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:50:47.502Z"}
+{"level":"info","message":"Performing text search for: \"must visit places VIT Vellore campus students\"","service":"reddit-scraper","timestamp":"2026-03-05T05:50:47.502Z"}
+{"level":"info","message":"vector search found 58 results","service":"reddit-scraper","timestamp":"2026-03-05T05:50:52.024Z"}
+{"level":"info","message":"text search found 150 results","service":"reddit-scraper","timestamp":"2026-03-05T05:50:52.024Z"}
+{"level":"info","message":"After deduplication: 121 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:50:52.089Z"}
+{"level":"info","message":"Analyzing relevance for query: \"must visit places VIT Vellore campus students\" with 30 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:50:52.203Z"}
+{"level":"info","message":"Found 1 relevant results out of 30 total","service":"reddit-scraper","timestamp":"2026-03-05T05:51:17.414Z"}
+{"level":"info","message":"Assessing quality for query: \"must visit places VIT Vellore campus students\" with 1 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:51:17.414Z"}
+{"level":"info","message":"Average relevance: 0.74, Quality score: 0.35","service":"reddit-scraper","timestamp":"2026-03-05T05:51:17.414Z"}
+{"level":"info","message":"Refining query: \"must visit places VIT Vellore campus students\" (iteration: 1), thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:51:17.414Z"}
+{"level":"info","message":"Generated refined query: \"New to VIT Vellore — what are the must-visit places on and around campus for students? (best hangouts, study spots, photo ops, food)\"","service":"reddit-scraper","timestamp":"2026-03-05T05:51:24.193Z"}
+{"level":"info","message":"Iteration 2: Searching with query: \"New to VIT Vellore — what are the must-visit places on and around campus for students? (best hangouts, study spots, photo ops, food)\"","service":"reddit-scraper","timestamp":"2026-03-05T05:51:24.193Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:51:24.193Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:51:24.196Z"}
+{"level":"info","message":"Performing text search for: \"New to VIT Vellore — what are the must-visit places on and around campus for students? (best hangouts, study spots, photo ops, food)\"","service":"reddit-scraper","timestamp":"2026-03-05T05:51:24.196Z"}
+{"level":"info","message":"vector search found 60 results","service":"reddit-scraper","timestamp":"2026-03-05T05:51:29.300Z"}
+{"level":"info","message":"text search found 150 results","service":"reddit-scraper","timestamp":"2026-03-05T05:51:29.301Z"}
+{"level":"info","message":"After deduplication: 128 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:51:29.370Z"}
+{"level":"info","message":"Analyzing relevance for query: \"must visit places VIT Vellore campus students\" with 30 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:51:29.510Z"}
+{"level":"info","message":"Adaptive relevance threshold enabled: topScore=0.496, base=0.500, effective=0.396","service":"reddit-scraper","timestamp":"2026-03-05T05:51:53.354Z"}
+{"level":"info","message":"Found 5 relevant results out of 30 total","service":"reddit-scraper","timestamp":"2026-03-05T05:51:53.355Z"}
+{"level":"info","message":"Assessing quality for query: \"must visit places VIT Vellore campus students\" with 5 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:51:53.355Z"}
+{"level":"info","message":"Average relevance: 0.46, Quality score: 0.89","service":"reddit-scraper","timestamp":"2026-03-05T05:51:53.356Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T05:53:38.974Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T05:53:38.975Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T05:53:41.026Z"}
+{"level":"info","message":"Text search indexes are ready","service":"reddit-scraper","timestamp":"2026-03-05T05:53:41.124Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T05:53:41.125Z"}
+{"level":"info","message":"Starting agentic RAG response for query: \"must visit places VIT Vellore campus students\"","service":"reddit-scraper","timestamp":"2026-03-05T05:53:41.126Z"}
+{"level":"info","message":"Starting agentic search for: \"must visit places VIT Vellore campus students\"","service":"reddit-scraper","timestamp":"2026-03-05T05:53:41.127Z"}
+{"level":"info","message":"QueryRelevanceAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:53:41.127Z"}
+{"level":"info","message":"QueryRefinementAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:53:41.128Z"}
+{"level":"info","message":"ResultQualityAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:53:41.129Z"}
+{"level":"info","message":"Iteration 1: Searching with query: \"must visit places VIT Vellore campus students\"","service":"reddit-scraper","timestamp":"2026-03-05T05:53:41.129Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:53:41.129Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:53:41.153Z"}
+{"level":"info","message":"Performing text search for: \"must visit places VIT Vellore campus students\"","service":"reddit-scraper","timestamp":"2026-03-05T05:53:41.154Z"}
+{"level":"info","message":"vector search found 38 results","service":"reddit-scraper","timestamp":"2026-03-05T05:53:44.816Z"}
+{"level":"info","message":"text search found 100 results","service":"reddit-scraper","timestamp":"2026-03-05T05:53:44.816Z"}
+{"level":"info","message":"After deduplication: 79 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:53:44.856Z"}
+{"level":"info","message":"Analyzing relevance for query: \"must visit places VIT Vellore campus students\" with 14 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:53:44.942Z"}
+{"level":"info","message":"Found 1 relevant results out of 20 total","service":"reddit-scraper","timestamp":"2026-03-05T05:54:01.329Z"}
+{"level":"info","message":"Assessing quality for query: \"must visit places VIT Vellore campus students\" with 1 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:54:01.329Z"}
+{"level":"info","message":"Average relevance: 0.53, Quality score: 0.31","service":"reddit-scraper","timestamp":"2026-03-05T05:54:01.329Z"}
+{"level":"info","message":"Refining query: \"must visit places VIT Vellore campus students\" (iteration: 1), thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:54:01.330Z"}
+{"level":"info","message":"Generated refined query: \"VIT Vellore students: what are the must-visit places on campus? Best spots, hangouts, cafes, photo-ops and study areas for freshers/reviewers\"","service":"reddit-scraper","timestamp":"2026-03-05T05:54:06.789Z"}
+{"level":"info","message":"Iteration 2: Searching with query: \"VIT Vellore students: what are the must-visit places on campus? Best spots, hangouts, cafes, photo-ops and study areas for freshers/reviewers\"","service":"reddit-scraper","timestamp":"2026-03-05T05:54:06.789Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:54:06.789Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:54:06.793Z"}
+{"level":"info","message":"Performing text search for: \"VIT Vellore students: what are the must-visit places on campus? Best spots, hangouts, cafes, photo-ops and study areas for freshers/reviewers\"","service":"reddit-scraper","timestamp":"2026-03-05T05:54:06.793Z"}
+{"level":"info","message":"vector search found 44 results","service":"reddit-scraper","timestamp":"2026-03-05T05:54:11.149Z"}
+{"level":"info","message":"text search found 100 results","service":"reddit-scraper","timestamp":"2026-03-05T05:54:11.149Z"}
+{"level":"info","message":"After deduplication: 89 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:54:11.181Z"}
+{"level":"info","message":"Analyzing relevance for query: \"must visit places VIT Vellore campus students\" with 14 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:54:11.275Z"}
+{"level":"info","message":"Adaptive relevance threshold enabled: topScore=0.447, base=0.500, effective=0.358","service":"reddit-scraper","timestamp":"2026-03-05T05:54:26.116Z"}
+{"level":"info","message":"Found 8 relevant results out of 20 total","service":"reddit-scraper","timestamp":"2026-03-05T05:54:26.116Z"}
+{"level":"info","message":"Assessing quality for query: \"must visit places VIT Vellore campus students\" with 8 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:54:26.116Z"}
+{"level":"info","message":"Average relevance: 0.39, Quality score: 0.58","service":"reddit-scraper","timestamp":"2026-03-05T05:54:26.116Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T05:56:30.091Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T05:56:30.119Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T05:56:31.642Z"}
+{"level":"info","message":"Text search indexes are ready","service":"reddit-scraper","timestamp":"2026-03-05T05:56:31.750Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T05:56:31.750Z"}
+{"level":"info","message":"Starting agentic RAG response for query: \"must visit places VIT Vellore campus students\"","service":"reddit-scraper","timestamp":"2026-03-05T05:56:31.751Z"}
+{"level":"info","message":"Starting agentic search for: \"must visit places VIT Vellore campus students\"","service":"reddit-scraper","timestamp":"2026-03-05T05:56:31.751Z"}
+{"level":"info","message":"QueryRelevanceAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:56:31.751Z"}
+{"level":"info","message":"QueryRefinementAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:56:31.751Z"}
+{"level":"info","message":"ResultQualityAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:56:31.751Z"}
+{"level":"info","message":"Iteration 1: Searching with query: \"must visit places VIT Vellore campus students\"","service":"reddit-scraper","timestamp":"2026-03-05T05:56:31.751Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:56:31.751Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:56:31.760Z"}
+{"level":"info","message":"Performing text search for: \"must visit places VIT Vellore campus students\"","service":"reddit-scraper","timestamp":"2026-03-05T05:56:31.761Z"}
+{"level":"info","message":"vector search found 38 results","service":"reddit-scraper","timestamp":"2026-03-05T05:56:35.092Z"}
+{"level":"info","message":"text search found 100 results","service":"reddit-scraper","timestamp":"2026-03-05T05:56:35.092Z"}
+{"level":"info","message":"After deduplication: 79 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:56:35.111Z"}
+{"level":"info","message":"Analyzing relevance for query: \"must visit places VIT Vellore campus students\" with 10 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:56:35.207Z"}
+{"level":"warn","message":"Structured relevance output length mismatch, using fallback","service":"reddit-scraper","timestamp":"2026-03-05T05:56:37.029Z"}
+{"level":"info","message":"Found 7 relevant results out of 20 total","service":"reddit-scraper","timestamp":"2026-03-05T05:56:37.031Z"}
+{"level":"info","message":"Assessing quality for query: \"must visit places VIT Vellore campus students\" with 7 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:56:37.031Z"}
+{"level":"info","message":"Average relevance: 0.58, Quality score: 0.62","service":"reddit-scraper","timestamp":"2026-03-05T05:56:37.031Z"}
+{"level":"info","message":"Sufficient quality reached, stopping search early","service":"reddit-scraper","timestamp":"2026-03-05T05:56:37.031Z"}

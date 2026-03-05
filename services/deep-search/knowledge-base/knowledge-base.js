@@ -802,9 +802,9 @@ class KnowledgeBase {
           reddit_id, subreddit, title, content, author,
           score, upvotes, created_utc, url, tags,
           is_video, post_type, images, video,
-          1 - (embedding <=> $1) AS similarity
+          1 - (embedding <=> $1::vector) AS similarity
         FROM reddit_posts
-        WHERE embedding IS NOT NULL AND embedding <=> $1 < $2
+        WHERE embedding IS NOT NULL AND embedding <=> $1::vector < $2
         ORDER BY similarity DESC
         LIMIT $3
       ),
@@ -814,9 +814,9 @@ class KnowledgeBase {
           reddit_id, subreddit, content AS title, content,
           author, score, upvotes, created_utc, NULL AS url, tags,
           false AS is_video, 'comment' AS post_type, NULL AS images, NULL AS video,
-          1 - (embedding <=> $1) AS similarity
+          1 - (embedding <=> $1::vector) AS similarity
         FROM reddit_comments
-        WHERE embedding IS NOT NULL AND embedding <=> $1 < $2
+        WHERE embedding IS NOT NULL AND embedding <=> $1::vector < $2
         ORDER BY similarity DESC
         LIMIT $4
       ),
@@ -829,9 +829,9 @@ class KnowledgeBase {
           0 AS upvotes, created_at AS created_utc,
           NULL AS url, ARRAY[]::text[] AS tags,
           false AS is_video, 'chunk' AS post_type, NULL AS images, NULL AS video,
-          1 - (embedding <=> $1) AS similarity
+          1 - (embedding <=> $1::vector) AS similarity
         FROM knowledge_chunks
-        WHERE embedding IS NOT NULL AND embedding <=> $1 < $2
+        WHERE embedding IS NOT NULL AND embedding <=> $1::vector < $2
         ORDER BY similarity DESC
         LIMIT $5
       )
@@ -918,7 +918,7 @@ class KnowledgeBase {
         similarity: parseFloat(r.similarity.toFixed(3)),
       }))
     } catch (error) {
-      logger.error('Text search failed, trying simpler search:', error.message)
+      logger.error(`Text search failed, trying simpler search: ${this.formatErrorForLog(error)}`)
 
       const simpleSearchSQL = `
         SELECT
@@ -1055,6 +1055,20 @@ class KnowledgeBase {
   async cleanup() {
     await this.pool.end()
   }
+
+  formatErrorForLog(error) {
+    if (!error) return 'Unknown error'
+    if (error instanceof Error) return error.message || error.toString()
+    if (typeof error === 'object') {
+      try {
+        return JSON.stringify(error)
+      } catch {
+        return String(error)
+      }
+    }
+    return String(error)
+  }
+
   async diverseSearch(query, limit = 10) {
     try {
       const strategies = [
@@ -1079,7 +1093,9 @@ class KnowledgeBase {
             )
           }
         } catch (error) {
-          logger.warn(`${strategy.name} search strategy failed:`, error.message)
+          logger.warn(
+            `${strategy.name} search strategy failed: ${this.formatErrorForLog(error)}`
+          )
         }
       }
 

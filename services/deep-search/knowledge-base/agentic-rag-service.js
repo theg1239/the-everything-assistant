@@ -620,7 +620,7 @@ Respond with ONLY a JSON array of relevance scores (0.0-1.0), one for each resul
       })
 
       try {
-        const scores = JSON.parse(result.text)
+        const scores = this.parseScores(result.text)
         if (Array.isArray(scores) && scores.length === searchResults.length) {
           const queryTerms = AgenticRAGService.extractKeyTerms(originalQuery)
           return scores.map((score, index) => {
@@ -675,6 +675,37 @@ Respond with ONLY a JSON array of relevance scores (0.0-1.0), one for each resul
     }
 
     return matches
+  }
+
+  parseScores(text) {
+    if (!text) return null
+
+    const cleaned = String(text).trim()
+    const direct = this.tryParseJson(cleaned)
+    if (Array.isArray(direct)) return direct
+
+    const withoutFences = cleaned
+      .replace(/^```(?:json)?/i, '')
+      .replace(/```$/i, '')
+      .trim()
+    const fenceParsed = this.tryParseJson(withoutFences)
+    if (Array.isArray(fenceParsed)) return fenceParsed
+
+    const match = withoutFences.match(/\[[\s\S]*\]/)
+    if (match) {
+      const matchedParsed = this.tryParseJson(match[0])
+      if (Array.isArray(matchedParsed)) return matchedParsed
+    }
+
+    return null
+  }
+
+  tryParseJson(value) {
+    try {
+      return JSON.parse(value)
+    } catch {
+      return null
+    }
   }
 }
 

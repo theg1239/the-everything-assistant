@@ -13,7 +13,7 @@ class AgenticRAGService {
     this.chatModel = openai('gpt-5-mini')
 
     this.maxIterations = 3
-    this.relevanceThreshold = 0.6
+    this.relevanceThreshold = 0.5
   }
 
   async generateResponse(query, conversationHistory = []) {
@@ -172,28 +172,58 @@ class AgenticRAGService {
 
   selectRelevantResults(originalQuery, scoredResults) {
     const queryTerms = AgenticRAGService.extractKeyTerms(originalQuery)
+    const rescoredResults = scoredResults.map((result, index) => ({
+      ...result,
+      resultIndex: index,
+      relevanceScore: this.scoreResultRelevance(result, queryTerms),
+    }))
 
-    return scoredResults
-        .map((result, index) => ({
-          ...result,
-          resultIndex: index,
-          relevanceScore: this.scoreResultRelevance(result, queryTerms),
-        }))
-        .filter(result => {
-          const titleMatches = this.countTermMatches(result.title, queryTerms)
-          const contentMatches = this.countTermMatches(result.content, queryTerms)
-          const lexicalMatches = titleMatches + contentMatches
-          const similarity = Math.max(0, Math.min(1, Number(result.similarity) || 0))
+    const topScore = rescoredResults.reduce(
+      (maxScore, item) => Math.max(maxScore, Number(item.relevanceScore) || 0),
+      0
+    )
+    let effectiveThreshold = this.relevanceThreshold
 
-          if (result.relevanceScore < this.relevanceThreshold) return false
+    if (topScore > 0 && topScore < this.relevanceThreshold) {
+      effectiveThreshold = Math.max(0.25, topScore * 0.8)
+      logger.info(
+        `Adaptive relevance threshold enabled: topScore=${topScore.toFixed(3)}, base=${this.relevanceThreshold.toFixed(3)}, effective=${effectiveThreshold.toFixed(3)}`
+      )
+    }
 
-          // Keep semantically very strong hits even without literal overlap, but reject weak fuzzy matches.
-          if (lexicalMatches === 0 && similarity < 0.78) return false
+    const selected = rescoredResults
+      .filter(result => {
+        const titleMatches = this.countTermMatches(result.title, queryTerms)
+        const contentMatches = this.countTermMatches(result.content, queryTerms)
+        const lexicalMatches = titleMatches + contentMatches
+        const similarity = Math.max(0, Math.min(1, Number(result.similarity) || 0))
 
-          return true
-        })
-        .sort((a, b) => b.relevanceScore - a.relevanceScore)
-        .slice(0, 12)
+        if (result.relevanceScore < effectiveThreshold) return false
+
+        // Keep semantic matches even when literal overlap is weak, but reject low-signal fuzz.
+        if (
+          lexicalMatches === 0 &&
+          similarity < 0.45 &&
+          result.relevanceScore < effectiveThreshold + 0.12
+        ) {
+          return false
+        }
+
+        return true
+      })
+      .sort((a, b) => b.relevanceScore - a.relevanceScore)
+      .slice(0, 12)
+
+    if (selected.length > 0) return selected
+
+    // Never return an empty set when retrieval produced candidates; keep the strongest signals.
+    return rescoredResults
+      .sort((a, b) => {
+        const relevanceDelta = (b.relevanceScore || 0) - (a.relevanceScore || 0)
+        if (Math.abs(relevanceDelta) > 1e-6) return relevanceDelta
+        return (b.similarity || 0) - (a.similarity || 0)
+      })
+      .slice(0, Math.min(8, rescoredResults.length))
   }
 
   async getNextQuery(originalQuery, currentBestResults, refinementAgent, iteration) {
@@ -513,7 +543,6 @@ Context: ${context}`
         model: this.chatModel,
         messages: messages,
         maxTokens: 4500,
-        temperature: 0.7,
       })
 
       let cleanResponse = result.text
@@ -616,7 +645,6 @@ Respond with ONLY a JSON array of relevance scores (0.0-1.0), one for each resul
         model: this.model,
         prompt: prompt,
         maxTokens: 500,
-        temperature: 0.3,
       })
 
       try {
@@ -757,7 +785,6 @@ Respond with ONLY the improved search query, no explanation or formatting.`
         model: this.model,
         prompt: prompt,
         maxTokens: 50,
-        temperature: 0.3, // Lower temperature for more focused results
       })
 
       const refinedQuery = result.text.trim().replace(/['"]/g, '')

@@ -14,7 +14,9 @@
     "init": "node cli.js init",
     "stats": "node cli.js stats",
     "status": "node cli.js status",
-    "migrate": "node migrate-vector-dimensions.js"
+    "migrate": "node migrate-vector-dimensions.js",
+    "migrate:reddit-db": "node scripts/migrate-reddit-db.js",
+    "benchmark:retrieval": "node scripts/benchmark-retrieval.js"
   },
   "bin": {
     "reddit-scraper": "./cli.js"

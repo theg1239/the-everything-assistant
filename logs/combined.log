@@ -1,0 +1,540 @@
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T04:42:36.865Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T04:42:36.866Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T04:42:38.654Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T04:42:38.654Z"}
+{"level":"info","message":"Starting agentic search for: \"must visit places on VIT Vellore campus according to students\"","service":"reddit-scraper","timestamp":"2026-03-05T04:42:38.655Z"}
+{"level":"info","message":"QueryRelevanceAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T04:42:38.657Z"}
+{"level":"info","message":"QueryRefinementAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T04:42:38.658Z"}
+{"level":"info","message":"ResultQualityAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T04:42:38.658Z"}
+{"level":"info","message":"Iteration 1: Searching with query: \"must visit places on VIT Vellore campus according to students\"","service":"reddit-scraper","timestamp":"2026-03-05T04:42:38.658Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:42:38.659Z"}
+{"level":"info","message":"vector search found 6 results","service":"reddit-scraper","timestamp":"2026-03-05T04:42:39.839Z"}
+{"level":"info","message":"After deduplication: 6 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:42:39.839Z"}
+{"level":"info","message":"Analyzing relevance for query: \"must visit places on VIT Vellore campus according to students\" with 6 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T04:42:40.121Z"}
+{"level":"info","message":"Found 0 relevant results out of 6 total","service":"reddit-scraper","timestamp":"2026-03-05T04:42:49.051Z"}
+{"level":"info","message":"Refining query: \"must visit places on VIT Vellore campus according to students\" (iteration: 1), thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T04:42:49.051Z"}
+{"level":"info","message":"Generated refined query: \"What are the must visit places on VIT Vellore campus according to students? Reddit recommendations and top spots\"","service":"reddit-scraper","timestamp":"2026-03-05T04:42:54.810Z"}
+{"level":"info","message":"Iteration 2: Searching with query: \"What are the must visit places on VIT Vellore campus according to students? Reddit recommendations and top spots\"","service":"reddit-scraper","timestamp":"2026-03-05T04:42:54.810Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:42:54.811Z"}
+{"level":"info","message":"vector search found 1 results","service":"reddit-scraper","timestamp":"2026-03-05T04:42:56.730Z"}
+{"level":"info","message":"After deduplication: 1 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:42:56.731Z"}
+{"level":"info","message":"Analyzing relevance for query: \"must visit places on VIT Vellore campus according to students\" with 1 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T04:42:56.899Z"}
+{"level":"info","message":"Found 0 relevant results out of 1 total","service":"reddit-scraper","timestamp":"2026-03-05T04:43:00.049Z"}
+{"level":"info","message":"Refining query: \"must visit places on VIT Vellore campus according to students\" (iteration: 2), thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T04:43:00.049Z"}
+{"level":"info","message":"Generated refined query: \"What are the must visit places on VIT Vellore campus according to students on Reddit?\"","service":"reddit-scraper","timestamp":"2026-03-05T04:43:11.051Z"}
+{"level":"info","message":"Iteration 3: Searching with query: \"What are the must visit places on VIT Vellore campus according to students on Reddit?\"","service":"reddit-scraper","timestamp":"2026-03-05T04:43:11.051Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:43:11.051Z"}
+{"level":"info","message":"vector search found 4 results","service":"reddit-scraper","timestamp":"2026-03-05T04:43:12.455Z"}
+{"level":"info","message":"After deduplication: 4 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:43:12.455Z"}
+{"level":"info","message":"Analyzing relevance for query: \"must visit places on VIT Vellore campus according to students\" with 4 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T04:43:12.621Z"}
+{"level":"info","message":"Found 0 relevant results out of 4 total","service":"reddit-scraper","timestamp":"2026-03-05T04:43:18.108Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T04:54:01.185Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T04:54:01.186Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T04:54:02.970Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T04:54:02.971Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:54:02.972Z"}
+{"level":"info","message":"vector search found 53 results","service":"reddit-scraper","timestamp":"2026-03-05T04:54:05.640Z"}
+{"level":"info","message":"After deduplication: 49 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:54:05.641Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:54:05.749Z"}
+{"level":"info","message":"vector search found 70 results","service":"reddit-scraper","timestamp":"2026-03-05T04:54:08.391Z"}
+{"level":"info","message":"After deduplication: 67 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:54:08.392Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:54:08.511Z"}
+{"level":"info","message":"vector search found 57 results","service":"reddit-scraper","timestamp":"2026-03-05T04:54:11.133Z"}
+{"level":"info","message":"After deduplication: 53 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:54:11.134Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:54:11.240Z"}
+{"level":"info","message":"vector search found 70 results","service":"reddit-scraper","timestamp":"2026-03-05T04:54:13.407Z"}
+{"level":"info","message":"After deduplication: 67 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:54:13.408Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:54:13.514Z"}
+{"level":"info","message":"vector search found 79 results","service":"reddit-scraper","timestamp":"2026-03-05T04:54:15.520Z"}
+{"level":"info","message":"After deduplication: 76 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:54:15.520Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:54:15.706Z"}
+{"level":"info","message":"vector search found 57 results","service":"reddit-scraper","timestamp":"2026-03-05T04:54:18.636Z"}
+{"level":"info","message":"After deduplication: 55 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:54:18.639Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:54:18.752Z"}
+{"level":"info","message":"vector search found 69 results","service":"reddit-scraper","timestamp":"2026-03-05T04:54:21.398Z"}
+{"level":"info","message":"After deduplication: 65 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:54:21.398Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:54:21.617Z"}
+{"level":"info","message":"vector search found 63 results","service":"reddit-scraper","timestamp":"2026-03-05T04:54:23.715Z"}
+{"level":"info","message":"After deduplication: 60 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:54:23.715Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:54:23.819Z"}
+{"level":"info","message":"vector search found 93 results","service":"reddit-scraper","timestamp":"2026-03-05T04:54:25.809Z"}
+{"level":"info","message":"After deduplication: 86 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:54:25.809Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:54:25.913Z"}
+{"level":"info","message":"vector search found 54 results","service":"reddit-scraper","timestamp":"2026-03-05T04:54:28.564Z"}
+{"level":"info","message":"After deduplication: 53 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:54:28.565Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T04:54:45.560Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T04:54:45.561Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T04:54:47.412Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T04:54:47.412Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T04:57:52.823Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T04:57:52.824Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T04:57:54.879Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T04:57:54.879Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:57:54.880Z"}
+{"level":"info","message":"vector search found 52 results","service":"reddit-scraper","timestamp":"2026-03-05T04:57:58.327Z"}
+{"level":"info","message":"After deduplication: 51 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:57:58.328Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:57:58.503Z"}
+{"level":"info","message":"vector search found 59 results","service":"reddit-scraper","timestamp":"2026-03-05T04:58:00.529Z"}
+{"level":"info","message":"After deduplication: 52 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:58:00.530Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:58:00.835Z"}
+{"level":"info","message":"vector search found 49 results","service":"reddit-scraper","timestamp":"2026-03-05T04:58:02.869Z"}
+{"level":"info","message":"After deduplication: 46 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:58:02.870Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:58:02.971Z"}
+{"level":"info","message":"vector search found 41 results","service":"reddit-scraper","timestamp":"2026-03-05T04:58:05.591Z"}
+{"level":"info","message":"After deduplication: 41 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:58:05.591Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:58:05.693Z"}
+{"level":"info","message":"vector search found 44 results","service":"reddit-scraper","timestamp":"2026-03-05T04:58:08.111Z"}
+{"level":"info","message":"After deduplication: 41 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:58:08.112Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:58:08.214Z"}
+{"level":"info","message":"vector search found 43 results","service":"reddit-scraper","timestamp":"2026-03-05T04:58:09.826Z"}
+{"level":"info","message":"After deduplication: 39 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:58:09.827Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:58:09.928Z"}
+{"level":"info","message":"vector search found 63 results","service":"reddit-scraper","timestamp":"2026-03-05T04:58:11.965Z"}
+{"level":"info","message":"After deduplication: 58 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:58:11.966Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:58:12.067Z"}
+{"level":"info","message":"vector search found 35 results","service":"reddit-scraper","timestamp":"2026-03-05T04:58:14.274Z"}
+{"level":"info","message":"After deduplication: 31 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:58:14.274Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:58:14.399Z"}
+{"level":"info","message":"vector search found 44 results","service":"reddit-scraper","timestamp":"2026-03-05T04:58:16.786Z"}
+{"level":"info","message":"After deduplication: 41 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:58:16.786Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T04:58:16.888Z"}
+{"level":"info","message":"vector search found 37 results","service":"reddit-scraper","timestamp":"2026-03-05T04:58:19.237Z"}
+{"level":"info","message":"After deduplication: 36 unique results","service":"reddit-scraper","timestamp":"2026-03-05T04:58:19.237Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T04:59:59.046Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T04:59:59.048Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T05:00:00.701Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T05:00:00.702Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:00:00.702Z"}
+{"level":"info","message":"vector search found 43 results","service":"reddit-scraper","timestamp":"2026-03-05T05:00:03.585Z"}
+{"level":"info","message":"After deduplication: 35 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:00:03.591Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:00:04.678Z"}
+{"level":"info","message":"vector search found 59 results","service":"reddit-scraper","timestamp":"2026-03-05T05:00:07.129Z"}
+{"level":"info","message":"After deduplication: 44 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:00:07.143Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:00:07.243Z"}
+{"level":"info","message":"vector search found 58 results","service":"reddit-scraper","timestamp":"2026-03-05T05:00:09.995Z"}
+{"level":"info","message":"After deduplication: 51 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:00:10.006Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:00:10.120Z"}
+{"level":"info","message":"vector search found 41 results","service":"reddit-scraper","timestamp":"2026-03-05T05:00:13.067Z"}
+{"level":"info","message":"After deduplication: 36 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:00:13.074Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:00:13.175Z"}
+{"level":"info","message":"vector search found 55 results","service":"reddit-scraper","timestamp":"2026-03-05T05:00:16.036Z"}
+{"level":"info","message":"After deduplication: 47 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:00:16.046Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:00:16.146Z"}
+{"level":"info","message":"vector search found 53 results","service":"reddit-scraper","timestamp":"2026-03-05T05:00:18.535Z"}
+{"level":"info","message":"After deduplication: 44 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:00:18.547Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:00:18.656Z"}
+{"level":"info","message":"vector search found 60 results","service":"reddit-scraper","timestamp":"2026-03-05T05:00:21.280Z"}
+{"level":"info","message":"After deduplication: 44 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:00:21.289Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:00:21.438Z"}
+{"level":"info","message":"vector search found 41 results","service":"reddit-scraper","timestamp":"2026-03-05T05:00:24.427Z"}
+{"level":"info","message":"After deduplication: 33 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:00:24.432Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:00:24.558Z"}
+{"level":"info","message":"vector search found 52 results","service":"reddit-scraper","timestamp":"2026-03-05T05:00:27.572Z"}
+{"level":"info","message":"After deduplication: 44 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:00:27.581Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:00:27.680Z"}
+{"level":"info","message":"vector search found 48 results","service":"reddit-scraper","timestamp":"2026-03-05T05:00:29.778Z"}
+{"level":"info","message":"After deduplication: 40 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:00:29.785Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T05:01:18.071Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T05:01:18.073Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T05:01:19.564Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T05:01:19.565Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:01:19.565Z"}
+{"level":"info","message":"vector search found 43 results","service":"reddit-scraper","timestamp":"2026-03-05T05:01:22.097Z"}
+{"level":"info","message":"After deduplication: 35 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:01:22.101Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:01:22.193Z"}
+{"level":"info","message":"vector search found 59 results","service":"reddit-scraper","timestamp":"2026-03-05T05:01:24.566Z"}
+{"level":"info","message":"After deduplication: 44 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:01:24.582Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:01:24.719Z"}
+{"level":"info","message":"vector search found 58 results","service":"reddit-scraper","timestamp":"2026-03-05T05:01:27.096Z"}
+{"level":"info","message":"After deduplication: 51 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:01:27.109Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:01:27.200Z"}
+{"level":"info","message":"vector search found 41 results","service":"reddit-scraper","timestamp":"2026-03-05T05:01:30.396Z"}
+{"level":"info","message":"After deduplication: 36 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:01:30.399Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:01:30.836Z"}
+{"level":"info","message":"vector search found 55 results","service":"reddit-scraper","timestamp":"2026-03-05T05:01:35.112Z"}
+{"level":"info","message":"After deduplication: 47 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:01:35.123Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:01:35.571Z"}
+{"level":"info","message":"vector search found 53 results","service":"reddit-scraper","timestamp":"2026-03-05T05:01:38.455Z"}
+{"level":"info","message":"After deduplication: 44 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:01:38.467Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:01:38.561Z"}
+{"level":"info","message":"vector search found 60 results","service":"reddit-scraper","timestamp":"2026-03-05T05:01:40.972Z"}
+{"level":"info","message":"After deduplication: 44 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:01:40.983Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:01:41.076Z"}
+{"level":"info","message":"vector search found 41 results","service":"reddit-scraper","timestamp":"2026-03-05T05:01:43.445Z"}
+{"level":"info","message":"After deduplication: 33 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:01:43.450Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:01:43.591Z"}
+{"level":"info","message":"vector search found 52 results","service":"reddit-scraper","timestamp":"2026-03-05T05:01:45.944Z"}
+{"level":"info","message":"After deduplication: 44 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:01:45.953Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:01:46.045Z"}
+{"level":"info","message":"vector search found 48 results","service":"reddit-scraper","timestamp":"2026-03-05T05:01:48.406Z"}
+{"level":"info","message":"After deduplication: 40 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:01:48.415Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T05:02:16.614Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T05:02:16.615Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T05:02:18.379Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T05:02:18.379Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:02:18.380Z"}
+{"level":"info","message":"vector search found 51 results","service":"reddit-scraper","timestamp":"2026-03-05T05:02:21.729Z"}
+{"level":"info","message":"After deduplication: 43 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:02:21.744Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:02:21.865Z"}
+{"level":"info","message":"vector search found 58 results","service":"reddit-scraper","timestamp":"2026-03-05T05:02:25.150Z"}
+{"level":"info","message":"After deduplication: 45 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:02:25.163Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:02:25.258Z"}
+{"level":"info","message":"vector search found 66 results","service":"reddit-scraper","timestamp":"2026-03-05T05:02:28.574Z"}
+{"level":"info","message":"After deduplication: 58 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:02:28.589Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:02:28.859Z"}
+{"level":"info","message":"vector search found 37 results","service":"reddit-scraper","timestamp":"2026-03-05T05:02:33.403Z"}
+{"level":"info","message":"After deduplication: 32 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:02:33.408Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:02:33.502Z"}
+{"level":"info","message":"vector search found 62 results","service":"reddit-scraper","timestamp":"2026-03-05T05:02:36.720Z"}
+{"level":"info","message":"After deduplication: 54 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:02:36.735Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:02:36.889Z"}
+{"level":"info","message":"vector search found 53 results","service":"reddit-scraper","timestamp":"2026-03-05T05:02:40.120Z"}
+{"level":"info","message":"After deduplication: 46 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:02:40.131Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:02:40.304Z"}
+{"level":"info","message":"vector search found 59 results","service":"reddit-scraper","timestamp":"2026-03-05T05:02:43.592Z"}
+{"level":"info","message":"After deduplication: 45 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:02:43.601Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:02:43.736Z"}
+{"level":"info","message":"vector search found 42 results","service":"reddit-scraper","timestamp":"2026-03-05T05:02:46.910Z"}
+{"level":"info","message":"After deduplication: 35 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:02:46.914Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:02:47.035Z"}
+{"level":"info","message":"vector search found 49 results","service":"reddit-scraper","timestamp":"2026-03-05T05:02:50.305Z"}
+{"level":"info","message":"After deduplication: 43 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:02:50.316Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:02:50.409Z"}
+{"level":"info","message":"vector search found 46 results","service":"reddit-scraper","timestamp":"2026-03-05T05:02:53.457Z"}
+{"level":"info","message":"After deduplication: 38 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:02:53.466Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T05:04:31.184Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T05:04:31.186Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T05:04:32.710Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T05:04:32.711Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:04:32.712Z"}
+{"level":"info","message":"vector search found 51 results","service":"reddit-scraper","timestamp":"2026-03-05T05:04:36.091Z"}
+{"level":"info","message":"After deduplication: 43 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:04:36.105Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:04:36.205Z"}
+{"level":"info","message":"vector search found 58 results","service":"reddit-scraper","timestamp":"2026-03-05T05:04:39.935Z"}
+{"level":"info","message":"After deduplication: 45 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:04:39.948Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:04:40.111Z"}
+{"level":"info","message":"vector search found 66 results","service":"reddit-scraper","timestamp":"2026-03-05T05:04:43.847Z"}
+{"level":"info","message":"After deduplication: 58 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:04:43.863Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:04:44.039Z"}
+{"level":"info","message":"vector search found 37 results","service":"reddit-scraper","timestamp":"2026-03-05T05:04:47.477Z"}
+{"level":"info","message":"After deduplication: 32 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:04:47.482Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:04:47.617Z"}
+{"level":"info","message":"vector search found 62 results","service":"reddit-scraper","timestamp":"2026-03-05T05:04:50.893Z"}
+{"level":"info","message":"After deduplication: 54 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:04:50.906Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:04:51.004Z"}
+{"level":"info","message":"vector search found 53 results","service":"reddit-scraper","timestamp":"2026-03-05T05:04:54.336Z"}
+{"level":"info","message":"After deduplication: 46 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:04:54.348Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:04:54.526Z"}
+{"level":"info","message":"vector search found 59 results","service":"reddit-scraper","timestamp":"2026-03-05T05:04:57.711Z"}
+{"level":"info","message":"After deduplication: 45 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:04:57.717Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:04:57.813Z"}
+{"level":"info","message":"vector search found 42 results","service":"reddit-scraper","timestamp":"2026-03-05T05:05:01.250Z"}
+{"level":"info","message":"After deduplication: 35 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:05:01.256Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:05:01.352Z"}
+{"level":"info","message":"vector search found 49 results","service":"reddit-scraper","timestamp":"2026-03-05T05:05:04.513Z"}
+{"level":"info","message":"After deduplication: 43 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:05:04.520Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:05:04.615Z"}
+{"level":"info","message":"vector search found 46 results","service":"reddit-scraper","timestamp":"2026-03-05T05:05:08.773Z"}
+{"level":"info","message":"After deduplication: 38 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:05:08.782Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T05:06:47.333Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T05:06:47.335Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T05:06:48.926Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T05:06:48.927Z"}
+{"level":"info","message":"Starting agentic RAG response for query: \"how are placements for cse in vit vellore\"","service":"reddit-scraper","timestamp":"2026-03-05T05:06:48.927Z"}
+{"level":"info","message":"Starting agentic search for: \"how are placements for cse in vit vellore\"","service":"reddit-scraper","timestamp":"2026-03-05T05:06:48.928Z"}
+{"level":"info","message":"QueryRelevanceAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:06:48.928Z"}
+{"level":"info","message":"QueryRefinementAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:06:48.928Z"}
+{"level":"info","message":"ResultQualityAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:06:48.928Z"}
+{"level":"info","message":"Iteration 1: Searching with query: \"how are placements for cse in vit vellore\"","service":"reddit-scraper","timestamp":"2026-03-05T05:06:48.929Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:06:48.930Z"}
+{"level":"info","message":"vector search found 65 results","service":"reddit-scraper","timestamp":"2026-03-05T05:06:52.403Z"}
+{"level":"info","message":"After deduplication: 54 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:06:52.422Z"}
+{"level":"info","message":"Analyzing relevance for query: \"how are placements for cse in vit vellore\" with 30 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:06:52.523Z"}
+{"level":"info","message":"Found 6 relevant results out of 30 total","service":"reddit-scraper","timestamp":"2026-03-05T05:07:29.699Z"}
+{"level":"info","message":"Assessing quality for query: \"how are placements for cse in vit vellore\" with 6 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:07:29.700Z"}
+{"level":"info","message":"Average relevance: 0.70, Quality score: 0.64","service":"reddit-scraper","timestamp":"2026-03-05T05:07:29.700Z"}
+{"level":"info","message":"Refining query: \"how are placements for cse in vit vellore\" (iteration: 1), thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:07:29.700Z"}
+{"level":"info","message":"Generated refined query: \"How are placements for cse in vit vellore recently? Looking for average packages, top recruiters, internship conversions and interview experiences (2023-24)\"","service":"reddit-scraper","timestamp":"2026-03-05T05:07:39.456Z"}
+{"level":"info","message":"Iteration 2: Searching with query: \"How are placements for cse in vit vellore recently? Looking for average packages, top recruiters, internship conversions and interview experiences (2023-24)\"","service":"reddit-scraper","timestamp":"2026-03-05T05:07:39.457Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:07:39.457Z"}
+{"level":"info","message":"vector search found 63 results","service":"reddit-scraper","timestamp":"2026-03-05T05:07:43.481Z"}
+{"level":"info","message":"After deduplication: 55 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:07:43.499Z"}
+{"level":"info","message":"Analyzing relevance for query: \"how are placements for cse in vit vellore\" with 30 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:07:43.606Z"}
+{"level":"info","message":"Found 6 relevant results out of 30 total","service":"reddit-scraper","timestamp":"2026-03-05T05:08:10.527Z"}
+{"level":"info","message":"Assessing quality for query: \"how are placements for cse in vit vellore\" with 6 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:08:10.527Z"}
+{"level":"info","message":"Average relevance: 0.71, Quality score: 0.65","service":"reddit-scraper","timestamp":"2026-03-05T05:08:10.527Z"}
+{"level":"info","message":"Refining query: \"how are placements for cse in vit vellore\" (iteration: 2), thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:08:10.527Z"}
+{"level":"info","message":"Generated refined query: \"How are placements for cse in vit vellore these days? Anyone from CSE share recent average packages, top recruiters and interview experience?\"","service":"reddit-scraper","timestamp":"2026-03-05T05:08:18.434Z"}
+{"level":"info","message":"Iteration 3: Searching with query: \"How are placements for cse in vit vellore these days? Anyone from CSE share recent average packages, top recruiters and interview experience?\"","service":"reddit-scraper","timestamp":"2026-03-05T05:08:18.434Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:08:18.434Z"}
+{"level":"info","message":"vector search found 64 results","service":"reddit-scraper","timestamp":"2026-03-05T05:08:22.842Z"}
+{"level":"info","message":"After deduplication: 53 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:08:22.858Z"}
+{"level":"info","message":"Analyzing relevance for query: \"how are placements for cse in vit vellore\" with 30 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:08:22.963Z"}
+{"level":"info","message":"Found 6 relevant results out of 30 total","service":"reddit-scraper","timestamp":"2026-03-05T05:08:52.868Z"}
+{"level":"info","message":"Assessing quality for query: \"how are placements for cse in vit vellore\" with 6 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:08:52.868Z"}
+{"level":"info","message":"Average relevance: 0.71, Quality score: 0.65","service":"reddit-scraper","timestamp":"2026-03-05T05:08:52.868Z"}
+{"level":"info","message":"Starting agentic RAG response for query: \"best mess in vit vellore campus\"","service":"reddit-scraper","timestamp":"2026-03-05T05:10:35.230Z"}
+{"level":"info","message":"Starting agentic search for: \"best mess in vit vellore campus\"","service":"reddit-scraper","timestamp":"2026-03-05T05:10:35.230Z"}
+{"level":"info","message":"QueryRelevanceAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:10:35.230Z"}
+{"level":"info","message":"QueryRefinementAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:10:35.230Z"}
+{"level":"info","message":"ResultQualityAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:10:35.230Z"}
+{"level":"info","message":"Iteration 1: Searching with query: \"best mess in vit vellore campus\"","service":"reddit-scraper","timestamp":"2026-03-05T05:10:35.230Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:10:35.230Z"}
+{"level":"info","message":"vector search found 78 results","service":"reddit-scraper","timestamp":"2026-03-05T05:10:40.048Z"}
+{"level":"info","message":"After deduplication: 67 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:10:40.067Z"}
+{"level":"info","message":"Analyzing relevance for query: \"best mess in vit vellore campus\" with 30 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:10:40.165Z"}
+{"level":"info","message":"Found 2 relevant results out of 30 total","service":"reddit-scraper","timestamp":"2026-03-05T05:11:08.160Z"}
+{"level":"info","message":"Assessing quality for query: \"best mess in vit vellore campus\" with 2 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:11:08.160Z"}
+{"level":"info","message":"Average relevance: 0.66, Quality score: 0.23","service":"reddit-scraper","timestamp":"2026-03-05T05:11:08.160Z"}
+{"level":"info","message":"Refining query: \"best mess in vit vellore campus\" (iteration: 1), thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:11:08.160Z"}
+{"level":"info","message":"Generated refined query: \"Which is the best mess in vit vellore campus? Reddit recommendations comparing D Annex, A4, A1—food quality, hygiene, menu, and value\"","service":"reddit-scraper","timestamp":"2026-03-05T05:11:15.108Z"}
+{"level":"info","message":"Iteration 2: Searching with query: \"Which is the best mess in vit vellore campus? Reddit recommendations comparing D Annex, A4, A1—food quality, hygiene, menu, and value\"","service":"reddit-scraper","timestamp":"2026-03-05T05:11:15.108Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:11:15.108Z"}
+{"level":"info","message":"vector search found 79 results","service":"reddit-scraper","timestamp":"2026-03-05T05:11:19.268Z"}
+{"level":"info","message":"After deduplication: 60 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:11:19.278Z"}
+{"level":"info","message":"Analyzing relevance for query: \"best mess in vit vellore campus\" with 30 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:11:19.380Z"}
+{"level":"info","message":"Found 1 relevant results out of 30 total","service":"reddit-scraper","timestamp":"2026-03-05T05:11:57.884Z"}
+{"level":"info","message":"Assessing quality for query: \"best mess in vit vellore campus\" with 1 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:11:57.884Z"}
+{"level":"info","message":"Average relevance: 0.69, Quality score: 0.34","service":"reddit-scraper","timestamp":"2026-03-05T05:11:57.884Z"}
+{"level":"info","message":"Refining query: \"best mess in vit vellore campus\" (iteration: 2), thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:11:57.884Z"}
+{"level":"info","message":"Generated refined query: \"Best mess in vit vellore campus? Looking for student/Reddit opinions on food quality, hygiene and variety\"","service":"reddit-scraper","timestamp":"2026-03-05T05:12:09.271Z"}
+{"level":"info","message":"Iteration 3: Searching with query: \"Best mess in vit vellore campus? Looking for student/Reddit opinions on food quality, hygiene and variety\"","service":"reddit-scraper","timestamp":"2026-03-05T05:12:09.271Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:12:09.271Z"}
+{"level":"info","message":"vector search found 66 results","service":"reddit-scraper","timestamp":"2026-03-05T05:12:15.267Z"}
+{"level":"info","message":"After deduplication: 52 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:12:15.273Z"}
+{"level":"info","message":"Analyzing relevance for query: \"best mess in vit vellore campus\" with 30 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:12:15.574Z"}
+{"level":"info","message":"Found 1 relevant results out of 30 total","service":"reddit-scraper","timestamp":"2026-03-05T05:12:43.680Z"}
+{"level":"info","message":"Assessing quality for query: \"best mess in vit vellore campus\" with 1 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:12:43.680Z"}
+{"level":"info","message":"Average relevance: 0.66, Quality score: 0.33","service":"reddit-scraper","timestamp":"2026-03-05T05:12:43.681Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T05:13:40.190Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T05:13:40.191Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T05:13:41.875Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T05:13:41.875Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:13:41.876Z"}
+{"level":"info","message":"vector search found 51 results","service":"reddit-scraper","timestamp":"2026-03-05T05:13:45.430Z"}
+{"level":"info","message":"After deduplication: 43 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:13:45.443Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:13:45.548Z"}
+{"level":"info","message":"vector search found 58 results","service":"reddit-scraper","timestamp":"2026-03-05T05:13:48.902Z"}
+{"level":"info","message":"After deduplication: 45 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:13:48.915Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:13:49.019Z"}
+{"level":"info","message":"vector search found 66 results","service":"reddit-scraper","timestamp":"2026-03-05T05:13:52.250Z"}
+{"level":"info","message":"After deduplication: 58 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:13:52.265Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:13:52.368Z"}
+{"level":"info","message":"vector search found 37 results","service":"reddit-scraper","timestamp":"2026-03-05T05:13:56.043Z"}
+{"level":"info","message":"After deduplication: 32 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:13:56.047Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:13:56.169Z"}
+{"level":"info","message":"vector search found 62 results","service":"reddit-scraper","timestamp":"2026-03-05T05:13:59.877Z"}
+{"level":"info","message":"After deduplication: 54 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:13:59.889Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:14:00.054Z"}
+{"level":"info","message":"vector search found 53 results","service":"reddit-scraper","timestamp":"2026-03-05T05:14:03.482Z"}
+{"level":"info","message":"After deduplication: 46 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:14:03.494Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:14:03.598Z"}
+{"level":"info","message":"vector search found 59 results","service":"reddit-scraper","timestamp":"2026-03-05T05:14:07.041Z"}
+{"level":"info","message":"After deduplication: 45 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:14:07.049Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:14:07.152Z"}
+{"level":"info","message":"vector search found 42 results","service":"reddit-scraper","timestamp":"2026-03-05T05:14:10.575Z"}
+{"level":"info","message":"After deduplication: 35 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:14:10.583Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:14:10.709Z"}
+{"level":"info","message":"vector search found 49 results","service":"reddit-scraper","timestamp":"2026-03-05T05:14:14.273Z"}
+{"level":"info","message":"After deduplication: 43 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:14:14.282Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:14:14.384Z"}
+{"level":"info","message":"vector search found 46 results","service":"reddit-scraper","timestamp":"2026-03-05T05:14:18.049Z"}
+{"level":"info","message":"After deduplication: 38 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:14:18.056Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T05:14:56.408Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T05:14:56.410Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T05:14:57.897Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T05:14:57.898Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:14:57.899Z"}
+{"level":"info","message":"vector search found 49 results","service":"reddit-scraper","timestamp":"2026-03-05T05:15:01.442Z"}
+{"level":"info","message":"After deduplication: 43 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:15:01.450Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:15:01.568Z"}
+{"level":"info","message":"vector search found 62 results","service":"reddit-scraper","timestamp":"2026-03-05T05:15:05.129Z"}
+{"level":"info","message":"After deduplication: 54 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:15:05.140Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:15:05.241Z"}
+{"level":"info","message":"vector search found 59 results","service":"reddit-scraper","timestamp":"2026-03-05T05:15:08.646Z"}
+{"level":"info","message":"After deduplication: 45 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:15:08.655Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T05:15:38.776Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T05:15:38.777Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T05:15:40.209Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T05:15:40.210Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:15:40.210Z"}
+{"level":"info","message":"vector search found 49 results","service":"reddit-scraper","timestamp":"2026-03-05T05:15:43.907Z"}
+{"level":"info","message":"After deduplication: 43 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:15:43.919Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T05:18:00.462Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T05:18:00.464Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T05:18:02.666Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T05:18:02.667Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:18:02.668Z"}
+{"level":"info","message":"vector search found 49 results","service":"reddit-scraper","timestamp":"2026-03-05T05:18:08.642Z"}
+{"level":"info","message":"After deduplication: 43 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:18:08.654Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:18:10.616Z"}
+{"level":"info","message":"vector search found 62 results","service":"reddit-scraper","timestamp":"2026-03-05T05:18:14.583Z"}
+{"level":"info","message":"After deduplication: 54 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:18:14.598Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:18:16.201Z"}
+{"level":"info","message":"vector search found 59 results","service":"reddit-scraper","timestamp":"2026-03-05T05:18:19.351Z"}
+{"level":"info","message":"After deduplication: 45 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:18:19.354Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:18:21.054Z"}
+{"level":"info","message":"vector search found 64 results","service":"reddit-scraper","timestamp":"2026-03-05T05:18:24.668Z"}
+{"level":"info","message":"After deduplication: 57 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:18:24.681Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T05:20:23.480Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T05:20:23.482Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T05:20:25.290Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T05:20:25.291Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:20:25.291Z"}
+{"level":"info","message":"vector search found 49 results","service":"reddit-scraper","timestamp":"2026-03-05T05:20:29.251Z"}
+{"level":"info","message":"After deduplication: 41 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:20:29.258Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:20:29.375Z"}
+{"level":"info","message":"vector search found 65 results","service":"reddit-scraper","timestamp":"2026-03-05T05:20:32.810Z"}
+{"level":"info","message":"After deduplication: 56 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:20:32.827Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:20:33.013Z"}
+{"level":"info","message":"vector search found 59 results","service":"reddit-scraper","timestamp":"2026-03-05T05:20:36.966Z"}
+{"level":"info","message":"After deduplication: 45 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:20:36.975Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:20:37.286Z"}
+{"level":"info","message":"vector search found 66 results","service":"reddit-scraper","timestamp":"2026-03-05T05:20:41.889Z"}
+{"level":"info","message":"After deduplication: 58 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:20:41.902Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T05:32:54.457Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T05:32:54.458Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T05:32:56.047Z"}
+{"level":"info","message":"Text search indexes are ready","service":"reddit-scraper","timestamp":"2026-03-05T05:32:56.159Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T05:32:56.159Z"}
+{"level":"info","message":"Starting agentic RAG response for query: \"how strict is attendance in vit vellore\"","service":"reddit-scraper","timestamp":"2026-03-05T05:32:56.160Z"}
+{"level":"info","message":"Starting agentic search for: \"how strict is attendance in vit vellore\"","service":"reddit-scraper","timestamp":"2026-03-05T05:32:56.161Z"}
+{"level":"info","message":"QueryRelevanceAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:32:56.161Z"}
+{"level":"info","message":"QueryRefinementAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:32:56.161Z"}
+{"level":"info","message":"ResultQualityAgent initialized with thinkingBudget: 512, includeThoughts: false","service":"reddit-scraper","timestamp":"2026-03-05T05:32:56.162Z"}
+{"level":"info","message":"Iteration 1: Searching with query: \"how strict is attendance in vit vellore\"","service":"reddit-scraper","timestamp":"2026-03-05T05:32:56.162Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:32:56.163Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:32:56.182Z"}
+{"level":"info","message":"Performing text search for: \"how strict is attendance in vit vellore\"","service":"reddit-scraper","timestamp":"2026-03-05T05:32:56.182Z"}
+{"level":"info","message":"vector search found 86 results","service":"reddit-scraper","timestamp":"2026-03-05T05:32:59.115Z"}
+{"level":"info","message":"text search found 150 results","service":"reddit-scraper","timestamp":"2026-03-05T05:32:59.115Z"}
+{"level":"info","message":"After deduplication: 129 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:32:59.183Z"}
+{"level":"info","message":"Analyzing relevance for query: \"how strict is attendance in vit vellore\" with 30 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:32:59.292Z"}
+{"level":"info","message":"Found 8 relevant results out of 30 total","service":"reddit-scraper","timestamp":"2026-03-05T05:33:26.126Z"}
+{"level":"info","message":"Assessing quality for query: \"how strict is attendance in vit vellore\" with 8 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:33:26.127Z"}
+{"level":"info","message":"Average relevance: 0.59, Quality score: 0.92","service":"reddit-scraper","timestamp":"2026-03-05T05:33:26.127Z"}
+{"level":"info","message":"Refining query: \"how strict is attendance in vit vellore\" (iteration: 1), thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:33:26.127Z"}
+{"level":"info","message":"Generated refined query: \"How strict is attendance in VIT Vellore? Do they really enforce the 75% rule—what are students Reddit experiences with exemptions, detentions, or being barred from exams?\"","service":"reddit-scraper","timestamp":"2026-03-05T05:33:36.388Z"}
+{"level":"info","message":"Iteration 2: Searching with query: \"How strict is attendance in VIT Vellore? Do they really enforce the 75% rule—what are students Reddit experiences with exemptions, detentions, or being barred from exams?\"","service":"reddit-scraper","timestamp":"2026-03-05T05:33:36.389Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:33:36.389Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:33:36.392Z"}
+{"level":"info","message":"Performing text search for: \"How strict is attendance in VIT Vellore? Do they really enforce the 75% rule—what are students Reddit experiences with exemptions, detentions, or being barred from exams?\"","service":"reddit-scraper","timestamp":"2026-03-05T05:33:36.392Z"}
+{"level":"info","message":"vector search found 71 results","service":"reddit-scraper","timestamp":"2026-03-05T05:33:41.621Z"}
+{"level":"info","message":"text search found 150 results","service":"reddit-scraper","timestamp":"2026-03-05T05:33:41.623Z"}
+{"level":"info","message":"After deduplication: 130 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:33:41.741Z"}
+{"level":"info","message":"Analyzing relevance for query: \"how strict is attendance in vit vellore\" with 30 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:33:42.152Z"}
+{"level":"info","message":"Found 12 relevant results out of 30 total","service":"reddit-scraper","timestamp":"2026-03-05T05:34:19.732Z"}
+{"level":"info","message":"Assessing quality for query: \"how strict is attendance in vit vellore\" with 12 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:34:19.732Z"}
+{"level":"info","message":"Average relevance: 0.59, Quality score: 0.93","service":"reddit-scraper","timestamp":"2026-03-05T05:34:19.732Z"}
+{"level":"info","message":"Refining query: \"how strict is attendance in vit vellore\" (iteration: 2), thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:34:19.732Z"}
+{"level":"info","message":"Generated refined query: \"How strict is attendance in VIT Vellore — experiences with proctor system, attendance cutoff, penalties and exemptions (CSE/ECE students)?\"","service":"reddit-scraper","timestamp":"2026-03-05T05:34:25.738Z"}
+{"level":"info","message":"Iteration 3: Searching with query: \"How strict is attendance in VIT Vellore — experiences with proctor system, attendance cutoff, penalties and exemptions (CSE/ECE students)?\"","service":"reddit-scraper","timestamp":"2026-03-05T05:34:25.738Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:34:25.738Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:34:25.739Z"}
+{"level":"info","message":"Performing text search for: \"How strict is attendance in VIT Vellore — experiences with proctor system, attendance cutoff, penalties and exemptions (CSE/ECE students)?\"","service":"reddit-scraper","timestamp":"2026-03-05T05:34:25.739Z"}
+{"level":"info","message":"vector search found 74 results","service":"reddit-scraper","timestamp":"2026-03-05T05:34:30.624Z"}
+{"level":"info","message":"text search found 150 results","service":"reddit-scraper","timestamp":"2026-03-05T05:34:30.624Z"}
+{"level":"info","message":"After deduplication: 126 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:34:30.691Z"}
+{"level":"info","message":"Analyzing relevance for query: \"how strict is attendance in vit vellore\" with 30 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:34:30.910Z"}
+{"level":"info","message":"Found 9 relevant results out of 30 total","service":"reddit-scraper","timestamp":"2026-03-05T05:34:55.632Z"}
+{"level":"info","message":"Assessing quality for query: \"how strict is attendance in vit vellore\" with 9 results, thinkingBudget: 512","service":"reddit-scraper","timestamp":"2026-03-05T05:34:55.633Z"}
+{"level":"info","message":"Average relevance: 0.60, Quality score: 0.93","service":"reddit-scraper","timestamp":"2026-03-05T05:34:55.633Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T05:36:03.471Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T05:36:03.472Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T05:36:05.635Z"}
+{"level":"info","message":"Text search indexes are ready","service":"reddit-scraper","timestamp":"2026-03-05T05:36:05.737Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T05:36:05.737Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:36:05.739Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:36:05.762Z"}
+{"level":"info","message":"Performing text search for: \"best mess in vit vellore\"","service":"reddit-scraper","timestamp":"2026-03-05T05:36:05.763Z"}
+{"level":"info","message":"vector search found 47 results","service":"reddit-scraper","timestamp":"2026-03-05T05:36:09.436Z"}
+{"level":"info","message":"text search found 50 results","service":"reddit-scraper","timestamp":"2026-03-05T05:36:09.437Z"}
+{"level":"info","message":"After deduplication: 45 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:36:09.456Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:36:09.564Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:36:09.566Z"}
+{"level":"info","message":"Performing text search for: \"hostel outing rules vit vellore\"","service":"reddit-scraper","timestamp":"2026-03-05T05:36:09.566Z"}
+{"level":"info","message":"vector search found 80 results","service":"reddit-scraper","timestamp":"2026-03-05T05:36:11.748Z"}
+{"level":"info","message":"text search found 50 results","service":"reddit-scraper","timestamp":"2026-03-05T05:36:11.749Z"}
+{"level":"info","message":"After deduplication: 42 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:36:11.766Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:36:11.922Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:36:11.924Z"}
+{"level":"info","message":"Performing text search for: \"wifi blocked sites in vit\"","service":"reddit-scraper","timestamp":"2026-03-05T05:36:11.924Z"}
+{"level":"info","message":"vector search found 52 results","service":"reddit-scraper","timestamp":"2026-03-05T05:36:14.401Z"}
+{"level":"info","message":"text search found 50 results","service":"reddit-scraper","timestamp":"2026-03-05T05:36:14.401Z"}
+{"level":"info","message":"After deduplication: 43 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:36:14.408Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:36:14.546Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:36:14.548Z"}
+{"level":"info","message":"Performing text search for: \"attendance 75 percent vit vellore\"","service":"reddit-scraper","timestamp":"2026-03-05T05:36:14.548Z"}
+{"level":"info","message":"vector search found 49 results","service":"reddit-scraper","timestamp":"2026-03-05T05:36:16.880Z"}
+{"level":"info","message":"text search found 50 results","service":"reddit-scraper","timestamp":"2026-03-05T05:36:16.881Z"}
+{"level":"info","message":"After deduplication: 47 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:36:16.897Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:36:16.983Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:36:16.985Z"}
+{"level":"info","message":"Performing text search for: \"how are placements for cse vit vellore\"","service":"reddit-scraper","timestamp":"2026-03-05T05:36:16.985Z"}
+{"level":"info","message":"vector search found 48 results","service":"reddit-scraper","timestamp":"2026-03-05T05:36:19.375Z"}
+{"level":"info","message":"text search found 50 results","service":"reddit-scraper","timestamp":"2026-03-05T05:36:19.375Z"}
+{"level":"info","message":"After deduplication: 46 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:36:19.392Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:36:19.513Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:36:19.515Z"}
+{"level":"info","message":"Performing text search for: \"clubs for freshers in vit vellore\"","service":"reddit-scraper","timestamp":"2026-03-05T05:36:19.515Z"}
+{"level":"info","message":"vector search found 45 results","service":"reddit-scraper","timestamp":"2026-03-05T05:36:22.067Z"}
+{"level":"info","message":"text search found 50 results","service":"reddit-scraper","timestamp":"2026-03-05T05:36:22.068Z"}
+{"level":"info","message":"After deduplication: 45 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:36:22.082Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T05:37:00.390Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T05:37:00.391Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T05:37:02.084Z"}
+{"level":"info","message":"Text search indexes are ready","service":"reddit-scraper","timestamp":"2026-03-05T05:37:02.258Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T05:37:02.258Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:37:02.259Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:37:02.283Z"}
+{"level":"info","message":"Performing text search for: \"attendance 75 percent vit vellore\"","service":"reddit-scraper","timestamp":"2026-03-05T05:37:02.283Z"}
+{"level":"info","message":"vector search found 49 results","service":"reddit-scraper","timestamp":"2026-03-05T05:37:05.181Z"}
+{"level":"info","message":"text search found 50 results","service":"reddit-scraper","timestamp":"2026-03-05T05:37:05.182Z"}
+{"level":"info","message":"After deduplication: 47 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:37:05.204Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:37:05.305Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:37:05.307Z"}
+{"level":"info","message":"Performing text search for: \"how are placements for cse vit vellore\"","service":"reddit-scraper","timestamp":"2026-03-05T05:37:05.308Z"}
+{"level":"info","message":"vector search found 48 results","service":"reddit-scraper","timestamp":"2026-03-05T05:37:07.729Z"}
+{"level":"info","message":"text search found 50 results","service":"reddit-scraper","timestamp":"2026-03-05T05:37:07.729Z"}
+{"level":"info","message":"After deduplication: 46 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:37:07.745Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:37:07.846Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:37:07.848Z"}
+{"level":"info","message":"Performing text search for: \"wifi blocked sites in vit\"","service":"reddit-scraper","timestamp":"2026-03-05T05:37:07.848Z"}
+{"level":"info","message":"vector search found 52 results","service":"reddit-scraper","timestamp":"2026-03-05T05:37:10.241Z"}
+{"level":"info","message":"text search found 50 results","service":"reddit-scraper","timestamp":"2026-03-05T05:37:10.242Z"}
+{"level":"info","message":"After deduplication: 43 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:37:10.258Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:37:10.372Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:37:10.374Z"}
+{"level":"info","message":"Performing text search for: \"clubs for freshers in vit vellore\"","service":"reddit-scraper","timestamp":"2026-03-05T05:37:10.375Z"}
+{"level":"info","message":"vector search found 45 results","service":"reddit-scraper","timestamp":"2026-03-05T05:37:12.592Z"}
+{"level":"info","message":"text search found 50 results","service":"reddit-scraper","timestamp":"2026-03-05T05:37:12.593Z"}
+{"level":"info","message":"After deduplication: 45 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:37:12.607Z"}
+{"level":"info","message":"Embedding config: provider=openai, model=text-embedding-3-large, dim=768, openaiBaseURL=https://api.openai.com/v1","service":"reddit-scraper","timestamp":"2026-03-05T05:37:52.963Z"}
+{"level":"info","message":"Knowledge DB configured: REDDIT_DATABASE","service":"reddit-scraper","timestamp":"2026-03-05T05:37:52.964Z"}
+{"level":"info","message":"Vector indexes are ready using \"ivfflat\"","service":"reddit-scraper","timestamp":"2026-03-05T05:37:54.788Z"}
+{"level":"info","message":"Text search indexes are ready","service":"reddit-scraper","timestamp":"2026-03-05T05:37:54.893Z"}
+{"level":"info","message":"Knowledge base initialized successfully","service":"reddit-scraper","timestamp":"2026-03-05T05:37:54.893Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:37:54.894Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:37:54.904Z"}
+{"level":"info","message":"Performing text search for: \"attendance 75 percent vit vellore\"","service":"reddit-scraper","timestamp":"2026-03-05T05:37:54.904Z"}
+{"level":"info","message":"vector search found 49 results","service":"reddit-scraper","timestamp":"2026-03-05T05:37:57.427Z"}
+{"level":"info","message":"text search found 50 results","service":"reddit-scraper","timestamp":"2026-03-05T05:37:57.427Z"}
+{"level":"info","message":"After deduplication: 41 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:37:57.432Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:37:57.548Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:37:57.549Z"}
+{"level":"info","message":"Performing text search for: \"how are placements for cse vit vellore\"","service":"reddit-scraper","timestamp":"2026-03-05T05:37:57.549Z"}
+{"level":"info","message":"vector search found 48 results","service":"reddit-scraper","timestamp":"2026-03-05T05:37:59.293Z"}
+{"level":"info","message":"text search found 50 results","service":"reddit-scraper","timestamp":"2026-03-05T05:37:59.293Z"}
+{"level":"info","message":"After deduplication: 36 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:37:59.299Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:37:59.400Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:37:59.401Z"}
+{"level":"info","message":"Performing text search for: \"wifi blocked sites in vit\"","service":"reddit-scraper","timestamp":"2026-03-05T05:37:59.401Z"}
+{"level":"info","message":"vector search found 52 results","service":"reddit-scraper","timestamp":"2026-03-05T05:38:01.375Z"}
+{"level":"info","message":"text search found 50 results","service":"reddit-scraper","timestamp":"2026-03-05T05:38:01.375Z"}
+{"level":"info","message":"After deduplication: 35 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:38:01.380Z"}
+{"level":"info","message":"Trying vector search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:38:01.501Z"}
+{"level":"info","message":"Trying text search strategy...","service":"reddit-scraper","timestamp":"2026-03-05T05:38:01.501Z"}
+{"level":"info","message":"Performing text search for: \"clubs for freshers in vit vellore\"","service":"reddit-scraper","timestamp":"2026-03-05T05:38:01.501Z"}
+{"level":"info","message":"vector search found 45 results","service":"reddit-scraper","timestamp":"2026-03-05T05:38:03.202Z"}
+{"level":"info","message":"text search found 50 results","service":"reddit-scraper","timestamp":"2026-03-05T05:38:03.202Z"}
+{"level":"info","message":"After deduplication: 38 unique results","service":"reddit-scraper","timestamp":"2026-03-05T05:38:03.205Z"}

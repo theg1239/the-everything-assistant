@@ -4,12 +4,33 @@ const { openai } = require('@ai-sdk/openai')
 const { z } = require('zod')
 const logger = require('../utils/logger')
 
+function parsePositiveInt(value, fallback) {
+  const parsed = Number.parseInt(value || '', 10)
+  if (Number.isFinite(parsed) && parsed > 0) return parsed
+  return fallback
+}
+
+function parseFraction(value, fallback) {
+  const parsed = Number.parseFloat(value || '')
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.max(0, Math.min(1, parsed))
+}
+
 class AgenticRAGService {
   constructor(options = {}) {
     this.knowledgeBase = new KnowledgeBase()
     this.maxContextLength = parseInt(process.env.MAX_CONTEXT_LENGTH) || 6000
     this.searchLimit = parseInt(process.env.AGENTIC_SEARCH_LIMIT || '20', 10)
     this.relevanceCandidateLimit = parseInt(process.env.AGENTIC_RELEVANCE_CANDIDATES || '10', 10)
+    this.relevanceTimeoutMs = parsePositiveInt(process.env.AGENTIC_RELEVANCE_TIMEOUT_MS, 5000)
+    this.refinementTimeoutMs = parsePositiveInt(process.env.AGENTIC_REFINEMENT_TIMEOUT_MS, 3500)
+    this.responseTimeoutMs = parsePositiveInt(process.env.AGENTIC_RESPONSE_TIMEOUT_MS, 35000)
+    this.firstPassMinResults = parsePositiveInt(process.env.AGENTIC_FIRST_PASS_MIN_RESULTS, 4)
+    this.firstPassMinAvgRelevance = parseFraction(
+      process.env.AGENTIC_FIRST_PASS_MIN_AVG_RELEVANCE,
+      0.5
+    )
+    this.firstPassMinQuality = parseFraction(process.env.AGENTIC_FIRST_PASS_MIN_QUALITY, 0.58)
 
     this.thinkingBudget = options.thinkingBudget !== undefined ? options.thinkingBudget : 1024
 
@@ -76,12 +97,19 @@ class AgenticRAGService {
 
     logger.info(`Starting agentic search for: "${originalQuery}"`)
 
-    const relevanceAgent = new QueryRelevanceAgent(this.chatModel, 512, { includeThoughts })
-    const refinementAgent = new QueryRefinementAgent(this.chatModel, 512, { includeThoughts })
+    const relevanceAgent = new QueryRelevanceAgent(this.chatModel, 512, {
+      includeThoughts,
+      timeoutMs: this.relevanceTimeoutMs,
+    })
+    const refinementAgent = new QueryRefinementAgent(this.chatModel, 512, {
+      includeThoughts,
+      timeoutMs: this.refinementTimeoutMs,
+    })
     const qualityAgent = new ResultQualityAgent(this.chatModel, 512, { includeThoughts })
 
     let bestResults = []
     let maxRelevanceScore = 0
+    let bestSelectionScore = 0
     const attempts = []
     const queriesUsed = []
 
@@ -128,12 +156,17 @@ class AgenticRAGService {
       }
 
       const relevanceCandidates = searchResults.slice(0, this.relevanceCandidateLimit)
-      const useLlmRelevance = i === 0
+      const heuristicScores = relevanceCandidates.map(result =>
+        this.estimateRelevanceFromRetrieval(originalQuery, result)
+      )
+      const useLlmRelevance = i === 0 && relevanceAgent.shouldUseLlmRelevance(heuristicScores)
+      const relevanceStart = Date.now()
       const relevanceScores = useLlmRelevance
-        ? await relevanceAgent.analyzeRelevance(originalQuery, relevanceCandidates)
-        : relevanceCandidates.map(result =>
-            this.estimateRelevanceFromRetrieval(originalQuery, result)
-          )
+        ? await relevanceAgent.analyzeRelevance(originalQuery, relevanceCandidates, heuristicScores)
+        : heuristicScores
+      logger.info(
+        `Relevance scoring mode=${useLlmRelevance ? 'llm' : 'heuristic'} took ${Date.now() - relevanceStart}ms`
+      )
 
       const relevantResults = this.selectRelevantResults(
         originalQuery,
@@ -145,7 +178,7 @@ class AgenticRAGService {
       )
 
       logger.info(
-        `Found ${relevantResults.length} relevant results out of ${searchResults.length} total`
+        `Found ${relevantResults.length} relevant results out of ${relevanceCandidates.length} ranked candidates`
       )
 
       if (relevantResults.length > 0) {
@@ -158,13 +191,27 @@ class AgenticRAGService {
           `Average relevance: ${avgRelevance.toFixed(2)}, Quality score: ${qualityScore.toFixed(2)}`
         )
 
-        if (avgRelevance > maxRelevanceScore) {
+        const coverageScore = Math.min(
+          1,
+          relevantResults.length / Math.max(4, this.relevanceCandidateLimit)
+        )
+        const selectionScore = avgRelevance * 0.45 + qualityScore * 0.35 + coverageScore * 0.2
+
+        if (
+          selectionScore > bestSelectionScore ||
+          (Math.abs(selectionScore - bestSelectionScore) < 1e-6 &&
+            relevantResults.length > bestResults.length)
+        ) {
+          bestSelectionScore = selectionScore
           maxRelevanceScore = avgRelevance
           bestResults = relevantResults
         }
 
         if (
-          (i === 0 && relevantResults.length >= 5 && avgRelevance >= 0.55) ||
+          (i === 0 &&
+            relevantResults.length >= this.firstPassMinResults &&
+            avgRelevance >= this.firstPassMinAvgRelevance &&
+            qualityScore >= this.firstPassMinQuality) ||
           (avgRelevance > 0.72 && qualityScore > 0.72 && relevantResults.length >= 4)
         ) {
           logger.info('Sufficient quality reached, stopping search early')
@@ -471,7 +518,9 @@ Context: ${context}`
       const result = await generateText({
         model: this.chatModel,
         messages: messages,
-        maxTokens: 2000,
+        maxOutputTokens: 1100,
+        maxRetries: 1,
+        timeout: { totalMs: this.responseTimeoutMs, stepMs: this.responseTimeoutMs },
         output: Output.text(),
         providerOptions: {
           openai: {
@@ -480,7 +529,18 @@ Context: ${context}`
         },
       })
  
-      const generatedText = typeof result.output === 'string' ? result.output : result.text
+      let generatedText = typeof result.text === 'string' ? result.text : ''
+      if (!generatedText) {
+        try {
+          generatedText = typeof result.output === 'string' ? result.output : ''
+        } catch {
+          generatedText = ''
+        }
+      }
+      if (!generatedText) {
+        throw new Error('No output generated by model')
+      }
+
       let cleanResponse = generatedText
         .replace(/```html\s*/g, '')
         .replace(/```\s*/g, '')
@@ -550,40 +610,91 @@ class QueryRelevanceAgent {
     this.model = model
     this.thinkingBudget = thinkingBudget
     this.includeThoughts = options.includeThoughts || false
+    this.timeoutMs = parsePositiveInt(options.timeoutMs, 5000)
+    this.maxOutputTokens = parsePositiveInt(options.maxOutputTokens, 192)
     logger.info(
       `QueryRelevanceAgent initialized with thinkingBudget: ${thinkingBudget}, includeThoughts: ${this.includeThoughts}`
     )
   }
 
-  async analyzeRelevance(originalQuery, searchResults) {
+  shouldUseLlmRelevance(heuristicScores = []) {
+    if (!Array.isArray(heuristicScores) || heuristicScores.length === 0) return false
+
+    const sorted = [...heuristicScores]
+      .map(value => Math.max(0, Math.min(1, Number(value) || 0)))
+      .sort((a, b) => b - a)
+    const top1 = sorted[0] || 0
+    const top3Avg =
+      sorted.slice(0, Math.min(3, sorted.length)).reduce((sum, value) => sum + value, 0) /
+      Math.min(3, sorted.length)
+    const spread = (sorted[0] || 0) - (sorted[Math.min(4, sorted.length - 1)] || 0)
+
+    // If retrieval signals are already strong and clear, skip LLM relevance for speed.
+    return !(top1 >= 0.78 && top3Avg >= 0.63 && spread >= 0.08)
+  }
+
+  estimateFallbackScores(originalQuery, searchResults) {
+    const queryTerms = AgenticRAGService.extractKeyTerms(originalQuery)
+    return searchResults.map(result => {
+      const titleMatches = this.countTermMatches(result.title, queryTerms)
+      const contentMatches = this.countTermMatches(result.content, queryTerms)
+      const lexicalCoverage =
+        queryTerms.length > 0
+          ? Math.min(1, (titleMatches * 1.4 + contentMatches) / (queryTerms.length * 1.8))
+          : 0
+      const similarity = Math.max(0, Math.min(1, parseFloat(result.similarity) || 0))
+      const rankingScore = Math.max(0, Math.min(1, parseFloat(result.rankingScore) || 0))
+
+      return Math.min(
+        1,
+        Math.max(0.2, lexicalCoverage * 0.45 + similarity * 0.4 + rankingScore * 0.15)
+      )
+    })
+  }
+
+  async analyzeRelevance(originalQuery, searchResults, precomputedFallbackScores = null) {
     logger.info(
       `Analyzing relevance for query: "${originalQuery}" with ${searchResults.length} results, thinkingBudget: ${this.thinkingBudget}`
     )
+    const fallbackScores =
+      Array.isArray(precomputedFallbackScores) &&
+      precomputedFallbackScores.length === searchResults.length
+        ? precomputedFallbackScores
+        : this.estimateFallbackScores(originalQuery, searchResults)
+
     try {
+      if (searchResults.length === 0) {
+        return []
+      }
+
       const resultsText = searchResults
         .map((result, index) =>
-          `Result ${index}: ${result.title || ''} ${result.content || ''}`.slice(0, 140)
+          `Result ${index}: title="${String(result.title || '').slice(0, 90)}" excerpt="${String(
+            result.content || ''
+          )
+            .replace(/\s+/g, ' ')
+            .slice(0, 70)}"`
         )
         .join('\n')
 
-      const prompt = `Analyze how relevant each search result is to the original query. Rate each result's relevance from 0.0 to 1.0.
+      const prompt = `Score each result for relevance to the user query. Return only the schema output.
 
 Original Query: "${originalQuery}"
 
 Search Results:
 ${resultsText}
 
-For each result, consider:
-- How directly it answers the query
-- How specific and useful the information is
-- How recent and credible it appears
-
-Return relevance scores for all results.`
+Rules:
+- Return exactly ${searchResults.length} scores.
+- Each score must be a number from 0 to 1.
+- Preserve input order.`
 
       const result = await generateText({
         model: this.model,
         prompt: prompt,
-        maxTokens: 160,
+        maxOutputTokens: this.maxOutputTokens,
+        maxRetries: 0,
+        timeout: { totalMs: this.timeoutMs, stepMs: this.timeoutMs },
         output: Output.object({
           schema: QueryRelevanceAgent.RELEVANCE_OUTPUT_SCHEMA,
         }),
@@ -609,24 +720,14 @@ Return relevance scores for all results.`
         return this.blendRelevanceScores(normalizedScores, searchResults, queryTerms)
       }
 
-      logger.warn('Structured relevance output missing, using fallback')
-
-      const queryTerms = AgenticRAGService.extractKeyTerms(originalQuery)
-      return searchResults.map(result => {
-        const titleMatches = this.countTermMatches(result.title, queryTerms)
-        const contentMatches = this.countTermMatches(result.content, queryTerms)
-        const lexicalCoverage =
-          queryTerms.length > 0
-            ? Math.min(1, (titleMatches * 1.4 + contentMatches) / (queryTerms.length * 1.8))
-            : 0
-        const similarity = Math.max(0, Math.min(1, parseFloat(result.similarity) || 0))
-        const rankingScore = Math.max(0, Math.min(1, parseFloat(result.rankingScore) || 0))
-
-        return Math.min(1, Math.max(0.2, lexicalCoverage * 0.45 + similarity * 0.4 + rankingScore * 0.15))
-      })
+      const warningCount = Array.isArray(result?.warnings) ? result.warnings.length : 0
+      logger.warn(
+        `Structured relevance output missing (finishReason=${result?.finishReason || 'unknown'}, warnings=${warningCount}), using heuristic fallback`
+      )
+      return fallbackScores
     } catch (error) {
       logger.error('Error in relevance analysis:', error)
-      return searchResults.map(() => 0.5)
+      return fallbackScores
     }
   }
 
@@ -676,6 +777,8 @@ class QueryRefinementAgent {
     this.model = model
     this.thinkingBudget = thinkingBudget
     this.includeThoughts = options.includeThoughts || false
+    this.timeoutMs = parsePositiveInt(options.timeoutMs, 3500)
+    this.maxOutputTokens = parsePositiveInt(options.maxOutputTokens, 96)
     logger.info(
       `QueryRefinementAgent initialized with thinkingBudget: ${thinkingBudget}, includeThoughts: ${this.includeThoughts}`
     )
@@ -721,7 +824,9 @@ Return:
       const result = await generateText({
         model: this.model,
         prompt: prompt,
-        maxTokens: 80,
+        maxOutputTokens: this.maxOutputTokens,
+        maxRetries: 0,
+        timeout: { totalMs: this.timeoutMs, stepMs: this.timeoutMs },
         output: Output.object({
           schema: QueryRefinementAgent.QUERY_REFINEMENT_OUTPUT_SCHEMA,
         }),

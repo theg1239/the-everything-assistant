@@ -801,7 +801,9 @@ class KnowledgeBase {
           'post' AS type,
           reddit_id, subreddit, title, content, author,
           score, upvotes, created_utc, url, tags,
-          is_video, post_type, images, video,
+          is_video, post_type::text AS post_type,
+          to_jsonb(images) AS images,
+          to_jsonb(video) AS video,
           1 - (embedding <=> $1::vector) AS similarity
         FROM reddit_posts
         WHERE embedding IS NOT NULL AND embedding <=> $1::vector < $2
@@ -812,8 +814,8 @@ class KnowledgeBase {
         SELECT
           'comment' AS type,
           reddit_id, subreddit, content AS title, content,
-          author, score, upvotes, created_utc, NULL AS url, tags,
-          false AS is_video, 'comment' AS post_type, NULL AS images, NULL AS video,
+          author, score, upvotes, created_utc, NULL::text AS url, tags,
+          false AS is_video, 'comment'::text AS post_type, NULL::jsonb AS images, NULL::jsonb AS video,
           1 - (embedding <=> $1::vector) AS similarity
         FROM reddit_comments
         WHERE embedding IS NOT NULL AND embedding <=> $1::vector < $2
@@ -827,8 +829,8 @@ class KnowledgeBase {
           chunk_text AS title, chunk_text AS content,
           NULL AS author, relevance_score AS score,
           0 AS upvotes, created_at AS created_utc,
-          NULL AS url, ARRAY[]::text[] AS tags,
-          false AS is_video, 'chunk' AS post_type, NULL AS images, NULL AS video,
+          NULL::text AS url, ARRAY[]::text[] AS tags,
+          false AS is_video, 'chunk'::text AS post_type, NULL::jsonb AS images, NULL::jsonb AS video,
           1 - (embedding <=> $1::vector) AS similarity
         FROM knowledge_chunks
         WHERE embedding IS NOT NULL AND embedding <=> $1::vector < $2
@@ -883,7 +885,9 @@ class KnowledgeBase {
           'post' AS type,
           reddit_id, subreddit, title, content, author,
           score, upvotes, created_utc, url, tags,
-          is_video, post_type, images, video,
+          is_video, post_type::text AS post_type,
+          to_jsonb(images) AS images,
+          to_jsonb(video) AS video,
           ts_rank(to_tsvector('english', COALESCE(title, '') || ' ' || COALESCE(content, '')), to_tsquery('english', $1)) AS similarity
         FROM reddit_posts
         WHERE to_tsvector('english', COALESCE(title, '') || ' ' || COALESCE(content, '')) @@ to_tsquery('english', $1)
@@ -894,8 +898,8 @@ class KnowledgeBase {
         SELECT
           'comment' AS type,
           reddit_id, subreddit, LEFT(content, 100) AS title, content,
-          author, score, upvotes, created_utc, NULL AS url, tags,
-          false AS is_video, 'comment' AS post_type, NULL AS images, NULL AS video,
+          author, score, upvotes, created_utc, NULL::text AS url, tags,
+          false AS is_video, 'comment'::text AS post_type, NULL::jsonb AS images, NULL::jsonb AS video,
           ts_rank(to_tsvector('english', content), to_tsquery('english', $1)) AS similarity
         FROM reddit_comments
         WHERE to_tsvector('english', content) @@ to_tsquery('english', $1)
@@ -925,7 +929,9 @@ class KnowledgeBase {
           'post' AS type,
           reddit_id, subreddit, title, content, author,
           score, upvotes, created_utc, url, tags,
-          is_video, post_type, images, video,
+          is_video, post_type::text AS post_type,
+          to_jsonb(images) AS images,
+          to_jsonb(video) AS video,
           0.5 AS similarity
         FROM reddit_posts
         WHERE title ILIKE $1 OR content ILIKE $1
@@ -933,8 +939,8 @@ class KnowledgeBase {
         SELECT
           'comment' AS type,
           reddit_id, subreddit, LEFT(content, 100) AS title, content,
-          author, score, upvotes, created_utc, NULL AS url, tags,
-          false AS is_video, 'comment' AS post_type, NULL AS images, NULL AS video,
+          author, score, upvotes, created_utc, NULL::text AS url, tags,
+          false AS is_video, 'comment'::text AS post_type, NULL::jsonb AS images, NULL::jsonb AS video,
           0.4 AS similarity
         FROM reddit_comments
         WHERE content ILIKE $1

@@ -25,6 +25,18 @@ class AgenticRAGService {
     this.relevanceTimeoutMs = parsePositiveInt(process.env.AGENTIC_RELEVANCE_TIMEOUT_MS, 5000)
     this.refinementTimeoutMs = parsePositiveInt(process.env.AGENTIC_REFINEMENT_TIMEOUT_MS, 3500)
     this.responseTimeoutMs = parsePositiveInt(process.env.AGENTIC_RESPONSE_TIMEOUT_MS, 35000)
+    this.responseMaxOutputTokens = parsePositiveInt(
+      process.env.AGENTIC_RESPONSE_MAX_OUTPUT_TOKENS,
+      2200
+    )
+    this.responseRetryTimeoutMs = parsePositiveInt(
+      process.env.AGENTIC_RESPONSE_RETRY_TIMEOUT_MS,
+      15000
+    )
+    this.responseRetryMaxOutputTokens = parsePositiveInt(
+      process.env.AGENTIC_RESPONSE_RETRY_MAX_OUTPUT_TOKENS,
+      900
+    )
     this.firstPassMinResults = parsePositiveInt(process.env.AGENTIC_FIRST_PASS_MIN_RESULTS, 4)
     this.firstPassMinAvgRelevance = parseFraction(
       process.env.AGENTIC_FIRST_PASS_MIN_AVG_RELEVANCE,
@@ -437,6 +449,73 @@ ${content}
 ---`
   }
 
+  extractGeneratedText(result) {
+    if (!result) return ''
+
+    if (typeof result.text === 'string' && result.text.trim()) {
+      return result.text
+    }
+
+    try {
+      if (typeof result.output === 'string' && result.output.trim()) {
+        return result.output
+      }
+    } catch {
+      return ''
+    }
+
+    return ''
+  }
+
+  sanitizeHtmlResponse(text) {
+    const clean = String(text || '')
+      .replace(/```html\s*/g, '')
+      .replace(/```\s*/g, '')
+      .replace(/`/g, '')
+      .trim()
+
+    if (!clean) return ''
+    if (clean.includes('reddit-response')) return clean
+    return `<div class="reddit-response">${clean}</div>`
+  }
+
+  buildCompactContext(searchResults, maxItems = 4) {
+    const shortlist = (Array.isArray(searchResults) ? searchResults : [])
+      .slice(0, maxItems)
+      .map(result => {
+        const title = String(result.title || '').replace(/\s+/g, ' ').trim().slice(0, 120)
+        const content = String(result.content || '').replace(/\s+/g, ' ').trim().slice(0, 220)
+        const author = result.author ? `u/${result.author}` : 'unknown'
+        const upvotes = Number(result.upvotes || result.score || 0)
+        return `- ${title}\n  ${content}\n  source: ${author}, upvotes=${upvotes}, subreddit=r/${result.subreddit || 'unknown'}`
+      })
+      .join('\n')
+
+    return shortlist || 'No context available.'
+  }
+
+  buildDeterministicFallbackHtml(query, searchResults = []) {
+    const top = (Array.isArray(searchResults) ? searchResults : []).slice(0, 5)
+    const items = top
+      .map(result => {
+        const title = String(result.title || 'Untitled').replace(/[<>]/g, '')
+        const author = result.author ? `u/${result.author}` : 'unknown'
+        const upvotes = Number(result.upvotes || result.score || 0)
+        const subreddit = result.subreddit ? `r/${result.subreddit}` : 'r/unknown'
+        const excerpt = String(result.content || '')
+          .replace(/[<>]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 220)
+        return `<li><strong>${title}</strong> <span style="color:#0066cc;">${author}</span> <span style="color:#ff4500;">↑${upvotes}</span> (${subreddit})<br/>${excerpt}</li>`
+      })
+      .join('')
+
+    return `<div class="reddit-response"><h3>Overview</h3><p>Here are the most relevant Reddit discussions found for: <strong>${String(
+      query || ''
+    ).replace(/[<>]/g, '')}</strong>.</p><h3>Student Experiences</h3><ul>${items || '<li>No reliable sources found.</li>'}</ul><h3>Bottom Line & Recommendations</h3><p>Use the highest-upvoted and most recent threads first, then cross-check with official campus resources before acting.</p></div>`
+  }
+
   async generateAIResponse(query, context, conversationHistory, agenticResult) {
     const searchInfo =
       agenticResult.attempts.length > 1
@@ -514,11 +593,19 @@ Context: ${context}`
       content: query,
     })
 
+    const compactSystemPrompt = `You are a student assistant. Return ONLY HTML in this structure:
+<div class="reddit-response">
+<h3>Overview</h3><p>2-3 sentence answer</p>
+<h3>Student Experiences</h3><ul><li>3-5 concrete points with source attribution (username and upvotes when available)</li></ul>
+<h3>Bottom Line & Recommendations</h3><p>Actionable recommendation</p>
+</div>
+Do not use markdown.`
+
     try {
-      const result = await generateText({
+      const primaryResult = await generateText({
         model: this.chatModel,
         messages: messages,
-        maxOutputTokens: 1100,
+        maxOutputTokens: this.responseMaxOutputTokens,
         maxRetries: 1,
         timeout: { totalMs: this.responseTimeoutMs, stepMs: this.responseTimeoutMs },
         output: Output.text(),
@@ -528,34 +615,45 @@ Context: ${context}`
           },
         },
       })
- 
-      let generatedText = typeof result.text === 'string' ? result.text : ''
-      if (!generatedText) {
-        try {
-          generatedText = typeof result.output === 'string' ? result.output : ''
-        } catch {
-          generatedText = ''
-        }
-      }
-      if (!generatedText) {
-        throw new Error('No output generated by model')
-      }
 
-      let cleanResponse = generatedText
-        .replace(/```html\s*/g, '')
-        .replace(/```\s*/g, '')
-        .replace(/`/g, '')
-        .trim()
+      const primaryText = this.extractGeneratedText(primaryResult)
+      const primaryClean = this.sanitizeHtmlResponse(primaryText)
+      if (primaryClean) return primaryClean
 
-      if (!cleanResponse.includes('reddit-response')) {
-        cleanResponse = `<div class="reddit-response">${cleanResponse}</div>`
-      }
-
-      return cleanResponse
+      logger.warn('Primary response generation returned empty output')
     } catch (error) {
-      logger.error('Error generating AI response:', error)
-      return '<div class="reddit-response"><p>I apologize, but I encountered an error while generating a response. Please try again.</p></div>'
+      logger.warn(`Primary response generation failed: ${error?.message || String(error)}`)
     }
+
+    try {
+      const compactContext = this.buildCompactContext(agenticResult.relevantResults, 4)
+      const retryResult = await generateText({
+        model: this.chatModel,
+        messages: [
+          { role: 'system', content: `${compactSystemPrompt}\n\nContext:\n${compactContext}` },
+          { role: 'user', content: query },
+        ],
+        maxOutputTokens: this.responseRetryMaxOutputTokens,
+        maxRetries: 0,
+        timeout: { totalMs: this.responseRetryTimeoutMs, stepMs: this.responseRetryTimeoutMs },
+        output: Output.text(),
+        providerOptions: {
+          openai: {
+            reasoningEffort: 'minimal',
+          },
+        },
+      })
+
+      const retryText = this.extractGeneratedText(retryResult)
+      const retryClean = this.sanitizeHtmlResponse(retryText)
+      if (retryClean) return retryClean
+
+      logger.warn('Compact retry returned empty output')
+    } catch (error) {
+      logger.warn(`Compact retry failed: ${error?.message || String(error)}`)
+    }
+
+    return this.buildDeterministicFallbackHtml(query, agenticResult.relevantResults)
   }
 
   formatSources(searchResults) {

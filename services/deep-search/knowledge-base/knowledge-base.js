@@ -2,7 +2,7 @@ require('dotenv').config()
 
 const { Pool } = require('pg')
 const { embed } = require('ai')
-const { openai } = require('@ai-sdk/openai')
+const { createOpenAI, openai } = require('@ai-sdk/openai')
 const { google } = require('@ai-sdk/google')
 const logger = require('../utils/logger')
 
@@ -50,7 +50,13 @@ function resolveEmbeddingConfig() {
     modelId = provider === 'google' ? 'text-embedding-004' : 'text-embedding-3-large'
   }
 
-  return { provider, modelId, dim }
+  const openaiBaseURL =
+    process.env.DEEP_SEARCH_OPENAI_BASE_URL ||
+    process.env.RAG_OPENAI_BASE_URL ||
+    process.env.OPENAI_BASE_URL ||
+    'https://api.openai.com/v1'
+
+  return { provider, modelId, dim, openaiBaseURL }
 }
 
 class KnowledgeBase {
@@ -62,10 +68,15 @@ class KnowledgeBase {
     this.embeddingProvider = embeddingConfig.provider
     this.embeddingModelId = embeddingConfig.modelId
     this.embeddingDim = embeddingConfig.dim
-    this.embeddingModel =
-      this.embeddingProvider === 'google'
-        ? google.textEmbeddingModel(this.embeddingModelId)
-        : openai.textEmbeddingModel(this.embeddingModelId)
+    this.openaiBaseURL = embeddingConfig.openaiBaseURL
+    this.openaiProvider =
+      this.embeddingProvider === 'openai'
+        ? createOpenAI({
+            apiKey: process.env.OPENAI_API_KEY,
+            baseURL: this.openaiBaseURL,
+          })
+        : null
+    this.embeddingModel = this.createEmbeddingModel()
     this.embeddingProviderOptions =
       this.embeddingProvider === 'openai'
         ? {
@@ -88,8 +99,26 @@ class KnowledgeBase {
     }
 
     logger.info(
-      `Embedding config: provider=${this.embeddingProvider}, model=${this.embeddingModelId}, dim=${this.embeddingDim}`
+      `Embedding config: provider=${this.embeddingProvider}, model=${this.embeddingModelId}, dim=${this.embeddingDim}, openaiBaseURL=${this.embeddingProvider === 'openai' ? this.openaiBaseURL : 'n/a'}`
     )
+  }
+
+  createEmbeddingModel(legacyOpenAiSettings = false) {
+    if (this.embeddingProvider === 'google') {
+      return google.textEmbeddingModel(this.embeddingModelId)
+    }
+
+    if (legacyOpenAiSettings) {
+      // Backwards-compatible with older OpenAI provider API shapes where embedding settings
+      // are passed at model-construction time instead of request-time provider options.
+      const provider = this.openaiProvider || openai
+      return provider.embedding(this.embeddingModelId, {
+        dimensions: this.embeddingDim,
+      })
+    }
+
+    const provider = this.openaiProvider || openai
+    return provider.embedding(this.embeddingModelId)
   }
 
   async initialize() {
@@ -628,20 +657,44 @@ class KnowledgeBase {
       return null
     }
     try {
+      const value = text.substring(0, this.maxContextLength)
       const embedOptions = {
         model: this.embeddingModel,
-        value: text.substring(0, this.maxContextLength),
+        value,
       }
 
       if (this.embeddingProviderOptions) {
         embedOptions.providerOptions = this.embeddingProviderOptions
       }
 
-      const { embedding } = await embed(embedOptions)
+      let result = await embed(embedOptions)
+      let embedding = result.embedding
+
+      if (
+        this.embeddingProvider === 'openai' &&
+        Array.isArray(embedding) &&
+        embedding.length !== this.embeddingDim
+      ) {
+        logger.warn(
+          `Embedding mismatch on primary OpenAI path (got ${embedding.length}, expected ${this.embeddingDim}); retrying with model-level dimensions settings`
+        )
+
+        result = await embed({
+          model: this.createEmbeddingModel(true),
+          value,
+        })
+        embedding = result.embedding
+      }
+
       if (!Array.isArray(embedding) || embedding.length !== this.embeddingDim) {
         logger.error(
           `Embedding dimension mismatch: got ${embedding?.length}, expected ${this.embeddingDim} (provider=${this.embeddingProvider}, model=${this.embeddingModelId})`
         )
+        if (this.embeddingProvider === 'openai') {
+          logger.error(
+            `OpenAI embedding response headers hint: openai-model=${result?.response?.headers?.['openai-model'] || 'unknown'}, openai-processing-ms=${result?.response?.headers?.['openai-processing-ms'] || 'unknown'}, baseURL=${this.openaiBaseURL}`
+          )
+        }
         return null
       }
       if (this.isZeroEmbedding(embedding)) {

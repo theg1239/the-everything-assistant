@@ -3,21 +3,93 @@ require('dotenv').config()
 const { Pool } = require('pg')
 const { embed } = require('ai')
 const { openai } = require('@ai-sdk/openai')
+const { google } = require('@ai-sdk/google')
 const logger = require('../utils/logger')
+
+function parsePositiveInt(value, fallback) {
+  const parsed = Number.parseInt(value || '', 10)
+  if (Number.isFinite(parsed) && parsed > 0) return parsed
+  return fallback
+}
+
+function resolveEmbeddingConfig() {
+  const providerRaw =
+    process.env.DEEP_SEARCH_EMBEDDING_PROVIDER ||
+    process.env.RAG_EMBEDDING_PROVIDER ||
+    process.env.EMBEDDING_MODEL_PROVIDER ||
+    'openai'
+  const modelRaw =
+    process.env.DEEP_SEARCH_EMBEDDING_MODEL ||
+    process.env.RAG_EMBEDDING_MODEL ||
+    process.env.EMBEDDING_MODEL ||
+    ''
+  const dim = parsePositiveInt(
+    process.env.DEEP_SEARCH_EMBEDDING_DIM ||
+      process.env.RAG_EMBEDDING_DIM ||
+      process.env.EMBEDDING_DIM,
+    768
+  )
+
+  let provider = providerRaw.toLowerCase().trim()
+  let modelId = modelRaw.trim()
+
+  const modelPrefixMatch = modelId.match(/^(openai|google)\/(.+)$/i)
+  if (modelPrefixMatch) {
+    provider = modelPrefixMatch[1].toLowerCase()
+    modelId = modelPrefixMatch[2]
+  } else if (provider === 'direct') {
+    provider = 'google'
+  }
+
+  if (provider !== 'openai' && provider !== 'google') {
+    logger.warn(`Unsupported embedding provider "${providerRaw}", falling back to "openai"`)
+    provider = 'openai'
+  }
+
+  if (!modelId) {
+    modelId = provider === 'google' ? 'text-embedding-004' : 'text-embedding-3-large'
+  }
+
+  return { provider, modelId, dim }
+}
 
 class KnowledgeBase {
   constructor() {
     this.pool = new Pool({
       connectionString: process.env.DATABASE_URL,
     })
-    this.embeddingModel = openai.textEmbeddingModel('text-embedding-3-large')
-    this.embeddingDim = 768
+    const embeddingConfig = resolveEmbeddingConfig()
+    this.embeddingProvider = embeddingConfig.provider
+    this.embeddingModelId = embeddingConfig.modelId
+    this.embeddingDim = embeddingConfig.dim
+    this.embeddingModel =
+      this.embeddingProvider === 'google'
+        ? google.textEmbeddingModel(this.embeddingModelId)
+        : openai.textEmbeddingModel(this.embeddingModelId)
+    this.embeddingProviderOptions =
+      this.embeddingProvider === 'openai'
+        ? {
+            openai: {
+              dimensions: this.embeddingDim,
+            },
+          }
+        : undefined
     this.similarityThreshold = parseFloat(process.env.SIMILARITY_THRESHOLD) || 0.5
     this.maxContextLength = parseInt(process.env.MAX_CONTEXT_LENGTH) || 4000
 
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY environment variable is required for embeddings')
+    if (this.embeddingProvider === 'openai' && !process.env.OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY environment variable is required for OpenAI embeddings')
     }
+
+    if (this.embeddingProvider === 'google' && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+      throw new Error(
+        'GOOGLE_GENERATIVE_AI_API_KEY environment variable is required for Google embeddings'
+      )
+    }
+
+    logger.info(
+      `Embedding config: provider=${this.embeddingProvider}, model=${this.embeddingModelId}, dim=${this.embeddingDim}`
+    )
   }
 
   async initialize() {
@@ -556,18 +628,19 @@ class KnowledgeBase {
       return null
     }
     try {
-      const { embedding } = await embed({
+      const embedOptions = {
         model: this.embeddingModel,
         value: text.substring(0, this.maxContextLength),
-        providerOptions: {
-          openai: {
-            dimensions: this.embeddingDim,
-          },
-        },
-      })
+      }
+
+      if (this.embeddingProviderOptions) {
+        embedOptions.providerOptions = this.embeddingProviderOptions
+      }
+
+      const { embedding } = await embed(embedOptions)
       if (!Array.isArray(embedding) || embedding.length !== this.embeddingDim) {
         logger.error(
-          `Embedding dimension mismatch: got ${embedding?.length}, expected ${this.embeddingDim}`
+          `Embedding dimension mismatch: got ${embedding?.length}, expected ${this.embeddingDim} (provider=${this.embeddingProvider}, model=${this.embeddingModelId})`
         )
         return null
       }

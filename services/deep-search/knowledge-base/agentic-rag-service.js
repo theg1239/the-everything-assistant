@@ -16,26 +16,34 @@ function parseFraction(value, fallback) {
   return Math.max(0, Math.min(1, parsed))
 }
 
+function createAbortSignal(timeoutMs) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return undefined
+  if (typeof AbortSignal === 'undefined' || typeof AbortSignal.timeout !== 'function') {
+    return undefined
+  }
+  return AbortSignal.timeout(timeoutMs)
+}
+
 class AgenticRAGService {
   constructor(options = {}) {
     this.knowledgeBase = new KnowledgeBase()
-    this.maxContextLength = parseInt(process.env.MAX_CONTEXT_LENGTH) || 6000
+    this.maxContextLength = parseInt(process.env.MAX_CONTEXT_LENGTH || '3200', 10)
     this.searchLimit = parseInt(process.env.AGENTIC_SEARCH_LIMIT || '20', 10)
-    this.relevanceCandidateLimit = parseInt(process.env.AGENTIC_RELEVANCE_CANDIDATES || '10', 10)
-    this.relevanceTimeoutMs = parsePositiveInt(process.env.AGENTIC_RELEVANCE_TIMEOUT_MS, 5000)
-    this.refinementTimeoutMs = parsePositiveInt(process.env.AGENTIC_REFINEMENT_TIMEOUT_MS, 3500)
-    this.responseTimeoutMs = parsePositiveInt(process.env.AGENTIC_RESPONSE_TIMEOUT_MS, 35000)
+    this.relevanceCandidateLimit = parseInt(process.env.AGENTIC_RELEVANCE_CANDIDATES || '15', 10)
+    this.relevanceTimeoutMs = parsePositiveInt(process.env.AGENTIC_RELEVANCE_TIMEOUT_MS, 3000)
+    this.refinementTimeoutMs = parsePositiveInt(process.env.AGENTIC_REFINEMENT_TIMEOUT_MS, 3000)
+    this.responseTimeoutMs = parsePositiveInt(process.env.AGENTIC_RESPONSE_TIMEOUT_MS, 12000)
     this.responseMaxOutputTokens = parsePositiveInt(
       process.env.AGENTIC_RESPONSE_MAX_OUTPUT_TOKENS,
-      2200
+      1200
     )
     this.responseRetryTimeoutMs = parsePositiveInt(
       process.env.AGENTIC_RESPONSE_RETRY_TIMEOUT_MS,
-      15000
+      5000
     )
     this.responseRetryMaxOutputTokens = parsePositiveInt(
       process.env.AGENTIC_RESPONSE_RETRY_MAX_OUTPUT_TOKENS,
-      900
+      550
     )
     this.firstPassMinResults = parsePositiveInt(process.env.AGENTIC_FIRST_PASS_MIN_RESULTS, 4)
     this.firstPassMinAvgRelevance = parseFraction(
@@ -43,6 +51,10 @@ class AgenticRAGService {
       0.5
     )
     this.firstPassMinQuality = parseFraction(process.env.AGENTIC_FIRST_PASS_MIN_QUALITY, 0.58)
+    this.firstPassMinLexicalCoverage = parseFraction(
+      process.env.AGENTIC_FIRST_PASS_MIN_LEXICAL_COVERAGE,
+      0.38
+    )
 
     this.thinkingBudget = options.thinkingBudget !== undefined ? options.thinkingBudget : 1024
 
@@ -79,7 +91,9 @@ class AgenticRAGService {
 
       return {
         response: response,
-        sources: this.formatSources(agenticResult.relevantResults.slice(0, 8)),
+        sources: this.formatSources(
+          this.prioritizeResponseResults(agenticResult.relevantResults, 8).slice(0, 8)
+        ),
         confidence: this.calculateConfidence(
           agenticResult.relevantResults,
           agenticResult.maxRelevanceScore
@@ -196,11 +210,15 @@ class AgenticRAGService {
       if (relevantResults.length > 0) {
         const avgRelevance =
           relevantResults.reduce((sum, r) => sum + r.relevanceScore, 0) / relevantResults.length
+        const avgLexicalCoverage = this.calculateAverageLexicalCoverage(
+          originalQuery,
+          relevantResults
+        )
 
         const qualityScore = await qualityAgent.assessQuality(originalQuery, relevantResults)
 
         logger.info(
-          `Average relevance: ${avgRelevance.toFixed(2)}, Quality score: ${qualityScore.toFixed(2)}`
+          `Average relevance: ${avgRelevance.toFixed(2)}, Quality score: ${qualityScore.toFixed(2)}, Lexical coverage: ${avgLexicalCoverage.toFixed(2)}`
         )
 
         const coverageScore = Math.min(
@@ -223,7 +241,8 @@ class AgenticRAGService {
           (i === 0 &&
             relevantResults.length >= this.firstPassMinResults &&
             avgRelevance >= this.firstPassMinAvgRelevance &&
-            qualityScore >= this.firstPassMinQuality) ||
+            qualityScore >= this.firstPassMinQuality &&
+            avgLexicalCoverage >= this.firstPassMinLexicalCoverage) ||
           (avgRelevance > 0.72 && qualityScore > 0.72 && relevantResults.length >= 4)
         ) {
           logger.info('Sufficient quality reached, stopping search early')
@@ -267,7 +286,9 @@ class AgenticRAGService {
         const titleMatches = this.countTermMatches(result.title, queryTerms)
         const contentMatches = this.countTermMatches(result.content, queryTerms)
         const lexicalMatches = titleMatches + contentMatches
+        const lexicalCoverage = queryTerms.length > 0 ? lexicalMatches / queryTerms.length : 0
         const similarity = Math.max(0, Math.min(1, Number(result.similarity) || 0))
+        const rankingScore = Math.max(0, Math.min(1, Number(result.rankingScore) || 0))
 
         if (result.relevanceScore < effectiveThreshold) return false
 
@@ -276,6 +297,16 @@ class AgenticRAGService {
           lexicalMatches === 0 &&
           similarity < 0.45 &&
           result.relevanceScore < effectiveThreshold + 0.12
+        ) {
+          return false
+        }
+
+        // Reject low-coverage chunk noise unless ranking signal is very strong.
+        if (
+          result.type === 'chunk' &&
+          lexicalCoverage < 0.34 &&
+          rankingScore < 0.42 &&
+          similarity < 0.72
         ) {
           return false
         }
@@ -345,9 +376,7 @@ class AgenticRAGService {
     let context = ''
     let currentLength = 0
 
-    const sortedResults = searchResults.sort(
-      (a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0)
-    )
+    const sortedResults = this.prioritizeResponseResults(searchResults, 6)
 
     for (const result of sortedResults) {
       const snippet = this.formatResultForContext(result)
@@ -363,6 +392,26 @@ class AgenticRAGService {
     return context.trim()
   }
 
+  prioritizeResponseResults(searchResults = [], minCount = 5) {
+    const ranked = [...(Array.isArray(searchResults) ? searchResults : [])].sort((a, b) => {
+      const typeScore = value => (value?.type === 'post' ? 2 : value?.type === 'comment' ? 1 : 0)
+      const typeDelta = typeScore(b) - typeScore(a)
+      if (typeDelta !== 0) return typeDelta
+
+      const relevanceDelta = (Number(b?.relevanceScore) || 0) - (Number(a?.relevanceScore) || 0)
+      if (Math.abs(relevanceDelta) > 1e-6) return relevanceDelta
+
+      return (Number(b?.similarity) || 0) - (Number(a?.similarity) || 0)
+    })
+
+    const nonChunk = ranked.filter(item => item.type !== 'chunk')
+    if (nonChunk.length === 0) return ranked
+
+    const chunks = ranked.filter(item => item.type === 'chunk')
+    const target = Math.min(ranked.length, Math.max(minCount, nonChunk.length))
+    return [...nonChunk, ...chunks].slice(0, target)
+  }
+
   countTermMatches(text, queryTerms) {
     if (!text || !queryTerms.length) return 0
 
@@ -370,10 +419,27 @@ class AgenticRAGService {
     let matches = 0
 
     for (const term of queryTerms) {
-      if (haystack.includes(term)) matches++
+      const escaped = String(term || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      if (!escaped) continue
+      const pattern = new RegExp(`\\b${escaped}\\b`, 'i')
+      if (pattern.test(haystack)) matches++
     }
 
     return matches
+  }
+
+  calculateAverageLexicalCoverage(query, results = []) {
+    const queryTerms = AgenticRAGService.extractKeyTerms(query)
+    if (!queryTerms.length || !Array.isArray(results) || results.length === 0) return 0
+
+    const coverageSum = results.reduce((sum, item) => {
+      const titleMatches = this.countTermMatches(item.title, queryTerms)
+      const contentMatches = this.countTermMatches(item.content, queryTerms)
+      const lexicalMatches = titleMatches + contentMatches
+      return sum + lexicalMatches / queryTerms.length
+    }, 0)
+
+    return coverageSum / results.length
   }
 
   scoreResultRelevance(result, queryTerms) {
@@ -388,6 +454,9 @@ class AgenticRAGService {
         : 0
     const contentLength = (result.content || result.title || '').length
     const contentQuality = Math.min(1, contentLength / 220)
+    const engagementBase = Math.max(0, Number(result.upvotes) || 0, Number(result.score) || 0)
+    const engagementScore = Math.min(1, Math.log10(engagementBase + 1) / 3)
+    const typeWeight = result.type === 'post' ? 1 : result.type === 'comment' ? 0.9 : 0.62
     const strategyPenalty =
       result.sourceStrategy === 'keywords' && lexicalCoverage < 0.5
         ? 0.9
@@ -396,12 +465,13 @@ class AgenticRAGService {
     return Math.min(
       1,
       (
-        llmRelevance * 0.5 +
-        lexicalCoverage * 0.25 +
-        similarity * 0.15 +
-        rankingScore * 0.05 +
-        contentQuality * 0.05
-      ) * strategyPenalty
+        llmRelevance * 0.43 +
+        lexicalCoverage * 0.24 +
+        similarity * 0.12 +
+        rankingScore * 0.11 +
+        contentQuality * 0.04 +
+        engagementScore * 0.06
+      ) * strategyPenalty * typeWeight
     )
   }
 
@@ -416,10 +486,21 @@ class AgenticRAGService {
     const similarity = Math.max(0, Math.min(1, parseFloat(result.similarity) || 0))
     const rankingScore = Math.max(0, Math.min(1, parseFloat(result.rankingScore) || 0))
     const contentQuality = Math.min(1, String(result.content || result.title || '').length / 220)
+    const engagementBase = Math.max(0, Number(result.upvotes) || 0, Number(result.score) || 0)
+    const engagementScore = Math.min(1, Math.log10(engagementBase + 1) / 3)
+    const typeWeight = result.type === 'post' ? 1 : result.type === 'comment' ? 0.9 : 0.62
 
     return Math.min(
       1,
-      Math.max(0.2, lexicalCoverage * 0.45 + similarity * 0.35 + rankingScore * 0.15 + contentQuality * 0.05)
+      Math.max(
+        0.15,
+        (lexicalCoverage * 0.42 +
+          similarity * 0.22 +
+          rankingScore * 0.23 +
+          contentQuality * 0.05 +
+          engagementScore * 0.08) *
+          typeWeight
+      )
     )
   }
 
@@ -480,7 +561,7 @@ ${content}
   }
 
   buildCompactContext(searchResults, maxItems = 4) {
-    const shortlist = (Array.isArray(searchResults) ? searchResults : [])
+    const shortlist = this.prioritizeResponseResults(searchResults)
       .slice(0, maxItems)
       .map(result => {
         const title = String(result.title || '').replace(/\s+/g, ' ').trim().slice(0, 120)
@@ -495,7 +576,7 @@ ${content}
   }
 
   buildDeterministicFallbackHtml(query, searchResults = []) {
-    const top = (Array.isArray(searchResults) ? searchResults : []).slice(0, 5)
+    const top = this.prioritizeResponseResults(searchResults).slice(0, 5)
     const items = top
       .map(result => {
         const title = String(result.title || 'Untitled').replace(/[<>]/g, '')
@@ -521,61 +602,22 @@ ${content}
       agenticResult.attempts.length > 1
         ? `Search refined ${agenticResult.attempts.length} times to find the most relevant results.`
         : 'Direct search results found.'
-    const systemPrompt = `You are a comprehensive student assistant analyzing Reddit discussions about student life. Your goal is to provide detailed, informative responses that fully cover the topic.
+    const systemPrompt = `You are a student assistant summarizing Reddit evidence for college queries.
 
-Generate a rich, well-structured response in HTML format. Follow this EXACT structure but EXPAND each section with detailed information:
-
+Return ONLY HTML with this structure:
 <div class="reddit-response">
-<h3>Overview</h3>
-<p>Provide a comprehensive 2-3 sentence summary that directly answers the question and sets context for what follows.</p>
-
-<h3>Student Experiences</h3>
-<ul>
-<li><strong>Personal Experience:</strong> Detailed account from <span style="color: #0066cc; font-weight: 500;">u/username</span> <span style="color: #ff4500; font-size: 0.9em;">↑XX upvotes</span> - include specific details, numbers, timeframes, and practical insights they shared.</li>
-<li><strong>Alternative Perspective:</strong> Different viewpoint with specific details and reasoning from another user with proper attribution.</li>
-<li><strong>Additional Insights:</strong> More experiences, tips, or observations from other students, including any warnings or recommendations.</li>
-<li><strong>Recent Updates:</strong> Any recent developments or changes mentioned in the discussions.</li>
-</ul>
-
-<h3>Important Details & Practical Information</h3>
-<ul>
-<li><strong>Key Requirements:</strong> Specific requirements, procedures, or prerequisites students need to know.</li>
-<li><strong>Timing & Deadlines:</strong> Important dates, timeframes, or scheduling considerations.</li>
-<li><strong>Costs & Fees:</strong> Any financial information, pricing, or cost-related details mentioned.</li>
-<li><strong>Location & Access:</strong> Where things are located, how to access services, or physical details.</li>
-<li><strong>Tips & Tricks:</strong> Practical advice, shortcuts, or insider knowledge shared by students.</li>
-<li><strong>Common Mistakes:</strong> Pitfalls to avoid or frequent errors mentioned in discussions.</li>
-</ul>
-
-<h3>Important Considerations</h3>
-<ul>
-<li><strong>Potential Issues:</strong> Problems, challenges, or difficulties students have encountered.</li>
-<li><strong>Quality Concerns:</strong> Any mentions of quality, reliability, or satisfaction levels.</li>
-<li><strong>Alternatives:</strong> Other options, backup plans, or substitute approaches discussed.</li>
-<li><strong>Recent Changes:</strong> Any updates, policy changes, or evolving situations.</li>
-</ul>
-
-<h3>Bottom Line & Recommendations</h3>
-<p><strong>Summary:</strong> Comprehensive conclusion that synthesizes all the information and provides clear, actionable advice for students.</p>
-<p><strong>Best Approach:</strong> Specific recommendation on the optimal course of action based on the collective student experiences.</p>
-<p><strong>Pro Tip:</strong> One key insight or piece of advice that stands out from the discussions.</p>
+<h3>Overview</h3><p>2-3 sentence answer.</p>
+<h3>Student Experiences</h3><ul><li>3-6 concrete points with evidence.</li></ul>
+<h3>Important Details</h3><ul><li>Practical details, caveats, and timing/cost/location if available.</li></ul>
+<h3>Bottom Line & Recommendations</h3><p>Actionable recommendation.</p>
 </div>
 
-CRITICAL RULES FOR DETAILED RESPONSES:
-- Output ONLY HTML - no markdown, no code blocks, no backticks  
-- Use the exact structure shown above but FILL IT WITH COMPREHENSIVE DETAILS
-- Always cite sources with real usernames and upvote counts from the context
-- Extract ALL relevant information from the context - don't leave out useful details
-- Include specific numbers, dates, prices, locations, and procedures when mentioned
-- Mention multiple student perspectives and experiences, not just one
-- Use proper HTML tags, NOT markdown
-- Do not hallucinate usernames or upvote counts - only use what's provided in context
-- Base response entirely on the provided context but be thorough in extracting information
-- If a section doesn't have relevant information from context, you can omit that specific subsection
-- Prioritize actionable, specific information over generic advice
-- ${searchInfo}
-
-Context: ${context}`
+Rules:
+- Keep total length concise (about 180-280 words).
+- Cite source handles and upvotes when present (e.g., u/name, ↑32).
+- Do not invent users, votes, or facts.
+- If evidence is weak, say so clearly.
+- ${searchInfo}`
 
     const messages = [
       {
@@ -590,7 +632,7 @@ Context: ${context}`
 
     messages.push({
       role: 'user',
-      content: query,
+      content: `User query: ${query}\n\nUse only this retrieved context:\n${context}`,
     })
 
     const compactSystemPrompt = `You are a student assistant. Return ONLY HTML in this structure:
@@ -606,8 +648,8 @@ Do not use markdown.`
         model: this.chatModel,
         messages: messages,
         maxOutputTokens: this.responseMaxOutputTokens,
-        maxRetries: 1,
-        timeout: { totalMs: this.responseTimeoutMs, stepMs: this.responseTimeoutMs },
+        maxRetries: 0,
+        abortSignal: createAbortSignal(this.responseTimeoutMs),
         output: Output.text(),
         providerOptions: {
           openai: {
@@ -635,7 +677,7 @@ Do not use markdown.`
         ],
         maxOutputTokens: this.responseRetryMaxOutputTokens,
         maxRetries: 0,
-        timeout: { totalMs: this.responseRetryTimeoutMs, stepMs: this.responseRetryTimeoutMs },
+        abortSignal: createAbortSignal(this.responseRetryTimeoutMs),
         output: Output.text(),
         providerOptions: {
           openai: {
@@ -727,8 +769,19 @@ class QueryRelevanceAgent {
       Math.min(3, sorted.length)
     const spread = (sorted[0] || 0) - (sorted[Math.min(4, sorted.length - 1)] || 0)
 
-    // If retrieval signals are already strong and clear, skip LLM relevance for speed.
-    return !(top1 >= 0.78 && top3Avg >= 0.63 && spread >= 0.08)
+    // Skip LLM relevance unless retrieval confidence is genuinely ambiguous.
+    if (top1 >= 0.62 && top3Avg >= 0.5) return false
+    return spread < 0.12 || top3Avg < 0.48
+  }
+
+  formatForLog(value) {
+    if (value == null) return 'unknown'
+    if (typeof value === 'string') return value
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return String(value)
+    }
   }
 
   estimateFallbackScores(originalQuery, searchResults) {
@@ -742,10 +795,17 @@ class QueryRelevanceAgent {
           : 0
       const similarity = Math.max(0, Math.min(1, parseFloat(result.similarity) || 0))
       const rankingScore = Math.max(0, Math.min(1, parseFloat(result.rankingScore) || 0))
+      const engagementBase = Math.max(0, Number(result.upvotes) || 0, Number(result.score) || 0)
+      const engagementScore = Math.min(1, Math.log10(engagementBase + 1) / 3)
+      const typeWeight = result.type === 'post' ? 1 : result.type === 'comment' ? 0.9 : 0.62
 
       return Math.min(
         1,
-        Math.max(0.2, lexicalCoverage * 0.45 + similarity * 0.4 + rankingScore * 0.15)
+        Math.max(
+          0.15,
+          (lexicalCoverage * 0.42 + similarity * 0.22 + rankingScore * 0.28 + engagementScore * 0.08) *
+            typeWeight
+        )
       )
     })
   }
@@ -792,7 +852,7 @@ Rules:
         prompt: prompt,
         maxOutputTokens: this.maxOutputTokens,
         maxRetries: 0,
-        timeout: { totalMs: this.timeoutMs, stepMs: this.timeoutMs },
+        abortSignal: createAbortSignal(this.timeoutMs),
         output: Output.object({
           schema: QueryRelevanceAgent.RELEVANCE_OUTPUT_SCHEMA,
         }),
@@ -820,7 +880,7 @@ Rules:
 
       const warningCount = Array.isArray(result?.warnings) ? result.warnings.length : 0
       logger.warn(
-        `Structured relevance output missing (finishReason=${result?.finishReason || 'unknown'}, warnings=${warningCount}), using heuristic fallback`
+        `Structured relevance output missing (finishReason=${this.formatForLog(result?.finishReason)}, warnings=${warningCount}), using heuristic fallback`
       )
       return fallbackScores
     } catch (error) {
@@ -856,7 +916,10 @@ Rules:
     let matches = 0
 
     for (const term of queryTerms) {
-      if (haystack.includes(term)) matches++
+      const escaped = String(term || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      if (!escaped) continue
+      const pattern = new RegExp(`\\b${escaped}\\b`, 'i')
+      if (pattern.test(haystack)) matches++
     }
 
     return matches
@@ -924,7 +987,7 @@ Return:
         prompt: prompt,
         maxOutputTokens: this.maxOutputTokens,
         maxRetries: 0,
-        timeout: { totalMs: this.timeoutMs, stepMs: this.timeoutMs },
+        abortSignal: createAbortSignal(this.timeoutMs),
         output: Output.object({
           schema: QueryRefinementAgent.QUERY_REFINEMENT_OUTPUT_SCHEMA,
         }),

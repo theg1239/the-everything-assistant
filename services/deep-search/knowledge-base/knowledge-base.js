@@ -1583,9 +1583,18 @@ class KnowledgeBase {
     const typeWeight = result.type === 'post' ? 1 : result.type === 'comment' ? 0.88 : 0.65
     const highSignalPenalty =
       highSignalTerms.length > 0 && highSignalMatches === 0
-        ? 0.72
-        : 1
-    const weakCoveragePenalty = lexicalCoverage < 0.2 ? 0.8 : lexicalCoverage < 0.35 ? 0.9 : 1
+        ? 0.2
+        : highSignalTerms.length >= 3 && highSignalMatches === 1
+          ? 0.55
+          : 1
+    const weakCoveragePenalty =
+      lexicalCoverage < 0.2
+        ? 0.45
+        : lexicalCoverage < 0.35
+          ? 0.7
+          : lexicalCoverage < 0.5
+            ? 0.86
+            : 1
 
     let recencyScore = 0.5
     if (result.created_utc) {
@@ -1596,16 +1605,16 @@ class KnowledgeBase {
       }
     }
 
-    const semanticComponent = normalizedSimilarity * (0.65 + lexicalScore * 0.35)
-    const textComponent = normalizedTextRank * (0.55 + lexicalScore * 0.45)
+    const semanticComponent = normalizedSimilarity * (0.55 + lexicalScore * 0.45)
+    const textComponent = normalizedTextRank * (0.45 + lexicalScore * 0.55)
 
     return (
-      (semanticComponent * 0.33 +
-        textComponent * 0.23 +
-        lexicalScore * 0.25 +
-        engagementScore * 0.08 +
-        normalizedRrfScore * 0.07 +
-        recencyScore * 0.03 +
+      (semanticComponent * 0.21 +
+        textComponent * 0.14 +
+        lexicalScore * 0.45 +
+        engagementScore * 0.05 +
+        normalizedRrfScore * 0.11 +
+        recencyScore * 0.04 +
         multiStrategyBonus) *
       typeWeight *
       highSignalPenalty *
@@ -1637,7 +1646,7 @@ class KnowledgeBase {
       variants.push(normalizedPunctuation)
     }
 
-    return Array.from(new Set(variants)).slice(0, 4)
+    return Array.from(new Set(variants)).slice(0, 2)
   }
 
   createResultFingerprint(result) {

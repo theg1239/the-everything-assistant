@@ -2,7 +2,6 @@ require('dotenv').config()
 
 const { Pool } = require('pg')
 const { embed } = require('ai')
-const { createOpenAI, openai } = require('@ai-sdk/openai')
 const { google } = require('@ai-sdk/google')
 const logger = require('../utils/logger')
 
@@ -69,22 +68,7 @@ class KnowledgeBase {
     this.embeddingModelId = embeddingConfig.modelId
     this.embeddingDim = embeddingConfig.dim
     this.openaiBaseURL = embeddingConfig.openaiBaseURL
-    this.openaiProvider =
-      this.embeddingProvider === 'openai'
-        ? createOpenAI({
-            apiKey: process.env.OPENAI_API_KEY,
-            baseURL: this.openaiBaseURL,
-          })
-        : null
     this.embeddingModel = this.createEmbeddingModel()
-    this.embeddingProviderOptions =
-      this.embeddingProvider === 'openai'
-        ? {
-            openai: {
-              dimensions: this.embeddingDim,
-            },
-          }
-        : undefined
     this.similarityThreshold = parseFloat(process.env.SIMILARITY_THRESHOLD) || 0.5
     this.maxContextLength = parseInt(process.env.MAX_CONTEXT_LENGTH) || 4000
 
@@ -107,9 +91,7 @@ class KnowledgeBase {
     if (this.embeddingProvider === 'google') {
       return google.textEmbeddingModel(this.embeddingModelId)
     }
-
-    const provider = this.openaiProvider || openai
-    return provider.embedding(this.embeddingModelId)
+    return null
   }
 
   getHeaderValue(headers, name) {
@@ -131,6 +113,7 @@ class KnowledgeBase {
         model: this.embeddingModelId,
         input: value,
         dimensions: this.embeddingDim,
+        encoding_format: 'float',
       }),
     })
 
@@ -698,28 +681,17 @@ class KnowledgeBase {
     }
     try {
       const value = text.substring(0, this.maxContextLength)
-      const embedOptions = {
-        model: this.embeddingModel,
-        value,
-      }
+      let result
+      let embedding
 
-      if (this.embeddingProviderOptions) {
-        embedOptions.providerOptions = this.embeddingProviderOptions
-      }
-
-      let result = await embed(embedOptions)
-      let embedding = result.embedding
-
-      if (
-        this.embeddingProvider === 'openai' &&
-        Array.isArray(embedding) &&
-        embedding.length !== this.embeddingDim
-      ) {
-        logger.warn(
-          `Embedding mismatch on AI SDK OpenAI path (got ${embedding.length}, expected ${this.embeddingDim}); retrying via direct OpenAI embeddings API`
-        )
-
+      if (this.embeddingProvider === 'openai') {
         result = await this.generateOpenAIEmbeddingDirect(value)
+        embedding = result.embedding
+      } else {
+        result = await embed({
+          model: this.embeddingModel,
+          value,
+        })
         embedding = result.embedding
       }
 

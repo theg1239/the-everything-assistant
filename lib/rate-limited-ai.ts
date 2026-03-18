@@ -274,7 +274,7 @@ export class RateLimitedAI {
   private resolveModelId(baseModelId: string | undefined, provider: Provider): string {
     if (provider === this.provider) return baseModelId ?? ''
     if (this.provider === 'google' && provider === 'openai') {
-      return process.env.OPENAI_FALLBACK_MODEL || 'gpt-5-mini'
+      return process.env.OPENAI_FALLBACK_MODEL || 'gpt-5.4-mini'
     }
     return baseModelId ?? ''
   }
@@ -953,7 +953,7 @@ export const rateLimitedAI = {
     getFullStatus: (u?: string) => getRateLimitedAI('openrouter').getFullStatus(u),
   },
   openai: {
-    model: (n = 'gpt-5-mini') => getModel('openai', n),
+    model: (n = 'gpt-5.4-mini') => getModel('openai', n),
     embedding: (n = modelIds.embedding) => getEmbeddingModel('openai', n),
     streamText: (o: TextGenerationOptions, u?: string, k?: ApiKeySelectionOptions) =>
       getRateLimitedAI('openai').streamText(o, u, k),

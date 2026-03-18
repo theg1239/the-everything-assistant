@@ -23,9 +23,9 @@ export type ModelConfig = {
 }
 
 const registry: Record<ModelKey, ModelConfig> = {
-  chat: { provider: 'direct', modelId: 'google/gemini-3.1-flash-lite' },
+  chat: { provider: 'direct', modelId: 'google/gemini-3.1-flash' },
   chatLite: { provider: 'direct', modelId: 'google/gemini-3.1-flash-lite' },
-  chatAttachment: { provider: 'direct', modelId: 'google/gemini-3.1-flash-lite' },
+  chatAttachment: { provider: 'direct', modelId: 'google/gemini-3.1-flash' },
   chatAutocomplete: { provider: 'direct', modelId: 'meta/llama-3.1-8b' },
   embedding: { provider: 'direct', modelId: 'google/gemini-embedding-001' },
   knowledgeEmbedding: { provider: 'direct', modelId: 'google/gemini-embedding-001' },
@@ -36,8 +36,8 @@ const registry: Record<ModelKey, ModelConfig> = {
   placementFormatter: { provider: 'google', modelId: 'gemini-3.1-flash-lite' },
   vtopParser: { provider: 'google', modelId: 'google/gemini-3.1-flash-lite' },
   chatTitle: { provider: 'direct', modelId: 'mistral/ministral-3b' },
-  thinkHarder: { provider: 'openai', modelId: 'gpt-5-mini' },
-  thinkHarderAdmin: { provider: 'openai', modelId: 'gpt-5.1' },
+  thinkHarder: { provider: 'openai', modelId: 'gpt-5.4-mini' },
+  thinkHarderAdmin: { provider: 'openai', modelId: 'gpt-5.4' },
 }
 
 export const modelRegistry = registry

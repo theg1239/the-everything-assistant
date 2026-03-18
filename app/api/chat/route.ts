@@ -563,7 +563,7 @@ export async function POST(req: Request) {
       tagName: 'reasoning',
     })
 
-    const fallbackModelId = process.env.OPENAI_FALLBACK_MODEL || 'gpt-5-mini'
+    const fallbackModelId = process.env.OPENAI_FALLBACK_MODEL || 'gpt-5.4-mini'
     const parsedOpenAIMaxOutputTokens = Number.parseInt(
       process.env.OPENAI_MAX_OUTPUT_TOKENS || '8000',
       10
@@ -586,7 +586,7 @@ export async function POST(req: Request) {
       !(
         modelId.startsWith('gpt-5.1') ||
         modelId.startsWith('gpt-5') ||
-        modelId.startsWith('gpt-5-mini') ||
+        modelId.startsWith('gpt-5.4-mini') ||
         modelId.startsWith('gpt-5-chat')
       )
 

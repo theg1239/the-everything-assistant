@@ -23,9 +23,9 @@ export type ModelConfig = {
 }
 
 const registry: Record<ModelKey, ModelConfig> = {
-  chat: { provider: 'direct', modelId: 'google/gemini-3.1-flash' },
-  chatLite: { provider: 'direct', modelId: 'google/gemini-3.1-flash-lite' },
-  chatAttachment: { provider: 'direct', modelId: 'google/gemini-3.1-flash' },
+  chat: { provider: 'direct', modelId: 'openai/gpt-5.4-mini' },
+  chatLite: { provider: 'direct', modelId: 'openai/gpt-5.4-mini' },
+  chatAttachment: { provider: 'direct', modelId: 'openai/gpt-5.4-mini' },
   chatAutocomplete: { provider: 'direct', modelId: 'meta/llama-3.1-8b' },
   embedding: { provider: 'direct', modelId: 'google/gemini-embedding-001' },
   knowledgeEmbedding: { provider: 'direct', modelId: 'google/gemini-embedding-001' },
@@ -34,7 +34,7 @@ const registry: Record<ModelKey, ModelConfig> = {
   hubVtop: { provider: 'google', modelId: 'gemini-3.1-flash-lite' },
   hubVtopFormatter: { provider: 'google', modelId: 'gemini-3.1-flash-lite' },
   placementFormatter: { provider: 'google', modelId: 'gemini-3.1-flash-lite' },
-  vtopParser: { provider: 'google', modelId: 'google/gemini-3.1-flash-lite' },
+  vtopParser: { provider: 'google', modelId: 'openai/gpt-5.4-mini' },
   chatTitle: { provider: 'direct', modelId: 'mistral/ministral-3b' },
   thinkHarder: { provider: 'openai', modelId: 'gpt-5.4-mini' },
   thinkHarderAdmin: { provider: 'openai', modelId: 'gpt-5.4' },

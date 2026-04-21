@@ -1,26 +1,59 @@
 'use client'
 
-import { useEffect } from 'react'
-import type { LegacyMessage } from '@/lib/ai-message-conversion'
+import type { UseChatHelpers } from '@ai-sdk/react'
+import { useEffect, useRef } from 'react'
+import { useDataStream } from '@/components/data-stream-provider'
+import type { AppUIMessage } from '@/lib/ai-message-conversion'
 
-export interface UseAutoResumeParams {
+export type UseAutoResumeParams = {
   autoResume: boolean
-  initialMessages: LegacyMessage[]
-  resumeStream?: () => Promise<void>
+  initialMessages: AppUIMessage[]
+  resumeStream: UseChatHelpers<AppUIMessage>['resumeStream']
+  setMessages: UseChatHelpers<AppUIMessage>['setMessages']
 }
 
-export function useAutoResume({ autoResume, initialMessages, resumeStream }: UseAutoResumeParams) {
+/**
+ * Re-attaches to an in-flight chat stream after reloads or network hiccups.
+ * Adapted from Scira's `useAutoResume`.
+ *
+ * - On mount, if the last message is from the user and `autoResume` is on, we
+ *   kick off `resumeStream()` to continue from the server's buffered state.
+ * - Subscribes to `data-appendMessage` data-stream parts so that a server-side
+ *   replay can push the final assistant message back.
+ */
+export function useAutoResume({
+  autoResume,
+  initialMessages,
+  resumeStream,
+  setMessages,
+}: UseAutoResumeParams) {
+  const { dataStream } = useDataStream()
+  const hasAttemptedAutoResumeRef = useRef(false)
+
   useEffect(() => {
     if (!autoResume) return
-    if (!resumeStream) return
+    if (hasAttemptedAutoResumeRef.current) return
+    hasAttemptedAutoResumeRef.current = true
 
     const mostRecentMessage = initialMessages.at(-1)
 
     if (mostRecentMessage?.role === 'user') {
-      resumeStream().catch(error => {
-        console.error('Failed to resume chat stream:', error)
-      })
+      void resumeStream()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [autoResume, initialMessages, resumeStream])
+
+  useEffect(() => {
+    if (!dataStream || dataStream.length === 0) return
+
+    const dataPart = dataStream[0]
+
+    if ((dataPart as { type?: string })?.type === 'data-appendMessage') {
+      try {
+        const message = JSON.parse((dataPart as { data: string }).data) as AppUIMessage
+        setMessages([...initialMessages, message])
+      } catch (err) {
+        console.warn('useAutoResume: failed to parse appended message', err)
+      }
+    }
+  }, [dataStream, initialMessages, setMessages])
 }

@@ -1,6 +1,7 @@
 import type React from 'react'
 import type { Metadata } from 'next'
 import localFont from 'next/font/local'
+import { Geist, Instrument_Serif, Baumans } from 'next/font/google'
 import '@/styles/globals.css'
 import '@/styles/sidebar-styles.css'
 import '@/styles/hamburger-styles.css'
@@ -17,17 +18,18 @@ import { MFAGate } from '@/components/mfa-gate'
 import { Toaster } from 'sonner'
 import MobileViewportFix from '@/components/mobile-viewport-fix'
 import ScrollToTop from '@/components/scroll-to-top'
-import CustomBackground from '@/components/backgrounds/custom-background'
 import { PdfDockProvider } from '@/contexts/pdf-dock-context'
 import PdfDock from '@/components/pdf-dock'
 import SpotifyBubble from '@/components/spotify-bubble'
-import { SynthwaveBackground } from '@/components/synthwave-background'
 import { PerformanceMonitor } from '@/components/performance-monitor'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { GlobalBroadcastDialog } from '@/components/global-broadcast-dialog'
 import { PWAInstallDialog } from '@/components/pwa-install-dialog'
 import { SidebarWrapper } from '@/components/sidebar-wrapper'
+import { NewChatHotkey } from '@/components/new-chat-hotkey'
+import { DataStreamProvider } from '@/components/data-stream-provider'
+import { ChatHistoryDialog } from '@/components/chat-history-dialog'
 import { BotIdClient } from 'botid/client'
 import type { LatestBroadcastResponse } from '@/types/api/broadcast'
 
@@ -36,6 +38,27 @@ const googleSansFlex = localFont({
   weight: '100 900',
   style: 'normal',
   display: 'swap',
+  variable: '--font-google-sans',
+})
+
+const geistSans = Geist({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-sans',
+})
+
+const instrumentSerif = Instrument_Serif({
+  subsets: ['latin'],
+  weight: '400',
+  display: 'swap',
+  variable: '--font-serif',
+})
+
+const baumans = Baumans({
+  subsets: ['latin'],
+  weight: '400',
+  display: 'swap',
+  variable: '--font-display',
 })
 
 const protectedRoutes = [
@@ -440,7 +463,9 @@ export default async function RootLayout({
           }
         `}</style>
       </head>
-      <body className={googleSansFlex.className}>
+      <body
+        className={`${geistSans.variable} ${instrumentSerif.variable} ${baumans.variable} ${googleSansFlex.variable} font-sans bg-background text-foreground`}
+      >
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-2 focus:rounded-md focus:bg-primary focus:text-primary-foreground"
@@ -454,25 +479,30 @@ export default async function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
-            <div className="fixed inset-0 w-full h-full z-[-10]">
-              <CustomBackground />
-            </div>
-            <SynthwaveBackground className="z-[-5]" />
+            {/* Clean neutral surface (Scira-inspired); animated backgrounds opt-in via settings. */}
+            <div
+              aria-hidden
+              className="fixed inset-0 w-full h-full z-[-10] bg-background"
+            />
+            <NewChatHotkey />
+            <ChatHistoryDialog />
             <MobileViewportFix />
             <ScrollToTop />
             {process.env.NODE_ENV === 'development' && <PerformanceMonitor />}
             <QueryProvider>
               <MemoryProvider>
-                <SidebarProvider>
-                  <MFAGate>
-                    <PdfDockProvider>
-                      <SidebarWrapper />
-                      {children}
-                      <PdfDock />
-                      <SpotifyBubble />
-                    </PdfDockProvider>
-                  </MFAGate>
-                </SidebarProvider>
+                <DataStreamProvider>
+                  <SidebarProvider>
+                    <MFAGate>
+                      <PdfDockProvider>
+                        <SidebarWrapper />
+                        {children}
+                        <PdfDock />
+                        <SpotifyBubble />
+                      </PdfDockProvider>
+                    </MFAGate>
+                  </SidebarProvider>
+                </DataStreamProvider>
               </MemoryProvider>
             </QueryProvider>
             <Toaster

@@ -100,7 +100,7 @@ const DAILY_BRIEFING_COMMANDS: HubVTOPCommand[] = Array.from(
 const DAILY_BRIEFING_STORAGE_KEY = 'ea.hub.daily-briefing-date'
 const DAILY_REVEAL_DELAY_MS = 2000
 const HUB_SURFACE_CLASS =
-  'rounded-3xl sm:rounded-[32px] border border-white/10 bg-[rgba(7,8,18,0.78)] backdrop-blur-xl shadow-[0_15px_50px_rgba(0,0,0,0.45)] sm:shadow-[0_25px_80px_rgba(0,0,0,0.55)]'
+  'rounded-3xl sm:rounded-[32px] border border-border/50 bg-card/80 backdrop-blur-xl shadow-lg sm:shadow-xl'
 const HUB_LABEL_CLASS =
   'text-[10px] uppercase tracking-[0.2em] text-white/60 sm:text-[11px] sm:tracking-[0.3em]'
 
@@ -1181,11 +1181,7 @@ export default function HubShell({
 
   return (
     <HubToolProvider value={toolExecutor}>
-      <div className="h-full relative overflow-hidden bg-[#05060c] text-foreground">
-        <div className="pointer-events-none absolute inset-0 opacity-[0.8]">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.08),_transparent_60%)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,6,12,0.85),rgba(3,4,8,0.92))]" />
-        </div>
+      <div className="h-full relative overflow-hidden bg-background text-foreground ring-1 ring-border/50">
         <div className="relative h-full flex flex-col">
           <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-6 sm:py-6" data-allow-touch-scroll>
             <div className="max-w-5xl w-full mx-auto space-y-5">
@@ -1193,7 +1189,7 @@ export default function HubShell({
             </div>
           </div>
           <div
-            className="relative border-t border-white/10 px-2 sm:px-4 py-2 sm:py-3 bg-[#05060c]/90 backdrop-blur supports-[backdrop-filter]:backdrop-blur-lg"
+            className="relative border-t border-border/60 px-2 sm:px-4 py-2 sm:py-3 bg-background/90 backdrop-blur supports-[backdrop-filter]:backdrop-blur-lg"
             style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 8px)' }}
           >
             <div className="max-w-5xl w-full mx-auto">

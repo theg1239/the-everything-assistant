@@ -585,7 +585,7 @@ function PureChatInterfaceComponent({
   } = useChat<AppUIMessage>({
     id: resolvedChatId,
     messages: initialUiMessages,
-    experimental_throttle: 25,
+    experimental_throttle: 100,
     transport: chatTransport,
     resume: autoResume ?? true,
     onFinish: ({ message }) => {

@@ -28,6 +28,12 @@ const config = {
       '2xl': '1536px',
     },
     extend: {
+      fontFamily: {
+        sans: ['var(--font-sans)', 'GoogleSansFlex', 'system-ui', 'sans-serif'],
+        serif: ['var(--font-serif)', 'ui-serif', 'Georgia', 'serif'],
+        display: ['var(--font-display)', 'var(--font-sans)', 'sans-serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+      },
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
@@ -62,6 +68,16 @@ const config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        sidebar: {
+          DEFAULT: 'hsl(var(--sidebar))',
+          foreground: 'hsl(var(--sidebar-foreground))',
+          primary: 'hsl(var(--sidebar-primary))',
+          'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',
+          accent: 'hsl(var(--sidebar-accent))',
+          'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
+          border: 'hsl(var(--sidebar-border))',
+          ring: 'hsl(var(--sidebar-ring))',
+        },
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -77,10 +93,21 @@ const config = {
           from: { height: 'var(--radix-accordion-content-height)' },
           to: { height: '0' },
         },
+        shimmer: {
+          '0%': { backgroundPosition: '-200% center' },
+          '100%': { backgroundPosition: '200% center' },
+        },
+        'reveal-line': {
+          '0%': { transform: 'scaleX(0)', opacity: '0.25' },
+          '60%': { opacity: '1' },
+          '100%': { transform: 'scaleX(1)', opacity: '1' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
+        shimmer: 'shimmer 3s ease-in-out infinite',
+        'reveal-line': 'reveal-line 420ms cubic-bezier(0.22, 1, 0.36, 1) both',
       },
     },
   },

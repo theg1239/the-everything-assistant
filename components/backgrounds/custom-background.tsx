@@ -165,10 +165,10 @@ const defaultBackgroundConfig: BackgroundConfig = {
   type: 'aurora',
   enabled: false,
   aurora: {
-    colorStops: ['#5227FF', '#7cff67', '#5227FF'],
-    amplitude: 1.2,
-    blend: 0.6,
-    speed: 0.8,
+    colorStops: ['#4f46e5', '#7c3aed', '#0ea5e9'],
+    amplitude: 1.1,
+    blend: 0.5,
+    speed: 0.5,
   },
   beams: {
     beamWidth: 2,
@@ -184,7 +184,7 @@ const defaultBackgroundConfig: BackgroundConfig = {
     waveSpeed: 0.05,
     waveFrequency: 3,
     waveAmplitude: 0.3,
-    waveColor: [0.4, 0.6, 0.8],
+    waveColor: [0.3, 0.2, 0.9],
     colorNum: 4,
     pixelSize: 2,
     disableAnimation: false,
@@ -192,10 +192,10 @@ const defaultBackgroundConfig: BackgroundConfig = {
     mouseRadius: 1,
   },
   floatingLines: {
-    linesGradient: ['#8b5cf6', '#0ea5e9', '#14b8a6'],
+    linesGradient: ['#7c3aed', '#2563eb', '#0ea5e9'],
     enabledWaves: ['top', 'middle', 'bottom'],
-    animationSpeed: 1.2,
-    parallaxStrength: 0.35,
+    animationSpeed: 1.0,
+    parallaxStrength: 0.3,
   },
   terminal: {
     scale: 1,
@@ -209,15 +209,15 @@ const defaultBackgroundConfig: BackgroundConfig = {
     chromaticAberration: 0.001,
     dither: 0.35,
     curvature: 0.1,
-    tint: '#2fd4c8',
+    tint: '#7c3aed',
     mouseReact: true,
     mouseStrength: 0.2,
     brightness: 0.9,
-    backgroundColor: '#030712',
+    backgroundColor: '#07090f',
     overlayOpacity: 0.5,
   },
   colorBands: {
-    colors: ['#22d3ee', '#3b82f6', '#a855f7', '#f97316'],
+    colors: ['#4f46e5', '#7c3aed', '#8b5cf6', '#a78bfa'],
     transparent: true,
     rotation: 32,
     speed: 0.35,
@@ -247,11 +247,11 @@ const defaultBackgroundConfig: BackgroundConfig = {
     enablePost: true,
   },
   gradient: {
-    colors: ['#1a1a2e', '#16213e', '#0f3460'],
+    colors: ['#1a1a1a', '#222222', '#2b2622'],
     direction: 'to-br',
   },
   solid: {
-    color: '#0a0a0a',
+    color: '#121212',
   },
 }
 
@@ -347,8 +347,40 @@ export default function CustomBackground() {
   const renderBackground = () => {
     if (!backgroundConfig.enabled) {
       return (
-        <div className="absolute inset-0 bg-background">
-          <div className="absolute inset-0 bg-gradient-to-br from-background via-muted/20 to-background" />
+        <div className="absolute inset-0 bg-background overflow-hidden">
+          <div
+            className="absolute pointer-events-none"
+            style={{
+              top: '-25%',
+              left: '-20%',
+              width: '65%',
+              height: '65%',
+              background: 'radial-gradient(ellipse at 50% 50%, rgba(124, 58, 237, 0.11) 0%, transparent 70%)',
+              filter: 'blur(64px)',
+            }}
+          />
+          <div
+            className="absolute pointer-events-none"
+            style={{
+              bottom: '-20%',
+              right: '-15%',
+              width: '60%',
+              height: '60%',
+              background: 'radial-gradient(ellipse at 50% 50%, rgba(14, 165, 233, 0.08) 0%, transparent 70%)',
+              filter: 'blur(72px)',
+            }}
+          />
+          <div
+            className="absolute pointer-events-none"
+            style={{
+              top: '35%',
+              left: '45%',
+              width: '42%',
+              height: '42%',
+              background: 'radial-gradient(ellipse at 50% 50%, rgba(79, 70, 229, 0.06) 0%, transparent 70%)',
+              filter: 'blur(52px)',
+            }}
+          />
         </div>
       )
     }

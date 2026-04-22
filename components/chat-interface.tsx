@@ -37,6 +37,7 @@ import ScrollToTopButton from '@/components/scroll-to-top-button'
 import { cn } from '@/lib/utils'
 import { useThrottle } from '@/hooks/use-debounce'
 import { useAutoResume } from '@/hooks/use-auto-resume'
+import { useOptimizedScroll } from '@/hooks/use-optimized-scroll'
 import { useSidebar } from '@/contexts/sidebar-context'
 import { StreamingErrorDisplay } from '@/components/streaming-error-display'
 import { DynamicLoadingIndicator } from '@/components/dynamic-loading-indicator'
@@ -917,23 +918,41 @@ function PureChatInterfaceComponent({
     autoResume: autoResume ?? true,
     initialMessages,
     resumeStream,
+    setMessages: setUiMessages,
   })
+
+  // Use Scira's rAF + near-bottom scroll helper to avoid fighting the user.
+  const scrollContainerRef = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    scrollContainerRef.current = contentRef.current?.parentElement ?? null
+  })
+  const { scrollToBottom: optimizedScrollToBottom } = useOptimizedScroll(
+    scrollContainerRef as React.RefObject<HTMLElement | null>
+  )
 
   const scrollToBottom = useCallback(() => {
     const prefersReducedMotion =
       typeof window !== 'undefined' &&
       window.matchMedia &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    // Active streaming or reduced-motion users: fast instant jump via the
+    // shared optimized hook (matches Scira behavior).
+    if (isLoading || prefersReducedMotion) {
+      optimizedScrollToBottom()
+      setIsAtBottom(true)
+      return
+    }
+    // Idle state still uses a smooth scroll — nicer when the user taps the
+    // "scroll to latest" pill.
     if (!messagesEndRef.current) return
     const container = contentRef.current?.parentElement
-    const scrollBehavior: ScrollBehavior = isLoading || prefersReducedMotion ? 'auto' : 'smooth'
     if (container && isMobile) {
-      container.scrollTo({ top: container.scrollHeight, behavior: scrollBehavior })
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
     } else {
-      messagesEndRef.current.scrollIntoView({ behavior: scrollBehavior, block: 'end' })
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
     }
     setIsAtBottom(true)
-  }, [isMobile, isLoading])
+  }, [isMobile, isLoading, optimizedScrollToBottom])
 
   const checkScrollPosition = useCallback(() => {
     const container = contentRef.current?.parentElement

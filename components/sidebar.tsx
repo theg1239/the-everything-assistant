@@ -22,6 +22,7 @@ import { formatDate } from '@/lib/utils'
 import { SettingsDialog } from '@/components/settings-dialog'
 import { useSidebar } from '@/contexts/sidebar-context'
 import { readJson } from '@/lib/http'
+import { useChatPrefetch } from '@/hooks/use-chat-prefetch'
 
 interface Chat {
   id: string
@@ -98,6 +99,7 @@ export const Sidebar = memo(
     const router = useRouter()
     const pathname = usePathname()
     const { data: session } = useSession()
+    const { prefetchOnHover, prefetchOnFocus, prefetchChats } = useChatPrefetch()
 
     useEffect(() => {
       setMounted(true)
@@ -192,6 +194,11 @@ export const Sidebar = memo(
               })
             }
 
+            // Prefetch the first batch of chats so switching is instant.
+            if (Array.isArray(data)) {
+              prefetchChats(data.slice(0, 8).map(c => c.id))
+            }
+
             if (data.length < 15) {
               setHasMore(false)
             }
@@ -204,7 +211,7 @@ export const Sidebar = memo(
           setIsLoadingMore(false)
         }
       },
-      [chats.length, setChats, setChatsLoaded]
+      [chats.length, setChats, setChatsLoaded, prefetchChats]
     )
 
     useEffect(() => {
@@ -541,6 +548,8 @@ export const Sidebar = memo(
                                   : 'hover:bg-muted/50 text-muted-foreground hover:text-foreground'
                               )}
                               onClick={() => handleChatClick(chat.id)}
+                              onMouseEnter={() => prefetchOnHover(chat.id)}
+                              onFocus={() => prefetchOnFocus(chat.id)}
                               role="button"
                               tabIndex={0}
                               aria-current={

@@ -2,12 +2,11 @@
  * Scira-style "group" definitions. A group is a bundle of tools that make
  * sense together (e.g. everything needed to answer VTOP questions), plus a
  * per-group system-prompt preamble. The chat route picks a group based on the
- * user's selection or routing heuristics, then the tool-loader filters the
- * full tool registry down to the group's allowlist.
+ * user's `preferredTool` selection, then the tool-loader filters the full
+ * registry down to the group's allowlist.
  *
- * Existing EA code can keep building its own `tools` object as before — this
- * file defines the vocabulary for future refactors and is already used by
- * ExamCooker's study route.
+ * Tool names below MUST match keys returned by `createVITTools` in
+ * `lib/tools.ts` (plus provider-tools like `google_search`).
  */
 
 export interface GroupConfig {
@@ -17,7 +16,7 @@ export interface GroupConfig {
   label: string
   /** Tool-name allowlist. If empty, the full registry is used. */
   tools: string[]
-  /** Optional preamble prepended to the base system prompt. */
+  /** Optional preamble appended to the base system prompt. */
   systemPrompt?: string
 }
 
@@ -27,34 +26,50 @@ export const GROUPS = {
     label: 'General',
     tools: [],
     systemPrompt:
-      'Answer the user directly. Prefer tool calls when they would produce faster, more accurate, or more up-to-date answers.',
+      'Answer directly. Prefer tool calls when they produce faster, more accurate, or more up-to-date answers.',
   },
   vtop: {
     id: 'vtop',
     label: 'VTOP',
-    tools: ['queryVTOP', 'vtopWebScraper'],
+    tools: ['queryVTOP'],
     systemPrompt:
-      'The user is asking about VTOP data (attendance, marks, timetable, grades). Always use the VTOP tools rather than guessing from general knowledge.',
+      'The user wants VTOP data (attendance, marks, timetable, grades). Always call queryVTOP rather than guessing from general knowledge.',
   },
   papers: {
     id: 'papers',
-    label: 'Papers',
-    tools: ['searchPapersCodeChef', 'searchPapersService', 'scrapeVITPaperVault', 'scrapeExamCooker'],
+    label: 'Past Papers',
+    tools: ['findPastPapers', 'resolveCourseCode', 'getCourseInfo'],
     systemPrompt:
-      'The user is looking for past papers. Use the paper-search tools and surface direct download links with course code, exam type, slot, and year whenever possible.',
+      'The user is looking for past papers. Use findPastPapers; always surface direct download links plus course code / exam type / slot / year.',
   },
   memory: {
     id: 'memory',
     label: 'Memory',
-    tools: ['memoryAdd', 'memorySearch', 'memoryList'],
+    tools: ['contributeKnowledge'],
     systemPrompt:
-      'Persist useful facts the user mentions and recall them on demand. Explicitly confirm what you have stored or retrieved.',
+      'Persist and recall user facts on demand. Explicitly confirm what you stored or retrieved.',
   },
   web: {
     id: 'web',
     label: 'Web',
-    tools: ['parallelWebSearch', 'parallelWebExtract', 'google_search'],
+    tools: ['google_search'],
     systemPrompt: 'Prefer fresh web sources. Cite the URLs you actually used.',
+  },
+  campus: {
+    id: 'campus',
+    label: 'Campus',
+    tools: [
+      'getMessMenu',
+      'getPlacementInfo',
+      'getSyllabus',
+      'getCampusInfo',
+      'getFacultyInfo',
+      'searchRedditKnowledge',
+      'searchRedditWithContext',
+      'getRedditOverview',
+    ],
+    systemPrompt:
+      'The user is asking about VIT campus life — mess menu, placements, syllabus, faculty, or community threads. Use the relevant tool directly.',
   },
 } as const satisfies Record<string, GroupConfig>
 
@@ -63,4 +78,36 @@ export type GroupId = keyof typeof GROUPS
 export function getGroupConfig(id: string | null | undefined): GroupConfig {
   if (!id) return GROUPS.general
   return (GROUPS as Record<string, GroupConfig>)[id] ?? GROUPS.general
+}
+
+/**
+ * Map the user-facing `preferredTool` shortcut (as sent by the chat composer)
+ * to a group id. Unknown values fall through to the general group so the
+ * route keeps working with the full tool registry.
+ */
+export function preferredToolToGroupId(
+  preferredTool?: string | null
+): GroupId | null {
+  if (!preferredTool) return null
+  switch (preferredTool) {
+    case 'web-search':
+    case 'web':
+      return 'web'
+    case 'vtop':
+    case 'queryVTOP':
+      return 'vtop'
+    case 'papers':
+    case 'past-papers':
+    case 'findPastPapers':
+      return 'papers'
+    case 'memory':
+      return 'memory'
+    case 'campus':
+    case 'mess-menu':
+    case 'getMessMenu':
+    case 'placements':
+      return 'campus'
+    default:
+      return null
+  }
 }

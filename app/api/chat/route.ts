@@ -40,6 +40,8 @@ import {
 import { createDirectToolCallStream } from './lib/messages'
 import { parseChatRequestPayload } from './lib/request'
 import { generateChatTitle } from './lib/chat-title'
+import { getGroupConfig, preferredToolToGroupId } from '@/lib/search/group-config'
+import { loadConfiguredTools } from '@/lib/search/tool-loader'
 import { parseVTOPData } from './lib/vtop-parser'
 import {
   getToolInputPayload,
@@ -270,6 +272,23 @@ export async function POST(req: Request) {
       }
     }
 
+    // Scira-style group filtering: if the user chose a preferred tool, trim
+    // the tool registry down to that group's allowlist so the model stops
+    // reaching for irrelevant tools. Unknown/missing selection keeps the full
+    // registry intact.
+    const groupId = preferredToolToGroupId(effectivePreferredTool)
+    const group = getGroupConfig(groupId)
+    const groupSystemAddition = groupId ? group.systemPrompt ?? '' : ''
+    if (groupId) {
+      const filtered = loadConfiguredTools(tools, group)
+      if (filtered && Object.keys(filtered).length > 0) {
+        tools = filtered as Record<string, any>
+        console.log(
+          `[Chat] Applied tool group "${group.id}" -> ${Object.keys(tools).join(', ')}`
+        )
+      }
+    }
+
     const { systemMessages, prefersWebSearch: finalPrefersWebSearch } = buildSystemPrompt({
       prefersWebSearch,
       effectivePreferredTool,
@@ -278,6 +297,12 @@ export async function POST(req: Request) {
       sessionUser: { name: session.user.name, email: session.user.email },
       channel: 'web',
     })
+
+    // Append the group's system preamble so the model knows it's operating in
+    // a narrowed tool scope (matches how Scira routes per-group prompts).
+    if (groupSystemAddition) {
+      systemMessages.push({ role: 'system', content: groupSystemAddition })
+    }
 
     const enhancedMessages = enhanceMessagesWithToolContext(messages, directToolCallResult)
 

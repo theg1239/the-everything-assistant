@@ -3,13 +3,13 @@
 import type { UseChatHelpers } from '@ai-sdk/react'
 import { useEffect, useRef } from 'react'
 import { useDataStream } from '@/components/data-stream-provider'
-import type { AppUIMessage } from '@/lib/ai-message-conversion'
+import type { AppUIMessage, LegacyMessage } from '@/lib/ai-message-conversion'
 
 export type UseAutoResumeParams = {
   autoResume: boolean
-  initialMessages: AppUIMessage[]
+  initialMessages: Array<AppUIMessage | LegacyMessage>
   resumeStream: UseChatHelpers<AppUIMessage>['resumeStream']
-  setMessages: UseChatHelpers<AppUIMessage>['setMessages']
+  setMessages?: UseChatHelpers<AppUIMessage>['setMessages']
 }
 
 /**
@@ -18,8 +18,9 @@ export type UseAutoResumeParams = {
  *
  * - On mount, if the last message is from the user and `autoResume` is on, we
  *   kick off `resumeStream()` to continue from the server's buffered state.
- * - Subscribes to `data-appendMessage` data-stream parts so that a server-side
- *   replay can push the final assistant message back.
+ * - When `setMessages` is provided, also subscribes to `data-appendMessage`
+ *   data-stream parts so that a server-side replay can push the final
+ *   assistant message back into the transcript.
  */
 export function useAutoResume({
   autoResume,
@@ -43,14 +44,20 @@ export function useAutoResume({
   }, [autoResume, initialMessages, resumeStream])
 
   useEffect(() => {
+    if (!setMessages) return
     if (!dataStream || dataStream.length === 0) return
 
     const dataPart = dataStream[0]
 
     if ((dataPart as { type?: string })?.type === 'data-appendMessage') {
       try {
-        const message = JSON.parse((dataPart as { data: string }).data) as AppUIMessage
-        setMessages([...initialMessages, message])
+        const message = JSON.parse(
+          (dataPart as { data: string }).data
+        ) as AppUIMessage
+        setMessages([
+          ...(initialMessages as AppUIMessage[]),
+          message,
+        ])
       } catch (err) {
         console.warn('useAutoResume: failed to parse appended message', err)
       }

@@ -3,7 +3,8 @@ import { authOptions } from '@/lib/auth'
 import { getChat, getMessages } from '@/lib/db'
 import { createUIMessageStream, JsonToSseTransformStream } from 'ai'
 import type { UIMessage } from 'ai'
-import { legacyMessageToUiMessage, type AppUIMessage } from '@/lib/ai-message-conversion'
+import { legacyMessageToUiMessage, type AppUIMessage, type LegacyMessage } from '@/lib/ai-message-conversion'
+import type { Message as DbMessage } from '@/lib/db'
 
 interface StreamRouteParams {
   id: string
@@ -43,20 +44,32 @@ export async function GET(_req: Request, { params }: { params: Promise<StreamRou
     return emptyStream()
   }
 
-  const legacyMessages = await getMessages(chatId).catch(() => [])
-  const mostRecent = legacyMessages.at(-1)
+  const dbMessages = (await getMessages(chatId).catch(() => [])) as DbMessage[]
+  const mostRecent = dbMessages.at(-1)
 
   if (!mostRecent || mostRecent.role !== 'assistant') {
     return emptyStream()
   }
 
-  const createdAt = new Date(mostRecent.createdAt ?? Date.now())
+  const createdAt = new Date(mostRecent.created_at ?? Date.now())
   const ageSeconds = (Date.now() - createdAt.getTime()) / 1000
   if (Number.isFinite(ageSeconds) && ageSeconds > RESUME_WINDOW_SECONDS) {
     return emptyStream()
   }
 
-  const appended: AppUIMessage = legacyMessageToUiMessage(mostRecent)
+  const legacyForConversion: LegacyMessage = {
+    id: mostRecent.id,
+    role: mostRecent.role,
+    content: mostRecent.content,
+    createdAt: mostRecent.created_at,
+    toolInvocations: mostRecent.toolInvocations,
+    attachments: mostRecent.attachments?.map(a => ({
+      url: a.url,
+      name: a.name ?? null,
+      contentType: a.contentType,
+    })),
+  }
+  const appended: AppUIMessage = legacyMessageToUiMessage(legacyForConversion)
 
   const stream = createUIMessageStream<UIMessage>({
     execute: ({ writer }) => {

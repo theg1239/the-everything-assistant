@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { OptimizedMarkdown } from './optimized-markdown'
 import { ToolCallDisplay } from './tool-call-display'
+import { SourceUrlPart } from './message-parts/source-url-part'
 import { MusicPlayerToolHandler } from './music-player-tool-handler'
 import { MessageActions } from './message-actions'
 import { SelectionMenu } from './selection-menu'
@@ -337,10 +338,11 @@ const PureMessageBubble = ({
   // Reasoning is shown inline where it appears in the conversation flow
   const orderedSegments = useMemo(() => {
     const segments: Array<{
-      type: 'reasoning' | 'text' | 'tools'
+      type: 'reasoning' | 'text' | 'tools' | 'sources'
       content?: string
       toolCalls?: NormalizedToolInvocation[]
       reasoningText?: string
+      sources?: { url: string; title?: string }[]
     }> = []
 
     if (!Array.isArray(message.parts) || message.parts.length === 0) {
@@ -360,7 +362,9 @@ const PureMessageBubble = ({
     let currentTextContent = ''
     let currentReasoningContent = ''
     let currentToolCalls: NormalizedToolInvocation[] = []
+    let currentSources: { url: string; title?: string }[] = []
     const seenToolCallIds = new Set<string>()
+    const seenSourceUrls = new Set<string>()
 
     const flushText = () => {
       if (currentTextContent.trim()) {
@@ -381,6 +385,18 @@ const PureMessageBubble = ({
         segments.push({ type: 'tools', toolCalls: [...currentToolCalls] })
         currentToolCalls = []
       }
+    }
+
+    const flushSources = () => {
+      const fresh = currentSources.filter(s => {
+        if (seenSourceUrls.has(s.url)) return false
+        seenSourceUrls.add(s.url)
+        return true
+      })
+      if (fresh.length > 0) {
+        segments.push({ type: 'sources', sources: fresh })
+      }
+      currentSources = []
     }
 
     for (const part of message.parts) {
@@ -407,6 +423,19 @@ const PureMessageBubble = ({
         flushReasoning()
         flushTools()
         currentTextContent += (currentTextContent ? '\n\n' : '') + (part as any).text
+        continue
+      }
+
+      // Handle source-url citation parts — collect them to render as chips
+      // after the surrounding text via the shared SourceUrlPart component.
+      if (partType === 'source-url') {
+        const url = (part as { url?: string }).url
+        if (url) {
+          flushReasoning()
+          flushTools()
+          const title = (part as { title?: string }).title
+          currentSources.push({ url, title })
+        }
         continue
       }
 
@@ -445,6 +474,7 @@ const PureMessageBubble = ({
     flushReasoning()
     flushTools()
     flushText()
+    flushSources()
 
     // If we have tool calls that weren't in parts (legacy toolInvocations), add them
     const segmentToolIds = new Set(
@@ -527,7 +557,25 @@ const PureMessageBubble = ({
                   </div>
                 )
               }
-              
+
+              if (segment.type === 'sources' && segment.sources && segment.sources.length > 0) {
+                return (
+                  <div
+                    key={`sources-${idx}`}
+                    className="flex flex-wrap gap-1.5 pt-1"
+                    aria-label="sources"
+                  >
+                    {segment.sources.map(source => (
+                      <SourceUrlPart
+                        key={source.url}
+                        url={source.url}
+                        title={source.title}
+                      />
+                    ))}
+                  </div>
+                )
+              }
+
               return null
             })
           })()}

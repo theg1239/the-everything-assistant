@@ -22,6 +22,9 @@ import type { EmbeddingModel } from 'ai'
 
 type Provider = 'google' | 'groq' | 'cerebras' | 'openrouter' | 'openai' | 'direct'
 
+const DEFAULT_OPENAI_EMBEDDING_MODEL = 'text-embedding-3-small'
+const DEFAULT_GOOGLE_EMBEDDING_MODEL = 'gemini-embedding-001'
+
 const openaiWebSocketFetch = createWebSocketFetch()
 const createOpenAIProvider = (apiKey: string) =>
   createOpenAI({ apiKey, fetch: openaiWebSocketFetch })
@@ -132,7 +135,10 @@ export class RateLimitedAI {
     }
     const listValue = process.env[entry.list]
     if (listValue) {
-      for (const value of listValue.split(',').map(v => v.trim()).filter(Boolean)) {
+      for (const value of listValue
+        .split(',')
+        .map(v => v.trim())
+        .filter(Boolean)) {
         keys.add(value)
       }
     }
@@ -226,7 +232,9 @@ export class RateLimitedAI {
     }
   }
 
-  async withProvider<T>(fn: (provider: ReturnType<typeof this.createProviderInstance>) => T | Promise<T>): Promise<T> {
+  async withProvider<T>(
+    fn: (provider: ReturnType<typeof this.createProviderInstance>) => T | Promise<T>
+  ): Promise<T> {
     const entry = await this.apiKeyManager.getCurrentKey({
       allowedProviders: [this.provider],
       preferredProviders: [this.provider],
@@ -283,13 +291,38 @@ export class RateLimitedAI {
     requestedModelId: string | undefined,
     provider: Provider
   ): string {
+    const normalizedModelId = requestedModelId?.trim()
+    const prefixMatch = normalizedModelId?.match(/^(openai|google)\/(.+)$/i)
+    const requestedProvider = prefixMatch?.[1]?.toLowerCase() as Provider | undefined
+    const unprefixedModelId = prefixMatch?.[2] ?? normalizedModelId
+
     if (provider === 'openai') {
-      return process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-large'
+      if (requestedProvider && requestedProvider !== 'openai') {
+        return process.env.OPENAI_EMBEDDING_MODEL || DEFAULT_OPENAI_EMBEDDING_MODEL
+      }
+      return (
+        process.env.OPENAI_EMBEDDING_MODEL || unprefixedModelId || DEFAULT_OPENAI_EMBEDDING_MODEL
+      )
     }
-    return requestedModelId ?? modelIds.embedding
+
+    if (provider === 'google') {
+      if (
+        requestedProvider === 'openai' ||
+        unprefixedModelId?.startsWith('text-embedding-3') ||
+        unprefixedModelId?.startsWith('text-embedding-ada')
+      ) {
+        return DEFAULT_GOOGLE_EMBEDDING_MODEL
+      }
+      return unprefixedModelId || DEFAULT_GOOGLE_EMBEDDING_MODEL
+    }
+
+    return unprefixedModelId ?? modelIds.embedding
   }
 
-  private buildOptionsForProvider(options: TextGenerationOptions, provider: Provider): TextGenerationOptions {
+  private buildOptionsForProvider(
+    options: TextGenerationOptions,
+    provider: Provider
+  ): TextGenerationOptions {
     const { providerOverrides, ...rest } = options as TextGenerationOptions & {
       providerOverrides?: Partial<Record<Provider, Partial<TextGenerationOptions>>>
     }
@@ -297,7 +330,11 @@ export class RateLimitedAI {
     const baseProviderOptions = rest.providerOptions ?? {}
     const overrideProviderOptions = (override as TextGenerationOptions).providerOptions ?? {}
     const mergedProviderOptions = { ...baseProviderOptions, ...overrideProviderOptions }
-    const merged = { ...rest, ...override, providerOptions: mergedProviderOptions } as TextGenerationOptions
+    const merged = {
+      ...rest,
+      ...override,
+      providerOptions: mergedProviderOptions,
+    } as TextGenerationOptions
     if (merged.providerOptions && typeof merged.providerOptions === 'object') {
       const selected = (merged.providerOptions as any)[provider]
       merged.providerOptions = selected ? { [provider]: selected } : undefined
@@ -401,7 +438,8 @@ export class RateLimitedAI {
       scheduleSlowLog()
       const enrichedOptions = this.withGoogleRetryOptions(options)
       const allowedProviders = keyOptions.allowedProviders ?? this.getAllowedProvidersForText()
-      const preferredProviders = keyOptions.preferredProviders ?? this.getPreferredProvidersForText()
+      const preferredProviders =
+        keyOptions.preferredProviders ?? this.getPreferredProvidersForText()
       let selectedProvider: Provider | undefined
       let selectedIndex: number | undefined
       const result = await this.apiKeyManager.executeWithRateLimit(
@@ -525,10 +563,7 @@ export class RateLimitedAI {
     return this.apiKeyManager.executeWithRateLimit(
       async entry => {
         const provider = (entry.provider as Provider) ?? this.provider
-        const resolvedModelId = this.resolveEmbeddingModelId(
-          options.model?.modelId,
-          provider
-        )
+        const resolvedModelId = this.resolveEmbeddingModelId(options.model?.modelId, provider)
         const modelFn =
           provider === 'openai'
             ? createOpenAIProvider(entry.key).textEmbeddingModel(resolvedModelId)
@@ -561,7 +596,10 @@ export class RateLimitedAI {
       aspectRatio?: string
     },
     userId?: string
-  ): Promise<{ image: { base64: string; mimeType: string }; images: { base64: string; mimeType: string }[] }> {
+  ): Promise<{
+    image: { base64: string; mimeType: string }
+    images: { base64: string; mimeType: string }[]
+  }> {
     if (this.provider !== 'google') {
       throw new Error('Image generation is only supported for the Google provider')
     }
@@ -574,36 +612,34 @@ export class RateLimitedAI {
     return this.apiKeyManager.executeWithRateLimit(
       async entry => {
         const google = createGoogleGenerativeAI({ apiKey: entry.key })
-      const modelId = options.model || 'gemini-2.5-flash-image'
+        const modelId = options.model || 'gemini-2.5-flash-image'
 
-      let fullPrompt = options.prompt
-      if (options.aspectRatio) {
-        fullPrompt = `${options.prompt} (aspect ratio: ${options.aspectRatio})`
-      }
+        let fullPrompt = options.prompt
+        if (options.aspectRatio) {
+          fullPrompt = `${options.prompt} (aspect ratio: ${options.aspectRatio})`
+        }
 
-      const result = await generateText({
-        model: google(modelId),
-        prompt: fullPrompt,
-      })
+        const result = await generateText({
+          model: google(modelId),
+          prompt: fullPrompt,
+        })
 
-      const imageFiles = (result.files || []).filter(file => 
-        file.mediaType.startsWith('image/')
-      )
+        const imageFiles = (result.files || []).filter(file => file.mediaType.startsWith('image/'))
 
-      if (imageFiles.length === 0) {
-        throw new Error('No images were generated by the model')
-      }
+        if (imageFiles.length === 0) {
+          throw new Error('No images were generated by the model')
+        }
 
-      return {
-        image: {
-          base64: imageFiles[0].base64,
-          mimeType: imageFiles[0].mediaType,
-        },
-        images: imageFiles.map(img => ({
-          base64: img.base64,
-          mimeType: img.mediaType,
-        })),
-      }
+        return {
+          image: {
+            base64: imageFiles[0].base64,
+            mimeType: imageFiles[0].mediaType,
+          },
+          images: imageFiles.map(img => ({
+            base64: img.base64,
+            mimeType: img.mediaType,
+          })),
+        }
       },
       {
         allowedProviders: ['google'],
@@ -766,8 +802,7 @@ class DirectAI {
     userId?: string
   ): Promise<EmbedResult | EmbedManyResult> {
     await this.enforceUserRateLimit(userId)
-    const resolvedModel =
-      getDirectModelId(options.model) || modelRegistry.embedding.modelId
+    const resolvedModel = getDirectModelId(options.model) || modelRegistry.embedding.modelId
     const model = resolvedModel as any
 
     if (Array.isArray(options.values)) {
@@ -804,7 +839,6 @@ class DirectAI {
     this.userRateLimiter.updateConfig(c)
   }
 }
-
 
 const instances: Partial<Record<Provider, RateLimitedAI>> = {}
 
@@ -843,7 +877,9 @@ export const rateLimitedAI = {
     generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) =>
       getDirectAI().generateObject<T>(o, u),
     embed: (
-      o: { model?: DirectModelInput; value: string } | { model?: DirectModelInput; values: string[] },
+      o:
+        | { model?: DirectModelInput; value: string }
+        | { model?: DirectModelInput; values: string[] },
       u?: string
     ) => getDirectAI().embed(o as any, u),
     banKeyByIndex: async (_i: number) => {},
@@ -869,10 +905,14 @@ export const rateLimitedAI = {
     embedding: (n = modelIds.embedding) => getEmbeddingModel('google', n),
     streamText: (o: TextGenerationOptions, u?: string, k?: ApiKeySelectionOptions) =>
       getRateLimitedAI('google').streamText(o, u, k),
-    generateText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('google').generateText(o, u),
-    generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) => getRateLimitedAI('google').generateObject<T>(o, u),
-    generateImage: (o: { model?: string; prompt: string; aspectRatio?: string }, u?: string) => getRateLimitedAI('google').generateImage(o, u),
-    embed: (o: EmbedOptions, u?: string) => getRateLimitedAI('google').embed(o as { model?: { modelId: string }; value: string }, u),
+    generateText: (o: TextGenerationOptions, u?: string) =>
+      getRateLimitedAI('google').generateText(o, u),
+    generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) =>
+      getRateLimitedAI('google').generateObject<T>(o, u),
+    generateImage: (o: { model?: string; prompt: string; aspectRatio?: string }, u?: string) =>
+      getRateLimitedAI('google').generateImage(o, u),
+    embed: (o: EmbedOptions, u?: string) =>
+      getRateLimitedAI('google').embed(o as { model?: { modelId: string }; value: string }, u),
     getUsageStats: () => getRateLimitedAI('google').getUsageStats(),
     rotateKey: () => getRateLimitedAI('google').rotateKey(),
     resetRateLimits: () => getRateLimitedAI('google').resetRateLimits(),
@@ -882,7 +922,8 @@ export const rateLimitedAI = {
     checkUserRateLimit: (u: string) => getRateLimitedAI('google').checkUserRateLimit(u),
     resetUserRateLimits: (u: string) => getRateLimitedAI('google').resetUserRateLimits(u),
     getUserConfig: () => getRateLimitedAI('google').getUserConfig(),
-    updateUserConfig: (c: Partial<UserRateLimitConfig>) => getRateLimitedAI('google').updateUserConfig(c),
+    updateUserConfig: (c: Partial<UserRateLimitConfig>) =>
+      getRateLimitedAI('google').updateUserConfig(c),
     getFullStatus: (u?: string) => getRateLimitedAI('google').getFullStatus(u),
     tools: {
       google_search: (options?: GoogleSearchToolOptions) => googleTools.googleSearch(options ?? {}),
@@ -897,9 +938,12 @@ export const rateLimitedAI = {
     embedding: (n = modelIds.embedding) => getEmbeddingModel('google', n),
     streamText: (o: TextGenerationOptions, u?: string, k?: ApiKeySelectionOptions) =>
       getRateLimitedAI('groq').streamText(o, u, k),
-    generateText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('groq').generateText(o, u),
-    generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) => getRateLimitedAI('groq').generateObject<T>(o, u),
-    embed: (o: EmbedOptions, u?: string) => getRateLimitedAI('groq').embed(o as { model?: { modelId: string }; value: string }, u),
+    generateText: (o: TextGenerationOptions, u?: string) =>
+      getRateLimitedAI('groq').generateText(o, u),
+    generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) =>
+      getRateLimitedAI('groq').generateObject<T>(o, u),
+    embed: (o: EmbedOptions, u?: string) =>
+      getRateLimitedAI('groq').embed(o as { model?: { modelId: string }; value: string }, u),
     getUsageStats: () => getRateLimitedAI('groq').getUsageStats(),
     rotateKey: () => getRateLimitedAI('groq').rotateKey(),
     resetRateLimits: () => getRateLimitedAI('groq').resetRateLimits(),
@@ -909,7 +953,8 @@ export const rateLimitedAI = {
     checkUserRateLimit: (u: string) => getRateLimitedAI('groq').checkUserRateLimit(u),
     resetUserRateLimits: (u: string) => getRateLimitedAI('groq').resetUserRateLimits(u),
     getUserConfig: () => getRateLimitedAI('groq').getUserConfig(),
-    updateUserConfig: (c: Partial<UserRateLimitConfig>) => getRateLimitedAI('groq').updateUserConfig(c),
+    updateUserConfig: (c: Partial<UserRateLimitConfig>) =>
+      getRateLimitedAI('groq').updateUserConfig(c),
     getFullStatus: (u?: string) => getRateLimitedAI('groq').getFullStatus(u),
   },
   cerebras: {
@@ -917,9 +962,12 @@ export const rateLimitedAI = {
     embedding: (n = modelIds.embedding) => getEmbeddingModel('google', n),
     streamText: (o: TextGenerationOptions, u?: string, k?: ApiKeySelectionOptions) =>
       getRateLimitedAI('cerebras').streamText(o, u, k),
-    generateText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('cerebras').generateText(o, u),
-    generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) => getRateLimitedAI('cerebras').generateObject<T>(o, u),
-    embed: (o: EmbedOptions, u?: string) => getRateLimitedAI('cerebras').embed(o as { model?: { modelId: string }; value: string }, u),
+    generateText: (o: TextGenerationOptions, u?: string) =>
+      getRateLimitedAI('cerebras').generateText(o, u),
+    generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) =>
+      getRateLimitedAI('cerebras').generateObject<T>(o, u),
+    embed: (o: EmbedOptions, u?: string) =>
+      getRateLimitedAI('cerebras').embed(o as { model?: { modelId: string }; value: string }, u),
     getUsageStats: () => getRateLimitedAI('cerebras').getUsageStats(),
     rotateKey: () => getRateLimitedAI('cerebras').rotateKey(),
     resetRateLimits: () => getRateLimitedAI('cerebras').resetRateLimits(),
@@ -929,7 +977,8 @@ export const rateLimitedAI = {
     checkUserRateLimit: (u: string) => getRateLimitedAI('cerebras').checkUserRateLimit(u),
     resetUserRateLimits: (u: string) => getRateLimitedAI('cerebras').resetUserRateLimits(u),
     getUserConfig: () => getRateLimitedAI('cerebras').getUserConfig(),
-    updateUserConfig: (c: Partial<UserRateLimitConfig>) => getRateLimitedAI('cerebras').updateUserConfig(c),
+    updateUserConfig: (c: Partial<UserRateLimitConfig>) =>
+      getRateLimitedAI('cerebras').updateUserConfig(c),
     getFullStatus: (u?: string) => getRateLimitedAI('cerebras').getFullStatus(u),
   },
   openrouter: {
@@ -937,9 +986,12 @@ export const rateLimitedAI = {
     embedding: (n = modelIds.embedding) => getEmbeddingModel('google', n),
     streamText: (o: TextGenerationOptions, u?: string, k?: ApiKeySelectionOptions) =>
       getRateLimitedAI('openrouter').streamText(o, u, k),
-    generateText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('openrouter').generateText(o, u),
-    generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) => getRateLimitedAI('openrouter').generateObject<T>(o, u),
-    embed: (o: EmbedOptions, u?: string) => getRateLimitedAI('openrouter').embed(o as { model?: { modelId: string }; value: string }, u),
+    generateText: (o: TextGenerationOptions, u?: string) =>
+      getRateLimitedAI('openrouter').generateText(o, u),
+    generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) =>
+      getRateLimitedAI('openrouter').generateObject<T>(o, u),
+    embed: (o: EmbedOptions, u?: string) =>
+      getRateLimitedAI('openrouter').embed(o as { model?: { modelId: string }; value: string }, u),
     getUsageStats: () => getRateLimitedAI('openrouter').getUsageStats(),
     rotateKey: () => getRateLimitedAI('openrouter').rotateKey(),
     resetRateLimits: () => getRateLimitedAI('openrouter').resetRateLimits(),
@@ -949,7 +1001,8 @@ export const rateLimitedAI = {
     checkUserRateLimit: (u: string) => getRateLimitedAI('openrouter').checkUserRateLimit(u),
     resetUserRateLimits: (u: string) => getRateLimitedAI('openrouter').resetUserRateLimits(u),
     getUserConfig: () => getRateLimitedAI('openrouter').getUserConfig(),
-    updateUserConfig: (c: Partial<UserRateLimitConfig>) => getRateLimitedAI('openrouter').updateUserConfig(c),
+    updateUserConfig: (c: Partial<UserRateLimitConfig>) =>
+      getRateLimitedAI('openrouter').updateUserConfig(c),
     getFullStatus: (u?: string) => getRateLimitedAI('openrouter').getFullStatus(u),
   },
   openai: {
@@ -957,9 +1010,12 @@ export const rateLimitedAI = {
     embedding: (n = modelIds.embedding) => getEmbeddingModel('openai', n),
     streamText: (o: TextGenerationOptions, u?: string, k?: ApiKeySelectionOptions) =>
       getRateLimitedAI('openai').streamText(o, u, k),
-    generateText: (o: TextGenerationOptions, u?: string) => getRateLimitedAI('openai').generateText(o, u),
-    generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) => getRateLimitedAI('openai').generateObject<T>(o, u),
-    embed: (o: EmbedOptions, u?: string) => getRateLimitedAI('openai').embed(o as { model?: { modelId: string }; value: string }, u),
+    generateText: (o: TextGenerationOptions, u?: string) =>
+      getRateLimitedAI('openai').generateText(o, u),
+    generateObject: <T>(o: TextGenerationOptions & { schema?: unknown }, u?: string) =>
+      getRateLimitedAI('openai').generateObject<T>(o, u),
+    embed: (o: EmbedOptions, u?: string) =>
+      getRateLimitedAI('openai').embed(o as { model?: { modelId: string }; value: string }, u),
     getUsageStats: () => getRateLimitedAI('openai').getUsageStats(),
     rotateKey: () => getRateLimitedAI('openai').rotateKey(),
     resetRateLimits: () => getRateLimitedAI('openai').resetRateLimits(),
@@ -969,7 +1025,8 @@ export const rateLimitedAI = {
     checkUserRateLimit: (u: string) => getRateLimitedAI('openai').checkUserRateLimit(u),
     resetUserRateLimits: (u: string) => getRateLimitedAI('openai').resetUserRateLimits(u),
     getUserConfig: () => getRateLimitedAI('openai').getUserConfig(),
-    updateUserConfig: (c: Partial<UserRateLimitConfig>) => getRateLimitedAI('openai').updateUserConfig(c),
+    updateUserConfig: (c: Partial<UserRateLimitConfig>) =>
+      getRateLimitedAI('openai').updateUserConfig(c),
     getFullStatus: (u?: string) => getRateLimitedAI('openai').getFullStatus(u),
   },
 }

@@ -23,12 +23,12 @@ export type ModelConfig = {
 }
 
 const registry: Record<ModelKey, ModelConfig> = {
-  chat: { provider: 'direct', modelId: 'openai/gpt-5.4-mini' },
-  chatLite: { provider: 'direct', modelId: 'openai/gpt-5.4-mini' },
-  chatAttachment: { provider: 'direct', modelId: 'openai/gpt-5.4-mini' },
+  chat: { provider: 'openai', modelId: 'gpt-5.4-mini' },
+  chatLite: { provider: 'openai', modelId: 'gpt-5.4-mini' },
+  chatAttachment: { provider: 'openai', modelId: 'gpt-5.4-mini' },
   chatAutocomplete: { provider: 'direct', modelId: 'meta/llama-3.1-8b' },
-  embedding: { provider: 'direct', modelId: 'google/gemini-embedding-001' },
-  knowledgeEmbedding: { provider: 'direct', modelId: 'google/gemini-embedding-001' },
+  embedding: { provider: 'openai', modelId: 'text-embedding-3-small' },
+  knowledgeEmbedding: { provider: 'openai', modelId: 'text-embedding-3-small' },
   followUps: { provider: 'direct', modelId: 'mistral/ministral-3b' },
   whatsappBot: { provider: 'google', modelId: 'gemini-3.1-flash-lite' },
   hubVtop: { provider: 'google', modelId: 'gemini-3.1-flash-lite' },
@@ -57,4 +57,3 @@ export const modelIds: Record<ModelKey, string> = Object.fromEntries(
 export function getModelConfig(key: ModelKey): ModelConfig {
   return registry[key]
 }
-

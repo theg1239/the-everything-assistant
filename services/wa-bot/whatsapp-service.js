@@ -678,6 +678,10 @@ class WhatsAppService extends EventEmitter {
         await this.sendStatusMessage(originalChat)
         break
 
+      case '!no':
+        await this.handleNoCommand(originalChat)
+        break
+
       case '!linkvtop':
       case '!vtoplink':
       case '!link':
@@ -784,6 +788,33 @@ class WhatsAppService extends EventEmitter {
         userChat,
         'something went wrong while creating the link. please try again in a bit.'
       )
+    }
+  }
+
+  async handleNoCommand(chat) {
+    const fallbackMessage =
+      "The API is down so I guess I'll just reject you manually - no"
+
+    try {
+      const response = await fetch('https://naas.isalman.dev/no', {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'WhatsApp-Bot-Service/1.0.0',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`NaaS request failed: ${response.status} ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      const reason = typeof data?.reason === 'string' ? data.reason.trim() : ''
+
+      await this.sendMessageToChat(chat, reason || fallbackMessage)
+    } catch (error) {
+      console.error('❌ Error in handleNoCommand:', error)
+      await this.sendMessageToChat(chat, fallbackMessage)
     }
   }
 
@@ -1268,6 +1299,9 @@ available commands:
    example: !context what were the main topics discussed?
    example: !context 400 summarize what happened while i was away
    example: !context limit=200 give me the finance updates
+
+!no - get a random rejection reason
+   example: !no
 
 !everyone [message] - tag everyone in group chat (owner only)
    example: !everyone meeting tomorrow at 5pm

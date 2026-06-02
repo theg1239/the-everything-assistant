@@ -70,6 +70,7 @@ npm start
 Users can interact with the bot using these commands:
 
 - `!ask [question]` - Ask the AI assistant anything
+- `!no` - Get a random rejection reason
 - `!help` - Show available commands
 - `!status` - Check bot status
 

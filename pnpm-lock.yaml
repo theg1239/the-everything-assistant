@@ -4,6 +4,10 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@types/three': 0.177.0
+  ai: 6.0.235
+
 importers:
 
   .:
@@ -2077,7 +2081,7 @@ packages:
   '@parallel-web/ai-sdk-tools@0.1.6':
     resolution: {integrity: sha512-MgMUzgpi1eKOaaclkHtQ5BAsUOwaG4cfMQQ2LrQom/c5WuKmOh2B5dS+jGkuqcR2+MQu3FCu3f9NR5vNmeV4bw==}
     peerDependencies:
-      ai: ^5.0.0
+      ai: 6.0.235
 
   '@pdf-lib/standard-fonts@1.0.0':
     resolution: {integrity: sha512-hU30BK9IUN/su0Mn9VdlVKsWBS6GyhVfqjwl1FjZN4TxP6cCw0jP2w7V3Hf5uX7M0AZJ16vey9yE0ny7Sa59ZA==}
@@ -3501,13 +3505,13 @@ packages:
   ai-resumable-stream@1.4.0:
     resolution: {integrity: sha512-lYNcoyk2nM/cS8oXexMX9B1nMvP5Gpm59uc7Z73hwDzLHy20kPOUg99BUmoIldrMAXCq7dCIu6ALySiXAkojng==}
     peerDependencies:
-      ai: ^6.0.0
+      ai: 6.0.235
       redis: ^5.0.0
 
   ai-stream-utils@2.2.0:
     resolution: {integrity: sha512-zodQ05B4BxpMG+iWrha35FKAhW3pZ4sJXrcbjSMB8Amsl7ur4dSm0kuZV4wgnqZhtV9LOhKECe3+Y+J5KN13Ug==}
     peerDependencies:
-      ai: 5.x || 6.x
+      ai: 6.0.235
 
   ai@6.0.235:
     resolution: {integrity: sha512-Uyeuvowo20XChpFC0lUaQq8xf0Kg7OElA56fEjUYoeWMJIzqshDTz4S57KXobcJ4m+iDQxMeJoUj06CIxSLx7A==}
@@ -4993,13 +4997,13 @@ packages:
   maath@0.10.8:
     resolution: {integrity: sha512-tRvbDF0Pgqz+9XUa4jjfgAQ8/aPKmQdWXilFu2tMy4GWj4NOsx99HlULO4IeREfbO3a0sA145DZYyvXPkybm0g==}
     peerDependencies:
-      '@types/three': '>=0.134.0'
+      '@types/three': 0.177.0
       three: '>=0.134.0'
 
   maath@0.6.0:
     resolution: {integrity: sha512-dSb2xQuP7vDnaYqfoKzlApeRcR2xtN8/f7WV/TMAkBC8552TwTLtOO0JTcSygkYMjNDPoo6V01jTw/aPi4JrMw==}
     peerDependencies:
-      '@types/three': '>=0.144.0'
+      '@types/three': 0.177.0
       three: '>=0.144.0'
 
   mailparser@3.9.1:
@@ -6243,7 +6247,7 @@ packages:
   stats-gl@2.4.2:
     resolution: {integrity: sha512-g5O9B0hm9CvnM36+v7SFl39T7hmAlv541tU81ME8YeSb3i1CIP5/QdDeSB3A0la0bKNHpxpwxOVRo2wFTYEosQ==}
     peerDependencies:
-      '@types/three': '*'
+      '@types/three': 0.177.0
       three: '*'
 
   stats.js@0.17.0:

@@ -58,7 +58,7 @@ class AgenticRAGService {
 
     this.thinkingBudget = options.thinkingBudget !== undefined ? options.thinkingBudget : 1024
 
-    this.chatModel = openai('gpt-5.4-mini')
+    this.chatModel = openai('gpt-5.6-terra')
 
     this.maxIterations = 2
     this.relevanceThreshold = 0.5
@@ -196,11 +196,10 @@ class AgenticRAGService {
 
       const relevantResults = this.selectRelevantResults(
         originalQuery,
-        relevanceCandidates
-          .map((result, index) => ({
-            ...result,
-            relevanceScore: relevanceScores[index] || 0,
-          }))
+        relevanceCandidates.map((result, index) => ({
+          ...result,
+          relevanceScore: relevanceScores[index] || 0,
+        }))
       )
 
       logger.info(
@@ -357,9 +356,7 @@ class AgenticRAGService {
 
       if (!normalized) return []
 
-      const terms = normalized
-        .split(' ')
-        .filter(term => term.length >= 3 && !/^\d+$/.test(term))
+      const terms = normalized.split(' ').filter(term => term.length >= 3 && !/^\d+$/.test(term))
 
       return Array.from(new Set(terms)).slice(0, 8)
     } catch (error) {
@@ -457,21 +454,18 @@ class AgenticRAGService {
     const engagementBase = Math.max(0, Number(result.upvotes) || 0, Number(result.score) || 0)
     const engagementScore = Math.min(1, Math.log10(engagementBase + 1) / 3)
     const typeWeight = result.type === 'post' ? 1 : result.type === 'comment' ? 0.9 : 0.62
-    const strategyPenalty =
-      result.sourceStrategy === 'keywords' && lexicalCoverage < 0.5
-        ? 0.9
-        : 1
+    const strategyPenalty = result.sourceStrategy === 'keywords' && lexicalCoverage < 0.5 ? 0.9 : 1
 
     return Math.min(
       1,
-      (
-        llmRelevance * 0.43 +
+      (llmRelevance * 0.43 +
         lexicalCoverage * 0.24 +
         similarity * 0.12 +
         rankingScore * 0.11 +
         contentQuality * 0.04 +
-        engagementScore * 0.06
-      ) * strategyPenalty * typeWeight
+        engagementScore * 0.06) *
+        strategyPenalty *
+        typeWeight
     )
   }
 
@@ -564,8 +558,14 @@ ${content}
     const shortlist = this.prioritizeResponseResults(searchResults)
       .slice(0, maxItems)
       .map(result => {
-        const title = String(result.title || '').replace(/\s+/g, ' ').trim().slice(0, 120)
-        const content = String(result.content || '').replace(/\s+/g, ' ').trim().slice(0, 220)
+        const title = String(result.title || '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 120)
+        const content = String(result.content || '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 220)
         const author = result.author ? `u/${result.author}` : 'unknown'
         const upvotes = Number(result.upvotes || result.score || 0)
         return `- ${title}\n  ${content}\n  source: ${author}, upvotes=${upvotes}, subreddit=r/${result.subreddit || 'unknown'}`
@@ -594,7 +594,10 @@ ${content}
 
     return `<div class="reddit-response"><h3>Overview</h3><p>Here are the most relevant Reddit discussions found for: <strong>${String(
       query || ''
-    ).replace(/[<>]/g, '')}</strong>.</p><h3>Student Experiences</h3><ul>${items || '<li>No reliable sources found.</li>'}</ul><h3>Bottom Line & Recommendations</h3><p>Use the highest-upvoted and most recent threads first, then cross-check with official campus resources before acting.</p></div>`
+    ).replace(
+      /[<>]/g,
+      ''
+    )}</strong>.</p><h3>Student Experiences</h3><ul>${items || '<li>No reliable sources found.</li>'}</ul><h3>Bottom Line & Recommendations</h3><p>Use the highest-upvoted and most recent threads first, then cross-check with official campus resources before acting.</p></div>`
   }
 
   async generateAIResponse(query, context, conversationHistory, agenticResult) {
@@ -653,7 +656,7 @@ Do not use markdown.`
         output: Output.text(),
         providerOptions: {
           openai: {
-            reasoningEffort: 'minimal',
+            reasoningEffort: 'none',
           },
         },
       })
@@ -681,7 +684,7 @@ Do not use markdown.`
         output: Output.text(),
         providerOptions: {
           openai: {
-            reasoningEffort: 'minimal',
+            reasoningEffort: 'none',
           },
         },
       })
@@ -715,7 +718,6 @@ Do not use markdown.`
 
   calculateConfidence(searchResults, maxRelevanceScore) {
     if (searchResults.length === 0) return 0
-
 
     const relevanceScores = searchResults.map(r => r.relevanceScore || 0)
     const avgRelevance = relevanceScores.reduce((sum, s) => sum + s, 0) / relevanceScores.length
@@ -803,7 +805,10 @@ class QueryRelevanceAgent {
         1,
         Math.max(
           0.15,
-          (lexicalCoverage * 0.42 + similarity * 0.22 + rankingScore * 0.28 + engagementScore * 0.08) *
+          (lexicalCoverage * 0.42 +
+            similarity * 0.22 +
+            rankingScore * 0.28 +
+            engagementScore * 0.08) *
             typeWeight
         )
       )
@@ -826,12 +831,13 @@ class QueryRelevanceAgent {
       }
 
       const resultsText = searchResults
-        .map((result, index) =>
-          `Result ${index}: title="${String(result.title || '').slice(0, 90)}" excerpt="${String(
-            result.content || ''
-          )
-            .replace(/\s+/g, ' ')
-            .slice(0, 70)}"`
+        .map(
+          (result, index) =>
+            `Result ${index}: title="${String(result.title || '').slice(0, 90)}" excerpt="${String(
+              result.content || ''
+            )
+              .replace(/\s+/g, ' ')
+              .slice(0, 70)}"`
         )
         .join('\n')
 
@@ -858,7 +864,7 @@ Rules:
         }),
         providerOptions: {
           openai: {
-            reasoningEffort: 'minimal',
+            reasoningEffort: 'none',
           },
         },
       })
@@ -924,9 +930,8 @@ Rules:
 
     return matches
   }
-
 }
- 
+
 class QueryRefinementAgent {
   static QUERY_REFINEMENT_OUTPUT_SCHEMA = z.object({
     refinedQuery: z.string().min(5),
@@ -993,7 +998,7 @@ Return:
         }),
         providerOptions: {
           openai: {
-            reasoningEffort: 'minimal',
+            reasoningEffort: 'none',
           },
         },
       })
@@ -1014,7 +1019,6 @@ Return:
       return originalQuery
     }
   }
-
 }
 
 class ResultQualityAgent {

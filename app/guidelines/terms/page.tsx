@@ -4,7 +4,10 @@ import React from 'react'
 
 export default function TermsOfServicePage() {
   return (
-    <div className="bg-zinc-900 text-white font-sans min-h-screen py-10 overflow-y-auto" data-allow-touch-scroll>
+    <div
+      className="bg-zinc-900 text-white font-sans min-h-screen py-10 overflow-y-auto"
+      data-allow-touch-scroll
+    >
       <main className="max-w-2xl mx-auto px-4">
         <h1 className="text-3xl font-bold mb-4">Terms of Service</h1>
         <p className="mb-6">Effective Date: June 25, 2025</p>
@@ -22,7 +25,7 @@ export default function TermsOfServicePage() {
           <p>
             The Service provides AI-powered assistance to answer questions and perform tasks as
             requested by users. Functionality may include data retrieval, analysis, and integration
-            with third‑party model providers.
+            with OpenAI models and external tools such as Parallel web search.
           </p>
         </section>
 
@@ -41,11 +44,11 @@ export default function TermsOfServicePage() {
         </section>
 
         <section className="mb-6">
-          <h2 className="text-xl font-semibold mb-2">4. Third-Party Model Providers</h2>
+          <h2 className="text-xl font-semibold mb-2">4. AI and Search Providers</h2>
           <p>
-            The Service may use third-party AI providers to process requests. Their use of data is
-            governed by their own Terms of Service and Privacy Policies. We encourage you to review
-            those documents.
+            The Service uses OpenAI to process AI model requests and may use Parallel for web search
+            and page extraction. Their use of data is governed by their respective Terms of Service
+            and Privacy Policies.
           </p>
         </section>
 

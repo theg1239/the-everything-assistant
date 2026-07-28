@@ -19,8 +19,8 @@ async function testVideoAnalysis(redditUrl = null) {
 
   console.log('1. Checking environment setup...')
 
-  if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-    console.error('❌ GOOGLE_GENERATIVE_AI_API_KEY is missing')
+  if (!process.env.OPENAI_API_KEY) {
+    console.error('❌ OPENAI_API_KEY is missing')
     process.exit(1)
   }
 

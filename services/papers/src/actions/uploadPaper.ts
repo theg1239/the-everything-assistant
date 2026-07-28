@@ -1,7 +1,7 @@
 'use server'
 
 import { generateObject } from 'ai'
-import { google } from '@ai-sdk/google'
+import { openai } from '@ai-sdk/openai'
 import { v2 as cloudinary } from 'cloudinary'
 import { PDFDocument } from 'pdf-lib'
 import sharp from 'sharp'
@@ -181,7 +181,7 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
 
       try {
         const { object: extractedData } = await generateObject({
-          model: google('gemini-3.1-flash-lite'),
+          model: openai('gpt-5.6-luna'),
           schema: z.object({
             metadata: PaperMetadataSchema,
             text: z.string().describe('Full text content of the document'),
@@ -197,13 +197,18 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
                 {
                   type: 'file',
                   data: base64Pdf,
-                  mimeType: 'application/pdf',
+                  mediaType: 'application/pdf',
                 },
               ],
             },
           ],
           system:
             'You are an AI that extracts metadata from VIT university exam papers with high accuracy. Follow these extraction rules:\n\n1. TITLE: Extract the full course name exactly as written (e.g., "Computer Programming", "Digital Logic Design", "Mathematics for Engineers")\n2. COURSE CODE: Find the exact alphanumeric course code (e.g., CSE1001, MAT1011, ECE2025, CHE1007)\n3. EXAM TYPE: Identify the assessment type - CAT-1 (Continuous Assessment Test 1), CAT-2 (Continuous Assessment Test 2), FAT (Final Assessment Test), Quiz, Assignment, or Lab\n4. SLOT: Extract the exact slot designation (A1, A2, B1, B2, C1, C2, D1, D2, E1, E2, F1, F2, G1, G2, or L1-L60 for lab slots)\n5. YEAR: Extract the academic year (e.g., 2023, 2024)\n6. SEMESTER: Identify the semester (Fall, Winter, Summer, Spring)\n\nLook for these details in headers, footers, and throughout the document. Be precise and only extract information that is clearly visible. ALL FIELDS ARE REQUIRED - if you cannot find a field, make your best educated guess based on the document content.',
+          providerOptions: {
+            openai: {
+              reasoningEffort: 'none',
+            },
+          },
         })
 
         const validationResult = PaperMetadataSchema.safeParse(extractedData.metadata)
@@ -218,7 +223,7 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
         metadata = validationResult.data
         ocrText = extractedData.text
       } catch (error) {
-        console.error('Gemini API error for PDF:', error)
+        console.error('OpenAI API error for PDF:', error)
         return {
           success: false,
           error:
@@ -231,7 +236,7 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
 
       try {
         const { object: extractedData } = await generateObject({
-          model: google('gemini-3.1-flash-lite'),
+          model: openai('gpt-5.6-luna'),
           schema: z.object({
             metadata: PaperMetadataSchema,
             text: z.string().describe('Full text content of the document'),
@@ -247,13 +252,18 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
                 {
                   type: 'image',
                   image: base64Image,
-                  mimeType,
+                  mediaType: mimeType,
                 },
               ],
             },
           ],
           system:
             'You are an AI that extracts metadata from VIT university exam papers with high accuracy. Follow these extraction rules:\n\n1. TITLE: Extract the full course name exactly as written (e.g., "Computer Programming", "Digital Logic Design", "Mathematics for Engineers")\n2. COURSE CODE: Find the exact alphanumeric course code (e.g., CSE1001, MAT1011, ECE2025, CHE1007)\n3. EXAM TYPE: Identify the assessment type - CAT-1 (Continuous Assessment Test 1), CAT-2 (Continuous Assessment Test 2), FAT (Final Assessment Test), Quiz, Assignment, or Lab\n4. SLOT: Extract the exact slot designation (A1, A2, B1, B2, C1, C2, D1, D2, E1, E2, F1, F2, G1, G2, or L1-L60 for lab slots)\n5. YEAR: Extract the academic year (e.g., 2023, 2024)\n6. SEMESTER: Identify the semester (Fall, Winter, Summer, Spring)\n\nLook for these details in headers, footers, and throughout the document. Be precise and only extract information that is clearly visible. ALL FIELDS ARE REQUIRED - if you cannot find a field, make your best educated guess based on the document content.',
+          providerOptions: {
+            openai: {
+              reasoningEffort: 'none',
+            },
+          },
         })
 
         const validationResult = PaperMetadataSchema.safeParse(extractedData.metadata)
@@ -268,7 +278,7 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
         metadata = validationResult.data
         ocrText = extractedData.text
       } catch (error) {
-        console.error('Gemini API error for image:', error)
+        console.error('OpenAI API error for image:', error)
         return {
           success: false,
           error:

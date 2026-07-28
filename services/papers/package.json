@@ -13,13 +13,13 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@ai-sdk/google": "latest",
+    "@ai-sdk/openai": "^3.0.88",
     "@neondatabase/serverless": "latest",
     "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-progress": "^1.1.7",
     "@radix-ui/react-slot": "latest",
     "@tailwindcss/typography": "latest",
-    "ai": "latest",
+    "ai": "6.0.235",
     "class-variance-authority": "latest",
     "cloudinary": "latest",
     "clsx": "latest",

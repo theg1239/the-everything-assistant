@@ -1,13 +1,13 @@
 const KnowledgeBase = require('./knowledge-base')
 const { generateText } = require('ai')
-const { google } = require('@ai-sdk/google')
+const { openai } = require('@ai-sdk/openai')
 const logger = require('../utils/logger')
 
 class RAGService {
   constructor() {
     this.knowledgeBase = new KnowledgeBase()
     this.maxContextLength = parseInt(process.env.MAX_CONTEXT_LENGTH) || 4000
-    this.chatModel = google('gemini-3.1-flash-lite')
+    this.chatModel = openai('gpt-5.6-luna')
   }
   async generateResponse(query, conversationHistory = []) {
     try {
@@ -337,8 +337,12 @@ Context: ${context}`
       const result = await generateText({
         model: this.chatModel,
         messages: messages,
-        maxTokens: 3000,
-        temperature: 0.7,
+        maxOutputTokens: 3000,
+        providerOptions: {
+          openai: {
+            reasoningEffort: 'none',
+          },
+        },
       })
 
       let cleanResponse = result.text
@@ -373,7 +377,6 @@ Context: ${context}`
   }
   calculateConfidence(searchResults) {
     if (searchResults.length === 0) return 0
-
 
     logger.info(`Calculating confidence for ${searchResults.length} results`)
 

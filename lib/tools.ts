@@ -1,6 +1,6 @@
 import { tool } from 'ai'
 import { searchTool, extractTool } from '@parallel-web/ai-sdk-tools'
-import * as z from 'zod/v3';
+import * as z from 'zod/v3'
 import { scrapePapersCodeChef } from './scrapers/papers-codechef'
 import { scrapePapersService } from './scrapers/papers-scraper'
 import { scrapeVITPaperVault } from './scrapers/vit-papervault'
@@ -1023,10 +1023,7 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
   })
 
   const kbContributionInputSchema = z.object({
-    title: z
-      .string()
-      .optional()
-      .describe('optional concise title for the knowledge-base update'),
+    title: z.string().optional().describe('optional concise title for the knowledge-base update'),
     body: z
       .string()
       .min(20, 'include the proposed knowledge chunk or correction')
@@ -1040,7 +1037,7 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
     ...createMusicPlayerTool(options.musicPlayerState),
     // generateImage: tool({
     //   description:
-    //     'Generate an image based on a text prompt using Google Gemini\'s image generation model. Use this when users ask you to create, generate, draw, or make an image, picture, illustration, artwork, or visual content. The generated image will be returned as base64 data.',
+    //     'Generate an image based on a text prompt using OpenAI GPT Image 2. Use this when users ask you to create, generate, draw, or make an image, picture, illustration, artwork, or visual content. The generated image will be returned as base64 data.',
     //   inputSchema: z.object({
     //     prompt: z
     //       .string()
@@ -1051,11 +1048,11 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
     //       .optional()
     //       .describe('Aspect ratio of the generated image. Defaults to 1:1 (square).'),
     //   }),
-    //   execute: async ({ prompt, aspectRatio }) => {        
+    //   execute: async ({ prompt, aspectRatio }) => {
     //     try {
     //       const startTime = Date.now()
-          
-    //       const result = await rateLimitedAI.google.generateImage({
+
+    //       const result = await rateLimitedAI.openai.generateImage({
     //         prompt,
     //         aspectRatio: aspectRatio,
     //       }, userId)
@@ -1075,7 +1072,7 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
     //       console.log('[generateImage] Image generated successfully')
     //       console.log('[generateImage] Image count:', result.images?.length || 1)
     //       console.log('[generateImage] Primary image MIME type:', result.image.mimeType || 'image/png')
-          
+
     //       return {
     //         success: true,
     //         image: {
@@ -1094,7 +1091,7 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
     //       const errorMessage = error?.message || 'Unknown error occurred'
     //       console.error('[generateImage] Error occurred:', errorMessage)
     //       console.error('[generateImage] Full error:', error)
-          
+
     //       if (errorMessage.includes('rate limit') || errorMessage.includes('quota')) {
     //         console.log('[generateImage] Rate limit error detected')
     //         return {
@@ -1103,7 +1100,7 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
     //           message: 'Image generation rate limit reached. Please try again in a few moments.',
     //         }
     //       }
-          
+
     //       if (errorMessage.includes('safety') || errorMessage.includes('blocked') || errorMessage.includes('policy')) {
     //         console.log('[generateImage] Content policy violation detected')
     //         return {
@@ -1127,11 +1124,14 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
         'file product feedback, feature requests, or bug reports directly from chat; creates a GitHub issue for maintainers.',
       inputSchema: feedbackSubmissionSchema,
       execute: async ({ title, body }) => {
-        const result = await createFeedbackIssue({
-          type: 'feedback',
-          title,
-          body,
-        }, sessionUser)
+        const result = await createFeedbackIssue(
+          {
+            type: 'feedback',
+            title,
+            body,
+          },
+          sessionUser
+        )
 
         if (!result.success) {
           return { success: false, error: result.error, details: result.details }
@@ -1149,10 +1149,13 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
         'capture knowledge-base contributions or corrections from the user and open a GitHub issue so maintainers can review.',
       inputSchema: kbContributionInputSchema,
       execute: async ({ title, body }) => {
-        const result = await createFeedbackIssue({
-          type: 'contribution',
-          contribution: { title: title || 'knowledge update', body },
-        }, sessionUser)
+        const result = await createFeedbackIssue(
+          {
+            type: 'contribution',
+            contribution: { title: title || 'knowledge update', body },
+          },
+          sessionUser
+        )
 
         if (!result.success) {
           return { success: false, error: result.error, details: result.details }
@@ -2349,84 +2352,84 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               flags.semesterQuery = 'latest'
             }
 
-        const isBotChannel = channel === 'whatsapp' || channel === 'discord'
+            const isBotChannel = channel === 'whatsapp' || channel === 'discord'
 
-        // Lazy-load MCP token from DB if not explicitly provided
-        let mcpAccessToken = mcpConfig?.accessToken
-        if (!mcpAccessToken && mcpConfig?.endpoint) {
-          const stored = await getUserMcpToken(userId)
-          if (stored) {
-            if (isMcpExpired(stored)) {
-              const refreshed = await refreshUserMcpToken(userId)
-              if (refreshed?.accessToken) {
-                mcpAccessToken = refreshed.accessToken
-              } else if (stored.accessToken) {
-                mcpAccessToken = stored.accessToken
+            // Lazy-load MCP token from DB if not explicitly provided
+            let mcpAccessToken = mcpConfig?.accessToken
+            if (!mcpAccessToken && mcpConfig?.endpoint) {
+              const stored = await getUserMcpToken(userId)
+              if (stored) {
+                if (isMcpExpired(stored)) {
+                  const refreshed = await refreshUserMcpToken(userId)
+                  if (refreshed?.accessToken) {
+                    mcpAccessToken = refreshed.accessToken
+                  } else if (stored.accessToken) {
+                    mcpAccessToken = stored.accessToken
+                  }
+                } else {
+                  mcpAccessToken = stored.accessToken
+                }
               }
-            } else {
-              mcpAccessToken = stored.accessToken
             }
-          }
-        }
 
-        const preferMcp =
-          !triedMcp &&
-          mcpConfig?.endpoint &&
-          mcpAccessToken &&
-          (isBotChannel || mcpConfig.clientName)
+            const preferMcp =
+              !triedMcp &&
+              mcpConfig?.endpoint &&
+              mcpAccessToken &&
+              (isBotChannel || mcpConfig.clientName)
 
-        if (isBotChannel && mcpConfig?.endpoint && !mcpAccessToken) {
-          return {
-            success: false,
-            requiresMcpLink: true,
-            command,
-            message:
-              'Missing or expired VTOP MCP token. Please run !linkvtop in WhatsApp to re-authorize, then retry.',
-          }
-        }
-
-        if (preferMcp) {
-          triedMcp = true
-          const mcpResult = await callVtopViaMcp({
-            command,
-            flags,
-            username,
-            password,
-            mcp: { ...mcpConfig, accessToken: mcpAccessToken },
-          })
-
-          if (mcpResult && mcpResult.success) {
-            return mcpResult
-          }
-
-          if (mcpResult) {
-            lastError = mcpResult
-
-            const msg = (mcpResult.message || mcpResult.error || '').toLowerCase()
-            const tokenIssues =
-              msg.includes('unauthorized') ||
-              msg.includes('invalid token') ||
-              msg.includes('expired') ||
-              msg.includes('forbidden')
-
-            if (isBotChannel && (!mcpResult.success && tokenIssues)) {
+            if (isBotChannel && mcpConfig?.endpoint && !mcpAccessToken) {
               return {
                 success: false,
                 requiresMcpLink: true,
                 command,
                 message:
-                  mcpResult.message ||
-                  'Your VTOP session token expired. Send !linkvtop again to refresh access.',
-                details: mcpResult,
+                  'Missing or expired VTOP MCP token. Please run !linkvtop in WhatsApp to re-authorize, then retry.',
               }
             }
 
-            // For non-token errors, surface the MCP error instead of forcing relink
-            if (isBotChannel) {
-              return mcpResult as any
+            if (preferMcp) {
+              triedMcp = true
+              const mcpResult = await callVtopViaMcp({
+                command,
+                flags,
+                username,
+                password,
+                mcp: { ...mcpConfig, accessToken: mcpAccessToken },
+              })
+
+              if (mcpResult && mcpResult.success) {
+                return mcpResult
+              }
+
+              if (mcpResult) {
+                lastError = mcpResult
+
+                const msg = (mcpResult.message || mcpResult.error || '').toLowerCase()
+                const tokenIssues =
+                  msg.includes('unauthorized') ||
+                  msg.includes('invalid token') ||
+                  msg.includes('expired') ||
+                  msg.includes('forbidden')
+
+                if (isBotChannel && !mcpResult.success && tokenIssues) {
+                  return {
+                    success: false,
+                    requiresMcpLink: true,
+                    command,
+                    message:
+                      mcpResult.message ||
+                      'Your VTOP session token expired. Send !linkvtop again to refresh access.',
+                    details: mcpResult,
+                  }
+                }
+
+                // For non-token errors, surface the MCP error instead of forcing relink
+                if (isBotChannel) {
+                  return mcpResult as any
+                }
+              }
             }
-          }
-        }
 
             let user = username
             let pass = password
@@ -2840,7 +2843,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
         }
       },
     }),
-  };
+  }
 }
 
 function getLevenshteinDistance(a: string, b: string): number {
@@ -2870,5 +2873,5 @@ function normalizeString(str?: string): string {
     .replace(/\p{Diacritic}/gu, '')
     .replace(/[^a-z0-9 ]/g, '')
     .replace(/\s+/g, ' ')
-    .trim();
+    .trim()
 }

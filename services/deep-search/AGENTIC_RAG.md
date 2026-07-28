@@ -143,7 +143,7 @@ This will show:
 Environment variables:
 
 - `MAX_CONTEXT_LENGTH`: Maximum context for AI responses (default: 4000)
-- `GOOGLE_GENERATIVE_AI_API_KEY`: Required for AI agents
+- `OPENAI_API_KEY`: Required for all AI agents, vision analysis, and embeddings
 
 Agent parameters (in code):
 

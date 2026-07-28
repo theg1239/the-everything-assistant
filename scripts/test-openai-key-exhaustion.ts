@@ -8,15 +8,14 @@ import { modelIds } from '../lib/model-registry'
 
 async function main() {
   if (!process.env.OPENAI_API_KEY) {
-    console.error('OPENAI_API_KEY is required to run this fallback test.')
+    console.error('OPENAI_API_KEY is required to run this key-exhaustion test.')
     process.exit(1)
   }
 
-  const ai: any = getRateLimitedAI('google')
-  console.log('[test] Starting Google->OpenAI fallback test')
+  const ai: any = getRateLimitedAI('openai')
+  console.log('[test] Starting OpenAI key-exhaustion test')
   console.log(`[test] OPENAI_API_KEY present: ${Boolean(process.env.OPENAI_API_KEY)}`)
-  console.log(`[test] Google model requested: ${modelIds.chat}`)
-  console.log('[test] Expected OpenAI fallback model: gpt-4o-mini (from rate-limited-ai)')
+  console.log(`[test] OpenAI model requested: ${modelIds.chat}`)
   const originalExecute = ai.apiKeyManager.executeWithRateLimit.bind(ai.apiKeyManager)
 
   console.log('[test] Patching ApiKeyManager.executeWithRateLimit to force exhaustion')
@@ -25,17 +24,18 @@ async function main() {
   }
 
   try {
-    const startedAt = Date.now()
-    console.log('[test] Calling generateText (should trigger OpenAI fallback)...')
-    const result = await ai.generateText({
+    console.log('[test] Calling generateText (should surface key exhaustion)...')
+    await ai.generateText({
       model: { modelId: modelIds.chat },
       prompt: 'Reply with the single word "ok".',
       maxOutputTokens: 5,
-      temperature: 0,
     })
-    const elapsedMs = Date.now() - startedAt
-    console.log(`[test] generateText completed in ${elapsedMs}ms`)
-    console.log('[test] Fallback test succeeded. Response:', (result as any)?.text ?? result)
+    throw new Error('Expected ALL_KEYS_EXHAUSTED but generation succeeded')
+  } catch (error) {
+    if (!(error instanceof ApiKeyManagerError) || error.code !== 'ALL_KEYS_EXHAUSTED') {
+      throw error
+    }
+    console.log('[test] OpenAI key exhaustion surfaced correctly.')
   } finally {
     console.log('[test] Restoring ApiKeyManager.executeWithRateLimit')
     ai.apiKeyManager.executeWithRateLimit = originalExecute
@@ -43,6 +43,6 @@ async function main() {
 }
 
 main().catch((err: any) => {
-  console.error('Fallback test failed:', err?.message || err)
+  console.error('Key-exhaustion test failed:', err?.message || err)
   process.exit(1)
 })

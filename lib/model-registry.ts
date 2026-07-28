@@ -1,4 +1,4 @@
-export type ModelProvider = 'google' | 'groq' | 'cerebras' | 'openrouter' | 'openai' | 'direct'
+export type ModelProvider = 'openai'
 
 export type ModelKey =
   | 'chat'
@@ -23,35 +23,27 @@ export type ModelConfig = {
 }
 
 const registry: Record<ModelKey, ModelConfig> = {
-  chat: { provider: 'openai', modelId: 'gpt-5.4-mini' },
-  chatLite: { provider: 'openai', modelId: 'gpt-5.4-mini' },
-  chatAttachment: { provider: 'openai', modelId: 'gpt-5.4-mini' },
-  chatAutocomplete: { provider: 'direct', modelId: 'meta/llama-3.1-8b' },
-  embedding: { provider: 'openai', modelId: 'text-embedding-3-small' },
-  knowledgeEmbedding: { provider: 'openai', modelId: 'text-embedding-3-small' },
-  followUps: { provider: 'direct', modelId: 'mistral/ministral-3b' },
-  whatsappBot: { provider: 'google', modelId: 'gemini-3.1-flash-lite' },
-  hubVtop: { provider: 'google', modelId: 'gemini-3.1-flash-lite' },
-  hubVtopFormatter: { provider: 'google', modelId: 'gemini-3.1-flash-lite' },
-  placementFormatter: { provider: 'google', modelId: 'gemini-3.1-flash-lite' },
-  vtopParser: { provider: 'google', modelId: 'openai/gpt-5.4-mini' },
-  chatTitle: { provider: 'direct', modelId: 'mistral/ministral-3b' },
-  thinkHarder: { provider: 'openai', modelId: 'gpt-5.4-mini' },
-  thinkHarderAdmin: { provider: 'openai', modelId: 'gpt-5.4' },
+  chat: { provider: 'openai', modelId: 'gpt-5.6-terra' },
+  chatLite: { provider: 'openai', modelId: 'gpt-5.6-terra' },
+  chatAttachment: { provider: 'openai', modelId: 'gpt-5.6-terra' },
+  chatAutocomplete: { provider: 'openai', modelId: 'gpt-5.6-luna' },
+  embedding: { provider: 'openai', modelId: 'text-embedding-3-large' },
+  knowledgeEmbedding: { provider: 'openai', modelId: 'text-embedding-3-large' },
+  followUps: { provider: 'openai', modelId: 'gpt-5.6-luna' },
+  whatsappBot: { provider: 'openai', modelId: 'gpt-5.6-luna' },
+  hubVtop: { provider: 'openai', modelId: 'gpt-5.6-luna' },
+  hubVtopFormatter: { provider: 'openai', modelId: 'gpt-5.6-luna' },
+  placementFormatter: { provider: 'openai', modelId: 'gpt-5.6-luna' },
+  vtopParser: { provider: 'openai', modelId: 'gpt-5.6-luna' },
+  chatTitle: { provider: 'openai', modelId: 'gpt-5.6-luna' },
+  thinkHarder: { provider: 'openai', modelId: 'gpt-5.6-terra' },
+  thinkHarderAdmin: { provider: 'openai', modelId: 'gpt-5.6-sol' },
 }
 
 export const modelRegistry = registry
 
-const stripDirectProviderPrefix = (modelId: string) => {
-  const parts = modelId.split('/')
-  return parts.length > 1 ? parts.slice(1).join('/') : modelId
-}
-
 export const modelIds: Record<ModelKey, string> = Object.fromEntries(
-  Object.entries(registry).map(([key, value]) => [
-    key,
-    value.provider === 'direct' ? stripDirectProviderPrefix(value.modelId) : value.modelId,
-  ])
+  Object.entries(registry).map(([key, value]) => [key, value.modelId])
 ) as Record<ModelKey, string>
 
 export function getModelConfig(key: ModelKey): ModelConfig {

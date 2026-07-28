@@ -1,11 +1,11 @@
 const { generateObject, generateText } = require('ai')
-const { google } = require('@ai-sdk/google')
+const { openai } = require('@ai-sdk/openai')
 const { z } = require('zod')
 const logger = require('../utils/logger')
 
 class ImageAnalyzer {
   constructor() {
-    this.visionModel = google('gemini-3.1-flash-lite')
+    this.visionModel = openai('gpt-5.6-luna')
   }
 
   async analyzeImage(imageBuffer) {
@@ -47,6 +47,11 @@ class ImageAnalyzer {
             ],
           },
         ],
+        providerOptions: {
+          openai: {
+            reasoningEffort: 'none',
+          },
+        },
       })
 
       return result.object
@@ -98,7 +103,12 @@ class ImageAnalyzer {
             ],
           },
         ],
-        maxTokens: 500,
+        maxOutputTokens: 500,
+        providerOptions: {
+          openai: {
+            reasoningEffort: 'none',
+          },
+        },
       })
 
       return result.text

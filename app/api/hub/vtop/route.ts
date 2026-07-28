@@ -8,14 +8,12 @@ import { saveTokenUsage } from '@/lib/db'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
 import { getModelConfig } from '@/lib/model-registry'
 import { normalizeTokenUsage } from '@/lib/token-usage'
-import * as z from 'zod/v3';
+import * as z from 'zod/v3'
 import type { VtopCommandFlags } from '@/types/tools'
 
 const vtopRequestSchema = z.object({
   command: z.string().min(1).optional(),
-  extras: z
-    .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
-    .optional(),
+  extras: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
 })
 
 export const maxDuration = 30
@@ -79,6 +77,11 @@ export async function POST(req: Request) {
         JSON.stringify(raw || {}, null, 2),
         '```',
       ].join('\n'),
+      providerOptions: {
+        openai: {
+          reasoningEffort: 'none',
+        },
+      },
       onFinish: async (final: any) => {
         try {
           const usage = (final && final.usage) || final?.response?.usage || null

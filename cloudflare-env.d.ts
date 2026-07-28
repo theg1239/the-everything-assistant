@@ -3,7 +3,7 @@
 // Runtime types generated with workerd@1.20251109.0 2024-12-30 global_fetch_strictly_public,nodejs_compat
 declare namespace Cloudflare {
 	interface Env {
-		GOOGLE_GENERATIVE_AI_API_KEY: string;
+		OPENAI_API_KEY: string;
 		CHROME_EXECUTABLE_PATH: string;
 		GOOGLE_CLIENT_ID: string;
 		GOOGLE_CLIENT_SECRET: string;
@@ -14,15 +14,13 @@ declare namespace Cloudflare {
 		UPSTASH_REDIS_REST_URL: string;
 		UPSTASH_REDIS_REST_TOKEN: string;
 		RATE_LIMIT_ADMIN_EMAIL: string;
-		GOOGLE_GENERATIVE_AI_API_KEY_2: string;
-		GOOGLE_GENERATIVE_AI_API_KEY_3: string;
-		GOOGLE_GENERATIVE_AI_API_KEY_4: string;
-		GOOGLE_GENERATIVE_AI_API_KEY_5: string;
+		OPENAI_API_KEY_2: string;
+		OPENAI_API_KEY_3: string;
+		OPENAI_API_KEYS: string;
+		OPENAI_EMBEDDING_MODEL: string;
 		DEBUG_PAPERS_CODECHEF: string;
 		DEBUG_SCRAPERS: string;
 		DISABLE_BOTID: string;
-		CEREBRAS_API_KEY: string;
-		GEMINI_API_KEY: string;
 		USER_RATE_LIMIT_REQUESTS_PER_MINUTE: string;
 		USER_RATE_LIMIT_REQUESTS_PER_HOUR: string;
 		USER_RATE_LIMIT_REQUESTS_PER_DAY: string;
@@ -38,7 +36,6 @@ declare namespace Cloudflare {
 		API_KEY_ROTATION_ENABLED: string;
 		API_KEY_ROTATE_ON_RATE_LIMIT: string;
 		API_KEY_HEALTH_CHECK_INTERVAL_MS: string;
-		GROQ_API_KEY: string;
 		GITHUB_TOKEN: string;
 		GITHUB_REPO_OWNER: string;
 		GITHUB_REPO_NAME: string;
@@ -53,8 +50,7 @@ declare namespace Cloudflare {
 		DATABASE_URL: string;
 		WHATSAPP_BOT_API_KEY: string;
 		RESEND_API_KEY: string;
-		OPENROUTER_API_KEY: string;
-		ENABLE_GOOGLE_SEARCH_GROUNDING: string;
+		PARALLEL_API_KEY: string;
 		EXAMCOOKER_API_KEY: string;
 		CLOUDFLARE_API_TOKEN: string;
 		R2_TOKEN: string;

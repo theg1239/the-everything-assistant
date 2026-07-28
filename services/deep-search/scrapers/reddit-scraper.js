@@ -4,7 +4,6 @@ const axios = require('axios')
 const cheerio = require('cheerio')
 const logger = require('../utils/logger')
 const { generateObject, embed } = require('ai')
-const { google } = require('@ai-sdk/google')
 const { openai } = require('@ai-sdk/openai')
 const { z } = require('zod')
 const ImageAnalyzer = require('./image-analyzer')
@@ -22,17 +21,13 @@ class RedditScraper {
       timeout: 30000,
       headers: { 'User-Agent': this.userAgent },
     })
-    this.embeddingModel = openai.textEmbeddingModel('text-embedding-3-large')
+    this.embeddingModel = openai.embeddingModel('text-embedding-3-large')
     this.embeddingDim = 768
     this.imageAnalyzer = new ImageAnalyzer()
     this.imageAnalysisEnabled = process.env.IMAGE_ANALYSIS_ENABLED === 'true'
 
     if (!process.env.OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY environment variable is required for embeddings')
-    }
-
-    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-      throw new Error('GOOGLE_GENERATIVE_AI_API_KEY environment variable is required')
+      throw new Error('OPENAI_API_KEY environment variable is required')
     }
 
     this.sessionData = {
@@ -684,11 +679,15 @@ Please provide:
 5. Relevance to students (high/medium/low)`
 
       const { object } = await generateObject({
-        model: google('gemini-3.1-flash-lite'),
+        model: openai('gpt-5.6-luna'),
         prompt,
         schema: contentAnalysisSchema,
-        maxTokens: 1000,
-        temperature: 0.3,
+        maxOutputTokens: 1000,
+        providerOptions: {
+          openai: {
+            reasoningEffort: 'none',
+          },
+        },
       })
 
       return object
@@ -913,8 +912,7 @@ Please provide:
               logger.error(`Failed to analyze video thumbnail for post ${post.id}:`, error.message)
             }
           }
-        }
-        else if (post.postType === 'image' && post.imageUrl) {
+        } else if (post.postType === 'image' && post.imageUrl) {
           const isValidImageUrl =
             post.imageUrl &&
             !post.imageUrl.includes('snoovatar') &&
@@ -1173,7 +1171,6 @@ Please provide:
       }
 
       const videoAnalysis = await this.analyzeVideoFrames(frames, postContext, videoData)
-
 
       return {
         ...videoAnalysis,
@@ -1558,11 +1555,15 @@ Based on the post context, comments, and video frames, please analyze the video 
       ]
 
       const { object: analysis } = await generateObject({
-        model: google('gemini-3.1-flash-lite'),
+        model: openai('gpt-5.6-luna'),
         messages,
         schema: videoAnalysisSchema,
-        maxTokens: 2000,
-        temperature: 0.3,
+        maxOutputTokens: 2000,
+        providerOptions: {
+          openai: {
+            reasoningEffort: 'none',
+          },
+        },
       })
 
       analysis.frame_count = frameImages.length

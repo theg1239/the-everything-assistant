@@ -1,19 +1,13 @@
 import {
   createUIMessageStream,
   smoothStream,
-  extractReasoningMiddleware,
   createUIMessageStreamResponse,
   generateId,
   stepCountIs,
   consumeStream,
 } from 'ai'
 import { rateLimitedAI } from '@/lib/rate-limited-ai'
-import {
-  createFallbackUIStream,
-  ensureUiStreamHasContent,
-  getErrorText,
-  isFallbackErrorText,
-} from '@/lib/ai-stream-fallback'
+import { getErrorText } from '@/lib/ai-stream-fallback'
 import { createVITTools } from '@/lib/tools'
 import type { ModelProvider } from '@/lib/model-registry'
 import type { ApiKeyEntry } from '@/lib/api-key-manager'
@@ -43,18 +37,13 @@ import { generateChatTitle } from './lib/chat-title'
 import { getGroupConfig, preferredToolToGroupId } from '@/lib/search/group-config'
 import { loadConfiguredTools } from '@/lib/search/tool-loader'
 import { parseVTOPData } from './lib/vtop-parser'
-import {
-  getToolInputPayload,
-  getToolOutputPayload,
-  inferLegacyToolState,
-} from './lib/tool-helpers'
+import { getToolInputPayload, getToolOutputPayload, inferLegacyToolState } from './lib/tool-helpers'
 import { executeDirectToolCall } from './lib/direct-tool-call'
 import { buildMemoryContext } from './lib/memory-context'
 import { enhanceMessagesWithToolContext, prepareFinalMessages } from './lib/message-prep'
 import { buildSystemPrompt } from './lib/prompt'
 
-const getMessageText = (message: LegacyMessage | null | undefined): string =>
-  message?.content ?? ''
+const getMessageText = (message: LegacyMessage | null | undefined): string => message?.content ?? ''
 
 const CLIENT_ERROR_MESSAGE = 'An error occurred.'
 
@@ -206,10 +195,11 @@ export async function POST(req: Request) {
       console.warn('[Chat] Unable to read codex ChatGPT status, falling back to API keys', error)
     }
 
-    if (!useCodexManagedUsage && !process.env.GROQ_API_KEY) {
+    if (!useCodexManagedUsage && !process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEYS) {
       return new Response(
         JSON.stringify({
-          error: 'API key not configured. Please add GROQ_API_KEY to your environment variables.',
+          error:
+            'API key not configured. Please add OPENAI_API_KEY or OPENAI_API_KEYS to your environment variables.',
         }),
         { status: 500, headers: { 'Content-Type': 'application/json' } }
       )
@@ -229,8 +219,9 @@ export async function POST(req: Request) {
       )
     }
 
-    const { context: memoryContext, isEnabled: isMemoryEnabled } =
-      await buildMemoryContext(session.user.id)
+    const { context: memoryContext, isEnabled: isMemoryEnabled } = await buildMemoryContext(
+      session.user.id
+    )
 
     const baseTools = createVITTools(session.user.id, {
       sessionUser: { name: session.user.name, email: session.user.email },
@@ -246,10 +237,15 @@ export async function POST(req: Request) {
         if (Object.keys(mcpResult.tools).length > 0) {
           tools = { ...tools, ...mcpResult.tools }
           mcpClients = mcpResult.clients
-          console.log(`[MCP] Loaded ${Object.keys(mcpResult.tools).length} tools from ${mcpClients.length} MCP servers`)
+          console.log(
+            `[MCP] Loaded ${Object.keys(mcpResult.tools).length} tools from ${mcpClients.length} MCP servers`
+          )
         }
         if (mcpResult.errors.length > 0) {
-          console.warn('[MCP] Some MCP servers failed to connect:', mcpResult.errors.map(e => `${e.config.name}: ${e.error}`))
+          console.warn(
+            '[MCP] Some MCP servers failed to connect:',
+            mcpResult.errors.map(e => `${e.config.name}: ${e.error}`)
+          )
         }
       } catch (error) {
         console.error('[MCP] Failed to fetch MCP tools:', error)
@@ -259,15 +255,17 @@ export async function POST(req: Request) {
 
     if (prefersWebSearch) {
       try {
-        const googleSearchTool = rateLimitedAI.google.tools.google_search()
-        if (googleSearchTool) {
+        const webSearchTool = rateLimitedAI.openai.tools.web_search({
+          searchContextSize: 'medium',
+        })
+        if (webSearchTool) {
           tools = {
             ...tools,
-            google_search: googleSearchTool,
+            web_search: webSearchTool,
           }
         }
       } catch (error) {
-        console.error('Failed to initialize Google Search tool:', error)
+        console.error('Failed to initialize OpenAI web search tool:', error)
         tools = { ...tools }
       }
     }
@@ -278,14 +276,12 @@ export async function POST(req: Request) {
     // registry intact.
     const groupId = preferredToolToGroupId(effectivePreferredTool)
     const group = getGroupConfig(groupId)
-    const groupSystemAddition = groupId ? group.systemPrompt ?? '' : ''
+    const groupSystemAddition = groupId ? (group.systemPrompt ?? '') : ''
     if (groupId) {
       const filtered = loadConfiguredTools(tools, group)
       if (filtered && Object.keys(filtered).length > 0) {
         tools = filtered as Record<string, any>
-        console.log(
-          `[Chat] Applied tool group "${group.id}" -> ${Object.keys(tools).join(', ')}`
-        )
+        console.log(`[Chat] Applied tool group "${group.id}" -> ${Object.keys(tools).join(', ')}`)
       }
     }
 
@@ -326,28 +322,22 @@ export async function POST(req: Request) {
         )
 
         try {
-        await saveMessage(
-            chat.id,
-            'assistant',
-            responseText,
-            safeInvocations,
-            responseId
-          )
-            console.debug('Direct tool call message saved with tool invocation')
+          await saveMessage(chat.id, 'assistant', responseText, safeInvocations, responseId)
+          console.debug('Direct tool call message saved with tool invocation')
         } catch (error) {
           console.error('Failed to save direct tool call message:', error)
         }
 
-      return createUIMessageStreamResponse({
-        headers: {
-          'X-Chat-Id': chat.id,
-          'X-Chat-Path': chat.path,
-          'X-Chat-Title': chat.title,
-        },
-        stream,
-        consumeSseStream: consumeStream,
-      })
-    }
+        return createUIMessageStreamResponse({
+          headers: {
+            'X-Chat-Id': chat.id,
+            'X-Chat-Path': chat.path,
+            'X-Chat-Title': chat.title,
+          },
+          stream,
+          consumeSseStream: consumeStream,
+        })
+      }
     }
 
     // Determine if user is admin for thinkHarder model selection
@@ -362,16 +352,8 @@ export async function POST(req: Request) {
       { thinkHarder: thinkHarder ?? false, isAdmin }
     )
     const openaiPromptCacheKey = `pc:v1:${chat.id.slice(0, 40)}`
-    const parseDirectModelId = (modelId: string) => {
-      const [provider, ...rest] = modelId.split('/')
-      return rest.length > 0
-        ? { provider, modelId: rest.join('/') }
-        : { provider: undefined, modelId }
-    }
-    const directModel =
-      model.provider === 'direct' ? parseDirectModelId(model.modelId) : null
-    const effectiveProvider = directModel?.provider ?? model.provider
-    const effectiveModelId = directModel?.modelId ?? model.modelId
+    const effectiveProvider = model.provider
+    const effectiveModelId = model.modelId
 
     const hasConversationContent = finalMessages.some(msg => msg.role !== 'system')
 
@@ -434,60 +416,38 @@ export async function POST(req: Request) {
 
             writer.write({ type: 'text-start', id: textPartId })
 
-            const codexResult: RunChatgptTurnResult = await runChatgptManagedTurn(
-              session.user.id,
-              {
-                prompt: codexPrompt,
-                baseInstructions: codexBaseInstructions || undefined,
-                developerInstructions: codexDeveloperInstructions,
-                personality: 'none',
-                tools,
-                toolExecutionMessages: finalMessages,
-                onToolEvent: (event: CodexToolEvent) => {
-                  if (event.phase === 'input-available') {
-                    writer.write({
-                      type: 'tool-input-available',
-                      toolCallId: event.toolCallId,
-                      toolName: event.toolName,
-                      input: event.input,
-                    })
-                    codexToolInvocationsById.set(event.toolCallId, {
-                      toolCallId: event.toolCallId,
-                      toolName: event.toolName,
-                      args:
-                        event.input && typeof event.input === 'object'
-                          ? (event.input as Record<string, unknown>)
-                          : undefined,
-                      state: 'call',
-                    })
-                    return
-                  }
-
-                  if (event.phase === 'output-available') {
-                    writer.write({
-                      type: 'tool-output-available',
-                      toolCallId: event.toolCallId,
-                      output: event.output,
-                    })
-                    const existing = codexToolInvocationsById.get(event.toolCallId)
-                    codexToolInvocationsById.set(event.toolCallId, {
-                      toolCallId: event.toolCallId,
-                      toolName: event.toolName,
-                      args:
-                        existing?.args ??
-                        (event.input && typeof event.input === 'object'
-                          ? (event.input as Record<string, unknown>)
-                          : undefined),
-                      result: event.output,
-                      state: 'result',
-                    })
-                    return
-                  }
-
+            const codexResult: RunChatgptTurnResult = await runChatgptManagedTurn(session.user.id, {
+              prompt: codexPrompt,
+              baseInstructions: codexBaseInstructions || undefined,
+              developerInstructions: codexDeveloperInstructions,
+              personality: 'none',
+              tools,
+              toolExecutionMessages: finalMessages,
+              onToolEvent: (event: CodexToolEvent) => {
+                if (event.phase === 'input-available') {
                   writer.write({
-                    type: 'tool-output-error',
+                    type: 'tool-input-available',
                     toolCallId: event.toolCallId,
-                    errorText: event.errorText,
+                    toolName: event.toolName,
+                    input: event.input,
+                  })
+                  codexToolInvocationsById.set(event.toolCallId, {
+                    toolCallId: event.toolCallId,
+                    toolName: event.toolName,
+                    args:
+                      event.input && typeof event.input === 'object'
+                        ? (event.input as Record<string, unknown>)
+                        : undefined,
+                    state: 'call',
+                  })
+                  return
+                }
+
+                if (event.phase === 'output-available') {
+                  writer.write({
+                    type: 'tool-output-available',
+                    toolCallId: event.toolCallId,
+                    output: event.output,
                   })
                   const existing = codexToolInvocationsById.get(event.toolCallId)
                   codexToolInvocationsById.set(event.toolCallId, {
@@ -498,21 +458,40 @@ export async function POST(req: Request) {
                       (event.input && typeof event.input === 'object'
                         ? (event.input as Record<string, unknown>)
                         : undefined),
-                    state: 'error',
-                    error: event.errorText,
+                    result: event.output,
+                    state: 'result',
                   })
-                },
-                onTextDelta: delta => {
-                  if (!delta) return
-                  streamedText += delta
-                  writer.write({
-                    type: 'text-delta',
-                    id: textPartId,
-                    delta,
-                  })
-                },
-              }
-            )
+                  return
+                }
+
+                writer.write({
+                  type: 'tool-output-error',
+                  toolCallId: event.toolCallId,
+                  errorText: event.errorText,
+                })
+                const existing = codexToolInvocationsById.get(event.toolCallId)
+                codexToolInvocationsById.set(event.toolCallId, {
+                  toolCallId: event.toolCallId,
+                  toolName: event.toolName,
+                  args:
+                    existing?.args ??
+                    (event.input && typeof event.input === 'object'
+                      ? (event.input as Record<string, unknown>)
+                      : undefined),
+                  state: 'error',
+                  error: event.errorText,
+                })
+              },
+              onTextDelta: delta => {
+                if (!delta) return
+                streamedText += delta
+                writer.write({
+                  type: 'text-delta',
+                  id: textPartId,
+                  delta,
+                })
+              },
+            })
 
             if (!streamedText && codexResult.text) {
               streamedText = codexResult.text
@@ -584,11 +563,6 @@ export async function POST(req: Request) {
 
     let savedFinalStepUsage = false
 
-    const reasoningMiddleware = extractReasoningMiddleware({
-      tagName: 'reasoning',
-    })
-
-    const fallbackModelId = process.env.OPENAI_FALLBACK_MODEL || 'gpt-5.4-mini'
     const parsedOpenAIMaxOutputTokens = Number.parseInt(
       process.env.OPENAI_MAX_OUTPUT_TOKENS || '8000',
       10
@@ -596,35 +570,20 @@ export async function POST(req: Request) {
     const openaiMaxOutputTokens = Number.isFinite(parsedOpenAIMaxOutputTokens)
       ? parsedOpenAIMaxOutputTokens
       : 8000
-    const allowProviderFallback = model.provider === 'google'
-    const allowedProviders: ModelProvider[] = allowProviderFallback
-      ? ['google', 'openai']
-      : [model.provider]
-    const preferredProviders: ModelProvider[] = allowProviderFallback
-      ? ['google', 'openai']
-      : [model.provider]
+    const allowedProviders: ModelProvider[] = ['openai']
+    const preferredProviders: ModelProvider[] = ['openai']
 
-    const supportsOpenAIPromptCacheRetention = (modelId: string) =>
-      modelId.startsWith('gpt-5.1')
-
-    const isOpenAIReasoningModel = (modelId: string) =>
-      !(
-        modelId.startsWith('gpt-5.1') ||
-        modelId.startsWith('gpt-5') ||
-        modelId.startsWith('gpt-5.4-mini') ||
-        modelId.startsWith('gpt-5-chat')
-      )
+    const supportsOpenAIPromptCacheRetention = (modelId: string) => modelId.startsWith('gpt-5.1')
 
     const buildOpenAIProviderOptions = (modelId: string) => ({
       openai: {
         parallelToolCalls: true,
         store: false,
         maxToolCalls: 4,
+        reasoningEffort: thinkHarder || modelId === 'gpt-5.6-sol' ? 'high' : 'none',
         reasoningSummary: 'detailed',
         promptCacheKey: openaiPromptCacheKey,
-        ...(supportsOpenAIPromptCacheRetention(modelId)
-          ? { promptCacheRetention: '24h' }
-          : {}),
+        ...(supportsOpenAIPromptCacheRetention(modelId) ? { promptCacheRetention: '24h' } : {}),
       },
     })
 
@@ -633,21 +592,7 @@ export async function POST(req: Request) {
       throw new Error(`Unsupported model provider: ${model.provider}`)
     }
 
-    const providerOptions =
-      effectiveProvider === 'google'
-        ? {
-            google: {
-              maxRetries: 0,
-              thinkingConfig: {
-                thinkingBudget: 512,
-                includeThoughts: false,
-              },
-            },
-            ...(allowProviderFallback ? buildOpenAIProviderOptions(fallbackModelId) : {}),
-          }
-        : effectiveProvider === 'openai'
-          ? buildOpenAIProviderOptions(effectiveModelId)
-          : undefined
+    const providerOptions = buildOpenAIProviderOptions(effectiveModelId)
 
     const persistStreamError = async (error: any) => {
       console.error('Streaming error occurred:', error)
@@ -659,13 +604,7 @@ export async function POST(req: Request) {
 
       if (process.env.STREAM_ERRORS_TO_CHAT === 'true') {
         try {
-          await saveMessage(
-            chat.id,
-            'assistant',
-            CLIENT_ERROR_MESSAGE,
-            [],
-            `error-${Date.now()}`
-          )
+          await saveMessage(chat.id, 'assistant', CLIENT_ERROR_MESSAGE, [], `error-${Date.now()}`)
           console.debug('Streaming error saved to database')
         } catch (saveError) {
           console.error('Failed to save streaming error:', saveError)
@@ -675,11 +614,9 @@ export async function POST(req: Request) {
 
     let activeStreamProvider = effectiveProvider
     let activeStreamModelId = effectiveModelId
-    let lastErrorText = ''
 
     const handleStreamError = async (error: any) => {
       const errorText = getErrorText(error)
-      if (errorText) lastErrorText = errorText
       clearNoChunkLog()
       console.warn('[Chat] Stream error', {
         provider: activeStreamProvider,
@@ -778,8 +715,7 @@ export async function POST(req: Request) {
       }
 
       const uniqueToolResults = allToolResults.filter(
-        (result, index, array) =>
-          index === array.findIndex(r => r.toolCallId === result.toolCallId)
+        (result, index, array) => index === array.findIndex(r => r.toolCallId === result.toolCallId)
       )
 
       if (directToolCallResult) {
@@ -843,13 +779,7 @@ export async function POST(req: Request) {
       const safeInvocations = sanitizeToolInvocations(allInvocations)
 
       try {
-        await saveMessage(
-          chat.id,
-          'assistant',
-          result.text,
-          safeInvocations,
-          result.response.id
-        )
+        await saveMessage(chat.id, 'assistant', result.text, safeInvocations, result.response.id)
         console.debug('Final message saved with tool invocations')
       } catch (error) {
         console.error('Failed to save final message:', error)
@@ -890,9 +820,6 @@ export async function POST(req: Request) {
       }
     }
 
-    const shouldIncludeTemperature = (provider: string, modelId: string) =>
-      !(provider === 'openai' && isOpenAIReasoningModel(modelId))
-
     const baseStreamOptions = {
       messages: finalMessages,
       tools,
@@ -905,45 +832,11 @@ export async function POST(req: Request) {
       onFinish: handleFinish,
     }
 
-    const googleStreamTimeout = { chunkMs: 4000, totalMs: 12000 }
-
-    const buildTemperatureOverride = (provider: string, modelId: string) =>
-      provider === 'openai' ? {} : shouldIncludeTemperature(provider, modelId) ? { temperature: 0.3 } : {}
-
-    const buildMaxOutputTokensOverride = (provider: string) =>
-      provider === 'openai' ? { maxOutputTokens: openaiMaxOutputTokens } : {}
-
-    const streamProviderOverrides: Record<string, Partial<any>> = {}
-    const generateProviderOverrides: Record<string, Partial<any>> = {}
-
-    const setProviderOverrides = (
-      provider: string,
-      modelId: string,
-      streamExtras: Record<string, unknown> = {}
-    ) => {
-      const tempOverride = buildTemperatureOverride(provider, modelId)
-      const maxTokensOverride = buildMaxOutputTokensOverride(provider)
-      generateProviderOverrides[provider] = { ...tempOverride, ...maxTokensOverride }
-      streamProviderOverrides[provider] = { ...tempOverride, ...maxTokensOverride, ...streamExtras }
-    }
-
-    if (effectiveProvider === 'google') {
-      setProviderOverrides('google', effectiveModelId, {
-        middleware: [reasoningMiddleware],
-        timeout: googleStreamTimeout,
-      })
-      if (allowProviderFallback) {
-        setProviderOverrides('openai', fallbackModelId, {
-          middleware: [],
-          timeout: { chunkMs: 4000, totalMs: 12000 },
-        })
-      }
-    } else if (effectiveProvider === 'openai') {
-      setProviderOverrides('openai', effectiveModelId, {
+    const streamProviderOverrides: Record<string, Partial<any>> = {
+      openai: {
+        maxOutputTokens: openaiMaxOutputTokens,
         middleware: [],
-      })
-    } else if (effectiveProvider && effectiveProvider !== 'direct') {
-      setProviderOverrides(effectiveProvider, effectiveModelId)
+      },
     }
 
     const streamOptions = {
@@ -954,11 +847,7 @@ export async function POST(req: Request) {
       onError: handleStreamError,
     }
 
-    const uiStreamOnError = (error: unknown) => {
-      const errorText = getErrorText(error)
-      if (errorText) lastErrorText = errorText
-      return CLIENT_ERROR_MESSAGE
-    }
+    const uiStreamOnError = (_error: unknown) => CLIENT_ERROR_MESSAGE
 
     const uiStreamOptions = {
       originalMessages: uiMessages,
@@ -975,93 +864,22 @@ export async function POST(req: Request) {
       onError: uiStreamOnError,
     }
 
-    const isModelProvider = (value?: string): value is ModelProvider =>
-      value === 'google' ||
-      value === 'openai' ||
-      value === 'groq' ||
-      value === 'cerebras' ||
-      value === 'openrouter' ||
-      value === 'direct'
-
-    let activeKeyIndex: number | null = null
-    const handleKeySelected = (idx: number, entry?: ApiKeyEntry) => {
-      activeKeyIndex = idx
-      const provider = isModelProvider(entry?.provider) ? entry?.provider : effectiveProvider
-      activeStreamProvider = provider
-      activeStreamModelId = provider === 'openai'
-        ? (effectiveProvider === 'openai' ? effectiveModelId : fallbackModelId)
-        : effectiveModelId
+    const handleKeySelected = (_idx: number, entry?: ApiKeyEntry) => {
+      activeStreamProvider = entry?.provider === 'openai' ? 'openai' : effectiveProvider
+      activeStreamModelId = effectiveModelId
     }
 
     const startStream = async () => {
       scheduleNoChunkLog()
-      const result = await providerClient.streamText(
-        streamOptions,
-        session.user.id,
-        {
-          allowedProviders,
-          preferredProviders,
-          onKeySelected: handleKeySelected,
-        }
-      )
+      const result = await providerClient.streamText(streamOptions, session.user.id, {
+        allowedProviders,
+        preferredProviders,
+        onKeySelected: handleKeySelected,
+      })
       return result.toUIMessageStream(uiStreamOptions)
     }
 
-    const banActiveKey = async () => {
-      if (activeKeyIndex === null) return
-      const idx = activeKeyIndex
-      activeKeyIndex = null
-      try {
-        await providerClient.banKeyByIndex(idx)
-      } catch (error) {
-        console.warn('[Chat] Failed to ban key after error', error)
-      }
-    }
-
-    const fallbackFactory = async () => {
-      await banActiveKey()
-      const fallbackUiStream = await startStream()
-      const fallbackMessageMetadata = uiStreamOptions.messageMetadata
-        ? uiStreamOptions.messageMetadata({ part: { type: 'finish' } as any })
-        : undefined
-      return ensureUiStreamHasContent(
-        fallbackUiStream,
-        async () => {
-          const generateOptions = {
-            messages: finalMessages,
-            tools,
-            maxRetries: 0,
-            maxOutputTokens: 40000,
-            model: { modelId: model.modelId },
-            ...(providerOptions ? { providerOptions } : {}),
-            providerOverrides: generateProviderOverrides,
-          }
-          const generated = await providerClient.generateText(
-            generateOptions,
-            session.user.id
-          )
-          return generated?.text ?? ''
-        },
-        () => fallbackMessageMetadata
-      )
-    }
-
-    const primaryUIStream = await startStream()
-
-    const stream = allowProviderFallback
-      ? createFallbackUIStream(primaryUIStream, fallbackFactory, {
-          getFallbackErrorText: () => lastErrorText,
-          shouldFallback: isFallbackErrorText,
-          onPrimaryErrorChunk: async (_chunk, errorText) => {
-            if (errorText) lastErrorText = errorText
-            await banActiveKey()
-          },
-          onPrimaryError: async (_error, errorText) => {
-            if (errorText) lastErrorText = errorText
-            await banActiveKey()
-          },
-        })
-      : primaryUIStream
+    const stream = await startStream()
 
     return createUIMessageStreamResponse({
       headers: {
@@ -1097,9 +915,9 @@ export async function POST(req: Request) {
       )
     }
 
-    return new Response(
-      JSON.stringify({ error: CLIENT_ERROR_MESSAGE }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    )
+    return new Response(JSON.stringify({ error: CLIENT_ERROR_MESSAGE }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }

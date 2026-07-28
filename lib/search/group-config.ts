@@ -6,7 +6,7 @@
  * registry down to the group's allowlist.
  *
  * Tool names below MUST match keys returned by `createVITTools` in
- * `lib/tools.ts` (plus provider-tools like `google_search`).
+ * `lib/tools.ts` (plus OpenAI provider tools like `web_search`).
  */
 
 export interface GroupConfig {
@@ -52,7 +52,7 @@ export const GROUPS = {
   web: {
     id: 'web',
     label: 'Web',
-    tools: ['google_search'],
+    tools: ['web_search', 'webSearch', 'webExtract'],
     systemPrompt: 'Prefer fresh web sources. Cite the URLs you actually used.',
   },
   campus: {
@@ -85,9 +85,7 @@ export function getGroupConfig(id: string | null | undefined): GroupConfig {
  * to a group id. Unknown values fall through to the general group so the
  * route keeps working with the full tool registry.
  */
-export function preferredToolToGroupId(
-  preferredTool?: string | null
-): GroupId | null {
+export function preferredToolToGroupId(preferredTool?: string | null): GroupId | null {
   if (!preferredTool) return null
   switch (preferredTool) {
     case 'web-search':

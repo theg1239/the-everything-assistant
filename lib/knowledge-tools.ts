@@ -1,5 +1,5 @@
 import { tool } from 'ai'
-import * as z from 'zod/v3';
+import * as z from 'zod/v3'
 import { getContextForAIPrompt } from './data/context-integration'
 import { rateLimitedAI } from './rate-limited-ai'
 import { searchRedditWithContext } from './tools'
@@ -40,7 +40,7 @@ export function createKnowledgeTools() {
       console.debug('[knowledgeBase] max_chunks:', max_chunks)
       try {
         const embedClient =
-          rateLimitedAI[ragEmbeddingProvider as keyof typeof rateLimitedAI] || rateLimitedAI.google
+          rateLimitedAI[ragEmbeddingProvider as keyof typeof rateLimitedAI] || rateLimitedAI.openai
         const { embedding: vector } = await embedClient.embed({
           model: { modelId: ragEmbeddingModelId },
           value: query,

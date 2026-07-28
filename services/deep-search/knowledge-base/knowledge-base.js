@@ -2,7 +2,7 @@ require('dotenv').config()
 
 const { Pool } = require('pg')
 const { embed } = require('ai')
-const { google } = require('@ai-sdk/google')
+const { createOpenAI } = require('@ai-sdk/openai')
 const logger = require('../utils/logger')
 
 function parsePositiveInt(value, fallback) {
@@ -12,16 +12,11 @@ function parsePositiveInt(value, fallback) {
 }
 
 function resolveEmbeddingConfig() {
-  const providerRaw =
-    process.env.DEEP_SEARCH_EMBEDDING_PROVIDER ||
-    process.env.RAG_EMBEDDING_PROVIDER ||
-    process.env.EMBEDDING_MODEL_PROVIDER ||
-    'openai'
   const modelRaw =
     process.env.DEEP_SEARCH_EMBEDDING_MODEL ||
     process.env.RAG_EMBEDDING_MODEL ||
-    process.env.EMBEDDING_MODEL ||
-    ''
+    process.env.OPENAI_EMBEDDING_MODEL ||
+    process.env.EMBEDDING_MODEL
   const dim = parsePositiveInt(
     process.env.DEEP_SEARCH_EMBEDDING_DIM ||
       process.env.RAG_EMBEDDING_DIM ||
@@ -29,25 +24,7 @@ function resolveEmbeddingConfig() {
     768
   )
 
-  let provider = providerRaw.toLowerCase().trim()
-  let modelId = modelRaw.trim()
-
-  const modelPrefixMatch = modelId.match(/^(openai|google)\/(.+)$/i)
-  if (modelPrefixMatch) {
-    provider = modelPrefixMatch[1].toLowerCase()
-    modelId = modelPrefixMatch[2]
-  } else if (provider === 'direct') {
-    provider = 'google'
-  }
-
-  if (provider !== 'openai' && provider !== 'google') {
-    logger.warn(`Unsupported embedding provider "${providerRaw}", falling back to "openai"`)
-    provider = 'openai'
-  }
-
-  if (!modelId) {
-    modelId = provider === 'google' ? 'text-embedding-004' : 'text-embedding-3-large'
-  }
+  const modelId = (modelRaw || 'text-embedding-3-large').replace(/^openai\//i, '').trim()
 
   const openaiBaseURL =
     process.env.DEEP_SEARCH_OPENAI_BASE_URL ||
@@ -55,7 +32,7 @@ function resolveEmbeddingConfig() {
     process.env.OPENAI_BASE_URL ||
     'https://api.openai.com/v1'
 
-  return { provider, modelId, dim, openaiBaseURL }
+  return { provider: 'openai', modelId, dim, openaiBaseURL }
 }
 
 class KnowledgeBase {
@@ -77,18 +54,12 @@ class KnowledgeBase {
     this.similarityThreshold = parseFloat(process.env.SIMILARITY_THRESHOLD) || 0.5
     this.maxContextLength = parseInt(process.env.MAX_CONTEXT_LENGTH) || 4000
 
-    if (this.embeddingProvider === 'openai' && !process.env.OPENAI_API_KEY) {
+    if (!process.env.OPENAI_API_KEY) {
       throw new Error('OPENAI_API_KEY environment variable is required for OpenAI embeddings')
     }
 
-    if (this.embeddingProvider === 'google' && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-      throw new Error(
-        'GOOGLE_GENERATIVE_AI_API_KEY environment variable is required for Google embeddings'
-      )
-    }
-
     logger.info(
-      `Embedding config: provider=${this.embeddingProvider}, model=${this.embeddingModelId}, dim=${this.embeddingDim}, openaiBaseURL=${this.embeddingProvider === 'openai' ? this.openaiBaseURL : 'n/a'}`
+      `Embedding config: provider=${this.embeddingProvider}, model=${this.embeddingModelId}, dim=${this.embeddingDim}, openaiBaseURL=${this.openaiBaseURL}`
     )
     logger.info(
       `Knowledge DB configured: ${process.env.REDDIT_DATABASE ? 'REDDIT_DATABASE' : 'DATABASE_URL'}`
@@ -96,60 +67,11 @@ class KnowledgeBase {
   }
 
   createEmbeddingModel() {
-    if (this.embeddingProvider === 'google') {
-      return google.textEmbeddingModel(this.embeddingModelId)
-    }
-    return null
-  }
-
-  getHeaderValue(headers, name) {
-    if (!headers || !name) return undefined
-    if (typeof headers.get === 'function') return headers.get(name) || undefined
-    const key = name.toLowerCase()
-    return headers[name] || headers[key]
-  }
-
-  async generateOpenAIEmbeddingDirect(value) {
-    const url = `${this.openaiBaseURL.replace(/\/$/, '')}/embeddings`
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: this.embeddingModelId,
-        input: value,
-        dimensions: this.embeddingDim,
-        encoding_format: 'float',
-      }),
+    const provider = createOpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+      baseURL: this.openaiBaseURL,
     })
-
-    const raw = await response.text()
-    let parsed
-    try {
-      parsed = JSON.parse(raw)
-    } catch {
-      parsed = null
-    }
-
-    if (!response.ok) {
-      throw new Error(
-        `Direct OpenAI embeddings call failed (${response.status}): ${parsed?.error?.message || raw.slice(0, 300)}`
-      )
-    }
-
-    const embedding = parsed?.data?.[0]?.embedding
-    if (!Array.isArray(embedding)) {
-      throw new Error('Direct OpenAI embeddings call returned an invalid embedding payload')
-    }
-
-    return {
-      embedding,
-      response: {
-        headers: response.headers,
-      },
-    }
+    return provider.embeddingModel(this.embeddingModelId)
   }
 
   async initialize() {
@@ -738,29 +660,20 @@ class KnowledgeBase {
     }
     try {
       const value = text.substring(0, this.maxContextLength)
-      let result
-      let embedding
-
-      if (this.embeddingProvider === 'openai') {
-        result = await this.generateOpenAIEmbeddingDirect(value)
-        embedding = result.embedding
-      } else {
-        result = await embed({
-          model: this.embeddingModel,
-          value,
-        })
-        embedding = result.embedding
-      }
+      const { embedding } = await embed({
+        model: this.embeddingModel,
+        value,
+        providerOptions: {
+          openai: {
+            dimensions: this.embeddingDim,
+          },
+        },
+      })
 
       if (!Array.isArray(embedding) || embedding.length !== this.embeddingDim) {
         logger.error(
           `Embedding dimension mismatch: got ${embedding?.length}, expected ${this.embeddingDim} (provider=${this.embeddingProvider}, model=${this.embeddingModelId})`
         )
-        if (this.embeddingProvider === 'openai') {
-          logger.error(
-            `OpenAI embedding response headers hint: openai-model=${this.getHeaderValue(result?.response?.headers, 'openai-model') || 'unknown'}, openai-processing-ms=${this.getHeaderValue(result?.response?.headers, 'openai-processing-ms') || 'unknown'}, baseURL=${this.openaiBaseURL}`
-          )
-        }
         return null
       }
       if (this.isZeroEmbedding(embedding)) {
@@ -1233,7 +1146,10 @@ class KnowledgeBase {
       let [vectorResults, textResults] = await Promise.all([vectorPromise, textPromise])
       let keywordResults = []
 
-      if ((!vectorResults || vectorResults.length === 0) && (!textResults || textResults.length === 0)) {
+      if (
+        (!vectorResults || vectorResults.length === 0) &&
+        (!textResults || textResults.length === 0)
+      ) {
         logger.info('Trying keywords search strategy...')
         keywordResults = await this.searchByKeywords(query, candidateLimit)
       }
@@ -1302,8 +1218,7 @@ class KnowledgeBase {
       results.forEach((result, index) => {
         const key = `${result.type}:${result.reddit_id}`
         const existing = merged.get(key)
-        const rrfContribution =
-          (1 / (rrfK + index + 1)) * (strategyWeight[strategy] || 1)
+        const rrfContribution = (1 / (rrfK + index + 1)) * (strategyWeight[strategy] || 1)
         const similarity = Math.max(0, Math.min(1, Number(result.similarity) || 0))
         const textRank = Math.max(0, Number(result.textRank ?? result.text_rank) || 0)
 
@@ -1540,7 +1455,11 @@ class KnowledgeBase {
       1,
       Math.log1p(Math.max(0, Number(result.textRank ?? result.text_rank) || 0)) / Math.log(2.5)
     )
-    const weightedTitleMatches = this.countWeightedTermMatches(result.title, queryTerms, termWeights)
+    const weightedTitleMatches = this.countWeightedTermMatches(
+      result.title,
+      queryTerms,
+      termWeights
+    )
     const weightedContentMatches = this.countWeightedTermMatches(
       result.content,
       queryTerms,
@@ -1556,7 +1475,9 @@ class KnowledgeBase {
       totalPossibleWeight > 0
         ? Math.min(
             1,
-            (weightedTitleMatches * 1.25 + weightedContentMatches + weightedSubredditMatches * 0.4) /
+            (weightedTitleMatches * 1.25 +
+              weightedContentMatches +
+              weightedSubredditMatches * 0.4) /
               (totalPossibleWeight * 2.2)
           )
         : 0
@@ -1566,11 +1487,7 @@ class KnowledgeBase {
     const highSignalTerms = queryTerms.filter(term => (termWeights[term] || 1) > 1.0)
     const highSignalMatches = this.countTermMatches(contentText, highSignalTerms)
 
-    const engagementBase = Math.max(
-      0,
-      Number(result.upvotes) || 0,
-      Number(result.score) || 0
-    )
+    const engagementBase = Math.max(0, Number(result.upvotes) || 0, Number(result.score) || 0)
     const engagementScore = Math.min(1, Math.log10(engagementBase + 1) / 3)
     const rrfScore = Math.max(0, Number(result.rrfScore) || 0)
     const normalizedRrfScore = Math.min(1, rrfScore * 120)
@@ -1588,13 +1505,7 @@ class KnowledgeBase {
           ? 0.55
           : 1
     const weakCoveragePenalty =
-      lexicalCoverage < 0.2
-        ? 0.45
-        : lexicalCoverage < 0.35
-          ? 0.7
-          : lexicalCoverage < 0.5
-            ? 0.86
-            : 1
+      lexicalCoverage < 0.2 ? 0.45 : lexicalCoverage < 0.35 ? 0.7 : lexicalCoverage < 0.5 ? 0.86 : 1
 
     let recencyScore = 0.5
     if (result.created_utc) {

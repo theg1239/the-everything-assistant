@@ -112,7 +112,7 @@ The system includes an **intelligent multi-agent RAG** that:
 ├──────────────────────────────────────────────────────────────────┤
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
 │  │ Reddit Scraper  │  │ Image Analyzer  │  │ Content Proc.   │  │
-│  │ (Pagination)    │  │ (Gemini Vision) │  │ (Embeddings)    │  │
+│  │ (Pagination)    │  │ (OpenAI Vision) │  │ (Embeddings)    │  │
 │  └─────────────────┘  └─────────────────┘  └─────────────────┘  │
 │               Continuous scraping every 6 hours                 │
 └──────────────────────────────────────────────────────────────────┘
@@ -123,7 +123,7 @@ The system includes an **intelligent multi-agent RAG** that:
 ### 1. Reddit Scraper (`reddit-scraper.js`)
 
 - **Continuous pagination**: Fetches multiple pages of posts (not just first 25)
-- **Image analysis**: Uses Google Gemini Vision to analyze image posts
+- **Image analysis**: Uses OpenAI GPT-5.6 Luna vision to analyze image posts
 - **Content extraction**: Extracts text, images, metadata, and comments
 - **Smart scheduling**: Configurable scraping intervals
 - **Vector embeddings**: Generates 768-dimensional embeddings for all content
@@ -161,7 +161,7 @@ reddit_comments (
 
 ### 3. RAG Service (`rag-service.js`)
 
-- **AI-powered responses**: Uses Google Gemini to generate intelligent answers
+- **AI-powered responses**: Uses OpenAI GPT-5.6 Luna to generate intelligent answers
 - **Context building**: Combines multiple search results into coherent context
 - **Confidence scoring**: Calculates confidence based on similarity and community validation
 - **Fallback strategies**: Tries keyword search if no vector results found
@@ -182,7 +182,7 @@ reddit_comments (
 
 ### 5. Image Analysis (`image-analyzer.js`)
 
-- **Google Gemini Vision**: Analyzes images for educational content
+- **OpenAI GPT-5.6 Luna vision**: Analyzes images for educational content
 - **OCR capabilities**: Extracts text from images
 - **Educational focus**: Identifies key concepts, subject areas
 - **Accessibility**: Generates alt-text for images
@@ -252,8 +252,14 @@ IMAGE_ANALYSIS_ENABLED=true
 SIMILARITY_THRESHOLD=0.5
 MAX_CONTEXT_LENGTH=4000
 
-GOOGLE_GENERATIVE_AI_API_KEY=your_key_here
+OPENAI_API_KEY=your_key_here
+DEEP_SEARCH_EMBEDDING_MODEL=text-embedding-3-large
+DEEP_SEARCH_EMBEDDING_DIM=768
 ```
+
+After changing the embedding model, regenerate the stored embeddings before relying on similarity
+search. Even when the configured vector dimension stays at 768, vectors from different embedding
+models are not interchangeable.
 
 ### Key Settings
 

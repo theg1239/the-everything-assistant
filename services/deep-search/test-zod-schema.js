@@ -3,7 +3,7 @@
 require('dotenv').config()
 
 const { generateObject } = require('ai')
-const { google } = require('@ai-sdk/google')
+const { openai } = require('@ai-sdk/openai')
 const { z } = require('zod')
 
 async function testVideoAnalysisSchema() {
@@ -51,11 +51,15 @@ This is a test analysis for a programming tutorial video with 5 key frames.
 Please analyze and provide structured information about this educational video content.`
 
     const { object } = await generateObject({
-      model: google('gemini-3.1-flash-lite'),
+      model: openai('gpt-5.6-luna'),
       prompt: testPrompt,
       schema: videoAnalysisSchema,
-      maxTokens: 1000,
-      temperature: 0.3,
+      maxOutputTokens: 1000,
+      providerOptions: {
+        openai: {
+          reasoningEffort: 'none',
+        },
+      },
     })
 
     object.frame_count = 5
@@ -88,11 +92,15 @@ async function testContentAnalysisSchema() {
     const testContent = `This is a great tutorial about machine learning algorithms. The professor explains neural networks clearly and provides practical examples. Students found it very helpful for their coursework.`
 
     const { object } = await generateObject({
-      model: google('gemini-flash-lite-latest'),
+      model: openai('gpt-5.6-luna'),
       prompt: `Analyze this Reddit content: "${testContent}"`,
       schema: contentAnalysisSchema,
-      maxTokens: 500,
-      temperature: 0.3,
+      maxOutputTokens: 500,
+      providerOptions: {
+        openai: {
+          reasoningEffort: 'none',
+        },
+      },
     })
 
     console.log('✅ Content analysis schema test passed!')
@@ -111,8 +119,8 @@ async function testContentAnalysisSchema() {
 async function main() {
   console.log('🧪 Testing Zod schemas for Reddit scraper...\n')
 
-  if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-    console.error('❌ GOOGLE_GENERATIVE_AI_API_KEY environment variable is required')
+  if (!process.env.OPENAI_API_KEY) {
+    console.error('❌ OPENAI_API_KEY environment variable is required')
     process.exit(1)
   }
 

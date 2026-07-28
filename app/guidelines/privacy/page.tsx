@@ -4,7 +4,10 @@ import React from 'react'
 
 export default function PrivacyPolicyPage() {
   return (
-    <div className="bg-zinc-900 text-white font-sans min-h-screen py-10 overflow-y-auto" data-allow-touch-scroll>
+    <div
+      className="bg-zinc-900 text-white font-sans min-h-screen py-10 overflow-y-auto"
+      data-allow-touch-scroll
+    >
       <main className="max-w-2xl mx-auto px-4">
         <h1 className="text-3xl font-bold mb-4">Privacy Policy</h1>
         <p className="mb-6">Effective Date: June 25, 2025</p>
@@ -42,12 +45,11 @@ export default function PrivacyPolicyPage() {
         </section>
 
         <section className="mb-6">
-          <h2 className="text-xl font-semibold mb-2">5. Third-Party Model Providers</h2>
+          <h2 className="text-xl font-semibold mb-2">5. AI and Search Providers</h2>
           <p>
-            When you interact with the assistant, requests may be processed by third-party AI model
-            providers like Google. Their handling of your data is governed by their own Terms of
-            Service and Privacy Policies. We encourage you to review those policies to understand
-            how they may collect, use, or store data.
+            AI model requests are processed through OpenAI. When web search or page extraction is
+            used, relevant queries or URLs may also be sent to Parallel. Their handling of data is
+            governed by their respective Terms of Service and Privacy Policies.
           </p>
         </section>
 

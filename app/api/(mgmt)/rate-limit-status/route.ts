@@ -19,14 +19,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized access - admin only' }, { status: 403 })
     }
 
-    const googleAI = getRateLimitedAI('google')
-    const groqAI = getRateLimitedAI('groq')
+    const openaiAI = getRateLimitedAI('openai')
 
-    const [googleUsageStats, groqUsageStats, googleConfig, groqConfig] = await Promise.all([
-      googleAI.getUsageStats(),
-      groqAI.getUsageStats(),
-      googleAI.getConfig(),
-      groqAI.getConfig(),
+    const [openaiUsageStats, openaiConfig] = await Promise.all([
+      openaiAI.getUsageStats(),
+      openaiAI.getConfig(),
     ])
 
     const prefixUsageStats = (
@@ -41,13 +38,12 @@ export async function GET(req: NextRequest) {
       )
 
     const combinedUsageStats: Record<string, ApiKeyUsageSnapshot> = {
-      ...prefixUsageStats(googleUsageStats, 'google'),
-      ...prefixUsageStats(groqUsageStats, 'groq'),
+      ...prefixUsageStats(openaiUsageStats, 'openai'),
     }
 
-    const totalKeyCount = googleConfig.keys.length + groqConfig.keys.length
-    const mainConfig = groqConfig // Base config is same
-    const userConfig = groqAI.getUserConfig() // User config is not provider-specific
+    const totalKeyCount = openaiConfig.keys.length
+    const mainConfig = openaiConfig
+    const userConfig = openaiAI.getUserConfig()
     const envValidation = validateEnvironmentConfig()
     const envSummary = getEnvironmentSummary()
 
@@ -120,7 +116,7 @@ export async function POST(req: NextRequest) {
 
     const { action, config } = parsed.data
 
-    const rateLimited = getRateLimitedAI('groq')
+    const rateLimited = getRateLimitedAI('openai')
 
     switch (action) {
       case 'rotate':

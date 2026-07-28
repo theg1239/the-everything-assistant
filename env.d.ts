@@ -8,6 +8,10 @@ declare namespace NodeJS {
     NODE_ENV: 'development' | 'production' | 'test'
     REDDIT_API_URL: string
     WHATSAPP_BOT_API_KEY: string
+    OPENAI_API_KEY: string
+    OPENAI_API_KEYS?: string
+    OPENAI_EMBEDDING_MODEL?: string
+    OPENAI_MAX_OUTPUT_TOKENS?: string
     EXAMCOOKER_API_KEY?: string
     PARALLEL_API_KEY?: string
     VTOP_MCP_URL?: string

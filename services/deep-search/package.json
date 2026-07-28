@@ -22,9 +22,8 @@
     "reddit-scraper": "./cli.js"
   },
   "dependencies": {
-    "@ai-sdk/google": "latest",
-    "@ai-sdk/openai": "^3.0.39",
-    "ai": "latest",
+    "@ai-sdk/openai": "^3.0.88",
+    "ai": "6.0.235",
     "axios": "latest",
     "cheerio": "latest",
     "commander": "latest",

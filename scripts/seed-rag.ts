@@ -1,6 +1,5 @@
 #!/usr/bin/env ts-node
 
-
 import { getContextForAIPrompt } from '../lib/data/context-integration'
 import { VIT_COMPREHENSIVE_KNOWLEDGE } from '../lib/knowledge-base'
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters'
@@ -124,7 +123,7 @@ async function main() {
     console.log('Inserting custom chunk:', customText)
     try {
       const embedClient =
-        rateLimitedAI[ragEmbeddingProvider as keyof typeof rateLimitedAI] || rateLimitedAI.google
+        rateLimitedAI[ragEmbeddingProvider as keyof typeof rateLimitedAI] || rateLimitedAI.openai
       const { embedding } = await embedClient.embed({
         model: { modelId: ragEmbeddingModelId },
         value: customText,
@@ -146,7 +145,9 @@ async function main() {
       console.log(`✅ Custom chunk inserted:`)
       console.log(`   ID: ${id}`)
       console.log(`   Length: ${customText.length} chars`)
-      console.log(`   Preview: "${customText.substring(0, 100)}${customText.length > 100 ? '...' : ''}"`)
+      console.log(
+        `   Preview: "${customText.substring(0, 100)}${customText.length > 100 ? '...' : ''}"`
+      )
     } catch (err) {
       console.error('Error inserting custom chunk:', err)
     }
@@ -158,7 +159,7 @@ async function main() {
       console.error(`No PDF files found at: ${pdfPath}`)
     } else {
       console.log(`Found ${pdfFiles.length} PDF file(s) to process...`)
-      
+
       const enc = await encoding_for_model('gpt-3.5-turbo')
       const pdfSplitter = new RecursiveCharacterTextSplitter({
         separators: ['\n## ', '\n# ', '\n\n', '\n', ' ', ''],
@@ -178,7 +179,7 @@ async function main() {
             try {
               const embedClient =
                 rateLimitedAI[ragEmbeddingProvider as keyof typeof rateLimitedAI] ||
-                rateLimitedAI.google
+                rateLimitedAI.openai
               const { embedding } = await embedClient.embed({
                 model: { modelId: ragEmbeddingModelId },
                 value: doc.pageContent,
@@ -199,10 +200,17 @@ async function main() {
                 VALUES ($1, $2, $3::jsonb, $4)
                 ON CONFLICT (id) DO NOTHING
               `,
-                [id, doc.pageContent.trim(), JSON.stringify(metadata), '[' + embedding.join(',') + ']']
+                [
+                  id,
+                  doc.pageContent.trim(),
+                  JSON.stringify(metadata),
+                  '[' + embedding.join(',') + ']',
+                ]
               )
               const preview = doc.pageContent.trim().substring(0, 80).replace(/\n/g, ' ')
-              console.log(`    [${idx + 1}/${pdfDocs.length}] Inserted: "${preview}${doc.pageContent.length > 80 ? '...' : ''}" (${doc.pageContent.length} chars)`)
+              console.log(
+                `    [${idx + 1}/${pdfDocs.length}] Inserted: "${preview}${doc.pageContent.length > 80 ? '...' : ''}" (${doc.pageContent.length} chars)`
+              )
             } catch (err) {
               console.error(`  Error on PDF chunk ${idx}:`, err)
             }
@@ -235,7 +243,7 @@ async function main() {
   for (const [idx, doc] of docs.entries()) {
     try {
       const embedClient =
-        rateLimitedAI[ragEmbeddingProvider as keyof typeof rateLimitedAI] || rateLimitedAI.google
+        rateLimitedAI[ragEmbeddingProvider as keyof typeof rateLimitedAI] || rateLimitedAI.openai
       const { embedding } = await embedClient.embed({
         model: { modelId: ragEmbeddingModelId },
         value: doc.pageContent,
@@ -257,7 +265,9 @@ async function main() {
         [id, doc.pageContent.trim(), JSON.stringify(metadata), '[' + embedding.join(',') + ']']
       )
       const preview = doc.pageContent.trim().substring(0, 80).replace(/\n/g, ' ')
-      console.log(`  [${idx + 1}/${docs.length}] Inserted: "${preview}${doc.pageContent.length > 80 ? '...' : ''}" (${doc.pageContent.length} chars)`)
+      console.log(
+        `  [${idx + 1}/${docs.length}] Inserted: "${preview}${doc.pageContent.length > 80 ? '...' : ''}" (${doc.pageContent.length} chars)`
+      )
     } catch (err) {
       console.error(`Error on chunk ${idx}:`, err)
     }

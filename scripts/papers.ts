@@ -694,9 +694,9 @@
 // }
 
 // function pickGeminiModel(opts: { pdf?: boolean; ocr?: boolean; fast?: boolean } = {}) {
-//   if (opts.ocr || opts.pdf) return 'gemini-3.1-flash-lite'
-//   if (opts.fast) return 'gemini-3.1-flash-lite'
-//   return 'gemini-3.1-flash-lite'
+//   if (opts.ocr || opts.pdf) return 'gpt-5.6-luna'
+//   if (opts.fast) return 'gpt-5.6-luna'
+//   return 'gpt-5.6-luna'
 // }
 // async function extractTextFromPdf(
 //   pdfData: Buffer,
@@ -788,7 +788,7 @@
 //       ]
 //       for (const img of limited)
 //         contentParts.push({ type: 'image', image: img.toString('base64'), mimeType: 'image/png' })
-//       const ocrRes: any = await rateLimitedAI.google.generateText({
+//       const ocrRes: any = await rateLimitedAI.openai.generateText({
 //         model: { modelId },
 //         messages: [{ role: 'user', content: contentParts }],
 //       })
@@ -804,7 +804,7 @@
 //           model: modelId,
 //           pages: limited.length,
 //         })
-//       if (runId) logEmit(runId, 'Document processing complete', { method: 'gemini-image-ocr' })
+//       if (runId) logEmit(runId, 'Document processing complete', { method: 'openai-vision-ocr' })
 //       return txt
 //     } catch (e: any) {
 //       log?.('Gemini OCR image fallback failed', { error: e?.message })
@@ -1070,7 +1070,6 @@
 //       return
 //     }
 
-
 //     if (options.runId)
 //       logEmit(options.runId, `Processing: ${p.title}`, { title: p.title, url: p.url })
 //     log('Processing paper', { title: p.title, url: p.url })
@@ -1159,14 +1158,14 @@
 //             chunks: chunksRaw.length,
 //           })
 
-//         const embeddingResult: any = await rateLimitedAI.google.embed({ values: chunksRaw })
+//         const embeddingResult: any = await rateLimitedAI.openai.embed({ values: chunksRaw })
 //         log('Embedding complete', { embeddings: embeddingResult.embeddings?.length })
 //         if (options.runId) logEmit(options.runId, 'Processing content with AI', { title: p.title })
 
 //         let questionEmbeddings: number[][] | undefined
 //         if (questions.length) {
 //           try {
-//             const qeRes: any = await rateLimitedAI.google.embed({ values: questions })
+//             const qeRes: any = await rateLimitedAI.openai.embed({ values: questions })
 //             questionEmbeddings = qeRes.embeddings || []
 //             log('Question embeddings complete', { count: (questionEmbeddings || []).length })
 //             if (options.runId)
@@ -1428,14 +1427,14 @@
 //         chunks: chunksRaw.length,
 //       })
 
-//     const embeddingResult: any = await rateLimitedAI.google.embed({ values: chunksRaw })
+//     const embeddingResult: any = await rateLimitedAI.openai.embed({ values: chunksRaw })
 //     log('Embedding complete', { embeddings: embeddingResult.embeddings?.length })
 //     if (options.runId) logEmit(options.runId, 'Processing content with AI', { title: p.title })
 
 //     let questionEmbeddings: number[][] | undefined
 //     if (questions.length) {
 //       try {
-//         const qeRes: any = await rateLimitedAI.google.embed({ values: questions })
+//         const qeRes: any = await rateLimitedAI.openai.embed({ values: questions })
 //         questionEmbeddings = qeRes.embeddings || []
 //         log('Question embeddings complete', { count: (questionEmbeddings || []).length })
 //         if (options.runId)
@@ -1639,7 +1638,7 @@
 //   }
 //   if (!index) return { success: false, error: 'Index not found or expired', logs: log.getLogs() }
 //   log('Starting Q&A', { indexId, questionLen: question.length })
-//   const embedRes: any = await rateLimitedAI.google.embed({ value: question })
+//   const embedRes: any = await rateLimitedAI.openai.embed({ value: question })
 //   const qEmb = embedRes.embedding || embedRes.embeddings?.[0]
 //   if (!qEmb) return { success: false, error: 'Failed to embed question', logs: log.getLogs() }
 //   const scored: { chunk: PaperChunk; score: number; paper: IndexedPaper }[] = []
@@ -1659,7 +1658,7 @@
 //     )
 //     .join('\n\n---\n\n')
 //   const prompt = `You are a precise assistant answering questions about VIT past exam papers.\nQuestion: ${question}\nUse ONLY the provided context. Quote specific question numbers or lines if relevant. If unknown, say you cannot find it.\nContext:\n${context}`
-//   const answer: any = await rateLimitedAI.google.generateText({
+//   const answer: any = await rateLimitedAI.openai.generateText({
 //     model: { modelId: pickGeminiModel({ fast: true }) },
 //     prompt,
 //   })

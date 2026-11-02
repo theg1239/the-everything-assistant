@@ -5,9 +5,10 @@
  * course-page-interactive MCP tools), kept for existing clients. All of the actual work is the
  * generic workflow engine (src/service.js); this module only translates request/response shapes:
  *
- *  - request flags semesterQuery/courseQuery/facultyQuery/materialQuery become selection hints,
- *    materialSelection becomes `materials`, `step` is advisory (the engine knows what's pending)
- *  - `sessionData` is now the opaque continuation token
+ *  - request flags are the exact course-page flags (option indices); `materialSelection` is an
+ *    alias for `materials`; `step` is advisory (the engine knows what's pending)
+ *  - `sessionData` is the opaque continuation token; `selection` must be option id(s) exactly as
+ *    for /vtop/continue (legacy "0" = all materials)
  *  - responses keep { step, options[{number, description, text}], nextStep, sessionData,
  *    interactiveState, completed, downloadInfo{servedFiles[...]} } and add the new fields
  */
@@ -51,74 +52,29 @@ function toLegacy(result) {
   }
 }
 
-/** Legacy request flags -> { flags, select } for the engine. */
-function splitLegacyFlags(raw = {}) {
+/** Legacy request flags -> exact engine flags. */
+function legacyFlags(raw = {}) {
   const flags = {}
-  const select = {}
   for (const [key, value] of Object.entries(raw || {})) {
     if (value === undefined || value === null || value === '') continue
-    switch (key) {
-      case 'semesterQuery':
-        select.semester = String(value)
-        break
-      case 'courseQuery':
-        select.course = String(value)
-        break
-      case 'facultyQuery':
-        select.faculty = String(value)
-        break
-      case 'materialQuery':
-        select.materials = String(value)
-        break
-      case 'materialSelection':
-        flags.materials = value
-        break
-      case 'fuzzyIndex':
-      case 'interactiveStep':
-      case 'debug':
-        break
-      default:
-        flags[key] = value
-    }
+    if (key === 'materialSelection') flags.materials = value
+    else flags[key] = value
   }
-  return { flags, select }
+  return flags
 }
 
 /** POST /vtop-interactive and the course-page-interactive MCP tool. */
-async function startLegacyWorkflow(service, { username, password, flags, sessionData }) {
-  const split = splitLegacyFlags(flags)
-  // Pre-token clients resumed with a JSON blob of flags; honour them (they're re-validated).
-  if (typeof sessionData === 'string' && sessionData.trim().startsWith('{')) {
-    try {
-      const parsed = JSON.parse(sessionData)
-      Object.assign(split.flags, splitLegacyFlags(parsed.flags || {}).flags, split.flags)
-    } catch {}
-  }
-  const result = await service.execute({ command: 'course-page', username, password, flags: split.flags, select: split.select })
+async function startLegacyWorkflow(service, { username, password, flags }) {
+  const result = await service.execute({ command: 'course-page', username, password, flags: legacyFlags(flags) })
   return toLegacy(result)
 }
 
 /** POST /vtop-interactive-continue and the course-page-interactive-continue MCP tool. */
-async function continueLegacyWorkflow(service, { username, password, sessionData, selection, step }) {
-  if (typeof sessionData === 'string' && sessionData.startsWith('v1.')) {
-    const result = await service.continueWorkflow({ continuation: sessionData, choice: selection, username, password })
-    return toLegacy(result)
-  }
-  // Pre-token JSON session: re-run with the selection applied as a flag.
-  let parsed = {}
-  try {
-    parsed = JSON.parse(sessionData || '{}')
-  } catch {}
-  const flags = { ...splitLegacyFlags(parsed.flags || {}).flags }
-  const param = step === 'materials' ? 'materials' : step
-  if (param) flags[param] = selection
-  const result = await service.execute({
-    command: 'course-page',
-    username: username || parsed.username,
-    password,
-    flags,
-  })
+async function continueLegacyWorkflow(service, { username, password, sessionData, selection }) {
+  // cli-top's --materials grammar used "0" for everything; "0" is never an option id.
+  const choice = selection === '0' || selection === 0 ? 'all' : selection
+  const result = await service.continueWorkflow({ continuation: sessionData, choice, username, password })
   return toLegacy(result)
 }
 
-module.exports = { toLegacy, splitLegacyFlags, startLegacyWorkflow, continueLegacyWorkflow }
+module.exports = { toLegacy, legacyFlags, startLegacyWorkflow, continueLegacyWorkflow }

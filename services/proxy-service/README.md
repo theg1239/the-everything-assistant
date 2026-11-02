@@ -32,7 +32,7 @@ HTTP (/vtop, /vtop/continue, /sync, legacy /vtop-interactive*)      MCP (/mcp, o
    validation (catalog) → result cache → single-flight → scheduler → CliRunner → envelope → result
                  │                                                        │
         workflow engine: selection / input / confirmation steps,   per-run isolated HOME/cwd,
-        hint matching, encrypted continuation tokens                allow-listed env, downloads
+        option-id validation, encrypted continuation tokens         allow-listed env, downloads
                                                                     → FileStore (signed URLs)
 ```
 
@@ -47,7 +47,6 @@ HTTP (/vtop, /vtop/continue, /sync, legacy /vtop-interactive*)      MCP (/mcp, o
 | `src/service.js`           | Cache, single-flight, retries, the multi-step workflow engine, `sync`.                            |
 | `src/scheduler.js`         | FIFO queue with global and per-user concurrency caps.                                             |
 | `src/workflow/token.js`    | AES-256-GCM continuation tokens.                                                                   |
-| `src/workflow/match.js`    | Natural-language hint matching ("CSE1001", "dsa", "anuj", "module 2", "previous semester").      |
 | `src/files/store.js`       | Download store, signed URLs, streaming, ZIP bundles, TTL cleanup.                                 |
 | `src/workflows/course-page.js` | Legacy `/vtop-interactive` adapter over the generic engine.                                    |
 | `src/mcp/server.js`        | MCP tools.                                                                                          |
@@ -57,8 +56,8 @@ HTTP (/vtop, /vtop/continue, /sync, legacy /vtop-interactive*)      MCP (/mcp, o
 
 - **Envelope**: one JSON line `{ success, command, version, requested_at, completed_at, duration_ms, reg_no, flags, output, structured_data: { tables, selection_requests, messages }, error: { kind, message } }`. Tables are *not* printed in proxy mode (`PrintTable` only captures a snapshot), so `output` only holds the non-table lines; the proxy re-renders tables in cli-top's box format so older text parsers keep working.
 - **Error kinds**: `auth_failed`, `selection_required`, `execution_error`, `partial_failure` (sync), `invalid_flags`, `encoding_error`. Login failures print human text (`Invalid LoginId/Password…`, `Number Of Maximum Fail Attempts…`, `Captcha could not be solved…`) to stdout *before* the envelope; the proxy uses it to tell wrong passwords from lockouts, captcha failures and VTOP outages.
-- **Selections**: `TableSelector`/`TableSelectorFuzzy` emit `selection_requests` (`subject`, `query`, `message`, `table`) and stop instead of prompting. Indices are 1-based rows. Numeric flags select directly; fuzzy text that matches several rows returns a *re-numbered* filtered table, so the proxy re-runs without the text to get stable indices and matches the hint itself.
-- **Semesters** default to the latest in proxy mode; passing an out-of-range index makes cli-top return the full semester table (used for "previous semester"-style hints).
+- **Selections**: `TableSelector`/`TableSelectorFuzzy` emit `selection_requests` (`subject`, `query`, `message`, `table`) and stop instead of prompting. Indices are 1-based rows. Numeric flags select directly. Some steps (`select: "fuzzy"` in the manifest) also run cli-top's *own* search on a text flag; when that search is ambiguous or misses, cli-top returns a *re-numbered* filtered table, so the proxy re-runs without the text to get the full table with stable indices. The proxy never matches text itself.
+- **Semesters** default to the latest in proxy mode; passing an out-of-range index makes cli-top return the full semester table (this is what `flags.semester: "list"` sends).
 - **Write flows**: `leave`/`nightslip` take `--apply` plus fields and fail with `missing --x; available <field> values: A (Label), …` before submitting when a field is missing; `facility` requires `--confirm`. These become `needs_input` / `needs_confirmation` steps.
 - **events**: proxy mode is view-only (registration is interactive-terminal-only in cli-top).
 - **Downloads** are written to `$HOME/Downloads/CLI-TOP Downloads/...`; the envelope carries no paths (except lines like `File saved to: …`). The proxy gives each run its own `HOME`, collects regular files afterwards (symlinks ignored), moves them to the file store and scrubs server paths from output.
@@ -78,6 +77,17 @@ Credentials: send `{ "username": "21BCE0001", "password": "…" }`. The legacy
 `encryptedPassword` + `sessionKey` (or `cipher:::key`) form is still accepted for one release and
 is **deprecated**.
 
+### Design rule: the proxy never interprets natural language
+
+The proxy exposes exact, typed parameters and VTOP's option lists; the calling model makes every
+choice. There is no hint matching, no acronym/keyword scoring, no relative-semester parsing and no
+"yes"/"cancel" word lists anywhere in the service. What remains is validation of machine formats
+(flag types, the `1,3-5` range grammar, dates, times, reg-no format) and parsing of cli-top's own
+protocol output (selection tables, `missing --x; available … values:` errors). The only automatic
+step is structural: when cli-top offers exactly **one** option, the proxy takes it and records it
+with `auto: true` in `progress` (except for a command's first step when that table *is* the data,
+i.e. `da` subjects and the `facility` list).
+
 ### `POST /vtop`
 
 ```json
@@ -85,20 +95,32 @@ is **deprecated**.
   "command": "course-page",
   "username": "21BCE0001",
   "password": "…",
-  "flags": { "semester": 2 },
-  "select": { "course": "CSE1001", "faculty": "anuj kumar", "materials": "module 2" },
+  "flags": { "course": 1 },
   "confirm": false,
   "fresh": false
 }
 ```
 
-- `flags`: exact values, allow-listed per command (`GET /commands`). Values are type-checked
-  (indices, the `--materials` grammar `1,3-5`/`0`/`all`, dates, times, ids) and may not start with
-  `-`. Unknown flags are rejected with 400.
-- `select`: natural-language hints resolved against VTOP's option lists. Legacy
-  `semesterQuery`/`courseQuery`/`facultyQuery`/`materialQuery` flags map here.
+- `flags`: exact values, allow-listed per command (`GET /commands` lists each param with `type`,
+  `format`, `description`). Unknown flags → 400 `invalid_input` with `field`. Types:
+  - `semester`: positive integer option index (1 = oldest), or `"list"` to get every semester back
+    as a `needs_selection` step; omit for the latest semester.
+  - `classGroup`, `course`, `faculty`, `assignment`, `facility`, `category`: positive integer option
+    index. On steps where cli-top runs its own search (`select: "fuzzy"`: faculty, `da`
+    course/assignment, `syllabus` course, `facility`, `course-allocation`) a string is also accepted
+    and passed **verbatim** to cli-top; if cli-top's search is not a unique hit the full option list
+    comes back (`step.cliQuery` echoes the string). Elsewhere a string is rejected.
+  - `materials`: `"1,3-5"`, `[1,3,4]`, `"0"` or `"all"`.
+  - `apply`, `confirm`: boolean (or `"true"`/`"false"`).
+  - dates `YYYY-MM-DD` (also `DD-MM-YYYY`), times `HH:MM` / `hh:MM AM`, ids/text as listed.
+  - Values may never start with `-`.
+- `select` was removed: sending it returns 400 `invalid_input`, `field: "select"`. The legacy
+  `semesterQuery`/`courseQuery`/`facultyQuery`/`materialQuery` flags are unknown flags (400).
 - `confirm`: explicit user confirmation for writes (`leave`/`nightslip` with `apply`, `facility`).
 - `fresh`: bypass the result cache (also `Cache-Control: no-cache`).
+
+The intended flow: call **without** selection flags, read `step.options`, continue with the chosen
+id(s). Pass flags directly only when you already hold indices from an earlier result.
 
 Response (every endpoint uses this shape):
 
@@ -117,20 +139,52 @@ Response (every endpoint uses this shape):
               "contentType": "application/pdf", "url": "https://proxy/files/…?exp=…&sig=…",
               "expiresAt": "…" }],
   "bundle": { "name": "course-page-2025-11-02.zip", "count": 2, "url": "…" },
-  "step": {                                // when status is needs_*
-    "id": "faculty", "kind": "select|input|confirm", "label": "Faculty",
-    "prompt": "Choose a faculty.", "multiple": false,
-    "options": [{ "id": "1", "index": 1, "label": "Anuj Kumar", "description": "…", "values": {} }]
-  },
+  "step": { … },                           // when status is needs_* (see below)
   "continuation": "v1.…",                  // opaque; pass to /vtop/continue
-  "progress": [{ "step": "course", "label": "Course", "choice": "CSE1001 — …", "auto": true }],
-  "meta": { "version": "2.12.1", "regNo": "…", "cached": false, "queuedMs": 0, "runs": 3,
-            "attempts": 1, "autoSelected": [], "flags": {} },
+  "progress": [{ "step": "faculty", "label": "Faculty", "choice": "Meera Iyer", "value": ["1"], "auto": true }],
+  "meta": { "version": "2.12.1", "regNo": "…", "cached": false, "queuedMs": 0, "runs": 2,
+            "attempts": 1, "autoSelected": [{ "step": "faculty", "choice": "Meera Iyer", "value": "1" }],
+            "flags": {} },
   // on errors:
   "error": "VTOP rejected the username or password.", "errorKind": "invalid_credentials",
-  "retryable": false, "requiresCredentials": true
+  "retryable": false, "requiresCredentials": true,
+  "field": "choice", "validIds": ["1", "2", "3"]   // on invalid_input where applicable
 }
 ```
+
+`needs_selection` example (`POST /vtop { "command": "course-page", … , "flags": { "course": 1 } }`):
+
+```json
+{
+  "success": true,
+  "status": "needs_selection",
+  "command": "course-page",
+  "message": "Choose one faculty: continue with its option id.",
+  "step": {
+    "id": "faculty",
+    "kind": "select",
+    "label": "Faculty",
+    "prompt": "Choose one faculty: continue with its option id.",
+    "multiple": false,
+    "options": [
+      { "id": "1", "index": 1, "label": "Anuj Kumar", "values": { "FACULTY": "Anuj Kumar" } },
+      { "id": "2", "index": 2, "label": "Anjali Sharma", "values": { "FACULTY": "Anjali Sharma" } },
+      { "id": "3", "index": 3, "label": "Ravi Shankar", "values": { "FACULTY": "Ravi Shankar" } }
+    ]
+  },
+  "continuation": "v1.…",
+  "progress": [],
+  "meta": { "runs": 1, "autoSelected": [], "flags": { "course": 1 } }
+}
+```
+
+Step shapes (`id` is the flag the step fills; `options` is always present and never truncated):
+
+| kind      | status               | extra fields                                                         | `choice` on continue |
+| --------- | -------------------- | -------------------------------------------------------------------- | -------------------- |
+| `select`  | `needs_selection`    | `multiple`, `cliQuery?` (cli-top search that was not a unique hit)   | option id(s)         |
+| `input`   | `needs_input`        | `inputType` (`date`/`time`/`text`/`id`/`option`), `format`, `description` | raw value; one of `options[].id` when `inputType: "option"` |
+| `confirm` | `needs_confirmation` | `summary` (leave/nightslip apply), `options: []`                     | `true` / `false`     |
 
 | errorKind                                | HTTP | Meaning                                                                    |
 | ---------------------------------------- | ---- | -------------------------------------------------------------------------- |
@@ -154,24 +208,51 @@ Response (every endpoint uses this shape):
 { "continuation": "v1.…", "choice": "2", "password": "…" }
 ```
 
-`choice` may be an option id, several ids for multi-select (`"1,3-5"`, `["1","3"]`, `"all"`),
-free text matched against the options (`"CSE1001"`, `"anuj"`, `"module 2"`), a value for
-`needs_input`, or `"confirm"`/`"cancel"`. Continuations are AES-256-GCM sealed (confidential,
-tamper-proof), expire after `WORKFLOW_TOKEN_TTL_SECONDS` (15 min), are bound to the VTOP account
-and never contain the password; the client re-sends the password with each call. Continuing
+`choice` must be exactly one of:
+
+- **select** steps: an option id (`"2"`; an integer `2` is accepted too), or an array with one id.
+  When `step.multiple`: an array of ids (`["1","3"]`), the range grammar over ids (`"1,3-5"`), or
+  `"all"`.
+- **input** steps: the raw value, validated against `step.inputType` / `step.format`; when
+  `step.options` is non-empty (VTOP's own value list, e.g. leave codes `HT1`), one of
+  `options[].id` exactly.
+- **confirm** steps: a boolean. `false` returns `status: "cancelled"` without running cli-top.
+
+Anything else (e.g. free text like `"anuj"`, an id that was not offered, `"yes"`) is rejected
+without running cli-top:
+
+```json
+{
+  "success": false,
+  "status": "error",
+  "error": "\"anuj\" is not a valid choice for Faculty; expected exactly one option id. Valid ids: 1, 2, 3",
+  "errorKind": "invalid_input",
+  "field": "choice",
+  "validIds": ["1", "2", "3"],
+  "retryable": false
+}
+```
+
+(HTTP 400; for multi-select `validIds` also contains `"all"`.) The continuation stays valid, so the
+client can retry with a correct id. There is no cancel keyword for select/input steps: just stop
+continuing (tokens expire).
+
+Continuations are AES-256-GCM sealed (confidential, tamper-proof), carry the offered option ids,
+expire after `WORKFLOW_TOKEN_TTL_SECONDS` (15 min), are bound to the VTOP account and never contain
+the password; the client re-sends the password with each call (`username` is optional). Continuing
 re-runs cli-top with the accumulated flags, so it works after restarts and across instances
 sharing `PROXY_TOKEN_SECRET`.
 
 | Command                         | Steps                                                                     |
 | ------------------------------- | ------------------------------------------------------------------------- |
-| `course-page`, `course-page-archive` | semester (only when hinted) → course → faculty → materials (multi)  |
+| `course-page`, `course-page-archive` | semester (archive, or `semester: "list"`) → course → faculty → materials (multi) |
 | `da`                            | subject → assignment (downloads the question paper)                       |
 | `syllabus`                      | course (downloads the PDF)                                                |
 | `course-allocation`             | category → course                                                         |
 | `calendar`                      | class group                                                               |
 | `facility`                      | facility → confirmation                                                   |
-| `leave` / `nightslip` + `apply` | confirmation → missing fields (with VTOP's own option lists)             |
-| semester-aware reads            | semester list when a non-latest semester is hinted                       |
+| `leave` / `nightslip` + `apply` | confirmation → missing fields (`needs_input`, with VTOP's own option lists) |
+| semester-aware reads            | semester list when `semester: "list"` is passed                           |
 
 ### `POST /sync` (alias `/vtop-sync`)
 
@@ -193,9 +274,14 @@ and the store is wiped at startup; total size is capped by `FILE_STORE_MAX_BYTES
 ### Legacy endpoints
 
 - `POST /vtop-interactive` / `POST /vtop-interactive-continue`: course-page only; same response
-  shape as before (`step`, `options[{number, description, text}]`, `nextStep`, `sessionData`,
-  `interactiveState`, `completed`, `downloadInfo.servedFiles[{name, downloadUrl, size, expiry}]`),
-  now backed by the generic engine (`sessionData` is the continuation token).
+  shape as before (`step`, `options[{number, id, description, text, values}]`, `nextStep`,
+  `sessionData`, `interactiveState`, `completed`, `downloadInfo.servedFiles[{name, downloadUrl,
+  size, expiry}]`), backed by the generic engine. They take **exact selections only**:
+  `flags` are course-page flags (option indices; `materialSelection` = `materials`), `sessionData`
+  must be the continuation token from the previous response, and `selection` must be option id(s)
+  as for `/vtop/continue` (`"0"` still means all materials). `semesterQuery`/`courseQuery`/
+  `facultyQuery`/`materialQuery`, free-text selections and pre-token JSON `sessionData` are
+  rejected with 400 `invalid_input` / `token_invalid`.
 - `GET /download/:fileId` answers 410 (old unsigned links).
 
 ### Other
@@ -208,12 +294,20 @@ and the store is wiped at startup; total size is capped by `FILE_STORE_MAX_BYTES
 
 ## MCP (`/mcp`)
 
-Tools: one per manifest command (input `{ flags?, select?, confirm?, fresh? }`), `vtop-continue`
-(`{ continuation, choice, confirm? }`), `sync`, and the deprecated `course-page-interactive(-continue)`.
-Results are `structuredContent` with the shape above (`isError: true` on failures; file URLs
-absolute). With OAuth enabled (default) credentials come from the bearer token; with
-`MCP_OAUTH_ENABLED=false` tools take `username`/`password` and `/mcp` requires the
-`PROXY_API_KEY` instead.
+Tools (all results are `structuredContent` with the shape above, `isError: true` on failures, file
+URLs absolute):
+
+| Tool | Input | Notes |
+| ---- | ----- | ----- |
+| one per manifest command (`profile`, `marks`, `course-page`, `da`, `leave`, …) | `{ flags?, confirm?, fresh? }` | `flags` is a typed object with exactly the command's params (integers for indices, `semester: int \| "list"`, `materials: string \| int[]`, booleans, strings for dates/ids). No hint parameter; `select` is rejected. |
+| `vtop-continue` | `{ continuation, choice }` | `choice`: option id / array of ids / `"1,3-5"` / `"all"` / input value / boolean, as for `/vtop/continue`. |
+| `sync` | `{ commands?, flags?: { semester }, fresh? }` | |
+| `course-page-interactive`, `course-page-interactive-continue` | legacy | Deprecated; exact selections only. |
+
+Tool descriptions tell the model to call **without** selection flags first, pick from
+`step.options` itself, and continue with option ids only. With OAuth enabled (default)
+credentials come from the bearer token; with `MCP_OAUTH_ENABLED=false` every tool also takes
+`username`/`password` and `/mcp` requires the `PROXY_API_KEY` instead.
 
 ### OAuth
 
@@ -243,8 +337,9 @@ absolute). With OAuth enabled (default) credentials come from the bearer token; 
 - **Scheduler**: `CLI_MAX_CONCURRENCY` global, `CLI_PER_USER_CONCURRENCY` (default 1: one VTOP
   session per student), FIFO queue instead of failures.
 - **Kill-switch cache**: saves the blocking `latest.json` HTTPS round trip per spawn.
-- **Auto-advance**: hints resolve workflow steps server-side; `materials: "all"`/indices are
-  passed up front (one fewer run).
+- **Auto-advance (structural only)**: a step for which cli-top offers exactly one option is taken
+  without a round trip (`progress[].auto: true`). Callers that already hold indices can pass them
+  as flags and skip steps entirely.
 - **No session reuse** (see above): each uncached run costs one VTOP login.
 
 `npm run bench` (fake cli-top: 1.5 s simulated login, 150 ms simulated latest.json; same scenarios
@@ -256,7 +351,8 @@ before and after the rewrite):
 | 10 sequential identical reads, one user     | 16 952 ms (10 logins)      | 1 580 ms (1 login)          |
 | 8 concurrent identical reads, one user      | 1 705 ms, **8 logins**     | 1 565 ms, 1 login           |
 | 16 users concurrently                       | 1 747 ms                   | 1 710 ms                    |
-| course-page "module 2 of CSE1001 by Anuj"   | not possible (broken)      | 1 HTTP call, 4 runs ≈ 6.5 s (3 runs for "all") |
+| course-page module download, ids picked per step | not possible (broken)  | 4 HTTP calls, 4 runs ≈ 6.3 s |
+| course-page with exact flags (indices known) | not possible (broken)     | 1 HTTP call, 1 run ≈ 1.6 s  |
 
 ---
 
@@ -300,8 +396,10 @@ See `.env.example` for every variable. Key ones: `PROXY_API_KEY`, `PROXY_TOKEN_S
   `pending`/`flaky-*`).
 - `test/http.test.js`: auth, argv safety, error mapping, retries, cache/single-flight/queueing,
   env isolation, path scrubbing.
-- `test/workflow.test.js`: every multi-step flow, tokens, downloads (signed URLs, zip, TTL),
-  sync + streaming, legacy API, kill-switch cache.
+- `test/workflow.test.js`: every multi-step flow driven by option ids only (course-page, syllabus,
+  da, calendar, semester list, facility confirm, leave/nightslip apply with inputs), rejection of
+  `select`/free-text choices with `validIds`, single-option auto-advance, tokens, downloads
+  (signed URLs, zip, TTL), sync + streaming, legacy API, kill-switch cache.
 - `test/mcp.test.js`, `test/oauth.test.js`, `test/unit.test.js`.
 
 Not verifiable without real VTOP access: real table headers/row contents per feature (fixtures

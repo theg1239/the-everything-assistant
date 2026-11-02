@@ -13,11 +13,12 @@ const { z } = require('zod')
  */
 
 class ValidationError extends Error {
-  constructor(message, field) {
+  constructor(message, field, extra = {}) {
     super(message)
     this.name = 'ValidationError'
     this.kind = 'invalid_input'
     this.field = field
+    Object.assign(this, extra)
   }
 }
 
@@ -28,41 +29,57 @@ const PARAMS = {
     cli: 'semester',
     type: 'index',
     description:
-      'Semester index as listed by VTOP (1 = oldest). Omit for the latest semester; pass a hint via select.semester (e.g. "fall 2024", "previous") to pick by name.',
+      'Semester option index as listed by VTOP (1 = oldest). Omit for the latest semester; pass "list" to get every semester back as a needs_selection step.',
   },
-  classGroup: { cli: 'class-group', type: 'index', description: 'Class group index (defaults to the first group).' },
+  classGroup: { cli: 'class-group', type: 'index', description: 'Class group option index (defaults to the first group).' },
   course: {
     cli: 'course',
     type: 'selection',
-    description: 'Course: an option index from a previous step, or (da/syllabus/course-allocation) a search query.',
+    description: 'Course option index from a previous needs_selection step.',
   },
-  faculty: { cli: 'faculty', type: 'selection', description: 'Faculty option index or name search.' },
+  faculty: { cli: 'faculty', type: 'selection', description: 'Faculty option index from a previous needs_selection step.' },
   materials: {
     cli: 'materials',
     type: 'materials',
-    description: 'Material indices/ranges, e.g. "1,3-5"; "0" or "all" downloads everything.',
+    description: 'Material option indices/ranges, e.g. "1,3-5" (or [1,3,4,5]); "0" or "all" downloads everything.',
   },
-  assignment: { cli: 'assignment', type: 'selection', description: 'DA option index or title search.' },
-  facility: { cli: 'facility', type: 'selection', description: 'Facility option index or name search.' },
-  category: { cli: 'category', type: 'selection', description: 'Curriculum category index or search.' },
+  assignment: { cli: 'assignment', type: 'selection', description: 'DA option index from a previous needs_selection step.' },
+  facility: { cli: 'facility', type: 'selection', description: 'Facility option index from a previous needs_selection step.' },
+  category: { cli: 'category', type: 'selection', description: 'Curriculum category option index from a previous needs_selection step.' },
   confirm: { cli: 'confirm', type: 'boolean', description: 'Confirm an irreversible action.' },
   apply: { cli: 'apply', type: 'boolean', description: 'Submit a new application instead of showing status.' },
-  leaveCode: { cli: 'leave-code', type: 'text', max: 40, description: 'Leave type code or label (e.g. HT1 / HOME TOWN).' },
+  leaveCode: { cli: 'leave-code', type: 'text', max: 40, description: 'Leave type code as listed by VTOP (e.g. HT1).' },
   visitingPlace: { cli: 'visiting-place', type: 'text', max: 150, description: 'Place you will visit.' },
   reason: { cli: 'reason', type: 'text', max: 500, description: 'Reason for leave.' },
   details: { cli: 'details', type: 'text', max: 500, description: 'Night slip details.' },
   fromDate: { cli: 'from-date', type: 'date', description: 'Start date (YYYY-MM-DD).' },
-  fromTime: { cli: 'from-time', type: 'time', description: 'Start time (HH:MM, 24h or 08:30 PM).' },
+  fromTime: { cli: 'from-time', type: 'time', description: 'Start time (HH:MM 24h, or hh:MM AM/PM).' },
   toDate: { cli: 'to-date', type: 'date', description: 'End date (YYYY-MM-DD).' },
-  toTime: { cli: 'to-time', type: 'time', description: 'End time (HH:MM, 24h or 08:30 PM).' },
-  costCentreId: { cli: 'cost-centre-id', type: 'id', description: 'Night slip cost centre id.' },
-  appliedTo: { cli: 'applied-to', type: 'id', description: 'Night slip approver (warden) id.' },
-  roomTypeId: { cli: 'room-type-id', type: 'id', description: 'Night slip room type id.' },
-  buildingId: { cli: 'building-id', type: 'id', description: 'Night slip building id.' },
+  toTime: { cli: 'to-time', type: 'time', description: 'End time (HH:MM 24h, or hh:MM AM/PM).' },
+  costCentreId: { cli: 'cost-centre-id', type: 'id', description: 'Night slip cost centre id as listed by VTOP.' },
+  appliedTo: { cli: 'applied-to', type: 'id', description: 'Night slip approver (warden) id as listed by VTOP.' },
+  roomTypeId: { cli: 'room-type-id', type: 'id', description: 'Night slip room type id as listed by VTOP.' },
+  buildingId: { cli: 'building-id', type: 'id', description: 'Night slip building id as listed by VTOP.' },
   venue: { cli: 'venue', type: 'text', max: 150, description: 'Night slip venue.' },
-  eventId: { cli: 'event-id', type: 'id', description: 'Night slip late-hour event id.' },
+  eventId: { cli: 'event-id', type: 'id', description: 'Night slip late-hour event id as listed by VTOP.' },
   commands: { cli: 'commands', type: 'commands', description: 'Comma-separated commands for sync.' },
 }
+
+/** Machine formats per param type (shown to clients and in step.format). */
+const FORMATS = {
+  index: 'positive integer',
+  selection: 'positive integer',
+  materials: '"1,3-5" | "0" | "all" | [1,3,4]',
+  boolean: 'boolean',
+  date: 'YYYY-MM-DD (also DD-MM-YYYY)',
+  time: 'HH:MM (24h) or hh:MM AM/PM',
+  id: 'exact id',
+  text: 'text',
+  commands: 'comma-separated command names',
+}
+
+/** Sentinel for `semester`: an out-of-range index makes cli-top answer with the full semester table. */
+const LIST_SEMESTERS = 9999
 
 /** Accepted spellings -> canonical param name (camelCase, kebab-case and cli-top aliases). */
 const ALIASES = (() => {
@@ -98,15 +115,6 @@ const ALIASES = (() => {
   for (const [alias, name] of Object.entries(extra)) map.set(alias, name)
   return map
 })()
-
-/** Legacy natural-language fields -> selection hints (resolved by the proxy, never sent to cli-top). */
-const HINT_ALIASES = {
-  semesterquery: 'semester',
-  coursequery: 'course',
-  facultyquery: 'faculty',
-  materialquery: 'materials',
-  categoryquery: 'category',
-}
 
 /** Accepted for backwards compatibility but never forwarded. */
 const IGNORED_FLAGS = new Set(['fuzzyindex', 'interactivestep', 'debug', 'd'])
@@ -181,9 +189,11 @@ function normalizeValue(name, value) {
   const spec = PARAMS[name]
   switch (spec.type) {
     case 'index':
-      if (name === 'semester' && typeof value === 'string' && /^(latest|current)$/i.test(value.trim())) return undefined
+      if (name === 'semester' && value === 'list') return LIST_SEMESTERS
       return asIndex(value, name)
     case 'selection': {
+      // Integer option index. Commands whose cli-top step does its own search (steps[].select
+      // "fuzzy") also accept a string, forwarded verbatim to cli-top; see Catalog#normalizeParams.
       if (typeof value === 'number') return asIndex(value, name)
       const text = asText(value, name, 120)
       return /^\d+$/.test(text) ? asIndex(text, name) : text
@@ -192,7 +202,7 @@ function normalizeValue(name, value) {
       if (Array.isArray(value)) value = value.join(',')
       if (typeof value === 'number') value = String(value)
       const text = asText(value, name, 200).replace(/\s+/g, '')
-      if (/^(all|everything)$/i.test(text)) return '0'
+      if (text === 'all') return '0'
       if (!MATERIALS_GRAMMAR.test(text)) {
         throw new ValidationError('materials must look like "1,3-5" (or "0"/"all" for everything)', name)
       }
@@ -200,8 +210,8 @@ function normalizeValue(name, value) {
     }
     case 'boolean':
       if (value === true || value === false) return value
-      if (typeof value === 'string' && /^(true|1|yes)$/i.test(value.trim())) return true
-      if (typeof value === 'string' && /^(false|0|no)$/i.test(value.trim())) return false
+      if (value === 'true') return true
+      if (value === 'false') return false
       throw new ValidationError(`${name} must be a boolean`, name)
     case 'date': {
       const text = asText(value, name, 10)
@@ -273,26 +283,18 @@ class Catalog {
   }
 
   /**
-   * Validate client flags for a command.
-   * Returns { flags, hints } where flags use canonical param names and validated values.
+   * Validate client flags for a command. Returns canonical param names -> validated values.
+   * Only exact machine values are accepted; nothing here interprets natural language.
    */
-  normalizeParams(entry, rawFlags = {}, rawHints = {}) {
+  normalizeParams(entry, rawFlags = {}) {
     if (rawFlags === null || rawFlags === undefined) rawFlags = {}
     if (typeof rawFlags !== 'object' || Array.isArray(rawFlags)) throw new ValidationError('flags must be an object', 'flags')
-    if (rawHints === null || rawHints === undefined) rawHints = {}
-    if (typeof rawHints !== 'object' || Array.isArray(rawHints)) throw new ValidationError('select must be an object', 'select')
 
     const flags = {}
-    const hints = {}
     for (const [key, value] of Object.entries(rawFlags)) {
       if (value === undefined || value === null || value === '') continue
       const lower = key.toLowerCase()
       if (IGNORED_FLAGS.has(lower)) continue
-      if (HINT_ALIASES[lower]) {
-        const param = HINT_ALIASES[lower]
-        if (entry.params.includes(param)) hints[param] = asText(String(value), key, 200)
-        continue
-      }
       const name = ALIASES.get(lower)
       if (!name || !entry.params.includes(name)) {
         throw new ValidationError(
@@ -300,16 +302,7 @@ class Catalog {
           key
         )
       }
-      const normalized = normalizeValue(name, value)
-      if (normalized !== undefined) flags[name] = normalized
-    }
-    for (const [key, value] of Object.entries(rawHints)) {
-      if (value === undefined || value === null || value === '') continue
-      const name = ALIASES.get(key.toLowerCase())
-      if (!name || !entry.params.includes(name)) {
-        throw new ValidationError(`Unsupported selection "${key}" for ${entry.command}`, key)
-      }
-      hints[name] = asText(typeof value === 'number' ? String(value) : value, `select.${key}`, 200)
+      flags[name] = normalizeValue(name, value)
     }
 
     if (flags.commands !== undefined) {
@@ -323,15 +316,16 @@ class Catalog {
       }
       flags.commands = [...new Set(list.map(item => this.get(item).cliCommand))].join(',')
     }
-    // A selection value that is free text for an index-only step becomes a hint.
-    for (const step of entry.steps) {
-      const value = flags[step.param]
-      if (step.select === 'index' && typeof value === 'string') {
-        hints[step.param] = hints[step.param] || value
-        delete flags[step.param]
+    // A string is only meaningful where cli-top itself searches (select: "fuzzy"); it is passed
+    // through verbatim. Everywhere else a selection flag must be an option index.
+    for (const [name, value] of Object.entries(flags)) {
+      if (PARAMS[name].type !== 'selection' || typeof value !== 'string') continue
+      const step = entry.steps.find(candidate => candidate.param === name)
+      if (!step || step.select !== 'fuzzy') {
+        throw new ValidationError(`${name} must be a positive integer option index for ${entry.command}`, name)
       }
     }
-    return { flags, hints }
+    return flags
   }
 
   /** Canonical flags -> cli-top argv (after `proxy <user> <pass> <command>`). */
@@ -350,4 +344,4 @@ class Catalog {
   }
 }
 
-module.exports = { Catalog, ValidationError, PARAMS, loadManifest, normalizeValue }
+module.exports = { Catalog, ValidationError, PARAMS, FORMATS, LIST_SEMESTERS, loadManifest, normalizeValue }

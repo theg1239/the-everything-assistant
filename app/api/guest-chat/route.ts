@@ -93,6 +93,8 @@ export async function POST(req: Request) {
   // Usage rows are written after the response (the SDK awaits onStepEnd/onEnd in-stream).
   const background = createBackgroundTasks()
   try {
+    // Reading the body is local work; start it so it overlaps the BotID verification.
+    const bodyPromise: Promise<unknown> = req.json().catch(() => null)
     if (process.env.DISABLE_BOTID !== 'true' && process.env.NODE_ENV !== 'development') {
       const verification = await checkBotId()
       if (verification.isBot) {
@@ -107,7 +109,7 @@ export async function POST(req: Request) {
       return jsonResponse({ error: 'UNAVAILABLE', message: 'guest mode is unavailable.' }, 503)
     }
 
-    const rawPayload: unknown = await req.json().catch(() => null)
+    const rawPayload = await bodyPromise
     // Client `system` messages are already stripped by the parser.
     const payload = parseChatRequestPayload(rawPayload)
 
@@ -156,6 +158,14 @@ export async function POST(req: Request) {
     }
     const guestUserId = `guest:${guestId}`
 
+    // Quota and per-guest rate limit are independent Redis round trips: run them together.
+    // The quota still decides first (a guest over quota gets the quota response even if the
+    // rate limit also failed); the only extra effect is that a quota-rejected request also
+    // spends a rate-limit token from that guest's own bucket, which the quota (2/day) already
+    // keeps far below the per-minute limit. Both must pass before the model starts.
+    const rateLimitCheck = enforceUserRateLimit(guestUserId)
+    // Handled where it is awaited; this only prevents an unhandled-rejection report meanwhile.
+    rateLimitCheck.catch(() => undefined)
     const quota = await consumeGuestQuota(
       quotaStore,
       { guestId, ip: getClientIp(req.headers, detectHostingPlatform()) },
@@ -165,7 +175,7 @@ export async function POST(req: Request) {
       return guestLimitResponse()
     }
 
-    await enforceUserRateLimit(guestUserId)
+    await rateLimitCheck
 
     const { systemMessages } = buildSystemPrompt({
       prefersWebSearch: false,

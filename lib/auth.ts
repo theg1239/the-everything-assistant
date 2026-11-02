@@ -109,8 +109,11 @@ async function allowSignIn(
   providerAccountId: string,
   profile: unknown
 ): Promise<boolean | string> {
-  const current = await cookieSessionUser()
-  const ownerId = await linkedUserId(provider, providerAccountId)
+  // Independent reads (session behind the cookie, current owner of the incoming account).
+  const [current, ownerId] = await Promise.all([
+    cookieSessionUser(),
+    linkedUserId(provider, providerAccountId),
+  ])
 
   if (provider === 'spotify') {
     if (!current?.fullyAuthenticated) return SPOTIFY_LINK_REQUIRES_SIGN_IN

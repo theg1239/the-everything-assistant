@@ -26,6 +26,7 @@ import {
   updateMessageToolInvocations,
 } from '@/lib/db'
 import { extractTitleFromContent } from '@/lib/utils'
+import { mapWithConcurrency } from '@/lib/concurrency'
 import { sanitizeToolInvocations } from '@/lib/sanitize-tools'
 import { normalizeTokenUsage } from '@/lib/token-usage'
 import { enforceUserRateLimit, UserRateLimitError } from '@/lib/user-rate-limiter'
@@ -70,6 +71,9 @@ import { buildMemoryContext } from './lib/memory-context'
 import { enhanceMessagesWithToolContext, prepareFinalMessages } from './lib/message-prep'
 import { buildSystemPrompt } from './lib/prompt'
 import { createBackgroundTasks, type BackgroundTasks } from './lib/background'
+
+/** Post-response VTOP result parsing (one LLM call each) runs at most this many at a time. */
+const VTOP_PARSE_CONCURRENCY = 3
 
 const getMessageText = (message: LegacyMessage | null | undefined): string => message?.content ?? ''
 
@@ -865,9 +869,11 @@ export async function POST(req: Request) {
         background.track(
           'parse VTOP results',
           (async () => {
-            for (const tr of unparsedVTOPResults) {
+            // Each result is parsed by its own LLM call and patched in place: independent, so
+            // they run in parallel (bounded); the row is rewritten once after all of them.
+            await mapWithConcurrency(unparsedVTOPResults, VTOP_PARSE_CONCURRENCY, async tr => {
               const toolOutput = getToolOutputPayload(tr)
-              if (!toolOutput) continue
+              if (!toolOutput) return
               try {
                 const parsed = await parseVTOPData(
                   toolOutput,
@@ -884,7 +890,7 @@ export async function POST(req: Request) {
               } catch (e) {
                 console.error('Failed to parse VTOP data in final result:', e)
               }
-            }
+            })
             if (savedWithInvocations) {
               await updateMessageToolInvocations(messageId, buildInvocations())
             }

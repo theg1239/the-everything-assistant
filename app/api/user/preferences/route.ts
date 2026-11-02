@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
     }
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
+      select: { preferences: true },
     })
 
     const storedPreferences = readStoredPreferences(user?.preferences)
@@ -79,6 +80,7 @@ export async function PATCH(request: NextRequest) {
 
     const existingUser = await prisma.user.findUnique({
       where: { email: session.user.email },
+      select: { preferences: true },
     })
     if (!existingUser) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })

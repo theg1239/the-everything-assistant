@@ -200,8 +200,8 @@ export async function recordSessionVerification(
 }
 
 export async function clearSessionVerification(kv: MfaKv, tokenHash: string): Promise<void> {
-  await kv.del(keys.session(tokenHash))
-  await kv.del(keys.webAuthnChallenge(tokenHash))
+  // Independent keys: both deletes are always attempted, in one round trip's time.
+  await Promise.all([kv.del(keys.session(tokenHash)), kv.del(keys.webAuthnChallenge(tokenHash))])
 }
 
 /** Whether the verification is recent enough to authorise a sensitive change. */

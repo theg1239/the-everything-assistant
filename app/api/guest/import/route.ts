@@ -1,5 +1,5 @@
 import { auth } from '@/lib/auth'
-import { createChat, getChat, saveMessage } from '@/lib/db'
+import { createChat, getChat, saveMessagesInOrder } from '@/lib/db'
 import { extractTitleFromContent, generateUUID } from '@/lib/utils'
 import * as z from 'zod'
 
@@ -84,10 +84,9 @@ export async function POST(req: Request) {
     }
   }
 
-  // Server-generated ids: client ids could collide with (or probe for) existing rows.
-  for (const message of messages) {
-    await saveMessage(chat.id, message.role, message.content, undefined, generateUUID())
-  }
+  // One INSERT for the whole history (previously one round trip per message), in order and
+  // with server-generated ids: client ids could collide with (or probe for) existing rows.
+  await saveMessagesInOrder(chat.id, messages)
 
   return new Response(
     JSON.stringify({ chatId: chat.id, path: chat.path || `/chat/${chat.id}` }),

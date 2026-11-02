@@ -110,13 +110,13 @@ async function currentUserId(): Promise<string | null> {
 }
 
 /**
- * Decrypted credentials of the signed-in user (migrating legacy cookies first if needed), or
- * null. Never throws: failures are logged without secrets. Server-side use only.
+ * Decrypted credentials of `userId` (migrating this request's legacy cookies first if needed),
+ * or null. For callers that already authenticated the request and hold the user id: it skips
+ * the extra `auth()` (not memoised in route handlers / server actions). Never throws: failures
+ * are logged without secrets. Server-side use only.
  */
-export async function getCurrentUserVTOPCredentials(): Promise<VTOPCredentials | null> {
+export async function getUserVTOPCredentials(userId: string): Promise<VTOPCredentials | null> {
   try {
-    const userId = await currentUserId()
-    if (!userId) return null
     const store = getVTOPCredentialStore()
     const stored = await store.get(userId)
     if (stored) return stored
@@ -128,11 +128,9 @@ export async function getCurrentUserVTOPCredentials(): Promise<VTOPCredentials |
   }
 }
 
-/** Link status of the signed-in user (migrating legacy cookies first if needed). Never throws. */
-export async function getCurrentUserVTOPCredentialStatus(): Promise<VTOPCredentialStatus> {
+/** Link status of `userId` (migrating legacy cookies first if needed). Never throws. */
+export async function getUserVTOPCredentialStatus(userId: string): Promise<VTOPCredentialStatus> {
   try {
-    const userId = await currentUserId()
-    if (!userId) return { linked: false }
     const store = getVTOPCredentialStore()
     const current = await store.status(userId)
     if (current.linked) return current
@@ -145,10 +143,35 @@ export async function getCurrentUserVTOPCredentialStatus(): Promise<VTOPCredenti
 }
 
 /**
+ * Decrypted credentials of the signed-in user (migrating legacy cookies first if needed), or
+ * null. Never throws: failures are logged without secrets. Server-side use only.
+ */
+export async function getCurrentUserVTOPCredentials(): Promise<VTOPCredentials | null> {
+  try {
+    const userId = await currentUserId()
+    return userId ? await getUserVTOPCredentials(userId) : null
+  } catch (error) {
+    logFailure('reading credentials', error)
+    return null
+  }
+}
+
+/** Link status of the signed-in user (migrating legacy cookies first if needed). Never throws. */
+export async function getCurrentUserVTOPCredentialStatus(): Promise<VTOPCredentialStatus> {
+  try {
+    const userId = await currentUserId()
+    return userId ? await getUserVTOPCredentialStatus(userId) : { linked: false }
+  } catch (error) {
+    logFailure('reading link status', error)
+    return { linked: false }
+  }
+}
+
+/**
  * @deprecated Use {@link getCurrentUserVTOPCredentials} (or `getVTOPCredentialsForUser(userId)`
  * from `@/lib/vtop-credential-store`) and send `{ username, password }` to the proxy.
  *
- * Kept for existing callers (lib/tools.ts, app/actions/hub.ts, app/api/hub/vtop/route.ts). The
+ * Kept for backwards compatibility. The
  * `cipher:::key` format only existed to carry the browser cookie key; now `encryptedPassword`
  * holds the PLAINTEXT password, which every caller already forwards as the proxy's `password`
  * field when it contains no `:::`. Passwords that do contain `:::` are wrapped in the legacy

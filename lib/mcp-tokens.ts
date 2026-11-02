@@ -75,8 +75,17 @@ export function isExpired(bundle: McpTokenBundle | null) {
   return Date.now() > expires - 60_000 // refresh 1 minute early
 }
 
-export async function refreshUserMcpToken(userId: string, provider: string = PROVIDER) {
-  const bundle = await getUserMcpToken(userId, provider)
+/**
+ * Exchanges the stored refresh token for a new access token and saves it. Pass `current` when
+ * the caller has just read the bundle (the usual "read, see it's expired, refresh" flow) to
+ * skip re-reading it.
+ */
+export async function refreshUserMcpToken(
+  userId: string,
+  provider: string = PROVIDER,
+  current?: McpTokenBundle | null
+) {
+  const bundle = current ?? (await getUserMcpToken(userId, provider))
   if (!bundle?.refreshToken) return null
 
   const rawOauthBase =

@@ -24,11 +24,9 @@ export async function GET(request: NextRequest) {
 
     if (!userId) return NextResponse.json({ error: 'missing userId' }, { status: 400 })
 
-    const chats = await prisma.chat.findMany({ where: { userId }, select: { id: true } })
-    const chatIds = chats.map(c => c.id)
-
+    // Relation filter: one query (previously all chat ids first, then an `IN` list of them).
     const where: Prisma.MessageWhereInput = {
-      chatId: { in: chatIds },
+      chat: { userId },
       ...(q ? { content: { contains: q, mode: 'insensitive' } } : {}),
     }
 

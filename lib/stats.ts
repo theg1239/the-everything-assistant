@@ -219,7 +219,8 @@ export async function getToolCallStats(limit = 50): Promise<ToolCallStat[]> {
 export async function getDetailedUsageStats() {
   const [lifetimeBuckets, hourlyHeatmap, dailyPeaks, topModels, tokensPerUser, movingAverages] =
     await Promise.all([
-      (await import('./db')).getTokenUsageLifetimeBuckets('day'),
+      // Not `(await import(...))` inside the array: that would delay every query below it.
+      import('./db').then(db => db.getTokenUsageLifetimeBuckets('day')),
       getHourlyHeatmap(14),
       getDailyPeakHours(30),
       getTopModels(10),

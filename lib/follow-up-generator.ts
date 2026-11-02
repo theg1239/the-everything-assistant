@@ -1,6 +1,5 @@
 import { generateText } from 'ai'
 import { defaultProviderOptions, languageModel } from '@/lib/ai'
-import { auth } from '@/lib/auth'
 import { getCurrentVITContext } from '@/lib/data/context-integration'
 import { enforceUserRateLimit } from '@/lib/user-rate-limiter'
 
@@ -9,15 +8,17 @@ type ConversationMessage = {
   content: string
 }
 
+/**
+ * `userId` is the already-authenticated caller (used for rate limiting). Passed in rather than
+ * re-read via `auth()`, which isn't memoised in route handlers (one more session lookup).
+ */
 export async function generateFollowUpSuggestions(
+  userId: string,
   assistantMessage: string,
   userMessage?: string,
   conversationHistory?: ConversationMessage[]
 ): Promise<string[]> {
   try {
-
-    const session = await auth()
-    const userId = session?.user?.id
 
     // Build conversation context from history
     let contextPrompt = ''

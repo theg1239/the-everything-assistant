@@ -88,8 +88,11 @@ async function completeChallenge(
     console.error('[mfa] failed to record session verification', error)
     return mfaUnavailableResponse()
   }
-  await resetVerificationAttemptLimit(context.kv, userId, request)
-  await logSecurityEvent(userId, 'MFA_LOGIN_SUCCESS', { method: factor }, request)
+  // Independent best-effort writes (Redis counter reset, DB audit row); neither throws.
+  await Promise.all([
+    resetVerificationAttemptLimit(context.kv, userId, request),
+    logSecurityEvent(userId, 'MFA_LOGIN_SUCCESS', { method: factor }, request),
+  ])
   return NextResponse.json({ success: true, message })
 }
 

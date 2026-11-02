@@ -231,7 +231,37 @@ export async function POST(request: NextRequest) {
 
     const resolvedUserId = userInfo.userId
 
+    // The lazily-imported modules don't depend on the user: load them during the user lookup.
+    const modulesPromise = Promise.all([
+      import('@/lib/ai'),
+      import('@/lib/tools'),
+      import('@/lib/mcp-tokens'),
+      import('@/lib/prompts'),
+      import('@/lib/memory/memory-service'),
+      import('ai'),
+      import('@/lib/db'),
+    ])
+    // Awaited below; this only avoids an unhandled rejection if the user lookup throws first.
+    modulesPromise.catch(() => undefined)
+
     const user = await getOrCreateBotUser(requestSource, resolvedUserId, userInfo.userName)
+
+    const isCommand =
+      typeof userMessage === 'string' && userMessage.trim().length > 0
+        ? /^[/.#!]/.test(userMessage.trim())
+        : false
+
+    const rateLimitKey =
+      requestSource === 'whatsapp'
+        ? isCommand && userInfo.userId
+          ? `wa-bot:cmd:${userInfo.userId}`
+          : undefined // normal messages shouldn't burn command rate limits
+        : user.id
+
+    // One Redis round trip, run alongside the memory / MCP-token reads below; it is awaited
+    // (and rejects the request) before the model is called.
+    const rateLimitCheck = enforceUserRateLimit(rateLimitKey)
+    rateLimitCheck.catch(() => undefined)
 
     const [
       { defaultProviderOptions, languageModel },
@@ -241,15 +271,7 @@ export async function POST(request: NextRequest) {
       { memoryService },
       { isStepCount, streamText },
       { saveTokenUsage },
-    ] = await Promise.all([
-      import('@/lib/ai'),
-      import('@/lib/tools'),
-      import('@/lib/mcp-tokens'),
-      import('@/lib/prompts'),
-      import('@/lib/memory/memory-service'),
-      import('ai'),
-      import('@/lib/db'),
-    ])
+    ] = await modulesPromise
 
     const rawMcpBase = process.env.VTOP_MCP_URL || process.env.VTOP_PROXY_URL
     const vtopMcpEndpoint = rawMcpBase
@@ -284,9 +306,14 @@ ${memories
     }
     const loadMcpToken = async () => {
       const token = await getUserMcpToken(user.id)
-      return token && isExpired(token) ? refreshUserMcpToken(user.id) : token
+      // The bundle was just read: hand it over instead of having the refresh re-read it.
+      return token && isExpired(token) ? refreshUserMcpToken(user.id, undefined, token) : token
     }
-    const [memoryContext, mcpToken] = await Promise.all([loadMemoryContext(), loadMcpToken()])
+    const [memoryContext, mcpToken] = await Promise.all([
+      loadMemoryContext(),
+      loadMcpToken(),
+      rateLimitCheck,
+    ])
 
     const allowFallback = process.env.ALLOW_MCP_FALLBACK_TOKEN === 'true'
     const fallbackToken = allowFallback
@@ -364,19 +391,6 @@ CRITICAL TOOL CONTINUATION RULES:
 
     const botModel = getModelConfig('whatsappBot')
 
-    const isCommand =
-      typeof userMessage === 'string' && userMessage.trim().length > 0
-        ? /^[/.#!]/.test(userMessage.trim())
-        : false
-
-    const rateLimitKey =
-      requestSource === 'whatsapp'
-        ? isCommand && userInfo.userId
-          ? `wa-bot:cmd:${userInfo.userId}`
-          : undefined // normal messages shouldn't burn command rate limits
-        : user.id
-
-    await enforceUserRateLimit(rateLimitKey)
 
     const resultStream = streamText({
       model: languageModel('whatsappBot'),

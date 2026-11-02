@@ -1,6 +1,6 @@
 import { auth } from '@/lib/auth'
 import { createVITTools } from '@/lib/tools'
-import { getFormattedVTOPCredentials as getServerFormatted } from '@/lib/server-vtop-credentials'
+import { getUserVTOPCredentials } from '@/lib/server-vtop-credentials'
 import { Output, streamText } from 'ai'
 import { vtopResultSchema } from './schema'
 import { saveTokenUsage } from '@/lib/db'
@@ -32,6 +32,10 @@ export async function POST(req: Request) {
   const command = parsedBody.data.command || 'attendance'
   const extras = parsedBody.data.extras || {}
 
+  // Credential read (DB + decrypt) runs alongside the rate-limit check; it never rejects and
+  // nothing reaches the proxy or the model until the limit has passed.
+  const credentialsPromise = getUserVTOPCredentials(session.user.id)
+
   try {
     // Every request runs the VTOP tool and then an LLM formatter.
     await enforceUserRateLimit(session.user.id)
@@ -44,12 +48,13 @@ export async function POST(req: Request) {
       return new Response(JSON.stringify({ error: 'vtop tool not available' }), { status: 500 })
     }
 
-    const serverCreds = await getServerFormatted()
+    // Plaintext `{ username, password }` from the server store (by user id: auth() already ran
+    // and isn't memoised in route handlers). Without stored credentials the tool reports
+    // `requiresCredentials`.
+    const serverCreds = await credentialsPromise
     const args: Record<string, string | number | boolean | undefined> = {
       command,
-      ...(serverCreds
-        ? { username: serverCreds.username, password: serverCreds.encryptedPassword }
-        : {}),
+      ...(serverCreds ? { username: serverCreds.username, password: serverCreds.password } : {}),
       ...extras,
     }
 

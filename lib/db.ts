@@ -218,7 +218,9 @@ export async function getChatShareWithMessages(
   shareId: string
 ): Promise<{ share: ChatShare; chat: Chat; messages: Message[] } | null> {
   try {
-    const share = await prisma.chatShare.findFirst({
+    // One query: the messages come with the chat (`relationJoins`), instead of a second
+    // round trip after the share lookup. Same order as `getMessages`.
+    const row = await prisma.chatShare.findFirst({
       where: { id: shareId, revoked: false },
       include: {
         chat: {
@@ -229,16 +231,21 @@ export async function getChatShareWithMessages(
             created_at: true,
             updated_at: true,
             path: true,
+            messages: {
+              orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+              select: messageSelect,
+            },
           },
         },
       },
     })
-    if (!share || !share.chat) return null
-    const messages = await getMessages(share.chatId)
+    if (!row || !row.chat) return null
+    const { chat: chatWithMessages, ...share } = row
+    const { messages, ...chat } = chatWithMessages
     return {
       share,
-      chat: share.chat,
-      messages,
+      chat,
+      messages: messages.map(toMessage),
     }
   } catch (error) {
     console.error('Error loading shared chat:', error)
@@ -679,6 +686,29 @@ export async function saveMessage(
       attachments,
     },
     select: { id: true, created_at: true },
+  })
+}
+
+/**
+ * Inserts plain-text messages into a chat in one statement, in array order. One INSERT shares a
+ * single DB `now()`, and history is ordered by `(created_at, id)` with random ids, so each row
+ * gets an explicit, strictly increasing timestamp ending at the current time (later messages,
+ * stamped by the DB default, still sort after them). Ids are server-generated.
+ */
+export async function saveMessagesInOrder(
+  chatId: string,
+  messages: ReadonlyArray<{ role: 'user' | 'assistant'; content: string }>
+): Promise<void> {
+  if (messages.length === 0) return
+  const firstAt = Date.now() - (messages.length - 1)
+  await prisma.message.createMany({
+    data: messages.map((message, index) => ({
+      id: crypto.randomUUID(),
+      chatId,
+      role: message.role,
+      content: message.content,
+      created_at: new Date(firstAt + index),
+    })),
   })
 }
 

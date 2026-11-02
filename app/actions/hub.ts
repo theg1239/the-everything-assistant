@@ -5,9 +5,11 @@ import * as z from 'zod'
 import { auth } from '@/lib/auth'
 import { createVITTools } from '@/lib/tools'
 import {
-  getFormattedVTOPCredentials as getServerFormattedVTOPCredentials,
-  hasVTOPCredentials,
+  getUserVTOPCredentials,
+  getUserVTOPCredentialStatus,
 } from '@/lib/server-vtop-credentials'
+import type { VTOPCredentials } from '@/lib/vtop-credential-store'
+import { mapWithConcurrency } from '@/lib/concurrency'
 import { vtopResultSchema, type VTOPFormattedResult } from '@/app/api/hub/vtop/schema'
 import {
   getToolExecutor,
@@ -85,7 +87,32 @@ const HUB_CORE_COMMANDS: HubVTOPCommand[] = [
   'da',
 ]
 
-const VTOP_PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001'
+/**
+ * Snapshot formatting/persisting (and the per-command fallback refresh, each a VTOP proxy call
+ * plus possibly an LLM call) run in parallel, capped so a long client-supplied command list
+ * can't fan out unbounded proxy/model calls or exhaust the DB pool.
+ */
+const HUB_SYNC_CONCURRENCY = 4
+
+const vtopProxyBaseUrl = () =>
+  (process.env.VTOP_PROXY_URL || 'http://localhost:3001').replace(/\/+$/, '')
+
+/**
+ * Headers for direct VTOP proxy calls: the proxy requires `Authorization: Bearer <key>`. Same
+ * env vars as `callVtopProxy` in lib/vtop-proxy.ts (whose header helper isn't exported).
+ * Throws in production when the key is missing, instead of sending a request the proxy rejects.
+ */
+function vtopProxyHeaders(): Record<string, string> {
+  const key = process.env.VTOP_PROXY_API_KEY || process.env.PROXY_API_KEY
+  if (!key && process.env.NODE_ENV === 'production') {
+    throw new Error('VTOP_PROXY_API_KEY is not configured: the VTOP proxy requires it')
+  }
+  return {
+    'Content-Type': 'application/json',
+    ...(key ? { Authorization: `Bearer ${key}` } : {}),
+  }
+}
+
 async function requireUser() {
   const session = await auth()
   if (!session?.user?.id) {
@@ -95,7 +122,11 @@ async function requireUser() {
 }
 
 async function buildHubState(userId: string): Promise<PersonalHubState> {
-  const [linked, rows] = await Promise.all([hasVTOPCredentials(), listVTOPSnapshots(userId)])
+  // Status by user id: the caller already ran auth(), which isn't memoised in server actions.
+  const [{ linked }, rows] = await Promise.all([
+    getUserVTOPCredentialStatus(userId),
+    listVTOPSnapshots(userId),
+  ])
   const snapshots: PersonalHubSnapshot[] = rows.map(row => {
     const parsed = storedSnapshotSchema.safeParse(row.data)
     const data = parsed.success ? parsed.data : null
@@ -120,29 +151,13 @@ async function buildHubState(userId: string): Promise<PersonalHubState> {
   }
 }
 
-async function resolveVTOPCredentials(
-  provided?: VTOPCredentialPayload
-): Promise<VTOPCredentialPayload> {
-  if (provided?.username && provided?.encryptedPassword) {
-    return provided
-  }
-  const fallback = await getServerFormattedVTOPCredentials()
-  if (!fallback) {
+/** The user's server-stored VTOP credentials (plaintext password, sent to the proxy as-is). */
+async function resolveVTOPCredentials(userId: string): Promise<VTOPCredentials> {
+  const credentials = await getUserVTOPCredentials(userId)
+  if (!credentials) {
     throw new Error('VTOP credentials are not linked')
   }
-  return fallback
-}
-
-function buildCredentialPayload(creds: VTOPCredentialPayload) {
-  const payload: Record<string, string | undefined> = { username: creds.username }
-  if (creds.encryptedPassword?.includes(':::')) {
-    const [encryptedPassword, sessionKey] = creds.encryptedPassword.split(':::')
-    payload.encryptedPassword = encryptedPassword
-    payload.sessionKey = sessionKey
-  } else {
-    payload.password = creds.encryptedPassword
-  }
-  return payload
+  return credentials
 }
 
 async function formatAndPersistVTOPResult(
@@ -184,22 +199,23 @@ async function formatAndPersistVTOPResult(
     }
   }
 
-  await upsertVTOPSnapshot(userId, command, object)
-
-  if (usage) {
-    const usageTotals = normalizeTokenUsage(usage)
-    const modelIdForUsage = modelConfig?.modelId ?? getModelConfig('hubVtop').modelId
-    await saveTokenUsage({
-      userId,
-      chatId: null,
-      model: modelIdForUsage,
-      stepIndex: null,
-      inputTokens: usageTotals.inputTokens,
-      outputTokens: usageTotals.outputTokens,
-      totalTokens: usageTotals.totalTokens,
-      meta: { type: 'hub-vtop', command },
-    })
-  }
+  // Independent rows (snapshot, usage log): written together, one round trip instead of two.
+  const usageTotals = usage ? normalizeTokenUsage(usage) : null
+  await Promise.all([
+    upsertVTOPSnapshot(userId, command, object),
+    usageTotals
+      ? saveTokenUsage({
+          userId,
+          chatId: null,
+          model: modelConfig?.modelId ?? getModelConfig('hubVtop').modelId,
+          stepIndex: null,
+          inputTokens: usageTotals.inputTokens,
+          outputTokens: usageTotals.outputTokens,
+          totalTokens: usageTotals.totalTokens,
+          meta: { type: 'hub-vtop', command },
+        })
+      : undefined,
+  ])
 
   return object
 }
@@ -208,33 +224,38 @@ async function executeVTOPCommand(
   userId: string,
   command: HubVTOPCommand,
   extras: Record<string, unknown> = {},
-  credentials?: VTOPCredentialPayload
+  credentials?: VTOPCredentials
 ): Promise<VTOPFormattedResult> {
   const executeVtop = getToolExecutor(createVITTools(userId), 'queryVTOP')
   if (!executeVtop) {
     throw new Error('VTOP tool is unavailable')
   }
 
-  const creds = await resolveVTOPCredentials(credentials)
+  const creds = credentials ?? (await resolveVTOPCredentials(userId))
 
   const args: Record<string, unknown> = {
     command,
-    username: creds.username,
     ...extras,
-    ...buildCredentialPayload(creds),
+    username: creds.username,
+    password: creds.password,
   }
 
   const raw = await executeVtop(args, `vtop-${Date.now()}`)
   return formatAndPersistVTOPResult(userId, command, raw)
 }
 
+/**
+ * `_legacyCredentials` (browser-held, deprecated `encryptedPassword` form) is accepted for
+ * signature compatibility with existing clients but ignored: the proxy is always called with
+ * the user's server-stored credentials (legacy cookies are migrated server-side).
+ */
 export async function refreshVTOPSnapshotAction(
   command: HubVTOPCommand,
   extras: Record<string, unknown> = {},
-  credentials?: VTOPCredentialPayload
+  _legacyCredentials?: VTOPCredentialPayload
 ): Promise<PersonalHubSnapshot> {
   const userId = await requireUser()
-  const snapshot = await executeVTOPCommand(userId, command, extras, credentials)
+  const snapshot = await executeVTOPCommand(userId, command, extras)
   return {
     command,
     title: snapshot.title,
@@ -246,16 +267,15 @@ export async function refreshVTOPSnapshotAction(
   }
 }
 
-async function runProxySyncBatch(commands: HubVTOPCommand[], creds: VTOPCredentialPayload) {
-  const body = {
-    ...buildCredentialPayload(creds),
-    commands,
-  }
-
-  const response = await fetch(`${VTOP_PROXY_URL}/sync`, {
+async function runProxySyncBatch(
+  commands: HubVTOPCommand[],
+  creds: VTOPCredentials,
+  headers: Record<string, string>
+) {
+  const response = await fetch(`${vtopProxyBaseUrl()}/sync`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    headers,
+    body: JSON.stringify({ username: creds.username, password: creds.password, commands }),
   })
 
   if (!response.ok) {
@@ -268,20 +288,23 @@ async function runProxySyncBatch(commands: HubVTOPCommand[], creds: VTOPCredenti
 
 export async function syncCoreHubSnapshots(commands: HubVTOPCommand[] = [...HUB_CORE_COMMANDS]) {
   const userId = await requireUser()
-  const creds = await resolveVTOPCredentials()
+  // Fails here (not in the fallback below) when the proxy key is missing in production.
+  const proxyHeaders = vtopProxyHeaders()
+  const creds = await resolveVTOPCredentials(userId)
 
   let updatedCount = 0
 
   try {
-    const entries = await runProxySyncBatch(commands, creds)
+    const entries = await runProxySyncBatch(commands, creds, proxyHeaders)
     console.log('[hub/actions] sync batch returned', entries.length, 'entries')
 
-    for (const entry of entries) {
+    // Each entry formats (maybe an LLM call) and upserts its own snapshot row: independent.
+    await mapWithConcurrency(entries, HUB_SYNC_CONCURRENCY, async entry => {
       const command = entry.command
-      if (!isHubVTOPCommand(command, commands)) continue
+      if (!isHubVTOPCommand(command, commands)) return
       if (!entry.success || !entry.result) {
         console.error('[hub/actions] sync skipped', command, entry.error || 'unknown error')
-        continue
+        return
       }
       try {
         await formatAndPersistVTOPResult(userId, command, entry.result)
@@ -290,7 +313,7 @@ export async function syncCoreHubSnapshots(commands: HubVTOPCommand[] = [...HUB_
       } catch (error) {
         console.error('[hub/actions] failed to store sync result', command, error)
       }
-    }
+    })
 
     if (updatedCount === 0 && entries.length === 0) {
       console.log('[hub/actions] no batch results, falling back to sequential refresh')
@@ -298,16 +321,14 @@ export async function syncCoreHubSnapshots(commands: HubVTOPCommand[] = [...HUB_
     }
   } catch (error) {
     console.error('[hub/actions] batch sync failed, falling back to sequential refresh:', error)
-    await Promise.allSettled(
-      commands.map(async command => {
-        try {
-          await executeVTOPCommand(userId, command, {}, creds)
-          updatedCount++
-        } catch (fallbackError) {
-          console.error('[hub/actions] fallback refresh failed', command, fallbackError)
-        }
-      })
-    )
+    await mapWithConcurrency(commands, HUB_SYNC_CONCURRENCY, async command => {
+      try {
+        await executeVTOPCommand(userId, command, {}, creds)
+        updatedCount++
+      } catch (fallbackError) {
+        console.error('[hub/actions] fallback refresh failed', command, fallbackError)
+      }
+    })
   }
 
   console.log('[hub/actions] sync complete, updated', updatedCount, 'snapshots')

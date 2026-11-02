@@ -261,11 +261,18 @@ export default async function RootLayout({
 }>) {
   // Seed the client session even while an MFA challenge is pending (auth() returns null
   // then), so the MFA gate can render the challenge instead of bouncing to /login.
-  const [session, cookieStore] = await Promise.all([authAllowingPendingMfa(), cookies()])
+  // The broadcast is a cross-request cached read (unstable_cache, never rejects) and isn't
+  // user-specific, so it is fetched alongside the session instead of after it; it is only
+  // rendered for fully signed-in users.
+  const [session, cookieStore, cachedBroadcast] = await Promise.all([
+    authAllowingPendingMfa(),
+    cookies(),
+    loadLatestBroadcast(),
+  ])
   const isFullySignedIn = Boolean(session && (!session.mfa.required || session.mfa.verified))
   const sidebarCookie = cookieStore.get(SIDEBAR_OPEN_COOKIE)?.value
   const initialSidebarOpen = sidebarCookie === undefined ? undefined : sidebarCookie === 'true'
-  const latestBroadcast = isFullySignedIn ? await loadLatestBroadcast() : null
+  const latestBroadcast = isFullySignedIn ? cachedBroadcast : null
 
   return (
     <html lang="en" suppressHydrationWarning>

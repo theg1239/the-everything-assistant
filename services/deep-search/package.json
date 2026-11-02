@@ -13,7 +13,8 @@
     "init": "node cli.js init",
     "stats": "node cli.js stats",
     "status": "node cli.js status",
-    "benchmark:retrieval": "node scripts/benchmark-retrieval.js"
+    "test": "node --test \"test/**/*.test.js\"",
+    "benchmark:relevance": "node scripts/benchmark-relevance.js"
   },
   "bin": {
     "reddit-scraper": "./cli.js"

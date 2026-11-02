@@ -1,174 +1,113 @@
-# Agentic RAG System
+# Agentic RAG
 
-This directory contains an improved **Agentic RAG (Retrieval-Augmented Generation)** system that uses multiple AI agents to intelligently search and refine queries until high-quality, relevant results are found.
+`POST /api/ask` answers a student's question from the Reddit knowledge base. Language judgements
+are made by models, never by hand-written word lists, term counting or query rewriting.
 
-## Problem Solved
-
-The original RAG system had several issues:
-
-- **Poor relevance**: Often returned irrelevant results with high confidence scores
-- **Fabricated data**: Would make up usernames, upvote counts, and sources
-- **Static search**: No ability to improve queries when initial search failed
-- **No quality assessment**: Couldn't determine if results actually answered the query
-
-## Agentic RAG Architecture
-
-The new system uses **3 specialized AI agents** that work together:
-
-### 1. Query Relevance Agent
-
-- **Purpose**: Analyzes how well each search result answers the original query
-- **Method**: Scores each result from 0.0 to 1.0 for relevance
-- **Output**: Relevance scores for filtering and ranking results
-
-### 2. Query Refinement Agent
-
-- **Purpose**: Generates improved search queries when initial results are poor
-- **Method**: Analyzes failed searches and creates better queries using:
-  - Different keywords and synonyms
-  - More specific or general terms as needed
-  - Reddit-style language patterns
-- **Output**: Refined search queries for subsequent iterations
-
-### 3. Result Quality Agent
-
-- **Purpose**: Assesses overall quality of the result set
-- **Method**: Evaluates based on:
-  - Number of results found
-  - Average upvotes/engagement
-  - Content completeness
-  - Source diversity
-- **Output**: Quality score to determine if search should continue
-
-## How It Works
+## Flow
 
 ```
-1. Initial Search
-   ├── Search with original query
-   ├── Query Relevance Agent scores each result
-   └── Filter results above relevance threshold
-
-2. Quality Assessment
-   ├── Result Quality Agent evaluates result set
-   ├── If quality is high (>0.8) and enough results → STOP
-   └── If quality is poor → CONTINUE
-
-3. Query Refinement (up to 3 iterations)
-   ├── Query Refinement Agent generates better query
-   ├── Search with refined query
-   ├── Score relevance and assess quality
-   └── Keep best results across all iterations
-
-4. Response Generation
-   ├── Use highest-quality results found
-   ├── Generate response with proper source attribution
-   └── Return with search metadata
+question
+  │
+  ├─ 1. Retrieve (knowledge-base.js `search`)
+  │     pgvector cosine similarity on the question embedding ─┐
+  │     Postgres full-text search (websearch_to_tsquery,     ├─ reciprocal rank fusion (k=60)
+  │       ts_rank_cd; the DB's own parser/stemmer)           ─┘   → structural de-dup → type balance
+  │
+  ├─ 2. Judge (relevance-judge.js `judgeRelevance`)
+  │     ONE OpenAI Decisions call (`experimental_decide`, gpt-6-luna) for up to
+  │     AGENTIC_RELEVANCE_CANDIDATES new candidates: one boolean question per candidate.
+  │     relevanceScore = returned P(true).
+  │
+  ├─ 3. Stop or refine
+  │     ≥ AGENTIC_FIRST_PASS_MIN_RESULTS candidates with P ≥ threshold → stop.
+  │     Otherwise the chat model (gpt-6.1-terra) writes one refined query → steps 1–2 again,
+  │     judging only candidates not seen before (max 2 passes).
+  │
+  ├─ 4. Select (over every candidate judged in any pass)
+  │     keep P ≥ threshold sorted by P, at most 12; if none pass, the top 3 by P
+  │     (the answer prompt is then told the evidence is weak).
+  │
+  └─ 5. Answer with the chat model (gpt-6.1-terra), HTML, citing real users/upvotes.
 ```
 
-## Key Features
+### Decisions request shape
 
-### Recursive Search Improvement
+Following OpenAI's Decisions guidance (shared evidence in the input, per-item content in its own
+question, observable criteria):
 
-- **Maximum 3 iterations** to find better results
-- **Keeps best results** across all search attempts
-- **Stops early** when high-quality results are found
+- `state`: `A VIT Vellore student asked: "<question>"`. Always the original question, so
+  probabilities from both passes are on one scale.
+- `questions`: `r0 … rN`, each a `boolean` question whose `instructions` name and contain that
+  result:
 
-### Real Source Attribution
+  ```
+  Search result r{i} — title: "{title}"; excerpt: "{excerpt}". Does this result contain information,
+  experiences or advice that directly helps answer the student's question? Count partial answers and
+  closely related rules or facts as helpful. Results about a different topic or place do not count.
+  ```
 
-- **No fabricated data** - only uses actual usernames/upvotes from results
-- **Transparent search process** - shows refined queries used
-- **Confidence based on actual relevance** - not just similarity scores
+  Comments and chunks have no title of their own, so they are labelled `Comment in r/<sub>` /
+  `Excerpt from a r/<sub> discussion`. Excerpts are capped at 600 characters.
 
-### Intelligent Query Generation
+### Failures
 
-- **Context-aware refinements** based on what was/wasn't found
-- **Domain-specific improvements** using Reddit discussion patterns
-- **Fallback strategies** when AI refinement fails
+- **Refusal** (`Experimental_DecisionRefusalError`): refused candidates are treated as not relevant
+  and the remaining questions are asked once more.
+- **Any other error / timeout** (`AGENTIC_RELEVANCE_TIMEOUT_MS`, one SDK retry): logged. If nothing
+  was judged yet, the top 8 candidates in retrieval (RRF) order are used with `relevanceScore: null`
+  and no refinement pass; if an earlier pass was judged, its results are kept. There is no keyword
+  scoring fallback.
+- **Refinement failure or intent drift**: search stops with what it has.
 
-## API Endpoints
+## Relevance threshold
 
-### `/api/ask` (Enhanced)
-
-Uses agentic RAG by default:
-
-```json
-{
-  "query": "nice places to eat at vit",
-  "useAgentic": true,
-  "conversationHistory": []
-}
-```
-
-Response includes:
-
-```json
-{
-  "success": true,
-  "response": "HTML formatted response",
-  "confidence": 85,
-  "searchAttempts": 2,
-  "refinedQueries": ["nice places to eat at vit", "vit food restaurants"],
-  "sources": [...],
-  "serviceUsed": "agentic"
-}
-```
-
-### `/api/compare` (New)
-
-Compare agentic vs legacy RAG side-by-side:
-
-```json
-{
-  "query": "your search query"
-}
-```
-
-## Testing
-
-Run the test script to see the agentic RAG in action:
+Default `0.5` (`DEEP_SEARCH_RELEVANCE_THRESHOLD`), chosen on the labeled fixture
+`test/fixtures/relevance-labeled.json` (8 VIT queries × 6 Reddit-style candidates, 24 relevant,
+24 not; negatives include same-keyword/different-topic and other-campus results). Run:
 
 ```bash
-node test-agentic.js
+OPENAI_API_KEY=... npm run benchmark:relevance   # BENCH_RUNS=3 by default
 ```
 
-This will show:
+Measured with gpt-6-luna, 3 runs (144 judgements, 24 calls):
 
-- Search attempts made
-- Queries refined
-- Relevance scores
-- Final confidence and results
+- The probabilities are strongly bimodal. Every negative scored ≤ 0.20 (the highest was "hostel
+  fees are separate from tuition" for a tuition-category question); 22 of 24 positives scored
+  ≥ 0.90. The other two positives (borderline "related fact" labels: hostel booking order for a
+  single-room question, merit scholarship for a fee-category question) scored ≤ 0.05.
+- Every threshold from 0.3 to 0.9 gives the same result: accuracy 0.958, precision 1.000, recall
+  0.917. 0.5 sits in the middle of the empty 0.20–0.90 gap, so it has the most margin on both sides.
+- AUC 0.974 pooled (0.972 mean per query). Latency per call (6 questions) p50 503–545 ms, p90
+  720–783 ms over two benchmark runs.
 
-## Configuration
+The previous relevance path on the same fixture: gpt-6.1-terra 0–1 scores blended with keyword
+overlap, then re-scored with lexical coverage. Its final score had AUC 0.872, its selection precision
+was 0.865 and recall 0.444, and the terra call took p50 2,086 ms / p90 2,606 ms. Raw terra scores
+had AUC 0.985, so keyword blending lowered the ranking quality.
 
-Environment variables:
+Re-check the threshold if the question wording, the decision model or the candidate format changes.
 
-- `MAX_CONTEXT_LENGTH`: Maximum context for AI responses (default: 4000)
-- `OPENAI_API_KEY`: Required for all AI agents, vision analysis, and embeddings
+## Environment
 
-Agent parameters (in code):
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `DEEP_SEARCH_DECISION_MODEL` | `gpt-6-luna` | OpenAI Decisions model for relevance |
+| `DEEP_SEARCH_RELEVANCE_THRESHOLD` | `0.5` | keep results with P(relevant) ≥ this |
+| `AGENTIC_RELEVANCE_CANDIDATES` | `15` | candidates judged per pass (capped at 400, the API limit) |
+| `AGENTIC_RELEVANCE_TIMEOUT_MS` | `3000` | Decisions call timeout |
+| `AGENTIC_FIRST_PASS_MIN_RESULTS` | `4` | stop after a pass once this many results have P ≥ threshold |
+| `AGENTIC_SEARCH_LIMIT` | `20` | retrieval results per pass |
+| `AGENTIC_REFINEMENT_TIMEOUT_MS` | `3000` | refinement call timeout |
+| `AGENTIC_RESPONSE_*` | | answer generation timeouts and token limits |
 
-- `maxIterations`: Maximum search refinement attempts (default: 3)
-- `relevanceThreshold`: Minimum relevance to keep results (default: 0.6)
+## API
 
-## Benefits
+`POST /api/ask` `{ "query": "...", "conversationHistory": [] }` returns `response`, `sources`,
+`confidence`, `searchResults`, `searchAttempts`, `refinedQueries` and `serviceUsed: "agentic"`.
+`sources[].relevanceScore` is P(relevant) from the Decisions model (or `null` in the retrieval-order
+fallback). `useAgentic` is accepted and ignored: the legacy keyword RAG service and `/api/compare`
+were removed.
 
-### For Users
+## Tests
 
-- **More relevant results** that actually answer their questions
-- **Transparent search process** showing how results were found
-- **Real source attribution** without fabricated data
-- **Better coverage** through query refinement
-
-### For Developers
-
-- **Modular agent design** easy to extend and modify
-- **Configurable thresholds** for different use cases
-- **Comprehensive metadata** for debugging and improvement
-- **Backward compatibility** with legacy RAG option
-
-## Future Improvements
-
-- **Learning from search patterns** to improve initial queries
-- **User feedback integration** to refine relevance scoring
-- **Domain-specific agents** for different types of queries
-- **Caching of refined queries** to speed up similar searches
+`npm test` runs `test/relevance.test.js` with a stub decision model (no network, no database).

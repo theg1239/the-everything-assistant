@@ -78,6 +78,9 @@ jobs:
           # Exercises the proxy against a fake cli-top that replays the proxy-mode protocol.
           - service: proxy-service
             check: npm test
+          # Relevance selection/fusion logic with a stubbed decision model (no network or DB).
+          - service: deep-search
+            check: npm test
     defaults:
       run:
         working-directory: services/${{ matrix.service }}

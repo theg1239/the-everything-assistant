@@ -92,9 +92,9 @@ All of these tools return structured JSON that the assistant can render as markd
 
 The deep-search microservice (port 3002 by default) powers all Reddit-related tools:
 
-- **`api-server.js`** exposes `/health`, `/api/search`, `/api/ask`, `/api/stats`, `/api/trending`, `/api/compare`.
-- **Agentic pipeline**: `knowledge-base/agentic-rag-service` refines queries, scoring replies with Gemini before returning citations, search attempts, and refined prompts.
-- **Database**: `knowledge-base/knowledge-base` uses Postgres with `reddit_posts`, `reddit_comments`, vector embeddings, and optional image/video analysis via Gemini Vision.
+- **`api-server.js`** exposes `/health`, `/api/search`, `/api/ask`, `/api/stats`, `/api/trending`.
+- **Agentic pipeline**: `knowledge-base/agentic-rag-service` retrieves candidates (pgvector + Postgres full-text, fused by reciprocal rank), judges relevance with one OpenAI Decisions API call per pass (`knowledge-base/relevance-judge.js`, `relevanceScore` = P(relevant)), refines the query with the chat model when too few results pass, then answers with the chat model. No keyword scoring. See `services/deep-search/AGENTIC_RAG.md`.
+- **Database**: `knowledge-base/knowledge-base` uses Postgres with `reddit_posts`, `reddit_comments`, vector embeddings, and optional image/video analysis via an OpenAI vision model (`scrapers/image-analyzer.js`).
 - **Scrapers** live in `scrapers/` and can process posts, comments, plus OCR on screenshots.
 - **Configuration** documented in `services/deep-search/README.md` + `AGENTIC_RAG.md` (env vars, intervals, thresholds).
 

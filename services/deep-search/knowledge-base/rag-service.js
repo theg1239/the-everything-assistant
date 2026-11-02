@@ -7,7 +7,7 @@ class RAGService {
   constructor() {
     this.knowledgeBase = new KnowledgeBase()
     this.maxContextLength = parseInt(process.env.MAX_CONTEXT_LENGTH) || 4000
-    this.chatModel = openai('gpt-5.6-luna')
+    this.chatModel = openai('gpt-6.1-terra')
   }
   async generateResponse(query, conversationHistory = []) {
     try {

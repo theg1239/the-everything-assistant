@@ -23,21 +23,21 @@ export type ModelConfig = {
 }
 
 const registry: Record<ModelKey, ModelConfig> = {
-  chat: { provider: 'openai', modelId: 'gpt-5.6-terra' },
-  chatLite: { provider: 'openai', modelId: 'gpt-5.6-terra' },
-  chatAttachment: { provider: 'openai', modelId: 'gpt-5.6-terra' },
-  chatAutocomplete: { provider: 'openai', modelId: 'gpt-5.6-luna' },
+  chat: { provider: 'openai', modelId: 'gpt-6.1-terra' },
+  chatLite: { provider: 'openai', modelId: 'gpt-6.1-terra' },
+  chatAttachment: { provider: 'openai', modelId: 'gpt-6.1-terra' },
+  chatAutocomplete: { provider: 'openai', modelId: 'gpt-6.1-terra' },
   embedding: { provider: 'openai', modelId: 'text-embedding-3-large' },
   knowledgeEmbedding: { provider: 'openai', modelId: 'text-embedding-3-large' },
-  followUps: { provider: 'openai', modelId: 'gpt-5.6-luna' },
-  whatsappBot: { provider: 'openai', modelId: 'gpt-5.6-luna' },
-  hubVtop: { provider: 'openai', modelId: 'gpt-5.6-luna' },
-  hubVtopFormatter: { provider: 'openai', modelId: 'gpt-5.6-luna' },
-  placementFormatter: { provider: 'openai', modelId: 'gpt-5.6-luna' },
-  vtopParser: { provider: 'openai', modelId: 'gpt-5.6-luna' },
-  chatTitle: { provider: 'openai', modelId: 'gpt-5.6-luna' },
-  thinkHarder: { provider: 'openai', modelId: 'gpt-5.6-terra' },
-  thinkHarderAdmin: { provider: 'openai', modelId: 'gpt-5.6-sol' },
+  followUps: { provider: 'openai', modelId: 'gpt-6.1-terra' },
+  whatsappBot: { provider: 'openai', modelId: 'gpt-6.1-terra' },
+  hubVtop: { provider: 'openai', modelId: 'gpt-6.1-terra' },
+  hubVtopFormatter: { provider: 'openai', modelId: 'gpt-6.1-terra' },
+  placementFormatter: { provider: 'openai', modelId: 'gpt-6.1-terra' },
+  vtopParser: { provider: 'openai', modelId: 'gpt-6.1-terra' },
+  chatTitle: { provider: 'openai', modelId: 'gpt-6.1-terra' },
+  thinkHarder: { provider: 'openai', modelId: 'gpt-6.1-terra' },
+  thinkHarderAdmin: { provider: 'openai', modelId: 'gpt-6.1-terra' },
 }
 
 export const modelRegistry = registry

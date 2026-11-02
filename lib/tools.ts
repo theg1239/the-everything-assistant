@@ -1368,10 +1368,11 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
               ? { continuation, choice }
               : { flags, ...(input.fresh ? { fresh: true } : {}) }
           try {
+            const mcp = { ...mcpConfig, accessToken: mcpAccessToken }
             const mcpResult = await callVtopViaMcp({
               toolName: continuation !== undefined ? 'vtop-continue' : command,
               args,
-              mcp: { ...mcpConfig, accessToken: mcpAccessToken },
+              mcp,
             })
             if (mcpResult) {
               if (isBotChannel && mcpResult.errorKind === 'unauthorized') {
@@ -1382,7 +1383,31 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
                   message: 'Your VTOP session token expired. Send !linkvtop again to refresh access.',
                 }
               }
-              if (mcpResult.success || isBotChannel) return toQueryVTOPResult(command, mcpResult, ignored)
+              if (mcpResult.success || isBotChannel) {
+                // Same Decisions-based step resolution as the direct path (bots especially benefit:
+                // each chat-model round trip is a visible delay in WhatsApp/Discord).
+                const { result, decided } = await autoAdvanceSelections({
+                  result: mcpResult,
+                  request: latestUserText(messages),
+                  command,
+                  continueWith: async (next, nextChoice) =>
+                    (await callVtopViaMcp({
+                      toolName: 'vtop-continue',
+                      args: { continuation: next, choice: nextChoice },
+                      mcp,
+                    })) ?? {
+                      success: false,
+                      status: 'error',
+                      command,
+                      error: 'VTOP MCP request failed',
+                    },
+                  abortSignal,
+                })
+                return {
+                  ...toQueryVTOPResult(command, result, ignored),
+                  ...(decided.length ? { autoSelected: decided } : {}),
+                }
+              }
             }
           } catch (error) {
             if (isBotChannel) {

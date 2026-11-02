@@ -2,27 +2,13 @@ import { ContextData } from './index'
 
 export const workingSaturdays: ContextData = {
   section: 'working-saturdays',
-  title: 'Working Saturdays & Weekend Notes',
-  lastUpdated: '2025-11-16',
-  priority: 'high',
+  title: 'Working Saturdays and Day Orders',
+  lastUpdated: '2026-11-02',
+  priority: 'medium',
   content: `
-## CURRENT STATUS (Nov 2025)
-- FAT examinations occupy the remaining November/early December weekends; no separate working-Saturday announcements while exams run.
-- Hostel checkout for graduating batches is paused until FAT concludes on Dec 4.
+The Winter 2026-27 circular VIT/VLR/Acad/2026/011 does not specify Saturday substitutions or alternate weekday orders. Do not infer a working Saturday or a class day order from the festival or exam dates. Check later VIT announcements and VTOP for applicable changes.
 
-## WINTER SEMESTER 2025-26 WEEKEND OUTLOOK
-- Dec 6-7, 2025: Reserved exclusively for add/drop activities—treat both days as administrative working days if you need timetable fixes.
-- Jan 2026: Regular Saturday order expected (official circular pending). Monitor for substitute days after Pongal break (Jan 14-18).
-- Feb 26 – Mar 1, 2026: Riviera 2026 spans Thursday-Sunday. Expect preceding Saturdays to be teaching days so that festival days remain free of classes.
-- Apr 11 – Apr 12, 2026: Weekend falls inside Lab FAT window. Lab courses may run assessments; treat as exam working days.
-
-## TIPS
-- Any Saturday designated as “working” will mirror the mentioned day order (e.g., “Friday order”). Watch VTOP SMS alerts for specifics.
-- Event Saturdays (Riviera, Good Friday weekend) frequently become *non-instructional* but may have compensatory working days; plan travel after notices arrive.
-- Exams (CAT/FAT) are always counted as separate instructional obligations even if scheduled on Saturdays or Sundays.
+For Fall 2026-27, the October 23 instructional-day notice specifies Saturday, October 24 follows Monday order for all students. The October 30 notice specifies Saturday, October 31 follows Wednesday order for all students. These are the converted-Saturday notices identified; check VTOP and subsequent notices for any others.
 `,
-  metadata: {
-    status: 'Exam period – no extra working Saturdays until Winter timetables release',
-    nextReview: '2025-12-05',
-  },
+  metadata: { winterSemester: '2026-27' },
 }

@@ -1,17 +1,19 @@
 {
   "name": "vit-proxy-service",
   "version": "1.0.0",
-  "description": "Secure proxy service for VTOP CLI commands with PaaS deployment support",
+  "description": "Authenticated HTTP + MCP proxy that drives cli-top (VTOP) through its machine-facing proxy protocol",
   "main": "index.js",
   "engines": {
-    "node": ">=18.0.0",
+    "node": ">=20.0.0",
     "npm": ">=8.0.0"
   },
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
     "build": "echo 'No build step required'",
-    "test": "echo 'No tests specified'",
+    "test": "node --test test/",
+    "check": "node scripts/check-syntax.js",
+    "bench": "node scripts/bench.js",
     "demo:mcp": "node scripts/demo-mcp.js"
   },
   "license": "ISC",
@@ -22,7 +24,6 @@
     "express": "^5.3.0",
     "express-rate-limit": "^8.7.2",
     "helmet": "^8.3.0",
-    "node-cache": "^5.1.2",
     "zod": "^4.6.7"
   },
   "devDependencies": {

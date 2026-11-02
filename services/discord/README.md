@@ -63,6 +63,9 @@ When inviting the bot to your server, make sure it has these permissions:
    BOT_OWNER_ID=your_discord_user_id_here
    MAIN_APP_URL=http://localhost:3000
    MAIN_APP_API_KEY=default-key
+   DISCORD_BOT_API_SECRET=change-me   # required: bearer secret for /api/* (openssl rand -hex 32)
+   # HOST=127.0.0.1                   # bind address (default loopback)
+   # DISCORD_BOT_INSECURE_DEV=1       # local only: /api/* without auth (ignored in production)
    ```
 
 3. To get your Discord User ID:
@@ -87,10 +90,14 @@ npm start
 
 ## API Endpoints
 
-- `GET /health` - Health check
+- `GET /health` - Public liveness check (`status`, `timestamp`, `discordReady` only)
 - `GET /api/discord/status` - Discord bot status
-- `POST /api/discord/restart` - Restart the Discord service
+- `POST /api/discord/restart` - Restart the Discord service (not registered when `NODE_ENV=production`)
 - `POST /api/webhook` - Webhook for system messages
+
+Every `/api/*` route requires `Authorization: Bearer <DISCORD_BOT_API_SECRET>` (constant-time
+compare, `401` otherwise). The server refuses to start without `DISCORD_BOT_API_SECRET` unless
+`DISCORD_BOT_INSECURE_DEV=1` is set outside production. It binds to `HOST` (default `127.0.0.1`).
 
 ## Project Structure
 

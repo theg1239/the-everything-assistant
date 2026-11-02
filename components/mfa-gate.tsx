@@ -2,10 +2,10 @@
 
 import dynamic from 'next/dynamic'
 import { useSession } from 'next-auth/react'
-import { usePathname } from 'next/navigation'
-import { MFAProvider, useMFA } from '@/contexts/mfa-context'
+import { useEffect } from 'react'
+import { MFAProvider, preloadMfaStatus, useMFA } from '@/contexts/mfa-context'
 
-/** Static splash shown while an MFA user's per-tab verification is being read. */
+/** Static splash shown while the session or the challenge bundle is loading. */
 function MFASplash() {
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#05060b]">
@@ -32,23 +32,26 @@ const MFAChallenge = dynamic(
 
 function MFAGateInner({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession()
-  const pathname = usePathname()
-  const { requiresMFA, isMFAVerified, isCheckingMFA } = useMFA()
+  const { requiresMFA, isMFAVerified } = useMFA()
+  const needsChallenge = Boolean(session?.user) && requiresMFA && !isMFAVerified
 
-  // With the server session seeded into SessionProvider this is resolved during
-  // SSR: signed-out users, /login and non-MFA users get children immediately.
+  // Fetch the MFA method while the challenge bundle downloads, rather than after it mounts.
+  useEffect(() => {
+    if (needsChallenge) preloadMfaStatus()
+  }, [needsChallenge])
+
+  // With the server session seeded into SessionProvider this is resolved during SSR.
   if (status === 'loading') {
     return <MFASplash />
   }
 
-  if (!session?.user || pathname === '/login') {
+  if (!session?.user) {
     return <>{children}</>
   }
 
-  if (isCheckingMFA) {
-    return <MFASplash />
-  }
-
+  // Server truth (`session.user.mfaVerified`). Shown on every route, /login included: a
+  // pending session is signed in as far as next-auth is concerned, but `auth()` rejects it,
+  // so pages redirect such users to /login, where they complete the challenge.
   if (requiresMFA && !isMFAVerified) {
     return (
       <div className="fixed inset-0 z-50">

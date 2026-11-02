@@ -8,9 +8,11 @@ import {
   type SystemModelMessage,
   type ToolSet,
 } from 'ai'
+import { checkBotId } from 'botid/server'
+import { cookies } from 'next/headers'
 import { defaultProviderOptions, languageModel } from '@/lib/ai'
 import { parseChatRequestPayload } from '@/app/api/chat/lib/request'
-import { isRecord } from '@/app/api/chat/lib/tool-helpers'
+import { toToolSet } from '@/app/api/chat/lib/tool-helpers'
 import { uiMessagesToLegacyMessages } from '@/lib/ai-message-conversion'
 import { buildSystemPrompt } from '@/app/api/chat/lib/prompt'
 import { createBackgroundTasks } from '@/app/api/chat/lib/background'
@@ -19,11 +21,54 @@ import { createVITTools } from '@/lib/tools'
 import { saveTokenUsage } from '@/lib/db'
 import { normalizeTokenUsage } from '@/lib/token-usage'
 import { enforceUserRateLimit, UserRateLimitError } from '@/lib/user-rate-limiter'
+import { getRedis } from '@/lib/redis'
+import {
+  GUEST_MESSAGE_LIMIT,
+  consumeGuestQuota,
+  createGuestId,
+  createMemoryGuestQuotaStore,
+  createRedisGuestQuotaStore,
+  detectHostingPlatform,
+  getClientIp,
+  loadGuestQuotaConfig,
+  signGuestId,
+  verifyGuestCookie,
+  type GuestQuotaStore,
+} from '@/lib/guest-quota'
 
-const GUEST_MESSAGE_LIMIT = 2
+/**
+ * Tools guests may use: free, read-only lookups over static/public data. Everything
+ * else is excluded: paid APIs (Parallel web search/extract, embeddings-backed
+ * knowledgeBase, LLM-backed Reddit deep search and placement formatter), outbound
+ * scraping (past papers), side effects (submitFeedback/contributeKnowledge open
+ * GitHub issues, saveMemory) and personal data (queryVTOP).
+ */
+const GUEST_TOOLS: ReadonlySet<string> = new Set([
+  'getMessMenu',
+  'getCourseInfo',
+  'resolveCourseCode',
+  'getFacultyInfo',
+  'getSyllabus',
+  'getCampusInfo',
+])
 
-/** Tools guests may not use. */
-const GUEST_BLOCKED_TOOLS = new Set(['queryVTOP', 'saveMemory'])
+/** Only the most recent turns reach the model (bounds cost of long shared histories). */
+const GUEST_MAX_HISTORY_MESSAGES = 12
+const GUEST_MAX_MESSAGE_CHARS = 16_000
+
+const GUEST_COOKIE = 'tea_guest'
+const GUEST_COOKIE_MAX_AGE = 60 * 60 * 24 * 30
+
+const GENERIC_ERROR = 'something went wrong. please try again.'
+
+const guestLimitResponse = () =>
+  jsonResponse(
+    {
+      error: 'GUEST_LIMIT',
+      message: 'guest mode includes 2 free messages. sign in to keep chatting.',
+    },
+    403
+  )
 
 const jsonResponse = (body: unknown, status: number) =>
   new Response(JSON.stringify(body), {
@@ -31,11 +76,41 @@ const jsonResponse = (body: unknown, status: number) =>
     headers: { 'Content-Type': 'application/json' },
   })
 
+let devQuotaStore: GuestQuotaStore | null = null
+
+/** Redis in deployments; an in-memory store only in local development. */
+function getGuestQuotaStore(): GuestQuotaStore | null {
+  const redis = getRedis()
+  if (redis) return createRedisGuestQuotaStore(redis)
+  if (process.env.NODE_ENV === 'development') {
+    devQuotaStore ??= createMemoryGuestQuotaStore()
+    return devQuotaStore
+  }
+  return null
+}
+
 export async function POST(req: Request) {
   // Usage rows are written after the response (the SDK awaits onStepEnd/onEnd in-stream).
   const background = createBackgroundTasks()
   try {
-    const rawPayload: unknown = await req.json().catch(() => null)
+    // Reading the body is local work; start it so it overlaps the BotID verification.
+    const bodyPromise: Promise<unknown> = req.json().catch(() => null)
+    if (process.env.DISABLE_BOTID !== 'true' && process.env.NODE_ENV !== 'development') {
+      const verification = await checkBotId()
+      if (verification.isBot) {
+        return jsonResponse({ error: 'Access denied' }, 403)
+      }
+    }
+
+    const secret = process.env.NEXTAUTH_SECRET
+    const quotaStore = getGuestQuotaStore()
+    if (!secret || !quotaStore) {
+      console.error('Guest chat disabled: NEXTAUTH_SECRET or Upstash Redis is not configured')
+      return jsonResponse({ error: 'UNAVAILABLE', message: 'guest mode is unavailable.' }, 503)
+    }
+
+    const rawPayload = await bodyPromise
+    // Client `system` messages are already stripped by the parser.
     const payload = parseChatRequestPayload(rawPayload)
 
     if (!payload) {
@@ -44,29 +119,20 @@ export async function POST(req: Request) {
 
     const guestChatId =
       typeof payload.id === 'string' && payload.id.trim().length > 0
-        ? payload.id.trim()
+        ? payload.id.trim().slice(0, 128)
         : generateId()
-
-    const guestUserId = `guest:${guestChatId}`
 
     const uiMessages = payload.messages ?? []
     const legacyMessages = uiMessagesToLegacyMessages(uiMessages)
-    const userMessageCount = legacyMessages.filter(m => {
-      const metadata: unknown = m.metadata
-      return m.role === 'user' && !(isRecord(metadata) && metadata.sharedHistory)
-    }).length
 
-    if (userMessageCount > GUEST_MESSAGE_LIMIT) {
-      return jsonResponse(
-        {
-          error: 'GUEST_LIMIT',
-          message: 'guest mode includes 2 free messages. sign in to keep chatting.',
-        },
-        403
-      )
+    const messages: ModelMessage[] = []
+    for (const m of legacyMessages.slice(-GUEST_MAX_HISTORY_MESSAGES)) {
+      const content = (m.content ?? '').trim().slice(0, GUEST_MAX_MESSAGE_CHARS)
+      if (!content || m.role === 'system') continue
+      messages.push({ role: m.role, content })
     }
 
-    if (legacyMessages.length === 0) {
+    if (messages.length === 0) {
       return jsonResponse(
         {
           error: 'EMPTY',
@@ -75,6 +141,41 @@ export async function POST(req: Request) {
         400
       )
     }
+
+    // Guest identity: the signed cookie, or a fresh one. The quota is counted on the
+    // server per request; client history (and its `sharedHistory` tags) is ignored.
+    const cookieStore = await cookies()
+    let guestId = await verifyGuestCookie(cookieStore.get(GUEST_COOKIE)?.value, secret)
+    if (!guestId) {
+      guestId = createGuestId()
+      cookieStore.set(GUEST_COOKIE, await signGuestId(guestId, secret), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: GUEST_COOKIE_MAX_AGE,
+      })
+    }
+    const guestUserId = `guest:${guestId}`
+
+    // Quota and per-guest rate limit are independent Redis round trips: run them together.
+    // The quota still decides first (a guest over quota gets the quota response even if the
+    // rate limit also failed); the only extra effect is that a quota-rejected request also
+    // spends a rate-limit token from that guest's own bucket, which the quota (2/day) already
+    // keeps far below the per-minute limit. Both must pass before the model starts.
+    const rateLimitCheck = enforceUserRateLimit(guestUserId)
+    // Handled where it is awaited; this only prevents an unhandled-rejection report meanwhile.
+    rateLimitCheck.catch(() => undefined)
+    const quota = await consumeGuestQuota(
+      quotaStore,
+      { guestId, ip: getClientIp(req.headers, detectHostingPlatform()) },
+      loadGuestQuotaConfig()
+    )
+    if (!quota.allowed) {
+      return guestLimitResponse()
+    }
+
+    await rateLimitCheck
 
     const { systemMessages } = buildSystemPrompt({
       prefersWebSearch: false,
@@ -90,32 +191,22 @@ export async function POST(req: Request) {
       {
         role: 'system',
         content:
-          'guest preview mode: keep answers concise, no personal data or memory, feedback/KB submissions allowed and attributed as guest.',
+          'guest preview mode: keep answers concise, no personal data or memory. web search, feedback and knowledge-base submissions are not available to guests; suggest signing in for those.',
       },
     ]
 
-    const messages: ModelMessage[] = []
-    for (const m of legacyMessages) {
-      const content = (m.content ?? '').trim()
-      if (!content) continue
-      // v7 rejects system messages inside `messages`; keep them as instructions.
-      if (m.role === 'system') instructions.push({ role: 'system', content })
-      else messages.push({ role: m.role, content })
-    }
-
     const model = getModelConfig('chat')
 
+    const allTools = toToolSet(
+      createVITTools(guestUserId, { channel: 'guest', sessionUser: { isGuest: true } })
+    )
     const tools: ToolSet = Object.fromEntries(
-      Object.entries(
-        createVITTools(guestUserId, { channel: 'guest', sessionUser: { isGuest: true } })
-      ).filter(([name]) => !GUEST_BLOCKED_TOOLS.has(name))
+      Object.entries(allTools).filter(([name]) => GUEST_TOOLS.has(name))
     )
 
     // Resolves true once the `stop` step's usage row is written; the final-usage
     // fallback only writes when that didn't happen (same rule as before).
     let finalStepUsageSaved: Promise<boolean> = Promise.resolve(false)
-
-    await enforceUserRateLimit(guestUserId)
 
     const result = streamText({
       model: languageModel('chat'),
@@ -199,11 +290,6 @@ export async function POST(req: Request) {
     if (error instanceof UserRateLimitError) {
       return jsonResponse({ error: 'RATE_LIMIT_EXCEEDED', type: 'user_rate_limit' }, 429)
     }
-    return jsonResponse(
-      {
-        error: (error instanceof Error && error.message) || 'unexpected error in guest chat',
-      },
-      500
-    )
+    return jsonResponse({ error: GENERIC_ERROR }, 500)
   }
 }

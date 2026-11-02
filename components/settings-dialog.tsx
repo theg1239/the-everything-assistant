@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect, useMemo, useRef } from 'react'
+import type * as z from 'zod'
 import { useSession, signOut } from 'next-auth/react'
+import { clearLegacyVTOPClientState } from '@/lib/vtop-credentials'
 import { motion } from 'framer-motion'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Drawer } from 'vaul'
@@ -49,6 +51,7 @@ import { FeedbackSection } from '@/components/feedback-section'
 import { MemoryManagement } from '@/components/memory-management'
 import { VTOPSettings } from '@/components/vtop-settings'
 import { deleteAccountAction } from '@/app/actions/account'
+import { useMFA } from '@/contexts/mfa-context'
 import { readApiMessage, readJson } from '@/lib/http'
 import { isRecord } from '@/lib/json'
 import { asRecord, errorMessage, readString } from '@/components/narrow'
@@ -56,12 +59,16 @@ import { useMiniPlayerStore } from '@/lib/stores/useMiniPlayerStore'
 import { userPreferencesResponseSchema, type UserPreferences } from '@/types/preferences'
 import { memorySettingsResponseSchema } from '@/types/api/memory'
 import {
+  mfaAuthenticatorChangeStartResponseSchema,
   mfaAvailabilityResponseSchema,
   mfaBackupCodesResponseSchema,
+  mfaEmailChangeStartResponseSchema,
   mfaMethodChangeResponseSchema,
+  mfaSecurityKeyChangeStartResponseSchema,
   mfaSetupResponseSchema,
   mfaStatusResponseSchema,
   webAuthnCreationOptionsSchema,
+  type MfaMethod,
 } from '@/types/api/mfa'
 import {
   chatgptLoginStartSchema,
@@ -78,6 +85,36 @@ const Aurora = dynamic(() => import('@/components/backgrounds/aurora'), {
   ssr: false,
   loading: () => null,
 })
+
+const MFA_METHOD_LABELS: Record<MfaMethod, string> = {
+  email: 'email verification',
+  authenticator: 'authenticator app',
+  security_key: 'security key',
+}
+
+/** A started-but-unverified `PATCH /api/user/mfa/method` switch (MFA already enabled). */
+type PendingMfaMethodChange =
+  | { method: 'email' }
+  | { method: 'authenticator'; qrCode: string; manualEntryKey: string }
+  | { method: 'security_key' }
+
+/** Server errors meaning the pending switch is gone and has to be started again. */
+const isExpiredMfaChangeError = (error: string | undefined) =>
+  error === 'Verification code expired' ||
+  error === 'No pending method change found' ||
+  error === 'Setup session expired' ||
+  error === 'No WebAuthn setup in progress'
+
+/** An MFA API failure; `expired` means the pending setup/switch has to be started again. */
+class MfaRequestError extends Error {
+  readonly expired: boolean
+
+  constructor(message: string, expired: boolean) {
+    super(message)
+    this.name = 'MfaRequestError'
+    this.expired = expired
+  }
+}
 
 const Beams = dynamic(() => import('@/components/backgrounds/beams'), {
   ssr: false,
@@ -167,6 +204,16 @@ const arrayBufferToBase64url = (buffer: ArrayBuffer | ArrayBufferView): string =
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 }
 
+/** GETs `url` and validates the body against `schema`; `null` for a non-2xx response. */
+async function fetchJsonIfOk<S extends z.ZodType>(
+  url: string,
+  schema: S,
+  signal: AbortSignal
+): Promise<z.infer<S> | null> {
+  const response = await fetch(url, { signal })
+  return response.ok ? readJson(response, schema) : null
+}
+
 const EMPTY_CHATGPT_STATUS: ChatgptStatusResponse = {
   available: true,
   connected: false,
@@ -226,6 +273,7 @@ export function SettingsDialog({
   initialSection,
 }: SettingsDialogProps) {
   const { data: session } = useSession()
+  const { fetchWithStepUp, requestStepUp } = useMFA()
   const { setBackgroundType, toggleBackground } = useCustomBackground()
   const { setIsOpen: setSidebarOpen } = useSidebar()
   const miniPlayerEnabled = useMiniPlayerStore(state => state.enabled)
@@ -456,6 +504,14 @@ export function SettingsDialog({
   const [manualEntryKey, setManualEntryKey] = useState('')
   const [verificationCode, setVerificationCode] = useState('')
   const [setupStep, setSetupStep] = useState<'method' | 'verify' | 'backup'>('method')
+  const [pendingMethodChange, setPendingMethodChange] = useState<PendingMfaMethodChange | null>(
+    null
+  )
+  const [methodChangeCode, setMethodChangeCode] = useState('')
+  const [methodChangeError, setMethodChangeError] = useState<{
+    message: string
+    expired: boolean
+  } | null>(null)
   const [showBackupCodesReveal, setShowBackupCodesReveal] = useState(false)
   const [mfaAvailability, setMfaAvailability] = useState<{
     email: boolean
@@ -507,112 +563,114 @@ export function SettingsDialog({
     if (!(open && session?.user?.id)) return
 
     const controller = new AbortController()
-
-    const loadPreferences = async () => {
-      let loadedMfaMethod: 'email' | 'authenticator' | 'security_key' = 'email'
-      setLoadingPreferences(true)
-      try {
-        const memorySettingsResponse = await fetch('/api/memories/settings', {
-          signal: controller.signal,
-        })
-        if (memorySettingsResponse.ok) {
-          const memorySettings = await readJson(memorySettingsResponse, memorySettingsResponseSchema)
-          setMemoryEnabled(memorySettings.isEnabled)
-        } else {
-          setMemoryEnabled(true)
-        }
-
-        const response = await fetch('/api/user/preferences', { signal: controller.signal })
-        if (response.ok) {
-          const data = await readJson(response, userPreferencesResponseSchema)
-          const prefs = data.preferences
-          setCurrentPreferences(prefs)
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('userPreferencesUpdated', { detail: prefs }))
-          }
-          setFollowUpSuggestions(prefs.followUpSuggestions ?? true)
-
-          if (prefs.backgroundConfig) {
-            const bgType = isSelectableBackgroundType(prefs.backgroundConfig.type)
-              ? prefs.backgroundConfig.type
-              : 'aurora'
-            setBackgroundConfig({
-              type: bgType,
-              enabled: prefs.backgroundConfig.enabled ?? true,
-            })
-          } else if (prefs.auroraBackground !== undefined) {
-            setBackgroundConfig({
-              type: 'aurora',
-              enabled: prefs.auroraBackground,
-            })
-          }
-
-          if (prefs.dailyBriefing) {
-            setDailyBriefingSettings({
-              dismissTime: prefs.dailyBriefing.dismissTime || '07:30',
-              emailEnabled: prefs.dailyBriefing.emailEnabled ?? false,
-              emailTime:
-                prefs.dailyBriefing.emailTime || prefs.dailyBriefing.dismissTime || '07:30',
-            })
-          }
-        }
-
-        const mfaResponse = await fetch('/api/user/mfa', { signal: controller.signal })
-        if (mfaResponse.ok) {
-          const mfaData = await readJson(mfaResponse, mfaStatusResponseSchema)
-          setMfaEnabled(mfaData.mfaEnabled ?? false)
-          loadedMfaMethod =
-            mfaData.mfaMethod === 'security_key'
-              ? 'security_key'
-              : mfaData.mfaMethod === 'authenticator'
-                ? 'authenticator'
-                : 'email'
-          setMfaMethod(loadedMfaMethod)
-          setBackupCodes(new Array(mfaData.backupCodesCount || 0).fill('••••••••'))
-        }
-
-        const availabilityResponse = await fetch('/api/user/mfa/availability', {
-          signal: controller.signal,
-        })
-        if (availabilityResponse.ok) {
-          const availabilityData = await readJson(
-            availabilityResponse,
-            mfaAvailabilityResponseSchema
-          )
-
-          const hasWebAuthnSupport = !!(
-            window.navigator.credentials &&
-            typeof window.navigator.credentials.create === 'function' &&
-            window.PublicKeyCredential
-          )
-
-          const updatedAvailability = {
-            ...availabilityData.availability,
-            security_key: availabilityData.availability.security_key && hasWebAuthnSupport,
-          }
-
-          setMfaAvailability(updatedAvailability)
-
-          if (!updatedAvailability.email && loadedMfaMethod === 'email') {
-            if (updatedAvailability.security_key) {
-              setMfaMethod('security_key')
-            } else {
-              setMfaMethod('authenticator')
-            }
-          }
-        }
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          console.error('Error loading preferences:', error)
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setLoadingPreferences(false)
-        }
-      }
+    const { signal } = controller
+    const logLoadError = (error: unknown) => {
+      if (!signal.aborted) console.error('Error loading preferences:', error)
     }
 
-    void loadPreferences()
+    setLoadingPreferences(true)
+
+    // The four reads are independent, so they run in parallel and each section is applied as
+    // soon as it lands (one failing no longer hides the others). MFA status and availability
+    // are applied together because the availability fallback depends on the loaded method.
+    const memorySection = fetchJsonIfOk(
+      '/api/memories/settings',
+      memorySettingsResponseSchema,
+      signal
+    ).then(memorySettings => {
+      if (signal.aborted) return
+      setMemoryEnabled(memorySettings?.isEnabled ?? true)
+    }, logLoadError)
+
+    const preferencesSection = fetchJsonIfOk(
+      '/api/user/preferences',
+      userPreferencesResponseSchema,
+      signal
+    ).then(data => {
+      if (signal.aborted || !data) return
+      const prefs = data.preferences
+      setCurrentPreferences(prefs)
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('userPreferencesUpdated', { detail: prefs }))
+      }
+      setFollowUpSuggestions(prefs.followUpSuggestions ?? true)
+
+      if (prefs.backgroundConfig) {
+        const bgType = isSelectableBackgroundType(prefs.backgroundConfig.type)
+          ? prefs.backgroundConfig.type
+          : 'aurora'
+        setBackgroundConfig({
+          type: bgType,
+          enabled: prefs.backgroundConfig.enabled ?? true,
+        })
+      } else if (prefs.auroraBackground !== undefined) {
+        setBackgroundConfig({
+          type: 'aurora',
+          enabled: prefs.auroraBackground,
+        })
+      }
+
+      if (prefs.dailyBriefing) {
+        setDailyBriefingSettings({
+          dismissTime: prefs.dailyBriefing.dismissTime || '07:30',
+          emailEnabled: prefs.dailyBriefing.emailEnabled ?? false,
+          emailTime:
+            prefs.dailyBriefing.emailTime || prefs.dailyBriefing.dismissTime || '07:30',
+        })
+      }
+    }, logLoadError)
+
+    const mfaSection = Promise.allSettled([
+      fetchJsonIfOk('/api/user/mfa', mfaStatusResponseSchema, signal),
+      fetchJsonIfOk('/api/user/mfa/availability', mfaAvailabilityResponseSchema, signal),
+    ]).then(([statusResult, availabilityResult]) => {
+      if (signal.aborted) return
+      let loadedMfaMethod: MfaMethod = 'email'
+
+      if (statusResult.status === 'rejected') {
+        logLoadError(statusResult.reason)
+      } else if (statusResult.value) {
+        const mfaData = statusResult.value
+        setMfaEnabled(mfaData.mfaEnabled ?? false)
+        loadedMfaMethod =
+          mfaData.mfaMethod === 'security_key'
+            ? 'security_key'
+            : mfaData.mfaMethod === 'authenticator'
+              ? 'authenticator'
+              : 'email'
+        setMfaMethod(loadedMfaMethod)
+        setBackupCodes(new Array(mfaData.backupCodesCount || 0).fill('••••••••'))
+      }
+
+      if (availabilityResult.status === 'rejected') {
+        logLoadError(availabilityResult.reason)
+      } else if (availabilityResult.value) {
+        const hasWebAuthnSupport = !!(
+          window.navigator.credentials &&
+          typeof window.navigator.credentials.create === 'function' &&
+          window.PublicKeyCredential
+        )
+
+        const updatedAvailability = {
+          ...availabilityResult.value.availability,
+          security_key: availabilityResult.value.availability.security_key && hasWebAuthnSupport,
+        }
+
+        setMfaAvailability(updatedAvailability)
+
+        if (!updatedAvailability.email && loadedMfaMethod === 'email') {
+          if (updatedAvailability.security_key) {
+            setMfaMethod('security_key')
+          } else {
+            setMfaMethod('authenticator')
+          }
+        }
+      }
+    }, logLoadError)
+
+    void Promise.allSettled([memorySection, preferencesSection, mfaSection]).then(() => {
+      if (!signal.aborted) setLoadingPreferences(false)
+    })
 
     return () => controller.abort()
   }, [open, session?.user?.id])
@@ -958,7 +1016,7 @@ export function SettingsDialog({
 
     setLoadingMfa(true)
     try {
-      const response = await fetch('/api/user/mfa', {
+      const response = await fetchWithStepUp('/api/user/mfa', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -969,6 +1027,7 @@ export function SettingsDialog({
         setMfaEnabled(false)
         setBackupCodes([])
         setShowMfaSetup(false)
+        cancelMfaMethodChange()
         toast.success('MFA disabled successfully')
       } else {
         throw new Error('Failed to disable MFA')
@@ -1018,6 +1077,155 @@ export function SettingsDialog({
     }
   }
 
+  /**
+   * Registers a WebAuthn credential for the pending `security_key` setup or method switch
+   * (`tempMfaMethod`), and returns the backup codes the server regenerated.
+   */
+  const registerSecurityKey = async (): Promise<string[]> => {
+    if (!window.navigator.credentials) {
+      throw new Error('WebAuthn is not supported in this browser')
+    }
+
+    if (!window.PublicKeyCredential) {
+      throw new Error('PublicKeyCredential is not supported in this browser')
+    }
+
+    console.log('Starting WebAuthn registration for: security_key')
+    console.log('Current origin:', window.location.origin)
+    console.log('Is HTTPS:', window.location.protocol === 'https:')
+    console.log('Is localhost:', window.location.hostname === 'localhost')
+
+    let isPlatformAvailable = false
+    try {
+      isPlatformAvailable =
+        await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+      console.log('Platform authenticator available:', isPlatformAvailable)
+    } catch (checkError) {
+      console.warn('Could not check platform authenticator availability:', checkError)
+    }
+
+    const optionsResponse = await fetchWithStepUp('/api/user/mfa/webauthn/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!optionsResponse.ok) {
+      const errorData = await readApiMessage(optionsResponse)
+      throw new MfaRequestError(
+        errorData.error || 'Failed to get registration options',
+        isExpiredMfaChangeError(errorData.error)
+      )
+    }
+
+    const options = await readJson(optionsResponse, webAuthnCreationOptionsSchema)
+    console.log('Received WebAuthn options:', options)
+    console.log('Challenge type:', typeof options.challenge, 'Length:', options.challenge?.length)
+    console.log('User ID type:', typeof options.user.id, 'Length:', options.user.id?.length)
+
+    const userIdBuffer: BufferSource = base64urlToArrayBuffer(options.user.id)
+    const challengeBuffer: BufferSource = base64urlToArrayBuffer(options.challenge)
+
+    const credentialCreationOptions: PublicKeyCredentialCreationOptions = {
+      rp: options.rp,
+      user: {
+        ...options.user,
+        id: userIdBuffer,
+      },
+      challenge: challengeBuffer,
+      pubKeyCredParams: options.pubKeyCredParams,
+      timeout: Math.min(options.timeout || 60000, 60000), // Cap at 60 seconds
+      attestation: 'none', // Use 'none' for better compatibility
+      authenticatorSelection: {
+        userVerification: 'discouraged', // Most compatible setting
+        requireResidentKey: false,
+        residentKey: 'discouraged',
+      },
+    }
+
+    console.log('Final credential creation options:', credentialCreationOptions)
+
+    const methodName = 'security key'
+    const instructionText =
+      "Please use Windows Hello, Touch ID, external key, or your device's built-in authenticator when prompted"
+
+    toast.info(`Setting up ${methodName}. ${instructionText}`, { duration: 5000 })
+
+    let credential: PublicKeyCredential | null = null
+
+    try {
+      console.log('Attempting WebAuthn credential creation...')
+      const created = await navigator.credentials.create({
+        publicKey: credentialCreationOptions,
+      })
+      credential = created instanceof PublicKeyCredential ? created : null
+
+      console.log('WebAuthn credential created successfully:', credential?.id)
+    } catch (webauthnError) {
+      console.error('WebAuthn credential creation failed:', webauthnError)
+      const webauthnErrorName = readString(asRecord(webauthnError)?.name)
+
+      if (webauthnErrorName === 'NotAllowedError') {
+        throw new Error(
+          'Security key registration was cancelled, timed out, or blocked. This could be due to Windows Hello setup issues, an unconnected security key, or browser restrictions. Please ensure your authenticator is ready and try again.'
+        )
+      } else if (webauthnErrorName === 'InvalidStateError') {
+        throw new Error(`This ${methodName} is already registered for your account.`)
+      } else if (webauthnErrorName === 'NotSupportedError') {
+        throw new Error(`Your ${methodName} is not supported by this browser.`)
+      } else if (webauthnErrorName === 'ConstraintError') {
+        throw new Error(`The ${methodName} does not meet the security requirements.`)
+      } else {
+        throw new Error(
+          `Failed to create ${methodName}: ${errorMessage(webauthnError) || 'Unknown error occurred'}`
+        )
+      }
+    }
+
+    if (!credential) {
+      throw new Error('Failed to create credential - no credential returned')
+    }
+
+    const response = credential.response
+    if (!(response instanceof AuthenticatorAttestationResponse)) {
+      throw new Error('Failed to create credential - unexpected credential response')
+    }
+
+    console.log('Sending credential to server for verification...')
+    const verifyResponse = await fetchWithStepUp('/api/user/mfa/webauthn/verify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        credential: {
+          id: credential.id,
+          rawId: arrayBufferToBase64url(cloneBufferSource(credential.rawId)),
+          response: {
+            attestationObject: arrayBufferToBase64url(
+              cloneBufferSource(response.attestationObject)
+            ),
+            clientDataJSON: arrayBufferToBase64url(cloneBufferSource(response.clientDataJSON)),
+          },
+          type: credential.type,
+          clientExtensionResults: credential.getClientExtensionResults?.() || {},
+        },
+        method: 'security_key',
+      }),
+    })
+
+    if (!verifyResponse.ok) {
+      const errorData = await readApiMessage(verifyResponse)
+      throw new MfaRequestError(
+        errorData.error || 'Failed to register security key',
+        isExpiredMfaChangeError(errorData.error)
+      )
+    }
+    const data = await readJson(verifyResponse, mfaBackupCodesResponseSchema)
+    return data.backupCodes
+  }
+
   const verifyMfaSetup = async () => {
     if (mfaMethod !== 'security_key' && !verificationCode.trim()) {
       toast.error('Please enter the verification code')
@@ -1027,150 +1235,11 @@ export function SettingsDialog({
     setLoadingMfa(true)
     try {
       if (mfaMethod === 'security_key') {
-        if (!window.navigator.credentials) {
-          throw new Error('WebAuthn is not supported in this browser')
-        }
-
-        if (!window.PublicKeyCredential) {
-          throw new Error('PublicKeyCredential is not supported in this browser')
-        }
-
-        console.log('Starting WebAuthn registration for:', mfaMethod)
-        console.log('Current origin:', window.location.origin)
-        console.log('Is HTTPS:', window.location.protocol === 'https:')
-        console.log('Is localhost:', window.location.hostname === 'localhost')
-
-        let isPlatformAvailable = false
-        try {
-          isPlatformAvailable =
-            await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
-          console.log('Platform authenticator available:', isPlatformAvailable)
-        } catch (checkError) {
-          console.warn('Could not check platform authenticator availability:', checkError)
-        }
-
-        const optionsResponse = await fetch('/api/user/mfa/webauthn/register', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        })
-
-        if (!optionsResponse.ok) {
-          throw new Error('Failed to get registration options')
-        }
-
-        const options = await readJson(optionsResponse, webAuthnCreationOptionsSchema)
-        console.log('Received WebAuthn options:', options)
-        console.log(
-          'Challenge type:',
-          typeof options.challenge,
-          'Length:',
-          options.challenge?.length
-        )
-        console.log('User ID type:', typeof options.user.id, 'Length:', options.user.id?.length)
-
-        const userIdBuffer: BufferSource = base64urlToArrayBuffer(options.user.id)
-        const challengeBuffer: BufferSource = base64urlToArrayBuffer(options.challenge)
-
-        const credentialCreationOptions: PublicKeyCredentialCreationOptions = {
-          rp: options.rp,
-          user: {
-            ...options.user,
-            id: userIdBuffer,
-          },
-          challenge: challengeBuffer,
-          pubKeyCredParams: options.pubKeyCredParams,
-          timeout: Math.min(options.timeout || 60000, 60000), // Cap at 60 seconds
-          attestation: 'none', // Use 'none' for better compatibility
-          authenticatorSelection: {
-            userVerification: 'discouraged', // Most compatible setting
-            requireResidentKey: false,
-            residentKey: 'discouraged',
-          },
-        }
-
-        console.log('Final credential creation options:', credentialCreationOptions)
-
-        const methodName = 'security key'
-        const instructionText =
-          "Please use Windows Hello, Touch ID, external key, or your device's built-in authenticator when prompted"
-
-        toast.info(`Setting up ${methodName}. ${instructionText}`, { duration: 5000 })
-
-        let credential: PublicKeyCredential | null = null
-
-        try {
-          console.log('Attempting WebAuthn credential creation...')
-          const created = await navigator.credentials.create({
-            publicKey: credentialCreationOptions,
-          })
-          credential = created instanceof PublicKeyCredential ? created : null
-
-          console.log('WebAuthn credential created successfully:', credential?.id)
-        } catch (webauthnError) {
-          console.error('WebAuthn credential creation failed:', webauthnError)
-          const webauthnErrorName = readString(asRecord(webauthnError)?.name)
-
-          if (webauthnErrorName === 'NotAllowedError') {
-            throw new Error(
-              'Security key registration was cancelled, timed out, or blocked. This could be due to Windows Hello setup issues, an unconnected security key, or browser restrictions. Please ensure your authenticator is ready and try again.'
-            )
-          } else if (webauthnErrorName === 'InvalidStateError') {
-            throw new Error(`This ${methodName} is already registered for your account.`)
-          } else if (webauthnErrorName === 'NotSupportedError') {
-            throw new Error(`Your ${methodName} is not supported by this browser.`)
-          } else if (webauthnErrorName === 'ConstraintError') {
-            throw new Error(`The ${methodName} does not meet the security requirements.`)
-          } else {
-            throw new Error(
-              `Failed to create ${methodName}: ${errorMessage(webauthnError) || 'Unknown error occurred'}`
-            )
-          }
-        }
-
-        if (!credential) {
-          throw new Error('Failed to create credential - no credential returned')
-        }
-
-        const response = credential.response
-        if (!(response instanceof AuthenticatorAttestationResponse)) {
-          throw new Error('Failed to create credential - unexpected credential response')
-        }
-
-        console.log('Sending credential to server for verification...')
-        const verifyResponse = await fetch('/api/user/mfa/webauthn/verify', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            credential: {
-              id: credential.id,
-              rawId: arrayBufferToBase64url(cloneBufferSource(credential.rawId)),
-              response: {
-                attestationObject: arrayBufferToBase64url(
-                  cloneBufferSource(response.attestationObject)
-                ),
-                clientDataJSON: arrayBufferToBase64url(cloneBufferSource(response.clientDataJSON)),
-              },
-              type: credential.type,
-              clientExtensionResults: credential.getClientExtensionResults?.() || {},
-            },
-            method: mfaMethod,
-          }),
-        })
-
-        if (verifyResponse.ok) {
-          const data = await readJson(verifyResponse, mfaBackupCodesResponseSchema)
-          setBackupCodes(data.backupCodes)
-          setMfaEnabled(true)
-          setSetupStep('backup')
-          toast.success('Security key registered successfully!')
-        } else {
-          const errorData = await readApiMessage(verifyResponse)
-          throw new Error(errorData.error || 'Failed to register security key')
-        }
+        const codes = await registerSecurityKey()
+        setBackupCodes(codes)
+        setMfaEnabled(true)
+        setSetupStep('backup')
+        toast.success('Security key registered successfully!')
       } else {
         const response = await fetch('/api/user/mfa/verify', {
           method: 'POST',
@@ -1215,7 +1284,7 @@ export function SettingsDialog({
   const generateNewBackupCodes = async () => {
     setLoadingMfa(true)
     try {
-      const response = await fetch('/api/user/mfa/backup-codes', {
+      const response = await fetchWithStepUp('/api/user/mfa/backup-codes', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1278,9 +1347,22 @@ export function SettingsDialog({
       return
     }
 
+    if (method === mfaMethod) return
+
+    await startMfaMethodChange(method)
+  }
+
+  /**
+   * Step 1 of switching method while MFA is on: `PATCH /api/user/mfa/method` without a code
+   * stages the new method server-side (TOTP secret, emailed code, or WebAuthn registration).
+   * The current method stays active until {@link verifyMfaMethodChange} completes the switch.
+   */
+  const startMfaMethodChange = async (method: MfaMethod) => {
     setLoadingMfa(true)
+    setMethodChangeError(null)
+    setMethodChangeCode('')
     try {
-      const response = await fetch('/api/user/mfa/method', {
+      const response = await fetchWithStepUp('/api/user/mfa/method', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -1290,21 +1372,26 @@ export function SettingsDialog({
         }),
       })
 
-      if (response.ok) {
-        const data = await readJson(response, mfaMethodChangeResponseSchema)
-
-        if (data.requiresRegistration && method === 'security_key') {
-          setMfaMethod(method)
-          setShowMfaSetup(true)
-          setSetupStep('verify')
-          toast.success(data.message || 'Please register your security key')
-        } else {
-          setMfaMethod(method)
-          toast.success(data.message || 'MFA method updated successfully')
-        }
-      } else {
+      if (!response.ok) {
         const errorData = await readApiMessage(response)
         throw new Error(errorData.error || 'Failed to update MFA method')
+      }
+
+      if (method === 'authenticator') {
+        const data = await readJson(response, mfaAuthenticatorChangeStartResponseSchema)
+        setPendingMethodChange({
+          method,
+          qrCode: data.qrCode,
+          manualEntryKey: data.manualEntryKey,
+        })
+      } else if (method === 'email') {
+        const data = await readJson(response, mfaEmailChangeStartResponseSchema)
+        setPendingMethodChange({ method })
+        toast.success(data.message || 'Verification code sent to your email')
+      } else {
+        const data = await readJson(response, mfaSecurityKeyChangeStartResponseSchema)
+        setPendingMethodChange({ method })
+        toast.success(data.message || 'Please register your security key')
       }
     } catch (error) {
       console.error('Error updating MFA method:', error)
@@ -1312,6 +1399,89 @@ export function SettingsDialog({
     } finally {
       setLoadingMfa(false)
     }
+  }
+
+  /** Re-reads the server's MFA state (method/enabled) after a change. */
+  const refreshMfaStatus = async () => {
+    try {
+      const response = await fetch('/api/user/mfa')
+      if (!response.ok) return
+      const data = await readJson(response, mfaStatusResponseSchema)
+      setMfaEnabled(data.mfaEnabled)
+      if (data.mfaMethod) setMfaMethod(data.mfaMethod)
+    } catch (error) {
+      console.error('Error refreshing MFA status:', error)
+    }
+  }
+
+  /**
+   * Step 2: email/authenticator re-send the PATCH with `verificationCode`; security keys
+   * register through WebAuthn, which also regenerates the backup codes.
+   */
+  const verifyMfaMethodChange = async () => {
+    if (!pendingMethodChange || loadingMfa) return
+    const { method } = pendingMethodChange
+    const code = methodChangeCode.trim()
+
+    if (method !== 'security_key' && !/^\d{6}$/.test(code)) {
+      setMethodChangeError({ message: 'Enter the 6-digit verification code', expired: false })
+      return
+    }
+
+    setLoadingMfa(true)
+    setMethodChangeError(null)
+    try {
+      if (method === 'security_key') {
+        const codes = await registerSecurityKey()
+        setBackupCodes(codes)
+        setShowBackupCodes(true)
+        setShowBackupCodesReveal(true)
+        toast.success(
+          'Switched to security key. Your backup codes were regenerated: save the new ones below.'
+        )
+      } else {
+        const response = await fetchWithStepUp('/api/user/mfa/method', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            newMethod: method,
+            verificationCode: code,
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await readApiMessage(response)
+          throw new MfaRequestError(
+            errorData.error || 'Failed to verify code',
+            isExpiredMfaChangeError(errorData.error)
+          )
+        }
+
+        await readJson(response, mfaMethodChangeResponseSchema)
+        toast.success(`MFA method changed to ${MFA_METHOD_LABELS[method]}`)
+      }
+
+      setMfaMethod(method)
+      setPendingMethodChange(null)
+      setMethodChangeCode('')
+      await refreshMfaStatus()
+    } catch (error) {
+      console.error('Error verifying MFA method change:', error)
+      setMethodChangeError({
+        message: errorMessage(error) || 'Failed to verify code',
+        expired: error instanceof MfaRequestError && error.expired,
+      })
+    } finally {
+      setLoadingMfa(false)
+    }
+  }
+
+  const cancelMfaMethodChange = () => {
+    setPendingMethodChange(null)
+    setMethodChangeCode('')
+    setMethodChangeError(null)
   }
 
   const menuItems: SettingsMenuItem[] = [
@@ -1470,8 +1640,15 @@ export function SettingsDialog({
     setDeletingAccount(true)
     setConfirmDeleteAccount(false)
     try {
-      await deleteAccountAction()
-      toast.success('account deleted ΓÇö signing you out')
+      let result = await deleteAccountAction()
+      if (!result.ok) {
+        // Deleting the account needs a recent MFA verification; prompt once and retry.
+        if (!(await requestStepUp())) return
+        result = await deleteAccountAction()
+      }
+      if (!result.ok) throw new Error('please verify your identity to delete your account')
+      toast.success('account deleted — signing you out')
+      clearLegacyVTOPClientState()
       await signOut({ callbackUrl: '/login' })
     } catch (error) {
       console.error('failed to delete account', error)
@@ -1627,7 +1804,7 @@ export function SettingsDialog({
                     >
                       {deletingAccount ? (
                         <>
-                          <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> deletingΓÇª
+                          <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> deleting…
                         </>
                       ) : confirmDeleteAccount ? (
                         'confirm delete?'
@@ -2360,7 +2537,203 @@ export function SettingsDialog({
 
                   {(mfaEnabled || showMfaSetup) && (
                     <div className="space-y-4">
-                      {!showMfaSetup ? (
+                      {pendingMethodChange ? (
+                        <div className="space-y-4">
+                          <div className="space-y-1">
+                            <Label className="text-sm font-medium">
+                              switch to {MFA_METHOD_LABELS[pendingMethodChange.method]}
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                              {MFA_METHOD_LABELS[mfaMethod]} stays active until you finish this step
+                            </p>
+                          </div>
+
+                          {pendingMethodChange.method === 'authenticator' && (
+                            <div className="space-y-4">
+                              <div className="text-center space-y-3">
+                                <h4 className="font-medium">scan qr code</h4>
+                                <p className="text-sm text-muted-foreground">
+                                  scan this qr code with your authenticator app, then enter the
+                                  6-digit code it shows
+                                </p>
+
+                                <div className="flex justify-center">
+                                  <div className="p-4 bg-white rounded-lg">
+                                    <img
+                                      src={pendingMethodChange.qrCode}
+                                      alt="QR code for your authenticator app"
+                                      className="w-48 h-48"
+                                    />
+                                  </div>
+                                </div>
+
+                                <details className="text-left">
+                                  <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground">
+                                    can't scan? enter manually
+                                  </summary>
+                                  <div className="mt-2 p-3 bg-muted rounded text-xs font-mono break-all">
+                                    {pendingMethodChange.manualEntryKey}
+                                  </div>
+                                </details>
+                              </div>
+                            </div>
+                          )}
+
+                          {pendingMethodChange.method === 'email' && (
+                            <div className="space-y-3 text-center">
+                              <h4 className="font-medium">check your email</h4>
+                              <p className="text-sm text-muted-foreground">
+                                we've sent a 6-digit code to{' '}
+                                {session?.user?.email || 'your email address'}. it expires in 10
+                                minutes.
+                              </p>
+                            </div>
+                          )}
+
+                          {pendingMethodChange.method === 'security_key' && (
+                            <div className="space-y-3 text-center">
+                              <div className="flex justify-center mb-3">
+                                <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-full">
+                                  <Fingerprint className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                                </div>
+                              </div>
+                              <h4 className="font-medium">register your security key</h4>
+                              <p className="text-sm text-muted-foreground">
+                                click the button below and follow your browser's prompts to register
+                                your security key
+                              </p>
+                              <div className="p-3 bg-muted/50 rounded-lg text-xs text-muted-foreground">
+                                your backup codes will be regenerated once the key is registered
+                              </div>
+                            </div>
+                          )}
+
+                          {pendingMethodChange.method !== 'security_key' && (
+                            <div className="space-y-3">
+                              <Label
+                                htmlFor="mfa-method-change-code"
+                                className="text-sm font-medium"
+                              >
+                                enter verification code
+                              </Label>
+                              <input
+                                id="mfa-method-change-code"
+                                type="text"
+                                inputMode="numeric"
+                                autoComplete="one-time-code"
+                                pattern="[0-9]*"
+                                maxLength={6}
+                                value={methodChangeCode}
+                                onChange={e => {
+                                  setMethodChangeCode(e.target.value.replace(/\D/g, '').slice(0, 6))
+                                  setMethodChangeError(null)
+                                }}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter' && methodChangeCode.length === 6) {
+                                    e.preventDefault()
+                                    void verifyMfaMethodChange()
+                                  }
+                                }}
+                                disabled={loadingMfa}
+                                autoFocus
+                                aria-invalid={methodChangeError ? true : undefined}
+                                aria-describedby={
+                                  methodChangeError ? 'mfa-method-change-error' : undefined
+                                }
+                                placeholder="000000"
+                                className="w-full px-3 py-2 text-center text-lg font-mono tracking-widest border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                              />
+                            </div>
+                          )}
+
+                          {methodChangeError && (
+                            <div
+                              id="mfa-method-change-error"
+                              role="alert"
+                              className="space-y-1 p-3 rounded-lg border border-red-200 bg-red-50/50 text-sm text-red-600 dark:border-red-800 dark:bg-red-950/20 dark:text-red-400"
+                            >
+                              <p>{methodChangeError.message}</p>
+                              {methodChangeError.expired && (
+                                <p className="text-xs">
+                                  {pendingMethodChange.method === 'authenticator'
+                                    ? 'start again to get a new qr code.'
+                                    : pendingMethodChange.method === 'email'
+                                      ? 'start again to get a new code.'
+                                      : 'start again to register your security key.'}
+                                </p>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="flex gap-2">
+                            {methodChangeError?.expired ? (
+                              <Button
+                                onClick={() => startMfaMethodChange(pendingMethodChange.method)}
+                                disabled={loadingMfa}
+                                size="sm"
+                                className="flex-1"
+                              >
+                                {loadingMfa ? (
+                                  <>
+                                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                    starting...
+                                  </>
+                                ) : (
+                                  'start again'
+                                )}
+                              </Button>
+                            ) : (
+                              <Button
+                                onClick={verifyMfaMethodChange}
+                                disabled={
+                                  loadingMfa ||
+                                  (pendingMethodChange.method !== 'security_key' &&
+                                    methodChangeCode.length !== 6)
+                                }
+                                size="sm"
+                                className="flex-1"
+                              >
+                                {loadingMfa ? (
+                                  <>
+                                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                    {pendingMethodChange.method === 'security_key'
+                                      ? 'registering...'
+                                      : 'verifying...'}
+                                  </>
+                                ) : pendingMethodChange.method === 'security_key' ? (
+                                  'register security key'
+                                ) : (
+                                  'verify'
+                                )}
+                              </Button>
+                            )}
+                            <Button
+                              onClick={cancelMfaMethodChange}
+                              disabled={loadingMfa}
+                              variant="outline"
+                              size="sm"
+                              className="flex-1"
+                            >
+                              cancel
+                            </Button>
+                          </div>
+
+                          {pendingMethodChange.method === 'email' &&
+                            !methodChangeError?.expired && (
+                              <div className="text-center">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => startMfaMethodChange('email')}
+                                  disabled={loadingMfa}
+                                  className="text-xs text-muted-foreground"
+                                >
+                                  didn't get it? send a new code
+                                </Button>
+                              </div>
+                            )}
+                        </div>
+                      ) : !showMfaSetup ? (
                         <>
                           <div className="space-y-3">
                             <Label className="text-sm font-medium">
@@ -2862,7 +3235,10 @@ export function SettingsDialog({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => signOut()}
+                    onClick={() => {
+                            clearLegacyVTOPClientState()
+                            void signOut()
+                          }}
                     className="w-full sm:w-auto flex-shrink-0"
                   >
                     log out
@@ -2982,6 +3358,7 @@ export function SettingsDialog({
       setShowMfaSetup(false)
       setSetupStep('method')
       setVerificationCode('')
+      cancelMfaMethodChange()
       setShowBackupCodes(false)
       setShowBackupCodesReveal(false)
     } else if (activeSection !== 'general') {

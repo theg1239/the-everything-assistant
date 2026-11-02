@@ -12,6 +12,18 @@ const isTimetableEntry = (value: unknown): value is TimetableEntry =>
 const isTimetableSchema = (value: unknown): value is TimetableSchema =>
   isRecord(value) && Array.isArray(value.theory) && Array.isArray(value.lab)
 
+async function fetchTimetableSchema(campus: string): Promise<TimetableSchema> {
+  const schemaResponse = await fetch(`/ffcs/schemas/${campus}.json`)
+  if (!schemaResponse.ok) {
+    throw new Error('Failed to load timetable schema')
+  }
+  const schemaData: unknown = await schemaResponse.json()
+  if (!isTimetableSchema(schemaData)) {
+    throw new Error('Invalid timetable schema')
+  }
+  return schemaData
+}
+
 const SCHOOLS = ['smec', 'score', 'scope', 'sbst', 'sce', 'scheme', 'select', 'sense'] as const
 type School = (typeof SCHOOLS)[number]
 
@@ -64,17 +76,12 @@ const FFCSArtifact: React.FC = () => {
       }
 
       try {
-        const data = await getCourseData(school)
+        // Independent requests: load the courses and the timetable schema together.
+        const [data, schemaData] = await Promise.all([
+          getCourseData(school),
+          fetchTimetableSchema(campus),
+        ])
         setCourseData(data)
-
-        const schemaResponse = await fetch(`/ffcs/schemas/${campus}.json`)
-        if (!schemaResponse.ok) {
-          throw new Error('Failed to load timetable schema')
-        }
-        const schemaData: unknown = await schemaResponse.json()
-        if (!isTimetableSchema(schemaData)) {
-          throw new Error('Invalid timetable schema')
-        }
         setTimetableSchema(schemaData)
       } catch (error) {
         console.error(`Failed to load courses or schema for ${campus}:`, error)

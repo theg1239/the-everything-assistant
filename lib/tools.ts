@@ -18,7 +18,17 @@ import { getCourseData, School } from './ffcs-tool'
 import { createKnowledgeTools } from './knowledge-tools'
 import { createMemoryTool } from './memory/memory-tools'
 import { createFeedbackIssue } from './feedback'
-import { hasVTOPCredentials, getFormattedVTOPCredentials } from './server-vtop-credentials'
+import { getVTOPCredentialsForUser } from './vtop-credential-store'
+import {
+  VTOP_COMMANDS,
+  VtopProxyUnavailableError,
+  callVtopProxy,
+  isPendingVtopStatus,
+  vtopParamsFor,
+  vtopProxyResultSchema,
+  type VtopCredentialFields,
+  type VtopProxyResult,
+} from './vtop-proxy'
 import { getUserMcpToken, refreshUserMcpToken, isExpired as isMcpExpired } from './mcp-tokens'
 import { createMusicPlayerTool, type MusicPlayerToolState } from './music-player-tool'
 import { memoizeAsync, publicAssetUrl } from './static-data'
@@ -35,9 +45,6 @@ import type {
   FacultySchoolRecord,
   JsonValue,
   SyllabusEntry,
-  VtopCommandFlags,
-  VtopInteractiveRequestBody,
-  VtopRequestBody,
 } from '@/types/tools'
 
 type ParsedPlacementData = {
@@ -65,6 +72,14 @@ const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
     z.record(z.string(), jsonValueSchema),
   ])
 )
+
+/** Deep-search (Reddit) API requires a bearer secret when DEEP_SEARCH_API_SECRET is set. */
+const redditApiHeaders = (): Record<string, string> => ({
+  'Content-Type': 'application/json',
+  ...(process.env.DEEP_SEARCH_API_SECRET
+    ? { Authorization: `Bearer ${process.env.DEEP_SEARCH_API_SECRET}` }
+    : {}),
+})
 
 const redditAskResponseSchema = z.object({
   success: z.boolean(),
@@ -184,33 +199,6 @@ const loadSyllabusEntries = memoizeAsync(async (): Promise<SyllabusEntry[]> => {
     : []
 })
 
-const vtopErrorResponseSchema = z
-  .object({
-    error: z.string().optional(),
-  })
-  .catchall(jsonValueSchema)
-
-const vtopProxyResponseSchema = z.object({
-  success: z.boolean().optional(),
-  data: jsonValueSchema.optional(),
-  output: jsonValueSchema.optional(),
-  structured_data: jsonValueSchema.optional(),
-  message: z.string().optional(),
-  raw: z.boolean().optional(),
-  meta: jsonValueSchema.optional(),
-  error: z.string().optional(),
-})
-
-const vtopInteractiveResponseSchema = vtopProxyResponseSchema.extend({
-  options: jsonValueSchema.optional(),
-  prompt: z.string().optional(),
-  nextStep: z.string().optional(),
-  sessionData: jsonValueSchema.optional(),
-  completed: z.boolean().optional(),
-  downloadInfo: jsonValueSchema.optional(),
-  smartMatch: jsonValueSchema.optional(),
-})
-
 type McpClientConfig = {
   endpoint?: string
   accessToken?: string
@@ -224,34 +212,24 @@ type VITToolsOptions = {
   musicPlayerState?: MusicPlayerToolState | null
 }
 
-type VtopProxyResponse = z.infer<typeof vtopProxyResponseSchema>
+const mcpFailure = (error: string, errorKind = 'mcp_error'): VtopProxyResult => ({
+  success: false,
+  status: 'error',
+  error,
+  errorKind,
+  message: error,
+})
 
 /**
- * `callVtopViaMcp` result: the proxy payload when it matches the expected
- * shape, otherwise the server's raw object (when it at least reports `success`)
- * or a local failure.
+ * Calls one VTOP proxy MCP tool (a command name or `vtop-continue`) and validates the
+ * structured result. Returns null when MCP isn't configured for this caller.
  */
-type VtopMcpResult =
-  | (VtopProxyResponse & { via: 'mcp' })
-  | {
-      success: false
-      error: string
-      message?: string
-      details?: unknown
-      via: 'mcp'
-    }
-  | (Record<string, unknown> & { via: 'mcp' })
-
 async function callVtopViaMcp(options: {
-  command: string
-  flags?: VtopCommandFlags
-  username?: string
-  password?: string
-  encryptedPassword?: string
-  sessionKey?: string
+  toolName: string
+  args: Record<string, JsonValue>
   mcp: McpClientConfig
-}): Promise<VtopMcpResult | null> {
-  const { command, flags, username, password, encryptedPassword, sessionKey, mcp } = options
+}): Promise<VtopProxyResult | null> {
+  const { toolName, args, mcp } = options
 
   if (!mcp?.endpoint || !mcp?.accessToken) return null
 
@@ -262,132 +240,280 @@ async function callVtopViaMcp(options: {
     Accept: 'application/json, text/event-stream',
   }
 
-  const initializeBody = {
-    jsonrpc: '2.0',
-    id: `init-${Date.now()}`,
-    method: 'initialize',
-    params: {
-      protocolVersion: '2025-06-18',
-      capabilities: { experimental: {}, sampling: {} },
-      clientInfo: {
-        name: mcp.clientName || 'vit-whatsapp-bot',
-        version: '1.0.0',
-      },
-    },
-  }
-
   const initRes = await fetch(endpoint, {
     method: 'POST',
     headers: baseHeaders,
-    body: JSON.stringify(initializeBody),
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: `init-${Date.now()}`,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2025-06-18',
+        capabilities: {},
+        clientInfo: { name: mcp.clientName || 'vit-whatsapp-bot', version: '1.0.0' },
+      },
+    }),
   })
 
   if (!initRes.ok) {
-    const text = await initRes.text().catch(() => '')
-    console.error('MCP initialize failed', { status: initRes.status, text })
+    console.error('MCP initialize failed', { status: initRes.status })
     throw new Error(`MCP initialize failed (${initRes.status})`)
   }
 
   const sessionId =
     initRes.headers.get('Mcp-Session-Id') || initRes.headers.get('mcp-session-id') || undefined
-
-  const args: {
-    flags?: VtopCommandFlags
-    username?: string
-    password?: string
-    encryptedPassword?: string
-    sessionKey?: string
-  } = {}
-  if (flags && Object.keys(flags).length) args.flags = flags
-  if (username) args.username = username
-  if (password) args.password = password
-  if (encryptedPassword) args.encryptedPassword = encryptedPassword
-  if (sessionKey) args.sessionKey = sessionKey
-
-  const toolCallBody = {
-    jsonrpc: '2.0',
-    id: `call-${Date.now()}`,
-    method: 'tools/call',
-    params: {
-      name: command,
-      arguments: args,
-    },
-  }
-
-  const callHeaders = {
-    ...baseHeaders,
-    ...(sessionId ? { 'Mcp-Session-Id': sessionId } : {}),
-  }
+  const callHeaders = { ...baseHeaders, ...(sessionId ? { 'Mcp-Session-Id': sessionId } : {}) }
 
   const callRes = await fetch(endpoint, {
     method: 'POST',
     headers: callHeaders,
-    body: JSON.stringify(toolCallBody),
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: `call-${Date.now()}`,
+      method: 'tools/call',
+      params: { name: toolName, arguments: args },
+    }),
   })
 
-  let parsed: unknown = null
-  try {
-    parsed = await callRes.json()
-  } catch {
-    parsed = null
-  }
-  const rpc = isRecord(parsed) ? parsed : {}
+  const rpc: unknown = await callRes.json().catch(() => null)
 
   if (sessionId) {
-    fetch(endpoint, {
-      method: 'DELETE',
-      headers: callHeaders,
-    }).catch(() => {})
+    fetch(endpoint, { method: 'DELETE', headers: callHeaders }).catch(() => {})
   }
 
-  if (!callRes.ok) {
-    const rpcError = isRecord(rpc.error) ? rpc.error : {}
-    const message =
-      readString(rpcError.message) ||
-      readString(rpc.message) ||
-      `MCP call failed: ${callRes.status}`
-    console.error('MCP call failed', { status: callRes.status, message, parsed })
-    return {
-      success: false,
-      error: message,
-      message,
-      via: 'mcp',
+  const rpcRecord = isRecord(rpc) ? rpc : {}
+  if (!callRes.ok || isRecord(rpcRecord.error)) {
+    const rpcError = isRecord(rpcRecord.error) ? rpcRecord.error : {}
+    const message = readString(rpcError.message) || `MCP call failed: ${callRes.status}`
+    console.error('MCP call failed', { status: callRes.status, message })
+    return mcpFailure(message, callRes.status === 401 ? 'unauthorized' : 'mcp_error')
+  }
+
+  const result = isRecord(rpcRecord.result) ? rpcRecord.result : null
+  const structured = result?.structuredContent
+  const parsed = vtopProxyResultSchema.safeParse(structured)
+  if (parsed.success) return parsed.data
+
+  // Older servers only return JSON text content.
+  const content = Array.isArray(result?.content) ? result.content : []
+  const first: unknown = content[0]
+  const text = isRecord(first) ? readString(first.text) : undefined
+  if (text) {
+    try {
+      const fromText = vtopProxyResultSchema.safeParse(JSON.parse(text))
+      if (fromText.success) return fromText.data
+    } catch {
+      return mcpFailure(text)
     }
   }
+  return mcpFailure('Invalid MCP response shape', 'protocol_error')
+}
 
-  const structured: unknown =
-    (isRecord(rpc.result) && rpc.result.structuredContent) ||
-    rpc.result ||
-    rpc.content ||
-    rpc.data ||
-    null
+const vtopApplicationSchema = z.object({
+  leaveCode: z
+    .string()
+    .optional()
+    .describe(
+      'leave: type code or label - HT1 (HOME TOWN), EY1 (EMERGENCY LEAVE), LG1 (LOCAL GUARDIAN), WP (WITH PARENT LEAVE), WV (WINTER VACATION), SV (SUMMER VACATION), EP (OFFICIAL LEAVES)'
+    ),
+  visitingPlace: z.string().optional().describe('leave: place being visited'),
+  reason: z.string().optional().describe('leave: reason'),
+  details: z.string().optional().describe('nightslip: what the late stay is for'),
+  fromDate: z.string().optional().describe('leave/nightslip: start date YYYY-MM-DD'),
+  fromTime: z.string().optional().describe('leave/nightslip: start time HH:MM (24h)'),
+  toDate: z.string().optional().describe('leave/nightslip: end date YYYY-MM-DD'),
+  toTime: z.string().optional().describe('leave/nightslip: end time HH:MM (24h)'),
+  costCentreId: z.string().optional().describe('nightslip: cost centre id (offered by a needs_input step)'),
+  appliedTo: z.string().optional().describe('nightslip: approver id (offered by a needs_input step)'),
+  roomTypeId: z.string().optional().describe('nightslip: room type id'),
+  buildingId: z.string().optional().describe('nightslip: building id'),
+  venue: z.string().optional().describe('nightslip: venue'),
+  eventId: z.string().optional().describe('nightslip: late-hour event id'),
+})
 
-  if (!structured) {
-    return {
-      success: false,
-      error: 'Empty MCP response',
-      message: 'Failed to retrieve data from MCP server.',
-      via: 'mcp',
-    }
+const vtopIdOrText = z.union([z.number().int().positive(), z.string()])
+
+const queryVTOPInputSchema = z.object({
+  command: z
+    .enum(VTOP_COMMANDS)
+    .describe(
+      "profile; marks/grades/attendance/timetable/exams (exam-schedule) - optional semester; today/tomorrow/dayafter (classes + whether attendance allows skipping); holiday; calendar (asks class group); cgpa; receipts; hostel; library-dues; msg (class-message, announcements); events (campus events, view only); leave (leave-status) and nightslip (status, or apply=true to submit); da (digital assignments: subject -> assignment, downloads the question paper); facility (sports/hostel facility registration); syllabus (download a course syllabus PDF); course-page (download course materials: semester -> course -> faculty -> materials); course-page-archive (same, legacy course page); course-allocation (faculty/slots offered for a curriculum course)"
+    ),
+  continuation: z
+    .string()
+    .optional()
+    .describe(
+      'Token from a previous queryVTOP result whose status was needs_selection / needs_input / needs_confirmation. Pass it back with `choice` (and the same command) to continue that workflow.'
+    ),
+  choice: z
+    .union([z.string(), z.number(), z.array(z.union([z.string(), z.number()]))])
+    .optional()
+    .describe(
+      'Answer for the pending step: an option id from step.options, several ids for multi-select (e.g. "1,3-5" or "all"), free text to match by name/code (e.g. "CSE1001", "anuj kumar", "module 2"), a value for needs_input, or "confirm"/"cancel" for needs_confirmation.'
+    ),
+  semester: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe('Semester option number from a previous semester list. Omit for the latest semester.'),
+  semesterQuery: z
+    .string()
+    .optional()
+    .describe('Semester by name: "previous", "fall 2024", "winter semester 2024-25". Omit for latest.'),
+  classGroup: z.number().int().positive().optional().describe('Class group option number (calendar/today/tomorrow/holiday).'),
+  course: vtopIdOrText
+    .optional()
+    .describe(
+      'Course: option number, or a course code/name/acronym such as "CSE1001", "data structures", "DSA" (course-page, course-page-archive, da, syllabus, course-allocation).'
+    ),
+  courseQuery: z.string().optional().describe('Alias of course as free text.'),
+  faculty: vtopIdOrText.optional().describe('Faculty option number or name, e.g. "anuj kumar" (course-page).'),
+  facultyQuery: z.string().optional().describe('Alias of faculty as free text.'),
+  materials: z
+    .string()
+    .optional()
+    .describe('Course-page materials: "all", indices like "1,3-5", or a description like "module 2" / "lab slides".'),
+  materialQuery: z.string().optional().describe('Alias of materials as free text.'),
+  assignment: vtopIdOrText.optional().describe('da: assignment option number or title (e.g. "DA1").'),
+  facility: vtopIdOrText.optional().describe('facility: option number or facility name.'),
+  category: z.string().optional().describe('course-allocation: curriculum category (e.g. "programme core").'),
+  apply: z.boolean().optional().describe('leave/nightslip: submit a NEW application (fill `application`).'),
+  application: vtopApplicationSchema.optional().describe('Fields for leave/nightslip applications.'),
+  confirm: z
+    .boolean()
+    .optional()
+    .describe(
+      'Only true when the user has EXPLICITLY confirmed a write action (leave/nightslip apply, facility registration) in this conversation.'
+    ),
+  fresh: z.boolean().optional().describe('Bypass the short-lived cache (user asked to refresh).'),
+  username: z.string().optional().describe('Internal. Leave unset: the linked VTOP account is used.'),
+  password: z.string().optional().describe('Internal. Never ask for or pass a password; leave unset.'),
+  encryptedPassword: z.string().optional().describe('Internal legacy field. Leave unset.'),
+  sessionKey: z.string().optional().describe('Internal legacy field. Leave unset.'),
+  interactiveStep: z.string().optional().describe('Deprecated, ignored.'),
+  fuzzyIndex: z.number().optional().describe('Deprecated, ignored.'),
+  debug: z.boolean().optional().describe('Deprecated, ignored.'),
+})
+type QueryVTOPInput = z.infer<typeof queryVTOPInputSchema>
+
+const MATERIAL_SELECTION = /^\s*(all|0|\d+(\s*-\s*\d+)?(\s*,\s*\d+(\s*-\s*\d+)?)*)\s*$/i
+const LATEST_SEMESTER = /^(latest|current)( semester)?$/i
+
+/**
+ * Splits tool input into proxy `flags` (exact values) and `select` hints (natural language the
+ * proxy matches against VTOP's option lists), keeping only params the command accepts.
+ */
+function buildVtopRequest(input: QueryVTOPInput) {
+  const allowed = new Set(vtopParamsFor(input.command))
+  const flags: Record<string, string | number | boolean> = {}
+  const select: Record<string, string> = {}
+  const ignored: string[] = []
+  const put = (name: string, value: string | number | boolean | undefined) => {
+    if (value === undefined || value === '') return
+    if (!allowed.has(name)) ignored.push(name)
+    else flags[name] = value
+  }
+  const hint = (name: string, value: string | undefined) => {
+    const text = value?.trim()
+    if (!text) return
+    if (!allowed.has(name)) ignored.push(name)
+    else select[name] = text
+  }
+  const idOrHint = (name: string, value: number | string | undefined) => {
+    if (typeof value === 'number') put(name, value)
+    else if (typeof value === 'string' && /^\s*\d+\s*$/.test(value)) put(name, Number(value))
+    else hint(name, value)
   }
 
-  const safeStructured = vtopProxyResponseSchema.safeParse(structured)
-
-  if (safeStructured.success) {
-    return { ...safeStructured.data, via: 'mcp' }
+  put('semester', input.semester)
+  if (input.semesterQuery && !LATEST_SEMESTER.test(input.semesterQuery.trim())) {
+    hint('semester', input.semesterQuery)
   }
-
-  if (isRecord(structured) && 'success' in structured) {
-    return { ...structured, via: 'mcp' }
+  put('classGroup', input.classGroup)
+  idOrHint('course', input.course)
+  hint('course', input.course === undefined ? input.courseQuery : undefined)
+  idOrHint('faculty', input.faculty)
+  hint('faculty', input.faculty === undefined ? input.facultyQuery : undefined)
+  idOrHint('assignment', input.assignment)
+  idOrHint('facility', input.facility)
+  hint('category', input.category)
+  const materials = input.materials ?? input.materialQuery
+  if (materials !== undefined) {
+    if (MATERIAL_SELECTION.test(materials)) put('materials', materials.replace(/\s+/g, ''))
+    else hint('materials', materials)
   }
+  if (input.apply) put('apply', true)
+  for (const [name, value] of Object.entries(input.application ?? {})) put(name, value)
+  if (input.confirm && allowed.has('confirm')) flags.confirm = true
 
+  return { flags, select, ignored: [...new Set(ignored)] }
+}
+
+const VTOP_NEXT_ACTION: Record<string, string> = {
+  needs_selection:
+    'If the user already named the option, call queryVTOP again with the same command, this continuation and choice (option id or name); otherwise show step.options and ask. Multi-select steps accept "1,3-5" or "all".',
+  needs_input:
+    'Ask the user for this value (offer step.options when present), then call queryVTOP with the same command, this continuation and choice = the value.',
+  needs_confirmation:
+    'Show the summary and ask the user to confirm. ONLY after they explicitly confirm, call queryVTOP with the same command, this continuation and choice "confirm". Never confirm on their behalf.',
+}
+
+/** Proxy result -> queryVTOP tool output (keeps the legacy fields existing renderers read). */
+function toQueryVTOPResult(command: string, result: VtopProxyResult, ignored: string[] = []) {
+  const status = result.status ?? (result.success ? 'completed' : 'error')
+  const pending = isPendingVtopStatus(status)
+  const files = result.files ?? []
   return {
-    success: false,
-    error: 'Invalid MCP response shape',
-    details: structured,
-    via: 'mcp',
+    success: result.success,
+    command: result.command || command,
+    status,
+    message: result.message || result.error || `VTOP ${command} ${status}`,
+    data: pending ? result.step?.prompt ?? result.message ?? '' : result.data ?? result.output ?? '',
+    structured_data: pending ? null : result.structured_data ?? null,
+    raw: false,
+    meta: result.meta ?? null,
+    ...(result.step ? { step: result.step } : {}),
+    ...(result.continuation ? { continuation: result.continuation } : {}),
+    ...(result.progress?.length ? { progress: result.progress } : {}),
+    ...(files.length
+      ? {
+          files,
+          downloadInfo: {
+            filesDownloaded: files.length,
+            totalFiles: files.length,
+            servedFiles: files.map(file => ({
+              name: file.name,
+              size: file.size,
+              downloadUrl: file.url,
+              expiry: file.expiresAt,
+            })),
+          },
+        }
+      : {}),
+    ...(result.bundle ? { bundle: result.bundle } : {}),
+    ...(result.links?.length ? { links: result.links } : {}),
+    ...(pending ? { type: 'vtop-workflow', nextAction: VTOP_NEXT_ACTION[status] } : {}),
+    ...(result.success
+      ? {}
+      : {
+          error: result.error || 'VTOP request failed',
+          errorKind: result.errorKind,
+          retryable: result.retryable ?? false,
+          requiresCredentials: result.requiresCredentials ?? false,
+        }),
+    ...(ignored.length ? { ignoredFlags: ignored } : {}),
   }
 }
+
+const VTOP_CREDENTIALS_REQUIRED = (command: string) => ({
+  success: false,
+  status: 'error',
+  error: 'VTOP credentials required',
+  requiresCredentials: true,
+  command,
+  message: 'Please link your VTOP account to access VTOP data.',
+})
 
 const SCHOOL_VALUES: School[] = [
   'smec',
@@ -410,9 +536,7 @@ async function searchRedditKnowledge(query: string, limit: number = 10) {
     const apiUrl = process.env.REDDIT_API_URL || 'http://localhost:3002'
     const response = await fetch(`${apiUrl}/api/ask`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: redditApiHeaders(),
       body: JSON.stringify({ query }),
     })
 
@@ -464,9 +588,7 @@ async function searchRedditRaw(query: string, limit: number = 10) {
     const apiUrl = process.env.REDDIT_API_URL || 'http://localhost:3002'
     const response = await fetch(`${apiUrl}/api/search`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: redditApiHeaders(),
       body: JSON.stringify({ query, limit }),
     })
 
@@ -487,9 +609,7 @@ async function getTrendingRedditTopics() {
     const apiUrl = process.env.REDDIT_API_URL || 'http://localhost:3002'
     const response = await fetch(`${apiUrl}/api/trending`, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: redditApiHeaders(),
     })
 
     if (!response.ok) {
@@ -508,8 +628,8 @@ async function getRedditOverview() {
   try {
     const apiUrl = process.env.REDDIT_API_URL || 'http://localhost:3002'
     const [trendingResponse, statsResponse] = await Promise.all([
-      fetch(`${apiUrl}/api/trending`),
-      fetch(`${apiUrl}/api/stats`),
+      fetch(`${apiUrl}/api/trending`, { headers: redditApiHeaders() }),
+      fetch(`${apiUrl}/api/stats`, { headers: redditApiHeaders() }),
     ])
 
     const trending = trendingResponse.ok
@@ -659,311 +779,6 @@ function organizeMenuByMealType(menuItems: Array<{ type: number; menu: string }>
   })
 
   return mealTypes
-}
-
-async function handleIntelligentCoursePage(params: {
-  username: string
-  password: string
-  semesterQuery?: string
-  courseQuery?: string
-  facultyQuery?: string
-  materialQuery?: string
-  interactiveStep?: string
-  semester?: number
-  course?: number
-  faculty?: number
-  fuzzyIndex?: number
-  /**
-   * Conversation so far. Usually AI SDK `ModelMessage`s, but direct tool calls
-   * pass legacy messages (string `content` + `toolInvocations`), so read defensively.
-   */
-  messages?: readonly unknown[]
-}) {
-  const {
-    username,
-    password,
-    semesterQuery,
-    courseQuery,
-    facultyQuery,
-    materialQuery,
-    interactiveStep,
-    semester,
-    course,
-    faculty,
-    fuzzyIndex,
-    messages,
-  } = params
-
-  let contextualSemesterQuery = semesterQuery
-  let contextualCourseQuery = courseQuery
-  let contextualFacultyQuery = facultyQuery
-  let contextualMaterialQuery = materialQuery
-  let previousOptions: unknown[] | null = null
-  let previousStepType: string | null = null
-
-  /** Plain-text content of a message (legacy messages carry a string `content`). */
-  const messageText = (message: unknown): string | undefined =>
-    isRecord(message) ? readString(message.content) : undefined
-  const lastMessageText = messages && messages.length > 0 ? messageText(messages.at(-1)) : undefined
-
-  if (messages && messages.length > 0) {
-    const recentMessages = messages.slice(-10)
-
-    for (const message of recentMessages.reverse()) {
-      if (isRecord(message) && Array.isArray(message.toolInvocations)) {
-        for (const toolCall of message.toolInvocations) {
-          if (
-            isRecord(toolCall) &&
-            toolCall.toolName === 'queryVTOP' &&
-            isRecord(toolCall.result) &&
-            toolCall.result.success
-          ) {
-            const result = toolCall.result
-            const resultStep = readString(result.step)
-            const formattedContent = readString(result.formatted_content)
-
-            if (resultStep && result.data) {
-              previousStepType = resultStep
-
-              if (typeof result.data === 'string') {
-                try {
-                  const parsedData: unknown = JSON.parse(result.data)
-                  if (isRecord(parsedData) && Array.isArray(parsedData.options)) {
-                    previousOptions = parsedData.options
-                  }
-                } catch {
-                  if (formattedContent) {
-                    previousOptions = extractOptionsFromContent(formattedContent, resultStep)
-                  }
-                }
-              } else if (isRecord(result.data) && Array.isArray(result.data.options)) {
-                previousOptions = result.data.options
-              }
-
-              if (!contextualSemesterQuery && formattedContent) {
-                const semesterMatch = formattedContent.match(/(summer|fall|winter)\s*semester/i)
-                if (semesterMatch) {
-                  contextualSemesterQuery = semesterMatch[0].toLowerCase()
-                }
-              }
-              if (previousOptions && previousStepType) {
-                const userMessage = messages[messages.length - 1]
-                if (isRecord(userMessage) && userMessage.role === 'user' && lastMessageText) {
-                  const userContent = lastMessageText.toLowerCase().trim()
-
-                  if (previousStepType === 'course' && !contextualCourseQuery) {
-                    const cleanedContent = userContent
-                      .replace(
-                        /^(i would like to|i want to|show me|view|get|select|choose)\s*/i,
-                        ''
-                      )
-                      .replace(/\s*(course|materials?|page)$/i, '')
-                      .trim()
-
-                    if (cleanedContent) {
-                      contextualCourseQuery = cleanedContent
-                    }
-                  } else if (previousStepType === 'faculty' && !contextualFacultyQuery) {
-                    const cleanedContent = userContent
-                      .replace(
-                        /^(i would like to|i want to|show me|view|get|select|choose)\s*/i,
-                        ''
-                      )
-                      .replace(/\s*(faculty|professor|teacher)$/i, '')
-                      .trim()
-                    if (cleanedContent) {
-                      contextualFacultyQuery = cleanedContent
-                    }
-                  } else if (previousStepType === 'materials' && !contextualMaterialQuery) {
-                    const extractedSelection = extractMaterialSelection(userContent)
-                    if (extractedSelection) {
-                      contextualMaterialQuery = extractedSelection
-                    }
-                  } else if (previousStepType === 'semester' && !contextualSemesterQuery) {
-                    contextualSemesterQuery = userContent
-                  }
-                }
-                break
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  function extractMaterialSelection(userContent: string): string | null {
-    if (
-      userContent.includes('all') ||
-      userContent.includes('everything') ||
-      userContent.includes('bulk download') ||
-      userContent.includes('download all')
-    ) {
-      return 'all'
-    } else if (userContent.match(/\d+[-,\s]*\d*/)) {
-      const numberPattern = userContent.match(/(\d+[-,\s]*\d*)/g)
-      if (numberPattern) {
-        return numberPattern.join(',')
-      }
-    } else if (userContent.includes('first') && userContent.match(/\d+/)) {
-      const num = userContent.match(/\d+/)?.[0]
-      if (num) {
-        return `1-${num}`
-      }
-    }
-    return null
-  }
-
-  function extractOptionsFromContent(
-    content: string,
-    stepType: string
-  ): Array<{ number: number; description: string }> | null {
-    if (!content || typeof content !== 'string') return null
-
-    const lines = content.split('\n')
-    const options: Array<{ number: number; description: string }> = []
-
-    for (const line of lines) {
-      const match = line.match(/^\s*(\d+)\s*[│|]\s*(.+)/)
-      const [, number, description] = match ?? []
-      if (number && description) {
-        options.push({
-          number: parseInt(number),
-          description: description.trim(),
-        })
-      }
-    }
-    return options.length > 0 ? options : null
-  }
-
-  let step = interactiveStep
-  if (!step) {
-    if (
-      (contextualCourseQuery || courseQuery) &&
-      (contextualFacultyQuery || facultyQuery) &&
-      (contextualMaterialQuery || materialQuery)
-    ) {
-      step = 'semester'
-    } else if ((contextualCourseQuery || courseQuery) && (contextualFacultyQuery || facultyQuery)) {
-      step = 'semester'
-    } else if (contextualCourseQuery || courseQuery) {
-      step = 'semester'
-    } else {
-      if (contextualSemesterQuery && !semester) {
-        step = 'semester'
-      } else if (!semester) {
-        step = 'semester'
-      } else if (!course) {
-        const shouldCompleteSemesterSelection = semester && previousStepType === 'semester'
-
-        const semesterAutoResolved =
-          contextualSemesterQuery &&
-          semester &&
-          lastMessageText?.toLowerCase().includes(contextualSemesterQuery.toLowerCase())
-
-        const userJustSelectedSemester =
-          messages &&
-          messages.length > 0 &&
-          previousStepType === 'semester' &&
-          /^\s*\d+\s*$/.test(lastMessageText || '')
-
-        if (shouldCompleteSemesterSelection || userJustSelectedSemester) {
-          step = 'semester'
-        } else if (semesterAutoResolved) {
-          step = 'semester'
-        } else {
-          step = 'course'
-        }
-      } else if (!faculty) {
-        step = 'faculty'
-      } else {
-        step = 'materials'
-      }
-    }
-  }
-
-  const PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001'
-
-  const requestBody: VtopInteractiveRequestBody = {
-    command: 'course-page-interactive',
-    username,
-    step,
-    flags: {},
-  }
-
-  if (password.includes(':::')) {
-    const [encryptedPassword, sessionKey] = password.split(':::')
-    requestBody.encryptedPassword = encryptedPassword
-    requestBody.sessionKey = sessionKey
-  } else {
-    requestBody.password = password
-  }
-  if (contextualSemesterQuery) {
-    requestBody.flags.semesterQuery = contextualSemesterQuery
-  }
-  if (contextualCourseQuery) {
-    requestBody.flags.courseQuery = contextualCourseQuery
-  }
-  if (contextualFacultyQuery || facultyQuery) {
-    requestBody.flags.facultyQuery = contextualFacultyQuery || facultyQuery
-    if (contextualFacultyQuery) debugLog('Using contextual faculty query:', contextualFacultyQuery)
-  }
-  if (contextualMaterialQuery || materialQuery) {
-    requestBody.flags.materialQuery = contextualMaterialQuery || materialQuery
-    if (contextualMaterialQuery)
-      debugLog('Using contextual material query:', contextualMaterialQuery)
-  }
-
-  if (semester !== undefined) requestBody.flags.semester = semester
-  if (course !== undefined) requestBody.flags.course = course
-  if (faculty !== undefined) requestBody.flags.faculty = faculty
-  if (fuzzyIndex !== undefined) requestBody.flags.fuzzyIndex = fuzzyIndex
-
-  try {
-    const response = await fetch(`${PROXY_URL}/vtop-interactive`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody),
-    })
-
-    if (!response.ok) {
-      const errorData = vtopErrorResponseSchema.parse(await response.json().catch(() => ({})))
-      return {
-        success: false,
-        error: `VTOP interactive request failed: ${response.status}`,
-        message: errorData.error || `Failed to execute ${step} step`,
-        details: errorData,
-      }
-    }
-
-    const result = vtopInteractiveResponseSchema.parse(await response.json())
-
-    return {
-      success: true,
-      command: 'course-page',
-      step: step,
-      data: result.data || result.output,
-      options: result.options,
-      prompt: result.prompt,
-      nextStep: result.nextStep,
-      sessionData: result.sessionData,
-      completed: result.completed,
-      message: result.message || `Successfully completed ${step} step`,
-      downloadInfo: result.downloadInfo,
-      smartMatch: result.smartMatch,
-      raw: result.raw || false,
-      type: 'interactive-course-page',
-    }
-  } catch (error) {
-    return {
-      success: false,
-      error: getErrorMessage(error) || 'Network error',
-      message: 'Unable to connect to VTOP proxy service for course materials.',
-      suggestion: 'The VTOP proxy service may be offline. Please try again later.',
-    }
-  }
 }
 
 const DEPARTMENT_ACRONYMS: Record<string, string[]> = {
@@ -1235,7 +1050,7 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
             title,
             body,
           },
-          sessionUser
+          { id: userId, isGuest: sessionUser?.isGuest }
         )
 
         if (!result.success) {
@@ -1259,7 +1074,7 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
             type: 'contribution',
             contribution: { title: title || 'knowledge update', body },
           },
-          sessionUser
+          { id: userId, isGuest: sessionUser?.isGuest }
         )
 
         if (!result.success) {
@@ -1560,6 +1375,16 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           const deptFilter = department ? department.toLowerCase() : null
           const facultyFilter = facultyName ? facultyName.toLowerCase() : null
           const courseFilter = courseQuery ? courseQuery.toLowerCase() : null
+          // Unfiltered course lookups visit every school; warm each school's (memoized) course
+          // data in parallel instead of fetching them one by one inside the loop below.
+          if ((courseFilter || includeCourses) && !facultyFilter && !deptFilter) {
+            const schoolKeys = new Set<School>()
+            for (const entry of schools) {
+              const key = entry.school ? toSchool(deriveSchoolAcronym(entry.school)) : null
+              if (key) schoolKeys.add(key)
+            }
+            await Promise.allSettled([...schoolKeys].map(key => getCourseData(key)))
+          }
           for (const school of schools) {
             const schoolName = school.school
             if (!schoolName) continue
@@ -2282,391 +2107,132 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
 
     queryVTOP: tool({
       description:
-        "Access VTOP (VIT's official portal) to get PERSONAL student data that requires login authentication. Use ONLY for individual student information like personal grades, attendance, timetable, marks, hostel info, library dues, exam schedules, digital assignments, and course materials. DO NOT use for general VIT information already available in knowledge base (like admission requirements, grading system explanation, campus facilities, exam patterns, etc.). This tool automatically handles credential authentication and interactive command prompts through intelligent defaults. For course materials, it supports smart natural language queries like 'anuj kumar's fluid mechanics notes' or 'week 5 assignments'. Use this tool ONLY when users request their PERSONAL VTOP data - credentials will be prompted securely.",
-      inputSchema: z.object({
-        command: z
-          .enum([
-            'profile',
-            'marks',
-            'grades',
-            'attendance',
-            'timetable',
-            'receipts',
-            'hostel',
-            'cgpa',
-            'exams',
-            'exam-schedule',
-            'library-dues',
-            'nightslip',
-            'leave',
-            'leave-status',
-            'msg',
-            'class-message',
-            'da',
-            'facility',
-            'syllabus',
-            'course-page',
-          ])
-          .describe(
-            "VTOP command to execute - marks (semester marks), grades (semester grades), attendance (attendance %), timetable (class schedule), receipts (fee receipts), hostel (hostel info), cgpa (CGPA details), exams/exam-schedule (the user's exam timetable), library-dues (library fines), nightslip (nightslip status), leave/leave-status (leave applications), msg/class-message (class announcements), da (digital assignments), facility (facility booking), syllabus (course syllabus), course-page (intelligent course materials with smart matching)"
-          ),
-        username: z
-          .string()
-          .optional()
-          .describe(
-            'VTOP username/registration number. Will be prompted securely if not provided.'
-          ),
-        password: z
-          .string()
-          .optional()
-          .describe('VTOP password. Will be prompted securely if not provided.'),
-        semester: z
-          .number()
-          .optional()
-          .describe(
-            'Semester number (1-8) for commands like marks, grades, calendar. Not needed for timetable, attendance (always use latest, specify latest always). If not specified, user will be prompted to select from available semesters.'
-          ),
-        semesterQuery: z
-          .string()
-          .optional()
-          .describe(
-            "Text description of semester to search for (e.g., 'summer semester', 'fall 2024', 'current semester', 'latest'). Used for intelligent semester matching."
-          ),
-        course: z
-          .number()
-          .optional()
-          .describe(
-            'Course selection number for course-page command. Defaults to first course (1) if not specified.'
-          ),
-        faculty: z
-          .number()
-          .optional()
-          .describe(
-            'Faculty selection number for course-page command. Defaults to first faculty (1) if not specified.'
-          ),
-        classGroup: z
-          .number()
-          .optional()
-          .describe(
-            'Class group number for calendar command. Defaults to first group (1) if not specified.'
-          ),
-        fuzzyIndex: z.number().optional().describe('Fuzzy search index for course-page command'),
-        courseQuery: z
-          .string()
-          .optional()
-          .describe(
-            "Course search query for syllabus command, or natural language course description for smart course-page matching - e.g., 'fluid mechanics', 'data structures', 'computer networks'"
-          ),
-        facultyQuery: z
-          .string()
-          .optional()
-          .describe(
-            "Natural language faculty description for smart course-page matching - e.g., 'anuj kumar', 'dr. smith', 'professor with morning classes'"
-          ),
-        materialQuery: z
-          .string()
-          .optional()
-          .describe(
-            "Natural language material description for smart course-page selection - e.g., 'lecture notes from week 5', 'all assignments', 'mid-term study materials'"
-          ),
-        interactiveStep: z
-          .enum(['semester', 'course', 'faculty', 'materials', 'smart-search', 'download'])
-          .optional()
-          .describe(
-            'For course-page command: specify which step of the interactive workflow to execute. Auto-determined based on provided parameters if not specified.'
-          ),
-        debug: z.boolean().optional().describe('Enable debug mode for troubleshooting'),
-      }),
-      execute: async (
-        {
-          command,
-          username,
-          password,
-          semester,
-          semesterQuery,
-          course,
-          faculty,
-          classGroup,
-          fuzzyIndex,
-          courseQuery,
-          facultyQuery,
-          materialQuery,
-          interactiveStep,
-          debug,
-        },
-        executionOptions
-      ) => {
-        const MAX_RETRIES = 3
-        let attempt = 0
-        let lastError: VtopMcpResult | Record<string, unknown> | null = null
-        let triedMcp = false
-        while (attempt < MAX_RETRIES) {
-          try {
-            const flags: VtopCommandFlags = {}
-            if (semester !== undefined) flags.semester = semester
-            if (semesterQuery) flags.semesterQuery = semesterQuery
-            if (course !== undefined) flags.course = course
-            if (faculty !== undefined) flags.faculty = faculty
-            if (classGroup !== undefined) flags.classGroup = classGroup
-            if (fuzzyIndex !== undefined) flags.fuzzyIndex = fuzzyIndex
-            if (courseQuery) flags.courseQuery = courseQuery
-            if (facultyQuery) flags.facultyQuery = facultyQuery
-            if (materialQuery) flags.materialQuery = materialQuery
-            if (debug) flags.debug = debug
-            const DEFAULT_LATEST_SEMESTER = new Set([
-              'timetable',
-              'marks',
-              'grades',
-              'cgpa',
-              'exam-schedule',
-              'exams',
-              'calendar',
-              'attendance',
-            ])
-            if (DEFAULT_LATEST_SEMESTER.has(command) && !flags.semester && !flags.semesterQuery) {
-              flags.semesterQuery = 'latest'
-            }
+        "Access the student's PERSONAL VTOP (VIT portal) data and actions through their linked VTOP account: grades, marks, attendance, timetable, today/tomorrow's classes and skip budget, exams, calendar/holidays, CGPA, hostel, receipts, library dues, class messages, events, leave and night-slip status or applications, digital assignments, facility registration, syllabus PDFs, course materials (course-page) and course allocation. Not for general VIT information. Multi-step commands return status needs_selection / needs_input / needs_confirmation with `step` (options) and a `continuation` token: pass what the user already said up front (e.g. course='CSE1001', faculty='anuj kumar', materials='module 2') so steps resolve automatically, otherwise continue with `continuation` + `choice`. Write actions (leave/nightslip apply=true, facility registration) always stop for confirmation - only confirm after the user explicitly agrees. Downloaded files come back in `files` with signed, expiring links: share them as links.",
+      inputSchema: queryVTOPInputSchema,
+      execute: async input => {
+        const { command } = input
+        const isWrite = Boolean(input.apply || input.confirm || input.continuation)
+        const { flags, select, ignored } = buildVtopRequest(input)
+        const isBotChannel = channel === 'whatsapp' || channel === 'discord'
 
-            const isBotChannel = channel === 'whatsapp' || channel === 'discord'
-
-            // Lazy-load MCP token from DB if not explicitly provided
-            let mcpAccessToken = mcpConfig?.accessToken
-            if (!mcpAccessToken && mcpConfig?.endpoint) {
-              const stored = await getUserMcpToken(userId)
-              if (stored) {
-                if (isMcpExpired(stored)) {
-                  const refreshed = await refreshUserMcpToken(userId)
-                  if (refreshed?.accessToken) {
-                    mcpAccessToken = refreshed.accessToken
-                  } else if (stored.accessToken) {
-                    mcpAccessToken = stored.accessToken
-                  }
-                } else {
-                  mcpAccessToken = stored.accessToken
-                }
-              }
-            }
-
-            const preferMcp =
-              !triedMcp &&
-              mcpConfig?.endpoint &&
-              mcpAccessToken &&
-              (isBotChannel || mcpConfig.clientName)
-
-            if (isBotChannel && mcpConfig?.endpoint && !mcpAccessToken) {
-              return {
-                success: false,
-                requiresMcpLink: true,
-                command,
-                message:
-                  'Missing or expired VTOP MCP token. Please run !linkvtop in WhatsApp to re-authorize, then retry.',
-              }
-            }
-
-            if (preferMcp) {
-              triedMcp = true
-              const mcpResult = await callVtopViaMcp({
-                command,
-                flags,
-                username,
-                password,
-                mcp: { ...mcpConfig, accessToken: mcpAccessToken },
-              })
-
-              if (mcpResult && mcpResult.success) {
-                return mcpResult
-              }
-
-              if (mcpResult) {
-                lastError = mcpResult
-
-                const msg = (
-                  readString(mcpResult.message) ||
-                  readString(mcpResult.error) ||
-                  ''
-                ).toLowerCase()
-                const tokenIssues =
-                  msg.includes('unauthorized') ||
-                  msg.includes('invalid token') ||
-                  msg.includes('expired') ||
-                  msg.includes('forbidden')
-
-                if (isBotChannel && !mcpResult.success && tokenIssues) {
-                  return {
-                    success: false,
-                    requiresMcpLink: true,
-                    command,
-                    message:
-                      readString(mcpResult.message) ||
-                      'Your VTOP session token expired. Send !linkvtop again to refresh access.',
-                    details: mcpResult,
-                  }
-                }
-
-                // For non-token errors, surface the MCP error instead of forcing relink
-                if (isBotChannel) {
-                  return mcpResult
-                }
-              }
-            }
-
-            let user = username
-            let pass = password
-            if (!user || !pass) {
-              if (await hasVTOPCredentials()) {
-                const savedCreds = await getFormattedVTOPCredentials()
-                if (savedCreds) {
-                  user = savedCreds.username
-                  pass = savedCreds.encryptedPassword
-                } else {
-                  return {
-                    success: false,
-                    error: 'VTOP credentials required',
-                    requiresCredentials: true,
-                    command,
-                    message: 'Please provide your VTOP username and password to access VTOP data.',
-                  }
-                }
-              } else {
-                return {
-                  success: false,
-                  error: 'VTOP credentials required',
-                  requiresCredentials: true,
-                  command,
-                  message: 'Please provide your VTOP username and password to access VTOP data.',
-                }
-              }
-            }
-
-            if (command === 'course-page') {
-              return await handleIntelligentCoursePage({
-                username: user,
-                password: pass,
-                semesterQuery,
-                courseQuery,
-                facultyQuery,
-                materialQuery,
-                interactiveStep,
-                semester,
-                course,
-                faculty,
-                fuzzyIndex,
-                // Optional-chained: app/api/hub/route.ts calls `execute(args)` without options.
-                messages: executionOptions?.messages ?? [],
-              })
-            }
-
-            const PROXY_URL = process.env.VTOP_PROXY_URL || 'http://localhost:3001'
-            const requestBody: VtopRequestBody = {
-              command,
-              username: user,
-              flags,
-            }
-            if (pass.includes(':::')) {
-              const [encryptedPassword, sessionKey] = pass.split(':::')
-              requestBody.encryptedPassword = encryptedPassword
-              requestBody.sessionKey = sessionKey
-            } else {
-              requestBody.password = pass
-            }
-
-            const response = await fetch(`${PROXY_URL}/vtop`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify(requestBody),
-            })
-
-            if (!response.ok) {
-              const errorData = vtopErrorResponseSchema.parse(
-                await response.json().catch(() => ({}))
-              )
-              const errorMsg =
-                typeof errorData === 'object' &&
-                'error' in errorData &&
-                typeof errorData.error === 'string'
-                  ? errorData.error.toLowerCase()
-                  : ''
-              if (
-                errorMsg.includes('invalid username') ||
-                errorMsg.includes('invalid loginid') ||
-                errorMsg.includes('invalid password')
-              ) {
-                return {
-                  success: false,
-                  error: `VTOP request failed: ${response.status}`,
-                  message: errorData.error || `Failed to execute ${command} command`,
-                  details: errorData,
-                }
-              }
-              lastError = {
-                success: false,
-                error: `VTOP request failed: ${response.status}`,
-                message: errorData.error || `Failed to execute ${command} command`,
-                details: errorData,
-              }
-              attempt++
-              continue
-            }
-
-            const result = vtopProxyResponseSchema.parse(await response.json())
-            if (result.success) {
-              return {
-                success: true,
-                command,
-                data: result.data || result.output,
-                output: result.output || result.data,
-                structured_data: result.structured_data || null,
-                message: result.message || `Successfully retrieved ${command} data from VTOP.`,
-                raw: result.raw || false,
-                meta: result.meta || null,
-              }
-            } else {
-              const errorMsg =
-                typeof result === 'object' && 'error' in result && typeof result.error === 'string'
-                  ? result.error.toLowerCase()
-                  : ''
-              if (
-                errorMsg.includes('invalid username') ||
-                errorMsg.includes('invalid loginid') ||
-                errorMsg.includes('invalid password')
-              ) {
-                return {
-                  success: false,
-                  error: result.error || 'Unknown error',
-                  message: `Failed to retrieve ${command} data from VTOP. Reload.`,
-                  command,
-                }
-              }
-              lastError = {
-                success: false,
-                error: result.error || 'Unknown error',
-                message: `Failed to retrieve ${command} data from VTOP. Reload.`,
-                command,
-              }
-              attempt++
-              continue
-            }
-          } catch (error) {
-            lastError = {
-              success: false,
-              error: getErrorMessage(error) || 'Network error',
-              message:
-                'Unable to connect to VTOP proxy service. Please ensure the service is running.',
-              suggestion: 'The VTOP proxy service may be offline. Please try again later.',
-            }
-            attempt++
-            continue
+        // ---- MCP (WhatsApp / Discord / connector clients): credentials live in the OAuth token.
+        // Only bot channels / named MCP clients use MCP; skip the token lookup otherwise.
+        const usesMcp = Boolean(mcpConfig?.endpoint && (isBotChannel || mcpConfig.clientName))
+        let mcpAccessToken = mcpConfig?.accessToken
+        if (!mcpAccessToken && usesMcp) {
+          const stored = await getUserMcpToken(userId)
+          if (stored) {
+            const refreshed = isMcpExpired(stored) ? await refreshUserMcpToken(userId, undefined, stored) : null
+            mcpAccessToken = refreshed?.accessToken || stored.accessToken
           }
         }
-        return (
-          lastError || {
+        if (isBotChannel && mcpConfig?.endpoint && !mcpAccessToken) {
+          return {
             success: false,
-            error: 'Unknown error after retries',
-            message: 'Failed to retrieve VTOP data after multiple attempts.',
+            requiresMcpLink: true,
+            command,
+            message:
+              'Missing or expired VTOP MCP token. Please run !linkvtop in WhatsApp to re-authorize, then retry.',
           }
-        )
+        }
+        if (usesMcp && mcpConfig && mcpAccessToken) {
+          const args: Record<string, JsonValue> = input.continuation
+            ? {
+                continuation: input.continuation,
+                choice: input.choice ?? '',
+                ...(input.confirm ? { confirm: true } : {}),
+              }
+            : {
+                flags,
+                select,
+                ...(input.confirm ? { confirm: true } : {}),
+                ...(input.fresh ? { fresh: true } : {}),
+              }
+          try {
+            const mcpResult = await callVtopViaMcp({
+              toolName: input.continuation ? 'vtop-continue' : command,
+              args,
+              mcp: { ...mcpConfig, accessToken: mcpAccessToken },
+            })
+            if (mcpResult) {
+              if (isBotChannel && mcpResult.errorKind === 'unauthorized') {
+                return {
+                  success: false,
+                  requiresMcpLink: true,
+                  command,
+                  message: 'Your VTOP session token expired. Send !linkvtop again to refresh access.',
+                }
+              }
+              if (mcpResult.success || isBotChannel) return toQueryVTOPResult(command, mcpResult, ignored)
+            }
+          } catch (error) {
+            if (isBotChannel) {
+              return {
+                success: false,
+                command,
+                error: getErrorMessage(error) || 'MCP request failed',
+                message: 'Unable to reach the VTOP service right now. Please try again shortly.',
+              }
+            }
+          }
+        }
+
+        // ---- Direct proxy call with the user's server-side stored credentials.
+        let credentials: VtopCredentialFields | null = null
+        if (input.username && input.password) {
+          credentials = { username: input.username, password: input.password }
+        } else if (input.username && input.encryptedPassword) {
+          credentials = {
+            username: input.username,
+            encryptedPassword: input.encryptedPassword,
+            ...(input.sessionKey ? { sessionKey: input.sessionKey } : {}),
+          }
+        } else {
+          try {
+            const stored = await getVTOPCredentialsForUser(userId)
+            if (stored) credentials = { username: stored.username, password: stored.password }
+          } catch (error) {
+            console.error('[queryVTOP] reading stored VTOP credentials failed:', getErrorMessage(error))
+          }
+        }
+        if (!credentials) return VTOP_CREDENTIALS_REQUIRED(command)
+
+        const attempts = isWrite ? 1 : 2
+        let last: ReturnType<typeof toQueryVTOPResult> | null = null
+        for (let attempt = 1; attempt <= attempts; attempt++) {
+          try {
+            const result = input.continuation
+              ? await callVtopProxy('/vtop/continue', {
+                  ...credentials,
+                  continuation: input.continuation,
+                  choice: input.choice ?? '',
+                  ...(input.confirm ? { confirm: true } : {}),
+                })
+              : await callVtopProxy('/vtop', {
+                  ...credentials,
+                  command,
+                  flags,
+                  select,
+                  ...(input.confirm ? { confirm: true } : {}),
+                  ...(input.fresh ? { fresh: true } : {}),
+                })
+            last = toQueryVTOPResult(command, result, ignored)
+            // The proxy already retries VTOP hiccups; only retry here when it was too busy.
+            if (result.success || result.errorKind !== 'busy') return last
+          } catch (error) {
+            if (!(error instanceof VtopProxyUnavailableError) || attempt === attempts) {
+              return {
+                success: false,
+                command,
+                error: getErrorMessage(error) || 'Network error',
+                message: 'Unable to connect to the VTOP proxy service. Please try again shortly.',
+                retryable: true,
+              }
+            }
+          }
+          await new Promise(resolve => setTimeout(resolve, 1500))
+        }
+        return last ?? VTOP_CREDENTIALS_REQUIRED(command)
       },
     }),
 

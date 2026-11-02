@@ -11,14 +11,9 @@ const {
   ServerError,
 } = require('@modelcontextprotocol/sdk/server/auth/errors.js')
 
-function escapeHtml(value = '') {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
+const { describeRedirect } = require('./redirect-policy')
+
+const MIN_CONSENT_SECRET_LENGTH = 16
 
 function buildRedirectUrl(base, params) {
   const target = new URL(base)
@@ -40,6 +35,7 @@ class VtopOAuthProvider {
           options.clientsFilePath ||
           process.env.MCP_OAUTH_CLIENTS_PATH ||
           path.resolve(process.cwd(), 'mcp-oauth-clients.json'),
+        redirectAllowlist: options.redirectAllowlist || [],
       })
     this.codes = new Map()
     this.tokens = new Map()
@@ -52,11 +48,13 @@ class VtopOAuthProvider {
     this.codeTtlMs = (options.codeTtlSeconds || 300) * 1000
     this.consentTtlMs = (options.consentTtlSeconds || 300) * 1000
     this.strictResource = options.strictResource !== false
-    this.consentSecret =
-      options.consentSecret ||
-      process.env.MCP_OAUTH_CONSENT_SECRET ||
-      process.env.SESSION_SECRET ||
-      'everything-assistant-consent-secret'
+    // No fallback: a guessable consent secret lets anyone forge consent tokens.
+    this.consentSecret = options.consentSecret || process.env.MCP_OAUTH_CONSENT_SECRET
+    if (!this.consentSecret || this.consentSecret.length < MIN_CONSENT_SECRET_LENGTH) {
+      throw new Error(
+        `MCP_OAUTH_CONSENT_SECRET must be set (>= ${MIN_CONSENT_SECRET_LENGTH} chars) when MCP OAuth is enabled`
+      )
+    }
   }
 
   cleanupExpiredEntries() {
@@ -136,19 +134,13 @@ class VtopOAuthProvider {
     const derivedName =
       client.client_name || client.application_name || client.software_id || client.client_id
     const scopeList = (params.scopes || []).length ? params.scopes.join(', ') : 'mcp:tools'
-    const redirectHost = (() => {
-      try {
-        return new URL(params.redirectUri).host
-      } catch {
-        return params.redirectUri
-      }
-    })()
-
+    // The template escapes every value; pass raw strings.
     return renderConsentTemplate({
       consentToken: consentId,
-      appName: escapeHtml(derivedName),
-      scopeList: escapeHtml(scopeList),
-      redirectHost: escapeHtml(redirectHost || 'custom'),
+      appName: derivedName,
+      clientId: client.client_id,
+      scopeList,
+      redirectOrigin: describeRedirect(params.redirectUri),
     })
   }
 
@@ -220,6 +212,10 @@ class VtopOAuthProvider {
     if (!data) {
       throw new InvalidGrantError('Invalid authorization code')
     }
+    if (data.expiresAt <= Date.now()) {
+      this.codes.delete(authorizationCode)
+      throw new InvalidGrantError('Authorization code expired')
+    }
     if (!data.codeChallenge) {
       throw new ServerError('Missing PKCE challenge for authorization code')
     }
@@ -281,6 +277,9 @@ class VtopOAuthProvider {
     }
     this.codes.delete(authorizationCode)
 
+    if (data.expiresAt <= Date.now()) {
+      throw new InvalidGrantError('Authorization code expired')
+    }
     if (data.clientId !== client.client_id) {
       throw new InvalidGrantError('Authorization code was not issued to this client')
     }
@@ -310,10 +309,13 @@ class VtopOAuthProvider {
       throw new InvalidGrantError('Refresh token was not issued to this client')
     }
 
-    if (stored.expiresAt < Date.now()) {
+    if (stored.expiresAt <= Date.now()) {
       this.refreshTokens.delete(refreshToken)
       throw new InvalidGrantError('Refresh token expired')
     }
+
+    // Rotation: a refresh token is single-use; replaying it after this point fails.
+    this.refreshTokens.delete(refreshToken)
 
     if (resource) {
       this.ensureResourceAllowed(resource, stored.resource)

@@ -26,12 +26,14 @@ export async function GET(req: NextRequest, { params }: { params: ChatParams }) 
       return NextResponse.json({ error: 'Missing chatId' }, { status: 400 })
     }
 
-    const all = await getMessages(chatId)
-
-    const chat = await prisma.chat.findUnique({
-      where: { id: chatId },
-      select: { id: true, user: { select: { id: true, name: true, email: true } } },
-    })
+    // Independent reads (admin already verified): run them together.
+    const [all, chat] = await Promise.all([
+      getMessages(chatId),
+      prisma.chat.findUnique({
+        where: { id: chatId },
+        select: { id: true, user: { select: { id: true, name: true, email: true } } },
+      }),
+    ])
 
     const messages = all
       .filter(m => m.role === 'user' || m.role === 'assistant')

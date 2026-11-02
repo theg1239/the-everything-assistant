@@ -4,18 +4,17 @@ import type { NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const session = await auth()
+    const [session, { id }] = await Promise.all([auth(), params])
     if (!session?.user?.id) {
       return new Response('Unauthorized', { status: 401 })
     }
 
-    const { id } = await params
-    const chat = await getChat(id, session.user.id)
+    // Ownership check and the history are independent reads: run them together. The messages
+    // are only returned once `getChat` confirms the chat belongs to the user.
+    const [chat, messages] = await Promise.all([getChat(id, session.user.id), getMessages(id)])
     if (!chat) {
       return new Response('Chat not found', { status: 404 })
     }
-
-    const messages = await getMessages(id)
 
     return Response.json({
       chat,

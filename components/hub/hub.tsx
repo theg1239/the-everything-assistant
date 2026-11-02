@@ -5,6 +5,7 @@ import { X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import HubShell from './hub-shell'
 import type {
+  HubSyncBatchResult,
   PersonalHubState,
   HubVTOPCommand,
   PersonalHubSnapshot,
@@ -17,6 +18,8 @@ import { shallow } from 'zustand/shallow'
 export type HubActionHandlers = {
   refreshState: () => Promise<PersonalHubState>
   syncCore: () => Promise<PersonalHubState>
+  /** One proxy /sync call for several commands (see syncHubSnapshotsBatch). */
+  syncBatch: (commands: HubVTOPCommand[]) => Promise<HubSyncBatchResult>
   refreshVTOP: (
     command: HubVTOPCommand,
     extras?: Record<string, unknown>,
@@ -46,6 +49,9 @@ export default function Hub({
 }: HubProps) {
   const [mounted, setMounted] = useState(false)
   const hubSyncing = useHubStore(state => state.syncing, shallow)
+  // The page streams hub state in; don't show the drawer (and run the shell's effects) on the
+  // empty placeholder state.
+  const hubStateReady = useHubStore(state => state.hubStateReady)
   const isSyncing = syncing || hubSyncing
   const [forceClose, setForceClose] = useState(false)
   const effectiveOpen = isOpen && !forceClose
@@ -87,7 +93,7 @@ export default function Hub({
     }
   }, [mounted, isOpen, onClose])
 
-  if (!mounted) return null
+  if (!mounted || !hubStateReady) return null
 
   return (
     <Drawer.Root open={effectiveOpen} onOpenChange={next => !next && onClose?.()} modal dismissible>

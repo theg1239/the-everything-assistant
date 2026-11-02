@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom'
 import dynamic from 'next/dynamic'
 import { useRouter, usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
+import { clearLegacyVTOPClientState } from '@/lib/vtop-credentials'
 import { Button } from '@/components/ui/button'
 import {
   MessageSquare,
@@ -708,7 +709,10 @@ export const Sidebar = memo(
                           variant="ghost"
                           size="sm"
                           className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors duration-150"
-                          onClick={() => signOut()}
+                          onClick={() => {
+                            clearLegacyVTOPClientState()
+                            void signOut()
+                          }}
                           aria-label="Sign out"
                         >
                           <LogOut className="h-4 w-4 mr-2" />

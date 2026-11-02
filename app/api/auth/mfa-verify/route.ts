@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
 import { checkBotId } from 'botid/server'
-import { auth } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
-import { verifyTOTP, verifyBackupCode } from '@/lib/mfa'
+import { handleCodeChallenge } from '@/lib/mfa-challenge'
 import { mfaVerifyRequestSchema } from '@/types/api/mfa'
 
+/**
+ * MFA challenge with a code: `{ code }` (authenticator TOTP or emailed code) or `{ backupCode }`.
+ * On success the session is recorded as MFA-verified server-side (login and step-up).
+ */
 export async function POST(request: Request) {
   try {
     if (process.env.DISABLE_BOTID !== 'true' && process.env.NODE_ENV !== 'development') {
@@ -14,90 +16,20 @@ export async function POST(request: Request) {
       }
     }
 
-    const session = await auth()
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const rawBody = await request.json().catch(() => null)
-    if (!rawBody) {
-      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
-    }
+    const rawBody: unknown = await request.json().catch(() => null)
     const parsedBody = mfaVerifyRequestSchema.safeParse(rawBody)
     if (!parsedBody.success) {
-      return NextResponse.json(
-        { error: 'Invalid request body', details: parsedBody.error.flatten() },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
     }
     const { code, backupCode } = parsedBody.data
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: {
-        id: true,
-        mfaEnabled: true,
-        mfaMethod: true,
-        mfaSecret: true,
-        backupCodes: true,
-      },
-    })
-
-    if (!user || !user.mfaEnabled) {
-      return NextResponse.json({ error: 'MFA not enabled' }, { status: 400 })
-    }
-    let isValid = false
-    let message = ''
-
     if (backupCode) {
-      const hashedBackupCodes = user.backupCodes
-
-      const isValidBackupCode = verifyBackupCode(backupCode, hashedBackupCodes)
-
-      if (isValidBackupCode) {
-        isValid = true
-
-        const hashedInput = require('crypto')
-          .createHash('sha256')
-          .update(backupCode.toUpperCase())
-          .digest('hex')
-        const updatedBackupCodes = hashedBackupCodes.filter(code => code !== hashedInput)
-
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { backupCodes: updatedBackupCodes },
-        })
-
-        const remainingCodes = updatedBackupCodes.length
-        message = `Backup code used successfully. ${remainingCodes} backup codes remaining.`
-      } else {
-      }
-    } else if (code) {
-      if (user.mfaMethod === 'authenticator' && user.mfaSecret) {
-        isValid = verifyTOTP(code, user.mfaSecret)
-      } else if (user.mfaMethod === 'email') {
-        return NextResponse.json(
-          { error: 'Email MFA verification not yet implemented for login' },
-          { status: 400 }
-        )
-      } else if (user.mfaMethod === 'security_key') {
-        return NextResponse.json(
-          { error: 'WebAuthn methods require authentication via their dedicated endpoints' },
-          { status: 400 }
-        )
-      } else {
-      }
-    } else {
+      return await handleCodeChallenge(request, { kind: 'backup_code', code: backupCode })
     }
-
-    if (!isValid) {
-      return NextResponse.json({ error: 'Invalid verification code' }, { status: 400 })
+    if (code) {
+      return await handleCodeChallenge(request, { kind: 'code', code })
     }
-
-    return NextResponse.json({
-      success: true,
-      message: message || 'MFA verification successful',
-    })
+    return NextResponse.json({ error: 'Verification code is required' }, { status: 400 })
   } catch (error) {
     console.error('MFA verification error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

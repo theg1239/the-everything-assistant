@@ -1,4 +1,4 @@
-import type { ToolSet } from 'ai'
+import { asSchema, type ToolSet } from 'ai'
 
 import { isRecord } from '@/lib/json'
 
@@ -68,10 +68,47 @@ export function toToolSet(tools: Record<string, ToolSet[string] | undefined>): T
 }
 
 /**
+ * Tools the hub panels run directly (no model in the loop), via `/api/hub` and the
+ * `runHubToolAction` server action. Everything else (memory, feedback/GitHub
+ * issues, web search, VTOP, ...) is only reachable through the model.
+ */
+export const HUB_DIRECT_TOOLS: ReadonlySet<string> = new Set([
+  'getFacultyInfo',
+  'getPlacementInfo',
+  'findPastPapers',
+  'getSyllabus',
+  'getMessMenu',
+  'searchRedditKnowledge',
+  'searchRedditWithContext',
+])
+
+/**
+ * Direct-callable tools that call a paid model/service without their own
+ * `enforceUserRateLimit` (Reddit deep search). `getPlacementInfo` and the VTOP
+ * formatter already rate-limit inside.
+ */
+export const RATE_LIMITED_DIRECT_TOOLS: ReadonlySet<string> = new Set([
+  'searchRedditKnowledge',
+  'searchRedditWithContext',
+])
+
+/** Tools `/api/chat` accepts as `directToolCall` (the chat UI's VTOP re-run). */
+export const CHAT_DIRECT_TOOLS: ReadonlySet<string> = new Set(['queryVTOP'])
+
+/** The input of a direct tool call did not match the tool's `inputSchema`. */
+export class ToolInputError extends Error {
+  constructor(toolName: string) {
+    super(`Invalid input for tool ${toolName}`)
+    this.name = 'ToolInputError'
+  }
+}
+
+/**
  * Runs a tool from a tool set by name outside of a model call (direct tool
  * calls, hub actions). Returns `undefined` when the tool does not exist or has
- * no `execute`. The input is passed through as-is; tools validate their own
- * inputs where it matters.
+ * no `execute`. The input is validated (and defaulted/stripped) with the tool's
+ * own `inputSchema` first, exactly as the SDK does for model-issued calls; an
+ * invalid input, or a schema without a validator, throws `ToolInputError`.
  */
 export function getToolExecutor(
   tools: Record<string, ToolSet[string] | undefined>,
@@ -79,10 +116,17 @@ export function getToolExecutor(
 ) {
   const tool = Object.hasOwn(tools, toolName) ? tools[toolName] : undefined
   const execute = tool?.execute
-  if (typeof execute !== 'function') return undefined
+  if (!tool || typeof execute !== 'function') return undefined
+  const schema = asSchema(tool.inputSchema)
 
   return async (input: unknown, toolCallId: string = `${toolName}-${Date.now()}`) => {
-    const output: unknown = await execute(input, { toolCallId, messages: [], context: {} })
+    const validation = schema.validate ? await schema.validate(input) : null
+    if (!validation?.success) throw new ToolInputError(toolName)
+    const output: unknown = await execute(validation.value, {
+      toolCallId,
+      messages: [],
+      context: {},
+    })
     return output
   }
 }

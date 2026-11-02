@@ -5,6 +5,7 @@ import { generateUUID } from '@/lib/utils'
 import {
   loadPersonalHubState,
   syncCoreHubSnapshots,
+  syncHubSnapshotsBatch,
   refreshVTOPSnapshotAction,
   runHubToolAction,
 } from '@/app/actions/hub'
@@ -27,10 +28,11 @@ export default async function Home({ searchParams }: HomeProps) {
   const initialChatId = generateUUID()
   const fallbackHubState: PersonalHubState = { isLinked: false, snapshots: [], lastSyncedAt: null }
   const isAuthenticated = Boolean(session?.user)
-  // The latest broadcast is rendered by the root layout; only hub state is needed here.
-  const initialHubState = isAuthenticated
-    ? await loadPersonalHubState().catch(() => fallbackHubState)
-    : fallbackHubState
+  // The latest broadcast is rendered by the root layout; only hub state is needed here. It is
+  // streamed, not awaited: the hub drawer is closed by default and waits for it itself.
+  const hubState = isAuthenticated
+    ? loadPersonalHubState().catch(() => fallbackHubState)
+    : undefined
 
   return (
     <main id="main-content" className="flex min-h-screen flex-col bg-transparent">
@@ -40,12 +42,13 @@ export default async function Home({ searchParams }: HomeProps) {
             chatId={initialChatId}
             key={initialChatId}
             autoResume={false}
-            initialHubState={initialHubState}
+            hubState={hubState}
             hubActions={
               isAuthenticated
                 ? {
                     refreshState: loadPersonalHubState,
                     syncCore: syncCoreHubSnapshots,
+                    syncBatch: syncHubSnapshotsBatch,
                     refreshVTOP: refreshVTOPSnapshotAction,
                     runTool: runHubToolAction,
                   }

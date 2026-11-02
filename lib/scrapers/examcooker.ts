@@ -95,8 +95,12 @@ export async function scrapeExamCooker(
   let lastError: string | undefined
   let hadSuccessfulFetch = false
 
-  for (const subject of subjectQueries) {
-    const { papers, error, searchUrl } = await queryExamCooker(subject, apiKey, examType, year)
+  // The aliases (code, spaced code, course-name parts: a handful) are independent requests and
+  // `queryExamCooker` never rejects: fetch them together, then fold in the original order.
+  const responses = await Promise.all(
+    subjectQueries.map(subject => queryExamCooker(subject, apiKey, examType, year))
+  )
+  for (const { papers, error, searchUrl } of responses) {
     if (searchUrl) attemptedUrls.push(searchUrl)
     if (error) {
       lastError = error

@@ -2,9 +2,11 @@ const fs = require('fs')
 const path = require('path')
 const { randomUUID } = require('crypto')
 const { InvalidRequestError } = require('@modelcontextprotocol/sdk/server/auth/errors.js')
+const { checkRedirectUri } = require('./redirect-policy')
 
 class InMemoryClientsStore {
-  constructor(initialClients = []) {
+  constructor(initialClients = [], { redirectAllowlist = [] } = {}) {
+    this.redirectAllowlist = redirectAllowlist
     this.clients = new Map()
     initialClients.forEach(client => {
       if (client?.client_id) {
@@ -21,6 +23,10 @@ class InMemoryClientsStore {
     if (!clientMetadata.redirect_uris || clientMetadata.redirect_uris.length === 0) {
       throw new InvalidRequestError('Client registration requires at least one redirect_uri')
     }
+    for (const uri of clientMetadata.redirect_uris) {
+      const problem = checkRedirectUri(uri, this.redirectAllowlist)
+      if (problem) throw new InvalidRequestError(problem)
+    }
 
     const clientId = clientMetadata.client_id || randomUUID()
     const registered = {
@@ -34,8 +40,8 @@ class InMemoryClientsStore {
 }
 
 class FileBackedClientsStore extends InMemoryClientsStore {
-  constructor(filePath, initialClients = []) {
-    super([])
+  constructor(filePath, initialClients = [], options = {}) {
+    super([], options)
     this.filePath = filePath
     this._loadFromDisk()
     initialClients.forEach(client => {
@@ -85,11 +91,11 @@ class FileBackedClientsStore extends InMemoryClientsStore {
   }
 }
 
-function createClientsStore({ staticClients = [], clientsFilePath } = {}) {
+function createClientsStore({ staticClients = [], clientsFilePath, redirectAllowlist = [] } = {}) {
   if (clientsFilePath) {
-    return new FileBackedClientsStore(clientsFilePath, staticClients)
+    return new FileBackedClientsStore(clientsFilePath, staticClients, { redirectAllowlist })
   }
-  return new InMemoryClientsStore(staticClients)
+  return new InMemoryClientsStore(staticClients, { redirectAllowlist })
 }
 
 module.exports = {

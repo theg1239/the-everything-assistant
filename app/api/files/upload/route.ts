@@ -4,7 +4,32 @@ import { nanoid } from 'nanoid'
 import { auth } from '@/lib/auth'
 
 const MAX_FILE_MB = 25
-const ALLOWED_PREFIXES = ['image/', 'application/pdf']
+
+type UploadType = { contentType: string; inline: boolean }
+
+/**
+ * Content type from the file's magic bytes; the client-claimed type is not
+ * trusted. Only raster images are served inline; PDFs are served as attachments.
+ * Everything else (SVG, HTML, ...) is rejected: the bucket is public.
+ */
+function detectUploadType(bytes: Uint8Array): UploadType | null {
+  const startsWith = (signature: number[], offset = 0) =>
+    signature.every((byte, i) => bytes[offset + i] === byte)
+  const ascii = (text: string) => Array.from(text, char => char.charCodeAt(0))
+
+  if (startsWith([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
+    return { contentType: 'image/png', inline: true }
+  }
+  if (startsWith([0xff, 0xd8, 0xff])) return { contentType: 'image/jpeg', inline: true }
+  if (startsWith(ascii('GIF87a')) || startsWith(ascii('GIF89a'))) {
+    return { contentType: 'image/gif', inline: true }
+  }
+  if (startsWith(ascii('RIFF')) && startsWith(ascii('WEBP'), 8)) {
+    return { contentType: 'image/webp', inline: true }
+  }
+  if (startsWith(ascii('%PDF-'))) return { contentType: 'application/pdf', inline: false }
+  return null
+}
 
 const getEnv = (key: string) => process.env[key]
 
@@ -66,13 +91,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `File size exceeds ${MAX_FILE_MB}MB limit` }, { status: 400 })
     }
 
-    const isAllowed = ALLOWED_PREFIXES.some(prefix => file.type.startsWith(prefix))
-    if (!isAllowed) {
-      return NextResponse.json({ error: 'Only images and PDFs are supported right now' }, { status: 400 })
-    }
-
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
+
+    const detected = detectUploadType(buffer)
+    if (!detected) {
+      return NextResponse.json(
+        { error: 'Only PNG, JPEG, WebP, GIF images and PDFs are supported right now' },
+        { status: 415 }
+      )
+    }
 
     const safeName = file.name?.replace(/[^a-zA-Z0-9._-]/g, '_') || 'upload'
     const key = `${session.user.id}/${Date.now()}-${nanoid(8)}-${safeName}`
@@ -83,9 +111,10 @@ export async function POST(request: Request) {
         Bucket: bucket,
         Key: key,
         Body: buffer,
-        ContentType: file.type,
+        ContentType: detected.contentType,
+        ContentDisposition: `${detected.inline ? 'inline' : 'attachment'}; filename="${safeName}"`,
         Metadata: {
-          uploader: session.user.email || session.user.id,
+          uploader: session.user.id,
           originalName: safeName,
         },
       })
@@ -96,7 +125,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       url,
       key,
-      contentType: file.type,
+      contentType: detected.contentType,
       name: safeName,
     })
   } catch (error) {

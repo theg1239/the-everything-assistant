@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { EventEmitter } from 'node:events'
-import { mkdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { Writable } from 'node:stream'
@@ -21,6 +20,14 @@ import {
   readCachedChatgptConnected,
   rememberChatgptConnected,
 } from './status-cache'
+import {
+  buildCodexChildEnv,
+  CODEX_LOCKDOWN_CONFIG,
+  codexLockdownCliArgs,
+  prepareCodexUserDirs,
+  sanitizeCodexArgs,
+  type CodexUserPaths,
+} from './sandbox'
 
 export { invalidateChatgptStatus, isCodexConfigured } from './status-cache'
 
@@ -225,56 +232,6 @@ const parseSpaceArgs = (value: string | undefined): string[] => {
     .filter(Boolean)
 }
 
-const sanitizeCodexArgsForReadOnly = (args: string[], source: string): string[] => {
-  const sanitized: string[] = []
-
-  for (let i = 0; i < args.length; i += 1) {
-    const arg = args[i]
-    if (arg === undefined) continue
-    const lower = arg.toLowerCase()
-
-    const dropCurrentAndMaybeValue = (reason: string) => {
-      console.warn(`[codex-app-server] removed ${arg} from ${source} (${reason})`)
-      const next = args[i + 1]
-      if (next && !next.startsWith('-')) {
-        i += 1
-      }
-    }
-
-    if (
-      lower === '--dangerously-bypass-approvals-and-sandbox' ||
-      lower === '--yolo' ||
-      lower === '--full-auto'
-    ) {
-      console.warn(`[codex-app-server] removed ${arg} from ${source} (unsafe execution mode)`)
-      continue
-    }
-
-    if (lower === '--sandbox' || lower === '-s') {
-      dropCurrentAndMaybeValue('sandbox is hard-enforced as read-only by app-server wrapper')
-      continue
-    }
-
-    if (
-      lower.startsWith('--sandbox=') ||
-      lower === '--ask-for-approval' ||
-      lower.startsWith('--ask-for-approval=') ||
-      lower === '-a'
-    ) {
-      dropCurrentAndMaybeValue(
-        'approval policy is hard-enforced as never by app-server wrapper'
-      )
-      continue
-    }
-
-    sanitized.push(arg)
-  }
-
-  return sanitized
-}
-
-const sanitizePathSegment = (value: string) => value.replace(/[^a-zA-Z0-9._-]/g, '_')
-
 const readString = (value: unknown): string | null => (typeof value === 'string' ? value : null)
 const readNumber = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? value : null
@@ -396,7 +353,6 @@ export type CodexTurnUsage = {
 export type RunChatgptTurnOptions = {
   prompt: string
   model?: string | null
-  cwd?: string | null
   baseInstructions?: string | null
   developerInstructions?: string | null
   personality?: 'friendly' | 'pragmatic' | 'none' | null
@@ -584,7 +540,8 @@ const proxyTurnEventSchema = z.discriminatedUnion('type', [
     requestId: z.string(),
     toolCallId: z.string(),
     toolName: z.string(),
-    input: z.unknown(),
+    // Optional: zod 4.6 rejects a missing bare `z.unknown()` key, and argument-less calls omit it.
+    input: z.unknown().optional(),
   }),
   z.object({
     type: z.literal('turn-complete'),
@@ -726,6 +683,7 @@ class CodexAppServerSession {
   private pendingLoginId: string | null = null
   private lastLoginError: string | null = null
   private readonly activeTurns = new Map<string, ActiveTurnContext>()
+  private userPaths: CodexUserPaths | null = null
 
   constructor(
     private readonly userId: string,
@@ -813,9 +771,14 @@ class CodexAppServerSession {
 
     const threadResult = (await this.request('thread/start', {
       model: options.model ?? process.env.CODEX_APP_SERVER_MODEL ?? undefined,
-      cwd: process.env.CODEX_APP_SERVER_CWD ?? options.cwd ?? process.cwd(),
+      // Server-chosen empty private dir; never a caller-supplied path or the app's cwd.
+      cwd: (await this.ensureUserDirs()).workspace,
       approvalPolicy: 'never',
       sandbox: 'read-only',
+      // Built-in shell/file/web tools off for this thread (see ./sandbox), and no execution
+      // environment, so only the app's dynamic tools are callable.
+      config: { ...CODEX_LOCKDOWN_CONFIG },
+      environments: [],
       baseInstructions: options.baseInstructions ?? undefined,
       developerInstructions: options.developerInstructions ?? undefined,
       personality: options.personality ?? 'none',
@@ -1247,19 +1210,28 @@ class CodexAppServerSession {
     return this.startupPromise
   }
 
+  private async ensureUserDirs(): Promise<CodexUserPaths> {
+    this.userPaths ??= await prepareCodexUserDirs(this.config.codexHomeRoot, this.userId)
+    return this.userPaths
+  }
+
   private async startInternal(): Promise<void> {
-    const codexHome = join(this.config.codexHomeRoot, sanitizePathSegment(this.userId))
-    await mkdir(codexHome, { recursive: true })
+    const { codexHome, workspace } = await this.ensureUserDirs()
 
     const child = spawn(
       this.config.codexBin,
-      [...this.config.codexArgs, 'app-server', ...this.config.appServerArgs],
+      [
+        ...this.config.codexArgs,
+        'app-server',
+        ...this.config.appServerArgs,
+        // Last so they win over any operator-supplied overrides.
+        ...codexLockdownCliArgs(),
+      ],
       {
         stdio: 'pipe',
-        env: {
-          ...process.env,
-          CODEX_HOME: codexHome,
-        },
+        cwd: workspace,
+        // Allow-list only: the app's secrets (DATABASE_URL, NEXTAUTH_SECRET, ...) never reach Codex.
+        env: buildCodexChildEnv(process.env, codexHome),
       }
     )
 
@@ -1437,6 +1409,8 @@ declare global {
   var __everythingAssistantCodexRegistry: SessionRegistry | undefined
 }
 
+const warnCodexArg = (message: string) => console.warn(`[codex-app-server] ${message}`)
+
 const resolveConfig = (): SessionConfig => {
   const startupTimeoutMs = Number(process.env.CODEX_APP_SERVER_STARTUP_TIMEOUT_MS ?? 15_000)
   const requestTimeoutMs = Number(process.env.CODEX_APP_SERVER_REQUEST_TIMEOUT_MS ?? 45_000)
@@ -1450,8 +1424,8 @@ const resolveConfig = (): SessionConfig => {
 
   return {
     codexBin: process.env.CODEX_BIN ?? 'codex',
-    codexArgs: sanitizeCodexArgsForReadOnly(parsedCodexArgs, 'CODEX_FLAGS'),
-    appServerArgs: sanitizeCodexArgsForReadOnly(parsedAppServerArgs, 'CODEX_APP_SERVER_FLAGS'),
+    codexArgs: sanitizeCodexArgs(parsedCodexArgs, 'CODEX_FLAGS', warnCodexArg),
+    appServerArgs: sanitizeCodexArgs(parsedAppServerArgs, 'CODEX_APP_SERVER_FLAGS', warnCodexArg),
     codexHomeRoot:
       process.env.CODEX_APP_SERVER_HOME_ROOT ??
       join(homedir(), '.the-everything-assistant', 'codex-app-server'),
@@ -1465,10 +1439,17 @@ const resolveProxyConfig = (): ProxyConfig | null => {
   const baseUrl = process.env.CODEX_PROXY_URL?.trim()
   if (!baseUrl) return null
 
+  // The proxy refuses unauthenticated requests (the token is what authorises acting for a userId),
+  // so a missing token is a misconfiguration; only tolerate it against a local insecure dev proxy.
+  const authToken = process.env.CODEX_PROXY_AUTH_TOKEN?.trim() || null
+  if (!authToken && process.env.NODE_ENV === 'production') {
+    throw new Error('CODEX_PROXY_AUTH_TOKEN is required when CODEX_PROXY_URL is set')
+  }
+
   const timeoutRaw = Number(process.env.CODEX_PROXY_TIMEOUT_MS ?? 120_000)
   return {
     baseUrl: baseUrl.replace(/\/+$/u, ''),
-    authToken: process.env.CODEX_PROXY_AUTH_TOKEN?.trim() || null,
+    authToken,
     timeoutMs: Number.isFinite(timeoutRaw) ? Math.max(timeoutRaw, 1_000) : 120_000,
   }
 }
@@ -1677,7 +1658,6 @@ export async function runChatgptManagedTurn(
         options: {
           prompt: options.prompt,
           model: options.model ?? null,
-          cwd: options.cwd ?? null,
           baseInstructions: options.baseInstructions ?? null,
           developerInstructions: options.developerInstructions ?? null,
           personality: options.personality ?? 'none',

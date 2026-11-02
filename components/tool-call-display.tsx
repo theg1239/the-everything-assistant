@@ -56,6 +56,8 @@ interface ToolCallDisplayProps {
 }
 
 const VTOP_ARTIFACT_BLACKLIST = new Set(['exams', 'exam-schedule'])
+/** Commands whose completed results are mainly downloads (rendered by the workflow card). */
+const VTOP_WORKFLOW_COMMANDS = new Set(['course-page', 'course-page-archive', 'syllabus', 'da'])
 
 /** Reads `command` from a legacy `function.arguments` payload (object or JSON string). */
 const commandFromFunctionArgs = (fn: unknown): unknown => {
@@ -89,6 +91,28 @@ const getArtifactConfig = (rawResult: unknown, toolName?: string, toolCallId?: s
   }
 
   if (toolName === 'queryVTOP') {
+    // Multi-step results (pending selections, confirmations) and downloads get the workflow card.
+    const vtopStatus = readString(result.status)
+    const vtopCommand = readString(result.command) || 'vtop'
+    const hasFiles = Array.isArray(result.files) && result.files.length > 0
+    if (
+      result.type === 'vtop-workflow' ||
+      vtopStatus === 'needs_selection' ||
+      vtopStatus === 'needs_input' ||
+      vtopStatus === 'needs_confirmation' ||
+      vtopStatus === 'cancelled' ||
+      (hasFiles && VTOP_WORKFLOW_COMMANDS.has(vtopCommand))
+    ) {
+      const step = asRecord(result.step)
+      const stepLabel = readString(step?.label)
+      return {
+        type: 'vtop-workflow' as const,
+        title: `VTOP ${vtopCommand.replace(/-/g, ' ')}${stepLabel ? ` · ${stepLabel}` : ''}`,
+        icon: <GraduationCap className="h-5 w-5 text-blue-500" />,
+        data: result,
+        source: 'VTOP',
+      }
+    }
     if (result.data || result.output) {
       const vtopData = result.data || result.output
       const command = readString(result.command) || 'unknown'
@@ -238,6 +262,8 @@ const getArtifactConfig = (rawResult: unknown, toolName?: string, toolCallId?: s
           summary: result.summary,
           error: result.error,
           message: result.message,
+          files: result.files,
+          bundle: result.bundle,
         },
         source: 'VTOP',
       }
@@ -951,6 +977,7 @@ const ToolCallResultsSummary = ({
           config.type === 'campus-info' ||
           config.type === 'papers' ||
           config.type === 'vtop-data' ||
+          config.type === 'vtop-workflow' ||
           config.type === 'error' ||
           config.type === 'general' ||
           config.type === 'mess-menu' ||

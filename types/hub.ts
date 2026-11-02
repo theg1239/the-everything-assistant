@@ -18,6 +18,15 @@ export type PersonalHubState = {
   snapshots: PersonalHubSnapshot[]
 }
 
+/** Result of `syncHubSnapshotsBatch`: one proxy /sync call for many commands. */
+export type HubSyncBatchResult = {
+  state: PersonalHubState
+  updated: HubVTOPCommand[]
+  failed: { command: HubVTOPCommand; error: string }[]
+  /** The stored VTOP login is missing or was rejected; the UI should prompt a re-link. */
+  requiresCredentials: boolean
+}
+
 export type HubVTOPCommand =
   | 'profile'
   | 'marks'
@@ -41,6 +50,13 @@ export type HubVTOPCommand =
   | 'syllabus'
   | 'course-page'
   | 'sync'
+  | 'today'
+  | 'tomorrow'
+  | 'dayafter'
+  | 'holiday'
+  | 'events'
+  | 'course-allocation'
+  | 'course-page-archive'
 
 export const HUB_COMMANDS = [
   'profile',
@@ -65,6 +81,13 @@ export const HUB_COMMANDS = [
   'syllabus',
   'course-page',
   'sync',
+  'today',
+  'tomorrow',
+  'dayafter',
+  'holiday',
+  'events',
+  'course-allocation',
+  'course-page-archive',
 ] as const satisfies HubVTOPCommand[]
 
 export type VTOPCredentialPayload = {

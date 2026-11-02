@@ -21,7 +21,7 @@ import { PdfDockProvider } from '@/contexts/pdf-dock-context'
 import PdfDock from '@/components/pdf-dock'
 import { PerformanceMonitor } from '@/components/performance-monitor'
 import { cookies } from 'next/headers'
-import { auth } from '@/lib/auth'
+import { authAllowingPendingMfa } from '@/lib/auth'
 import {
   GlobalBroadcastDialog,
   PWAInstallDialog,
@@ -56,6 +56,11 @@ const protectedRoutes = [
   },
   {
     path: '/api/auth/mfa-verify',
+    method: 'POST',
+  },
+  {
+    // Guest chat calls checkBotId(); without this entry every guest is treated as a bot.
+    path: '/api/guest-chat',
     method: 'POST',
   },
   {
@@ -254,10 +259,20 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const [session, cookieStore] = await Promise.all([auth(), cookies()])
+  // Seed the client session even while an MFA challenge is pending (auth() returns null
+  // then), so the MFA gate can render the challenge instead of bouncing to /login.
+  // The broadcast is a cross-request cached read (unstable_cache, never rejects) and isn't
+  // user-specific, so it is fetched alongside the session instead of after it; it is only
+  // rendered for fully signed-in users.
+  const [session, cookieStore, cachedBroadcast] = await Promise.all([
+    authAllowingPendingMfa(),
+    cookies(),
+    loadLatestBroadcast(),
+  ])
+  const isFullySignedIn = Boolean(session && (!session.mfa.required || session.mfa.verified))
   const sidebarCookie = cookieStore.get(SIDEBAR_OPEN_COOKIE)?.value
   const initialSidebarOpen = sidebarCookie === undefined ? undefined : sidebarCookie === 'true'
-  const latestBroadcast = session?.user ? await loadLatestBroadcast() : null
+  const latestBroadcast = isFullySignedIn ? cachedBroadcast : null
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -401,7 +416,7 @@ export default async function RootLayout({
                       name: 'Is my data secure?',
                       acceptedAnswer: {
                         '@type': 'Answer',
-                        text: 'Absolutely. We use end-to-end encryption and never store your VTOP credentials. All sessions are temporary and secure, just like logging in yourself.',
+                        text: 'Yes. Your VTOP credentials are encrypted with AES-256-GCM, tied to your account, and only ever decrypted on our servers to talk to VTOP on your behalf. They are never sent back to your browser, and you can unlink them at any time from settings.',
                       },
                     },
                   ],
@@ -502,7 +517,7 @@ export default async function RootLayout({
                 className: 'sonner-toast',
               }}
             />
-            {session?.user && latestBroadcast && (
+            {isFullySignedIn && latestBroadcast && (
               <GlobalBroadcastDialog latestBroadcast={latestBroadcast} />
             )}
             <PWAInstallDialog />

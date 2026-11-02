@@ -9,6 +9,8 @@ const hubCapabilitySchema = z.object({
   description: z.string(),
   group: z.enum(['academics', 'logistics', 'documents', 'hub']),
   autoSync: z.boolean().optional(),
+  /** Supported by the proxy's batched `/sync` (one login for many commands). */
+  sync: z.boolean().optional(),
   parser: z.string().optional(),
   insights: z.array(z.string()).optional(),
   flags: z

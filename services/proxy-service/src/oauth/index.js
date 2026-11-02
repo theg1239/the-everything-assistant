@@ -11,6 +11,7 @@ const {
 } = require('@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js')
 const { InvalidRequestError } = require('@modelcontextprotocol/sdk/server/auth/errors.js')
 const { VtopOAuthProvider } = require('./provider')
+const { checkRedirectUri, parseAllowlist } = require('./redirect-policy')
 const { renderErrorPage, renderSuccessRedirectPage } = require('./templates')
 
 const DEFAULT_ISSUER = 'http://localhost:3001/oauth'
@@ -54,6 +55,7 @@ function setupMcpOAuth(app) {
     ? parseUrl(process.env.MCP_OAUTH_SERVICE_DOCS_URL)
     : undefined
   const staticClients = loadStaticClients()
+  const redirectAllowlist = parseAllowlist(process.env.MCP_OAUTH_REDIRECT_ALLOWLIST)
   const clientsFilePath =
     process.env.MCP_OAUTH_CLIENTS_PATH || path.resolve(process.cwd(), 'mcp-oauth-clients.json')
 
@@ -65,6 +67,7 @@ function setupMcpOAuth(app) {
     consentTtlSeconds: parseInt(process.env.MCP_OAUTH_CONSENT_TTL || '300', 10),
     staticClients,
     clientsFilePath,
+    redirectAllowlist,
   })
 
   ;(async () => {
@@ -133,7 +136,15 @@ function setupMcpOAuth(app) {
       )
   })
 
-  const autoRegisterEnabled = process.env.MCP_OAUTH_AUTO_REGISTER === 'false' ? false : true
+  // Auto-registration during /authorize bypasses dynamic client registration entirely, so it is
+  // opt-in and additionally requires a redirect allow-list.
+  let autoRegisterEnabled = process.env.MCP_OAUTH_AUTO_REGISTER === 'true'
+  if (autoRegisterEnabled && !redirectAllowlist.length) {
+    console.warn(
+      '[oauth] MCP_OAUTH_AUTO_REGISTER=true ignored: set MCP_OAUTH_REDIRECT_ALLOWLIST to the redirect hosts you trust'
+    )
+    autoRegisterEnabled = false
+  }
 
   const authorizeBodyParser = express.urlencoded({ extended: false })
 
@@ -155,6 +166,11 @@ function setupMcpOAuth(app) {
     try {
       const existing = await provider.clientsStore.getClient(clientId)
       if (!existing) {
+        const problem = checkRedirectUri(redirectUri, redirectAllowlist)
+        if (problem) {
+          console.warn('[oauth] refused auto-registration:', problem)
+          return next()
+        }
         const clientName = params.client_name || params.application_name
         const client = {
           client_id: clientId,

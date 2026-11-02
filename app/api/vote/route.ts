@@ -2,12 +2,12 @@ import { auth } from '@/lib/auth'
 import { saveVote } from '@/lib/db'
 import * as z from 'zod'
 
+// `messageContent`/`messageRole` are still sent by older clients; they are ignored
+// (votes never create messages).
 const voteSchema = z.object({
-  chatId: z.string().min(1),
-  messageId: z.string().min(1),
+  chatId: z.string().min(1).max(128),
+  messageId: z.string().min(1).max(128),
   isUpvoted: z.boolean(),
-  messageContent: z.string().optional(),
-  messageRole: z.enum(['system', 'user', 'assistant']).optional(),
 })
 
 export async function POST(request: Request) {
@@ -22,12 +22,12 @@ export async function POST(request: Request) {
     if (!parsedBody.success) {
       return new Response('Invalid request body', { status: 400 })
     }
-    const { chatId, messageId, isUpvoted, messageContent, messageRole } = parsedBody.data
+    const { chatId, messageId, isUpvoted } = parsedBody.data
 
-    await saveVote(chatId, messageId, isUpvoted, {
-      content: messageContent,
-      role: messageRole,
-    })
+    const saved = await saveVote({ userId: session.user.id, chatId, messageId, isUpvoted })
+    if (!saved) {
+      return new Response('Not found', { status: 404 })
+    }
 
     return Response.json({ success: true })
   } catch (error) {

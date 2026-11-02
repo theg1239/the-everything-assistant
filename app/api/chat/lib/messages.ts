@@ -10,7 +10,9 @@ export function createDirectToolCallStream(
   uiMessages: AppUIMessage[],
   chat: { id: string; path: string },
   directToolCallResult: DirectToolCallResult,
-  responseText: string
+  responseText: string,
+  /** Id of the streamed assistant message; persist the message under the same id. */
+  messageId: string = generateId()
 ) {
   const safeInvocations = sanitizeToolInvocations([
     {
@@ -26,7 +28,6 @@ export function createDirectToolCallStream(
     originalMessages: uiMessages,
     generateId,
     execute: ({ writer }) => {
-      const messageId = generateId()
       const textPartId = generateId()
 
       writer.write({ type: 'start', messageId })

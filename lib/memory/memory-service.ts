@@ -254,6 +254,36 @@ export class MemoryService {
     })
   }
 
+  /**
+   * Applies a validated partial update to one of the user's memories in a single
+   * ownership-scoped statement (no read-then-write). Fields left out keep their stored values.
+   * Returns null when the memory doesn't exist or isn't the user's.
+   */
+  async updateOwnedMemory(
+    userId: string,
+    memoryId: string,
+    patch: Partial<z.infer<typeof memorySchema>>
+  ): Promise<Memory | null> {
+    const { content, tags, importance } = memorySchema.partial().parse(patch)
+    const [updated] = await prisma.memory.updateManyAndReturn({
+      where: { id: memoryId, userId },
+      data: {
+        ...(content !== undefined ? { content } : {}),
+        ...(tags !== undefined ? { tags } : {}),
+        // `upsertMemory` treated a missing/falsy importance as "keep" (it merged the stored one).
+        ...(importance ? { importance } : {}),
+        lastUsedAt: new Date(),
+      },
+    })
+    return updated ? toMemory(updated) : null
+  }
+
+  /** Deletes one of the user's memories in one statement; false when there was none. */
+  async deleteOwnedMemory(userId: string, memoryId: string): Promise<boolean> {
+    const { count } = await prisma.memory.deleteMany({ where: { id: memoryId, userId } })
+    return count > 0
+  }
+
   async getMemory(id: string, userId: string): Promise<Memory | null> {
     const memory = await prisma.memory.findUnique({
       where: { id, userId },

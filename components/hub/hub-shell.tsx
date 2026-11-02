@@ -35,7 +35,12 @@ import { HubToolProvider } from './hub-tools-context'
 import { DailyBriefingOverlay } from './daily-briefing-overlay'
 import { MinimalStatusCard } from './minimal-status-card'
 import { HUB_COMMANDS } from '@/types/hub'
-import type { PersonalHubSnapshot, HubVTOPCommand, VTOPCredentialPayload } from '@/types/hub'
+import type {
+  PersonalHubSnapshot,
+  PersonalHubState,
+  HubVTOPCommand,
+  VTOPCredentialPayload,
+} from '@/types/hub'
 import type { HubActionHandlers } from './hub'
 import { listHubCapabilities, type HubCapability } from '@/lib/hub/capabilities'
 import {
@@ -135,6 +140,37 @@ type HubShellProps = {
 }
 
 type DailyExamAction = 'syllabus' | 'papers' | 'materials' | 'skip'
+
+type BriefingEmailPayload = {
+  greeting: string
+  messages: DailyBriefingMessage[]
+  actions: DailyBriefingAction[]
+}
+
+type BriefingEmailRequest = BriefingEmailPayload & {
+  scheduledAt?: string
+}
+
+/** POSTs the briefing email; rejects with the server's message on failure. */
+const postBriefingEmail = async (payload: BriefingEmailRequest): Promise<void> => {
+  const response: Response = await fetch('/api/hub/daily-briefing-email', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+  if (!response.ok) {
+    const { error } = await readApiMessage(response)
+    throw new Error(error || `status ${response.status}`)
+  }
+  // consume body to keep connection clean if server returns payload
+  try {
+    await readJson(response, briefingEmailSentSchema)
+  } catch {
+    // ignore non-JSON / unexpected success payloads
+  }
+}
 
 export default function HubShell({
   actions,
@@ -251,7 +287,7 @@ export default function HubShell({
       snapshots: [snapshot, ...prev.snapshots.filter(s => s.command !== snapshot.command)],
       isLinked: true,
     }))
-  }, [])
+  }, [setHubState])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -288,12 +324,10 @@ export default function HubShell({
 
   const handleRefreshState = useCallback(async () => {
     setState({ syncing: true })
-    try {
-      const next = await actions.refreshState()
-      setHubState(next)
-    } finally {
-      setState({ syncing: false })
-    }
+    await actions
+      .refreshState()
+      .then(next => setHubState(next))
+      .finally(() => setState({ syncing: false }))
   }, [actions, setHubState, setState])
 
   const persistDailyBriefingSeen = useCallback(() => {
@@ -340,14 +374,11 @@ export default function HubShell({
     }
 
     setState({ syncing: true, syncCommand: null })
-    try {
-      const nextState = await actions.syncCore()
-      setHubState(nextState)
-    } catch (error) {
-      console.error('[hub] failed to run sync batch', error)
-    } finally {
-      setState({ syncCommand: null, syncing: false })
-    }
+    await actions
+      .syncCore()
+      .then(nextState => setHubState(nextState))
+      .catch((error: unknown) => console.error('[hub] failed to run sync batch', error))
+    setState({ syncCommand: null, syncing: false })
   }, [actions, linked, handleLinkIntent, setHubState, setState])
 
   const handleExamAction = useCallback(
@@ -367,7 +398,7 @@ export default function HubShell({
       }
       dismissDailyBriefing()
     },
-    [dismissDailyBriefing]
+    [dismissDailyBriefing, setState]
   )
 
   const openSnapshot = useCallback(
@@ -442,16 +473,6 @@ export default function HubShell({
   )
   const terseName = useMemo(() => deriveTerseName(profileSnapshot), [profileSnapshot])
 
-  type BriefingEmailPayload = {
-    greeting: string
-    messages: DailyBriefingMessage[]
-    actions: DailyBriefingAction[]
-  }
-
-  type BriefingEmailRequest = BriefingEmailPayload & {
-    scheduledAt?: string
-  }
-
   const buildEmailPayload = useCallback((): BriefingEmailPayload => {
     const reference = nowTick ? new Date(nowTick) : new Date()
     if (dailyMessages.length) {
@@ -507,24 +528,7 @@ export default function HubShell({
         : emailPayload
 
       try {
-        const response: Response = await fetch('/api/hub/daily-briefing-email', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        })
-        if (!response.ok) {
-          const { error } = await readApiMessage(response)
-          throw new Error(error || `status ${response.status}`)
-        } else {
-          // consume body to keep connection clean if server returns payload
-          try {
-            await readJson(response, briefingEmailSentSchema)
-          } catch {
-            // ignore non-JSON / unexpected success payloads
-          }
-        }
+        await postBriefingEmail(payload)
         if (scheduleToken) {
           emailPlanRef.current = scheduleToken
           emailSentRef.current = true
@@ -546,11 +550,9 @@ export default function HubShell({
   const handleSendEmailNow = useCallback(async () => {
     if (sendingBriefingEmail) return
     setState({ sendingBriefingEmail: true })
-    try {
-      await sendBriefingEmail({ force: true })
-    } finally {
+    await sendBriefingEmail({ force: true }).finally(() =>
       setState({ sendingBriefingEmail: false })
-    }
+    )
   }, [sendBriefingEmail, sendingBriefingEmail, setState])
 
   const launchDailyBriefing = useCallback(
@@ -706,38 +708,26 @@ export default function HubShell({
     let cancelled = false
     setState({ dailyHydration: { running: true, completed: 0, total: hydrationQueue.length } })
     setState({ hydrationCurrentCommand: null })
-    ;(async () => {
-      for (const [idx, command] of hydrationQueue.entries()) {
-        if (cancelled) break
-        setState({ hydrationCurrentCommand: command })
-        try {
-          await runVtopCommand(command)
-        } catch (error) {
-          console.error('[hub/daily-briefing] auto hydration failed', command, error)
-          if (isCredentialError(error)) {
-            console.warn('[hub/daily-briefing] credentials required, prompting relink')
-            cancelled = true
-            handleLinkIntent()
-            break
-          }
-        }
-        if (cancelled) break
-        setState(state => ({
-          dailyHydration: { ...state.dailyHydration, completed: idx + 1 },
-        }))
+    // One batched proxy /sync (one VTOP login) instead of a server action per command:
+    // actions from one client run one at a time, so the loop was N sequential round trips.
+    void hydrateDailyBriefing(actions, hydrationQueue).then(outcome => {
+      if (cancelled) return
+      if (outcome.state) setHubState(outcome.state)
+      if (outcome.requiresCredentials) {
+        console.warn('[hub/daily-briefing] credentials required, prompting relink')
+        handleLinkIntent()
+        return
       }
-      if (!cancelled) {
-        setState(state => ({
-          dailyHydration: {
-            ...state.dailyHydration,
-            running: false,
-            completed: state.dailyHydration.total,
-          },
-          hydrationCurrentCommand: null,
-          dailyBriefingReady: true,
-        }))
-      }
-    })()
+      setState(state => ({
+        dailyHydration: {
+          ...state.dailyHydration,
+          running: false,
+          completed: state.dailyHydration.total,
+        },
+        hydrationCurrentCommand: null,
+        dailyBriefingReady: true,
+      }))
+    })
     return () => {
       cancelled = true
     }
@@ -746,7 +736,8 @@ export default function HubShell({
     linked,
     overlayMode,
     hydrationQueue,
-    runVtopCommand,
+    actions,
+    setHubState,
     handleLinkIntent,
     setState,
   ])
@@ -873,7 +864,7 @@ export default function HubShell({
       default:
         return null
     }
-  }, [linked, openSnapshot, page, runVtopCommand])
+  }, [linked, openSnapshot, page, runVtopCommand, setState, handleLinkIntent])
 
   const handleCapabilityRun = useCallback(
     async (capability: HubCapability) => {
@@ -890,9 +881,8 @@ export default function HubShell({
         if (isCredentialError(error)) {
           handleLinkIntent()
         }
-      } finally {
-        setState({ capabilityLoading: null })
       }
+      setState({ capabilityLoading: null })
     },
     [linked, handleLinkIntent, runVtopCommand, openSnapshot, setState]
   )
@@ -1617,6 +1607,26 @@ function toTimetableClass(value: Record<string, unknown>): TimetableClass {
     startTime: readText(value.startTime),
     endTime: readText(value.endTime),
     venue: readText(value.venue),
+  }
+}
+
+/**
+ * Module-level (not in the component) so React Compiler keeps HubShell compiled. Resolves,
+ * never rejects: a thrown credential error maps to `requiresCredentials` like the batch flag.
+ */
+async function hydrateDailyBriefing(
+  actions: HubActionHandlers,
+  commands: HubVTOPCommand[]
+): Promise<{ state: PersonalHubState | null; requiresCredentials: boolean }> {
+  try {
+    const result = await actions.syncBatch(commands)
+    if (result.failed.length) {
+      console.error('[hub/daily-briefing] some commands failed to sync', result.failed)
+    }
+    return { state: result.state, requiresCredentials: result.requiresCredentials }
+  } catch (error) {
+    console.error('[hub/daily-briefing] auto hydration failed', error)
+    return { state: null, requiresCredentials: isCredentialError(error) }
   }
 }
 

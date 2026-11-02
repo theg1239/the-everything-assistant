@@ -3,19 +3,18 @@ import { auth } from '@/lib/auth'
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const session = await auth()
+    const [session, { id }] = await Promise.all([auth(), params])
     if (!session?.user?.id) {
       return new Response('Unauthorized', { status: 401 })
     }
 
-    const { id } = await params
-    const chat = await getChat(id, session.user.id)
+    // Ownership check and the history are independent reads: run them together. The messages
+    // are only returned once `getChat` confirms the chat belongs to the user.
+    const [chat, messages] = await Promise.all([getChat(id, session.user.id), getMessages(id)])
 
     if (!chat) {
       return new Response('Chat not found', { status: 404 })
     }
-
-    const messages = await getMessages(id)
 
     return Response.json(
       {
@@ -29,6 +28,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           role: msg.role,
           content: msg.content,
           toolInvocations: msg.toolInvocations,
+          attachments: msg.attachments,
           parts:
             Array.isArray(msg.toolInvocations) && msg.toolInvocations.length > 0
               ? [

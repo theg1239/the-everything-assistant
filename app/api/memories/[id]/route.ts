@@ -37,16 +37,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     const data = parsed.data
 
-    const existing = await memoryService.getMemory(id, session.user.id)
-    if (!existing) {
+    // One ownership-scoped UPDATE (previously a read, then the write).
+    const memory = await memoryService.updateOwnedMemory(session.user.id, id, data)
+    if (!memory) {
       return new NextResponse('Memory not found', { status: 404 })
     }
-
-    const memory = await memoryService.upsertMemory(session.user.id, {
-      ...existing,
-      ...data,
-      id,
-    })
 
     return NextResponse.json(memory)
   } catch (error) {
@@ -63,12 +58,10 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       return new NextResponse('Unauthorized', { status: 401 })
     }
 
-    const existing = await memoryService.getMemory(id, session.user.id)
-    if (!existing) {
+    // One ownership-scoped DELETE (previously a read, then the delete).
+    if (!(await memoryService.deleteOwnedMemory(session.user.id, id))) {
       return new NextResponse('Memory not found', { status: 404 })
     }
-
-    await memoryService.deleteMemory(session.user.id, id)
     return new NextResponse(null, { status: 204 })
   } catch (error) {
     console.error('Failed to delete memory:', error)

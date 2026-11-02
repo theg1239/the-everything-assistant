@@ -34,6 +34,7 @@ Edit `.env` with your configuration:
 ```env
 # Server Configuration
 PORT=3001
+HOST=127.0.0.1            # bind address (default 127.0.0.1; use 0.0.0.0 only inside a container/private network)
 NODE_ENV=development
 
 # Main Application API
@@ -47,7 +48,10 @@ WHATSAPP_PUPPETEER_ARGS=--no-sandbox,--disable-setuid-sandbox
 # WHATSAPP_WEB_VERSION=2.3000.1017054665
 
 # Security
-WEBHOOK_SECRET=your-webhook-secret-here
+# Required: every /api/* route needs `Authorization: Bearer <WA_BOT_API_SECRET>`.
+# The server refuses to start without it (generate with `openssl rand -hex 32`).
+WA_BOT_API_SECRET=change-me
+# WA_BOT_INSECURE_DEV=1   # local only: run /api/* without auth (ignored when NODE_ENV=production)
 ALLOWED_ORIGINS=http://localhost:3000,https://your-domain.com
 ```
 
@@ -85,13 +89,19 @@ Example:
 
 ### API Endpoints
 
+All `/api/*` routes require `Authorization: Bearer <WA_BOT_API_SECRET>` (compared in constant
+time; `401` otherwise). `GET /health` is public and returns only `status`, `timestamp` and
+`whatsappReady`. `POST /api/whatsapp/restart` and `POST /api/whatsapp/test` are not registered when
+`NODE_ENV=production`. Nothing in the main app calls these routes today; the webhook is for trusted
+internal callers only (the same bearer secret, so no separate HMAC).
+
 #### Health Check
 
 ```
 GET /health
 ```
 
-Returns server health and status information.
+Returns liveness and the WhatsApp ready flag.
 
 #### WhatsApp Status
 
@@ -219,6 +229,8 @@ CMD ["npm", "start"]
 ### Environment Variables for Production
 
 - Set `NODE_ENV=production`
+- Set a strong `WA_BOT_API_SECRET` (required; the server will not start without it)
+- Set `HOST=0.0.0.0` only if the port must be reachable from outside the host (e.g. Docker)
 - Configure proper `MAIN_APP_URL`
 - Use strong `MAIN_APP_API_KEY`
 - Set appropriate `ALLOWED_ORIGINS`

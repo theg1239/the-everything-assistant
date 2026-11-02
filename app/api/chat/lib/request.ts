@@ -62,7 +62,8 @@ const isJsonValue = (value: unknown): value is JsonValue => {
 }
 
 /**
- * Structural check for a UI message: id, role and a parts array. Part shapes
+ * Structural check for a UI message: id, role and a parts array. `system` is
+ * accepted structurally and stripped by `parseChatRequestPayload`. Part shapes
  * are deliberately not validated here (`safeValidateUIMessages` would reject
  * the legacy file-part shapes still present in stored chat history); every
  * consumer reads parts defensively.
@@ -150,7 +151,10 @@ export const parseChatRequestPayload = (value: unknown): ChatRequestPayload | nu
 
   if (Array.isArray(value.messages)) {
     if (!value.messages.every(isUIMessageLike)) return null
-    payload.messages = value.messages
+    // The server builds every instruction itself. Client-supplied `system` messages
+    // would otherwise be promoted to model instructions (prompt injection), so they
+    // are dropped here rather than rejected: stored histories may still contain them.
+    payload.messages = value.messages.filter(message => message.role !== 'system')
   }
 
   const musicPlayerState = musicPlayerStateSchema.safeParse(value.musicPlayerState)

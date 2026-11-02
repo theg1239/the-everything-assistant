@@ -170,7 +170,15 @@ reddit_comments (
 
 - **RESTful endpoints**: Clean API for frontend integration
 - **Error handling**: Graceful degradation and informative error messages
-- **CORS enabled**: Ready for frontend consumption
+- **Authenticated**: every `/api/*` route requires `Authorization: Bearer <DEEP_SEARCH_API_SECRET>`
+  (constant-time compare); `GET /health` stays public. The service refuses to start without the
+  secret unless `DEEP_SEARCH_INSECURE_DEV=1` is set outside production.
+- **CORS restricted**: browser access only from origins listed in `DEEP_SEARCH_ALLOWED_ORIGINS`
+  (comma-separated, none by default; the main app calls the service server-side).
+
+**Callers:** `lib/tools.ts` (`searchRedditKnowledge`, `searchRedditRaw`, `getTrendingRedditTopics`,
+`getRedditOverview`) via `REDDIT_API_URL`; they must send the same `DEEP_SEARCH_API_SECRET` as a
+bearer token.
 
 **Endpoints:**
 
@@ -219,16 +227,20 @@ const result = await searchRedditKnowledge(query)
 
 ```javascript
 // RAG-powered response (recommended)
+const headers = {
+  'Content-Type': 'application/json',
+  Authorization: `Bearer ${process.env.DEEP_SEARCH_API_SECRET}`,
+}
 const response = await fetch('http://localhost:3002/api/ask', {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+  headers,
   body: JSON.stringify({ query: 'hostel life VIT' }),
 })
 
 // Raw search results
 const searchResponse = await fetch('http://localhost:3002/api/search', {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+  headers,
   body: JSON.stringify({ query: 'hostel life VIT', limit: 10 }),
 })
 ```
@@ -238,9 +250,13 @@ const searchResponse = await fetch('http://localhost:3002/api/search', {
 ### Environment Variables (`.env`)
 
 ```env
-DATABASE_URL=postgres://...
+REDDIT_DATABASE=postgres://...   # dedicated Reddit knowledge DB (not the main app DB)
 PORT=3002
 NODE_ENV=development
+
+DEEP_SEARCH_API_SECRET=change-me-openssl-rand-hex-32   # required for /api/* (Bearer token)
+# DEEP_SEARCH_ALLOWED_ORIGINS=https://everything-assistant.com
+# DEEP_SEARCH_INSECURE_DEV=1   # local only: /api/* without auth (ignored in production)
 
 TARGET_SUBREDDITS=Vit
 SCRAPE_INTERVAL_HOURS=6

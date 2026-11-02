@@ -6,11 +6,24 @@ require('dotenv').config({ quiet: true })
 
 const WhatsAppService = require('./whatsapp-service')
 const APIClient = require('./api-client')
+const { createApiAuthMiddleware, resolveApiAuthConfig, resolveBindHost } = require('./http-auth')
+
+const isProduction = () => process.env.NODE_ENV === 'production'
 
 class WABotServer {
   constructor() {
+    // Resolved first so a missing secret aborts before WhatsApp/Chromium start.
+    this.apiAuth = resolveApiAuthConfig(process.env, {
+      secretVar: 'WA_BOT_API_SECRET',
+      insecureVar: 'WA_BOT_INSECURE_DEV',
+      serviceName: 'the WhatsApp bot',
+    })
+    if (this.apiAuth.mode === 'insecure-dev') {
+      console.warn('WA_BOT_INSECURE_DEV=1: /api/* routes are NOT authenticated (dev only)')
+    }
     this.app = express()
     this.port = process.env.PORT || 3001
+    this.host = resolveBindHost(process.env)
     this.whatsappService = null
     this.apiClient = null
 
@@ -38,6 +51,9 @@ class WABotServer {
       },
     })
     this.app.use('/api/', limiter)
+    // Every /api/* route (send, conversations, restart, test, webhook) needs the shared secret;
+    // checked before body parsing so unauthenticated bodies are never read.
+    this.app.use('/api', createApiAuthMiddleware(this.apiAuth))
 
     this.app.use(express.json({ limit: '10mb' }))
     this.app.use(express.urlencoded({ extended: true, limit: '10mb' }))
@@ -50,13 +66,11 @@ class WABotServer {
 
   setupRoutes() {
     this.app.get('/health', (req, res) => {
+      // Public liveness probe: no client info, phone numbers, memory or version details.
       res.json({
         status: 'ok',
         timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
         whatsappReady: this.whatsappService?.isReady || false,
-        memory: process.memoryUsage(),
-        version: require('./package.json').version,
       })
     })
 
@@ -159,6 +173,27 @@ class WABotServer {
       }
     })
 
+    if (!isProduction()) this.setupDevRoutes()
+
+    this.app.use((req, res) => {
+      res.status(404).json({
+        error: 'Endpoint not found',
+        path: req.originalUrl,
+        method: req.method,
+      })
+    })
+
+    this.app.use((error, req, res, next) => {
+      console.error('❌ Express error:', error)
+      res.status(500).json({
+        error: 'Internal server error',
+        message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong',
+      })
+    })
+  }
+
+  /** Operational endpoints that are disabled in production (still behind the API secret). */
+  setupDevRoutes() {
     this.app.post('/api/whatsapp/restart', async (req, res) => {
       try {
         console.log('Restarting WhatsApp service...')
@@ -211,22 +246,6 @@ class WABotServer {
           message: error.message,
         })
       }
-    })
-
-    this.app.use((req, res) => {
-      res.status(404).json({
-        error: 'Endpoint not found',
-        path: req.originalUrl,
-        method: req.method,
-      })
-    })
-
-    this.app.use((error, req, res, next) => {
-      console.error('❌ Express error:', error)
-      res.status(500).json({
-        error: 'Internal server error',
-        message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong',
-      })
     })
   }
 
@@ -339,14 +358,13 @@ class WABotServer {
 
   async start() {
     try {
-      this.app.listen(this.port, error => {
+      this.app.listen(this.port, this.host, error => {
         if (error) {
-          console.error(`Failed to start server on port ${this.port}:`, error)
+          console.error(`Failed to start server on ${this.host}:${this.port}:`, error)
           process.exit(1)
         }
-        console.log(`WhatsApp Bot Server running on port ${this.port}`)
-        console.log(`Health check: http://localhost:${this.port}/health`)
-        console.log(`WhatsApp status: http://localhost:${this.port}/api/whatsapp/status`)
+        console.log(`WhatsApp Bot Server running on http://${this.host}:${this.port}`)
+        console.log(`Health check: http://${this.host}:${this.port}/health`)
       })
 
       process.on('SIGINT', () => this.shutdown())
@@ -375,7 +393,13 @@ class WABotServer {
 }
 
 if (require.main === module) {
-  const server = new WABotServer()
+  let server
+  try {
+    server = new WABotServer()
+  } catch (error) {
+    console.error(`Failed to start WhatsApp Bot Server: ${error.message}`)
+    process.exit(1)
+  }
   server.start().catch(error => {
     console.error('Failed to start WhatsApp Bot Server:', error)
     process.exit(1)

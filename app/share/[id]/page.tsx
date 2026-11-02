@@ -21,7 +21,8 @@ export default async function SharePage({ params }: SharePageProps) {
     role: msg.role,
     content: msg.content,
     toolInvocations: msg.toolInvocations,
-    metadata: { sharedHistory: true, shareId: id, sourceChatId: shared.chat.id },
+    // No source chat id: it would be rendered into the public page payload.
+    metadata: { sharedHistory: true, shareId: id },
     createdAt: msg.created_at,
   }))
 

@@ -18,12 +18,14 @@ export const maxDuration = 30
 
 export async function POST(request: NextRequest) {
   try {
+    // The body is read while the session is looked up (local, no round trip of its own).
+    const bodyPromise: Promise<unknown> = request.json().catch(() => null)
     const session = await auth()
-    if (!session) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const rawBody = await request.json().catch(() => null)
+    const rawBody = await bodyPromise
     const parsedBody = suggestionRequestSchema.safeParse(rawBody)
     if (!parsedBody.success) {
       return NextResponse.json(
@@ -34,6 +36,7 @@ export async function POST(request: NextRequest) {
     const { assistantMessage, userMessage, conversationHistory } = parsedBody.data
 
     const suggestions = await generateFollowUpSuggestions(
+      session.user.id,
       assistantMessage,
       userMessage,
       conversationHistory

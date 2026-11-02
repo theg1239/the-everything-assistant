@@ -8,35 +8,95 @@
     "autoSync": true,
     "parser": "attendance",
     "insights": ["attendance-risk"],
-    "flags": {
-      "semester": false
-    },
-    "interactive": {
-      "requiresSemester": true
-    }
+    "kind": "read",
+    "cacheTtlSeconds": 300,
+    "sync": true,
+    "params": ["semester"],
+    "steps": [{ "subject": "semester", "param": "semester", "select": "index", "label": "Semester" }],
+    "flags": { "semester": false },
+    "interactive": { "requiresSemester": true }
   },
   {
     "command": "sync",
     "cliCommand": "sync",
     "title": "hub sync",
-    "description": "Batch refresh personal hub snapshots.",
+    "description": "Batch refresh personal hub snapshots in one VTOP login.",
     "group": "hub",
-    "autoSync": false
+    "autoSync": false,
+    "kind": "read",
+    "params": ["commands", "semester"]
   },
   {
     "command": "timetable",
     "cliCommand": "timetable",
     "title": "timetable pulse",
-    "description": "Next FFCS block with slots and rooms.",
+    "description": "Weekly class timetable with slots, venues and working Saturdays.",
     "group": "academics",
     "autoSync": true,
     "insights": ["next-class"],
-    "flags": {
-      "semester": false
-    },
-    "interactive": {
-      "requiresSemester": true
-    }
+    "kind": "read",
+    "cacheTtlSeconds": 1800,
+    "sync": true,
+    "params": ["semester"],
+    "steps": [{ "subject": "semester", "param": "semester", "select": "index", "label": "Semester" }],
+    "flags": { "semester": false },
+    "interactive": { "requiresSemester": true }
+  },
+  {
+    "command": "today",
+    "cliCommand": "today",
+    "title": "today's classes",
+    "description": "Today's classes and whether attendance leaves room to skip each one.",
+    "group": "academics",
+    "autoSync": false,
+    "kind": "read",
+    "cacheTtlSeconds": 300,
+    "sync": true,
+    "params": ["semester", "classGroup"],
+    "steps": [{ "subject": "semester", "param": "semester", "select": "index", "label": "Semester" }],
+    "flags": { "semester": false, "classGroup": false }
+  },
+  {
+    "command": "tomorrow",
+    "cliCommand": "tomorrow",
+    "title": "tomorrow's classes",
+    "description": "Tomorrow's classes, exams and skip budget per class.",
+    "group": "academics",
+    "autoSync": false,
+    "kind": "read",
+    "cacheTtlSeconds": 300,
+    "sync": true,
+    "params": ["semester", "classGroup"],
+    "steps": [{ "subject": "semester", "param": "semester", "select": "index", "label": "Semester" }],
+    "flags": { "semester": false, "classGroup": false }
+  },
+  {
+    "command": "dayafter",
+    "cliCommand": "dayafter",
+    "title": "day-after classes",
+    "description": "Classes the day after tomorrow and skip budget per class.",
+    "group": "academics",
+    "autoSync": false,
+    "kind": "read",
+    "cacheTtlSeconds": 300,
+    "sync": true,
+    "params": ["semester", "classGroup"],
+    "steps": [{ "subject": "semester", "param": "semester", "select": "index", "label": "Semester" }],
+    "flags": { "semester": false, "classGroup": false }
+  },
+  {
+    "command": "holiday",
+    "cliCommand": "holiday",
+    "title": "upcoming holidays",
+    "description": "Upcoming class-impacting holidays for a semester.",
+    "group": "logistics",
+    "autoSync": false,
+    "kind": "read",
+    "cacheTtlSeconds": 3600,
+    "sync": true,
+    "params": ["semester", "classGroup"],
+    "steps": [{ "subject": "semester", "param": "semester", "select": "index", "label": "Semester" }],
+    "flags": { "semester": false, "classGroup": false }
   },
   {
     "command": "marks",
@@ -45,12 +105,13 @@
     "description": "Continuous assessment per semester.",
     "group": "academics",
     "autoSync": false,
-    "flags": {
-      "semester": true
-    },
-    "interactive": {
-      "requiresSemester": true
-    }
+    "kind": "read",
+    "cacheTtlSeconds": 600,
+    "sync": true,
+    "params": ["semester"],
+    "steps": [{ "subject": "semester", "param": "semester", "select": "index", "label": "Semester" }],
+    "flags": { "semester": true },
+    "interactive": { "requiresSemester": true }
   },
   {
     "command": "grades",
@@ -59,12 +120,13 @@
     "description": "Grade cards with deltas.",
     "group": "academics",
     "autoSync": false,
-    "flags": {
-      "semester": true
-    },
-    "interactive": {
-      "requiresSemester": true
-    }
+    "kind": "read",
+    "cacheTtlSeconds": 3600,
+    "sync": true,
+    "params": ["semester"],
+    "steps": [{ "subject": "semester", "param": "semester", "select": "index", "label": "Semester" }],
+    "flags": { "semester": true },
+    "interactive": { "requiresSemester": true }
   },
   {
     "command": "cgpa",
@@ -72,22 +134,26 @@
     "title": "cgpa trend",
     "description": "Cumulative GPA across semesters.",
     "group": "academics",
-    "autoSync": false
+    "autoSync": false,
+    "kind": "read",
+    "cacheTtlSeconds": 3600,
+    "sync": true
   },
   {
     "command": "exams",
     "cliCommand": "exams",
     "title": "exam schedule",
-    "description": "Upcoming exam timetable snapshot.",
+    "description": "Upcoming exam timetable snapshot (plus an .ics calendar file).",
     "group": "academics",
     "autoSync": true,
     "insights": ["exam"],
-    "flags": {
-      "semester": true
-    },
-    "interactive": {
-      "requiresSemester": true
-    }
+    "kind": "read",
+    "cacheTtlSeconds": 900,
+    "sync": true,
+    "params": ["semester"],
+    "steps": [{ "subject": "semester", "param": "semester", "select": "index", "label": "Semester" }],
+    "flags": { "semester": true },
+    "interactive": { "requiresSemester": true }
   },
   {
     "command": "exam-schedule",
@@ -96,55 +162,91 @@
     "description": "Alias for exams.",
     "group": "academics",
     "autoSync": true,
-    "flags": {
-      "semester": true
-    },
-    "interactive": {
-      "requiresSemester": true
-    }
+    "kind": "read",
+    "cacheTtlSeconds": 900,
+    "params": ["semester"],
+    "steps": [{ "subject": "semester", "param": "semester", "select": "index", "label": "Semester" }],
+    "flags": { "semester": true },
+    "interactive": { "requiresSemester": true }
   },
   {
     "command": "calendar",
     "cliCommand": "calendar",
     "title": "academic calendar",
-    "description": "Term dates and working days.",
+    "description": "Term dates, holidays and working days for a class group.",
     "group": "logistics",
     "autoSync": false,
-    "flags": {
-      "semester": true,
-      "classGroup": true
-    },
-    "interactive": {
-      "requiresSemester": true,
-      "requiresClassGroup": true
-    }
+    "kind": "read",
+    "cacheTtlSeconds": 3600,
+    "params": ["semester", "classGroup"],
+    "steps": [
+      { "subject": "semester", "param": "semester", "select": "index", "label": "Semester" },
+      { "subject": "class group", "param": "classGroup", "select": "index", "label": "Class group" }
+    ],
+    "flags": { "semester": true, "classGroup": true },
+    "interactive": { "requiresSemester": true, "requiresClassGroup": true }
   },
   {
     "command": "course-page",
     "cliCommand": "course-page",
     "title": "course materials",
-    "description": "Dnloader for notes, slides, DAs.",
+    "description": "Download course materials: semester -> course -> faculty -> materials.",
     "group": "documents",
     "autoSync": false,
-    "flags": {
-      "semester": true,
-      "course": true,
-      "faculty": true,
-      "fuzzyIndex": true
-    },
-    "interactive": {
-      "requiresCourse": true,
-      "requiresFaculty": true,
-      "requiresSemester": true
-    }
+    "kind": "download",
+    "params": ["semester", "course", "faculty", "materials"],
+    "steps": [
+      { "subject": "semester", "param": "semester", "select": "index", "label": "Semester" },
+      { "subject": "course", "param": "course", "select": "index", "label": "Course" },
+      { "subject": "faculty", "param": "faculty", "select": "fuzzy", "label": "Faculty" },
+      { "subject": "material", "param": "materials", "select": "multi", "label": "Materials" }
+    ],
+    "flags": { "semester": true, "course": true, "faculty": true, "fuzzyIndex": true },
+    "interactive": { "requiresCourse": true, "requiresFaculty": true, "requiresSemester": true }
+  },
+  {
+    "command": "course-page-archive",
+    "cliCommand": "course-page-archive",
+    "title": "course materials (archive)",
+    "description": "Download course materials from the legacy course page: semester -> course -> faculty -> materials.",
+    "group": "documents",
+    "autoSync": false,
+    "kind": "download",
+    "params": ["semester", "course", "faculty", "materials"],
+    "steps": [
+      { "subject": "semester", "param": "semester", "select": "index", "label": "Semester" },
+      { "subject": "course", "param": "course", "select": "index", "label": "Course" },
+      { "subject": "faculty", "param": "faculty", "select": "fuzzy", "label": "Faculty" },
+      { "subject": "material", "param": "materials", "select": "multi", "label": "Materials" }
+    ],
+    "flags": { "semester": true, "course": true, "faculty": true }
+  },
+  {
+    "command": "course-allocation",
+    "cliCommand": "course-allocation",
+    "title": "course allocation",
+    "description": "Faculty, slots and venues offered for a curriculum course.",
+    "group": "academics",
+    "autoSync": false,
+    "kind": "read",
+    "cacheTtlSeconds": 1800,
+    "params": ["category", "course"],
+    "steps": [
+      { "subject": "category", "param": "category", "select": "fuzzy", "label": "Curriculum category" },
+      { "subject": "course", "param": "course", "select": "fuzzy", "label": "Course" }
+    ],
+    "flags": { "course": true }
   },
   {
     "command": "receipts",
     "cliCommand": "receipts",
     "title": "fee receipts",
-    "description": "Official receipt PDFs and refs.",
+    "description": "Fee receipts and references.",
     "group": "documents",
-    "autoSync": false
+    "autoSync": false,
+    "kind": "read",
+    "cacheTtlSeconds": 1800,
+    "sync": true
   },
   {
     "command": "library-dues",
@@ -152,7 +254,10 @@
     "title": "library dues",
     "description": "Books on hold, fines, due dates.",
     "group": "logistics",
-    "autoSync": true
+    "autoSync": true,
+    "kind": "read",
+    "cacheTtlSeconds": 900,
+    "sync": true
   },
   {
     "command": "hostel",
@@ -160,24 +265,37 @@
     "title": "hostel info",
     "description": "Block, room, contacts from VTOP.",
     "group": "logistics",
-    "autoSync": false
+    "autoSync": false,
+    "kind": "read",
+    "cacheTtlSeconds": 21600,
+    "sync": true
   },
   {
     "command": "nightslip",
     "cliCommand": "nightslip",
     "title": "night slip",
-    "description": "Request and approval feed.",
+    "description": "Night slip (late hour) requests; apply for a new one with apply=true.",
     "group": "logistics",
-    "autoSync": true
+    "autoSync": true,
+    "kind": "read",
+    "cacheTtlSeconds": 60,
+    "sync": true,
+    "writeWhen": "apply",
+    "params": ["apply", "details", "fromDate", "fromTime", "toDate", "toTime", "costCentreId", "appliedTo", "roomTypeId", "buildingId", "venue", "eventId"]
   },
   {
     "command": "leave",
     "cliCommand": "leave",
     "title": "leave status",
-    "description": "Leave tracker with approval states.",
+    "description": "Hostel leave requests with approval states; apply for leave with apply=true.",
     "group": "logistics",
     "autoSync": true,
-    "insights": ["leave"]
+    "insights": ["leave"],
+    "kind": "read",
+    "cacheTtlSeconds": 60,
+    "sync": true,
+    "writeWhen": "apply",
+    "params": ["apply", "leaveCode", "visitingPlace", "reason", "fromDate", "fromTime", "toDate", "toTime"]
   },
   {
     "command": "leave-status",
@@ -186,7 +304,11 @@
     "description": "Alias for leave command.",
     "group": "logistics",
     "autoSync": true,
-    "insights": ["leave"]
+    "insights": ["leave"],
+    "kind": "read",
+    "cacheTtlSeconds": 60,
+    "writeWhen": "apply",
+    "params": ["apply", "leaveCode", "visitingPlace", "reason", "fromDate", "fromTime", "toDate", "toTime"]
   },
   {
     "command": "msg",
@@ -194,7 +316,10 @@
     "title": "class messages",
     "description": "Latest announcements per course.",
     "group": "academics",
-    "autoSync": true
+    "autoSync": true,
+    "kind": "read",
+    "cacheTtlSeconds": 120,
+    "sync": true
   },
   {
     "command": "class-message",
@@ -202,47 +327,66 @@
     "title": "class messages",
     "description": "Alias for class messages.",
     "group": "academics",
-    "autoSync": true
+    "autoSync": true,
+    "kind": "read",
+    "cacheTtlSeconds": 120
   },
   {
     "command": "da",
     "cliCommand": "da",
     "title": "digital assignments",
-    "description": "Submission deadlines and status.",
+    "description": "DA deadlines and status per subject; pick a subject and DA to download its question paper.",
     "group": "documents",
     "autoSync": false,
     "insights": ["assignments"],
-    "flags": {
-      "course": false
-    },
-    "interactive": {
-      "autoCtrlC": true
-    }
+    "kind": "download",
+    "selectionIsData": true,
+    "sync": true,
+    "params": ["course", "assignment"],
+    "steps": [
+      { "subject": "subject", "param": "course", "select": "fuzzy", "label": "Subject" },
+      { "subject": "da", "param": "assignment", "select": "fuzzy", "label": "Assignment" }
+    ],
+    "flags": { "course": false },
+    "interactive": { "autoCtrlC": true }
   },
   {
     "command": "facility",
     "cliCommand": "facility",
     "title": "facility booking",
-    "description": "Hostel facility registration status.",
+    "description": "Sports/hostel facility registrations; select a facility and confirm to register.",
     "group": "logistics",
     "autoSync": false,
-    "interactive": {
-      "autoCtrlC": true
-    }
+    "kind": "read",
+    "writeWhen": "confirm",
+    "selectionIsData": true,
+    "params": ["facility", "confirm"],
+    "steps": [{ "subject": "facility", "param": "facility", "select": "fuzzy", "label": "Facility" }],
+    "interactive": { "autoCtrlC": true }
+  },
+  {
+    "command": "events",
+    "cliCommand": "events",
+    "title": "campus events",
+    "description": "Upcoming VTOP events and your registrations (registration is interactive-only in cli-top).",
+    "group": "logistics",
+    "autoSync": false,
+    "kind": "read",
+    "cacheTtlSeconds": 300,
+    "sync": true
   },
   {
     "command": "syllabus",
     "cliCommand": "syllabus",
     "title": "syllabus vault",
-    "description": "Course PDF downloader with fuzzy search.",
+    "description": "Course syllabus PDF downloader with fuzzy/acronym search.",
     "group": "documents",
     "autoSync": false,
-    "flags": {
-      "course": true
-    },
-    "interactive": {
-      "requiresCourse": true
-    }
+    "kind": "download",
+    "params": ["course"],
+    "steps": [{ "subject": "course", "param": "course", "select": "fuzzy", "label": "Course" }],
+    "flags": { "course": true },
+    "interactive": { "requiresCourse": true }
   },
   {
     "command": "profile",
@@ -250,6 +394,9 @@
     "title": "profile",
     "description": "Student profile snapshot.",
     "group": "logistics",
-    "autoSync": true
+    "autoSync": true,
+    "kind": "read",
+    "cacheTtlSeconds": 21600,
+    "sync": true
   }
 ]

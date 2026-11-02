@@ -1,13 +1,14 @@
 import { auth } from '@/lib/auth'
 import { createVITTools } from '@/lib/tools'
-import { getFormattedVTOPCredentials as getServerFormatted } from '@/lib/server-vtop-credentials'
+import { getUserVTOPCredentials } from '@/lib/server-vtop-credentials'
 import { Output, streamText } from 'ai'
 import { vtopResultSchema } from './schema'
 import { saveTokenUsage } from '@/lib/db'
 import { defaultProviderOptions, languageModel } from '@/lib/ai'
 import { getModelConfig } from '@/lib/model-registry'
 import { normalizeTokenUsage } from '@/lib/token-usage'
-import { getToolExecutor } from '@/app/api/chat/lib/tool-helpers'
+import { getToolExecutor, ToolInputError } from '@/app/api/chat/lib/tool-helpers'
+import { enforceUserRateLimit, UserRateLimitError } from '@/lib/user-rate-limiter'
 import * as z from 'zod'
 
 const vtopRequestSchema = z.object({
@@ -31,7 +32,14 @@ export async function POST(req: Request) {
   const command = parsedBody.data.command || 'attendance'
   const extras = parsedBody.data.extras || {}
 
+  // Credential read (DB + decrypt) runs alongside the rate-limit check; it never rejects and
+  // nothing reaches the proxy or the model until the limit has passed.
+  const credentialsPromise = getUserVTOPCredentials(session.user.id)
+
   try {
+    // Every request runs the VTOP tool and then an LLM formatter.
+    await enforceUserRateLimit(session.user.id)
+
     const tools = createVITTools(session.user.id, {
       sessionUser: { name: session.user.name, email: session.user.email },
     })
@@ -40,12 +48,13 @@ export async function POST(req: Request) {
       return new Response(JSON.stringify({ error: 'vtop tool not available' }), { status: 500 })
     }
 
-    const serverCreds = await getServerFormatted()
+    // Plaintext `{ username, password }` from the server store (by user id: auth() already ran
+    // and isn't memoised in route handlers). Without stored credentials the tool reports
+    // `requiresCredentials`.
+    const serverCreds = await credentialsPromise
     const args: Record<string, string | number | boolean | undefined> = {
       command,
-      ...(serverCreds
-        ? { username: serverCreds.username, password: serverCreds.encryptedPassword }
-        : {}),
+      ...(serverCreds ? { username: serverCreds.username, password: serverCreds.password } : {}),
       ...extras,
     }
 
@@ -93,8 +102,16 @@ export async function POST(req: Request) {
 
     return result.toTextStreamResponse()
   } catch (e) {
-    const message = e instanceof Error ? e.message : ''
-    return new Response(JSON.stringify({ error: message || 'failed to stream vtop result' }), {
+    if (e instanceof UserRateLimitError) {
+      return new Response(JSON.stringify({ error: 'RATE_LIMIT_EXCEEDED' }), { status: 429 })
+    }
+    if (e instanceof ToolInputError) {
+      return new Response(JSON.stringify({ error: 'invalid vtop command arguments' }), {
+        status: 400,
+      })
+    }
+    console.error('[hub/vtop] failed:', e)
+    return new Response(JSON.stringify({ error: 'failed to stream vtop result' }), {
       status: 500,
     })
   }

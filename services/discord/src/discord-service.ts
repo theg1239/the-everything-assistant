@@ -79,6 +79,13 @@ const RECONNECT_BASE_DELAY_MS = 5_000
 const RECONNECT_MAX_DELAY_MS = 5 * 60_000
 const RECONNECT_MAX_ATTEMPTS = 10
 
+/** Rethrows the first rejection (in input order) once every promise has settled. */
+function throwFirstRejection(results: PromiseSettledResult<unknown>[]): void {
+  for (const result of results) {
+    if (result.status === 'rejected') throw result.reason
+  }
+}
+
 type SlashCommand = SlashCommandBuilder | SlashCommandOptionsOnlyBuilder
 
 interface ContextConfig {
@@ -563,8 +570,14 @@ class DiscordService extends EventEmitter<DiscordServiceEvents> {
       const isInGuild = !!interaction.guild
 
       if (isLongResponse && isInGuild && !isOwner) {
-        await interaction.editReply(`sent a detailed response to ${interaction.user.tag} in dm.`)
-        await interaction.user.send(formattedResponse)
+        // Interaction webhook and DM channel are independent targets. allSettled (not all) so the
+        // catch below can't overwrite the reply before the in-flight notice edit lands.
+        throwFirstRejection(
+          await Promise.allSettled([
+            interaction.editReply(`sent a detailed response to ${interaction.user.tag} in dm.`),
+            interaction.user.send(formattedResponse),
+          ])
+        )
       } else {
         if (formattedResponse.length > 2000) {
           await interaction.editReply(formattedResponse.substring(0, 2000))
@@ -713,7 +726,10 @@ class DiscordService extends EventEmitter<DiscordServiceEvents> {
         return
       }
 
-      await channel.sendTyping()
+      // Typing indicator is cosmetic: don't block (or fail) the AI request on it.
+      void channel.sendTyping().catch((error: unknown) => {
+        console.warn('Failed to send typing indicator:', error)
+      })
 
       const conversationHistory = this.getContext(author.id)
       console.log(
@@ -744,7 +760,10 @@ class DiscordService extends EventEmitter<DiscordServiceEvents> {
 
       console.log(`📚 Processing context request from ${author.tag}: ${question}`)
 
-      await channel.sendTyping()
+      // Typing indicator is cosmetic: run it alongside the history fetch instead of before it.
+      void channel.sendTyping().catch((error: unknown) => {
+        console.warn('Failed to send typing indicator:', error)
+      })
 
       const recentMessages = await this.getChannelHistory(channel, 100)
 
@@ -902,8 +921,14 @@ Keep the response concise but informative.`
       }
 
       if (isLongResponse && guild && !isOwner) {
-        await channel.send(`Sent a detailed response to ${author.tag} in DM.`)
-        await author.send(formattedResponse)
+        // Different channels (guild channel vs DM), so send both at once; allSettled so the error
+        // reply in the catch below is only sent once both have finished.
+        throwFirstRejection(
+          await Promise.allSettled([
+            channel.send(`Sent a detailed response to ${author.tag} in DM.`),
+            author.send(formattedResponse),
+          ])
+        )
       } else if (formattedResponse.length > 2000) {
         await this.sendLongMessage(channel, formattedResponse)
       } else if (thinkingMessage) {
@@ -1144,6 +1169,15 @@ Keep the response concise but informative.`
       this.contextCleanupTimer = null
     }
     await this.client.destroy()
+  }
+
+  /**
+   * Whether the gateway connection is up right now. Tracked from ClientReady/ShardReady/ShardResume
+   * (up) and ShardReconnecting/ShardDisconnect/Invalidated/shutdown (down); unlike
+   * {@link getClientInfo}, this goes false while discord.js is reconnecting.
+   */
+  isConnected(): boolean {
+    return this.isReady
   }
 
   getClientInfo(): DiscordClientInfo {

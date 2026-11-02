@@ -4,7 +4,7 @@ import type { JsonValue } from '@/types/tools'
 
 import { parseVTOPData } from './vtop-parser'
 import type { ToolCallPayload } from './request'
-import { getToolExecutor, isRecord, readString } from './tool-helpers'
+import { CHAT_DIRECT_TOOLS, getToolExecutor, isRecord, readString } from './tool-helpers'
 
 export type DirectToolCallResult = {
   toolCallId: string
@@ -41,7 +41,10 @@ export async function executeDirectToolCall(params: {
     },
   })
 
-  const execute = getToolExecutor(createVITTools(userId), directToolCall.toolName)
+  // Only allow-listed tools may bypass the model; the rest stay model-mediated.
+  const execute = CHAT_DIRECT_TOOLS.has(directToolCall.toolName)
+    ? getToolExecutor(createVITTools(userId), directToolCall.toolName)
+    : undefined
 
   if (!execute) {
     console.error('Direct tool call - tool not found:', directToolCall.toolName)
@@ -49,15 +52,6 @@ export async function executeDirectToolCall(params: {
       { success: false, error: 'Tool not found', timestamp: new Date().toISOString() },
       'error'
     )
-  }
-
-  if (
-    directToolCall.toolName === 'getFacultyInfo' &&
-    directToolCall.args &&
-    directToolCall.args.facultyName &&
-    !directToolCall.args.includeCourses
-  ) {
-    directToolCall.args.includeCourses = true
   }
 
   try {

@@ -1,5 +1,16 @@
-import { $ } from 'bun'
 import { z } from 'zod'
+import {
+  buildCodexChildEnv,
+  CODEX_LOCKDOWN_CONFIG,
+  codexLockdownCliArgs,
+  isRequestAuthorized,
+  prepareCodexUserDirs,
+  resolveBindHost,
+  resolveProxyAuthConfig,
+  sanitizeCodexArgs,
+  type CodexUserPaths,
+  type ProxyAuthConfig,
+} from './security'
 
 type JsonRpcError = {
   code?: number
@@ -35,8 +46,10 @@ type JsonRpcServerRequest = {
 const jsonRpcIncomingMessageSchema = z.object({
   id: z.number().optional().catch(undefined),
   method: z.string().optional().catch(undefined),
-  params: z.unknown(),
-  result: z.unknown(),
+  // zod 4.6 treats a bare `z.unknown()` key as required; responses have no `params` and
+  // notifications no `result`, so both must be explicitly optional.
+  params: z.unknown().optional(),
+  result: z.unknown().optional(),
   error: z.object({ message: z.unknown() }).optional().catch(undefined),
 })
 
@@ -118,7 +131,6 @@ type DynamicTool = z.infer<typeof dynamicToolSchema>
 type RunChatgptTurnOptions = {
   prompt: string
   model?: string | null
-  cwd?: string | null
   baseInstructions?: string | null
   developerInstructions?: string | null
   // Known values are 'friendly' | 'pragmatic' | 'none'; any other string from the HTTP caller is
@@ -619,53 +631,6 @@ const refreshAccessToken = async (refreshToken: string): Promise<OpenAiTokenResu
   }
 }
 
-const sanitizeCodexArgsForReadOnly = (args: string[], source: string): string[] => {
-  const sanitized: string[] = []
-
-  for (let i = 0; i < args.length; i += 1) {
-    const arg = args[i]
-    if (arg === undefined) continue
-    const lower = arg.toLowerCase()
-
-    const dropCurrentAndMaybeValue = (reason: string) => {
-      console.warn(`[codex-proxy] removed ${arg} from ${source} (${reason})`)
-      const next = args[i + 1]
-      if (next && !next.startsWith('-')) {
-        i += 1
-      }
-    }
-
-    if (
-      lower === '--dangerously-bypass-approvals-and-sandbox' ||
-      lower === '--yolo' ||
-      lower === '--full-auto'
-    ) {
-      console.warn(`[codex-proxy] removed ${arg} from ${source} (unsafe execution mode)`)
-      continue
-    }
-
-    if (lower === '--sandbox' || lower === '-s') {
-      dropCurrentAndMaybeValue('sandbox is hard-enforced as read-only by proxy')
-      continue
-    }
-
-    if (
-      lower.startsWith('--sandbox=') ||
-      lower === '--ask-for-approval' ||
-      lower.startsWith('--ask-for-approval=') ||
-      lower === '-a'
-    ) {
-      dropCurrentAndMaybeValue('approval policy is hard-enforced as never by proxy')
-      continue
-    }
-
-    sanitized.push(arg)
-  }
-
-  return sanitized
-}
-
-const sanitizePathSegment = (value: string) => value.replace(/[^a-zA-Z0-9._-]/g, '_')
 const HOME_DIR = Bun.env.HOME || Bun.env.USERPROFILE || '/tmp'
 
 const trimSlashes = (value: string): string => value.replace(/^\/+|\/+$/gu, '')
@@ -687,35 +652,14 @@ const joinPath = (...parts: string[]): string => {
   return joined
 }
 
-const resolveBunCwd = (): string => {
-  // `Bun.cwd` is not part of Bun's published types; probe it at runtime.
-  const cwdValue: unknown = 'cwd' in Bun ? Bun.cwd : undefined
-  if (typeof cwdValue === 'function') {
-    try {
-      const resolved: unknown = cwdValue()
-      if (typeof resolved === 'string' && resolved.trim()) {
-        return resolved
-      }
-    } catch {
-      // fall through to non-function paths
-    }
-  }
-  if (typeof cwdValue === 'string' && cwdValue.trim()) {
-    return cwdValue
-  }
-  const envPwd = Bun.env.PWD?.trim()
-  if (envPwd) {
-    return envPwd
-  }
-  return '.'
-}
-
 class JsonRpcConnection {
   private buffer = ''
   private nextId = 1
   private readonly pending = new Map<number, PendingRequest>()
   private readonly stdinSink: {
     write: (chunk: string) => unknown
+    /** Bun's FileSink buffers writes; flush so JSON-RPC lines reach codex immediately. */
+    flush?: () => unknown
   }
 
   private readonly notificationListeners = new Set<(notification: JsonRpcNotification) => void>()
@@ -725,7 +669,7 @@ class JsonRpcConnection {
   private readonly stderrListeners = new Set<(line: string) => void>()
 
   constructor(
-    stdin: { write: (chunk: string) => unknown },
+    stdin: { write: (chunk: string) => unknown; flush?: () => unknown },
     stdout: ReadableStream<Uint8Array>,
     stderr?: ReadableStream<Uint8Array>
   ) {
@@ -937,6 +881,7 @@ class JsonRpcConnection {
 
   private async writeMessage(message: JsonRpcRequest | JsonRpcResponse | JsonRpcNotification): Promise<void> {
     await Promise.resolve(this.stdinSink.write(`${JSON.stringify(message)}\n`))
+    await Promise.resolve(this.stdinSink.flush?.())
   }
 
   private emitClose(): void {
@@ -964,6 +909,7 @@ class CodexAppServerSession {
   private lastUsedAt = Date.now()
   private readonly runsById = new Map<string, TurnRunState>()
   private readonly runIdByTurnKey = new Map<string, string>()
+  private userPaths: CodexUserPaths | null = null
 
   constructor(
     private readonly userId: string,
@@ -1331,9 +1277,13 @@ class CodexAppServerSession {
 
     const threadResult = readObject(await this.request('thread/start', {
       model: options.model ?? Bun.env.CODEX_APP_SERVER_MODEL ?? undefined,
-      cwd: Bun.env.CODEX_APP_SERVER_CWD ?? options.cwd ?? resolveBunCwd(),
+      // Server-chosen empty private dir; request bodies cannot pick the working directory.
+      cwd: (await this.ensureUserDirs()).workspace,
       approvalPolicy: 'never',
       sandbox: 'read-only',
+      // Built-in shell/file/web tools off and no execution environment: only dynamic tools remain.
+      config: { ...CODEX_LOCKDOWN_CONFIG },
+      environments: [],
       baseInstructions: options.baseInstructions ?? undefined,
       developerInstructions: options.developerInstructions ?? undefined,
       personality: options.personality ?? 'none',
@@ -1554,20 +1504,30 @@ class CodexAppServerSession {
     return this.startupPromise
   }
 
+  private async ensureUserDirs(): Promise<CodexUserPaths> {
+    this.userPaths ??= await prepareCodexUserDirs(this.config.codexHomeRoot, this.userId)
+    return this.userPaths
+  }
+
   private async startInternal(): Promise<void> {
-    const codexHome = joinPath(this.config.codexHomeRoot, sanitizePathSegment(this.userId))
-    await $`mkdir -p ${codexHome}`
+    const { codexHome, workspace } = await this.ensureUserDirs()
 
     const child = Bun.spawn(
-      [this.config.codexBin, ...this.config.codexArgs, 'app-server', ...this.config.appServerArgs],
+      [
+        this.config.codexBin,
+        ...this.config.codexArgs,
+        'app-server',
+        ...this.config.appServerArgs,
+        // Last so they win over any operator-supplied overrides.
+        ...codexLockdownCliArgs(),
+      ],
       {
         stdin: 'pipe',
         stdout: 'pipe',
         stderr: 'pipe',
-        env: {
-          ...Bun.env,
-          CODEX_HOME: codexHome,
-        },
+        cwd: workspace,
+        // Allow-list only: CODEX_PROXY_AUTH_TOKEN and any other secrets never reach Codex.
+        env: buildCodexChildEnv(Bun.env, codexHome),
       }
     )
 
@@ -1925,6 +1885,8 @@ type SessionRegistry = {
   config: SessionConfig
 }
 
+const warnCodexArg = (message: string) => console.warn(`[codex-proxy] ${message}`)
+
 const resolveConfig = (): SessionConfig => {
   const startupTimeoutMs = Number(Bun.env.CODEX_APP_SERVER_STARTUP_TIMEOUT_MS ?? 15_000)
   const requestTimeoutMs = Number(Bun.env.CODEX_APP_SERVER_REQUEST_TIMEOUT_MS ?? 45_000)
@@ -1938,8 +1900,8 @@ const resolveConfig = (): SessionConfig => {
 
   return {
     codexBin: Bun.env.CODEX_BIN ?? 'codex',
-    codexArgs: sanitizeCodexArgsForReadOnly(parsedCodexArgs, 'CODEX_FLAGS'),
-    appServerArgs: sanitizeCodexArgsForReadOnly(parsedAppServerArgs, 'CODEX_APP_SERVER_FLAGS'),
+    codexArgs: sanitizeCodexArgs(parsedCodexArgs, 'CODEX_FLAGS', warnCodexArg),
+    appServerArgs: sanitizeCodexArgs(parsedAppServerArgs, 'CODEX_APP_SERVER_FLAGS', warnCodexArg),
     codexHomeRoot:
       Bun.env.CODEX_APP_SERVER_HOME_ROOT ??
       joinPath(HOME_DIR, '.the-everything-assistant', 'codex-proxy-home'),
@@ -1974,25 +1936,26 @@ const disposeSession = (userId: string): void => {
   registry.sessions.delete(userId)
 }
 
-const expectedToken = Bun.env.CODEX_PROXY_AUTH_TOKEN?.trim() || ''
-
-const getProvidedToken = (request: Request): string | null => {
-  const bearer = request.headers.get('authorization')
-  if (bearer && bearer.toLowerCase().startsWith('bearer ')) {
-    return bearer.slice(7).trim()
+// Fail closed: without a token anyone who can reach the port could act as any user.
+const resolveAuthOrExit = (): ProxyAuthConfig => {
+  try {
+    return resolveProxyAuthConfig(Bun.env)
+  } catch (error) {
+    console.error(`[codex-proxy] ${error instanceof Error ? error.message : String(error)}`)
+    process.exit(1)
   }
-  const headerToken = request.headers.get('x-codex-proxy-token')
-  if (headerToken && headerToken.trim()) {
-    return headerToken.trim()
-  }
-  return null
 }
 
-const isAuthorized = (request: Request): boolean => {
-  if (!expectedToken) return true
-  const provided = getProvidedToken(request)
-  return Boolean(provided && provided === expectedToken)
+const authConfig = resolveAuthOrExit()
+if (authConfig.mode === 'insecure-dev') {
+  console.warn('[codex-proxy] CODEX_PROXY_INSECURE_DEV=1: requests are NOT authenticated (dev only)')
 }
+
+/**
+ * `userId` in request bodies is trusted because only the main app holds CODEX_PROXY_AUTH_TOKEN and
+ * it always sends the signed-in user's id; the token is what authorises acting on behalf of users.
+ */
+const isAuthorized = (request: Request): boolean => isRequestAuthorized(authConfig, request.headers)
 
 const json = (body: unknown, init?: ResponseInit): Response =>
   new Response(JSON.stringify(body), {
@@ -2051,7 +2014,7 @@ const sweepTimer = setInterval(() => {
   }
 }, Math.max(5_000, sessionSweepMs))
 
-const host = Bun.env.CODEX_PROXY_HOST || '0.0.0.0'
+const host = resolveBindHost(Bun.env)
 const port = Number(Bun.env.CODEX_PROXY_PORT || 8788)
 
 const server = Bun.serve({
@@ -2067,7 +2030,6 @@ const server = Bun.serve({
       }
       return json({
         ok: true,
-        codexBin: registry.config.codexBin,
         activeSessions: registry.sessions.size,
         activeRuns,
       })
@@ -2162,7 +2124,6 @@ const server = Bun.serve({
       const runOptions: RunChatgptTurnOptions = {
         prompt,
         model: readString(optionsRaw?.model),
-        cwd: readString(optionsRaw?.cwd),
         baseInstructions: readString(optionsRaw?.baseInstructions),
         developerInstructions: readString(optionsRaw?.developerInstructions),
         personality: readString(optionsRaw?.personality) ?? 'none',
@@ -2244,7 +2205,6 @@ const server = Bun.serve({
       const runOptions: RunChatgptTurnOptions = {
         prompt,
         model: readString(optionsRaw?.model),
-        cwd: readString(optionsRaw?.cwd),
         baseInstructions: readString(optionsRaw?.baseInstructions),
         developerInstructions: readString(optionsRaw?.developerInstructions),
         personality: readString(optionsRaw?.personality) ?? 'none',

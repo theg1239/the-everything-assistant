@@ -1,29 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { generateBackupCodes, hashBackupCodes, checkRateLimit, logSecurityEvent } from '@/lib/mfa'
+import { generateBackupCodes, getMfaPepper, hashBackupCodes, logSecurityEvent } from '@/lib/mfa'
+import { consumeRateLimit } from '@/lib/mfa-state'
+import {
+  getMfaKv,
+  hasFreshMfa,
+  mfaStepUpRequiredResponse,
+  mfaUnavailableResponse,
+} from '@/lib/session'
 
+/** Regenerates backup codes. Requires a recent MFA verification (step-up). */
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const rateLimitKey = `mfa-backup-${session.user.email}`
-    if (!checkRateLimit(rateLimitKey, 3, 60 * 60 * 1000)) {
-      return NextResponse.json(
-        { error: 'Too many attempts. Please try again later.' },
-        { status: 429 }
-      )
-    }
-
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { id: session.user.id },
       select: {
         id: true,
-        email: true,
-        name: true,
         mfaEnabled: true,
       },
     })
@@ -36,8 +34,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'MFA is not enabled' }, { status: 400 })
     }
 
+    if (!(await hasFreshMfa({ userId: user.id, mfaEnabled: user.mfaEnabled }))) {
+      return mfaStepUpRequiredResponse()
+    }
+
+    const kv = getMfaKv()
+    if (!kv) return mfaUnavailableResponse()
+    if (
+      !(await consumeRateLimit(kv, `backup-codes:${user.id}`, { max: 3, windowSeconds: 60 * 60 }))
+    ) {
+      return NextResponse.json(
+        { error: 'Too many attempts. Please try again later.' },
+        { status: 429 }
+      )
+    }
+
     const backupCodes = generateBackupCodes(10)
-    const hashedBackupCodes = hashBackupCodes(backupCodes)
+    const hashedBackupCodes = hashBackupCodes(backupCodes, getMfaPepper())
 
     await prisma.user.update({
       where: { id: user.id },

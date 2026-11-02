@@ -60,27 +60,6 @@ export type SyllabusEntry =
       filename?: string
     }
 
-export type VtopCommandFlags = Record<string, string | number | boolean | undefined>
-
-export interface VtopInteractiveRequestBody {
-  command: string
-  username: string
-  step: string
-  password?: string
-  encryptedPassword?: string
-  sessionKey?: string
-  flags: VtopCommandFlags
-}
-
-export interface VtopRequestBody {
-  command: string
-  username: string
-  password?: string
-  encryptedPassword?: string
-  sessionKey?: string
-  flags: VtopCommandFlags
-}
-
 export type ToolInvocationState = 'partial-call' | 'call' | 'result' | 'error' | string
 
 export interface ToolInvocation {

@@ -1,6 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useCallback } from 'react'
+import { useVTOPCredentialBootstrap } from '@/lib/vtop-credentials'
 
 interface VTOPToolResult {
   toolCallId: string
@@ -22,6 +23,9 @@ const VTOPContext = createContext<VTOPContextType | undefined>(undefined)
 export function VTOPProvider({ children }: { children: React.ReactNode }) {
   const [toolResults, setToolResults] = useState<Map<string, VTOPToolResult>>(new Map())
   const [version, setVersion] = useState(0)
+  // Warm the cached link status that the chat's synchronous VTOP checks read, and migrate
+  // any pre-server-storage credential cookies into the encrypted server store.
+  useVTOPCredentialBootstrap()
 
   const updateToolResult = useCallback((toolCallId: string, command: string, result: unknown) => {
     setToolResults(prev => {

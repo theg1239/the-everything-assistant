@@ -1,9 +1,9 @@
 import { createGuardrails, generateSecret, generateURI, verifySync } from 'otplib'
-import { createHash, randomBytes } from 'crypto'
+import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'crypto'
 import qrcode from 'qrcode'
 import nodemailer from 'nodemailer'
 
-const TOTP_PERIOD_SECONDS = 30
+export const TOTP_PERIOD_SECONDS = 30
 
 // otplib v12 generated 10-byte secrets by default; v13 rejects anything under
 // 16 bytes. Relax the floor for verification so already-enrolled users keep
@@ -26,7 +26,11 @@ export async function generateQRCode(
   return await qrcode.toDataURL(generateTOTPUri(secret, userEmail, serviceName))
 }
 
-export function verifyTOTP(token: string, secret: string): boolean {
+/**
+ * Verifies a TOTP code (±1 step of drift) and returns the time step it matched, so the caller
+ * can reject replays of an already-accepted step (see `claimTotpTimeStep` in `lib/mfa-state`).
+ */
+export function matchTOTP(token: string, secret: string): { timeStep: number } | null {
   try {
     const result = verifySync({
       token,
@@ -36,11 +40,18 @@ export function verifyTOTP(token: string, secret: string): boolean {
       epochTolerance: TOTP_PERIOD_SECONDS,
       guardrails: LEGACY_SECRET_GUARDRAILS,
     })
-    return result.valid
+    // TOTP results always carry `timeStep` (the step counter that matched); the HOTP arm of
+    // otplib's union never applies here, and is rejected rather than trusted.
+    return result.valid && 'timeStep' in result ? { timeStep: result.timeStep } : null
   } catch {
     // Malformed tokens/secrets throw in v13; treat them as a failed check.
-    return false
+    return null
   }
+}
+
+/** Stateless TOTP check. Login/step-up paths must use {@link matchTOTP} plus replay protection. */
+export function verifyTOTP(token: string, secret: string): boolean {
+  return matchTOTP(token, secret) !== null
 }
 
 export function generateBackupCodes(count: number = 10): string[] {
@@ -52,17 +63,91 @@ export function generateBackupCodes(count: number = 10): string[] {
   return codes
 }
 
-export function hashBackupCodes(codes: string[]): string[] {
-  return codes.map(code => createHash('sha256').update(code).digest('hex'))
+/** Prefix of peppered (HMAC-SHA256) backup-code hashes; unprefixed hex is legacy plain SHA-256. */
+const PEPPERED_BACKUP_CODE_PREFIX = 'hmac1$'
+
+/**
+ * Server-side secret mixed into backup-code and email-code hashes, so a database leak alone
+ * doesn't let an attacker brute-force the (low-entropy) codes offline.
+ */
+export function getMfaPepper(): string {
+  const pepper = process.env.MFA_BACKUP_CODE_PEPPER?.trim() || process.env.NEXTAUTH_SECRET?.trim()
+  if (!pepper) {
+    throw new Error('MFA_BACKUP_CODE_PEPPER (or NEXTAUTH_SECRET) must be set to hash MFA codes')
+  }
+  return pepper
 }
 
-export function verifyBackupCode(code: string, hashedCodes: string[]): boolean {
-  const hashedCode = createHash('sha256').update(code.toUpperCase()).digest('hex')
-  return hashedCodes.includes(hashedCode)
+/** Users may type backup codes in lower case or with spaces/dashes. */
+export function normalizeBackupCode(code: string): string {
+  return code.replace(/[\s-]/g, '').toUpperCase()
 }
 
+function hmacHex(pepper: string, purpose: string, value: string): string {
+  return createHmac('sha256', pepper).update(`${purpose}:${value}`).digest('hex')
+}
+
+function legacyBackupCodeHash(code: string): string {
+  return createHash('sha256').update(code).digest('hex')
+}
+
+function hexEquals(a: string, b: string): boolean {
+  const left = Buffer.from(a, 'hex')
+  const right = Buffer.from(b, 'hex')
+  return left.length === right.length && left.length > 0 && timingSafeEqual(left, right)
+}
+
+export function hashBackupCode(code: string, pepper: string): string {
+  return PEPPERED_BACKUP_CODE_PREFIX + hmacHex(pepper, 'backup-code', normalizeBackupCode(code))
+}
+
+export function hashBackupCodes(codes: string[], pepper: string): string[] {
+  return codes.map(code => hashBackupCode(code, pepper))
+}
+
+/**
+ * Finds `code` among the stored hashes: peppered `hmac1$…` entries and legacy plain SHA-256
+ * entries (written before peppering) are both accepted. Returns the matching index, or `null`.
+ * The caller removes that entry (codes are single-use), which retires a legacy hash on use;
+ * regenerating the codes replaces any remaining legacy hashes with peppered ones.
+ */
+export function findBackupCode(
+  code: string,
+  hashedCodes: readonly string[],
+  pepper: string
+): { index: number; legacy: boolean } | null {
+  const normalized = normalizeBackupCode(code)
+  if (!normalized) return null
+  const peppered = hmacHex(pepper, 'backup-code', normalized)
+  const legacy = legacyBackupCodeHash(normalized)
+  for (const [index, stored] of hashedCodes.entries()) {
+    if (stored.startsWith(PEPPERED_BACKUP_CODE_PREFIX)) {
+      if (hexEquals(stored.slice(PEPPERED_BACKUP_CODE_PREFIX.length), peppered)) {
+        return { index, legacy: false }
+      }
+    } else if (hexEquals(stored, legacy)) {
+      return { index, legacy: true }
+    }
+  }
+  return null
+}
+
+export function isLegacyBackupCodeHash(hash: string): boolean {
+  return !hash.startsWith(PEPPERED_BACKUP_CODE_PREFIX)
+}
+
+/** A uniformly random 6-digit code from the CSPRNG. */
 export function generateEmailCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString()
+  return randomInt(100000, 1000000).toString()
+}
+
+/** Peppered hash of an emailed login code (what gets stored in Redis). */
+export function hashEmailCode(code: string, pepper: string): string {
+  return hmacHex(pepper, 'email-code', code.trim())
+}
+
+export function emailCodeHashesEqual(a: string, b: string): boolean {
+  return hexEquals(a, b)
 }
 
 export async function sendEmailCode(
@@ -71,10 +156,12 @@ export async function sendEmailCode(
   type: 'setup' | 'login' = 'setup'
 ): Promise<boolean> {
   try {
+    // `SMTP_EMAIL` is what `isSMTPConfigured()` checks; `SMTP_USER` is the legacy name.
+    const smtpUser = process.env.SMTP_EMAIL || process.env.SMTP_USER
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: process.env.SMTP_USER,
+        user: smtpUser,
         pass: process.env.SMTP_APP_PASSWORD,
       },
     })
@@ -106,7 +193,7 @@ export async function sendEmailCode(
     `
 
     await transporter.sendMail({
-      from: `"The Everything Assistant" <${process.env.SMTP_USER}>`,
+      from: `"The Everything Assistant" <${smtpUser}>`,
       to: email,
       subject,
       html,
@@ -117,37 +204,6 @@ export async function sendEmailCode(
     console.error('Error sending email:', error)
     return false
   }
-}
-
-const attemptCache = new Map<string, { count: number; lastAttempt: number }>()
-
-export function checkRateLimit(
-  identifier: string,
-  maxAttempts: number = 5,
-  windowMs: number = 15 * 60 * 1000
-): boolean {
-  const now = Date.now()
-  const attempts = attemptCache.get(identifier)
-
-  if (!attempts) {
-    attemptCache.set(identifier, { count: 1, lastAttempt: now })
-    return true
-  }
-
-  if (now - attempts.lastAttempt > windowMs) {
-    attemptCache.set(identifier, { count: 1, lastAttempt: now })
-    return true
-  }
-
-  if (attempts.count >= maxAttempts) {
-    return false
-  }
-
-  attempts.count++
-  attempts.lastAttempt = now
-  attemptCache.set(identifier, attempts)
-
-  return true
 }
 
 export async function logSecurityEvent(

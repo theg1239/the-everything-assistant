@@ -218,7 +218,9 @@ export async function getChatShareWithMessages(
   shareId: string
 ): Promise<{ share: ChatShare; chat: Chat; messages: Message[] } | null> {
   try {
-    const share = await prisma.chatShare.findFirst({
+    // One query: the messages come with the chat (`relationJoins`), instead of a second
+    // round trip after the share lookup. Same order as `getMessages`.
+    const row = await prisma.chatShare.findFirst({
       where: { id: shareId, revoked: false },
       include: {
         chat: {
@@ -229,16 +231,21 @@ export async function getChatShareWithMessages(
             created_at: true,
             updated_at: true,
             path: true,
+            messages: {
+              orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+              select: messageSelect,
+            },
           },
         },
       },
     })
-    if (!share || !share.chat) return null
-    const messages = await getMessages(share.chatId)
+    if (!row || !row.chat) return null
+    const { chat: chatWithMessages, ...share } = row
+    const { messages, ...chat } = chatWithMessages
     return {
       share,
-      chat: share.chat,
-      messages,
+      chat,
+      messages: messages.map(toMessage),
     }
   } catch (error) {
     console.error('Error loading shared chat:', error)
@@ -583,44 +590,79 @@ const messageSelect = {
   created_at: true,
 } as const
 
-export type GetMessagesOptions = {
-  /**
-   * Only the most recent `limit` messages (still returned oldest-first). Uses the
-   * `(chatId, created_at)` index; omit for the full history.
-   */
-  limit?: number
-}
+/** DB row -> `Message` (raw tool-invocation JSON is sanitized and not carried along). */
+const toMessage = ({
+  tool_invocations,
+  attachments,
+  role,
+  ...rest
+}: Prisma.MessageGetPayload<{ select: typeof messageSelect }>): Message => ({
+  ...rest,
+  role: toMessageRole(role),
+  toolInvocations: readToolInvocations(tool_invocations),
+  attachments: readAttachments(attachments),
+})
 
-export async function getMessages(
-  chatId: string,
-  options: GetMessagesOptions = {}
-): Promise<Message[]> {
+/** Every message of a chat, oldest first. */
+export async function getMessages(chatId: string): Promise<Message[]> {
   try {
-    const { limit } = options
-    const messages =
-      limit !== undefined && limit > 0
-        ? (
-            await prisma.message.findMany({
-              where: { chatId },
-              orderBy: { created_at: 'desc' },
-              take: limit,
-              select: messageSelect,
-            })
-          ).reverse()
-        : await prisma.message.findMany({
-            where: { chatId },
-            orderBy: { created_at: 'asc' },
-            select: messageSelect,
-          })
-    return messages.map(msg => ({
-      ...msg,
-      role: toMessageRole(msg.role),
-      toolInvocations: readToolInvocations(msg.tool_invocations),
-      attachments: readAttachments(msg.attachments),
-    }))
+    const messages = await prisma.message.findMany({
+      where: { chatId },
+      orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+      select: messageSelect,
+    })
+    return messages.map(toMessage)
   } catch (error) {
     console.error('Error getting messages:', error)
     return []
+  }
+}
+
+export type MessagesPage = {
+  /** Oldest first. */
+  messages: Message[]
+  /** Whether the chat has messages older than `messages[0]`. */
+  hasMore: boolean
+}
+
+/**
+ * The newest `limit` messages of a chat — or, with `before` (a message id of this chat), the
+ * newest `limit` messages older than that one — returned oldest first. Ordered by
+ * `(created_at, id)` so pages never overlap or skip rows that share a timestamp; reads use the
+ * `(chatId, created_at)` index. An unknown `before` id yields an empty page.
+ */
+export async function getMessagesPage(
+  chatId: string,
+  { limit, before }: { limit: number; before?: string }
+): Promise<MessagesPage> {
+  try {
+    let olderThan: Prisma.MessageWhereInput = {}
+    if (before) {
+      const cursor = await prisma.message.findFirst({
+        where: { id: before, chatId },
+        select: { id: true, created_at: true },
+      })
+      if (!cursor) return { messages: [], hasMore: false }
+      olderThan = {
+        OR: [
+          { created_at: { lt: cursor.created_at } },
+          { created_at: cursor.created_at, id: { lt: cursor.id } },
+        ],
+      }
+    }
+    // One extra row tells whether anything older remains.
+    const rows = await prisma.message.findMany({
+      where: { chatId, ...olderThan },
+      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+      select: messageSelect,
+    })
+    const hasMore = rows.length > limit
+    const page = hasMore ? rows.slice(0, limit) : rows
+    return { messages: page.reverse().map(toMessage), hasMore }
+  } catch (error) {
+    console.error('Error getting messages page:', error)
+    return { messages: [], hasMore: false }
   }
 }
 
@@ -647,6 +689,29 @@ export async function saveMessage(
   })
 }
 
+/**
+ * Inserts plain-text messages into a chat in one statement, in array order. One INSERT shares a
+ * single DB `now()`, and history is ordered by `(created_at, id)` with random ids, so each row
+ * gets an explicit, strictly increasing timestamp ending at the current time (later messages,
+ * stamped by the DB default, still sort after them). Ids are server-generated.
+ */
+export async function saveMessagesInOrder(
+  chatId: string,
+  messages: ReadonlyArray<{ role: 'user' | 'assistant'; content: string }>
+): Promise<void> {
+  if (messages.length === 0) return
+  const firstAt = Date.now() - (messages.length - 1)
+  await prisma.message.createMany({
+    data: messages.map((message, index) => ({
+      id: crypto.randomUUID(),
+      chatId,
+      role: message.role,
+      content: message.content,
+      created_at: new Date(firstAt + index),
+    })),
+  })
+}
+
 /** Replaces a saved message's tool invocations (used to attach post-processed tool output). */
 export async function updateMessageToolInvocations(
   messageId: string,
@@ -666,14 +731,7 @@ export async function getLatestMessage(chatId: string): Promise<Message | null> 
     orderBy: { created_at: 'desc' },
     select: messageSelect,
   })
-  return message
-    ? {
-        ...message,
-        role: toMessageRole(message.role),
-        toolInvocations: readToolInvocations(message.tool_invocations),
-        attachments: readAttachments(message.attachments),
-      }
-    : null
+  return message ? toMessage(message) : null
 }
 
 export async function createChatFromMessages(
@@ -734,10 +792,14 @@ export async function forkSharedChatToUser(shareId: string, userId: string): Pro
   return createChatFromMessages(userId, title, shared.messages)
 }
 
-export async function getCanvasDocuments(chatId: string): Promise<CanvasDocument[]> {
+/** Canvas documents of a chat the user owns; [] when the chat is not theirs. */
+export async function getCanvasDocuments(
+  chatId: string,
+  userId: string
+): Promise<CanvasDocument[]> {
   try {
     const documents = await prisma.canvasDocument.findMany({
-      where: { chatId },
+      where: { chatId, chat: { userId } },
       orderBy: { created_at: 'desc' },
       select: {
         id: true,
@@ -756,12 +818,16 @@ export async function getCanvasDocuments(chatId: string): Promise<CanvasDocument
   }
 }
 
+/** Creates a canvas document in a chat the user owns; null when the chat is not theirs. */
 export async function createCanvasDocument(
+  userId: string,
   chatId: string,
   title: string,
   content: string,
   type = 'document'
-): Promise<CanvasDocument> {
+): Promise<CanvasDocument | null> {
+  const owned = await prisma.chat.findFirst({ where: { id: chatId, userId }, select: { id: true } })
+  if (!owned) return null
   const document = await prisma.canvasDocument.create({
     data: {
       chatId,
@@ -782,72 +848,60 @@ export async function createCanvasDocument(
   return document
 }
 
+/** Updates a canvas document in a chat the user owns; false when no such document. */
 export async function updateCanvasDocument(
+  userId: string,
   id: string,
   title: string,
   content: string
-): Promise<void> {
-  await prisma.canvasDocument.update({
-    where: { id },
+): Promise<boolean> {
+  const { count } = await prisma.canvasDocument.updateMany({
+    where: { id, chat: { userId } },
     data: {
       title,
       content,
       updated_at: new Date(),
     },
+  })
+  return count > 0
+}
+
+/**
+ * Records a vote on an existing message of a chat the user owns. Never creates
+ * messages; returns false (nothing written) when the message is not in that chat
+ * or the chat is not the user's.
+ */
+export async function saveVote(params: {
+  userId: string
+  chatId: string
+  messageId: string
+  isUpvoted: boolean
+}): Promise<boolean> {
+  const { userId, chatId, messageId, isUpvoted } = params
+  const message = await prisma.message.findFirst({
+    where: { id: messageId, chatId, chat: { userId } },
     select: { id: true },
   })
-}
+  if (!message) return false
 
-type VoteMessageMetadata = {
-  content?: string
-  role?: string
-}
-
-export async function saveVote(
-  chatId: string,
-  messageId: string,
-  isUpvoted: boolean,
-  messageMetadata?: VoteMessageMetadata
-): Promise<void> {
-  try {
-    const messageExists = await prisma.message.findUnique({
-      where: { id: messageId },
-      select: { id: true },
-    })
-
-    if (!messageExists && messageMetadata?.content) {
-      await prisma.message.create({
-        data: {
-          id: messageId,
-          chatId,
-          role: messageMetadata.role || 'assistant',
-          content: messageMetadata.content,
-        },
-        select: { id: true },
-      })
-    }
-
-    await prisma.vote.upsert({
-      where: {
-        chatId_messageId: {
-          chatId,
-          messageId,
-        },
-      },
-      update: {
-        is_upvoted: isUpvoted,
-      },
-      create: {
+  await prisma.vote.upsert({
+    where: {
+      chatId_messageId: {
         chatId,
         messageId,
-        is_upvoted: isUpvoted,
       },
-      select: { chatId: true },
-    })
-  } catch (error) {
-    console.error('Error in saveVote:', error)
-    throw error
-  }
+    },
+    update: {
+      is_upvoted: isUpvoted,
+    },
+    create: {
+      chatId,
+      messageId,
+      is_upvoted: isUpvoted,
+    },
+    select: { chatId: true },
+  })
+  return true
 }
 
 export async function deleteAllArchivedChats(userId: string): Promise<number> {

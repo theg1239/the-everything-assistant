@@ -65,6 +65,7 @@ model User {
   webAuthnCredentials   WebAuthnCredential[]
   whatsappConversations WhatsAppConversation[]
   vtopSnapshots         VTOPSnapshot[]
+  vtopCredential        VTOPCredential?
   shares                ChatShare[]
 
   @@index([email])
@@ -326,6 +327,25 @@ model VTOPSnapshot {
   @@unique([userId, command])
   @@index([userId, fetchedAt(sort: Desc)])
   @@map("vtop_snapshots")
+}
+
+/// The user's VTOP (VIT portal) login, AES-256-GCM encrypted server-side (lib/vtop-credential-store.ts).
+/// The password is never returned to the browser. `keyVersion` identifies the encryption key
+/// (a fingerprint of VTOP_CREDENTIALS_KEY / _PREVIOUS); the AAD binds the row to userId + username.
+model VTOPCredential {
+  userId     String   @id
+  username   String
+  /// base64 AES-GCM ciphertext including the 16-byte tag
+  ciphertext String
+  /// base64 12-byte GCM nonce
+  iv         String
+  keyVersion Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("vtop_credentials")
 }
 
 enum crdb_internal_region {

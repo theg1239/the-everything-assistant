@@ -16,6 +16,10 @@ declare namespace NodeJS {
     VTOP_MCP_URL?: string
     VTOP_PROXY_URL?: string
     VTOP_MCP_CLIENT_ID?: string
+    /** base64 32-byte AES-256-GCM key for stored VTOP passwords (`openssl rand -base64 32`). Required in production. */
+    VTOP_CREDENTIALS_KEY?: string
+    /** The previous VTOP_CREDENTIALS_KEY while rotating; rows are re-encrypted on read. */
+    VTOP_CREDENTIALS_KEY_PREVIOUS?: string
     CODEX_BIN?: string
     CODEX_FLAGS?: string
     CODEX_FLAGS_JSON?: string

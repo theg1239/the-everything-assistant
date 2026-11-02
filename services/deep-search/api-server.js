@@ -1,12 +1,55 @@
+const crypto = require('node:crypto')
 const express = require('express')
 const cors = require('cors')
 const RAGService = require('./knowledge-base/rag-service')
 const AgenticRAGService = require('./knowledge-base/agentic-rag-service')
 const KnowledgeBase = require('./knowledge-base/knowledge-base')
 
+// --- Access control -------------------------------------------------------------------------
+// Every /api/* route requires `Authorization: Bearer <DEEP_SEARCH_API_SECRET>`; /health stays
+// public. Without the secret the service refuses to start, unless DEEP_SEARCH_INSECURE_DEV=1 is set
+// outside production.
+const apiSecret = (process.env.DEEP_SEARCH_API_SECRET || '').trim()
+const insecureDev =
+  process.env.DEEP_SEARCH_INSECURE_DEV === '1' && process.env.NODE_ENV !== 'production'
+
+if (!apiSecret && !insecureDev) {
+  throw new Error(
+    'DEEP_SEARCH_API_SECRET is not set. Refusing to start the deep-search API: /api/* would be ' +
+      'open to anyone. Set DEEP_SEARCH_API_SECRET (e.g. `openssl rand -hex 32`) and send it as ' +
+      '`Authorization: Bearer <secret>`, or for local development only set ' +
+      'DEEP_SEARCH_INSECURE_DEV=1 with NODE_ENV != production.'
+  )
+}
+if (!apiSecret) {
+  console.warn('DEEP_SEARCH_INSECURE_DEV=1: deep-search /api/* routes are NOT authenticated')
+}
+
+const sha256 = value => crypto.createHash('sha256').update(value, 'utf8').digest()
+
+/** Constant-time comparison; hashing first gives equal-length buffers whatever the input lengths. */
+const secretsMatch = (expected, provided) =>
+  Boolean(expected && provided) && crypto.timingSafeEqual(sha256(expected), sha256(provided))
+
+const requireApiSecret = (req, res, next) => {
+  if (!apiSecret) return next()
+  const match = /^Bearer\s+(.+)$/iu.exec((req.get('authorization') || '').trim())
+  if (match && secretsMatch(apiSecret, match[1].trim())) return next()
+  res.setHeader('WWW-Authenticate', 'Bearer')
+  return res.status(401).json({ success: false, error: 'Unauthorized' })
+}
+
+// Browser access only from explicitly configured origins (comma-separated); none by default, since
+// the main app calls this service server-side.
+const allowedOrigins = (process.env.DEEP_SEARCH_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean)
+
 const app = express()
 
-app.use(cors())
+app.use(cors({ origin: allowedOrigins.length > 0 ? allowedOrigins : false }))
+app.use('/api', requireApiSecret)
 app.use(express.json())
 
 app.use((req, res, next) => {
@@ -128,34 +171,34 @@ app.post('/api/ask', async (req, res) => {
 
 app.get('/api/stats', async (req, res) => {
   try {
-    const postCountResult = await knowledgeBase.pool.query('SELECT COUNT(*) FROM reddit_posts')
-    const commentCountResult = await knowledgeBase.pool.query(
-      'SELECT COUNT(*) FROM reddit_comments'
-    )
-    const embeddingCountResult = await knowledgeBase.pool.query(
-      'SELECT COUNT(*) FROM reddit_posts WHERE embedding IS NOT NULL'
-    )
-    const videoCountResult = await knowledgeBase.pool.query(
-      'SELECT COUNT(*) FROM reddit_posts WHERE is_video = true'
-    )
-    const videoWithAnalysisResult = await knowledgeBase.pool.query(
-      'SELECT COUNT(*) FROM reddit_posts WHERE is_video = true AND video IS NOT NULL'
-    )
-    const subredditStats = await knowledgeBase.pool.query(`
-      SELECT subreddit, COUNT(*) AS post_count
-      FROM reddit_posts
-      GROUP BY subreddit
-      ORDER BY post_count DESC
-    `)
+    // Independent reads: run them together, and count the four post figures in one table scan.
+    const [postCountsResult, commentCountResult, subredditStats] = await Promise.all([
+      knowledgeBase.pool.query(`
+        SELECT
+          COUNT(*) AS total_posts,
+          COUNT(*) FILTER (WHERE embedding IS NOT NULL) AS posts_with_embeddings,
+          COUNT(*) FILTER (WHERE is_video = true) AS total_videos,
+          COUNT(*) FILTER (WHERE is_video = true AND video IS NOT NULL) AS videos_with_analysis
+        FROM reddit_posts
+      `),
+      knowledgeBase.pool.query('SELECT COUNT(*) FROM reddit_comments'),
+      knowledgeBase.pool.query(`
+        SELECT subreddit, COUNT(*) AS post_count
+        FROM reddit_posts
+        GROUP BY subreddit
+        ORDER BY post_count DESC
+      `),
+    ])
+    const postCounts = postCountsResult.rows[0]
 
     res.json({
       success: true,
       stats: {
-        totalPosts: parseInt(postCountResult.rows[0].count, 10),
+        totalPosts: parseInt(postCounts.total_posts, 10),
         totalComments: parseInt(commentCountResult.rows[0].count, 10),
-        postsWithEmbeddings: parseInt(embeddingCountResult.rows[0].count, 10),
-        totalVideos: parseInt(videoCountResult.rows[0].count, 10),
-        videosWithAnalysis: parseInt(videoWithAnalysisResult.rows[0].count, 10),
+        postsWithEmbeddings: parseInt(postCounts.posts_with_embeddings, 10),
+        totalVideos: parseInt(postCounts.total_videos, 10),
+        videosWithAnalysis: parseInt(postCounts.videos_with_analysis, 10),
         subreddits: subredditStats.rows,
       },
     })

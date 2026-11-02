@@ -1,4 +1,6 @@
 import { cache } from 'react'
+import { cookies } from 'next/headers'
+import { LEGACY_VTOP_COOKIES } from '@/lib/vtop-credential-schema'
 import type { NextAuthOptions, Session } from 'next-auth'
 import { getServerSession } from 'next-auth/next'
 import GoogleProvider from 'next-auth/providers/google'
@@ -171,6 +173,16 @@ export const authOptions: NextAuthOptions = {
     signOut: async ({ session }) => {
       const sessionToken = adapterSessionToken(session)
       if (sessionToken) await clearSessionVerificationForToken(sessionToken)
+      // Legacy client-side VTOP credential cookies weren't bound to a user; never
+      // leave them behind for the next person on a shared browser.
+      try {
+        const jar = await cookies()
+        for (const name of LEGACY_VTOP_COOKIES) {
+          if (jar.has(name)) jar.delete({ name, path: '/' })
+        }
+      } catch {
+        // Outside a request scope (no cookie store); nothing to clear.
+      }
     },
   },
   pages: {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useSession, signOut } from 'next-auth/react'
+import { clearLegacyVTOPClientState } from '@/lib/vtop-credentials'
 import { motion } from 'framer-motion'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Drawer } from 'vaul'
@@ -1634,6 +1635,7 @@ export function SettingsDialog({
       }
       if (!result.ok) throw new Error('please verify your identity to delete your account')
       toast.success('account deleted — signing you out')
+      clearLegacyVTOPClientState()
       await signOut({ callbackUrl: '/login' })
     } catch (error) {
       console.error('failed to delete account', error)
@@ -3220,7 +3222,10 @@ export function SettingsDialog({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => signOut()}
+                    onClick={() => {
+                            clearLegacyVTOPClientState()
+                            void signOut()
+                          }}
                     className="w-full sm:w-auto flex-shrink-0"
                   >
                     log out

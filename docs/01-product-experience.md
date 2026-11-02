@@ -52,8 +52,8 @@ This guide walks through everything a user (student, admin, or reviewer) can tou
 ### Credential Flow (`components/vtop-tool-handler.tsx`)
 
 - Listens for `vtopLoginTrigger` events emitted when `lib/tools.ts` returns `requiresCredentials`.
-- Opens `VTOPCredentialsDialog`, storing encrypted credentials locally via `lib/vtop-credentials.ts` (AES cipher tied to a session key Cookie).
-- Once credentials exist, auto-resubmits in the background. Hub overlays (next section) reuse the same storage.
+- Opens `VTOPCredentialsDialog`, which saves credentials server-side via `PUT /api/user/vtop-credentials` (AES-256-GCM under `VTOP_CREDENTIALS_KEY`, bound to the user; see `lib/vtop-credential-store.ts`). The password is never returned to the browser.
+- Once credentials exist, auto-resubmits in the background. Hub overlays (next section) read link status from `GET /api/user/vtop-credentials`.
 
 ### Memory Awareness
 

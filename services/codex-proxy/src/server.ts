@@ -1,4 +1,5 @@
 import { $ } from 'bun'
+import { z } from 'zod'
 
 type JsonRpcError = {
   code?: number
@@ -29,6 +30,16 @@ type JsonRpcServerRequest = {
   params?: unknown
 }
 
+// Incoming JSON-RPC line from codex app-server. Fields with the wrong type are treated as absent
+// (mirrors the previous `typeof` checks) instead of rejecting the whole message.
+const jsonRpcIncomingMessageSchema = z.object({
+  id: z.number().optional().catch(undefined),
+  method: z.string().optional().catch(undefined),
+  params: z.unknown(),
+  result: z.unknown(),
+  error: z.object({ message: z.unknown() }).optional().catch(undefined),
+})
+
 type PendingRequest = {
   resolve: (value: unknown) => void
   reject: (error: Error) => void
@@ -48,7 +59,9 @@ type SessionConfig = {
 type ChatgptStatus = {
   available: boolean
   connected: boolean
-  authMode: 'apiKey' | 'chatgpt' | 'chatgptAuthTokens' | null
+  // Known values are 'apiKey' | 'chatgpt' | 'chatgptAuthTokens'; any other string reported by
+  // codex app-server is forwarded verbatim.
+  authMode: string | null
   email: string | null
   planType: string | null
   planUsage: AccountPlanUsage | null
@@ -75,27 +88,6 @@ type AccountPlanUsage = {
   creditsBalance: string | null
 }
 
-type AccountReadResult = {
-  account?: {
-    type?: 'apiKey' | 'chatgpt' | 'chatgptAuthTokens'
-    email?: string
-    planType?: string
-  } | null
-  requiresOpenaiAuth?: boolean
-}
-
-type AccountRateLimitsReadResult = {
-  rateLimits?: unknown
-  rate_limits?: unknown
-  rateLimitsByLimitId?: Record<string, unknown> | null
-  rate_limits_by_limit_id?: Record<string, unknown> | null
-}
-
-type LoginChatgptResult = {
-  loginId?: string
-  authUrl?: string
-}
-
 type ChatgptLoginStartResult = {
   authUrl: string | null
   loginId: string | null
@@ -113,14 +105,26 @@ type CodexTurnUsage = {
   reasoningOutputTokens: number
 }
 
+const dynamicToolSchema = z.looseObject({
+  name: z.string(),
+  description: z.string().optional(),
+  inputSchema: z.unknown(),
+})
+
+const dynamicToolsSchema = z.array(dynamicToolSchema)
+
+type DynamicTool = z.infer<typeof dynamicToolSchema>
+
 type RunChatgptTurnOptions = {
   prompt: string
   model?: string | null
   cwd?: string | null
   baseInstructions?: string | null
   developerInstructions?: string | null
-  personality?: 'friendly' | 'pragmatic' | 'none' | null
-  dynamicTools?: Array<{ name: string; description?: string; inputSchema: unknown }>
+  // Known values are 'friendly' | 'pragmatic' | 'none'; any other string from the HTTP caller is
+  // forwarded verbatim to codex app-server (which validates it).
+  personality?: string | null
+  dynamicTools?: DynamicTool[]
 }
 
 type RunChatgptTurnResult = {
@@ -230,9 +234,12 @@ type PendingDeviceLogin = {
   canceled: boolean
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
 const readObject = (value: unknown): Record<string, unknown> | null => {
-  if (!value || typeof value !== 'object') return null
-  return value as Record<string, unknown>
+  if (!value || !isRecord(value)) return null
+  return value
 }
 
 const readString = (value: unknown): string | null => (typeof value === 'string' ? value : null)
@@ -308,9 +315,7 @@ const parsePlanUsageSnapshot = (value: unknown): AccountPlanUsage | null => {
   }
 }
 
-const pickPlanUsageSnapshot = (
-  payload: AccountRateLimitsReadResult | null | undefined
-): AccountPlanUsage | null => {
+const pickPlanUsageSnapshot = (payload: Record<string, unknown> | null): AccountPlanUsage | null => {
   if (!payload) return null
 
   const byLimitId =
@@ -334,8 +339,8 @@ const pickPlanUsageSnapshot = (
 const parseJsonArgs = (value: string | undefined): string[] | null => {
   if (!value) return null
   try {
-    const parsed = JSON.parse(value)
-    return Array.isArray(parsed) ? parsed.map(item => String(item)) : null
+    const parsed: unknown = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed.map((item: unknown) => String(item)) : null
   } catch {
     return null
   }
@@ -390,7 +395,7 @@ const decodeBase64UrlJson = (encoded: string): Record<string, unknown> | null =>
   const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4)
   try {
     const decoded = atob(padded)
-    const parsed = JSON.parse(decoded)
+    const parsed: unknown = JSON.parse(decoded)
     return readObject(parsed)
   } catch {
     return null
@@ -399,7 +404,8 @@ const decodeBase64UrlJson = (encoded: string): Record<string, unknown> | null =>
 
 const parseJwtAuthClaims = (token: string): JwtAuthClaims => {
   const parts = token.split('.')
-  if (parts.length < 2) {
+  const encodedPayload = parts[1]
+  if (parts.length < 2 || encodedPayload === undefined) {
     return {
       email: null,
       accountId: null,
@@ -408,7 +414,7 @@ const parseJwtAuthClaims = (token: string): JwtAuthClaims => {
     }
   }
 
-  const payload = decodeBase64UrlJson(parts[1])
+  const payload = decodeBase64UrlJson(encodedPayload)
   if (!payload) {
     return {
       email: null,
@@ -618,6 +624,7 @@ const sanitizeCodexArgsForReadOnly = (args: string[], source: string): string[] 
 
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i]
+    if (arg === undefined) continue
     const lower = arg.toLowerCase()
 
     const dropCurrentAndMaybeValue = (reason: string) => {
@@ -664,9 +671,10 @@ const HOME_DIR = Bun.env.HOME || Bun.env.USERPROFILE || '/tmp'
 const trimSlashes = (value: string): string => value.replace(/^\/+|\/+$/gu, '')
 
 const joinPath = (...parts: string[]): string => {
-  if (!parts.length) return ''
+  const first = parts[0]
+  if (first === undefined) return ''
 
-  const hasLeadingSlash = parts[0].startsWith('/')
+  const hasLeadingSlash = first.startsWith('/')
   const cleaned = parts.map((part, index) => {
     if (index === 0) return part.replace(/\/+$/gu, '')
     return trimSlashes(part)
@@ -680,10 +688,11 @@ const joinPath = (...parts: string[]): string => {
 }
 
 const resolveBunCwd = (): string => {
-  const cwdValue = (Bun as unknown as { cwd?: unknown }).cwd
+  // `Bun.cwd` is not part of Bun's published types; probe it at runtime.
+  const cwdValue: unknown = 'cwd' in Bun ? Bun.cwd : undefined
   if (typeof cwdValue === 'function') {
     try {
-      const resolved = cwdValue()
+      const resolved: unknown = cwdValue()
       if (typeof resolved === 'string' && resolved.trim()) {
         return resolved
       }
@@ -706,7 +715,7 @@ class JsonRpcConnection {
   private nextId = 1
   private readonly pending = new Map<number, PendingRequest>()
   private readonly stdinSink: {
-    write: (chunk: string | ArrayBuffer | ArrayBufferView) => unknown
+    write: (chunk: string) => unknown
   }
 
   private readonly notificationListeners = new Set<(notification: JsonRpcNotification) => void>()
@@ -716,7 +725,7 @@ class JsonRpcConnection {
   private readonly stderrListeners = new Set<(line: string) => void>()
 
   constructor(
-    stdin: { write: (chunk: string | ArrayBuffer | ArrayBufferView) => unknown },
+    stdin: { write: (chunk: string) => unknown },
     stdout: ReadableStream<Uint8Array>,
     stderr?: ReadableStream<Uint8Array>
   ) {
@@ -775,7 +784,7 @@ class JsonRpcConnection {
 
       this.pending.set(id, { resolve, reject, timer })
 
-      void this.writeMessage({ id, method, params } satisfies JsonRpcRequest).catch(error => {
+      void this.writeMessage({ id, method, params } satisfies JsonRpcRequest).catch((error: unknown) => {
         this.pending.delete(id)
         clearTimeout(timer)
         reject(error instanceof Error ? error : new Error(String(error)))
@@ -784,13 +793,13 @@ class JsonRpcConnection {
   }
 
   sendNotification(method: string, params?: unknown): void {
-    void this.writeMessage({ method, params } satisfies JsonRpcNotification).catch(error => {
+    void this.writeMessage({ method, params } satisfies JsonRpcNotification).catch((error: unknown) => {
       this.emitError(error instanceof Error ? error : new Error(String(error)))
     })
   }
 
   sendResponse(id: number, result?: unknown, error?: JsonRpcError): void {
-    void this.writeMessage({ id, result, error } satisfies JsonRpcResponse).catch(err => {
+    void this.writeMessage({ id, result, error } satisfies JsonRpcResponse).catch((err: unknown) => {
       this.emitError(err instanceof Error ? err : new Error(String(err)))
     })
   }
@@ -882,7 +891,11 @@ class JsonRpcConnection {
       return
     }
 
-    const message = payload as Partial<JsonRpcRequest & JsonRpcResponse & JsonRpcNotification>
+    const parsed = jsonRpcIncomingMessageSchema.safeParse(payload)
+    if (!parsed.success) {
+      return
+    }
+    const message = parsed.data
 
     if (typeof message.id === 'number' && typeof message.method === 'string') {
       const request: JsonRpcServerRequest = {
@@ -904,7 +917,7 @@ class JsonRpcConnection {
       clearTimeout(pending.timer)
 
       if (message.error?.message) {
-        pending.reject(new Error(message.error.message))
+        pending.reject(new Error(String(message.error.message)))
       } else {
         pending.resolve(message.result)
       }
@@ -1109,9 +1122,11 @@ class CodexAppServerSession {
   private async startBrowserLoginFlow(): Promise<ChatgptLoginStartResult> {
     this.clearPendingDeviceLogin()
 
-    const result = (await this.request('account/login/start', {
-      type: 'chatgpt',
-    })) as LoginChatgptResult
+    const result = readObject(
+      await this.request('account/login/start', {
+        type: 'chatgpt',
+      })
+    )
 
     this.pendingLoginId = readString(result?.loginId)
     this.lastLoginError = null
@@ -1205,7 +1220,7 @@ class CodexAppServerSession {
     this.pendingLoginId = pending.loginId
     this.lastLoginError = null
 
-    void this.pollDeviceLogin(pending).catch(error => {
+    void this.pollDeviceLogin(pending).catch((error: unknown) => {
       if (this.pendingDeviceLogin?.loginId !== pending.loginId) {
         return
       }
@@ -1226,22 +1241,20 @@ class CodexAppServerSession {
 
   async getStatus(): Promise<ChatgptStatus> {
     this.touch()
-    await this.maybeRefreshExternalAuth(false).catch(error => {
+    await this.maybeRefreshExternalAuth(false).catch((error: unknown) => {
       this.lastLoginError = error instanceof Error ? error.message : String(error)
     })
 
-    const [accountResult, rateLimitsResult] = await Promise.all([
+    const [accountResultRaw, rateLimitsResultRaw] = await Promise.all([
       this.request('account/read', {
         refreshToken: false,
-      }) as Promise<AccountReadResult>,
-      this.request('account/rateLimits/read').catch(() => null) as Promise<AccountRateLimitsReadResult | null>,
+      }),
+      this.request('account/rateLimits/read').catch(() => null),
     ])
+    const accountResult = readObject(accountResultRaw)
+    const rateLimitsResult = readObject(rateLimitsResultRaw)
     const account = readObject(accountResult?.account ?? null)
-    const authMode = readString(account?.type) as
-      | 'apiKey'
-      | 'chatgpt'
-      | 'chatgptAuthTokens'
-      | null
+    const authMode = readString(account?.type)
     const planUsage = pickPlanUsageSnapshot(rateLimitsResult)
 
     if (this.isConnectedAuthMode(authMode)) {
@@ -1316,7 +1329,7 @@ class CodexAppServerSession {
       throw new Error('Prompt is required for codex turn')
     }
 
-    const threadResult = (await this.request('thread/start', {
+    const threadResult = readObject(await this.request('thread/start', {
       model: options.model ?? Bun.env.CODEX_APP_SERVER_MODEL ?? undefined,
       cwd: Bun.env.CODEX_APP_SERVER_CWD ?? options.cwd ?? resolveBunCwd(),
       approvalPolicy: 'never',
@@ -1330,7 +1343,7 @@ class CodexAppServerSession {
       ephemeral: true,
       experimentalRawEvents: false,
       persistExtendedHistory: false,
-    })) as Record<string, unknown>
+    }))
 
     const thread = readObject(threadResult?.thread)
     const threadId = readString(thread?.id)
@@ -1339,11 +1352,13 @@ class CodexAppServerSession {
       throw new Error('codex app-server did not return a thread id')
     }
 
-    const turnStartResult = (await this.request('turn/start', {
-      threadId,
-      input: [{ type: 'text', text: prompt, text_elements: [] }],
-      approvalPolicy: 'never',
-    })) as Record<string, unknown>
+    const turnStartResult = readObject(
+      await this.request('turn/start', {
+        threadId,
+        input: [{ type: 'text', text: prompt, text_elements: [] }],
+        approvalPolicy: 'never',
+      })
+    )
 
     const turn = readObject(turnStartResult?.turn)
     const turnId = readString(turn?.id)
@@ -1836,7 +1851,7 @@ class CodexAppServerSession {
             input: toolInput,
           })
         }
-      ).catch(error => {
+      ).catch((error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
         return {
           result: {
@@ -1991,14 +2006,28 @@ const json = (body: unknown, init?: ResponseInit): Response =>
 const badRequest = (message: string): Response => json({ error: message }, { status: 400 })
 const unauthorized = (): Response => json({ error: 'Unauthorized' }, { status: 401 })
 
+const requestBodySchema = z.record(z.string(), z.unknown())
+
 const parseBody = async (request: Request): Promise<Record<string, unknown> | null> => {
   try {
-    const payload = await request.json()
+    const payload: unknown = await request.json()
     if (!payload || typeof payload !== 'object') return null
-    return payload as Record<string, unknown>
+    const parsed = requestBodySchema.safeParse(payload)
+    return parsed.success ? parsed.data : null
   } catch {
     return null
   }
+}
+
+const errorMessageOr = (error: unknown, fallback: string): string =>
+  readString(readObject(error)?.message) || fallback
+
+type DynamicToolsParseResult = { ok: true; tools: DynamicTool[] | undefined } | { ok: false }
+
+const parseDynamicTools = (value: unknown): DynamicToolsParseResult => {
+  if (!Array.isArray(value)) return { ok: true, tools: undefined }
+  const parsed = dynamicToolsSchema.safeParse(value)
+  return parsed.success ? { ok: true, tools: parsed.data } : { ok: false }
 }
 
 const userIdFromBody = (body: Record<string, unknown> | null): string | null => {
@@ -2057,8 +2086,8 @@ const server = Bun.serve({
         const session = getOrCreateSession(userId)
         const status = await session.getStatus()
         return json(status)
-      } catch (error: any) {
-        return json({ error: error?.message || 'Failed to get ChatGPT status' }, { status: 500 })
+      } catch (error) {
+        return json({ error: errorMessageOr(error, 'Failed to get ChatGPT status') }, { status: 500 })
       }
     }
 
@@ -2071,8 +2100,8 @@ const server = Bun.serve({
         const session = getOrCreateSession(userId)
         const result = await session.startChatgptLogin()
         return json(result)
-      } catch (error: any) {
-        return json({ error: error?.message || 'Failed to start ChatGPT login' }, { status: 500 })
+      } catch (error) {
+        return json({ error: errorMessageOr(error, 'Failed to start ChatGPT login') }, { status: 500 })
       }
     }
 
@@ -2085,8 +2114,8 @@ const server = Bun.serve({
         const session = getOrCreateSession(userId)
         const status = await session.cancelChatgptLogin(readString(body?.loginId))
         return json(status)
-      } catch (error: any) {
-        return json({ error: error?.message || 'Failed to cancel ChatGPT login' }, { status: 500 })
+      } catch (error) {
+        return json({ error: errorMessageOr(error, 'Failed to cancel ChatGPT login') }, { status: 500 })
       }
     }
 
@@ -2099,8 +2128,8 @@ const server = Bun.serve({
         const session = getOrCreateSession(userId)
         const status = await session.logout()
         return json(status)
-      } catch (error: any) {
-        return json({ error: error?.message || 'Failed to disconnect ChatGPT' }, { status: 500 })
+      } catch (error) {
+        return json({ error: errorMessageOr(error, 'Failed to disconnect ChatGPT') }, { status: 500 })
       }
     }
 
@@ -2123,29 +2152,29 @@ const server = Bun.serve({
         return badRequest('options.prompt is required')
       }
 
+      const dynamicTools = parseDynamicTools(optionsRaw?.dynamicTools)
+      if (!dynamicTools.ok) {
+        return badRequest(
+          'options.dynamicTools must be an array of { name: string, description?: string, inputSchema }'
+        )
+      }
+
       const runOptions: RunChatgptTurnOptions = {
         prompt,
         model: readString(optionsRaw?.model),
         cwd: readString(optionsRaw?.cwd),
         baseInstructions: readString(optionsRaw?.baseInstructions),
         developerInstructions: readString(optionsRaw?.developerInstructions),
-        personality:
-          (readString(optionsRaw?.personality) as RunChatgptTurnOptions['personality']) ?? 'none',
-        dynamicTools: Array.isArray(optionsRaw?.dynamicTools)
-          ? (optionsRaw?.dynamicTools as Array<{
-              name: string
-              description?: string
-              inputSchema: unknown
-            }>)
-          : undefined,
+        personality: readString(optionsRaw?.personality) ?? 'none',
+        dynamicTools: dynamicTools.tools,
       }
 
       try {
         const session = getOrCreateSession(userId)
         const result = await session.startTurnRun(runOptions)
         return json(result)
-      } catch (error: any) {
-        return json({ error: error?.message || 'Failed to start ChatGPT turn' }, { status: 500 })
+      } catch (error) {
+        return json({ error: errorMessageOr(error, 'Failed to start ChatGPT turn') }, { status: 500 })
       }
     }
 
@@ -2161,8 +2190,8 @@ const server = Bun.serve({
         const session = getOrCreateSession(userId)
         const event = await session.nextTurnEvent(runId, timeoutMs)
         return json({ event })
-      } catch (error: any) {
-        return json({ error: error?.message || 'Failed to fetch turn event' }, { status: 500 })
+      } catch (error) {
+        return json({ error: errorMessageOr(error, 'Failed to fetch turn event') }, { status: 500 })
       }
     }
 
@@ -2180,8 +2209,8 @@ const server = Bun.serve({
         const session = getOrCreateSession(userId)
         await session.submitToolResult(runId, requestId, result)
         return json({ ok: true })
-      } catch (error: any) {
-        return json({ error: error?.message || 'Failed to submit tool result' }, { status: 500 })
+      } catch (error) {
+        return json({ error: errorMessageOr(error, 'Failed to submit tool result') }, { status: 500 })
       }
     }
 
@@ -2196,8 +2225,8 @@ const server = Bun.serve({
         const session = getOrCreateSession(userId)
         session.closeRun(runId)
         return json({ ok: true })
-      } catch (error: any) {
-        return json({ error: error?.message || 'Failed to close turn run' }, { status: 500 })
+      } catch (error) {
+        return json({ error: errorMessageOr(error, 'Failed to close turn run') }, { status: 500 })
       }
     }
 
@@ -2218,16 +2247,15 @@ const server = Bun.serve({
         cwd: readString(optionsRaw?.cwd),
         baseInstructions: readString(optionsRaw?.baseInstructions),
         developerInstructions: readString(optionsRaw?.developerInstructions),
-        personality:
-          (readString(optionsRaw?.personality) as RunChatgptTurnOptions['personality']) ?? 'none',
+        personality: readString(optionsRaw?.personality) ?? 'none',
       }
 
       try {
         const session = getOrCreateSession(userId)
         const result = await session.runChatgptTurn(runOptions)
         return json(result)
-      } catch (error: any) {
-        return json({ error: error?.message || 'Failed to run ChatGPT turn' }, { status: 500 })
+      } catch (error) {
+        return json({ error: errorMessageOr(error, 'Failed to run ChatGPT turn') }, { status: 500 })
       }
     }
 
@@ -2244,5 +2272,5 @@ const shutdown = () => {
   }
   registry.sessions.clear()
   server.stop(true)
-  Bun.exit(0)
+  process.exit(0)
 }

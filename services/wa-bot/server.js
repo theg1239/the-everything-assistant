@@ -2,8 +2,7 @@ const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
 const rateLimit = require('express-rate-limit')
-const bodyParser = require('body-parser')
-require('dotenv').config()
+require('dotenv').config({ quiet: true })
 
 const WhatsAppService = require('./whatsapp-service')
 const APIClient = require('./api-client')
@@ -33,15 +32,15 @@ class WABotServer {
 
     const limiter = rateLimit({
       windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-      max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
+      limit: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
       message: {
         error: 'Too many requests from this IP, please try again later.',
       },
     })
     this.app.use('/api/', limiter)
 
-    this.app.use(bodyParser.json({ limit: '10mb' }))
-    this.app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }))
+    this.app.use(express.json({ limit: '10mb' }))
+    this.app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
     this.app.use((req, res, next) => {
       console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`)
@@ -80,7 +79,7 @@ class WABotServer {
 
     this.app.post('/api/whatsapp/send', async (req, res) => {
       try {
-        const { phoneNumber, message } = req.body
+        const { phoneNumber, message } = req.body || {}
 
         if (!phoneNumber || !message) {
           return res.status(400).json({
@@ -117,7 +116,7 @@ class WABotServer {
 
     this.app.post('/api/webhook', (req, res) => {
       try {
-        const { type, data } = req.body
+        const { type, data } = req.body || {}
 
         console.log(`Webhook received: ${type}`)
 
@@ -185,7 +184,7 @@ class WABotServer {
 
     this.app.post('/api/whatsapp/test', async (req, res) => {
       try {
-        const { phoneNumber } = req.body
+        const { phoneNumber } = req.body || {}
 
         if (!phoneNumber) {
           return res.status(400).json({
@@ -214,7 +213,7 @@ class WABotServer {
       }
     })
 
-    this.app.use('*', (req, res) => {
+    this.app.use((req, res) => {
       res.status(404).json({
         error: 'Endpoint not found',
         path: req.originalUrl,
@@ -340,7 +339,11 @@ class WABotServer {
 
   async start() {
     try {
-      this.app.listen(this.port, () => {
+      this.app.listen(this.port, error => {
+        if (error) {
+          console.error(`Failed to start server on port ${this.port}:`, error)
+          process.exit(1)
+        }
         console.log(`WhatsApp Bot Server running on port ${this.port}`)
         console.log(`Health check: http://localhost:${this.port}/health`)
         console.log(`WhatsApp status: http://localhost:${this.port}/api/whatsapp/status`)

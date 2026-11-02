@@ -10,18 +10,16 @@
     "postinstall": "echo 'Install complete'"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "whatsapp-web.js": "^1.25.0",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.2",
+    "helmet": "^8.3.0",
     "qrcode-terminal": "^0.12.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.6.0",
-    "node-fetch": "^2.7.0",
-    "body-parser": "^1.20.2",
-    "helmet": "^7.1.0",
-    "express-rate-limit": "^7.1.5"
+    "whatsapp-web.js": "^1.34.7"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2"
+    "nodemon": "^3.1.14"
   },
   "engines": {
     "node": ">=18.0.0"

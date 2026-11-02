@@ -15,6 +15,7 @@ const production = {
 test('only the intended Git production project can sync', () => {
   assert.equal(shouldSyncRag(production), true)
   assert.equal(shouldSyncRag({ ...production, VERCEL_GIT_COMMIT_REF: 'stable' }), true)
+  assert.equal(shouldSyncRag({ ...production, VERCEL_GIT_COMMIT_REF: 'prod' }), true)
   assert.equal(
     shouldSyncRag({ ...production, VERCEL_ENV: 'preview', VERCEL_GIT_COMMIT_REF: 'stable' }),
     false

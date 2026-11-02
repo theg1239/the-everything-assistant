@@ -2,10 +2,10 @@ import { drizzle } from 'drizzle-orm/neon-http'
 import { neon } from '@neondatabase/serverless'
 import { papers } from './schema'
 
-const connectionString = process.env.PAPERS_DATABASE_URL!
+const connectionString = process.env.PAPERS_DATABASE_URL
 
 if (!connectionString) {
-  throw new Error('DATABASE_URL environment variable is required')
+  throw new Error('PAPERS_DATABASE_URL environment variable is required')
 }
 
 const sql = neon(connectionString)

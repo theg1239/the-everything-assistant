@@ -1,18 +1,22 @@
 'use server'
 
-import { generateObject } from 'ai'
+import { generateText, Output } from 'ai'
 import { openai } from '@ai-sdk/openai'
-import { v2 as cloudinary } from 'cloudinary'
-import { PDFDocument } from 'pdf-lib'
+import {
+  v2 as cloudinary,
+  type UploadApiOptions,
+  type UploadApiResponse,
+} from 'cloudinary'
+import { PDFDocument, type PDFImage } from 'pdf-lib'
 import sharp from 'sharp'
 import { db } from '../db'
-import { papers, NewPaper } from '../db/schema'
+import { papers, type NewPaper } from '../db/schema'
 import { z } from 'zod'
 
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME!,
-  api_key: process.env.CLOUDINARY_API_KEY!,
-  api_secret: process.env.CLOUDINARY_API_SECRET!,
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 })
 
 const PaperMetadataSchema = z.object({
@@ -39,60 +43,131 @@ const PaperMetadataSchema = z.object({
     ),
   semester: z
     .enum(['Fall', 'Winter', 'Summer', 'Spring'], {
-      errorMap: () => ({ message: 'Semester must be one of: Fall, Winter, Summer, Spring' }),
+      error: 'Semester must be one of: Fall, Winter, Summer, Spring',
     })
     .describe('The semester when exam was conducted (Fall/Winter/Summer/Spring)'),
   examType: z
     .enum(['CAT-1', 'CAT-2', 'FAT', 'Quiz', 'Assignment', 'Lab'], {
-      errorMap: () => ({
-        message: 'Exam type must be one of: CAT-1, CAT-2, FAT, Quiz, Assignment, Lab',
-      }),
+      error: 'Exam type must be one of: CAT-1, CAT-2, FAT, Quiz, Assignment, Lab',
     })
     .describe(
       'Type of assessment: CAT-1 (Continuous Assessment Test 1), CAT-2 (Continuous Assessment Test 2), FAT (Final Assessment Test), Quiz, Assignment, or Lab'
     ),
 })
 
-type PaperMetadata = z.infer<typeof PaperMetadataSchema>
+const PaperExtractionSchema = z.object({
+  metadata: PaperMetadataSchema,
+  text: z.string().describe('Full text content of the document'),
+})
 
-interface UploadResult {
+type PaperExtraction = z.infer<typeof PaperExtractionSchema>
+
+const EXTRACTION_INSTRUCTIONS =
+  'You are an AI that extracts metadata from VIT university exam papers with high accuracy. Follow these extraction rules:\n\n1. TITLE: Extract the full course name exactly as written (e.g., "Computer Programming", "Digital Logic Design", "Mathematics for Engineers")\n2. COURSE CODE: Find the exact alphanumeric course code (e.g., CSE1001, MAT1011, ECE2025, CHE1007)\n3. EXAM TYPE: Identify the assessment type - CAT-1 (Continuous Assessment Test 1), CAT-2 (Continuous Assessment Test 2), FAT (Final Assessment Test), Quiz, Assignment, or Lab\n4. SLOT: Extract the exact slot designation (A1, A2, B1, B2, C1, C2, D1, D2, E1, E2, F1, F2, G1, G2, or L1-L60 for lab slots)\n5. YEAR: Extract the academic year (e.g., 2023, 2024)\n6. SEMESTER: Identify the semester (Fall, Winter, Summer, Spring)\n\nLook for these details in headers, footers, and throughout the document. Be precise and only extract information that is clearly visible. ALL FIELDS ARE REQUIRED - if you cannot find a field, make your best educated guess based on the document content.'
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024
+const ALLOWED_TYPES: ReadonlySet<string> = new Set([
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+])
+
+export interface UploadedPaper {
+  id: string
+  title: string
+  courseCode: string
+  year: number
+  slot: string
+  semester: string
+  examType: string
+  fileUrl: string
+  thumbnailUrl: string
+  ocrText?: string
+  createdAt: Date
+}
+
+export interface UploadResult {
   success: boolean
   error?: string
-  paper?: {
-    id: string
-    title: string
-    courseCode: string
-    year: number
-    slot: string
-    semester: string
-    examType: string
-    fileUrl: string
-    thumbnailUrl: string
-    ocrText?: string
-    createdAt: Date
-  }
+  paper?: UploadedPaper
+}
+
+interface CloudinaryUpload {
+  secure_url: string
+  public_id: string
+}
+
+/** Extracts metadata + OCR text from a PDF or image using the LLM, validated by zod. */
+async function extractPaperContent(data: Buffer, mediaType: string): Promise<PaperExtraction> {
+  const kind = mediaType === 'application/pdf' ? 'PDF' : 'image'
+  const { output } = await generateText({
+    model: openai('gpt-5.6-luna'),
+    output: Output.object({ schema: PaperExtractionSchema }),
+    instructions: EXTRACTION_INSTRUCTIONS,
+    reasoning: 'none',
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: `Please analyze this exam paper ${kind} and extract both the metadata and full text content.`,
+          },
+          {
+            type: 'file',
+            data: { type: 'data', data: data.toString('base64') },
+            mediaType,
+          },
+        ],
+      },
+    ],
+  })
+  return output
+}
+
+function uploadToCloudinary(
+  buffer: Buffer,
+  options: UploadApiOptions,
+  label: string
+): Promise<CloudinaryUpload> {
+  return new Promise<CloudinaryUpload>((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      options,
+      (error, result?: UploadApiResponse) => {
+        if (error) {
+          console.error(`Cloudinary ${label} error:`, error)
+          reject(new Error(`Failed to ${label}: ${error.message}`))
+        } else if (!result) {
+          reject(new Error(`Failed to ${label}: empty response from Cloudinary`))
+        } else {
+          console.log(`Cloudinary ${label} succeeded:`, result.secure_url)
+          resolve({ secure_url: result.secure_url, public_id: result.public_id })
+        }
+      }
+    )
+    uploadStream.end(buffer)
+  })
 }
 
 export async function uploadPaper(formData: FormData): Promise<UploadResult> {
   try {
-    const files = formData.getAll('file') as File[]
+    const files = formData.getAll('file').filter((entry): entry is File => entry instanceof File)
+    const [firstFile] = files
 
-    if (!files || files.length === 0) {
+    if (!firstFile) {
       return { success: false, error: 'No file provided' }
     }
 
-    const maxFileSize = 10 * 1024 * 1024
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
-
     for (const file of files) {
-      if (file.size > maxFileSize) {
+      if (file.size > MAX_FILE_SIZE) {
         return {
           success: false,
           error: `File "${file.name}" is too large. Please upload files smaller than 10MB.`,
         }
       }
 
-      if (!allowedTypes.includes(file.type)) {
+      if (!ALLOWED_TYPES.has(file.type)) {
         return {
           success: false,
           error: `Invalid file type for "${file.name}". Please upload PDF or image files (JPEG, PNG, WebP)`,
@@ -107,12 +182,11 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
     let combinedFilename: string
 
     if (files.length === 1) {
-      const file = files[0]
-      finalBuffer = Buffer.from(await file.arrayBuffer())
-      finalMimeType = file.type
-      combinedFilename = file.name
+      finalBuffer = Buffer.from(await firstFile.arrayBuffer())
+      finalMimeType = firstFile.type
+      combinedFilename = firstFile.name
       console.log(
-        `Processing single file: ${file.name}, size: ${file.size} bytes, type: ${file.type}`
+        `Processing single file: ${firstFile.name}, size: ${firstFile.size} bytes, type: ${firstFile.type}`
       )
     } else {
       console.log(`Combining ${files.length} files into a single PDF`)
@@ -127,7 +201,7 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
           const pages = await pdfDoc.copyPages(existingPdf, existingPdf.getPageIndices())
           pages.forEach(page => pdfDoc.addPage(page))
         } else {
-          let image
+          let image: PDFImage
           if (file.type === 'image/png') {
             image = await pdfDoc.embedPng(buffer)
           } else if (file.type === 'image/jpeg') {
@@ -158,212 +232,81 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
 
       finalBuffer = Buffer.from(await pdfDoc.save())
       finalMimeType = 'application/pdf'
-      combinedFilename =
-        files.length > 1 ? `combined_paper_${files.length}_files.pdf` : files[0].name
+      combinedFilename = `combined_paper_${files.length}_files.pdf`
       console.log(`Combined PDF created, size: ${finalBuffer.length} bytes`)
     }
 
-    let ocrText = ''
-    let metadata: PaperMetadata
-    let fileBuffer = finalBuffer
+    const isPdf = finalMimeType === 'application/pdf'
 
-    if (finalMimeType === 'application/pdf') {
+    if (isPdf) {
       try {
         await PDFDocument.load(finalBuffer)
-      } catch (error) {
+      } catch {
         return {
           success: false,
           error: 'Invalid PDF file. Please ensure the file is not corrupted.',
         }
       }
+    }
 
-      const base64Pdf = finalBuffer.toString('base64')
-
-      try {
-        const { object: extractedData } = await generateObject({
-          model: openai('gpt-5.6-luna'),
-          schema: z.object({
-            metadata: PaperMetadataSchema,
-            text: z.string().describe('Full text content of the document'),
-          }),
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: 'Please analyze this exam paper PDF and extract both the metadata and full text content.',
-                },
-                {
-                  type: 'file',
-                  data: base64Pdf,
-                  mediaType: 'application/pdf',
-                },
-              ],
-            },
-          ],
-          system:
-            'You are an AI that extracts metadata from VIT university exam papers with high accuracy. Follow these extraction rules:\n\n1. TITLE: Extract the full course name exactly as written (e.g., "Computer Programming", "Digital Logic Design", "Mathematics for Engineers")\n2. COURSE CODE: Find the exact alphanumeric course code (e.g., CSE1001, MAT1011, ECE2025, CHE1007)\n3. EXAM TYPE: Identify the assessment type - CAT-1 (Continuous Assessment Test 1), CAT-2 (Continuous Assessment Test 2), FAT (Final Assessment Test), Quiz, Assignment, or Lab\n4. SLOT: Extract the exact slot designation (A1, A2, B1, B2, C1, C2, D1, D2, E1, E2, F1, F2, G1, G2, or L1-L60 for lab slots)\n5. YEAR: Extract the academic year (e.g., 2023, 2024)\n6. SEMESTER: Identify the semester (Fall, Winter, Summer, Spring)\n\nLook for these details in headers, footers, and throughout the document. Be precise and only extract information that is clearly visible. ALL FIELDS ARE REQUIRED - if you cannot find a field, make your best educated guess based on the document content.',
-          providerOptions: {
-            openai: {
-              reasoningEffort: 'none',
-            },
-          },
-        })
-
-        const validationResult = PaperMetadataSchema.safeParse(extractedData.metadata)
-        if (!validationResult.success) {
-          console.error('Schema validation failed for PDF:', validationResult.error.issues)
-          return {
-            success: false,
-            error: `Failed to extract required metadata from PDF: ${validationResult.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join(', ')}`,
-          }
-        }
-
-        metadata = validationResult.data
-        ocrText = extractedData.text
-      } catch (error) {
-        console.error('OpenAI API error for PDF:', error)
-        return {
-          success: false,
-          error:
-            'Failed to process PDF content. Please ensure the PDF contains clear exam paper information and try again.',
-        }
-      }
-    } else {
-      const base64Image = finalBuffer.toString('base64')
-      const mimeType = finalMimeType
-
-      try {
-        const { object: extractedData } = await generateObject({
-          model: openai('gpt-5.6-luna'),
-          schema: z.object({
-            metadata: PaperMetadataSchema,
-            text: z.string().describe('Full text content of the document'),
-          }),
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: 'Please analyze this exam paper image and extract both the metadata and full text content.',
-                },
-                {
-                  type: 'image',
-                  image: base64Image,
-                  mediaType: mimeType,
-                },
-              ],
-            },
-          ],
-          system:
-            'You are an AI that extracts metadata from VIT university exam papers with high accuracy. Follow these extraction rules:\n\n1. TITLE: Extract the full course name exactly as written (e.g., "Computer Programming", "Digital Logic Design", "Mathematics for Engineers")\n2. COURSE CODE: Find the exact alphanumeric course code (e.g., CSE1001, MAT1011, ECE2025, CHE1007)\n3. EXAM TYPE: Identify the assessment type - CAT-1 (Continuous Assessment Test 1), CAT-2 (Continuous Assessment Test 2), FAT (Final Assessment Test), Quiz, Assignment, or Lab\n4. SLOT: Extract the exact slot designation (A1, A2, B1, B2, C1, C2, D1, D2, E1, E2, F1, F2, G1, G2, or L1-L60 for lab slots)\n5. YEAR: Extract the academic year (e.g., 2023, 2024)\n6. SEMESTER: Identify the semester (Fall, Winter, Summer, Spring)\n\nLook for these details in headers, footers, and throughout the document. Be precise and only extract information that is clearly visible. ALL FIELDS ARE REQUIRED - if you cannot find a field, make your best educated guess based on the document content.',
-          providerOptions: {
-            openai: {
-              reasoningEffort: 'none',
-            },
-          },
-        })
-
-        const validationResult = PaperMetadataSchema.safeParse(extractedData.metadata)
-        if (!validationResult.success) {
-          console.error('Schema validation failed for image:', validationResult.error.issues)
-          return {
-            success: false,
-            error: `Failed to extract required metadata from image: ${validationResult.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join(', ')}`,
-          }
-        }
-
-        metadata = validationResult.data
-        ocrText = extractedData.text
-      } catch (error) {
-        console.error('OpenAI API error for image:', error)
-        return {
-          success: false,
-          error:
-            'Failed to process image content. Please ensure the image contains clear exam paper information and is readable.',
-        }
+    let extraction: PaperExtraction
+    try {
+      extraction = await extractPaperContent(finalBuffer, finalMimeType)
+    } catch (error) {
+      console.error(`OpenAI API error for ${isPdf ? 'PDF' : 'image'}:`, error)
+      return {
+        success: false,
+        error: isPdf
+          ? 'Failed to process PDF content. Please ensure the PDF contains clear exam paper information and try again.'
+          : 'Failed to process image content. Please ensure the image contains clear exam paper information and is readable.',
       }
     }
 
+    const { metadata, text: ocrText } = extraction
+
     const timestamp = Date.now()
-    const fileUploadResult = await new Promise<{ secure_url: string; public_id: string }>(
-      (resolve, reject) => {
-        if (finalMimeType === 'application/pdf') {
-          const uploadStream = cloudinary.uploader.upload_stream(
-            {
-              resource_type: 'raw',
-              folder: 'vit-papers',
-              public_id: `paper_${timestamp}.pdf`,
-              use_filename: false,
-              unique_filename: false,
-            },
-            (error: any, result: any) => {
-              if (error) {
-                console.error('Cloudinary PDF upload error:', error)
-                reject(new Error(`Failed to upload PDF: ${error.message}`))
-              } else {
-                console.log('PDF uploaded successfully:', result.secure_url)
-                resolve(result)
-              }
-            }
-          )
-          uploadStream.end(fileBuffer)
-        } else {
-          const uploadStream = cloudinary.uploader.upload_stream(
-            {
-              resource_type: 'image',
-              folder: 'vit-papers',
-              public_id: `paper_${timestamp}`,
-              quality: 'auto:best',
-              fetch_format: 'auto',
-              flags: 'progressive',
-            },
-            (error: any, result: any) => {
-              if (error) {
-                console.error('Cloudinary image upload error:', error)
-                reject(new Error(`Failed to upload image: ${error.message}`))
-              } else {
-                console.log('Image uploaded successfully:', result.secure_url)
-                resolve(result)
-              }
-            }
-          )
-          uploadStream.end(fileBuffer)
-        }
-      }
-    )
+    const fileUploadResult = isPdf
+      ? await uploadToCloudinary(
+          finalBuffer,
+          {
+            resource_type: 'raw',
+            folder: 'vit-papers',
+            public_id: `paper_${timestamp}.pdf`,
+            use_filename: false,
+            unique_filename: false,
+          },
+          'upload PDF'
+        )
+      : await uploadToCloudinary(
+          finalBuffer,
+          {
+            resource_type: 'image',
+            folder: 'vit-papers',
+            public_id: `paper_${timestamp}`,
+            quality: 'auto:best',
+            fetch_format: 'auto',
+            flags: 'progressive',
+          },
+          'upload image'
+        )
 
-    let thumbnailUploadResult: { secure_url: string; public_id: string }
+    let thumbnailUploadResult: CloudinaryUpload
 
-    if (finalMimeType === 'application/pdf') {
-      thumbnailUploadResult = await new Promise<{ secure_url: string; public_id: string }>(
-        (resolve, reject) => {
-          const uploadStream = cloudinary.uploader.upload_stream(
-            {
-              resource_type: 'image',
-              folder: 'vit-papers/thumbnails',
-              public_id: `thumb_${timestamp}`,
-              format: 'webp',
-              page: 1,
-              width: 800,
-              height: 1200,
-              crop: 'limit',
-              quality: 'auto:good',
-            },
-            (error: any, result: any) => {
-              if (error) {
-                console.error('Cloudinary PDF thumbnail error:', error)
-                reject(new Error(`Failed to generate PDF thumbnail: ${error.message}`))
-              } else {
-                console.log('PDF thumbnail generated successfully:', result.secure_url)
-                resolve(result)
-              }
-            }
-          )
-          uploadStream.end(finalBuffer)
-        }
+    if (isPdf) {
+      thumbnailUploadResult = await uploadToCloudinary(
+        finalBuffer,
+        {
+          resource_type: 'image',
+          folder: 'vit-papers/thumbnails',
+          public_id: `thumb_${timestamp}`,
+          format: 'webp',
+          page: 1,
+          width: 800,
+          height: 1200,
+          crop: 'limit',
+          quality: 'auto:good',
+        },
+        'generate PDF thumbnail'
       )
     } else {
       const thumbnailBuffer = await sharp(finalBuffer)
@@ -371,31 +314,19 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
         .webp({ quality: 90 })
         .toBuffer()
 
-      thumbnailUploadResult = await new Promise<{ secure_url: string; public_id: string }>(
-        (resolve, reject) => {
-          const uploadStream = cloudinary.uploader.upload_stream(
-            {
-              resource_type: 'image',
-              folder: 'vit-papers/thumbnails',
-              public_id: `thumb_${Date.now()}`,
-              format: 'webp',
-              transformation: [
-                { width: 800, height: 1200, crop: 'limit' },
-                { quality: 'auto:good', fetch_format: 'auto' },
-              ],
-            },
-            (error: any, result: any) => {
-              if (error) {
-                console.error('Cloudinary thumbnail upload error:', error)
-                reject(new Error(`Failed to generate image thumbnail: ${error.message}`))
-              } else {
-                resolve(result)
-              }
-            }
-          )
-
-          uploadStream.end(thumbnailBuffer)
-        }
+      thumbnailUploadResult = await uploadToCloudinary(
+        thumbnailBuffer,
+        {
+          resource_type: 'image',
+          folder: 'vit-papers/thumbnails',
+          public_id: `thumb_${Date.now()}`,
+          format: 'webp',
+          transformation: [
+            { width: 800, height: 1200, crop: 'limit' },
+            { quality: 'auto:good', fetch_format: 'auto' },
+          ],
+        },
+        'generate image thumbnail'
       )
     }
 
@@ -418,6 +349,10 @@ export async function uploadPaper(formData: FormData): Promise<UploadResult> {
     }
 
     const [insertedPaper] = await db.insert(papers).values(newPaper).returning()
+
+    if (!insertedPaper) {
+      return { success: false, error: 'Failed to save paper' }
+    }
 
     return {
       success: true,

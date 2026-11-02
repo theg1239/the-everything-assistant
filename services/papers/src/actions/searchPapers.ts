@@ -2,78 +2,84 @@
 
 import { db } from '../db'
 import { papers } from '../db/schema'
-import { desc, asc, ilike, and, or, eq, count, isNotNull } from 'drizzle-orm'
+import { desc, asc, ilike, and, or, eq, count, isNotNull, type SQL } from 'drizzle-orm'
+import { z } from 'zod'
 
-export interface SearchFilters {
+const optionalText = z
+  .string()
+  .trim()
+  .optional()
+  .transform(value => value || undefined)
+
+/** Server actions are callable from the client, so their inputs are validated at runtime. */
+const SearchFiltersSchema = z.object({
+  courseCode: optionalText,
+  year: z.number().int().positive().optional(),
+  slot: optionalText,
+  semester: optionalText,
+  examType: optionalText,
+  query: optionalText,
+})
+
+const PaginationOptionsSchema = z.object({
+  page: z.number().int().positive().optional(),
+  limit: z.number().int().positive().optional(),
+  sortBy: z.enum(['createdAt', 'title', 'year']).optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional(),
+})
+
+export type SearchFilters = z.input<typeof SearchFiltersSchema>
+export type PaginationOptions = z.input<typeof PaginationOptionsSchema>
+
+export interface PaperSummary {
+  id: string
+  title: string
   courseCode?: string
   year?: number
   slot?: string
   semester?: string
   examType?: string
-  query?: string
-}
-
-export interface PaginationOptions {
-  page?: number
-  limit?: number
-  sortBy?: 'createdAt' | 'title' | 'year'
-  sortOrder?: 'asc' | 'desc'
-}
-
-export interface SearchResult {
-  papers: Array<{
-    id: string
-    title: string
-    courseCode?: string
-    year?: number
-    slot?: string
-    semester?: string
-    examType?: string
-    fileUrl: string
-    thumbnailUrl: string
-    createdAt: Date
-    originalFilename?: string
-    fileSize?: number
-    mimeType?: string
-    ocrText?: string
-  }>
-  totalCount: number
-  hasMore: boolean
-  currentPage: number
-  totalPages: number
+  fileUrl: string
+  thumbnailUrl: string
+  createdAt: Date
+  originalFilename?: string
+  fileSize?: number
+  mimeType?: string
+  ocrText?: string
 }
 
 export interface PaperListResult {
-  papers: Array<{
-    id: string
-    title: string
-    courseCode?: string
-    year?: number
-    slot?: string
-    semester?: string
-    examType?: string
-    fileUrl: string
-    thumbnailUrl: string
-    createdAt: Date
-    originalFilename?: string
-    fileSize?: number
-  }>
+  papers: PaperSummary[]
   totalCount: number
   hasMore: boolean
   currentPage: number
   totalPages: number
 }
 
+export interface FilterOptions {
+  courseCodes: string[]
+  years: number[]
+  slots: string[]
+  semesters: string[]
+  examTypes: string[]
+}
+
 export async function searchPapers(
-  filters: SearchFilters = {},
-  pagination: PaginationOptions = {}
+  rawFilters: SearchFilters = {},
+  rawPagination: PaginationOptions = {}
 ): Promise<PaperListResult> {
   try {
-    const { page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc' } = pagination
+    const filters = SearchFiltersSchema.parse(rawFilters)
+    const {
+      page = 1,
+      limit = 20,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+    } = PaginationOptionsSchema.parse(rawPagination)
 
     const offset = (page - 1) * limit
 
-    const conditions = []
+    const conditions: SQL[] = []
 
     if (filters.courseCode) {
       conditions.push(ilike(papers.courseCode, `%${filters.courseCode}%`))
@@ -96,14 +102,16 @@ export async function searchPapers(
     }
 
     if (filters.query) {
-      conditions.push(
-        or(ilike(papers.title, `%${filters.query}%`), ilike(papers.ocrText, `%${filters.query}%`))
+      const queryCondition = or(
+        ilike(papers.title, `%${filters.query}%`),
+        ilike(papers.ocrText, `%${filters.query}%`)
       )
+      if (queryCondition) conditions.push(queryCondition)
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined
 
-    let orderByClause
+    let orderByClause: SQL
     switch (sortBy) {
       case 'title':
         orderByClause = sortOrder === 'asc' ? asc(papers.title) : desc(papers.title)
@@ -111,13 +119,14 @@ export async function searchPapers(
       case 'year':
         orderByClause = sortOrder === 'asc' ? asc(papers.year) : desc(papers.year)
         break
-      default:
+      case 'createdAt':
         orderByClause = sortOrder === 'asc' ? asc(papers.createdAt) : desc(papers.createdAt)
+        break
     }
 
     const totalCountResult = await db.select({ count: count() }).from(papers).where(whereClause)
 
-    const totalCount = totalCountResult[0]?.count || 0
+    const totalCount = totalCountResult[0]?.count ?? 0
 
     const papersResult = await db
       .select({
@@ -170,8 +179,9 @@ export async function searchPapers(
   }
 }
 
-export async function getPaperById(id: string) {
+export async function getPaperById(rawId: string) {
   try {
+    const id = z.string().min(1).parse(rawId)
     const [paper] = await db.select().from(papers).where(eq(papers.id, id)).limit(1)
 
     if (!paper) {
@@ -194,8 +204,14 @@ export async function getPaperById(id: string) {
   }
 }
 
-export async function deletePaper(id: string): Promise<{ success: boolean; error?: string }> {
+export async function deletePaper(rawId: string): Promise<{ success: boolean; error?: string }> {
   try {
+    const idResult = z.string().min(1).safeParse(rawId)
+    if (!idResult.success) {
+      return { success: false, error: 'Invalid paper id' }
+    }
+    const id = idResult.data
+
     const [paperToDelete] = await db
       .select({
         cloudinaryPublicId: papers.cloudinaryPublicId,
@@ -230,7 +246,7 @@ export async function deletePaper(id: string): Promise<{ success: boolean; error
     }
   }
 }
-export async function getFilterOptions() {
+export async function getFilterOptions(): Promise<FilterOptions> {
   try {
     const courseCodes = await db
       .selectDistinct({ courseCode: papers.courseCode })

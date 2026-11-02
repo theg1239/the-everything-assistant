@@ -1,8 +1,79 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@plugin '@tailwindcss/typography';
+
+/*
+  Theme migrated from the former tailwind.config.ts (Tailwind v3) to v4's CSS-first config.
+  `inline` makes utilities reference the runtime CSS variables so `.dark` overrides apply.
+*/
+@theme inline {
+  --breakpoint-xs: 475px;
+
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+}
+
+@utility container {
+  margin-inline: auto;
+  padding-inline: 2rem;
+
+  @media (width >= 1400px) {
+    max-width: 1400px;
+  }
+}
+
+/* Tailwind v4 dropped the pointer cursor on buttons; keep the v3 behaviour. */
+@layer base {
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}
 
 @layer base {
   :root {
@@ -95,7 +166,7 @@
   }
 
   .gradient-text {
-    @apply bg-gradient-to-r from-gray-900 via-gray-700 to-gray-900 bg-clip-text text-transparent;
+    @apply bg-linear-to-r from-gray-900 via-gray-700 to-gray-900 bg-clip-text text-transparent;
   }
 
   .dark .gradient-text {
@@ -107,7 +178,7 @@
   }
 
   .search-input {
-    @apply w-full rounded-2xl border border-gray-200/60 bg-white/90 px-6 py-4 text-base placeholder:text-gray-500 focus:border-gray-400 focus:outline-none focus:ring-4 focus:ring-gray-100/50 backdrop-blur-sm transition-all;
+    @apply w-full rounded-2xl border border-gray-200/60 bg-white/90 px-6 py-4 text-base placeholder:text-gray-500 focus:border-gray-400 focus:outline-hidden focus:ring-4 focus:ring-gray-100/50 backdrop-blur-xs transition-all;
   }
 
   .dark .search-input {
@@ -115,7 +186,7 @@
   }
 
   .filter-select {
-    @apply w-full rounded-xl border border-gray-200/60 bg-white/90 px-4 py-3 text-sm focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-100/50 backdrop-blur-sm transition-all;
+    @apply w-full rounded-xl border border-gray-200/60 bg-white/90 px-4 py-3 text-sm focus:border-gray-400 focus:outline-hidden focus:ring-2 focus:ring-gray-100/50 backdrop-blur-xs transition-all;
   }
 
   .dark .filter-select {
@@ -123,11 +194,11 @@
   }
 
   .modern-card {
-    @apply overflow-hidden rounded-2xl border border-border bg-card shadow-sm;
+    @apply overflow-hidden rounded-2xl border border-border bg-card shadow-xs;
   }
 
   .search-container {
-    @apply overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition;
+    @apply overflow-hidden rounded-2xl border border-border bg-card shadow-xs transition;
   }
 
   .pill {

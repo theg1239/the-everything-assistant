@@ -25,12 +25,12 @@ export const papers = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
-  table => ({
-    courseCodeIdx: index('course_code_idx').on(table.courseCode),
-    yearIdx: index('year_idx').on(table.year),
-    examTypeIdx: index('exam_type_idx').on(table.examType),
-    createdAtIdx: index('created_at_idx').on(table.createdAt),
-  })
+  table => [
+    index('course_code_idx').on(table.courseCode),
+    index('year_idx').on(table.year),
+    index('exam_type_idx').on(table.examType),
+    index('created_at_idx').on(table.createdAt),
+  ]
 )
 
 export type Paper = typeof papers.$inferSelect

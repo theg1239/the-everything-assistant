@@ -14,7 +14,7 @@ export function ThemeToggle() {
       variant="outline"
       size="sm"
       onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-      className="rounded-full border-gray-200/60 bg-white/90 backdrop-blur-sm hover:bg-gray-50 dark:border-gray-800/60 dark:bg-gray-900/90 dark:hover:bg-gray-800/90"
+      className="rounded-full border-gray-200/60 bg-white/90 backdrop-blur-xs hover:bg-gray-50 dark:border-gray-800/60 dark:bg-gray-900/90 dark:hover:bg-gray-800/90"
     >
       <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
       <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />

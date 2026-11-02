@@ -13,11 +13,16 @@ import {
   Loader2,
   CloudUpload,
 } from 'lucide-react'
-import { uploadPaper } from '../actions/uploadPaper'
+import { uploadPaper, type UploadResult } from '../actions/uploadPaper'
 import { Button } from './ui/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card'
 import { Input } from './ui/input'
 import { toast } from 'sonner'
+
+function resetFileInput() {
+  const fileInput = document.getElementById('file')
+  if (fileInput instanceof HTMLInputElement) fileInput.value = ''
+}
 
 interface UploadFormProps {
   onUploadSuccess?: () => void
@@ -27,17 +32,13 @@ export default function UploadForm({ onUploadSuccess }: UploadFormProps) {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadStatus, setUploadStatus] = useState('')
-  const [result, setResult] = useState<{ success: boolean; error?: string; paper?: any } | null>(
-    null
-  )
+  const [result, setResult] = useState<UploadResult | null>(null)
   const [dragActive, setDragActive] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
 
   const handlePaste = (e: React.ClipboardEvent<HTMLFormElement>) => {
-    const items = e.clipboardData.items
     const newFiles: File[] = []
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]
+    for (const item of Array.from(e.clipboardData.items)) {
       if (item.kind === 'file' && item.type.startsWith('image/')) {
         const file = item.getAsFile()
         if (file) newFiles.push(file)
@@ -86,8 +87,7 @@ export default function UploadForm({ onUploadSuccess }: UploadFormProps) {
           setSelectedFiles([])
           setUploadProgress(0)
           setUploadStatus('')
-          const fileInput = document.getElementById('file') as HTMLInputElement
-          if (fileInput) fileInput.value = ''
+          resetFileInput()
         }, 5000)
       } else {
         setUploadStatus('upload failed')
@@ -151,7 +151,7 @@ export default function UploadForm({ onUploadSuccess }: UploadFormProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
     >
-      <Card className="w-full max-w-xl border border-border bg-card shadow-sm">
+      <Card className="w-full max-w-xl border border-border bg-card shadow-xs">
         <CardHeader className="text-center pb-4">
           <CardTitle className="text-xl font-medium text-gray-900 dark:text-white">
             upload paper
@@ -319,8 +319,7 @@ export default function UploadForm({ onUploadSuccess }: UploadFormProps) {
                               setSelectedFiles([])
                               setUploadProgress(0)
                               setUploadStatus('')
-                              const fileInput = document.getElementById('file') as HTMLInputElement
-                              if (fileInput) fileInput.value = ''
+                              resetFileInput()
                             }}
                             className="mt-2 rounded-lg text-xs"
                           >

@@ -1,34 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { searchPapers } from '../../../actions/searchPapers'
+import { z } from 'zod'
+import { searchPapers, type SearchFilters } from '../../../actions/searchPapers'
+
+/** Empty/missing values become undefined; unparsable numbers fall back to the default. */
+const optionalParam = z
+  .string()
+  .nullable()
+  .transform(value => value || undefined)
+
+const positiveIntParam = (fallback: number | undefined) =>
+  z.coerce.number().int().positive().optional().catch(fallback)
+
+const PapersQuerySchema = z.object({
+  query: optionalParam,
+  courseCode: optionalParam,
+  subject: optionalParam,
+  year: positiveIntParam(undefined),
+  slot: optionalParam,
+  semester: optionalParam,
+  examType: optionalParam,
+  exam: optionalParam,
+  page: positiveIntParam(1),
+  limit: positiveIntParam(50),
+})
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
+    const { searchParams } = request.nextUrl
+    const params = PapersQuerySchema.parse({
+      query: searchParams.get('query'),
+      courseCode: searchParams.get('courseCode'),
+      subject: searchParams.get('subject'),
+      year: searchParams.get('year') ?? undefined,
+      slot: searchParams.get('slot'),
+      semester: searchParams.get('semester'),
+      examType: searchParams.get('examType'),
+      exam: searchParams.get('exam'),
+      page: searchParams.get('page') ?? undefined,
+      limit: searchParams.get('limit') ?? undefined,
+    })
 
-    const query = searchParams.get('query') || undefined
-    const courseCode = searchParams.get('courseCode') || searchParams.get('subject') || undefined
-    const year = searchParams.get('year') ? parseInt(searchParams.get('year')!) : undefined
-    const slot = searchParams.get('slot') || undefined
-    const semester = searchParams.get('semester') || undefined
-    const examType = searchParams.get('examType') || searchParams.get('exam') || undefined
-    const page = searchParams.get('page') ? parseInt(searchParams.get('page')!) : 1
-    const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : 50
-
-    const filters: any = {}
-    if (query) filters.query = query
-    if (courseCode) filters.courseCode = courseCode
-    if (year) filters.year = year
-    if (slot) filters.slot = slot
-    if (semester) filters.semester = semester
-    if (examType) filters.examType = examType
-
-    const pagination = {
-      page,
-      limit,
-      sortBy: 'createdAt' as const,
+    const filters: SearchFilters = {
+      query: params.query,
+      courseCode: params.courseCode ?? params.subject,
+      year: params.year,
+      slot: params.slot,
+      semester: params.semester,
+      examType: params.examType ?? params.exam,
     }
 
-    const result = await searchPapers(filters, pagination)
+    const result = await searchPapers(filters, {
+      page: params.page ?? 1,
+      limit: params.limit ?? 50,
+      sortBy: 'createdAt',
+    })
 
     const response = {
       success: true,
@@ -41,7 +66,7 @@ export async function GET(request: NextRequest) {
         downloadUrl: paper.fileUrl,
         finalUrl: paper.fileUrl,
         metadata: `${paper.slot || ''} ${paper.semester || ''}`.trim(),
-        description: (paper as any).ocrText ? (paper as any).ocrText.substring(0, 200) + '...' : '',
+        description: paper.ocrText ? paper.ocrText.substring(0, 200) + '...' : '',
         examType: paper.examType,
         exam: paper.examType,
         year: paper.year?.toString(),
@@ -53,7 +78,7 @@ export async function GET(request: NextRequest) {
         thumbnailUrl: paper.thumbnailUrl,
         originalFilename: paper.originalFilename,
         fileSize: paper.fileSize,
-        mimeType: (paper as any).mimeType,
+        mimeType: paper.mimeType,
         createdAt: paper.createdAt,
       })),
       totalCount: result.totalCount,

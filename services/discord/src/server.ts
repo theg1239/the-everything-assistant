@@ -2,12 +2,28 @@ import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
-import bodyParser from 'body-parser'
 import * as dotenv from 'dotenv'
+import { z } from 'zod'
 import DiscordService from './discord-service'
+import type { AskRequest } from './discord-service'
 import APIClient from './api-client'
 
-dotenv.config()
+dotenv.config({ quiet: true })
+
+const sendMessageBodySchema = z.object({
+  channelId: z.string().min(1),
+  message: z.string().min(1),
+})
+
+const webhookBodySchema = z.object({
+  type: z.unknown(),
+  data: z.unknown(),
+})
+
+const packageJsonSchema = z.object({ version: z.string().optional() })
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error)
 
 class DiscordBotServer {
   private app: express.Application
@@ -36,15 +52,15 @@ class DiscordBotServer {
 
     const limiter = rateLimit({
       windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
-      max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'), // 100 requests per window
+      limit: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'), // 100 requests per window
       message: {
         error: 'Too many requests from this IP, please try again later.',
       },
     })
     this.app.use('/api/', limiter)
 
-    this.app.use(bodyParser.json({ limit: '10mb' }))
-    this.app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }))
+    this.app.use(express.json({ limit: '10mb' }))
+    this.app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
     this.app.use((req, res, next) => {
       console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`)
@@ -60,7 +76,8 @@ class DiscordBotServer {
         uptime: process.uptime(),
         discordReady: this.discordService?.getClientInfo() ? true : false,
         memory: process.memoryUsage(),
-        version: require('../package.json').version,
+        // Resolved at runtime relative to dist/ (or src/ under tsx); package.json is outside rootDir.
+        version: packageJsonSchema.safeParse(require('../package.json')).data?.version,
       })
     })
 
@@ -75,25 +92,27 @@ class DiscordBotServer {
       } catch (error) {
         res.status(500).json({
           error: 'Failed to get Discord status',
-          message: (error as Error).message,
+          message: errorMessage(error),
         })
       }
     })
 
     this.app.post('/api/discord/send', async (req, res) => {
       try {
-        const { channelId, message } = req.body
+        const body = sendMessageBodySchema.safeParse(req.body)
 
-        if (!channelId || !message) {
-          return res.status(400).json({
+        if (!body.success) {
+          res.status(400).json({
             error: 'Missing required fields: channelId and message',
           })
+          return
         }
 
         if (!this.discordService) {
-          return res.status(503).json({
+          res.status(503).json({
             error: 'Discord service is not ready',
           })
+          return
         }
 
         res.json({
@@ -104,23 +123,28 @@ class DiscordBotServer {
         console.error('Error in send message endpoint:', error)
         res.status(500).json({
           error: 'Internal server error',
-          message: (error as Error).message,
+          message: errorMessage(error),
         })
       }
     })
 
     this.app.post('/api/webhook', (req, res) => {
       try {
-        const { type, data } = req.body
+        const body = webhookBodySchema.safeParse(req.body)
+        if (!body.success) {
+          res.status(400).json({ error: 'Invalid webhook payload' })
+          return
+        }
+        const { type, data } = body.data
 
-        console.log(`Webhook received: ${type}`)
+        console.log(`Webhook received: ${String(type)}`)
 
         switch (type) {
           case 'system_message':
             this.handleSystemMessage(data)
             break
           default:
-            console.warn(`Unknown webhook type: ${type}`)
+            console.warn(`Unknown webhook type: ${String(type)}`)
         }
 
         res.json({ success: true })
@@ -128,7 +152,7 @@ class DiscordBotServer {
         console.error('Webhook error:', error)
         res.status(500).json({
           error: 'Webhook processing failed',
-          message: (error as Error).message,
+          message: errorMessage(error),
         })
       }
     })
@@ -151,7 +175,7 @@ class DiscordBotServer {
         console.error('Failed to restart Discord service:', error)
         res.status(500).json({
           error: 'Failed to restart Discord service',
-          message: (error as Error).message,
+          message: errorMessage(error),
         })
       }
     })
@@ -165,11 +189,13 @@ class DiscordBotServer {
     })
 
     this.app.use(
-      (error: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+      // Express detects error handlers by arity, so all four parameters must stay.
+      (error: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
         console.error('❌ Express error:', error)
         res.status(500).json({
           error: 'Internal server error',
-          message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong',
+          message:
+            process.env.NODE_ENV === 'development' ? errorMessage(error) : 'Something went wrong',
         })
       }
     )
@@ -230,7 +256,7 @@ class DiscordBotServer {
     })
   }
 
-  private async handleAskRequest(data: any): Promise<void> {
+  private async handleAskRequest(data: AskRequest): Promise<void> {
     const { messageData, question, conversationHistory = [], startTime, respondCallback } = data
 
     try {
@@ -247,7 +273,7 @@ class DiscordBotServer {
           source: 'discord',
           userId: messageData.author.id,
           username: messageData.author.tag,
-          channelId: messageData.channel.id,
+          channelId: messageData.channel?.id,
           guildId: messageData.guild?.id,
         },
         conversationHistory
@@ -270,7 +296,7 @@ class DiscordBotServer {
     }
   }
 
-  private async handleSystemMessage(data: any): Promise<void> {
+  private async handleSystemMessage(data: unknown): Promise<void> {
     console.log('System message received:', data)
   }
 
@@ -278,7 +304,12 @@ class DiscordBotServer {
     try {
       await this.setupDiscord()
 
-      this.app.listen(this.port, () => {
+      this.app.listen(this.port, error => {
+        // Express 5 passes listen errors (e.g. EADDRINUSE) to this callback.
+        if (error) {
+          console.error(`Failed to listen on port ${this.port}:`, error)
+          return
+        }
         console.log(`Discord Bot Server running on port ${this.port}`)
         console.log(`Health check: http://localhost:${this.port}/health`)
         console.log(`Discord status: http://localhost:${this.port}/api/discord/status`)

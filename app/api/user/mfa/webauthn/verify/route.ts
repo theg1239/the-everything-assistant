@@ -110,6 +110,8 @@ export async function POST(request: NextRequest) {
         data: {
           mfaEnabled: true,
           mfaMethod: method,
+          // Switching from an authenticator app: drop its TOTP secret like the other paths do.
+          mfaSecret: null,
           tempMfaSecret: null,
           tempMfaMethod: null,
           tempMfaExpires: null,

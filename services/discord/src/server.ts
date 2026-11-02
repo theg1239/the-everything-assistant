@@ -69,12 +69,14 @@ class DiscordBotServer {
   }
 
   private setupRoutes(): void {
+    // Liveness: always 200 while the process serves requests. `discordReady` reports the actual
+    // gateway state (same convention as the WhatsApp service's `whatsappReady`).
     this.app.get('/health', (req, res) => {
       res.json({
         status: 'ok',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
-        discordReady: this.discordService?.getClientInfo() ? true : false,
+        discordReady: this.discordService?.isConnected() ?? false,
         memory: process.memoryUsage(),
         // Resolved at runtime relative to dist/ (or src/ under tsx); package.json is outside rootDir.
         version: packageJsonSchema.safeParse(require('../package.json')).data?.version,
@@ -85,7 +87,7 @@ class DiscordBotServer {
       try {
         const info = this.discordService?.getClientInfo()
         res.json({
-          ready: info ? true : false,
+          ready: this.discordService?.isConnected() ?? false,
           clientInfo: info,
           uptime: process.uptime(),
         })

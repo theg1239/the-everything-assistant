@@ -134,7 +134,12 @@ export const mfaBackupCodesResponseSchema = z.object({
 })
 export type MfaBackupCodesResponse = z.infer<typeof mfaBackupCodesResponseSchema>
 
-/** `PATCH /api/user/mfa/method` */
+/**
+ * `PATCH /api/user/mfa/method`. Switching is two-step: a request without `verificationCode`
+ * starts the change (see the per-method start schemas below), then a second request with
+ * `verificationCode` completes it (`{ success, message }`). `security_key` instead completes
+ * through `POST /api/user/mfa/webauthn/register` + `/webauthn/verify`.
+ */
 export const mfaMethodChangeResponseSchema = z.object({
   success: z.boolean(),
   message: z.string().optional(),
@@ -144,6 +149,31 @@ export const mfaMethodChangeResponseSchema = z.object({
   manualEntryKey: z.string().optional(),
 })
 export type MfaMethodChangeResponse = z.infer<typeof mfaMethodChangeResponseSchema>
+
+/**
+ * `PATCH /api/user/mfa/method` start for `authenticator`: a pending TOTP secret (valid 15 min)
+ * as a QR code data URL plus the key for manual entry.
+ */
+export const mfaAuthenticatorChangeStartResponseSchema = z.object({
+  success: z.literal(true),
+  qrCode: z.string().min(1),
+  secret: z.string().min(1),
+  manualEntryKey: z.string().min(1),
+})
+
+/** `PATCH /api/user/mfa/method` start for `email`: a 6-digit code (valid 10 min) was emailed. */
+export const mfaEmailChangeStartResponseSchema = z.object({
+  success: z.literal(true),
+  message: z.string().optional(),
+})
+
+/** `PATCH /api/user/mfa/method` start for `security_key`: register a key via WebAuthn next. */
+export const mfaSecurityKeyChangeStartResponseSchema = z.object({
+  success: z.literal(true),
+  message: z.string().optional(),
+  requiresRegistration: z.literal(true),
+  method: z.literal('security_key'),
+})
 
 /**
  * `POST /api/user/mfa/webauthn/register`: `PublicKeyCredentialCreationOptionsJSON` from

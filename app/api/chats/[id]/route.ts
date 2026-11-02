@@ -29,6 +29,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           role: msg.role,
           content: msg.content,
           toolInvocations: msg.toolInvocations,
+          attachments: msg.attachments,
           parts:
             Array.isArray(msg.toolInvocations) && msg.toolInvocations.length > 0
               ? [

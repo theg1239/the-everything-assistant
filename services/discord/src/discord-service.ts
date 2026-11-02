@@ -1146,6 +1146,15 @@ Keep the response concise but informative.`
     await this.client.destroy()
   }
 
+  /**
+   * Whether the gateway connection is up right now. Tracked from ClientReady/ShardReady/ShardResume
+   * (up) and ShardReconnecting/ShardDisconnect/Invalidated/shutdown (down); unlike
+   * {@link getClientInfo}, this goes false while discord.js is reconnecting.
+   */
+  isConnected(): boolean {
+    return this.isReady
+  }
+
   getClientInfo(): DiscordClientInfo {
     return {
       tag: this.client.user?.tag,

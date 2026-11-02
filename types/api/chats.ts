@@ -42,9 +42,17 @@ const storedToolInvocationSchema = z.object({
   error: z.string().optional(),
 })
 
+/** A stored file attachment as `lib/db` returns it (`readAttachments`). */
+const storedAttachmentSchema = z.object({
+  url: z.string(),
+  name: z.string().nullish(),
+  contentType: z.string(),
+})
+
 /**
- * `GET /api/chats/[id]`. Messages carry `content` + `toolInvocations` (the route also sends
- * legacy `parts`, which clients rebuild from those two, and omits attachments).
+ * `GET /api/chats/[id]`. Messages carry `content` + `toolInvocations` + `attachments` (the same
+ * fields `app/chat/[id]/page.tsx` passes as `initialMessages`). The route also sends legacy
+ * `parts`, which clients rebuild from those fields.
  */
 export const chatDetailResponseSchema = chatSummarySchema.extend({
   messages: z.array(
@@ -53,6 +61,7 @@ export const chatDetailResponseSchema = chatSummarySchema.extend({
       role: z.enum(['system', 'user', 'assistant']),
       content: z.string(),
       toolInvocations: z.array(storedToolInvocationSchema).optional(),
+      attachments: z.array(storedAttachmentSchema).optional(),
       createdAt: z.string(),
     })
   ),

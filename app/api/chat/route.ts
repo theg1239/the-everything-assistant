@@ -290,12 +290,14 @@ export async function POST(req: Request) {
         : Promise.resolve(true)
     background.track('save user message', userMessageSaved)
 
-    // Only the model path is user-rate-limited. When neither a direct tool call nor
-    // Codex can take over this request, run the (single round-trip) check concurrently.
+    // Every path below spends money: the chat model, Codex, or a direct tool call
+    // (queryVTOP's result is formatted by an LLM). The (single round-trip) check runs
+    // concurrently with chat setup; the direct tool call waits for it, and the
+    // Promise.all below rejects with UserRateLimitError before any model starts.
     const codexConfigured = isCodexConfigured()
-    const earlyRateLimit = !directToolCall && !codexConfigured ? enforceUserRateLimit(userId) : null
+    const rateLimitCheck = enforceUserRateLimit(userId)
     // Handled where it is awaited; this only prevents an unhandled-rejection report meanwhile.
-    earlyRateLimit?.catch(() => undefined)
+    rateLimitCheck.catch(() => undefined)
 
     const mcpPromise = loadMCPTools(payload.mcpConfigs)
 
@@ -305,6 +307,7 @@ export async function POST(req: Request) {
       Awaited<ReturnType<typeof buildMemoryContext>>,
       Awaited<ReturnType<typeof executeDirectToolCall>> | null,
       LoadedMCPTools,
+      void,
     ]
     try {
       parallelReads = await Promise.all([
@@ -312,9 +315,10 @@ export async function POST(req: Request) {
         codexConfigured ? isChatgptConnectedCached(userId) : Promise.resolve(false),
         buildMemoryContext(userId),
         directToolCall
-          ? executeDirectToolCall({ directToolCall, messages, userId })
+          ? rateLimitCheck.then(() => executeDirectToolCall({ directToolCall, messages, userId }))
           : Promise.resolve(null),
         mcpPromise,
+        rateLimitCheck,
       ])
     } catch (error) {
       background.track(
@@ -427,7 +431,9 @@ export async function POST(req: Request) {
       if (directResultPayload && formattedContent) {
         closeMCPClientsLater(background, mcpClients)
         const responseText = formattedContent
-        const responseId = directToolCallResult.toolCallId || `direct-${Date.now()}`
+        // Server-generated and shared by the stream and the DB row, so the client's
+        // message id matches the stored one (votes reference it).
+        const responseId = generateId()
         const { stream, safeInvocations } = createDirectToolCallStream(
           uiMessages,
           chat,
@@ -435,7 +441,8 @@ export async function POST(req: Request) {
             ...directToolCallResult,
             result: directResultPayload,
           },
-          responseText
+          responseText,
+          responseId
         )
 
         await userMessageSaved
@@ -786,6 +793,10 @@ export async function POST(req: Request) {
       }
     }
 
+    // Shared by the UI stream and the DB row so the client's message id is the stored
+    // one (votes are only accepted for messages that exist in the voter's chat).
+    const assistantMessageId = generateId()
+
     // The SDK awaits onEnd before closing the stream: only the assistant-message
     // insert stays inline (the chat page reads it right after the stream ends);
     // VTOP parsing (an LLM call), usage rows and MCP teardown run after the response.
@@ -830,7 +841,7 @@ export async function POST(req: Request) {
         )
       })
 
-      const messageId = result.response.id
+      const messageId = assistantMessageId
       let savedWithInvocations = false
       await userMessageSaved
       try {
@@ -906,7 +917,6 @@ export async function POST(req: Request) {
       closeMCPClientsLater(background, mcpClients)
     }
 
-    await (earlyRateLimit ?? enforceUserRateLimit(userId))
     scheduleNoChunkLog()
 
     const result = streamText({
@@ -926,7 +936,7 @@ export async function POST(req: Request) {
 
     const uiStream = result.toUIMessageStream<AppUIMessage>({
       originalMessages: uiMessages,
-      generateMessageId: generateId,
+      generateMessageId: () => assistantMessageId,
       messageMetadata: ({ part }) => {
         if (part.type === 'finish') {
           return {

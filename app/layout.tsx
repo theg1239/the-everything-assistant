@@ -59,6 +59,11 @@ const protectedRoutes = [
     method: 'POST',
   },
   {
+    // Guest chat calls checkBotId(); without this entry every guest is treated as a bot.
+    path: '/api/guest-chat',
+    method: 'POST',
+  },
+  {
     path: '/login',
     method: 'GET',
   },

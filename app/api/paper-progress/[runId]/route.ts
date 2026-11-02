@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { paperProgress, type PaperProgressEvent } from '@/lib/progress/paper-progress'
 import { auth } from '@/lib/auth'
+import { scopedRunId } from '../scope'
 
 export const runtime = 'nodejs'
 
@@ -12,15 +13,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<Params
     return new Response('Unauthorized', { status: 401 })
   }
   const { runId } = await params
+  const scopedId = scopedRunId(session.user.id, runId)
 
   const encoder = new TextEncoder()
+  // Clients only ever see their own run id, never the scoped key.
+  const encode = (evt: PaperProgressEvent) =>
+    encoder.encode(`data: ${JSON.stringify({ ...evt, runId })}\n\n`)
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       const send = (evt: PaperProgressEvent) => {
-        if (evt.runId !== runId) return
-        console.log('[paper-progress SSE] dispatching', evt.runId, evt.step)
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(evt)}\n\n`))
+        if (evt.runId !== scopedId) return
+        console.log('[paper-progress SSE] dispatching', runId, evt.step)
+        controller.enqueue(encode(evt))
       }
 
       paperProgress.on('progress', send)
@@ -30,11 +35,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<Params
       )
 
       try {
-        const buffered = paperProgress.getBuffered(runId)
+        const buffered = paperProgress.getBuffered(scopedId)
         if (buffered.length) {
           console.log('[paper-progress SSE] flushing buffered events', runId, buffered.length)
           for (const evt of buffered) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(evt)}\n\n`))
+            controller.enqueue(encode(evt))
           }
         } else {
           console.log('[paper-progress SSE] no buffered events to flush', runId)

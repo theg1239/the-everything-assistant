@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { saveUserMcpToken } from '@/lib/mcp-tokens'
 import * as z from 'zod'
+import { consumeOAuthState, OAuthStateUnavailableError } from '../state'
 
 const tokenResponseSchema = z.object({
   access_token: z.string().optional().catch(undefined),
@@ -10,38 +11,6 @@ const tokenResponseSchema = z.object({
   scope: z.string().optional().catch(undefined),
   token_type: z.string().optional().catch(undefined),
 })
-
-const statePayloadSchema = z.looseObject({
-  uid: z.unknown(),
-  userId: z.unknown(),
-  user_id: z.unknown(),
-  sub: z.unknown(),
-  v: z.unknown(),
-  code_verifier: z.unknown(),
-})
-
-type StatePayload = z.infer<typeof statePayloadSchema>
-
-function decodeState(state: string): StatePayload | null {
-  try {
-    const encodedPayload = state.split('.')[1]
-    if (encodedPayload === undefined) return null
-    const payload = Buffer.from(encodedPayload, 'base64url').toString('utf8')
-    const parsed = statePayloadSchema.safeParse(JSON.parse(payload))
-    return parsed.success ? parsed.data : null
-  } catch (err) {
-    console.error('Failed to decode state JWT:', err)
-    return null
-  }
-}
-
-/** First truthy string among the candidates (mirrors a `a || b || c` chain over string claims). */
-function firstString(...candidates: unknown[]): string | undefined {
-  for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate) return candidate
-  }
-  return undefined
-}
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
@@ -52,15 +21,22 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Missing code or state' }, { status: 400 })
   }
 
-  const statePayload = decodeState(state)
-  const userId =
-    firstString(statePayload?.uid, statePayload?.userId, statePayload?.user_id, statePayload?.sub) ??
-    null
-  const codeVerifier = firstString(statePayload?.v, statePayload?.code_verifier)
-
-  if (!userId) {
-    return NextResponse.json({ error: 'Invalid state: user not found' }, { status: 400 })
+  // Signature, expiry, single use and user binding are all checked here; the PKCE
+  // verifier comes from the server-side record, never from the URL.
+  let pending: Awaited<ReturnType<typeof consumeOAuthState>>
+  try {
+    pending = await consumeOAuthState(state)
+  } catch (error) {
+    if (error instanceof OAuthStateUnavailableError) {
+      console.error('[whatsapp/oauth]', error.message)
+      return NextResponse.json({ error: 'VTOP linking is not configured' }, { status: 503 })
+    }
+    throw error
   }
+  if (!pending) {
+    return NextResponse.json({ error: 'Invalid or expired link. Request a new one.' }, { status: 400 })
+  }
+  const { userId, verifier: codeVerifier } = pending
 
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
   if (!user) {
@@ -88,9 +64,7 @@ export async function GET(req: NextRequest) {
     redirect_uri: `${url.origin}/api/whatsapp/oauth/callback`,
   })
 
-  if (codeVerifier) {
-    body.append('code_verifier', codeVerifier)
-  }
+  body.append('code_verifier', codeVerifier)
 
   const tokenRes = await fetch(tokenUrl, {
     method: 'POST',
@@ -101,10 +75,7 @@ export async function GET(req: NextRequest) {
   if (!tokenRes.ok) {
     const errText = await tokenRes.text().catch(() => '')
     console.error('Token exchange failed:', tokenRes.status, errText)
-    return NextResponse.json(
-      { error: 'Token exchange failed', detail: errText || tokenRes.statusText },
-      { status: 502 }
-    )
+    return NextResponse.json({ error: 'Token exchange failed' }, { status: 502 })
   }
 
   const parsedToken = tokenResponseSchema.safeParse(await tokenRes.json().catch(() => null))

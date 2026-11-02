@@ -2,11 +2,12 @@ import { NextRequest } from 'next/server'
 import { paperProgress } from '@/lib/progress/paper-progress'
 import { auth } from '@/lib/auth'
 import * as z from 'zod'
+import { scopedRunId } from '../scope'
 
 const progressSchema = z.object({
-  runId: z.string().min(1),
-  step: z.string().min(1),
-  detail: z.string().optional(),
+  runId: z.string().min(1).max(128),
+  step: z.string().min(1).max(64),
+  detail: z.string().max(2000).optional(),
 })
 
 export const runtime = 'nodejs'
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: 'runId and step required' }), { status: 400 })
     }
     const { runId, step, detail } = parsedBody.data
-    paperProgress.emitStep(runId, step, detail)
+    paperProgress.emitStep(scopedRunId(session.user.id, runId), step, detail)
     return new Response(JSON.stringify({ ok: true }), { status: 200 })
   } catch (error) {
     console.error('[paper-progress/push] failed:', error)

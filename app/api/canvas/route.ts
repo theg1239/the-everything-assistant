@@ -16,7 +16,7 @@ export async function GET(request: Request) {
       return new Response('Chat ID is required', { status: 400 })
     }
 
-    const documents = await getCanvasDocuments(chatId)
+    const documents = await getCanvasDocuments(chatId, session.user.id)
     return Response.json(documents)
   } catch (error) {
     console.error('Error fetching canvas documents:', error)
@@ -41,7 +41,10 @@ export async function POST(request: Request) {
     }
     const { chatId, title, content, type } = parsedBody.data
 
-    const document = await createCanvasDocument(chatId, title, content, type)
+    const document = await createCanvasDocument(session.user.id, chatId, title, content, type)
+    if (!document) {
+      return new Response('Not found', { status: 404 })
+    }
 
     return Response.json(document)
   } catch (error) {
@@ -67,7 +70,10 @@ export async function PUT(request: Request) {
     }
     const { id, title, content } = parsedBody.data
 
-    await updateCanvasDocument(id, title, content)
+    const updated = await updateCanvasDocument(session.user.id, id, title, content)
+    if (!updated) {
+      return new Response('Not found', { status: 404 })
+    }
 
     return Response.json({ success: true })
   } catch (error) {

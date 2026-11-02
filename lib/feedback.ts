@@ -13,7 +13,33 @@ function getRepoConfig() {
   return { token: GITHUB_TOKEN, owner: GITHUB_REPO_OWNER, repo: GITHUB_REPO_NAME }
 }
 
-type SessionUser = { name?: string | null; email?: string | null }
+type SessionUser = { id?: string | null; name?: string | null; email?: string | null; isGuest?: boolean }
+
+const encoder = new TextEncoder()
+
+/**
+ * Opaque, stable reference for the submitter. Issues may be public, so no name or
+ * email is written; a keyed hash (not a plain one: student emails are guessable)
+ * lets maintainers correlate submissions by recomputing it for a known user.
+ */
+async function submitterReference(sessionUser: SessionUser | undefined): Promise<string> {
+  const identity = sessionUser?.id || sessionUser?.email
+  if (!identity) return sessionUser?.isGuest ? 'a guest user' : 'an anonymous user'
+  const secret = process.env.FEEDBACK_USER_HASH_SECRET || process.env.NEXTAUTH_SECRET
+  if (!secret) return 'a signed-in user'
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  )
+  const digest = await crypto.subtle.sign('HMAC', key, encoder.encode(`feedback:${identity}`))
+  const hex = Array.from(new Uint8Array(digest).slice(0, 8), byte =>
+    byte.toString(16).padStart(2, '0')
+  ).join('')
+  return `user \`u_${hex}\``
+}
 
 export async function createFeedbackIssue(raw: unknown, sessionUser?: SessionUser): Promise<FeedbackResult> {
   const parsed = feedbackRequestSchema.safeParse(raw)
@@ -35,9 +61,7 @@ export async function createFeedbackIssue(raw: unknown, sessionUser?: SessionUse
   const { type, title, body, contribution } = parsed.data
   const octokit = new Octokit({ auth: config.token })
 
-  const submittedBy = sessionUser?.email || sessionUser?.name
-    ? `**Submitted by:** ${sessionUser.name ?? 'Anonymous'} (${sessionUser.email ?? 'no email provided'})`
-    : '**Submitted by:** An anonymous user'
+  const submittedBy = `**Submitted by:** ${await submitterReference(sessionUser)}`
 
   let issueTitle: string
   let issueBody: string
@@ -71,7 +95,6 @@ export async function createFeedbackIssue(raw: unknown, sessionUser?: SessionUse
       success: false,
       status: 500,
       error: 'Failed to create GitHub issue.',
-      details: error instanceof Error ? error.message : undefined,
     }
   }
 }

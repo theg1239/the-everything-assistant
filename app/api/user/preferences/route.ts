@@ -88,7 +88,31 @@ export async function PATCH(request: NextRequest) {
     let preferencesToUpdate: UserPreferences = { ...currentPrefs }
 
     if (body.preferences) {
-      preferencesToUpdate = body.preferences
+      // Merge, never replace: the stored JSON also holds server-managed keys
+      // (mcpTokens, whatsapp/discord links, ...). `body.preferences` went through
+      // `userPreferencesSchema`, which strips unknown keys, so clients can only
+      // write the user-editable ones.
+      const incoming = body.preferences
+      preferencesToUpdate = {
+        ...preferencesToUpdate,
+        ...incoming,
+        ...(incoming.backgroundConfig
+          ? {
+              backgroundConfig: {
+                ...(preferencesToUpdate.backgroundConfig || {}),
+                ...incoming.backgroundConfig,
+              },
+            }
+          : {}),
+        ...(incoming.dailyBriefing
+          ? {
+              dailyBriefing: {
+                ...(preferencesToUpdate.dailyBriefing || {}),
+                ...incoming.dailyBriefing,
+              },
+            }
+          : {}),
+      }
     } else {
       if (body.backgroundConfig) {
         preferencesToUpdate = {
@@ -133,7 +157,8 @@ export async function PATCH(request: NextRequest) {
     })
 
     return NextResponse.json({
-      preferences: preferencesToUpdate,
+      // Only the user-editable keys go back to the browser (never mcpTokens etc.).
+      preferences: userPreferencesSchema.parse(preferencesToUpdate),
       message: 'Preferences updated successfully',
     })
   } catch (error) {

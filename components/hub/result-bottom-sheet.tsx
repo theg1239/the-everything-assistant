@@ -5,6 +5,7 @@ import { Drawer } from 'vaul'
 import { Button } from '@/components/ui/button'
 import { Share2 } from 'lucide-react'
 import type { PersonalHubSnapshot } from '@/types/hub'
+import { SafeHtml } from '@/components/safe-html'
 
 interface ResultBottomSheetProps {
   open: boolean
@@ -39,9 +40,9 @@ export function ResultBottomSheet({
     if (!result) return <div className="text-xs text-muted-foreground">no data</div>
     if (tab === 'insights' && result.formatted_content) {
       return (
-        <div
+        <SafeHtml
           className="prose prose-sm dark:prose-invert max-w-none"
-          dangerouslySetInnerHTML={{ __html: result.formatted_content }}
+          html={result.formatted_content}
         />
       )
     }

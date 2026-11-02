@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import jwt from 'jsonwebtoken'
-import { prisma } from '@/lib/prisma'
 import { generatePkcePair } from '@/lib/pkce'
 import { getOrCreateUserForPhone } from '@/lib/whatsapp-user'
 import * as z from 'zod'
+import { createOAuthState, OAUTH_STATE_TTL_SECONDS, OAuthStateUnavailableError } from '../oauth/state'
 
 const apiKeyEnv = process.env.WHATSAPP_BOT_API_KEY
 
@@ -44,17 +43,16 @@ export async function POST(request: NextRequest) {
 
   const { verifier, challenge } = generatePkcePair()
 
-  const statePayload = {
-    uid: user.id,
-    phone: phoneNumber,
-    v: verifier,
-    exp: Math.floor(Date.now() / 1000) + 600, // 10 minutes
+  let state: string
+  try {
+    state = await createOAuthState({ userId: user.id, phone: phoneNumber, verifier })
+  } catch (error) {
+    if (error instanceof OAuthStateUnavailableError) {
+      console.error('[whatsapp/link]', error.message)
+      return NextResponse.json({ error: 'VTOP linking is not configured' }, { status: 503 })
+    }
+    throw error
   }
-
-  const state = jwt.sign(
-    statePayload,
-    process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || 'state-secret'
-  )
 
   const authorizeUrl = `${proxyBase}/oauth/authorize?response_type=code&client_id=${encodeURIComponent(
     clientId
@@ -64,7 +62,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     link: authorizeUrl,
-    expiresIn: 600,
+    expiresIn: OAUTH_STATE_TTL_SECONDS,
     message:
       'Tap this link to link your VTOP account securely. It opens the OAuth consent page; after confirmation, you can return to WhatsApp and run VTOP commands.',
   })

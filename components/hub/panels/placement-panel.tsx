@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/select'
 import { useHubTool } from '../use-hub-tool'
 import { asRecord, readString } from '@/components/narrow'
+import { SafeHtml } from '@/components/safe-html'
 import { Briefcase, Search, X } from 'lucide-react'
 
 export default function PlacementPanel() {
@@ -108,9 +109,9 @@ export default function PlacementPanel() {
             </CardHeader>
             <CardContent>
               {formattedContent ? (
-                <div
+                <SafeHtml
                   className="prose prose-sm dark:prose-invert max-w-none"
-                  dangerouslySetInnerHTML={{ __html: formattedContent }}
+                  html={formattedContent}
                 />
               ) : (
                 <pre className="text-xs overflow-auto max-h-96 bg-background/50 p-3 rounded-md">

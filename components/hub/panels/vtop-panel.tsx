@@ -14,6 +14,7 @@ import {
 import type { HubVTOPCommand, PersonalHubSnapshot } from '@/types/hub'
 import { Card, CardContent } from '@/components/ui/card'
 import { errorMessage } from '@/components/narrow'
+import { SafeHtml } from '@/components/safe-html'
 
 const COMMANDS: { id: HubVTOPCommand; label: string; description: string }[] = [
   { id: 'profile', label: 'profile', description: 'student profile snapshot' },
@@ -161,9 +162,9 @@ export default function VTOPPanel({
             </div>
             <p className="text-sm text-muted-foreground whitespace-pre-wrap">{snapshot.summary}</p>
             {snapshot.formatted_content && (
-              <div
+              <SafeHtml
                 className="prose prose-sm dark:prose-invert max-w-none"
-                dangerouslySetInnerHTML={{ __html: snapshot.formatted_content }}
+                html={snapshot.formatted_content}
               />
             )}
           </CardContent>

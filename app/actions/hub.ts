@@ -9,7 +9,11 @@ import {
   hasVTOPCredentials,
 } from '@/lib/server-vtop-credentials'
 import { vtopResultSchema, type VTOPFormattedResult } from '@/app/api/hub/vtop/schema'
-import { getToolExecutor } from '@/app/api/chat/lib/tool-helpers'
+import {
+  getToolExecutor,
+  HUB_DIRECT_TOOLS,
+  RATE_LIMITED_DIRECT_TOOLS,
+} from '@/app/api/chat/lib/tool-helpers'
 import { parseHubCommandResult } from '@/lib/hub/parsers'
 import type { RawVTOPResult } from '@/lib/hub/parsers/attendance'
 import { defaultProviderOptions, languageModel } from '@/lib/ai'
@@ -320,9 +324,14 @@ export async function runHubToolAction(
   args: Record<string, unknown> = {}
 ): Promise<unknown> {
   const userId = await requireUser()
-  const execute = getToolExecutor(createVITTools(userId), toolName)
+  const execute = HUB_DIRECT_TOOLS.has(toolName)
+    ? getToolExecutor(createVITTools(userId), toolName)
+    : undefined
   if (!execute) {
     throw new Error(`Unknown hub tool: ${toolName}`)
+  }
+  if (RATE_LIMITED_DIRECT_TOOLS.has(toolName)) {
+    await enforceUserRateLimit(userId)
   }
   return execute(args)
 }

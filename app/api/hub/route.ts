@@ -3,7 +3,13 @@ import { auth } from '@/lib/auth'
 import { createVITTools } from '@/lib/tools'
 import * as z from 'zod'
 import type { JsonValue } from '@/types/tools'
-import { getToolExecutor } from '@/app/api/chat/lib/tool-helpers'
+import {
+  getToolExecutor,
+  HUB_DIRECT_TOOLS,
+  RATE_LIMITED_DIRECT_TOOLS,
+  ToolInputError,
+} from '@/app/api/chat/lib/tool-helpers'
+import { enforceUserRateLimit, UserRateLimitError } from '@/lib/user-rate-limiter'
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -59,7 +65,7 @@ export async function POST(request: NextRequest) {
     const tools = createVITTools(session.user.id, {
       sessionUser: { name: session.user.name, email: session.user.email },
     })
-    const execute = getToolExecutor(tools, toolName)
+    const execute = HUB_DIRECT_TOOLS.has(toolName) ? getToolExecutor(tools, toolName) : undefined
 
     if (!execute) {
       return new Response(
@@ -68,15 +74,29 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (RATE_LIMITED_DIRECT_TOOLS.has(toolName)) {
+      await enforceUserRateLimit(session.user.id)
+    }
     const result = await execute(args)
     return new Response(JSON.stringify({ success: true, toolName, args, result }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     })
   } catch (error) {
+    if (error instanceof ToolInputError) {
+      return new Response(JSON.stringify({ success: false, error: 'Invalid tool arguments' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    if (error instanceof UserRateLimitError) {
+      return new Response(JSON.stringify({ success: false, error: 'RATE_LIMIT_EXCEEDED' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
     console.error('[HUB] Tool execution failed:', error)
-    const message = error instanceof Error ? error.message : ''
-    return new Response(JSON.stringify({ success: false, error: message || 'Execution failed' }), {
+    return new Response(JSON.stringify({ success: false, error: 'Execution failed' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     })

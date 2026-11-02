@@ -37,7 +37,7 @@ function buildSessionPersona(sessionUser?: SessionUser, channel?: string): strin
   const channelText = channel ? `channel: ${channel}` : 'channel: web'
   const identity = guest ? 'guest user (not signed in)' : 'signed-in user'
   const capabilities = guest
-    ? 'limited to guest preview; personal data and memory are disabled; feedback/KB submissions are allowed but attributed as guest.'
+    ? 'limited to guest preview; personal data, memory, web search and feedback/KB submissions are disabled (suggest signing in for those).'
     : 'full features enabled: memory, personal tools (where applicable), feedback + KB submissions attributed to the signed-in account.'
 
   const nameLine = !guest && (sessionUser?.name || sessionUser?.email)

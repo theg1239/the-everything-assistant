@@ -41,6 +41,13 @@ export type HubVTOPCommand =
   | 'syllabus'
   | 'course-page'
   | 'sync'
+  | 'today'
+  | 'tomorrow'
+  | 'dayafter'
+  | 'holiday'
+  | 'events'
+  | 'course-allocation'
+  | 'course-page-archive'
 
 export const HUB_COMMANDS = [
   'profile',
@@ -65,6 +72,13 @@ export const HUB_COMMANDS = [
   'syllabus',
   'course-page',
   'sync',
+  'today',
+  'tomorrow',
+  'dayafter',
+  'holiday',
+  'events',
+  'course-allocation',
+  'course-page-archive',
 ] as const satisfies HubVTOPCommand[]
 
 export type VTOPCredentialPayload = {

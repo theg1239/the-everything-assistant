@@ -7,7 +7,8 @@ import { saveTokenUsage } from '@/lib/db'
 import { defaultProviderOptions, languageModel } from '@/lib/ai'
 import { getModelConfig } from '@/lib/model-registry'
 import { normalizeTokenUsage } from '@/lib/token-usage'
-import { getToolExecutor } from '@/app/api/chat/lib/tool-helpers'
+import { getToolExecutor, ToolInputError } from '@/app/api/chat/lib/tool-helpers'
+import { enforceUserRateLimit, UserRateLimitError } from '@/lib/user-rate-limiter'
 import * as z from 'zod'
 
 const vtopRequestSchema = z.object({
@@ -32,6 +33,9 @@ export async function POST(req: Request) {
   const extras = parsedBody.data.extras || {}
 
   try {
+    // Every request runs the VTOP tool and then an LLM formatter.
+    await enforceUserRateLimit(session.user.id)
+
     const tools = createVITTools(session.user.id, {
       sessionUser: { name: session.user.name, email: session.user.email },
     })
@@ -93,8 +97,16 @@ export async function POST(req: Request) {
 
     return result.toTextStreamResponse()
   } catch (e) {
-    const message = e instanceof Error ? e.message : ''
-    return new Response(JSON.stringify({ error: message || 'failed to stream vtop result' }), {
+    if (e instanceof UserRateLimitError) {
+      return new Response(JSON.stringify({ error: 'RATE_LIMIT_EXCEEDED' }), { status: 429 })
+    }
+    if (e instanceof ToolInputError) {
+      return new Response(JSON.stringify({ error: 'invalid vtop command arguments' }), {
+        status: 400,
+      })
+    }
+    console.error('[hub/vtop] failed:', e)
+    return new Response(JSON.stringify({ error: 'failed to stream vtop result' }), {
       status: 500,
     })
   }

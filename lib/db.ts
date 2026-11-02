@@ -762,10 +762,14 @@ export async function forkSharedChatToUser(shareId: string, userId: string): Pro
   return createChatFromMessages(userId, title, shared.messages)
 }
 
-export async function getCanvasDocuments(chatId: string): Promise<CanvasDocument[]> {
+/** Canvas documents of a chat the user owns; [] when the chat is not theirs. */
+export async function getCanvasDocuments(
+  chatId: string,
+  userId: string
+): Promise<CanvasDocument[]> {
   try {
     const documents = await prisma.canvasDocument.findMany({
-      where: { chatId },
+      where: { chatId, chat: { userId } },
       orderBy: { created_at: 'desc' },
       select: {
         id: true,
@@ -784,12 +788,16 @@ export async function getCanvasDocuments(chatId: string): Promise<CanvasDocument
   }
 }
 
+/** Creates a canvas document in a chat the user owns; null when the chat is not theirs. */
 export async function createCanvasDocument(
+  userId: string,
   chatId: string,
   title: string,
   content: string,
   type = 'document'
-): Promise<CanvasDocument> {
+): Promise<CanvasDocument | null> {
+  const owned = await prisma.chat.findFirst({ where: { id: chatId, userId }, select: { id: true } })
+  if (!owned) return null
   const document = await prisma.canvasDocument.create({
     data: {
       chatId,
@@ -810,72 +818,60 @@ export async function createCanvasDocument(
   return document
 }
 
+/** Updates a canvas document in a chat the user owns; false when no such document. */
 export async function updateCanvasDocument(
+  userId: string,
   id: string,
   title: string,
   content: string
-): Promise<void> {
-  await prisma.canvasDocument.update({
-    where: { id },
+): Promise<boolean> {
+  const { count } = await prisma.canvasDocument.updateMany({
+    where: { id, chat: { userId } },
     data: {
       title,
       content,
       updated_at: new Date(),
     },
+  })
+  return count > 0
+}
+
+/**
+ * Records a vote on an existing message of a chat the user owns. Never creates
+ * messages; returns false (nothing written) when the message is not in that chat
+ * or the chat is not the user's.
+ */
+export async function saveVote(params: {
+  userId: string
+  chatId: string
+  messageId: string
+  isUpvoted: boolean
+}): Promise<boolean> {
+  const { userId, chatId, messageId, isUpvoted } = params
+  const message = await prisma.message.findFirst({
+    where: { id: messageId, chatId, chat: { userId } },
     select: { id: true },
   })
-}
+  if (!message) return false
 
-type VoteMessageMetadata = {
-  content?: string
-  role?: string
-}
-
-export async function saveVote(
-  chatId: string,
-  messageId: string,
-  isUpvoted: boolean,
-  messageMetadata?: VoteMessageMetadata
-): Promise<void> {
-  try {
-    const messageExists = await prisma.message.findUnique({
-      where: { id: messageId },
-      select: { id: true },
-    })
-
-    if (!messageExists && messageMetadata?.content) {
-      await prisma.message.create({
-        data: {
-          id: messageId,
-          chatId,
-          role: messageMetadata.role || 'assistant',
-          content: messageMetadata.content,
-        },
-        select: { id: true },
-      })
-    }
-
-    await prisma.vote.upsert({
-      where: {
-        chatId_messageId: {
-          chatId,
-          messageId,
-        },
-      },
-      update: {
-        is_upvoted: isUpvoted,
-      },
-      create: {
+  await prisma.vote.upsert({
+    where: {
+      chatId_messageId: {
         chatId,
         messageId,
-        is_upvoted: isUpvoted,
       },
-      select: { chatId: true },
-    })
-  } catch (error) {
-    console.error('Error in saveVote:', error)
-    throw error
-  }
+    },
+    update: {
+      is_upvoted: isUpvoted,
+    },
+    create: {
+      chatId,
+      messageId,
+      is_upvoted: isUpvoted,
+    },
+    select: { chatId: true },
+  })
+  return true
 }
 
 export async function deleteAllArchivedChats(userId: string): Promise<number> {

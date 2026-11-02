@@ -75,6 +75,9 @@ jobs:
           # Runs on Bun in production, but typechecking only needs @types/bun, not the runtime.
           - service: codex-proxy
             check: npx tsc --noEmit
+          # Exercises the proxy against a fake cli-top that replays the proxy-mode protocol.
+          - service: proxy-service
+            check: npm test
     defaults:
       run:
         working-directory: services/${{ matrix.service }}

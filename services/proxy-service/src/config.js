@@ -1,130 +1,140 @@
+'use strict'
+
 const fs = require('fs')
+const os = require('os')
 const path = require('path')
+const { randomBytes, randomUUID } = require('crypto')
 
 require('dotenv').config({ quiet: true })
 
+const int = (value, fallback) => {
+  const parsed = parseInt(value, 10)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+const bool = (value, fallback) => {
+  if (value === undefined || value === '') return fallback
+  return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase())
+}
+
 function findUpwards(filename, startDir) {
-  const parsed = path.parse(startDir)
   let current = startDir
   while (true) {
     const candidate = path.join(current, filename)
-    if (fs.existsSync(candidate)) {
-      return candidate
-    }
-    if (current === parsed.root) break
+    if (fs.existsSync(candidate)) return candidate
     const next = path.dirname(current)
-    if (next === current) break
+    if (next === current) return null
     current = next
   }
-  return null
 }
 
-function resolveManifestPath() {
-  const explicit = process.env.HUB_CAPABILITIES_PATH
-  if (explicit && fs.existsSync(explicit)) {
-    return explicit
+function resolveManifestPath(env) {
+  if (env.HUB_CAPABILITIES_PATH && fs.existsSync(env.HUB_CAPABILITIES_PATH)) {
+    return env.HUB_CAPABILITIES_PATH
   }
-
   const candidates = [
     path.resolve(__dirname, '../../../hub-capabilities.json'),
-    path.resolve(__dirname, '../../hub-capabilities.json'),
+    path.resolve(__dirname, '../hub-capabilities.json'),
     path.resolve(process.cwd(), 'hub-capabilities.json'),
-    path.resolve(process.cwd(), '../hub-capabilities.json'),
   ]
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate
-    }
-  }
-
-  const discovered =
+  return (
+    candidates.find(candidate => fs.existsSync(candidate)) ||
     findUpwards('hub-capabilities.json', __dirname) ||
-    findUpwards('hub-capabilities.json', process.cwd())
-  if (discovered) {
-    return discovered
+    findUpwards('hub-capabilities.json', process.cwd()) ||
+    candidates[0]
+  )
+}
+
+function resolveBinaryPath(env) {
+  if (env.BINARY_PATH) return path.resolve(env.BINARY_PATH)
+  const name = process.platform === 'win32' ? 'binary.exe' : 'binary'
+  return path.resolve(__dirname, '..', name)
+}
+
+/** All runtime configuration, read once from the environment. */
+function loadConfig(env = process.env) {
+  const nodeEnv = (env.NODE_ENV || 'development').toLowerCase()
+  const isProduction = nodeEnv === 'production'
+  const tmp = os.tmpdir()
+
+  const apiKey = env.PROXY_API_KEY || env.PROXY_SHARED_SECRET || ''
+  const authOptOut = bool(env.PROXY_AUTH_DISABLED, false)
+
+  let tokenSecret = env.PROXY_TOKEN_SECRET || ''
+  let tokenSecretEphemeral = false
+  if (!tokenSecret) {
+    tokenSecret = randomBytes(32).toString('hex')
+    tokenSecretEphemeral = true
   }
 
-  return path.resolve(process.cwd(), 'hub-capabilities.json')
-}
+  return {
+    nodeEnv,
+    isProduction,
+    port: int(env.PORT, 3001),
+    verboseLogs: !isProduction && bool(env.PROXY_VERBOSE_LOGS, false),
 
-const capabilityManifestPath = resolveManifestPath()
+    // HTTP API authentication (shared secret with the Next app).
+    apiKey,
+    // Explicit, development-only opt-out. Ignored in production (fail closed).
+    authDisabled: authOptOut && !isProduction,
+    authOptOutRequestedInProduction: authOptOut && isProduction,
 
-if (process.env.NODE_ENV !== 'test') {
-  console.log('[config] hub-capabilities manifest:', capabilityManifestPath)
-}
+    // Continuation tokens + signed download URLs.
+    tokenSecret,
+    tokenSecretEphemeral,
+    workflowTtlSeconds: int(env.WORKFLOW_TOKEN_TTL_SECONDS, 15 * 60),
+    publicBaseUrl: (env.PROXY_PUBLIC_URL || '').replace(/\/+$/, ''),
+    trustProxy: env.TRUST_PROXY || false,
 
-function loadCapabilityManifest() {
-  try {
-    const raw = fs.readFileSync(capabilityManifestPath, 'utf-8')
-    return JSON.parse(raw)
-  } catch (error) {
-    console.error('[config] Failed to load hub-capabilities manifest:', error.message)
-    return []
+    // cli-top process management
+    binaryPath: resolveBinaryPath(env),
+    cliTimeoutMs: int(env.CLI_TIMEOUT, 120_000),
+    cliDownloadTimeoutMs: int(env.CLI_DOWNLOAD_TIMEOUT, 300_000),
+    runRoot: env.CLI_RUN_DIR || path.join(tmp, 'vtop-proxy-runs'),
+    cliUuid: env.CLI_TOP_UUID || randomUUID(),
+    envPassthrough: (env.CLI_ENV_PASSTHROUGH || '')
+      .split(',')
+      .map(name => name.trim())
+      .filter(Boolean),
+    retryAttempts: Math.max(0, int(env.CLI_RETRY_ATTEMPTS, 1)),
+    maxStdoutBytes: int(env.CLI_MAX_STDOUT_BYTES, 32 * 1024 * 1024),
+
+    // Concurrency / queueing
+    maxConcurrent: Math.max(1, int(env.CLI_MAX_CONCURRENCY, Math.max(4, os.cpus().length * 2))),
+    perUserConcurrency: Math.max(1, int(env.CLI_PER_USER_CONCURRENCY, 1)),
+    maxQueue: Math.max(1, int(env.CLI_MAX_QUEUE, 200)),
+    perUserMaxQueue: Math.max(1, int(env.CLI_PER_USER_MAX_QUEUE, 8)),
+    queueTimeoutMs: int(env.CLI_QUEUE_TIMEOUT_MS, 60_000),
+
+    // Result cache
+    cacheEnabled: bool(env.RESULT_CACHE_ENABLED, true),
+    cacheMaxEntries: int(env.RESULT_CACHE_MAX_ENTRIES, 5000),
+
+    // Downloaded files
+    fileStoreDir: env.FILE_STORE_DIR || path.join(tmp, 'vtop-proxy-files'),
+    fileTtlSeconds: int(env.FILE_TTL_SECONDS, 60 * 60),
+    fileStoreMaxBytes: int(env.FILE_STORE_MAX_BYTES, 2 * 1024 * 1024 * 1024),
+
+    // latest.json (kill switch) cache served to children over loopback
+    latestJsonCache: bool(env.CLI_TOP_LATEST_JSON_CACHE, true),
+    latestJsonUpstream: env.CLI_TOP_LATEST_JSON_UPSTREAM || 'https://cli-top.acmvit.in/latest.json',
+    latestJsonRefreshMs: int(env.CLI_TOP_LATEST_JSON_REFRESH_MS, 5 * 60_000),
+    latestJsonMaxStaleMs: int(env.CLI_TOP_LATEST_JSON_MAX_STALE_MS, 60 * 60_000),
+
+    // Abuse limits
+    globalRateLimit: int(env.GLOBAL_RATE_LIMIT, 120),
+    vtopRateLimit: int(env.VTOP_RATE_LIMIT, 30),
+    perUserLimit: int(env.VTOP_USER_LIMIT, 15),
+    perUserWindowMs: int(env.VTOP_USER_WINDOW_MS, 5 * 60_000),
+
+    usernamePattern: new RegExp(env.VTOP_USERNAME_PATTERN || '^[0-9]{2}[A-Za-z]{2,4}[0-9]{3,5}$'),
+
+    allowedOrigins: env.ALLOWED_ORIGINS
+      ? env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+      : ['https://everything-assistant.com', 'http://localhost:3000'],
+
+    manifestPath: resolveManifestPath(env),
+    version: require('../package.json').version,
   }
 }
 
-let capabilityManifest = loadCapabilityManifest()
-
-function refreshManifest() {
-  capabilityManifest = loadCapabilityManifest()
-}
-
-function getCliExecutablePath() {
-  if (process.env.BINARY_PATH) {
-    return process.env.BINARY_PATH
-  }
-
-  const possibleNames = process.platform === 'win32' ? ['binary.exe'] : ['binary']
-  for (const name of possibleNames) {
-    const fullPath = path.resolve(__dirname, `../${name}`)
-    if (fs.existsSync(fullPath)) {
-      return fullPath
-    }
-  }
-  const fallback = process.platform === 'win32' ? 'binary.exe' : 'binary'
-  return path.resolve(__dirname, `../${fallback}`)
-}
-
-const BINARY_PATH = getCliExecutablePath()
-const CLI_TIMEOUT = parseInt(process.env.CLI_TIMEOUT || '120000', 10)
-
-function buildCapabilityMaps(manifest) {
-  const commandMap = new Map()
-  const interactiveMap = new Map()
-  manifest.forEach(capability => {
-    commandMap.set(capability.command, capability.cliCommand || capability.command)
-    if (capability.interactive) {
-      interactiveMap.set(capability.cliCommand || capability.command, capability.interactive)
-    }
-  })
-  return { commandMap, interactiveMap }
-}
-
-let { commandMap: COMMAND_MAPPING, interactiveMap: INTERACTIVE_COMMANDS } =
-  buildCapabilityMaps(capabilityManifest)
-
-function reloadCapabilities() {
-  refreshManifest()
-  const rebuilt = buildCapabilityMaps(capabilityManifest)
-  COMMAND_MAPPING = rebuilt.commandMap
-  INTERACTIVE_COMMANDS = rebuilt.interactiveMap
-}
-
-const GLOBAL_RATE_LIMIT = parseInt(process.env.GLOBAL_RATE_LIMIT || '120', 10)
-const VTOP_RATE_LIMIT = parseInt(process.env.VTOP_RATE_LIMIT || '30', 10)
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
-  : ['https://everything-assistant.com', 'http://localhost:3000']
-
-module.exports = {
-  capabilityManifest: () => capabilityManifest,
-  COMMAND_MAPPING: () => COMMAND_MAPPING,
-  INTERACTIVE_COMMANDS: () => INTERACTIVE_COMMANDS,
-  reloadCapabilities,
-  BINARY_PATH,
-  CLI_TIMEOUT,
-  GLOBAL_RATE_LIMIT,
-  VTOP_RATE_LIMIT,
-  ALLOWED_ORIGINS,
-}
+module.exports = { loadConfig }

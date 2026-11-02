@@ -62,27 +62,32 @@ Besides the main Next.js app, the repo contains several standalone services and 
 
 ### Purpose
 
-- Bridges the assistant and the VTOP CLI ([cli-top](https://cli-top.acmvit.in); Linux build committed at `services/proxy-service/binary`, override with `BINARY_PATH`).
-- Enforces OAuth 2.0 (PKCE) for MCP transports, so credentials never flow through chat payloads.
-- Exposes the same `hub-capabilities.json` manifest used by the UI to keep naming/parsers consistent.
+- Bridges the assistant and [cli-top](https://cli-top.acmvit.in) v2.12.1 (Linux build committed at `services/proxy-service/binary`, override with `BINARY_PATH`). It drives cli-top only through its machine-facing `cli-top proxy <user> <password> <command> [flags]` JSON protocol: one zod-validated envelope per run, `selection_required` steps instead of prompts, no stdin/stdout scraping.
+- Exposes every cli-top proxy command (profile, marks, grades, attendance, timetable, today, tomorrow, dayafter, holiday, calendar, exams, cgpa, receipts, hostel, library-dues, msg, events, leave/nightslip status **and apply**, da, facility, syllabus, course-page, course-page-archive, course-allocation, sync) plus the legacy aliases. The command list, per-command flag allow-list, multi-step steps and cache TTLs come from the shared root `hub-capabilities.json`.
+- Multi-step commands use one generic model: a request either completes or returns `needs_selection` / `needs_input` / `needs_confirmation` with options and an encrypted, short-lived `continuation` token; `POST /vtop/continue` with a `choice` resumes it by re-running cli-top with the accumulated flags (stateless, survives restarts). Natural-language hints (`select: { course: "CSE1001", faculty: "anuj", materials: "module 2" }`) resolve steps automatically.
+- Downloads (course materials, syllabus, DA papers, exam `.ics`) are collected from a private per-run `HOME`, served through HMAC-signed expiring `/files/...` links (plus a `.zip` bundle) and deleted after `FILE_TTL_SECONDS`.
+- Performance: per-user TTL cache for reads, single-flight de-duplication, a queue with global + per-user concurrency caps (1 VTOP session per student at a time), one-login `sync` batches (NDJSON streaming), and a cached cli-top kill-switch document so children skip a blocking HTTPS fetch per spawn.
+- Security: every VTOP endpoint requires the shared secret `PROXY_API_KEY` (`Authorization: Bearer`, fail-closed); MCP transports use OAuth 2.0 + PKCE (consent secret required, no auto-registration by default, refresh-token rotation). cli-top children get an allow-listed environment and an isolated working directory. See the service README for details and known limits (cli-top only accepts the password as an argument).
 
 ### Endpoints
 
-| Route                             | Description                                                                      |
-| --------------------------------- | -------------------------------------------------------------------------------- |
-| `POST /vtop`                      | Execute a single CLI command (requires username + password or encrypted bundle). |
-| `POST /vtop-interactive`          | Start/advance interactive workflows (course-page).                               |
-| `POST /vtop-interactive-continue` | Submit selections for an existing workflow session.                              |
-| `POST /mcp`                       | MCP JSON-RPC endpoint (streamable HTTP or SSE fallback). Requires OAuth tokens.  |
-| `GET /commands`                   | List supported CLI commands.                                                     |
-| `/oauth/*`, `/register`           | OAuth 2.0 authorization server, PKCE support, client registration.               |
-| `/health`                         | Binary health check.                                                             |
+| Route                                     | Description                                                                                 |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `POST /vtop`                              | Run a command: `{ command, username, password, flags?, select?, confirm?, fresh? }`.       |
+| `POST /vtop/continue`                     | Continue a multi-step command: `{ continuation, choice, password }`.                      |
+| `POST /sync` (alias `/vtop-sync`)         | Batch refresh with one login; `?stream=1` streams NDJSON (cached entries first).          |
+| `POST /vtop-interactive`, `…-continue`    | Legacy course-page workflow API (adapter over the generic workflow).                      |
+| `GET /files/:id/:name`, `/files/bundle/…` | Signed, expiring download links.                                                            |
+| `POST /mcp`                               | MCP JSON-RPC (streamable HTTP or SSE): one tool per command + `vtop-continue` + `sync`.   |
+| `GET /commands`                           | Catalog: commands, params, steps, kinds, cache TTLs.                                       |
+| `/oauth/*`, `/register`                   | OAuth 2.0 authorization server for MCP clients.                                            |
+| `GET /health` (public), `GET /stats`      | Health (binary, kill switch, auth configured) / cache, queue and file-store counters.      |
 
-### Extras
+### App integration
 
-- `mcp-inspector.config.json` preconfigures Model Context Protocol Inspector to talk to the proxy.
-- `workflows/course-page.js` encapsulates multi-step scraping for “course materials” (auto-semester/course/faculty inference).
-- Rate limits: global + per-user VTOP limits (cache in-memory via `NodeCache`).
+- `lib/vtop-proxy.ts` holds the zod schemas and the HTTP client (sends `VTOP_PROXY_API_KEY`); `lib/tools.ts` (`queryVTOP`) maps tool input to `flags` + `select` hints, uses the user's server-side stored credentials, and continues workflows with `continuation` + `choice`.
+- `components/vtop-workflow-card.tsx` renders pending steps (options, filters, multi-select, confirmations) and downloaded files; picking an option pre-fills the chat input.
+- Tests: `cd services/proxy-service && npm test` (node:test against a protocol-faithful fake cli-top in `test/fixtures/`); `npm run bench` for latency numbers.
 
 ---
 
@@ -149,7 +154,7 @@ See §5 in `03-tools-and-integrations.md` for data flow. Operational notes:
 ## 9. Operational Tips
 
 - **Secrets**: each service ships with an `.env.example`; copy it before running anything.
-- **Logging**: all services log verbosely (esp. proxy + deep-search). Use `PROXY_VERBOSE_LOGS=0` or custom loggers if you deploy to production.
+- **Logging**: deep-search logs verbosely. The VTOP proxy logs only method/path/status/duration and masked usernames (never credentials, argv or VTOP output); `PROXY_VERBOSE_LOGS=1` adds debug logs outside production.
 - **Health Checks**: expose `/health` endpoints to uptime monitors (WhatsApp, proxy, deep-search, Discord).
 - **Deployments**: host long-lived bots on Render/Heroku/PM2, but ensure `MAIN_APP_API_KEY` stays synced with the core app’s `WHATSAPP_BOT_API_KEY`.
 

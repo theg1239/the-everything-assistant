@@ -138,10 +138,11 @@ ${BASE_STYLES}
 </html>`
 }
 
-function renderConsentPage({ consentToken, appName, scopeList, redirectHost }) {
+function renderConsentPage({ consentToken, appName, clientId, scopeList, redirectOrigin }) {
   const safeAppName = escapeHtml(appName || 'this client')
+  const safeClientId = escapeHtml(clientId || '')
   const safeScope = escapeHtml(scopeList || 'requested')
-  const safeRedirectHost = escapeHtml(redirectHost || 'verified callback')
+  const safeRedirectOrigin = escapeHtml(redirectOrigin || 'unknown')
   const safeToken = escapeHtml(consentToken || '')
   return `<!DOCTYPE html>
 <html lang="en">
@@ -184,6 +185,14 @@ ${BASE_STYLES}
       .primary { background: #4f46e5; color: #f9fafb; }
       .secondary { background: transparent; border: 1px solid rgba(148,163,184,0.6); color: inherit; }
       .hint { margin-top: 0.85rem; font-size: 0.82rem; color: #94a3b8; }
+      .redirect {
+        margin-top: 0.9rem;
+        padding: 0.75rem 0.85rem;
+        border-radius: 10px;
+        border: 1px solid #f59e0b;
+        background: rgba(245,158,11,0.08);
+      }
+      .redirect code { display: block; margin-top: 0.3rem; font-size: 1rem; font-weight: 600; word-break: break-all; }
       @media (prefers-color-scheme: light) { .hint { color: #6b7280; } }
     </style>
   </head>
@@ -191,9 +200,14 @@ ${BASE_STYLES}
     <div class="card">
       <h1>Authorize ${safeAppName}</h1>
       <p class="muted">Let this client run VTOP actions through Everything Assistant.</p>
+      <div class="redirect">
+        <div class="label">After you authorize, your access is sent to</div>
+        <code id="redirect-origin">${safeRedirectOrigin}</code>
+        <p class="muted" style="font-size:0.82rem;margin-top:0.35rem;">Only continue if you recognise this address.</p>
+      </div>
       <div class="meta">
         <span>Scope: ${safeScope}</span>
-        <span>Callback: ${safeRedirectHost}</span>
+        <span>Client ID: ${safeClientId}</span>
       </div>
       <form method="post" action="/oauth/consent" style="margin-top:1rem;">
         <input type="hidden" name="consent_token" value="${safeToken}" />

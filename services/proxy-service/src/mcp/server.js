@@ -1,424 +1,265 @@
+'use strict'
+
 const { randomUUID } = require('crypto')
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js')
-const {
-  StreamableHTTPServerTransport,
-} = require('@modelcontextprotocol/sdk/server/streamableHttp.js')
+const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js')
 const { SSEServerTransport } = require('@modelcontextprotocol/sdk/server/sse.js')
 const { isInitializeRequest } = require('@modelcontextprotocol/sdk/types.js')
 const { z } = require('zod')
-const pkg = require('../../package.json')
-const { capabilityManifest } = require('../config')
-const { runCommand } = require('../cli-runner')
-const { normalizeResultPayload } = require('../utils/shape')
-const { normalizeFlagsForCommand } = require('../utils/flags')
-const { resolvePassword } = require('../utils/credentials')
-const { executeInteractiveCoursePageWorkflow, getNextStep } = require('../workflows/course-page')
+const { resolvePassword } = require('../credentials')
+const { absolutize } = require('../http/respond')
+const { startLegacyWorkflow, continueLegacyWorkflow } = require('../workflows/course-page')
 
-function coerceFlags(flags) {
-  if (!flags) return {}
-  if (Array.isArray(flags)) return {}
-  if (typeof flags === 'object') return flags
-  return {}
-}
-
-function normalizeEncryptedPayload(encryptedPassword, sessionKey) {
-  if (typeof encryptedPassword === 'string' && encryptedPassword.includes(':::')) {
-    const [enc, embeddedKey] = encryptedPassword.split(':::')
-    return {
-      encryptedPassword: enc,
-      sessionKey: sessionKey || embeddedKey,
-    }
-  }
-  return { encryptedPassword, sessionKey }
-}
-
-function resolveCredentialBundle(input, extra, fallbackUsername) {
-  const authCredentials = extra?.authInfo?.credentials
-  let username = input.username || fallbackUsername || authCredentials?.username
-  let { password } = input
-  let { encryptedPassword, sessionKey } = normalizeEncryptedPayload(
-    input.encryptedPassword,
-    input.sessionKey
-  )
-
-  if (!password && (!encryptedPassword || !sessionKey) && authCredentials) {
-    ;({ encryptedPassword, sessionKey } = normalizeEncryptedPayload(
-      authCredentials.encryptedPassword,
-      authCredentials.sessionKey
-    ))
-  }
-
-  if (!username) {
-    throw new Error('username required: supply one in the request or link credentials via OAuth')
-  }
-
-  if (!password && !(encryptedPassword && sessionKey)) {
-    throw new Error(
-      'Missing credentials: provide password or encryptedPassword + sessionKey, or complete the OAuth credential linking flow.'
-    )
-  }
-
-  return { username, password, encryptedPassword, sessionKey }
-}
-
-function createServer() {
-  const instance = new McpServer({
-    name: 'vtop-mcp',
-    version: pkg.version,
-  })
-
-  registerTools(instance)
-  return instance
-}
-
-const server = createServer()
-const transports = new Map()
-const sseTransports = new Map()
 const SSE_MESSAGES_PATH = '/mcp/messages'
 
-function registerTools(targetServer) {
-  const manifest = capabilityManifest()
+const WORKFLOW_HINT =
+  'If the result status is needs_selection / needs_input / needs_confirmation, either ask the user or, when their request already identifies the answer, call vtop-continue with { continuation, choice } (choice = option id, several ids like "1,3-4" for multi-select, free text to match by name, or "confirm"/"cancel").'
 
-  const flagsSchema = z.preprocess(value => {
-    if (!value) return value
-    if (Array.isArray(value)) {
-      return {}
-    }
-    return value
-  }, z.record(z.string(), z.any()))
-
+function createMcpHandlers({ service, catalog, config, logger, requestContext }) {
   const oauthEnabled = process.env.MCP_OAUTH_ENABLED !== 'false'
-
-  const baseFields = oauthEnabled
-    ? {
-        flags: flagsSchema.optional(),
-      }
+  const credentialFields = oauthEnabled
+    ? {}
     : {
-        username: z.string().min(1, 'username required'),
-        password: z.string().optional(),
-        encryptedPassword: z.string().optional(),
-        sessionKey: z.string().optional(),
-        flags: flagsSchema.optional(),
+        username: z.string().min(1).describe('VTOP registration number'),
+        password: z.string().optional().describe('VTOP password'),
+        encryptedPassword: z.string().optional().describe('DEPRECATED legacy cipher'),
+        sessionKey: z.string().optional().describe('DEPRECATED legacy cipher key'),
       }
 
-  const baseObjectSchema = z.object(baseFields)
-  const baseInputSchema = baseObjectSchema
-
-  manifest.forEach(capability => {
-    targetServer.registerTool(
-      capability.command,
-      {
-        title: capability.title || capability.command,
-        description: capability.description || `Execute ${capability.command} via VTOP proxy`,
-        inputSchema: baseInputSchema,
-      },
-      async ({ username, password, encryptedPassword, sessionKey, flags }, extra) => {
-        const credentials = resolveCredentialBundle(
-          { username, password, encryptedPassword, sessionKey },
-          extra
-        )
-        const finalPassword = resolvePassword({
-          password: credentials.password,
-          encryptedPassword: credentials.encryptedPassword,
-          sessionKey: credentials.sessionKey,
-        })
-        const normalizedFlagsInput = coerceFlags(flags)
-        const { sanitizedFlags } = normalizeFlagsForCommand(
-          capability.command,
-          normalizedFlagsInput
-        )
-        const result = await runCommand(
-          credentials.username,
-          finalPassword,
-          capability.command,
-          sanitizedFlags
-        )
-        const shaped = normalizeResultPayload(result, capability.command, sanitizedFlags)
-
-        if (!shaped.success) {
-          throw new Error(shaped.error || `Failed to execute ${capability.command}`)
-        }
-
-        return {
-          content: [{ type: 'text', text: JSON.stringify(shaped, null, 2) }],
-          structuredContent: shaped,
-        }
-      }
-    )
-  })
-
-  registerInteractiveTools(targetServer, baseObjectSchema)
-}
-
-function registerInteractiveTools(targetServer, baseSchema) {
-  const workflowSteps = ['semester', 'course', 'faculty', 'materials', 'download']
-  const interactiveInput = baseSchema.extend({
-    step: z.enum(workflowSteps).optional(),
-    sessionData: z.string().optional(),
-  })
-
-  const continueInput = z.object({
-    sessionData: z.string(),
-    selection: z.string(),
-    step: z.enum(['semester', 'course', 'faculty', 'materials']),
-    password: z.string().optional(),
-    encryptedPassword: z.string().optional(),
-    sessionKey: z.string().optional(),
-  })
-
-  targetServer.registerTool(
-    'course-page-interactive',
-    {
-      title: 'course-page interactive',
-      description: 'Run the multi-step course materials workflow with automatic prompts.',
-      inputSchema: interactiveInput,
-    },
-    async (
-      { username, password, encryptedPassword, sessionKey, step = 'semester', flags, sessionData },
-      extra
-    ) => {
-      const credentials = resolveCredentialBundle(
-        { username, password, encryptedPassword, sessionKey },
-        extra
-      )
-      const finalPassword = resolvePassword({
-        password: credentials.password,
-        encryptedPassword: credentials.encryptedPassword,
-        sessionKey: credentials.sessionKey,
-      })
-      const normalizedFlagsInput = coerceFlags(flags)
-      const { sanitizedFlags } = normalizeFlagsForCommand('course-page', normalizedFlagsInput)
-      const result = await executeInteractiveCoursePageWorkflow(
-        credentials.username,
-        finalPassword,
-        step,
-        sanitizedFlags,
-        sessionData
-      )
-
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-        structuredContent: result,
-      }
+  function credentialsFor(input, extra) {
+    const linked = extra && extra.authInfo && extra.authInfo.credentials
+    const username = input.username || (linked && linked.username)
+    if (input.password || input.encryptedPassword) {
+      return { username, password: resolvePassword(input, { logger }) }
     }
-  )
+    if (linked) return { username, password: resolvePassword(linked, { logger }) }
+    return { username, password: resolvePassword({}, { logger }) }
+  }
 
-  targetServer.registerTool(
-    'course-page-interactive-continue',
-    {
-      title: 'course-page interactive continue',
-      description: 'Advance the interactive workflow after the user selects an option.',
-      inputSchema: continueInput,
-    },
-    async ({ sessionData, selection, step, password, encryptedPassword, sessionKey }, extra) => {
-      let parsedSession
-      try {
-        parsedSession = JSON.parse(sessionData)
-      } catch (error) {
-        throw new Error('Invalid sessionData JSON')
-      }
-
-      if (!parsedSession?.username) {
-        throw new Error('Session missing username')
-      }
-
-      const credentials = resolveCredentialBundle(
-        { password, encryptedPassword, sessionKey },
-        extra,
-        parsedSession.username
-      )
-      const finalPassword = resolvePassword({
-        password: credentials.password,
-        encryptedPassword: credentials.encryptedPassword,
-        sessionKey: credentials.sessionKey,
-      })
-      const updatedFlags = { ...(parsedSession.flags || {}) }
-      let nextStep = getNextStep(step)
-
-      if (step === 'semester') {
-        updatedFlags.semester = parseInt(selection)
-      } else if (step === 'course') {
-        updatedFlags.course = parseInt(selection)
-      } else if (step === 'faculty') {
-        updatedFlags.faculty = parseInt(selection)
-      } else if (step === 'materials') {
-        updatedFlags.materialSelection = selection
-        nextStep = 'download'
-      }
-
-      const result = await executeInteractiveCoursePageWorkflow(
-        credentials.username || parsedSession.username,
-        finalPassword,
-        nextStep,
-        updatedFlags,
-        sessionData
-      )
-
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-        structuredContent: result,
-      }
+  function toToolResult(result) {
+    const store = requestContext.getStore()
+    const { httpStatus, ...body } = absolutize(result, (store && store.baseUrl) || config.publicBaseUrl)
+    return {
+      content: [{ type: 'text', text: JSON.stringify(body) }],
+      structuredContent: body,
+      isError: body.success === false,
     }
-  )
-}
-
-async function handleMcpRequest(req, res) {
-  const method = req.method.toUpperCase()
-  const wantsSse =
-    method === 'GET' &&
-    !req.headers['mcp-session-id'] &&
-    req.headers.accept?.includes('text/event-stream')
-
-  if (wantsSse) {
-    return handleSseStream(req, res)
   }
 
-  if (method === 'POST') {
-    return handlePostRequest(req, res)
+  async function guarded(fn) {
+    try {
+      return toToolResult(await fn())
+    } catch (error) {
+      return toToolResult({ success: false, status: 'error', error: error.message, errorKind: error.kind || 'internal_error' })
+    }
   }
-  if (method === 'GET' || method === 'DELETE') {
-    return handleSessionSideRequest(req, res)
-  }
 
-  res.status(405).json({
-    jsonrpc: '2.0',
-    error: {
-      code: -32000,
-      message: `Method ${req.method} not allowed`,
-    },
-    id: null,
-  })
-}
+  function registerTools(server) {
+    const flagsSchema = z
+      .preprocess(value => (Array.isArray(value) ? {} : value), z.record(z.string(), z.unknown()))
+      .optional()
+      .describe('Command flags (see params in the description)')
+    const selectSchema = z
+      .record(z.string(), z.string())
+      .optional()
+      .describe('Natural-language hints per step, e.g. { "course": "CSE1001", "faculty": "anuj", "materials": "module 2" }')
 
-async function handlePostRequest(req, res) {
-  const sessionId = req.headers['mcp-session-id']
-  let transport = sessionId ? transports.get(sessionId) : undefined
-
-  if (!transport) {
-    if (!isInitializeRequest(req.body)) {
-      res.status(400).json({
-        jsonrpc: '2.0',
-        error: {
-          code: -32000,
-          message: 'Bad Request: expected initialize call or valid session',
+    for (const entry of catalog.list()) {
+      if (entry.command === 'sync') continue
+      const params = entry.params.length
+        ? ` Params: ${entry.params.map(name => `${name} (${catalog.paramSpec(name).type})`).join(', ')}.`
+        : ''
+      const steps = entry.steps.length ? ` Steps: ${entry.steps.map(step => step.label).join(' -> ')}. ${WORKFLOW_HINT}` : ''
+      const write = entry.writeWhen ? ` Setting ${entry.writeWhen}=true performs a write and requires confirmation.` : ''
+      server.registerTool(
+        entry.command,
+        {
+          title: entry.title,
+          description: `${entry.description}${params}${steps}${write}`,
+          inputSchema: z.object({
+            ...credentialFields,
+            flags: flagsSchema,
+            select: selectSchema,
+            confirm: z.boolean().optional().describe('Explicit user confirmation for write actions'),
+            fresh: z.boolean().optional().describe('Bypass the short-lived result cache'),
+          }),
         },
-        id: req.body?.id ?? null,
-      })
-      return
+        (input, extra) =>
+          guarded(async () => {
+            const creds = credentialsFor(input, extra)
+            return service.execute({
+              command: entry.command,
+              ...creds,
+              flags: input.flags,
+              select: input.select,
+              confirm: input.confirm === true,
+              fresh: input.fresh === true,
+            })
+          })
+      )
     }
 
-    transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => randomUUID(),
-      enableJsonResponse: true,
-      onsessioninitialized: newSessionId => {
-        transports.set(newSessionId, transport)
+    server.registerTool(
+      'vtop-continue',
+      {
+        title: 'continue a VTOP workflow',
+        description: `Continue a multi-step VTOP command after a needs_* result. ${WORKFLOW_HINT}`,
+        inputSchema: z.object({
+          ...credentialFields,
+          continuation: z.string().min(1),
+          choice: z.union([z.string(), z.number(), z.boolean(), z.array(z.union([z.string(), z.number()]))]),
+          confirm: z.boolean().optional(),
+        }),
       },
-    })
+      (input, extra) =>
+        guarded(async () => {
+          const creds = credentialsFor(input, extra)
+          return service.continueWorkflow({ continuation: input.continuation, choice: input.choice, confirm: input.confirm === true, ...creds })
+        })
+    )
 
-    transport.onclose = () => {
-      if (transport.sessionId) {
-        transports.delete(transport.sessionId)
+    server.registerTool(
+      'sync',
+      {
+        title: 'hub sync',
+        description: 'Refresh several read-only commands with one VTOP login. Cached results are returned instantly.',
+        inputSchema: z.object({
+          ...credentialFields,
+          commands: z.array(z.string()).optional(),
+          flags: flagsSchema,
+          fresh: z.boolean().optional(),
+        }),
+      },
+      (input, extra) =>
+        guarded(async () => {
+          const creds = credentialsFor(input, extra)
+          const result = await service.sync({ ...creds, commands: input.commands, flags: input.flags, fresh: input.fresh === true })
+          return { ...result, success: result.success }
+        })
+    )
+
+    // Legacy course-page workflow tools (kept for existing MCP clients).
+    server.registerTool(
+      'course-page-interactive',
+      {
+        title: 'course-page interactive (legacy)',
+        description: `Deprecated: use course-page + vtop-continue. Runs the course materials workflow.`,
+        inputSchema: z.object({
+          ...credentialFields,
+          step: z.string().optional(),
+          flags: flagsSchema,
+          sessionData: z.string().optional(),
+        }),
+      },
+      (input, extra) =>
+        guarded(async () => startLegacyWorkflow(service, { ...credentialsFor(input, extra), flags: input.flags, sessionData: input.sessionData }))
+    )
+    server.registerTool(
+      'course-page-interactive-continue',
+      {
+        title: 'course-page interactive continue (legacy)',
+        description: 'Deprecated: use vtop-continue.',
+        inputSchema: z.object({
+          ...credentialFields,
+          sessionData: z.string(),
+          selection: z.string(),
+          step: z.string().optional(),
+        }),
+      },
+      (input, extra) =>
+        guarded(async () =>
+          continueLegacyWorkflow(service, {
+            ...credentialsFor(input, extra),
+            sessionData: input.sessionData,
+            selection: input.selection,
+            step: input.step,
+          })
+        )
+    )
+  }
+
+  function createServer() {
+    const server = new McpServer({ name: 'vtop-mcp', version: config.version })
+    registerTools(server)
+    return server
+  }
+
+  const transports = new Map()
+  const sseTransports = new Map()
+
+  async function handlePostRequest(req, res) {
+    const sessionId = req.headers['mcp-session-id']
+    let transport = sessionId ? transports.get(sessionId) : undefined
+    if (!transport) {
+      if (!isInitializeRequest(req.body)) {
+        res.status(400).json({
+          jsonrpc: '2.0',
+          error: { code: -32000, message: 'Bad Request: expected initialize call or valid session' },
+          id: (req.body && req.body.id) ?? null,
+        })
+        return
       }
-    }
-
-    await server.connect(transport)
-  }
-
-  try {
-    await transport.handleRequest(req, res, req.body)
-  } catch (error) {
-    console.error('[mcp] streamable transport error:', error)
-    if (!res.headersSent) {
-      res.status(500).json({
-        jsonrpc: '2.0',
-        error: { code: -32603, message: 'Internal server error' },
-        id: req.body?.id ?? null,
+      const server = createServer()
+      transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        enableJsonResponse: true,
+        onsessioninitialized: id => transports.set(id, transport),
       })
+      transport.onclose = () => {
+        if (transport.sessionId) transports.delete(transport.sessionId)
+        server.close().catch(() => {})
+      }
+      await server.connect(transport)
     }
-  }
-}
-
-async function handleSessionSideRequest(req, res) {
-  const sessionId = req.headers['mcp-session-id']
-  const transport = sessionId ? transports.get(sessionId) : undefined
-
-  if (!transport) {
-    res.status(404).send('Invalid or missing MCP session')
-    return
+    await transport.handleRequest(req, res, req.body)
   }
 
-  try {
+  async function handleSessionSideRequest(req, res) {
+    const sessionId = req.headers['mcp-session-id']
+    const transport = sessionId ? transports.get(sessionId) : undefined
+    if (!transport) return res.status(404).send('Invalid or missing MCP session')
     await transport.handleRequest(req, res)
-  } catch (error) {
-    console.error('[mcp] session request error:', error)
-    if (!res.headersSent) {
-      res.status(500).send('MCP session handling failed')
+    if (req.method.toUpperCase() === 'DELETE') {
+      transports.delete(sessionId)
+      await transport.close()
     }
   }
 
-  if (req.method.toUpperCase() === 'DELETE') {
-    transport.close()
-    transports.delete(sessionId)
-  }
-}
-
-async function handleSseStream(req, res) {
-  const transport = new SSEServerTransport(SSE_MESSAGES_PATH, res)
-  sseTransports.set(transport.sessionId, transport)
-
-  transport.onclose = () => {
-    sseTransports.delete(transport.sessionId)
+  async function handleSseStream(req, res) {
+    const transport = new SSEServerTransport(SSE_MESSAGES_PATH, res)
+    sseTransports.set(transport.sessionId, transport)
+    transport.onclose = () => sseTransports.delete(transport.sessionId)
+    await createServer().connect(transport)
   }
 
-  try {
-    const sseServer = createServer()
-    await sseServer.connect(transport)
-  } catch (error) {
-    console.error('[mcp] SSE stream error:', error)
-    sseTransports.delete(transport.sessionId)
-    if (!res.headersSent) {
-      res.status(500).send('Failed to start SSE transport')
+  async function handleMcpRequest(req, res) {
+    const method = req.method.toUpperCase()
+    if (method === 'GET' && !req.headers['mcp-session-id'] && (req.headers.accept || '').includes('text/event-stream')) {
+      return handleSseStream(req, res)
     }
-  }
-}
-
-async function handleSseMessagePost(req, res) {
-  const { sessionId } = req.query
-  if (!sessionId || !sseTransports.has(sessionId)) {
-    res.status(404).send('Unknown SSE session')
-    return
+    if (method === 'POST') return handlePostRequest(req, res)
+    if (method === 'GET' || method === 'DELETE') return handleSessionSideRequest(req, res)
+    res.status(405).json({ jsonrpc: '2.0', error: { code: -32000, message: `Method ${req.method} not allowed` }, id: null })
   }
 
-  const transport = sseTransports.get(sessionId)
-  try {
+  async function handleSseMessagePost(req, res) {
+    const transport = sseTransports.get(req.query.sessionId)
+    if (!transport) return res.status(404).send('Unknown SSE session')
     await transport.handlePostMessage(req, res, req.body)
-  } catch (error) {
-    console.error('[mcp] SSE message error:', error)
-    if (!res.headersSent) {
-      res.status(500).send('Failed to handle SSE message')
-    }
   }
+
+  async function closeMcpSessions() {
+    const open = [...transports.values(), ...sseTransports.values()]
+    transports.clear()
+    sseTransports.clear()
+    const results = await Promise.allSettled(open.map(transport => transport.close()))
+    results
+      .filter(result => result.status === 'rejected')
+      .forEach(result => logger.warn('[mcp] error closing session during shutdown:', result.reason))
+    return open.length
+  }
+
+  return { handleMcpRequest, handleSseMessagePost, closeMcpSessions }
 }
 
-/** Close every open MCP transport (ending SSE streams) and the shared server. Used on shutdown. */
-async function closeMcpSessions() {
-  const open = [...transports.values(), ...sseTransports.values()]
-  transports.clear()
-  sseTransports.clear()
-
-  const results = await Promise.allSettled([
-    ...open.map(transport => transport.close()),
-    server.close(),
-  ])
-  results
-    .filter(result => result.status === 'rejected')
-    .forEach(result => console.warn('[mcp] error closing session during shutdown:', result.reason))
-
-  return open.length
-}
-
-module.exports = {
-  handleMcpRequest,
-  handleSseMessagePost,
-  closeMcpSessions,
-}
+module.exports = { createMcpHandlers }

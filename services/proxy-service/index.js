@@ -1,609 +1,104 @@
-const express = require('express')
-const path = require('path')
+'use strict'
+
 const fs = require('fs')
-const helmet = require('helmet')
-const rateLimit = require('express-rate-limit')
-const { randomUUID } = require('crypto')
-const NodeCache = require('node-cache')
-const {
-  capabilityManifest,
-  COMMAND_MAPPING,
-  INTERACTIVE_COMMANDS,
-  BINARY_PATH,
-  CLI_TIMEOUT,
-  GLOBAL_RATE_LIMIT,
-  VTOP_RATE_LIMIT,
-  ALLOWED_ORIGINS,
-} = require('./src/config')
-const { runCommand } = require('./src/cli-runner')
-const { sanitizeErrorForResponse } = require('./src/utils/errors')
-const { normalizeResultPayload } = require('./src/utils/shape')
-const { normalizeFlagsForCommand } = require('./src/utils/flags')
-const { resolvePassword } = require('./src/utils/credentials')
-const { handleMcpRequest, handleSseMessagePost, closeMcpSessions } = require('./src/mcp/server')
+const { loadConfig } = require('./src/config')
+const { createProxy } = require('./src/app')
+const { createLogger } = require('./src/logger')
 const { terminateActiveChildren } = require('./src/child-processes')
-const { setupMcpOAuth } = require('./src/oauth')
-const {
-  executeInteractiveCoursePageWorkflow,
-  getNextStep,
-  tempFiles,
-} = require('./src/workflows/course-page')
-require('dotenv').config({ quiet: true })
-
-const VERBOSE_LOG =
-  process.env.PROXY_VERBOSE_LOGS === '1' ||
-  (process.env.NODE_ENV || '').toLowerCase() !== 'production'
-
-const app = express()
 
 const SHUTDOWN_TIMEOUT_MS = 10_000
-let shuttingDown = false
 
-// server.close() stops new connections, but kept-alive sockets can still send requests; refuse
-// them so no new CLI processes are spawned mid-shutdown.
-app.use((req, res, next) => {
-  if (!shuttingDown) return next()
-  res.set('Connection', 'close')
-  res.status(503).json({ error: 'Server is shutting down' })
-})
+const config = loadConfig()
+const logger = createLogger(config)
 
-const DEFAULT_SYNC_COMMANDS = ['profile', 'timetable', 'attendance', 'marks', 'cgpa', 'exams', 'da']
-
-const PER_USER_VTOP_LIMIT = parseInt(process.env.VTOP_USER_LIMIT || '15', 10)
-const PER_USER_VTOP_WINDOW_MS = parseInt(
-  process.env.VTOP_USER_WINDOW_MS || String(5 * 60 * 1000),
-  10
-)
-const userVtopCache = new NodeCache({ stdTTL: PER_USER_VTOP_WINDOW_MS / 1000, checkperiod: 60 })
-
-const maskIdentifier = value => {
-  if (!value || typeof value !== 'string') return 'unknown'
-  if (value.length <= 4) return value
-  return `${value.slice(0, 2)}***${value.slice(-2)}`
-}
-
-const scrubFlags = flags => {
-  if (!flags) return {}
-  const copy = { ...flags }
-  if (copy.password) copy.password = '***'
-  if (copy.encryptedPassword) copy.encryptedPassword = '***'
-  return copy
-}
-
-const logRequest = (scope, id, message, meta = undefined) => {
-  const prefix = `[${scope}:${id}]`
-  if (meta !== undefined) {
-    console.log(prefix, message, meta)
-  } else {
-    console.log(prefix, message)
-  }
-}
-
-const logError = (scope, id, message, error) => {
-  const prefix = `[${scope}:${id}]`
-  console.error(prefix, message, error)
-}
-
-const isPlainObject = value => value && typeof value === 'object' && !Array.isArray(value)
-
-app.use(
-  helmet({
-    crossOriginResourcePolicy: { policy: 'cross-origin' },
-  })
-)
-
-app.use(express.json({ limit: '10mb' }))
-
-const globalLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: GLOBAL_RATE_LIMIT,
-  standardHeaders: true,
-  legacyHeaders: false,
-})
-app.use(globalLimiter)
-
-const allowedOrigins = ALLOWED_ORIGINS
-
-app.use((req, res, next) => {
-  const origin = req.headers.origin
-  if (allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin)
-  }
-  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Mcp-Session-Id')
-  res.header('Access-Control-Expose-Headers', 'Mcp-Session-Id')
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200)
-  }
-  next()
-})
-
-const vtopLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: VTOP_RATE_LIMIT,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many requests' },
-})
-
-function checkPerUserVtopLimit(username) {
-  if (!username || !PER_USER_VTOP_LIMIT || PER_USER_VTOP_LIMIT <= 0) return { allowed: true }
-  const key = `user:${username.toLowerCase()}`
-  const current = userVtopCache.get(key) || 0
-  if (current >= PER_USER_VTOP_LIMIT) {
-    return {
-      allowed: false,
-      remainingMs: userVtopCache.getTtl(key) ? userVtopCache.getTtl(key) - Date.now() : 0,
-    }
-  }
-  userVtopCache.set(key, current + 1)
-  return { allowed: true }
-}
-
-app.use((req, res, next) => {
-  const timestamp = new Date().toISOString()
-  console.log(`[${timestamp}] ${req.method} ${req.path} - ${req.ip}`)
-  next()
-})
-
-const oauthSetup = setupMcpOAuth(app)
-
-const SUPPORTED_COMMANDS = capabilityManifest().map(capability => capability.command)
-
-app.get('/health', (req, res) => {
-  const binaryExists = fs.existsSync(BINARY_PATH)
-  res.json({
-    status: binaryExists ? 'ok' : 'missing-binary',
-    binary: BINARY_PATH,
-    commands: SUPPORTED_COMMANDS.length,
-  })
-})
-
-app.post('/vtop', vtopLimiter, async (req, res) => {
-  const requestId = randomUUID().slice(0, 8)
-  const startedAt = Date.now()
-  const { command, username, password, encryptedPassword, sessionKey, flags } = req.body || {}
-
-  if (!command || !username) {
-    return res.status(400).json({
-      error: 'Missing required fields: command, username',
-    })
-  }
-
-  if (!SUPPORTED_COMMANDS.includes(command)) {
-    return res.status(400).json({
-      error: 'Unsupported command',
-      supportedCommands: SUPPORTED_COMMANDS,
-    })
-  }
-
-  const perUser = checkPerUserVtopLimit(username)
-  if (!perUser.allowed) {
-    return res.status(429).json({
-      error: 'VTOP rate limit reached for this user. Please try again in a few minutes.',
-      username: maskIdentifier(username),
-    })
-  }
-
-  let finalPassword
-  try {
-    finalPassword = resolvePassword({ password, encryptedPassword, sessionKey })
-  } catch (error) {
-    return res.status(400).json({
-      error: error.message || 'Failed to resolve credentials',
-    })
-  }
-
-  const { sanitizedFlags } = normalizeFlagsForCommand(command, flags || {})
-  logRequest(
-    'vtop',
-    requestId,
-    `command=${command} user=${maskIdentifier(username)} flags=${JSON.stringify(
-      scrubFlags(sanitizedFlags)
-    )} encrypted=${Boolean(encryptedPassword)} password=${Boolean(password)}`
-  )
-
-  try {
-    const result = await runCommand(username, finalPassword, command, sanitizedFlags)
-    const shaped = normalizeResultPayload(result, command, sanitizedFlags)
-    if (VERBOSE_LOG) {
-      const outputSnippet = typeof shaped.output === 'string' ? shaped.output.slice(0, 400) : null
-      logRequest('vtop', requestId, `debug result command=${command} success=${shaped.success}`, {
-        outputSnippet,
-        meta: shaped.meta || null,
-      })
-    }
-    logRequest(
-      'vtop',
-      requestId,
-      `success command=${command} duration=${Date.now() - startedAt}ms`,
-      { keys: Object.keys(shaped) }
-    )
-
-    if (!shaped.success) {
-      const statusCode = shaped.requiresCredentials ? 401 : 400
-      return res.status(statusCode).json(shaped)
-    }
-
-    res.json(shaped)
-  } catch (error) {
-    logError('vtop', requestId, `failed command=${command}`, error.error || error.message || error)
-    const sanitizedError = sanitizeErrorForResponse(error, command)
-    return res.status(500).json(sanitizedError)
-  }
-})
-
-app.post('/sync', vtopLimiter, async (req, res) => {
-  const startedAt = Date.now()
-  const { username, password, encryptedPassword, sessionKey, commands, flags } = req.body || {}
-
-  if (!username) {
-    return res.status(400).json({ error: 'Missing required field: username' })
-  }
-
-  const commandList = Array.isArray(commands) && commands.length ? commands : DEFAULT_SYNC_COMMANDS
-  const unsupported = commandList.filter(cmd => !SUPPORTED_COMMANDS.includes(cmd))
-  if (unsupported.length) {
-    return res
-      .status(400)
-      .json({
-        error: `Unsupported commands: ${unsupported.join(', ')}`,
-        supportedCommands: SUPPORTED_COMMANDS,
-      })
-  }
-
-  let resolvedPassword
-  try {
-    resolvedPassword = resolvePassword({ password, encryptedPassword, sessionKey })
-  } catch (error) {
-    return res.status(400).json({ error: error.message || 'Failed to resolve credentials' })
-  }
-
-  const mergedFlags = {
-    ...(isPlainObject(flags) ? flags : {}),
-    commands: commandList.join(','),
-  }
-
-  try {
-    const raw = await runCommand(username, resolvedPassword, 'sync', mergedFlags)
-    const shaped = normalizeResultPayload(raw, 'sync', mergedFlags)
-    const structured = isPlainObject(shaped?.structured_data) ? shaped.structured_data : {}
-    const results = Array.isArray(structured?.results) ? structured.results : []
-
-    res.json({
-      success: shaped.success !== false,
-      startedAt: new Date(startedAt).toISOString(),
-      durationMs: Date.now() - startedAt,
-      results,
-      raw: shaped,
-    })
-  } catch (error) {
-    const sanitized = sanitizeErrorForResponse(error, 'sync')
-    res.status(500).json(sanitized)
-  }
-})
-
-app.post('/vtop-interactive', vtopLimiter, async (req, res) => {
-  const requestId = randomUUID().slice(0, 8)
-  const startedAt = Date.now()
-  const { command, step, username, password, encryptedPassword, sessionKey, flags, sessionData } =
-    req.body || {}
-
-  if (!command || !step || !username) {
-    return res.status(400).json({
-      error: 'Missing required fields: command, step, username',
-    })
-  }
-
-  let finalPassword
-  try {
-    finalPassword = resolvePassword({ password, encryptedPassword, sessionKey })
-  } catch (error) {
-    return res.status(400).json({
-      error: error.message || 'Failed to resolve credentials',
-    })
-  }
-
-  logRequest(
-    'vtop-interactive',
-    requestId,
-    `command=${command} step=${step} user=${maskIdentifier(username)} flags=${JSON.stringify(
-      scrubFlags(flags)
-    )}`
-  )
-
-  try {
-    const { sanitizedFlags } = normalizeFlagsForCommand(command, flags || {})
-    const result = await executeInteractiveCoursePageWorkflow(
-      username,
-      finalPassword,
-      step,
-      sanitizedFlags,
-      sessionData
-    )
-    logRequest(
-      'vtop-interactive',
-      requestId,
-      `success command=${command} step=${step} duration=${Date.now() - startedAt}ms`
-    )
-    res.json(result)
-  } catch (error) {
-    logError(
-      'vtop-interactive',
-      requestId,
-      `failed command=${command} step=${step}`,
-      error.error || error.message || error
-    )
-    const sanitizedError = sanitizeErrorForResponse(error, `${command}-${step}`)
-    return res.status(500).json(sanitizedError)
-  }
-})
-
-app.post('/vtop-interactive-continue', vtopLimiter, async (req, res) => {
-  const requestId = randomUUID().slice(0, 8)
-  const startedAt = Date.now()
-  const { sessionData, selection, step } = req.body || {}
-
-  if (!sessionData || !selection || !step) {
-    return res.status(400).json({
-      error: 'Missing required fields: sessionData, selection, step',
-    })
-  }
-
-  let parsedSession
-  try {
-    parsedSession = JSON.parse(sessionData)
-  } catch (error) {
-    return res.status(400).json({
-      error: 'Invalid session data format',
-    })
-  }
-
-  if (!parsedSession.username) {
-    return res.status(400).json({
-      error: 'Invalid session: missing username',
-    })
-  }
-
-  let nextStep = getNextStep(step)
-  let updatedFlags = { ...parsedSession.flags }
-
-  if (step === 'semester') {
-    updatedFlags.semester = parseInt(selection)
-  } else if (step === 'course') {
-    updatedFlags.course = parseInt(selection)
-  } else if (step === 'faculty') {
-    updatedFlags.faculty = parseInt(selection)
-  } else if (step === 'materials') {
-    updatedFlags.materialSelection = selection
-    nextStep = 'download'
-  }
-
-  const password = req.body?.password || req.body?.encryptedPassword
-  if (!password) {
-    return res.status(400).json({
-      error: 'Password required to continue workflow',
-    })
-  }
-
-  logRequest(
-    'vtop-interactive',
-    requestId,
-    `continue from ${step} -> ${nextStep} selection=${selection} user=${maskIdentifier(
-      parsedSession.username
-    )}`
-  )
-
-  try {
-    const result = await executeInteractiveCoursePageWorkflow(
-      parsedSession.username,
-      password,
-      nextStep,
-      updatedFlags,
-      JSON.stringify(parsedSession)
-    )
-    logRequest(
-      'vtop-interactive',
-      requestId,
-      `continue success step=${step} duration=${Date.now() - startedAt}ms`
-    )
-    res.json(result)
-  } catch (error) {
-    logError(
-      'vtop-interactive',
-      requestId,
-      `continue failed step=${step}`,
-      error.error || error.message || error
-    )
-    const sanitizedError = sanitizeErrorForResponse(error, `${step}-continue`)
-    return res.status(500).json(sanitizedError)
-  }
-})
-
-app.get('/download/:fileId', (req, res) => {
-  const { fileId } = req.params
-
-  const fileInfo = tempFiles.get(fileId)
-  if (!fileInfo) {
-    return res.status(404).json({ error: 'File not found or expired' })
-  }
-
-  if (Date.now() > fileInfo.expiry) {
-    tempFiles.delete(fileId)
-    return res.status(410).json({ error: 'File has expired' })
-  }
-
-  if (!fs.existsSync(fileInfo.path)) {
-    tempFiles.delete(fileId)
-    return res.status(404).json({ error: 'File no longer available' })
-  }
-
-  res.setHeader('Content-Disposition', `attachment; filename="${fileInfo.filename}"`)
-  res.setHeader('Content-Type', 'application/octet-stream')
-
-  const fileStream = fs.createReadStream(fileInfo.path)
-  fileStream.pipe(res)
-
-  fileStream.on('error', error => {
-    console.error('Error streaming file:', error)
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'Error downloading file' })
-    }
-  })
-})
-
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    version: require('./package.json').version,
-    environment: process.env.NODE_ENV || 'development',
-  })
-})
-
-app.get('/commands', (req, res) => {
-  const manifest = capabilityManifest()
-  const mapping = Object.fromEntries(COMMAND_MAPPING())
-  const interactive = Object.fromEntries(INTERACTIVE_COMMANDS())
-  res.json({
-    commands: SUPPORTED_COMMANDS,
-    mapping,
-    interactive,
-    description: 'Available VTOP commands with interactive handling support',
-    version: require('./package.json').version,
-    supportedFlags: {
-      semester: 'Semester number for semester-specific commands',
-      course: 'Course selection number for course-specific commands',
-      faculty: 'Faculty selection number for faculty-specific commands',
-      classGroup: 'Class group selection number for calendar commands',
-      fuzzyIndex: 'Fuzzy search index for course-page commands',
-    },
-  })
-})
-
-const protectMcp = oauthSetup?.authMiddleware ? [oauthSetup.authMiddleware] : []
-
-app.all('/mcp', ...protectMcp, async (req, res) => {
-  try {
-    await handleMcpRequest(req, res)
-  } catch (error) {
-    console.error('[mcp] handler error:', error)
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'MCP handler failed', message: error.message })
-    }
-  }
-})
-
-app.post('/mcp/messages', ...protectMcp, async (req, res) => {
-  try {
-    await handleSseMessagePost(req, res)
-  } catch (error) {
-    console.error('[mcp] SSE message handler error:', error)
-    if (!res.headersSent) {
-      res.status(500).send('SSE message handler failed')
-    }
-  }
-})
-
-app.get('/', (req, res) => {
-  res.sendFile('index.html', { root: path.join(__dirname, 'public') })
-})
-
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err)
-  res.status(500).json({
-    error: 'Internal server error',
-    message: process.env.NODE_ENV === 'production' ? 'Something went wrong' : err.message,
-  })
-})
-
-app.use((req, res) => {
-  res.status(404).json({
-    error: 'Not found',
-    message: `Path ${req.path} not found`,
-  })
-})
-
-const PORT = process.env.PORT || 3001
-
-function performStartupChecks() {
-  console.log(`CLI Path: ${BINARY_PATH}`)
-
-  if (!fs.existsSync(BINARY_PATH)) {
-    console.error(`CLI executable not found at: ${BINARY_PATH}`)
-    console.error('Please ensure the executable is available in the correct location.')
+function startupChecks() {
+  if (!fs.existsSync(config.binaryPath)) {
+    logger.error(`cli-top executable not found at ${config.binaryPath} (set BINARY_PATH)`)
     process.exit(1)
   }
-
-  if (process.platform !== 'win32') {
-    try {
-      fs.chmodSync(BINARY_PATH, '755')
-      console.log('Executable permissions set for CLI tool')
-    } catch (chmodErr) {
-      console.warn('Could not set executable permissions:', chmodErr.message)
-    }
+  if (!config.apiKey && !config.authDisabled) {
+    logger.error(
+      '[auth] PROXY_API_KEY is not set: every VTOP endpoint will answer 503 until it is configured' +
+        (config.isProduction ? '' : ' (or set PROXY_AUTH_DISABLED=true for local development)')
+    )
   }
-
-  console.log('CLI executable found and configured')
+  if (config.authOptOutRequestedInProduction) {
+    logger.error('[auth] PROXY_AUTH_DISABLED is ignored in production')
+  }
+  if (config.authDisabled) logger.warn('[auth] API authentication DISABLED (development only)')
+  if (config.tokenSecretEphemeral) {
+    logger.warn('[tokens] PROXY_TOKEN_SECRET not set: workflow tokens and download links will not survive restarts or work across instances')
+  }
 }
 
-performStartupChecks()
+startupChecks()
 
-const server = app.listen(PORT, error => {
-  if (error) {
-    console.error(`Failed to start Proxy Service on port ${PORT}:`, error)
+let proxy
+try {
+  proxy = createProxy(config, { logger })
+} catch (error) {
+  // e.g. MCP OAuth enabled without MCP_OAUTH_CONSENT_SECRET, or an invalid manifest.
+  logger.error('Failed to initialise proxy:', error.message)
+  process.exit(1)
+}
+
+let server
+proxy
+  .start(config.port)
+  .then(srv => {
+    server = srv
+    logger.info(`Proxy Service running on port ${config.port} (${config.nodeEnv})`)
+  })
+  .catch(error => {
+    logger.error(`Failed to start Proxy Service on port ${config.port}:`, error)
     process.exit(1)
-  }
-  console.log(`Proxy Service running on port ${PORT}`)
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`)
-})
+  })
 
 function closeHttpServer() {
+  if (!server) return Promise.resolve()
   return new Promise(resolve => {
     server.close(error => {
-      if (error && error.code !== 'ERR_SERVER_NOT_RUNNING') {
-        console.warn('Error closing HTTP server:', error.message)
-      }
+      if (error && error.code !== 'ERR_SERVER_NOT_RUNNING') logger.warn('Error closing HTTP server:', error.message)
       resolve()
     })
     server.closeIdleConnections()
   })
 }
 
+let shuttingDown = false
 async function shutdown(signal) {
   if (shuttingDown) {
-    console.log(`${signal} received again; shutdown already in progress`)
+    logger.info(`${signal} received again; shutdown already in progress`)
     return
   }
   shuttingDown = true
-  console.log(`${signal} received, shutting down gracefully`)
+  proxy.setShuttingDown()
+  logger.info(`${signal} received, shutting down gracefully`)
 
   const forceExit = setTimeout(() => {
-    console.error(`Graceful shutdown exceeded ${SHUTDOWN_TIMEOUT_MS}ms; forcing exit`)
+    logger.error(`Graceful shutdown exceeded ${SHUTDOWN_TIMEOUT_MS}ms; forcing exit`)
     process.exit(1)
   }, SHUTDOWN_TIMEOUT_MS)
   forceExit.unref()
 
   try {
     const httpClosed = closeHttpServer()
-
     const [children, mcpSessions] = await Promise.all([
       terminateActiveChildren({ graceMs: 3000, killWaitMs: 1000 }),
-      closeMcpSessions(),
+      proxy.closeMcpSessions(),
     ])
-    console.log(
+    logger.info(
       `Terminated ${children.total} CLI process(es) (${children.forced} force-killed); closed ${mcpSessions} MCP session(s)`
     )
-
     // In-flight requests settle once their CLI children are gone; drop any sockets still open after that.
-    const lingering = setTimeout(() => server.closeAllConnections(), 2000)
+    const lingering = setTimeout(() => server && server.closeAllConnections(), 2000)
     await httpClosed
     clearTimeout(lingering)
-
-    console.log('Process terminated')
+    proxy.stop()
+    logger.info('Process terminated')
     process.exit(0)
   } catch (error) {
-    console.error('Error during shutdown:', error)
+    logger.error('Error during shutdown:', error)
     process.exit(1)
   }
 }

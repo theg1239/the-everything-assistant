@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { VTOPCredentialsDialog } from './vtop-credentials-dialog'
-import { hasVTOPCredentials, getFormattedVTOPCredentials } from '@/lib/vtop-credentials'
+import { getCachedVTOPCredentialStatus } from '@/lib/vtop-credentials'
 import { asRecord, readString } from '@/components/narrow'
 
 /** Minimal shape of a (legacy) tool invocation this handler inspects. `result` is unvalidated. */
@@ -28,6 +28,22 @@ const commandOf = (tool: VTOPToolCall) =>
 
 const detailOf = (event: Event) => (event instanceof CustomEvent ? asRecord(event.detail) : null)
 
+/** VTOP rejected the stored password: re-linking (not resubmitting) is the only fix. */
+const STALE_CREDENTIAL_KINDS = new Set(['invalid_credentials', 'login_failed', 'missing_credentials'])
+const rejectedStoredCredentials = (tool: VTOPToolCall | null | undefined) =>
+  STALE_CREDENTIAL_KINDS.has(readString(asRecord(tool?.result)?.errorKind) ?? '')
+
+/**
+ * The browser never holds the VTOP password: when the account is linked, the server resolves
+ * the stored credentials, so the handler only passes the linked username along.
+ */
+const linkedCredentials = () => {
+  const status = getCachedVTOPCredentialStatus()
+  return status?.linked && status.username
+    ? { username: status.username, encryptedPassword: '' }
+    : null
+}
+
 export function VTOPToolHandler({
   children,
   toolInvocations,
@@ -49,7 +65,7 @@ export function VTOPToolHandler({
           toolCallId: id,
           command: cmd,
           message:
-            'To fetch your VTOP data, the assistant needs your VTOP credentials. Your credentials are stored locally and are optional; you can provide them so the assistant can answer your queries.',
+            'To fetch your VTOP data, the assistant needs your VTOP credentials. Your VTOP credentials are encrypted on our servers and never sent back to your browser. You can unlink them anytime in settings.',
         },
       })
       window.dispatchEvent(event)
@@ -62,13 +78,13 @@ export function VTOPToolHandler({
       const triggerToolCallId = readString(detail?.toolCallId)
       const linkOnly = detail?.linkOnly
 
-      if (hasVTOPCredentials()) {
-        const savedCredentials = getFormattedVTOPCredentials()
-        if (savedCredentials && onCredentialsSubmit) {
-          let vtopToolCall: VTOPToolCall | null | undefined = null
-          if (triggerToolCallId) {
-            vtopToolCall = toolInvocations?.find(tool => tool.toolCallId === triggerToolCallId)
-          }
+      const savedCredentials = linkedCredentials()
+      const triggeredCall = triggerToolCallId
+        ? toolInvocations?.find(tool => tool.toolCallId === triggerToolCallId)
+        : undefined
+      if (savedCredentials && !rejectedStoredCredentials(triggeredCall)) {
+        if (onCredentialsSubmit) {
+          let vtopToolCall: VTOPToolCall | null | undefined = triggeredCall
 
           if (!vtopToolCall) {
             vtopToolCall = {
@@ -131,7 +147,7 @@ export function VTOPToolHandler({
       setCommand(commandToRun)
       setPendingToolCall(resolvedToolCall)
       dispatchDisclaimer(resolvedToolCall, commandToRun)
-      if (linkOnly || resolvedToolCall.meta?.linkOnly) {
+      if (linkOnly || resolvedToolCall.meta?.linkOnly || rejectedStoredCredentials(resolvedToolCall)) {
         setShowCredentialsDialog(true)
       }
     }

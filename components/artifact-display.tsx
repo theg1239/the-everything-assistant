@@ -2,6 +2,7 @@
 
 import React, { useState, memo, useRef, useEffect, useSyncExternalStore } from 'react'
 import ReactDOM from 'react-dom'
+import * as z from 'zod'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   FileSearch,
@@ -54,6 +55,9 @@ import {
 import { cn } from '@/lib/utils'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { ResponsiveCard } from '@/components/responsive-card'
+import { SafeHtml } from '@/components/safe-html'
+import { VTOPWorkflowCard, VTOPFilesList } from '@/components/vtop-workflow-card'
+import { vtopFileSchema, vtopBundleSchema } from '@/lib/vtop-proxy'
 import FFCSArtifact from './artifacts/ffcs-artifact'
 import FfcsCourseSearchResult, {
   parseCourseSearchResult,
@@ -91,6 +95,7 @@ export type ArtifactType =
   | 'placements'
   | 'mess-menu'
   | 'vtop-data'
+  | 'vtop-workflow'
   | 'interactive-course-page'
   | 'reddit-knowledge'
   | 'reddit-overview'
@@ -248,6 +253,15 @@ const VTOPProfileFields = ({
       )}
     </div>
   )
+}
+
+/** Downloads attached to a completed VTOP result (syllabus PDFs, DA papers, exam .ics files). */
+const VTOPDataFiles = ({ data }: { data: unknown }) => {
+  const record = asRecord(data)
+  const files = z.array(vtopFileSchema).safeParse(record.files)
+  const bundle = vtopBundleSchema.safeParse(record.bundle)
+  if (!files.success || !files.data.length) return null
+  return <VTOPFilesList files={files.data} bundle={bundle.success ? bundle.data : undefined} />
 }
 
 const VTOPDataCard = ({
@@ -654,10 +668,8 @@ const VTOPDataCard = ({
             return (
               <div className="space-y-3">
                 <div className="p-3 bg-muted/50 rounded-md overflow-x-auto">
-                  <div
-                    className="text-sm text-muted-foreground prose prose-sm max-w-none"
-                    dangerouslySetInnerHTML={{ __html: formattedContentHtml }}
-                  />
+                  <SafeHtml
+                    className="text-sm text-muted-foreground prose prose-sm max-w-none" html={formattedContentHtml} />
                 </div>
               </div>
             )
@@ -901,10 +913,8 @@ const VTOPDataCard = ({
           return (
             <div className="space-y-3">
               <div className="p-3 bg-muted/50 rounded-md overflow-x-auto">
-                <div
-                  className="text-sm text-muted-foreground prose prose-sm max-w-none"
-                  dangerouslySetInnerHTML={{ __html: formattedContentHtml }}
-                />
+                <SafeHtml
+                  className="text-sm text-muted-foreground prose prose-sm max-w-none" html={formattedContentHtml} />
               </div>
             </div>
           )
@@ -929,10 +939,8 @@ const VTOPDataCard = ({
           return (
             <div className="space-y-3">
               <div className="p-3 bg-muted/50 rounded-md overflow-x-auto">
-                <div
-                  className="text-sm text-muted-foreground prose prose-sm max-w-none"
-                  dangerouslySetInnerHTML={{ __html: formattedContent }}
-                />
+                <SafeHtml
+                  className="text-sm text-muted-foreground prose prose-sm max-w-none" html={formattedContent} />
               </div>
             </div>
           )
@@ -1085,7 +1093,7 @@ const VTOPDataCard = ({
           {typeof finalFormattedContent === 'string' && finalFormattedContent && (
             <div className="p-3 bg-muted/50 rounded-md overflow-x-auto">
               <h4 className="text-sm font-medium text-card-foreground mb-2"></h4>
-              <div
+              <SafeHtml
                 className="text-sm text-muted-foreground prose prose-sm max-w-none 
                            [&_table]:w-full [&_table]:border-collapse [&_table]:border [&_table]:rounded-md [&_table]:overflow-hidden
                            [&_th]:border [&_th]:border-border [&_th]:p-3 [&_th]:bg-muted/80 [&_th]:font-semibold [&_th]:text-card-foreground [&_th]:text-left
@@ -1103,9 +1111,7 @@ const VTOPDataCard = ({
                            [&_h6]:text-sm [&_h6]:font-medium [&_h6]:text-card-foreground [&_h6]:mb-2 [&_h6]:mt-3
                            [&_a]:inline-flex [&_a]:items-center [&_a]:gap-1.5 [&_a]:px-4 [&_a]:py-2 [&_a]:bg-blue-500 [&_a]:text-white [&_a]:rounded-lg [&_a]:text-sm [&_a]:font-medium [&_a]:no-underline [&_a]:hover:bg-blue-600 [&_a]:transition-colors [&_a]:shadow-sm [&_a]:ml-2
                            [&_ul]:space-y-4 [&_ul]:mb-6 [&_ul]:pl-0
-                           [&_li]:flex [&_li]:items-center [&_li]:justify-between [&_li]:p-3 [&_li]:bg-muted/30 [&_li]:rounded-lg [&_li]:border [&_li]:border-border/50 [&_li]:text-card-foreground [&_li]:gap-4"
-                dangerouslySetInnerHTML={{ __html: finalFormattedContent }}
-              />
+                           [&_li]:flex [&_li]:items-center [&_li]:justify-between [&_li]:p-3 [&_li]:bg-muted/30 [&_li]:rounded-lg [&_li]:border [&_li]:border-border/50 [&_li]:text-card-foreground [&_li]:gap-4" html={finalFormattedContent} />
             </div>
           )}
 
@@ -2028,7 +2034,7 @@ const RedditKnowledgeCard = ({ data }: { data: unknown }) => {
           </div>
 
           <div className="prose prose-sm max-w-none dark:prose-invert reddit-response-content">
-            <div
+            <SafeHtml
               className="text-card-foreground dark:text-gray-100 leading-relaxed 
                 [&_ul]:list-disc [&_ul]:ml-4 sm:[&_ul]:ml-6 [&_li]:mb-1 
                 [&_strong]:font-semibold [&_em]:italic
@@ -2043,9 +2049,7 @@ const RedditKnowledgeCard = ({ data }: { data: unknown }) => {
                 [&_table]:text-xs sm:[&_table]:text-sm [&_table]:w-full [&_table]:border-collapse
                 [&_th]:border [&_th]:border-border [&_th]:p-1 sm:[&_th]:p-2 [&_th]:bg-muted [&_th]:font-medium [&_th]:text-card-foreground [&_th]:dark:text-gray-100
                 [&_td]:border [&_td]:border-border [&_td]:p-1 sm:[&_td]:p-2 [&_td]:text-card-foreground [&_td]:dark:text-gray-100
-                [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded"
-              dangerouslySetInnerHTML={{ __html: cleanedResponse }}
-            />
+                [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded" html={cleanedResponse} />
           </div>
 
           {note && (
@@ -2623,10 +2627,8 @@ const PlacementInfoCard = ({ data: rawData }: { data: unknown }) => {
   return (
     <div className="space-y-6">
       {formatted_content && (
-        <div
-          className="prose max-w-none dark:prose-invert bg-card rounded-lg p-6 border border-border"
-          dangerouslySetInnerHTML={{ __html: formatted_content }}
-        />
+        <SafeHtml
+          className="prose max-w-none dark:prose-invert bg-card rounded-lg p-6 border border-border" html={formatted_content} />
       )}
 
       <div className="flex justify-center">
@@ -3130,6 +3132,8 @@ const PureArtifactDisplay = ({
             'grid gap-3',
             type === 'mess-menu' ||
               type === 'vtop-data' ||
+              type === 'vtop-workflow' ||
+              type === 'interactive-course-page' ||
               type === 'reddit-knowledge' ||
               type === 'reddit-overview' ||
               type === 'papers-index' ||
@@ -3181,7 +3185,15 @@ const PureArtifactDisplay = ({
               case 'mess-menu':
                 return <MessMenuCard key={index} menuData={item} />
               case 'vtop-data':
-                return <VTOPDataCard key={index} vtopData={item} onLoginClick={onLoginClick} />
+                return (
+                  <div key={index} className="space-y-3">
+                    <VTOPDataCard vtopData={item} onLoginClick={onLoginClick} />
+                    <VTOPDataFiles data={item} />
+                  </div>
+                )
+              case 'vtop-workflow':
+              case 'interactive-course-page':
+                return <VTOPWorkflowCard key={index} data={item} />
               case 'reddit-knowledge':
                 return <RedditKnowledgeCard key={index} data={item} />
               case 'reddit-overview':

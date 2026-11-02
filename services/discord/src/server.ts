@@ -7,6 +7,12 @@ import { z } from 'zod'
 import DiscordService from './discord-service'
 import type { AskRequest } from './discord-service'
 import APIClient from './api-client'
+import {
+  createApiAuthMiddleware,
+  resolveApiAuthConfig,
+  resolveBindHost,
+  type ApiAuthConfig,
+} from './http-auth'
 
 dotenv.config({ quiet: true })
 
@@ -15,12 +21,13 @@ const sendMessageBodySchema = z.object({
   message: z.string().min(1),
 })
 
+// zod 4.6 treats bare `z.unknown()` keys as required; both are optional in practice.
 const webhookBodySchema = z.object({
-  type: z.unknown(),
-  data: z.unknown(),
+  type: z.unknown().optional(),
+  data: z.unknown().optional(),
 })
 
-const packageJsonSchema = z.object({ version: z.string().optional() })
+const isProduction = (): boolean => process.env.NODE_ENV === 'production'
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
@@ -28,12 +35,24 @@ const errorMessage = (error: unknown): string =>
 class DiscordBotServer {
   private app: express.Application
   private port: number
+  private host: string
+  private apiAuth: ApiAuthConfig
   private discordService: DiscordService | null = null
   private apiClient: APIClient | null = null
 
   constructor() {
+    // Throws (caught in index.ts) when DISCORD_BOT_API_SECRET is missing, before anything starts.
+    this.apiAuth = resolveApiAuthConfig(process.env, {
+      secretVar: 'DISCORD_BOT_API_SECRET',
+      insecureVar: 'DISCORD_BOT_INSECURE_DEV',
+      serviceName: 'the Discord bot',
+    })
+    if (this.apiAuth.mode === 'insecure-dev') {
+      console.warn('DISCORD_BOT_INSECURE_DEV=1: /api/* routes are NOT authenticated (dev only)')
+    }
     this.app = express()
     this.port = parseInt(process.env.PORT || '3002')
+    this.host = resolveBindHost(process.env)
 
     this.setupMiddleware()
     this.setupRoutes()
@@ -58,6 +77,8 @@ class DiscordBotServer {
       },
     })
     this.app.use('/api/', limiter)
+    // Every /api/* route needs the shared secret; checked before body parsing.
+    this.app.use('/api', createApiAuthMiddleware(this.apiAuth))
 
     this.app.use(express.json({ limit: '10mb' }))
     this.app.use(express.urlencoded({ extended: true, limit: '10mb' }))
@@ -71,15 +92,12 @@ class DiscordBotServer {
   private setupRoutes(): void {
     // Liveness: always 200 while the process serves requests. `discordReady` reports the actual
     // gateway state (same convention as the WhatsApp service's `whatsappReady`).
+    // Public: no client info, memory or version details.
     this.app.get('/health', (req, res) => {
       res.json({
         status: 'ok',
         timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
         discordReady: this.discordService?.isConnected() ?? false,
-        memory: process.memoryUsage(),
-        // Resolved at runtime relative to dist/ (or src/ under tsx); package.json is outside rootDir.
-        version: packageJsonSchema.safeParse(require('../package.json')).data?.version,
       })
     })
 
@@ -159,6 +177,31 @@ class DiscordBotServer {
       }
     })
 
+    // Disabled in production; elsewhere still behind the API secret.
+    if (!isProduction()) this.setupDevRoutes()
+
+    this.app.use((req, res) => {
+      res.status(404).json({
+        error: 'Endpoint not found',
+        path: req.originalUrl,
+        method: req.method,
+      })
+    })
+
+    this.app.use(
+      // Express detects error handlers by arity, so all four parameters must stay.
+      (error: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+        console.error('❌ Express error:', error)
+        res.status(500).json({
+          error: 'Internal server error',
+          message:
+            process.env.NODE_ENV === 'development' ? errorMessage(error) : 'Something went wrong',
+        })
+      }
+    )
+  }
+
+  private setupDevRoutes(): void {
     this.app.post('/api/discord/restart', async (req, res) => {
       try {
         console.log('Restarting Discord service...')
@@ -181,26 +224,6 @@ class DiscordBotServer {
         })
       }
     })
-
-    this.app.use((req, res) => {
-      res.status(404).json({
-        error: 'Endpoint not found',
-        path: req.originalUrl,
-        method: req.method,
-      })
-    })
-
-    this.app.use(
-      // Express detects error handlers by arity, so all four parameters must stay.
-      (error: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
-        console.error('❌ Express error:', error)
-        res.status(500).json({
-          error: 'Internal server error',
-          message:
-            process.env.NODE_ENV === 'development' ? errorMessage(error) : 'Something went wrong',
-        })
-      }
-    )
   }
 
   private async setupDiscord(): Promise<void> {
@@ -301,15 +324,14 @@ class DiscordBotServer {
     try {
       await this.setupDiscord()
 
-      this.app.listen(this.port, error => {
+      this.app.listen(this.port, this.host, error => {
         // Express 5 passes listen errors (e.g. EADDRINUSE) to this callback.
         if (error) {
-          console.error(`Failed to listen on port ${this.port}:`, error)
+          console.error(`Failed to listen on ${this.host}:${this.port}:`, error)
           return
         }
-        console.log(`Discord Bot Server running on port ${this.port}`)
-        console.log(`Health check: http://localhost:${this.port}/health`)
-        console.log(`Discord status: http://localhost:${this.port}/api/discord/status`)
+        console.log(`Discord Bot Server running on http://${this.host}:${this.port}`)
+        console.log(`Health check: http://${this.host}:${this.port}/health`)
       })
 
       process.on('SIGINT', () => this.shutdown())

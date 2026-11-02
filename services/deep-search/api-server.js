@@ -1,12 +1,55 @@
+const crypto = require('node:crypto')
 const express = require('express')
 const cors = require('cors')
 const RAGService = require('./knowledge-base/rag-service')
 const AgenticRAGService = require('./knowledge-base/agentic-rag-service')
 const KnowledgeBase = require('./knowledge-base/knowledge-base')
 
+// --- Access control -------------------------------------------------------------------------
+// Every /api/* route requires `Authorization: Bearer <DEEP_SEARCH_API_SECRET>`; /health stays
+// public. Without the secret the service refuses to start, unless DEEP_SEARCH_INSECURE_DEV=1 is set
+// outside production.
+const apiSecret = (process.env.DEEP_SEARCH_API_SECRET || '').trim()
+const insecureDev =
+  process.env.DEEP_SEARCH_INSECURE_DEV === '1' && process.env.NODE_ENV !== 'production'
+
+if (!apiSecret && !insecureDev) {
+  throw new Error(
+    'DEEP_SEARCH_API_SECRET is not set. Refusing to start the deep-search API: /api/* would be ' +
+      'open to anyone. Set DEEP_SEARCH_API_SECRET (e.g. `openssl rand -hex 32`) and send it as ' +
+      '`Authorization: Bearer <secret>`, or for local development only set ' +
+      'DEEP_SEARCH_INSECURE_DEV=1 with NODE_ENV != production.'
+  )
+}
+if (!apiSecret) {
+  console.warn('DEEP_SEARCH_INSECURE_DEV=1: deep-search /api/* routes are NOT authenticated')
+}
+
+const sha256 = value => crypto.createHash('sha256').update(value, 'utf8').digest()
+
+/** Constant-time comparison; hashing first gives equal-length buffers whatever the input lengths. */
+const secretsMatch = (expected, provided) =>
+  Boolean(expected && provided) && crypto.timingSafeEqual(sha256(expected), sha256(provided))
+
+const requireApiSecret = (req, res, next) => {
+  if (!apiSecret) return next()
+  const match = /^Bearer\s+(.+)$/iu.exec((req.get('authorization') || '').trim())
+  if (match && secretsMatch(apiSecret, match[1].trim())) return next()
+  res.setHeader('WWW-Authenticate', 'Bearer')
+  return res.status(401).json({ success: false, error: 'Unauthorized' })
+}
+
+// Browser access only from explicitly configured origins (comma-separated); none by default, since
+// the main app calls this service server-side.
+const allowedOrigins = (process.env.DEEP_SEARCH_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean)
+
 const app = express()
 
-app.use(cors())
+app.use(cors({ origin: allowedOrigins.length > 0 ? allowedOrigins : false }))
+app.use('/api', requireApiSecret)
 app.use(express.json())
 
 app.use((req, res, next) => {

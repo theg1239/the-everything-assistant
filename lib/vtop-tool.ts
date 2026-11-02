@@ -6,10 +6,13 @@
  * index grammar, dates, ids) and continuation choices are option ids the proxy validates.
  */
 import * as z from 'zod'
+import type { ModelMessage } from 'ai'
+import { pickOption } from './decisions'
 import {
   VTOP_COMMANDS,
   isPendingVtopStatus,
   vtopParamsFor,
+  type VtopChoice,
   type VtopProxyResult,
 } from './vtop-proxy'
 
@@ -228,3 +231,78 @@ export const vtopWorkflowChoiceSchema = z.object({
   display: z.string().min(1),
 })
 export type VtopWorkflowChoice = z.infer<typeof vtopWorkflowChoiceSchema>
+
+/** A selection step the Decisions API resolved on the chat model's behalf. */
+export interface VtopDecidedStep {
+  step: string
+  label: string
+  choice: string
+  probability: number
+}
+
+const ALL_OPTION_ID = 'all'
+const MAX_AUTO_STEPS = 4
+
+/**
+ * Before handing a `needs_selection` step back to the chat model (a full model round trip per
+ * step), ask the Decisions API whether the user's own latest message already determines the
+ * option. Continue with that option id only when it's confident (see lib/decisions.ts);
+ * otherwise return the step untouched for the chat model / user. Never guesses from text in
+ * code; `request` is passed to the model verbatim.
+ */
+export async function autoAdvanceSelections({
+  result,
+  request,
+  command,
+  continueWith,
+  pick = pickOption,
+  abortSignal,
+}: {
+  result: VtopProxyResult
+  request: string
+  command: string
+  continueWith: (continuation: string, choice: VtopChoice) => Promise<VtopProxyResult>
+  pick?: typeof pickOption
+  abortSignal?: AbortSignal
+}): Promise<{ result: VtopProxyResult; decided: VtopDecidedStep[] }> {
+  const decided: VtopDecidedStep[] = []
+  let current = result
+  for (let i = 0; i < MAX_AUTO_STEPS && request.trim(); i++) {
+    const step = current.step
+    const options = step?.options ?? []
+    if (current.status !== 'needs_selection' || !step || step.kind !== 'select') break
+    if (!current.continuation || options.length < 2) break
+
+    const candidates = options.map(option => ({ id: option.id, label: option.label, description: option.description }))
+    if (step.multiple) candidates.push({ id: ALL_OPTION_ID, label: `all of the listed ${step.label.toLowerCase()}`, description: undefined })
+
+    const decision = await pick({
+      request,
+      subject: step.label.toLowerCase(),
+      context: `The student asked the VIT assistant to run the VTOP "${command}" command, which needs a ${step.label.toLowerCase()} chosen.`,
+      options: candidates,
+      abortSignal,
+    })
+    if (decision.status !== 'picked') break
+
+    const label = candidates.find(option => option.id === decision.id)?.label ?? decision.id
+    const next = await continueWith(current.continuation, decision.id)
+    decided.push({ step: step.id, label: step.label, choice: label, probability: decision.probability })
+    current = next
+    if (!next.success) break
+  }
+  return { result: current, decided }
+}
+
+/** The user's latest message text from the tool call's model messages (empty if none). */
+export function latestUserText(messages: readonly ModelMessage[] | undefined): string {
+  for (let i = (messages?.length ?? 0) - 1; i >= 0; i--) {
+    const message = messages?.[i]
+    if (message?.role !== 'user') continue
+    if (typeof message.content === 'string') return message.content
+    return message.content
+      .flatMap(part => (part.type === 'text' ? [part.text] : []))
+      .join('\n')
+  }
+  return ''
+}

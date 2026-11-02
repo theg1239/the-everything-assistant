@@ -28,7 +28,13 @@ import {
   type VtopCredentialFields,
   type VtopProxyResult,
 } from './vtop-proxy'
-import { buildVtopFlags, queryVTOPInputSchema, toQueryVTOPResult } from './vtop-tool'
+import {
+  autoAdvanceSelections,
+  buildVtopFlags,
+  latestUserText,
+  queryVTOPInputSchema,
+  toQueryVTOPResult,
+} from './vtop-tool'
 import { getUserMcpToken, refreshUserMcpToken, isExpired as isMcpExpired } from './mcp-tokens'
 import { createMusicPlayerTool, type MusicPlayerToolState } from './music-player-tool'
 import { memoizeAsync, publicAssetUrl } from './static-data'
@@ -1313,11 +1319,11 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
     queryVTOP: tool({
       description:
         "Access the student's PERSONAL VTOP (VIT portal) data and actions through their linked VTOP account: grades, marks, attendance, timetable, today/tomorrow's classes and skip budget, exams, calendar/holidays, CGPA, hostel, receipts, library dues, class messages, events, leave and night-slip status or applications, digital assignments, facility registration, syllabus PDFs, course materials (course-page) and course allocation. Not for general VIT information.\n" +
-        'Multi-step commands (course-page, da, syllabus, facility, calendar, ...): call with just the command (and semester if known). The result has `status`: "completed" (data in `data`/`structured_data`, downloads in `files` with signed expiring links: share them as links), or "needs_selection" / "needs_input" / "needs_confirmation" with `step: { id, kind, label, prompt, multiple, options: [{ id, label, description }] }` (every option VTOP offered), `continuation`, `progress` (choices made so far; `auto: true` when VTOP offered a single option) and `nextAction`. To continue, call queryVTOP again with the same command, `continuation`, and `choice` = the option id(s) you pick from step.options for what the user asked; ask the user only when their request does not determine the option.\n' +
+        'Multi-step commands (course-page, da, syllabus, facility, calendar, ...): call with just the command (and semester if known). The result has `status`: "completed" (data in `data`/`structured_data`, downloads in `files` with signed expiring links: share them as links), or "needs_selection" / "needs_input" / "needs_confirmation" with `step: { id, kind, label, prompt, multiple, options: [{ id, label, description }] }` (every option VTOP offered), `continuation`, `progress` (choices made so far; `auto: true` when VTOP offered a single option), `autoSelected` (steps already resolved from the latest user message, with what was picked: mention these to the user) and `nextAction`. To continue, call queryVTOP again with the same command, `continuation`, and `choice` = the option id(s) you pick from step.options for what the user asked; ask the user only when their request does not determine the option.\n' +
         'Write actions (leave/nightslip apply=true, facility registration) always stop at needs_confirmation: answer choice true only after the user explicitly agrees in this conversation.\n' +
         'Errors: `success: false` with `errorKind` (e.g. "invalid_input" with `field` and `validIds` for a choice that is not an offered id, "token_invalid" when the continuation expired (start the command again), "invalid_credentials"/"login_failed" when the linked account was rejected, "busy"/"vtop_unavailable"/"timeout" with `retryable: true`) and `requiresCredentials: true` when the account must be (re)linked: the app then shows a secure dialog, so never ask for credentials in chat.',
       inputSchema: queryVTOPInputSchema,
-      execute: async input => {
+      execute: async (input, { messages, abortSignal }) => {
         const { command } = input
         const continuation = input.continuation
         const choice = input.choice
@@ -1414,7 +1420,7 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
         let last: ReturnType<typeof toQueryVTOPResult> | null = null
         for (let attempt = 1; attempt <= attempts; attempt++) {
           try {
-            const result =
+            const firstResult =
               continuation !== undefined && choice !== undefined
                 ? await callVtopProxy('/vtop/continue', { ...credentials, continuation, choice })
                 : await callVtopProxy('/vtop', {
@@ -1423,7 +1429,21 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
                     flags,
                     ...(input.fresh ? { fresh: true } : {}),
                   })
-            last = toQueryVTOPResult(command, result, ignored)
+            // Resolve selection steps the user's own message already determines with one fast
+            // Decisions call each, instead of a chat-model round trip per step.
+            const stored = credentials
+            const { result, decided } = await autoAdvanceSelections({
+              result: firstResult,
+              request: latestUserText(messages),
+              command,
+              continueWith: (next, nextChoice) =>
+                callVtopProxy('/vtop/continue', { ...stored, continuation: next, choice: nextChoice }),
+              abortSignal,
+            })
+            last = {
+              ...toQueryVTOPResult(command, result, ignored),
+              ...(decided.length ? { autoSelected: decided } : {}),
+            }
             // The proxy already retries VTOP hiccups; only retry here when it was too busy.
             if (result.success || result.errorKind !== 'busy') return last
           } catch (error) {

@@ -81,7 +81,12 @@ export async function pickOption({
       questions: {
         pick: {
           type: 'choice',
-          instructions: `Which ${subject} is the student asking for? Students often use informal abbreviations and nicknames.`,
+          // One concern per question (OpenAI Decisions guidance): requests often also name other
+          // workflow details (a faculty, a module, a file type) that belong to other steps.
+          instructions:
+            `Which ${subject} is this request about? The request may also mention other details ` +
+            `(people, modules, file types, dates); only the ${subject} matters here. ` +
+            `Students often use informal abbreviations and nicknames.`,
           criteria,
         },
       },

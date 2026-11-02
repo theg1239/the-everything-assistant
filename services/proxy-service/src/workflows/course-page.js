@@ -1,7 +1,7 @@
 const fs = require('fs')
 const path = require('path')
 const { spawn } = require('child_process')
-const { v4: uuidv4 } = require('uuid')
+const { randomUUID } = require('crypto')
 const { BINARY_PATH, CLI_TIMEOUT } = require('../config')
 const { cleanVTOPOutput } = require('../utils/text')
 
@@ -1580,7 +1580,7 @@ async function serveDownloadedFiles(downloadPath, downloadInfo) {
       const stat = fs.statSync(filePath)
 
       if (stat.isFile()) {
-        const fileId = uuidv4()
+        const fileId = randomUUID()
         const expiry = Date.now() + 2 * 60 * 60 * 1000
 
         tempFiles.set(fileId, {

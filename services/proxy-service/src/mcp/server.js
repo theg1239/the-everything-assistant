@@ -85,7 +85,7 @@ function registerTools(targetServer) {
       return {}
     }
     return value
-  }, z.record(z.any()))
+  }, z.record(z.string(), z.any()))
 
   const oauthEnabled = process.env.MCP_OAUTH_ENABLED !== 'false'
 

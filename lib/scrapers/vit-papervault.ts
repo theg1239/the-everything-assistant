@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { findFullCourseName } from '../course-map'
+import { getCourseByCode } from '../course-map'
 import { BROWSER_TOOLS_ENABLED } from '../browser-flags'
 
 const paperVaultEntrySchema = z.object({
@@ -59,7 +59,7 @@ async function tryVITVaultListAPI(courseCode: string, examType?: string, year?: 
 
     const all = paperVaultListSchema.parse(await resp.json()).data
 
-    const full = findFullCourseName(courseCode)
+    const full = getCourseByCode(courseCode)?.name ?? courseCode
     const plainName = full.replace(/\s*\[.*\]$/, '')
 
     const filtered = all.filter(p => {

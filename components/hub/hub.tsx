@@ -8,7 +8,7 @@ import type {
   HubSyncBatchResult,
   PersonalHubState,
   HubVTOPCommand,
-  PersonalHubSnapshot,
+  HubVTOPRefreshResult,
   VTOPCredentialPayload,
 } from '@/types/hub'
 import { Drawer } from 'vaul'
@@ -24,7 +24,7 @@ export type HubActionHandlers = {
     command: HubVTOPCommand,
     extras?: Record<string, unknown>,
     credentials?: VTOPCredentialPayload
-  ) => Promise<PersonalHubSnapshot>
+  ) => Promise<HubVTOPRefreshResult>
   runTool: (toolName: string, args?: Record<string, unknown>) => Promise<unknown>
 }
 

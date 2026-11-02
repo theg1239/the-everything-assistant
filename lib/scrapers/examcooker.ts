@@ -1,5 +1,6 @@
 import * as z from 'zod'
-import { findFullCourseName } from '../course-map'
+import { getCourseByCode } from '../course-map'
+import { labelHasExamType } from './exam-type'
 
 const SOURCE = 'ExamCooker'
 const API_ENDPOINT = 'https://examcooker.acmvit.in/api/papers'
@@ -140,13 +141,10 @@ function buildSubjectQueries(courseCode: string): string[] {
     if (spaced !== normalizedCode) queries.add(spaced)
   }
 
-  const courseName = findFullCourseName(normalizedCode)
-  if (courseName && courseName.toUpperCase() !== normalizedCode) {
-    courseName
-      .split('/')
-      .map(part => sanitizeSubject(part))
-      .filter(Boolean)
-      .forEach(part => queries.add(part))
+  const courseName = getCourseByCode(normalizedCode)?.name
+  if (courseName) {
+    const subject = sanitizeSubject(courseName)
+    if (subject) queries.add(subject)
   }
 
   return Array.from(queries).filter(Boolean)
@@ -510,11 +508,9 @@ function filterByRequestedParams(papers: Paper[], examType?: string, year?: stri
   let filtered = papers
 
   if (examType) {
-    const desired = examType.trim().toLowerCase()
-    filtered = filtered.filter(paper => {
-      const matchFields = [paper.examType, paper.metadata, paper.title]
-      return matchFields.some(field => field && field.toLowerCase().includes(desired))
-    })
+    filtered = filtered.filter(paper =>
+      [paper.examType, paper.metadata, paper.title].some(field => labelHasExamType(field, examType))
+    )
   }
 
   if (year) {

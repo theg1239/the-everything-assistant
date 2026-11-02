@@ -131,119 +131,13 @@ Output exactly 3 questions, one per line, without numbering or bullet points.`
 
 
     if (suggestions.length < 2 || suggestions.some((s: string) => s.length < 5)) {
-      console.warn('Generated suggestions were invalid, falling back to static ones')
-      return getStaticFollowUpSuggestions(assistantMessage)
+      console.warn('Generated follow-up suggestions were malformed; returning none')
+      return []
     }
 
     return suggestions
   } catch (error) {
     console.error('Error generating follow-up suggestions:', error)
-    return getStaticFollowUpSuggestions(assistantMessage)
+    return []
   }
-}
-
-function getStaticFollowUpSuggestions(assistantMessage: string): string[] {
-  const message = assistantMessage.toLowerCase()
-
-  const currentSemesterSuggestions = [
-    'when is the next semester registration?',
-    'show me fall semester exam dates',
-    'what classes start in july?',
-  ]
-
-  if (message.includes('vtop') || message.includes('marks') || message.includes('attendance')) {
-    return [
-      'check my current semester attendance',
-      'show detailed marks breakdown',
-      'get my fee payment status',
-    ]
-  }
-
-  if (message.includes('course') || message.includes('subject') || message.includes('materials')) {
-    return [
-      'download course materials for this semester',
-      'get past exam papers',
-      'show faculty contact information',
-    ]
-  }
-
-  if (message.includes('exam') || message.includes('cat') || message.includes('fat')) {
-    return [
-      'when are cat-1 exams this semester?',
-      'show exam schedule for fall 2025',
-      'check assignment deadlines',
-    ]
-  }
-
-  if (message.includes('timetable') || message.includes('schedule') || message.includes('class')) {
-    return [
-      'show my current semester timetable',
-      'what classes do i have tomorrow?',
-      'check lab schedule',
-    ]
-  }
-
-  if (message.includes('placement') || message.includes('company') || message.includes('package')) {
-    return [
-      'show latest placement statistics',
-      'what companies are visiting?',
-      'get interview preparation tips',
-    ]
-  }
-
-  if (message.includes('hostel') || message.includes('mess') || message.includes('campus')) {
-    return [
-      "check today's mess menu",
-      'show campus sports facilities',
-      'tell me about upcoming events',
-    ]
-  }
-
-  if (
-    message.includes('registration') ||
-    message.includes('deadline') ||
-    message.includes('academic')
-  ) {
-    return currentSemesterSuggestions
-  }
-
-  if (message.includes('calendar') || message.includes('date') || message.includes('schedule')) {
-    return [
-      'show working saturdays this semester',
-      'when is gravitas 2025?',
-      'check holiday calendar',
-    ]
-  }
-
-  if (message.includes('research') || message.includes('project') || message.includes('faculty')) {
-    return [
-      'how to join research projects?',
-      'show faculty research areas',
-      'get project guidelines',
-    ]
-  }
-
-  if (message.includes('library') || message.includes('book') || message.includes('due')) {
-    return ['check my library dues', 'show library timings', 'how to renew books?']
-  }
-
-  if (
-    message.includes('placement') ||
-    message.includes('internship') ||
-    message.includes('company')
-  ) {
-    return [
-      'show placement statistics',
-      'list top recruiting companies',
-      'show recent placement offers',
-      'compare placement statistics by campus',
-      'show highest package offers',
-    ]
-  }
-
-  return [
-    'show my vtop attendance',
-    'when is the next semester FFCS?',
-    'check fall semester exam dates',
-  ]
 }

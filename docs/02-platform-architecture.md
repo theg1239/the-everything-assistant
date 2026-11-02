@@ -148,7 +148,6 @@ Chat now exposes two internal tools (`submitFeedback`, `contributeKnowledge`) th
 
 ### Paper Ingestion & Progress
 
-- CLI script `scripts/papers.ts` orchestrates scraping + chunking. Emits `paper-progress` events that bubble to `/api/paper-progress/[runId]` SSE clients and optionally persist to `/api/paper-progress/push`.
 - `lib/progress/paper-progress.ts` caches events, rebroadcasts to the browser, and forwards to Next.js routes (useful when the CLI runs outside the Next runtime).
 
 ### RAG Seeding

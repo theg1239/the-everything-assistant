@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import {
+  VTOP_COMMANDS,
   VTOP_STATUSES,
   formatBytes,
   vtopBundleSchema,
@@ -27,8 +28,10 @@ import {
   vtopStepSchema,
   type VtopFile,
   type VtopOption,
+  type VtopCommand,
   type VtopStep,
 } from '@/lib/vtop-proxy'
+import { VTOP_WORKFLOW_CHOICE_EVENT, type VtopWorkflowChoice } from '@/lib/vtop-tool'
 
 /** queryVTOP tool output, as far as this card needs it (validated, unknown keys ignored). */
 const workflowResultSchema = z
@@ -39,6 +42,7 @@ const workflowResultSchema = z
     message: z.string().optional(),
     error: z.string().optional(),
     step: vtopStepSchema.optional(),
+    continuation: z.string().optional(),
     progress: z.array(vtopProgressSchema).optional(),
     files: z.array(vtopFileSchema).optional(),
     bundle: vtopBundleSchema.optional(),
@@ -48,10 +52,27 @@ const workflowResultSchema = z
 
 type WorkflowResult = z.infer<typeof workflowResultSchema>
 
-/** Prefills the chat input (chat-interface listens for `hubShareToChat`); the user presses send. */
-function proposeReply(text: string) {
-  window.dispatchEvent(new CustomEvent('hubShareToChat', { detail: { text } }))
+/** What a step control needs to answer the pending step. */
+type StepContext = {
+  step: VtopStep
+  command: VtopCommand
+  continuation: string
+  /** Sends the structured choice; `display` is the message shown in the chat for it. */
+  submit: (choice: VtopWorkflowChoice['choice'], display: string) => void
+  disabled: boolean
 }
+
+/**
+ * Continues the workflow with a structured choice. The chat interface (listening for
+ * VTOP_WORKFLOW_CHOICE_EVENT) records `display` as the user's message and runs queryVTOP with
+ * `{ command, continuation, choice }` directly, so the option id reaches the proxy as-is.
+ */
+function sendChoice(detail: VtopWorkflowChoice) {
+  window.dispatchEvent(new CustomEvent(VTOP_WORKFLOW_CHOICE_EVENT, { detail }))
+}
+
+const isVtopCommand = (value: string): value is VtopCommand =>
+  VTOP_COMMANDS.some(command => command === value)
 
 const STATUS_COPY: Record<string, { label: string; tone: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   needs_selection: { label: 'Choose an option', tone: 'default' },
@@ -87,13 +108,14 @@ function ProgressTrail({ progress }: { progress: NonNullable<WorkflowResult['pro
   )
 }
 
-function OptionList({ step, command }: { step: VtopStep; command: string }) {
+function OptionList({ step, submit, disabled }: StepContext) {
   const options = step.options ?? []
   const [query, setQuery] = useState('')
   const [picked, setPicked] = useState<Set<string>>(new Set())
   const multiple = Boolean(step.multiple)
   const label = step.label.toLowerCase()
 
+  // Narrows the rendered list for the user's eyes only; it never picks an option.
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase()
     if (!needle) return options
@@ -112,20 +134,19 @@ function OptionList({ step, command }: { step: VtopStep; command: string }) {
       })
       return
     }
-    proposeReply(`For ${commandName(command)}, choose ${step.label.toLowerCase()} option ${option.id}: ${option.label}`)
+    submit(option.id, `${step.label}: ${option.label} (option ${option.id})`)
   }
 
   const submitMany = (all: boolean) => {
-    const chosen = options.filter(option => picked.has(option.id))
     if (all) {
-      proposeReply(`For ${commandName(command)}, select all ${label}.`)
+      submit('all', `${step.label}: all`)
       return
     }
+    const chosen = options.filter(option => picked.has(option.id))
     if (!chosen.length) return
-    proposeReply(
-      `For ${commandName(command)}, select ${label} options ${chosen.map(o => o.id).join(',')}: ${chosen
-        .map(o => o.label)
-        .join('; ')}`
+    submit(
+      chosen.map(option => option.id),
+      `${step.label}: ${chosen.map(option => `${option.label} (option ${option.id})`).join('; ')}`
     )
   }
 
@@ -148,6 +169,7 @@ function OptionList({ step, command }: { step: VtopStep; command: string }) {
               <button
                 type="button"
                 onClick={() => choose(option)}
+                disabled={disabled}
                 aria-pressed={multiple ? selected : undefined}
                 className={cn(
                   'flex w-full items-start gap-3 rounded-lg border px-3 py-2 text-left text-sm transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -171,22 +193,20 @@ function OptionList({ step, command }: { step: VtopStep; command: string }) {
       </ul>
       {multiple && (
         <div className="flex flex-wrap gap-2 pt-1">
-          <Button size="sm" disabled={!picked.size} onClick={() => submitMany(false)}>
+          <Button size="sm" disabled={disabled || !picked.size} onClick={() => submitMany(false)}>
             <Download className="mr-1 h-3.5 w-3.5" aria-hidden />
             Download selected{picked.size ? ` (${picked.size})` : ''}
           </Button>
-          {step.allowAll && (
-            <Button size="sm" variant="outline" onClick={() => submitMany(true)}>
-              Download all
-            </Button>
-          )}
+          <Button size="sm" variant="outline" disabled={disabled} onClick={() => submitMany(true)}>
+            {label === 'materials' ? 'Download all' : `All ${label}`}
+          </Button>
         </div>
       )}
     </div>
   )
 }
 
-function ValueInput({ step, command }: { step: VtopStep; command: string }) {
+function ValueInput({ step, submit, disabled }: StepContext) {
   const [value, setValue] = useState('')
   const type = step.inputType === 'date' ? 'date' : step.inputType === 'time' ? 'time' : 'text'
   return (
@@ -194,7 +214,8 @@ function ValueInput({ step, command }: { step: VtopStep; command: string }) {
       className="flex gap-2"
       onSubmit={event => {
         event.preventDefault()
-        if (value.trim()) proposeReply(`For ${commandName(command)}, ${step.label.toLowerCase()} is ${value.trim()}`)
+        const trimmed = value.trim()
+        if (trimmed) submit(trimmed, `${step.label}: ${trimmed}`)
       }}
     >
       <Input
@@ -203,15 +224,17 @@ function ValueInput({ step, command }: { step: VtopStep; command: string }) {
         onChange={event => setValue(event.target.value)}
         className="h-8 text-sm"
         aria-label={step.label}
+        placeholder={step.format}
+        disabled={disabled}
       />
-      <Button size="sm" type="submit" disabled={!value.trim()}>
+      <Button size="sm" type="submit" disabled={disabled || !value.trim()}>
         Use
       </Button>
     </form>
   )
 }
 
-function Confirmation({ step, command }: { step: VtopStep; command: string }) {
+function Confirmation({ step, command, submit, disabled }: StepContext) {
   const summary = Object.entries(step.summary ?? {})
   return (
     <div className="space-y-3">
@@ -226,10 +249,19 @@ function Confirmation({ step, command }: { step: VtopStep; command: string }) {
         </dl>
       )}
       <div className="flex gap-2">
-        <Button size="sm" onClick={() => proposeReply(`Yes, I confirm: submit the ${commandName(command)} request.`)}>
+        <Button
+          size="sm"
+          disabled={disabled}
+          onClick={() => submit(true, `Confirm: submit the ${commandName(command)} request.`)}
+        >
           Confirm
         </Button>
-        <Button size="sm" variant="outline" onClick={() => proposeReply(`Cancel the ${commandName(command)} request.`)}>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={disabled}
+          onClick={() => submit(false, `Cancel the ${commandName(command)} request.`)}
+        >
           Cancel
         </Button>
       </div>
@@ -288,6 +320,7 @@ export function VTOPFilesList({ files, bundle }: { files: VtopFile[]; bundle?: W
 
 /** Renders a queryVTOP multi-step result: pending step (options/input/confirm), progress, files. */
 export function VTOPWorkflowCard({ data }: { data: unknown }) {
+  const [submitted, setSubmitted] = useState<string | null>(null)
   const parsed = workflowResultSchema.safeParse(data)
   if (!parsed.success) return null
   const result = parsed.data
@@ -296,6 +329,20 @@ export function VTOPWorkflowCard({ data }: { data: unknown }) {
   const copy = STATUS_COPY[status] ?? STATUS_COPY.completed
   const step = result.step
   const pending = status === 'needs_selection' || status === 'needs_input' || status === 'needs_confirmation'
+  const continuation = result.continuation
+  const stepContext: StepContext | null =
+    step && continuation && isVtopCommand(command)
+      ? {
+          step,
+          command,
+          continuation,
+          disabled: submitted !== null,
+          submit: (choice, display) => {
+            setSubmitted(display)
+            sendChoice({ command, continuation, choice, display })
+          },
+        }
+      : null
 
   return (
     <div className="space-y-3 rounded-xl border bg-card p-4">
@@ -309,20 +356,20 @@ export function VTOPWorkflowCard({ data }: { data: unknown }) {
       {pending && step && (
         <div className="space-y-2">
           {step.prompt && <p className="text-sm whitespace-pre-line">{step.prompt}</p>}
-          {step.unmatchedHint && (
-            <p className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-              <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
-              Couldn’t match “{step.unmatchedHint}” on VTOP; closest options are listed first.
-            </p>
-          )}
-          {step.kind === 'confirm' ? (
-            <Confirmation step={step} command={command} />
-          ) : step.options?.length ? (
-            <OptionList step={step} command={command} />
+          {stepContext ? (
+            step.kind === 'confirm' ? (
+              <Confirmation {...stepContext} />
+            ) : step.options?.length ? (
+              <OptionList {...stepContext} />
+            ) : (
+              <ValueInput {...stepContext} />
+            )
           ) : (
-            <ValueInput step={step} command={command} />
+            <p className="text-xs text-muted-foreground">This step can no longer be continued here.</p>
           )}
-          <p className="text-xs text-muted-foreground">Picking an option fills the message box; press send to continue.</p>
+          <p className="text-xs text-muted-foreground">
+            {submitted ? `Sent: ${submitted}` : 'Your choice is sent to VTOP straight away.'}
+          </p>
         </div>
       )}
 

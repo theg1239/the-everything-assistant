@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { labelHasExamType } from './exam-type'
 
 interface Paper {
   title: string
@@ -170,17 +171,9 @@ export async function scrapePapersService(
     let filteredPapers = papers
 
     if (examType) {
-      filteredPapers = filteredPapers.filter((paper: Paper) => {
-        const paperTitle = paper.title.toLowerCase()
-        const paperMeta = paper.metadata.toLowerCase()
-        const examTypeLower = examType.toLowerCase()
-
-        return (
-          paperTitle.includes(examTypeLower) ||
-          paperMeta.includes(examTypeLower) ||
-          (paper.examType && paper.examType.toLowerCase().includes(examTypeLower))
-        )
-      })
+      filteredPapers = filteredPapers.filter((paper: Paper) =>
+        [paper.title, paper.metadata, paper.examType].some(field => labelHasExamType(field, examType))
+      )
     }
 
     if (year) {

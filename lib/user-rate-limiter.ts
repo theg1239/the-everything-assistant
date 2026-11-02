@@ -334,7 +334,13 @@ export function getUserRateLimiter(): UserRateLimiter {
 }
 
 export class UserRateLimitError extends Error {
-  constructor(reason: string | undefined) {
+  /**
+   * @param resetTime Epoch ms when the exhausted window refills (sent to clients as `resetTime`).
+   */
+  constructor(
+    reason: string | undefined,
+    readonly resetTime?: number
+  ) {
     super(`Rate limit: ${reason ?? 'too many requests'}`)
     this.name = 'UserRateLimitError'
   }
@@ -346,5 +352,13 @@ export async function enforceUserRateLimit(userId: string | null | undefined): P
   // and deployments with limiting disabled shouldn't need Redis at all.
   if (!userId || !(sharedLimiter?.getConfig() ?? loadUserRateLimitConfig()).enabled) return
   const result = await getUserRateLimiter().checkRateLimit(userId)
-  if (!result.allowed) throw new UserRateLimitError(result.error)
+  if (!result.allowed) {
+    // Only the exhausted window reports a non-zero reset time.
+    const resetTime = Math.max(
+      result.limits.minute.resetTime,
+      result.limits.hour.resetTime,
+      result.limits.day.resetTime
+    )
+    throw new UserRateLimitError(result.error, resetTime > 0 ? resetTime : undefined)
+  }
 }

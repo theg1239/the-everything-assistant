@@ -39,6 +39,7 @@ import type {
   PersonalHubSnapshot,
   PersonalHubState,
   HubVTOPCommand,
+  HubVTOPRefreshResult,
   VTOPCredentialPayload,
 } from '@/types/hub'
 import type { HubActionHandlers } from './hub'
@@ -308,9 +309,10 @@ export default function HubShell({
       } catch (error) {
         console.warn('[hub] failed to read cached VTOP credentials', error)
       }
-      const snapshot = await actions.refreshVTOP(command, extras, credentials)
-      updateSnapshot(snapshot)
-      return snapshot
+      const result = await actions.refreshVTOP(command, extras, credentials)
+      if (!result.ok) throw new HubVTOPCommandError(result)
+      updateSnapshot(result.snapshot)
+      return result.snapshot
     },
     [actions, updateSnapshot]
   )
@@ -1612,7 +1614,8 @@ function toTimetableClass(value: Record<string, unknown>): TimetableClass {
 
 /**
  * Module-level (not in the component) so React Compiler keeps HubShell compiled. Resolves,
- * never rejects: a thrown credential error maps to `requiresCredentials` like the batch flag.
+ * never rejects: credential problems arrive as the batch's `requiresCredentials` flag (the
+ * action never throws for them), so a thrown error is reported as a plain failure.
  */
 async function hydrateDailyBriefing(
   actions: HubActionHandlers,
@@ -1626,19 +1629,25 @@ async function hydrateDailyBriefing(
     return { state: result.state, requiresCredentials: result.requiresCredentials }
   } catch (error) {
     console.error('[hub/daily-briefing] auto hydration failed', error)
-    return { state: null, requiresCredentials: isCredentialError(error) }
+    return { state: null, requiresCredentials: false }
   }
 }
 
-function isCredentialError(error: unknown) {
-  if (!error) return false
-  const record = asRecord(error)
-  const message =
-    (typeof error === 'string' && error) || readString(record?.message) || readString(record?.cause)
-  if (!message) return false
-  const lower = message.toLowerCase()
-  return lower.includes('credential') || lower.includes('login')
+/** A failed `refreshVTOP` result, rethrown client-side so callers keep the structured fields. */
+class HubVTOPCommandError extends Error {
+  override name = 'HubVTOPCommandError'
+  readonly requiresCredentials: boolean
+  readonly errorKind?: string
+
+  constructor(result: Extract<HubVTOPRefreshResult, { ok: false }>) {
+    super(result.error)
+    this.requiresCredentials = result.requiresCredentials
+    this.errorKind = result.errorKind
+  }
 }
+
+const isCredentialError = (error: unknown) =>
+  error instanceof HubVTOPCommandError && error.requiresCredentials
 
 /*
  * Minute clock shared by every `useNow()` caller. The server snapshot is `undefined`, so the

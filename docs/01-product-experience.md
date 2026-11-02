@@ -67,6 +67,7 @@ This guide walks through everything a user (student, admin, or reviewer) can tou
 ### Follow-Up Suggestions
 
 - `components/follow-up-suggestions.tsx` calls `/api/suggestions` (implemented in `app/api/suggestions/route.ts`) which uses `lib/follow-up-generator.ts` and `rateLimitedAI.openai` to synthesize three next questions.
+- If the LLM call fails or returns malformed output, no suggestions are shown (there is no keyword-based fallback).
 - Suggestions respect the current semester context (`getCurrentVITContext`) and the assistant’s declared capabilities (mess menu, attendance, schedule, placements, etc.).
 
 ### Memories Manager

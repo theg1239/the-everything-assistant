@@ -24,7 +24,7 @@ export async function buildMemoryContext(userId: string) {
 ${memories
   .map(
     m =>
-      `    <memory>
+      `    <memory id="${m.id}">
       <content>${m.content}</content>
       <last_updated>${new Date(m.updatedAt).toLocaleDateString()}</last_updated>
     </memory>`

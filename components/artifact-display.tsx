@@ -83,6 +83,7 @@ import {
   type UnknownRecord,
 } from './artifacts/artifact-data'
 import { usePdfDock, type PdfItem } from '@/contexts/pdf-dock-context'
+import type { MessMenuErrorKind } from '@/lib/scrapers/mess-menu-scraper'
 
 /** Opaque handle for the maximized artifact; ArtifactDisplay only checks whether one is set. */
 export type MaximizedArtifactItem = unknown
@@ -1002,40 +1003,8 @@ const VTOPDataCard = ({
 
   const renderVTOPContent = () => {
     if (success === false || error) {
-      let errorMessage =
+      const errorMessage =
         asString(error) || asString(message) || 'An error occurred while retrieving VTOP data'
-
-      if ((!errorMessage || errorMessage === '500') && rawOutput && typeof rawOutput === 'string') {
-        if (
-          rawOutput.includes('Login failed') ||
-          rawOutput.includes('session could not be established')
-        ) {
-          errorMessage = 'Login failed - incorrect username/password'
-        } else if (rawOutput.includes('Invalid LoginId/Password')) {
-          errorMessage = 'Invalid LoginId/Password'
-        } else if (
-          rawOutput.includes('credentials required') ||
-          rawOutput.includes('VTOP credentials required')
-        ) {
-          errorMessage = 'VTOP credentials required'
-        } else if (rawOutput.includes('error')) {
-          const lines = rawOutput.split('\n')
-          const errorLine = lines.find(
-            line => line.toLowerCase().includes('error') || line.toLowerCase().includes('invalid')
-          )
-          if (errorLine) {
-            const cleanError = errorLine
-              .replace(/^[^"]*"/, '')
-              .replace(/"[^"]*$/, '')
-              .replace(/\\n/g, ' ')
-              .replace(/\s+/g, ' ')
-              .trim()
-            if (cleanError) {
-              errorMessage = cleanError
-            }
-          }
-        }
-      }
 
       return (
         <div className="space-y-3">
@@ -1856,20 +1825,22 @@ const MessMenuCard = ({ menuData }: { menuData: unknown }) => {
   )
 }
 
+const MESS_MENU_ERROR_KINDS: readonly string[] = [
+  'menu_unavailable',
+  'menu_fetch_failed',
+] satisfies MessMenuErrorKind[]
+
 const ErrorCard = ({ errorData }: { errorData: unknown }) => {
   const errorRecord = asRecord(errorData)
   const error = asString(errorRecord.error)
   const message = asString(errorRecord.message)
+  const errorKind = asString(errorRecord.errorKind)
   const availableDateRange = errorRecord.availableDateRange
   const isMobile = useMediaQuery('(max-width: 640px)')
   const timeZone = useIsHydrated() ? undefined : PRE_HYDRATION_TIME_ZONE
 
   const getErrorMessage = () => {
-    if (message && message.includes('mess menu')) {
-      return 'The requested mess menu is not available for this date. Please try a different date from the available range below.'
-    }
-
-    if (error && error.includes('Menu not available')) {
+    if (errorKind && MESS_MENU_ERROR_KINDS.includes(errorKind)) {
       return 'The requested mess menu is not available for this date. Please try a different date from the available range below.'
     }
 

@@ -55,11 +55,7 @@ All tools share the rate-limited AI clients defined in `lib/rate-limited-ai.ts`,
   - `papers-scraper` (internal archive), `papers-codechef`, `vit-papervault`, `examcooker`.
   - `placement-scraper.ts` (see §4) and `mess-menu-scraper.ts`.
 - Each scraper normalizes metadata (`title`, `url`, `examType`, `year`, `source`) and deduplicates PDF links.
-
-### Paper Agent (`lib/agents/paper-agent.ts`)
-
-- Aggregates scrapers, dedupes by Drive ID/title similarity, downloads files (via Puppeteer or `pdf-lib`), performs OCR fallback, extracts questions, embeds both chunks and question vectors, and writes everything via `lib/papers-db.ts`.
-- `paperProgress` events (see `lib/progress/paper-progress.ts`) relay status to the UI/SSE endpoints.
+- `findPastPapers` takes an exact course code (the model finds it with `searchCourseCatalog` first), `examType` (`cat1` | `cat2` | `fat` | `quiz`) and a four-digit `year`.
 
 ### Database (`lib/papers-db.ts`)
 
@@ -72,11 +68,8 @@ All tools share the rate-limited AI clients defined in `lib/rate-limited-ai.ts`,
 
 ### Public Endpoint
 
-- `/api/public/papers/search` (unauthenticated) resolves fuzzy course codes via `getCourseCode` / `getAllCourseMatches` and fans out to all scrapers, returning deduped results + source diagnostics.
-
-### CLI Workflow
-
-- `scripts/papers.ts` ties it all together (scraping, dedupe, OCR, embedding, indexing, SSE progress).
+- `/api/public/papers/search` (unauthenticated) takes `courseCode` (aliases `course`, `q`, `query`) plus optional `examType` / `year`, fans out to all scrapers and returns deduped results + source diagnostics. The course is an exact code (`BCSE302L`), or text that is substring-matched (case-insensitive) against catalog codes and titles via `searchCourseCatalog`: exactly one match uses that course; several return `400 { error: "ambiguous_course", candidates: [{ code, name }] }`; none return `400 { error: "unresolved_course_code", candidates: [] }`. Successful responses are unchanged.
+- **Changed:** nickname/acronym resolution (e.g. `DSA`, `DBMS`, `calc`) and "first fuzzy match wins" were removed. Callers that sent nicknames must send a code or a title fragment and pick from `candidates`.
 
 ---
 
@@ -86,9 +79,9 @@ All tools share the rate-limited AI clients defined in `lib/rate-limited-ai.ts`,
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | **Mess Menu** (`getMessMenu`) | Reads static JSON menus (`public/menu-data/…`) and filters by hostel/mess/date/meal.                                                                                                                  | `lib/scrapers/mess-menu-scraper.ts`                            |
 | **Course Catalog / FFCS**     | `getCourseData` loads JSON dumps per school (`public/ffcs/{school}.json`). Course search & slot filtering happen in `lib/ffcs-tool.ts`.                                                               | `public/ffcs/*.json`                                           |
-| **Course Mapping**            | Acronym-to-code lookups & fuzzy matching (DSA, TOC, etc.). Enables “natural language to course code” conversions.                                                                                     | `lib/course-map.ts`                                            |
-| **Faculty Directory**         | `getFacultyInfo` fetches `public/faculty.json`, filtering by department, school, faculty name, or course query.                                                                                       | `public/faculty.json`                                          |
-| **Syllabi Downloader**        | `syllabus` command consumes `public/syllabi.json` to map fuzzy names to official PDFs.                                                                                                                | `public/syllabi.json`                                          |
+| **Course Catalog** (`searchCourseCatalog`, `lookupCourseCode`) | `COURSE_MAP` (code → official title) with an exact code lookup and a case-insensitive substring search returning candidates. No acronyms or fuzzy scoring: the model searches, reads candidates and passes exact codes to other tools. | `lib/course-map.ts`                                            |
+| **Faculty Directory**         | `getFacultyInfo` fetches `public/faculty.json`, filtering by exact school acronym, and case-insensitive substrings of department, faculty name, or course code/title (no acronym tables or spelling correction).                                                                                       | `public/faculty.json`                                          |
+| **Syllabi Downloader**        | `getSyllabus` looks up `public/syllabi.json` by exact code, else case-insensitive substring of code/title/filename; several matches come back as candidates for the model to choose.                                                                                                                | `public/syllabi.json`                                          |
 | **Placement Insights**        | `scrapePlacementInfo` parses CSVs in `public/placements` (standard + WITCH programs), de-dupes by student/reg no, computes stats (highest/lowest/median CTC, per-company placements, campus filters). | `lib/scrapers/placement-scraper.ts`, `public/placements/*.csv` |
 
 All of these tools return structured JSON that the assistant can render as markdown or pass into hub panels (e.g., `components/hub/panels/placement-panel.tsx`).
@@ -118,9 +111,9 @@ The deep-search microservice (port 3002 by default) powers all Reddit-related to
 
 ### Runtime Flow
 
-1. The assistant (or hub) calls the `queryVTOP` tool with `command`, optional flags (`semester`, `courseQuery`, etc.).
+1. The assistant (or hub) calls the `queryVTOP` tool with `command` and optional exact flags (`semester` index or `"list"`, option indices, `materials` index grammar, application fields). Multi-step commands return `needs_selection` / `needs_input` / `needs_confirmation` with the full `step.options` list and a `continuation`; the model (or the workflow card) continues with `continuation` + `choice` (option id(s), a value, or `true`/`false`).
 2. `lib/tools.ts` resolves credentials (stored per user or via `VTOPCredentialsDialog`), builds a payload, and calls the proxy service (`services/proxy-service`, default `http://localhost:3001`).
-3. The proxy runs the CLI, handles interactive workflows (`course-page`) via `/vtop-interactive` and `/vtop-interactive-continue`, and returns raw JSON + temporary download links.
+3. The proxy runs the CLI (`POST /vtop`), continues workflows (`POST /vtop/continue`, which rejects anything that is not an offered option id with `400 invalid_input` + `validIds`), and returns raw JSON + temporary download links.
 4. `app/api/hub/vtop/route.ts` (or server actions in `app/actions/hub.ts`) parse the raw output via `lib/hub/parsers/*`, or falls back to Gemini to format into the shared `vtopResultSchema`.
 5. Snapshots are stored in Prisma (`VTOPSnapshot`).
 6. Hub panels and the daily briefing overlay (`components/hub/daily-briefing-overlay.tsx`) render structured content or quick insight summaries.
@@ -134,9 +127,8 @@ The deep-search microservice (port 3002 by default) powers all Reddit-related to
 
 ## 7. Memory Tooling
 
-- `createMemoryTool(userId)` (within `lib/tools.ts`) exposes a `saveMemory` tool with schema: `{ memoryContent, importance?, tags? }`.
-- The executor deduplicates similar memories (`memoryService.findSimilarMemory`), updates tags/importance if a similar entry exists, and falls back gracefully with descriptive errors.
-- Auto-save heuristics (detecting first-person statements, length bounds) live in `lib/memory/memory-service.ts`.
+- `createMemoryTool(userId)` (within `lib/tools.ts`) exposes a `saveMemory` tool with schema: `{ memoryContent, memoryId?, importance?, tags? }`.
+- To update an existing memory the model passes its `memoryId` (ids are listed in the memory context); otherwise a new memory is created. Identical content is skipped; there is no similarity-based merging.
 
 ---
 

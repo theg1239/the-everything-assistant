@@ -24,12 +24,14 @@ import { enforceUserRateLimit } from '@/lib/user-rate-limiter'
 import { saveTokenUsage } from '@/lib/db'
 import { normalizeTokenUsage } from '@/lib/token-usage'
 import { listVTOPSnapshots, upsertVTOPSnapshot } from '@/lib/vtop-snapshots'
-import { toJsonValue } from '@/lib/json'
+import { isRecord, toJsonValue } from '@/lib/json'
+import { requiresVtopCredentials, STALE_CREDENTIAL_ERROR_KINDS } from '@/lib/vtop-errors'
 import { getModelConfig } from '@/lib/model-registry'
 import {
   HUB_COMMANDS,
   type HubSyncBatchResult,
   type HubVTOPCommand,
+  type HubVTOPRefreshResult,
   type PersonalHubState,
   type PersonalHubSnapshot,
   type VTOPCredentialPayload,
@@ -64,7 +66,7 @@ const proxySyncEntrySchema = z.object({
 })
 
 /** Proxy error kinds that mean the stored VTOP login is missing or was rejected. */
-const CREDENTIAL_ERROR_KINDS = new Set(['missing_credentials', 'invalid_credentials', 'login_failed'])
+const CREDENTIAL_ERROR_KINDS = STALE_CREDENTIAL_ERROR_KINDS
 
 const parseProxySyncResults = (value: unknown) => {
   const results =
@@ -227,18 +229,30 @@ async function formatAndPersistVTOPResult(
   return object
 }
 
+type VTOPCommandOutcome =
+  | { ok: true; formatted: VTOPFormattedResult }
+  | Extract<HubVTOPRefreshResult, { ok: false }>
+
 async function executeVTOPCommand(
   userId: string,
   command: HubVTOPCommand,
   extras: Record<string, unknown> = {},
   credentials?: VTOPCredentials
-): Promise<VTOPFormattedResult> {
+): Promise<VTOPCommandOutcome> {
   const executeVtop = getToolExecutor(createVITTools(userId), 'queryVTOP')
   if (!executeVtop) {
     throw new Error('VTOP tool is unavailable')
   }
 
-  const creds = credentials ?? (await resolveVTOPCredentials(userId))
+  const creds = credentials ?? (await getUserVTOPCredentials(userId))
+  if (!creds) {
+    return {
+      ok: false,
+      requiresCredentials: true,
+      errorKind: 'missing_credentials',
+      error: 'VTOP credentials are not linked',
+    }
+  }
 
   const args: Record<string, unknown> = {
     command,
@@ -248,7 +262,17 @@ async function executeVTOPCommand(
   }
 
   const raw = await executeVtop(args, `vtop-${Date.now()}`)
-  return formatAndPersistVTOPResult(userId, command, raw)
+  // A rejected/missing login must reach the UI as a re-link prompt, not a formatted snapshot.
+  if (requiresVtopCredentials(raw)) {
+    const record = isRecord(raw) ? raw : {}
+    return {
+      ok: false,
+      requiresCredentials: true,
+      ...(typeof record.errorKind === 'string' ? { errorKind: record.errorKind } : {}),
+      error: typeof record.error === 'string' ? record.error : 'VTOP credentials required',
+    }
+  }
+  return { ok: true, formatted: await formatAndPersistVTOPResult(userId, command, raw) }
 }
 
 /**
@@ -260,17 +284,22 @@ export async function refreshVTOPSnapshotAction(
   command: HubVTOPCommand,
   extras: Record<string, unknown> = {},
   _legacyCredentials?: VTOPCredentialPayload
-): Promise<PersonalHubSnapshot> {
+): Promise<HubVTOPRefreshResult> {
   const userId = await requireUser()
-  const snapshot = await executeVTOPCommand(userId, command, extras)
+  const outcome = await executeVTOPCommand(userId, command, extras)
+  if (!outcome.ok) return outcome
+  const snapshot = outcome.formatted
   return {
-    command,
-    title: snapshot.title,
-    summary: snapshot.summary,
-    formatted_content: snapshot.formatted_content,
-    structured_data: toJsonValue(snapshot.structured_data),
-    meta: snapshot.meta || null,
-    fetchedAt: new Date().toISOString(),
+    ok: true,
+    snapshot: {
+      command,
+      title: snapshot.title,
+      summary: snapshot.summary,
+      formatted_content: snapshot.formatted_content,
+      structured_data: toJsonValue(snapshot.structured_data),
+      meta: snapshot.meta || null,
+      fetchedAt: new Date().toISOString(),
+    },
   }
 }
 
@@ -332,8 +361,8 @@ export async function syncCoreHubSnapshots(requested: HubVTOPCommand[] = [...HUB
     console.error('[hub/actions] batch sync failed, falling back to sequential refresh:', error)
     await mapWithConcurrency(commands, HUB_SYNC_CONCURRENCY, async command => {
       try {
-        await executeVTOPCommand(userId, command, {}, creds)
-        updatedCount++
+        const outcome = await executeVTOPCommand(userId, command, {}, creds)
+        if (outcome.ok) updatedCount++
       } catch (fallbackError) {
         console.error('[hub/actions] fallback refresh failed', command, fallbackError)
       }

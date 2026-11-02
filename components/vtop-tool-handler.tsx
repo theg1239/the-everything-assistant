@@ -4,6 +4,10 @@ import React, { useState, useEffect } from 'react'
 import { VTOPCredentialsDialog } from './vtop-credentials-dialog'
 import { getCachedVTOPCredentialStatus } from '@/lib/vtop-credentials'
 import { asRecord, readString } from '@/components/narrow'
+import {
+  rejectedStoredCredentials,
+  requiresVtopCredentials,
+} from '@/lib/vtop-errors'
 
 /** Minimal shape of a (legacy) tool invocation this handler inspects. `result` is unvalidated. */
 export type VTOPToolCall = {
@@ -27,11 +31,6 @@ const commandOf = (tool: VTOPToolCall) =>
   readString(asRecord(tool.result)?.command) || readString(tool.args?.command)
 
 const detailOf = (event: Event) => (event instanceof CustomEvent ? asRecord(event.detail) : null)
-
-/** VTOP rejected the stored password: re-linking (not resubmitting) is the only fix. */
-const STALE_CREDENTIAL_KINDS = new Set(['invalid_credentials', 'login_failed', 'missing_credentials'])
-const rejectedStoredCredentials = (tool: VTOPToolCall | null | undefined) =>
-  STALE_CREDENTIAL_KINDS.has(readString(asRecord(tool?.result)?.errorKind) ?? '')
 
 /**
  * The browser never holds the VTOP password: when the account is linked, the server resolves
@@ -82,7 +81,7 @@ export function VTOPToolHandler({
       const triggeredCall = triggerToolCallId
         ? toolInvocations?.find(tool => tool.toolCallId === triggerToolCallId)
         : undefined
-      if (savedCredentials && !rejectedStoredCredentials(triggeredCall)) {
+      if (savedCredentials && !rejectedStoredCredentials(triggeredCall?.result)) {
         if (onCredentialsSubmit) {
           let vtopToolCall: VTOPToolCall | null | undefined = triggeredCall
 
@@ -110,16 +109,10 @@ export function VTOPToolHandler({
       if (!vtopToolCall) {
         vtopToolCall = toolInvocations?.find(tool => {
           const result = asRecord(tool.result)
-          const error = readString(result?.error)
           return (
             tool.toolName === 'queryVTOP' &&
             result &&
-            (result.requiresCredentials === true ||
-              (error &&
-                (error.includes('VTOP credentials required') ||
-                  error.includes('credentials') ||
-                  error.includes('Invalid LoginId/Password') ||
-                  error.includes('Login failed')))) &&
+            requiresVtopCredentials(result) &&
             !result.data &&
             !result.output
           )
@@ -147,7 +140,11 @@ export function VTOPToolHandler({
       setCommand(commandToRun)
       setPendingToolCall(resolvedToolCall)
       dispatchDisclaimer(resolvedToolCall, commandToRun)
-      if (linkOnly || resolvedToolCall.meta?.linkOnly || rejectedStoredCredentials(resolvedToolCall)) {
+      if (
+        linkOnly ||
+        resolvedToolCall.meta?.linkOnly ||
+        rejectedStoredCredentials(resolvedToolCall.result)
+      ) {
         setShowCredentialsDialog(true)
       }
     }
@@ -173,12 +170,10 @@ export function VTOPToolHandler({
     if (toolInvocations && !showCredentialsDialog) {
       const vtopToolCall = toolInvocations.find(tool => {
         const result = asRecord(tool.result)
-        const error = readString(result?.error)
         return (
           tool.toolName === 'queryVTOP' &&
           result &&
-          (result.requiresCredentials === true ||
-            (error && error.includes('VTOP credentials required'))) &&
+          result.requiresCredentials === true &&
           !result.data &&
           !result.output &&
           !(tool.toolCallId !== undefined && dismissedToolCallIds.has(tool.toolCallId))

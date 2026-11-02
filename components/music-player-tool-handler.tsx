@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { useMiniPlayerStore, Track } from '@/lib/stores/useMiniPlayerStore'
+import { useMiniPlayerStore } from '@/lib/stores/useMiniPlayerStore'
 import { toast } from 'sonner'
 import { asRecord, readString } from '@/components/narrow'
 
@@ -45,36 +45,6 @@ function persistProcessedIds(ids: Set<string>) {
   }
 }
 
-function findBestMatch(tracks: Track[], query: string): Track | null {
-  const q = query.toLowerCase()
-
-  const exactTitle = tracks.find(t => t.title.toLowerCase() === q)
-  if (exactTitle) return exactTitle
-
-  const startsWithTitle = tracks.find(t => t.title.toLowerCase().startsWith(q))
-  if (startsWithTitle) return startsWithTitle
-
-  const containsTitle = tracks.find(t => t.title.toLowerCase().includes(q))
-  if (containsTitle) return containsTitle
-
-  const artistMatch = tracks.find(t =>
-    t.artist && t.artist.toLowerCase().includes(q)
-  )
-  if (artistMatch) return artistMatch
-
-  const words = q.split(/\s+/).filter(w => w.length > 2)
-  if (words.length > 0) {
-    const wordMatch = tracks.find(t => {
-      const titleLower = t.title.toLowerCase()
-      const artistLower = (t.artist || '').toLowerCase()
-      return words.some(word => titleLower.includes(word) || artistLower.includes(word))
-    })
-    if (wordMatch) return wordMatch
-  }
-
-  return null
-}
-
 /**
  * Applies `musicPlayer` tool results to the mini player store. Mounted once per message, so it
  * deliberately does not subscribe to the store: player state is read when a tool result is applied.
@@ -97,7 +67,6 @@ export function MusicPlayerToolHandler({ toolInvocations }: MusicPlayerToolHandl
       
       const result = asRecord(tool.result)
       const clientAction = readString(result?.clientAction)
-      const query = readString(result?.query)
       const trackId = readString(result?.trackId)
       const loopMode = result?.loopMode
       if (!clientAction) continue
@@ -172,21 +141,11 @@ export function MusicPlayerToolHandler({ toolInvocations }: MusicPlayerToolHandl
         case 'PLAY_TRACK':
           if (trackId) {
             const track = tracks.find(t => t.id === trackId)
-            playTrack(trackId)
             if (track) {
+              playTrack(trackId)
               toast.success(`Now playing: ${track.title}`)
-            }
-          }
-          break
-          
-        case 'SEARCH_AND_PLAY':
-          if (query) {
-            const match = findBestMatch(tracks, query)
-            if (match) {
-              playTrack(match.id)
-              toast.success(`Now playing: ${match.title}`)
             } else {
-              toast.error(`No track found matching "${query}"`)
+              toast.error('That track is not in the player queue')
             }
           }
           break

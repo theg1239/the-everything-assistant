@@ -2,13 +2,13 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import { isRecord } from '@/lib/json'
+import { classifyChatError } from '@/lib/chat-errors'
 
 interface RateLimitError {
   isRateLimit: boolean
   resetTime?: string
   userLimit?: boolean
   message?: string
-  estimated?: boolean
 }
 
 interface RateLimitContextType {
@@ -54,9 +54,6 @@ const toPayload = (parsed: unknown): UnknownRecord => {
   return isRecord(parsed) ? parsed : {}
 }
 
-const asOptionalRecord = (value: unknown): UnknownRecord | undefined =>
-  value !== null && typeof value === 'object' ? (isRecord(value) ? value : {}) : undefined
-
 const RateLimitContext = createContext<RateLimitContextType | undefined>(undefined)
 
 export function RateLimitProvider({ children }: { children: React.ReactNode }) {
@@ -91,188 +88,29 @@ export function RateLimitProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    let estimated = false
-
-    if (!normalizedReset) {
-      const msg = String(info.message || '').toLowerCase()
-      const overloadedHint =
-        msg.includes('try again later') ||
-        msg.includes('overload') ||
-        msg.includes('overloaded') ||
-        msg.includes('temporarily')
-      if (overloadedHint) {
-        const numericHint = msg.match(
-          /(\d+)\s*(seconds|second|secs|sec|minutes|minute|mins|min|hours|hour|hrs|hr)/i
-        )
-        if (numericHint) {
-          const [hintText, amount = '', unitText] = numericHint
-          const n = parseInt(amount, 10)
-          const unit = String(unitText || '').toLowerCase()
-          let ms: number | undefined
-          if (unit.startsWith('sec')) ms = n * 1000
-          else if (unit.startsWith('min')) ms = n * 60 * 1000
-          else if (unit.startsWith('hour') || unit.startsWith('hr')) ms = n * 60 * 60 * 1000
-          if (ms !== undefined) {
-            normalizedReset = new Date(Date.now() + ms).toISOString()
-            estimated = true
-          } else {
-            try {
-              // eslint-disable-next-line no-console
-              console.debug(
-                '[RateLimit] numeric hint with unknown unit; skipping estimate:',
-                hintText
-              )
-            } catch {}
-          }
-        } else {
-          try {
-            // eslint-disable-next-line no-console
-            console.debug(
-              '[RateLimit] overload hint found but no numeric hint; skipping estimated reset'
-            )
-          } catch {}
-        }
-      }
-    }
-
     const payload: RateLimitError = {
       isRateLimit: true,
       resetTime: normalizedReset,
       userLimit: info.userLimit ?? false,
       message: info.message,
-      estimated,
     }
-    try {
-    } catch {}
     setRateLimitError(payload)
   }, [])
-  const checkForRateLimitError = useCallback((error: unknown): boolean => {
-    if (!error) return false
-
-    const err = asOptionalRecord(error)
-    const response = asOptionalRecord(err?.response)
-
-    const status = err?.status || err?.statusCode || response?.status
-    if (status === 429) {
-      const body = err?.responseBody || err?.body || response?.body || null
-      if (body && typeof body === 'string') {
-        try {
-          const parsed = toPayload(JSON.parse(body))
-          const msg = parsed.message || parsed.error || parsed.detail || parsed.error_description
-          const numericRequestsPattern =
-            /(\d+\s*requests?)\s*(per|\/)?\s*(second|sec|minute|min|hour|hr)/i
-          const userPattern =
-            /you have exceeded|exceeded your rate limit|user_rate_limit|requests?\s+per\s+(minute|hour|second)|requests?\/minute|per minute/i
-          const userLimit =
-            parsed.type === 'user_rate_limit' ||
-            /user/i.test(String(msg || '')) ||
-            numericRequestsPattern.test(String(msg || '')) ||
-            userPattern.test(String(msg || ''))
-          trySet({
-            resetTime: toResetInput(parsed.resetTime || parsed.reset_at || parsed.reset || undefined),
-            userLimit,
-            message: toMessage(msg),
-          })
-          try {
-          } catch {}
-          return true
-        } catch {
-          trySet({ message: 'rate limit exceeded. please try again later.' })
-          return true
-        }
-      }
-      trySet({ message: 'rate limit exceeded. please try again later.' })
-      return true
-    }
-
-    const responseBody = err?.responseBody
-    if (responseBody && typeof responseBody === 'string') {
-      const txt = responseBody.trim()
-      if (txt) {
-        if (
-          txt.toLowerCase().includes('rate limit') ||
-          txt.toLowerCase().includes('too many requests') ||
-          txt.includes('RATE_LIMIT')
-        ) {
-          try {
-            const parsed = toPayload(JSON.parse(txt))
-            const msg = parsed.message || parsed.error || parsed.detail
-            const numericRequestsPattern =
-              /(\d+\s*requests?)\s*(per|\/)?\s*(second|sec|minute|min|hour|hr)/i
-            const userPattern =
-              /you have exceeded|exceeded your rate limit|user_rate_limit|requests?\s+per\s+(minute|hour|second)|requests?\/minute|per minute/i
-            const userLimit =
-              parsed.type === 'user_rate_limit' ||
-              /user/i.test(String(msg || '')) ||
-              numericRequestsPattern.test(String(msg || '')) ||
-              userPattern.test(String(msg || ''))
-            trySet({
-              resetTime: toResetInput(parsed.resetTime || parsed.reset_at),
-              userLimit,
-              message: toMessage(msg),
-            })
-            try {
-            } catch {}
-            return true
-          } catch {
-            trySet({ message: txt })
-            return true
-          }
-        }
-      }
-    }
-
-    const errorMessage = String(err?.message || String(error) || '')
-    const lower = errorMessage.toLowerCase()
-    if (
-      lower.includes('rate limit') ||
-      lower.includes('too many requests') ||
-      lower.includes('quota exceeded') ||
-      lower.includes('rate_limited') ||
-      lower.includes('rate_limit')
-    ) {
-      const idx = errorMessage.indexOf('429:')
-      if (idx !== -1) {
-        const jsonPart = errorMessage.slice(idx + 4).trim()
-        try {
-          const parsed = toPayload(JSON.parse(jsonPart))
-          const msg = parsed.message || parsed.error
-          const numericRequestsPattern =
-            /(\d+\s*requests?)\s*(per|\/)?\s*(second|sec|minute|min|hour|hr)/i
-          const userPattern =
-            /you have exceeded|exceeded your rate limit|user_rate_limit|requests?\s+per\s+(minute|hour|second)|requests?\/minute|per minute/i
-          const userLimit =
-            parsed.type === 'user_rate_limit' ||
-            /user/i.test(String(msg || '')) ||
-            numericRequestsPattern.test(String(msg || '')) ||
-            userPattern.test(String(msg || ''))
-          trySet({
-            resetTime: toResetInput(parsed.resetTime || parsed.reset_at),
-            userLimit,
-            message: toMessage(msg),
-          })
-          return true
-        } catch {}
-      }
-
-      const numericRequestsPattern2 =
-        /(\d+\s*requests?)\s*(per|\/)?\s*(second|sec|minute|min|hour|hr)/i
-      const isUserLimit =
-        lower.includes('user') ||
-        lower.includes('you have exceeded') ||
-        numericRequestsPattern2.test(lower) ||
-        lower.includes('requests per')
+  /** Structured check: HTTP 429 / our JSON rate-limit body (see `classifyChatError`). */
+  const checkForRateLimitError = useCallback(
+    (error: unknown): boolean => {
+      if (!error) return false
+      const classified = classifyChatError(error)
+      if (classified.kind !== 'rate_limit') return false
       trySet({
-        userLimit: isUserLimit,
-        message: isUserLimit
-          ? 'you have exceeded your rate limit. please wait before sending another message.'
-          : 'rate limit exceeded. please try again later.',
+        resetTime: classified.resetTime,
+        userLimit: classified.scope === 'user',
+        message: classified.message ?? 'rate limit exceeded. please try again later.',
       })
       return true
-    }
-
-    return false
-  }, [])
+    },
+    [trySet]
+  )
 
   useEffect(() => {
     if (typeof window === 'undefined') return

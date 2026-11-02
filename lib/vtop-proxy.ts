@@ -71,17 +71,20 @@ export const vtopOptionSchema = z.object({
 })
 export type VtopOption = z.infer<typeof vtopOptionSchema>
 
+/**
+ * A pending workflow step. `options` is the full list VTOP offered; continue with option ids.
+ * `cliQuery` echoes a search cli-top itself ran that did not identify a single option.
+ */
 export const vtopStepSchema = z.object({
   id: z.string(),
   kind: z.enum(['select', 'input', 'confirm']),
   label: z.string(),
   prompt: z.string().optional(),
-  select: z.string().optional(),
   multiple: z.boolean().optional(),
-  allowAll: z.boolean().optional(),
   inputType: z.string().optional(),
+  format: z.string().optional(),
   description: z.string().optional(),
-  unmatchedHint: z.string().optional(),
+  cliQuery: z.string().optional(),
   options: z.array(vtopOptionSchema).optional(),
   summary: z.record(z.string(), jsonValueSchema).optional(),
 })
@@ -142,6 +145,8 @@ export const vtopProxyResultSchema = z
     retryable: z.boolean().optional(),
     requiresCredentials: z.boolean().optional(),
     field: z.string().optional(),
+    /** On an `invalid_input` choice: the option ids that would have been accepted. */
+    validIds: z.array(z.string()).optional(),
   })
   .loose()
 export type VtopProxyResult = z.infer<typeof vtopProxyResultSchema>
@@ -154,6 +159,8 @@ export const vtopProxyErrorSchema = z
     message: z.string().optional(),
     retryable: z.boolean().optional(),
     requiresCredentials: z.boolean().optional(),
+    field: z.string().optional(),
+    validIds: z.array(z.string()).optional(),
   })
   .loose()
 
@@ -182,18 +189,25 @@ export type VtopCredentialFields = { username: string } & (
   | { encryptedPassword: string; sessionKey?: string }
 )
 
+/** POST /vtop: start a command with exact cli-top flags (option indices, dates, ids). */
 export type VtopRunRequest = VtopCredentialFields & {
   command: VtopCommand
   flags?: Record<string, string | number | boolean>
-  select?: Record<string, string>
   confirm?: boolean
   fresh?: boolean
 }
 
+/**
+ * Answer to a pending step: option id(s) for select steps (an id, ids, or for `multiple` steps
+ * the "1,3-5" id-range grammar / "all"), the raw value for input steps, a boolean to confirm.
+ * The proxy rejects anything else with `invalid_input` + `validIds`.
+ */
+export type VtopChoice = string | number | boolean | Array<string | number>
+
+/** POST /vtop/continue */
 export type VtopContinueRequest = VtopCredentialFields & {
   continuation: string
-  choice: string | number | boolean | Array<string | number>
-  confirm?: boolean
+  choice: VtopChoice
 }
 
 /** Failure of the HTTP call itself (network / non-JSON). Proxy-reported errors are results. */
@@ -247,6 +261,8 @@ export async function callVtopProxy(
     errorKind: detail.errorKind || (response.ok ? 'protocol_error' : `http_${response.status}`),
     retryable: detail.retryable ?? response.status >= 500,
     requiresCredentials: detail.requiresCredentials ?? response.status === 401,
+    ...(detail.field ? { field: detail.field } : {}),
+    ...(detail.validIds ? { validIds: detail.validIds } : {}),
   }
 }
 

@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -50,9 +49,6 @@ export default function VTOPPanel({
   onResult,
 }: VTOPPanelProps) {
   const [command, setCommand] = useState<HubVTOPCommand>('attendance')
-  const [semesterQuery, setSemesterQuery] = useState('')
-  const [courseQuery, setCourseQuery] = useState('')
-  const [materialQuery, setMaterialQuery] = useState('')
   const [snapshot, setSnapshot] = useState<PersonalHubSnapshot | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -66,11 +62,8 @@ export default function VTOPPanel({
     setLoading(true)
     setError(null)
     try {
-      const extras: Record<string, string> = {}
-      if (semesterQuery) extras.semesterQuery = semesterQuery
-      if (courseQuery) extras.courseQuery = courseQuery
-      if (materialQuery) extras.materialQuery = materialQuery
-      const result = await runCommand(command, extras)
+      // Multi-step commands (course-page, da) come back as a pending step; pick options in chat.
+      const result = await runCommand(command)
       setSnapshot(result)
       onResult(result)
     } catch (err) {
@@ -101,35 +94,6 @@ export default function VTOPPanel({
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="semesterQuery">semester filter (optional)</Label>
-          <Input
-            id="semesterQuery"
-            value={semesterQuery}
-            onChange={e => setSemesterQuery(e.target.value)}
-            placeholder="e.g. fall 2025 / winter"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="courseQuery">course filter</Label>
-          <Input
-            id="courseQuery"
-            value={courseQuery}
-            onChange={e => setCourseQuery(e.target.value)}
-            placeholder="course code or keyword"
-          />
-        </div>
-        {command === 'course-page' && (
-          <div className="space-y-1.5">
-            <Label htmlFor="materialQuery">material filter</Label>
-            <Input
-              id="materialQuery"
-              value={materialQuery}
-              onChange={e => setMaterialQuery(e.target.value)}
-              placeholder="e.g. week 5 notes"
-            />
-          </div>
-        )}
       </div>
 
       <div className="flex gap-2">

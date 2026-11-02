@@ -45,11 +45,6 @@ The root build runs `scripts/sync-rag-vercel.ts` after `next build`. It only wri
 
 Do not use `--fresh` as an automatic update: it drops the entire table, including custom and PDF chunks. The manual seeder does not deduplicate generated corpus rows. Existing documents must use a compatible embedding model and dimension.
 
-### Paper Indexing (`scripts/papers.ts`)
-
-- Coordinates scraping, OCR, embeddings, and DB writes.
-- Emits progress via `paperProgress.emitStep`, which feeds `/api/paper-progress/[runId]`.
-
 ### Performance Tests (`scripts/test-performance.ts`)
 
 - Seeds a synthetic user, chats, and runs DB benchmarks (`lib/performance-tester.ts`).

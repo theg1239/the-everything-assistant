@@ -48,6 +48,7 @@ const LEGACY_TO_UI_STATE: Record<string, AppToolState> = {
   'partial-call': 'input-streaming',
   call: 'input-available',
   result: 'output-available',
+  error: 'output-error',
 }
 
 const UI_TO_LEGACY_STATE: Partial<Record<string, LegacyToolInvocation['state']>> = {

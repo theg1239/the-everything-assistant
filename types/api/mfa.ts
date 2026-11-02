@@ -92,31 +92,87 @@ export const webAuthnRegistrationSchema = z.object({
 })
 export type WebAuthnRegistrationRequest = z.infer<typeof webAuthnRegistrationSchema>
 
-export interface MfaStatusResponse {
-  mfaEnabled: boolean
-  mfaMethod: MfaMethod | null
-  hasBackupCodes: boolean
-  backupCodesCount: number
-}
+/* Response schemas for `app/api/user/mfa/**` and `app/api/auth/mfa-verify`. */
 
-export interface MfaAvailabilityResponse {
-  success: boolean
-  availability: {
-    email: boolean
-    authenticator: boolean
-    security_key: boolean
-  }
-}
+/** `GET /api/user/mfa` (`mfaMethod` is a free-form DB column; unknown values read as null). */
+export const mfaStatusResponseSchema = z.object({
+  mfaEnabled: z.boolean(),
+  mfaMethod: mfaMethodSchema.nullable().catch(null),
+  hasBackupCodes: z.boolean(),
+  backupCodesCount: z.number(),
+})
+export type MfaStatusResponse = z.infer<typeof mfaStatusResponseSchema>
 
-export interface MfaSetupResponse {
-  success: boolean
-  message?: string
-  qrCode?: string
-  secret?: string
-  manualEntryKey?: string
-  requiresWebAuthn?: boolean
-}
+/** `GET /api/user/mfa/availability` */
+export const mfaAvailabilityResponseSchema = z.object({
+  success: z.boolean(),
+  availability: z.object({
+    email: z.boolean(),
+    authenticator: z.boolean(),
+    security_key: z.boolean(),
+  }),
+})
+export type MfaAvailabilityResponse = z.infer<typeof mfaAvailabilityResponseSchema>
 
-export interface MfaBackupCodesResponse {
-  backupCodes: string[]
-}
+/** `POST /api/user/mfa/setup` (fields depend on the method being set up). */
+export const mfaSetupResponseSchema = z.object({
+  success: z.boolean(),
+  message: z.string().optional(),
+  qrCode: z.string().optional(),
+  secret: z.string().optional(),
+  manualEntryKey: z.string().optional(),
+  requiresWebAuthn: z.boolean().optional(),
+})
+export type MfaSetupResponse = z.infer<typeof mfaSetupResponseSchema>
+
+/**
+ * `POST /api/user/mfa/verify`, `POST /api/user/mfa/webauthn/verify`,
+ * `POST /api/user/mfa/backup-codes` (all return fresh backup codes on success).
+ */
+export const mfaBackupCodesResponseSchema = z.object({
+  backupCodes: z.array(z.string()),
+})
+export type MfaBackupCodesResponse = z.infer<typeof mfaBackupCodesResponseSchema>
+
+/** `PATCH /api/user/mfa/method` */
+export const mfaMethodChangeResponseSchema = z.object({
+  success: z.boolean(),
+  message: z.string().optional(),
+  requiresRegistration: z.boolean().optional(),
+  qrCode: z.string().optional(),
+  secret: z.string().optional(),
+  manualEntryKey: z.string().optional(),
+})
+export type MfaMethodChangeResponse = z.infer<typeof mfaMethodChangeResponseSchema>
+
+/**
+ * `POST /api/user/mfa/webauthn/register`: `PublicKeyCredentialCreationOptionsJSON` from
+ * `@simplewebauthn/server` (only the fields the client uses are checked).
+ */
+export const webAuthnCreationOptionsSchema = z.object({
+  rp: z.object({ id: z.string().optional(), name: z.string() }),
+  user: z.object({ id: z.string(), name: z.string(), displayName: z.string() }),
+  challenge: z.string(),
+  pubKeyCredParams: z.array(z.object({ type: z.literal('public-key'), alg: z.number() })),
+  timeout: z.number().optional(),
+})
+
+/**
+ * `POST /api/user/mfa/webauthn/authenticate` (no credential in the body):
+ * `PublicKeyCredentialRequestOptionsJSON` from `@simplewebauthn/server`.
+ */
+export const webAuthnRequestOptionsSchema = z.object({
+  challenge: z.string(),
+  timeout: z.number().optional(),
+  rpId: z.string().optional(),
+  allowCredentials: z
+    .array(
+      z.object({
+        id: z.string(),
+        type: z.literal('public-key'),
+        transports: z.array(z.string()).optional(),
+      })
+    )
+    .optional(),
+  userVerification: z.enum(['required', 'preferred', 'discouraged']).optional(),
+})

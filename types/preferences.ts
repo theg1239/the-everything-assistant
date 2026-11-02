@@ -29,6 +29,9 @@ export const preferencesPatchSchema = z.object({
 
 export type PreferencesPatch = z.infer<typeof preferencesPatchSchema>
 
-export interface UserPreferencesResponse {
-  preferences: UserPreferences
-}
+/** `GET /api/user/preferences` */
+export const userPreferencesResponseSchema = z.object({
+  preferences: userPreferencesSchema,
+})
+
+export type UserPreferencesResponse = z.infer<typeof userPreferencesResponseSchema>

@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { RefreshCw, Search, Send } from 'lucide-react'
 import { toast } from 'sonner'
-import { readJson } from '@/lib/http'
+import { readApiMessage, readJson } from '@/lib/http'
+import { mgmtUsersResponseSchema, sendBriefingResponseSchema } from '@/types/api/mgmt'
 import { errorMessage, type MgmtUser } from '../types'
 import { useHydrationSafeField } from '@/lib/hydration-safe'
 
@@ -38,8 +39,7 @@ export default function UsersList({
       const offset = reset ? 0 : users.length
       const res = await fetch(`/api/users?limit=25&offset=${offset}`)
       if (!res.ok) throw new Error('failed')
-      const json = await readJson<{ users?: MgmtUser[] }>(res)
-      const items = json.users || []
+      const { users: items } = await readJson(res, mgmtUsersResponseSchema)
       setUsers(reset ? items : [...users, ...items])
       setHasMore(items.length === 25)
       setPage(reset ? 1 : page + 1)
@@ -56,20 +56,19 @@ export default function UsersList({
     }
     setSendingId(user.id ?? user.email ?? null)
     try {
-      const res = await fetch('/api/(mgmt)/hub/send-briefing', {
+      // Route groups like `(mgmt)` aren't part of the URL.
+      const res = await fetch('/api/hub/send-briefing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, email: user.email }),
       })
-      const json = await readJson<{
-        error?: string
-        briefing?: { scheduledAt?: string }
-      }>(res)
       if (!res.ok) {
-        throw new Error(json.error || 'failed to send briefing')
+        const { error } = await readApiMessage(res)
+        throw new Error(error || 'failed to send briefing')
       }
+      const json = await readJson(res, sendBriefingResponseSchema)
       toast.success(
-        json.briefing?.scheduledAt
+        json.briefing.scheduledAt
           ? `briefing scheduled for ${json.briefing.scheduledAt}`
           : 'briefing email sent'
       )

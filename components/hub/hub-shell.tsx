@@ -1,8 +1,9 @@
 'use client'
 
-import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
+import { useMemo, useEffect, useCallback, useRef, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
-import { formatDistanceToNow } from 'date-fns'
+import { formatDistance } from 'date-fns'
+import * as z from 'zod'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -68,9 +69,12 @@ import {
 } from '@/lib/hub/daily-briefing'
 import { toast } from 'sonner'
 import { HUB_BRIEFING_ACTION_EVENT } from '@/lib/hub/constants'
-import { readJson } from '@/lib/http'
+import { readApiMessage, readJson } from '@/lib/http'
 import type { HubToolArgs } from './types'
 import { asRecord, readRecords, readString, readText } from '@/components/narrow'
+
+/** Success body of `POST /api/hub/daily-briefing-email`. */
+const briefingEmailSentSchema = z.object({ ok: z.literal(true) })
 
 const isHubCommand = (value: unknown): value is HubVTOPCommand =>
   HUB_COMMANDS.some(command => command === value)
@@ -174,7 +178,8 @@ export default function HubShell({
   const pendingBriefingResetRef = useRef(false)
   const manualBriefingRef = useRef(false)
   const capabilities = useMemo(() => listHubCapabilities(), [])
-  const nowTick = useNow(60000)
+  // `undefined` on the server and during hydration; time-dependent output waits for it.
+  const nowTick = useNow()
   const snapshotMap = useMemo(() => {
     const map = new Map<string, PersonalHubSnapshot>()
     hubState.snapshots.forEach(snapshot => {
@@ -426,7 +431,9 @@ export default function HubShell({
   }, [hubState.snapshots])
 
   const lastSyncedLabel = hubState.lastSyncedAt
-    ? formatDistanceToNow(new Date(hubState.lastSyncedAt), { addSuffix: true })
+    ? nowTick === undefined
+      ? '…'
+      : formatDistance(new Date(hubState.lastSyncedAt), nowTick, { addSuffix: true })
     : 'never'
 
   const profileSnapshot = useMemo(
@@ -508,19 +515,14 @@ export default function HubShell({
           body: JSON.stringify(payload),
         })
         if (!response.ok) {
-          let responseBody: { error?: string } | null = null
-          try {
-            responseBody = await readJson<{ error?: string }>(response)
-          } catch {
-            responseBody = null
-          }
-          throw new Error(responseBody?.error || `status ${response.status}`)
+          const { error } = await readApiMessage(response)
+          throw new Error(error || `status ${response.status}`)
         } else {
           // consume body to keep connection clean if server returns payload
           try {
-            await readJson<Record<string, unknown>>(response)
+            await readJson(response, briefingEmailSentSchema)
           } catch {
-            // ignore non-JSON success payloads
+            // ignore non-JSON / unexpected success payloads
           }
         }
         if (scheduleToken) {
@@ -929,11 +931,11 @@ export default function HubShell({
   )
 
   const nextClassInsight = useMemo(
-    () => deriveNextClassInsight(timetableSnapshot, nowTick),
+    () => (nowTick === undefined ? null : deriveNextClassInsight(timetableSnapshot, nowTick)),
     [timetableSnapshot, nowTick]
   )
   const assignmentsInsight = useMemo(
-    () => deriveAssignmentInsight(assignmentsSnapshot, nowTick),
+    () => (nowTick === undefined ? null : deriveAssignmentInsight(assignmentsSnapshot, nowTick)),
     [assignmentsSnapshot, nowTick]
   )
   const attendanceInsight = useMemo(
@@ -942,7 +944,7 @@ export default function HubShell({
   )
   const leaveInsight = useMemo(() => deriveLeaveInsight(leaveSnapshot), [leaveSnapshot])
   const examInsight = useMemo(
-    () => deriveExamInsight(examsSnapshot, nowTick),
+    () => (nowTick === undefined ? null : deriveExamInsight(examsSnapshot, nowTick)),
     [examsSnapshot, nowTick]
   )
   const attendanceRisks = useMemo(() => {
@@ -963,7 +965,8 @@ export default function HubShell({
       .slice(0, 3)
   }, [attendanceSnapshot])
   const assignmentSubjects = useMemo(() => {
-    const now = nowTick ? new Date(nowTick) : new Date()
+    if (nowTick === undefined) return []
+    const now = new Date(nowTick)
     const subjects = normalizeAssignments(assignmentsSnapshot, now).sort((a, b) => {
       if (a.dueDate && b.dueDate) return a.dueDate.getTime() - b.dueDate.getTime()
       if (a.dueDate) return -1
@@ -973,7 +976,7 @@ export default function HubShell({
     return subjects.slice(0, 3).map(subject => ({
       ...subject,
       displayDue: subject.dueDate
-        ? `${formatShortDate(subject.dueDate)} (${formatDistanceToNow(subject.dueDate, { addSuffix: true })})`
+        ? `${formatShortDate(subject.dueDate)} (${formatDistance(subject.dueDate, now, { addSuffix: true })})`
         : subject.nextDue,
     }))
   }, [assignmentsSnapshot, nowTick])
@@ -988,17 +991,19 @@ export default function HubShell({
   const daCapability = useMemo(() => capabilities.find(cap => cap.command === 'da'), [capabilities])
   const notifications = useMemo(
     () =>
-      deriveNotifications(
-        {
-          attendanceSnapshot,
-          assignmentsSnapshot,
-          leaveSnapshot,
-          examsSnapshot,
-          librarySnapshot,
-          gradesSnapshot,
-        },
-        nowTick
-      ),
+      nowTick === undefined
+        ? []
+        : deriveNotifications(
+            {
+              attendanceSnapshot,
+              assignmentsSnapshot,
+              leaveSnapshot,
+              examsSnapshot,
+              librarySnapshot,
+              gradesSnapshot,
+            },
+            nowTick
+          ),
     [
       attendanceSnapshot,
       assignmentsSnapshot,
@@ -1174,6 +1179,7 @@ export default function HubShell({
               <SnapshotGlance
                 key={snapshot.command}
                 snapshot={snapshot}
+                now={nowTick}
                 onOpen={openSnapshot}
                 minimal
               />
@@ -1232,7 +1238,8 @@ export default function HubShell({
           <DailyBriefingOverlay
             mode={overlayMode || (linked ? 'briefing' : 'onboarding')}
             greeting={
-              dailyGreeting || buildGreeting(nowTick ? new Date(nowTick) : new Date(), terseName)
+              dailyGreeting ||
+              (nowTick === undefined ? '' : buildGreeting(new Date(nowTick), terseName))
             }
             messages={dailyMessages}
             revealedCount={dailyRevealedCount}
@@ -1383,13 +1390,14 @@ function TimetablePeek({
 }: {
   snapshot: PersonalHubSnapshot
   onOpen?: () => void
-  now?: number
+  /** Current time; `undefined` before hydration, when only the static timetable is shown. */
+  now: number | undefined
 }) {
   const data = asRecord(snapshot.structured_data)
   const classes = readRecords(data?.classes).map(toTimetableClass)
   if (!classes.length) return null
-  const reference = now ? new Date(now) : new Date()
-  const rolling: NextClassComputation = computeDynamicNextClass(snapshot.structured_data, reference)
+  const rolling: NextClassComputation =
+    now === undefined ? null : computeDynamicNextClass(snapshot.structured_data, new Date(now))
   const rollingClass = asRecord(rolling?.classInfo)
   const nextClass = asRecord(data?.nextClass)
   const highlight = rollingClass
@@ -1434,7 +1442,9 @@ function TimetablePeek({
           <div className="text-[11px] text-white/60">
             {[
               highlight.day,
-              rolling?.startsAt ? formatDistanceToNow(rolling.startsAt, { addSuffix: true }) : null,
+              rolling?.startsAt && now !== undefined
+                ? formatDistance(rolling.startsAt, now, { addSuffix: true })
+                : null,
               highlight.venue,
             ]
               .filter(Boolean)
@@ -1523,17 +1533,21 @@ function SnapshotCard({
 
 function SnapshotGlance({
   snapshot,
+  now,
   onOpen,
   minimal = false,
 }: {
   snapshot: PersonalHubSnapshot
+  /** Current time; `undefined` before hydration. */
+  now: number | undefined
   onOpen: (snapshot: PersonalHubSnapshot) => void
   minimal?: boolean
 }) {
   const icon = isHubCommand(snapshot.command) ? SNAPSHOT_ICONS[snapshot.command] : undefined
   const summary =
     snapshot.summary?.split('\n').filter(Boolean).slice(0, 2).join(' ') || 'view details'
-  const updatedLabel = formatDistanceToNow(new Date(snapshot.fetchedAt), { addSuffix: true })
+  const updatedLabel =
+    now === undefined ? '…' : formatDistance(new Date(snapshot.fetchedAt), now, { addSuffix: true })
 
   return (
     <HubSurface className="space-y-2">
@@ -1616,13 +1630,38 @@ function isCredentialError(error: unknown) {
   return lower.includes('credential') || lower.includes('login')
 }
 
-function useNow(intervalMs = 60000) {
-  const [now, setNow] = useState(() => Date.now())
+/*
+ * Minute clock shared by every `useNow()` caller. The server snapshot is `undefined`, so the
+ * server render and the hydration render agree (server time ≠ client time); the client value
+ * takes over right after hydration, and immediately for components mounted on the client.
+ */
+const CLOCK_INTERVAL_MS = 60_000
+let clockNow: number | undefined
+let clockTimer: ReturnType<typeof setInterval> | undefined
+const clockListeners = new Set<() => void>()
 
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), intervalMs)
-    return () => clearInterval(id)
-  }, [intervalMs])
+function subscribeClock(onChange: () => void) {
+  clockListeners.add(onChange)
+  if (clockTimer === undefined) {
+    clockTimer = setInterval(() => {
+      clockNow = Date.now()
+      clockListeners.forEach(listener => listener())
+    }, CLOCK_INTERVAL_MS)
+  }
+  return () => {
+    clockListeners.delete(onChange)
+    if (clockListeners.size === 0) {
+      clearInterval(clockTimer)
+      clockTimer = undefined
+      // Next mount starts from a fresh reading rather than the last tick.
+      clockNow = undefined
+    }
+  }
+}
 
-  return now
+const getClockSnapshot = () => (clockNow ??= Date.now())
+const getServerClockSnapshot = (): number | undefined => undefined
+
+function useNow(): number | undefined {
+  return useSyncExternalStore(subscribeClock, getClockSnapshot, getServerClockSnapshot)
 }

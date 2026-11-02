@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  push:
+    branches: [staging, prod]
+  pull_request:
+
+# A newer push to the same branch/PR supersedes the in-flight run.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  app:
+    name: App (typecheck, test, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Dummy values only. `prisma generate` requires DATABASE_URL (prisma.config.ts reads it
+      # with env()); nothing listens on this port in CI, so the one build-time query
+      # (/updates prerender) fails fast and the page falls back to an empty list.
+      # `next build` needs no other env vars: OpenAI/Redis/R2/SMTP/auth are all read lazily.
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
+    steps:
+      - uses: actions/checkout@v7
+
+      # No `version`: pnpm/action-setup reads `packageManager` from package.json.
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm exec prisma generate
+
+      - name: Typecheck
+        run: pnpm exec tsc --noEmit -p .
+
+      - name: Unit tests
+        run: pnpm test
+
+      - uses: actions/cache@v6
+        with:
+          path: .next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+            next-${{ runner.os }}-
+
+      # Not `pnpm build`: that also runs scripts/sync-rag-vercel.ts, which talks to OpenAI/the DB.
+      - name: Build
+        run: pnpm exec next build
+
+  services:
+    name: Service ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: papers
+            check: npx tsc --noEmit && npx next build
+          - service: discord
+            check: npm run build
+          # Runs on Bun in production, but typechecking only needs @types/bun, not the runtime.
+          - service: codex-proxy
+            check: npx tsc --noEmit
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
+    env:
+      # Dummy values only. services/papers/src/db/index.ts throws at import time without
+      # PAPERS_DATABASE_URL, which breaks page-data collection for /api/papers.
+      PAPERS_DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
+      CLOUDINARY_CLOUD_NAME: ci
+      CLOUDINARY_API_KEY: ci
+      CLOUDINARY_API_SECRET: ci
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: services/${{ matrix.service }}/package-lock.json
+
+      - run: npm ci --no-audit --no-fund
+
+      - run: ${{ matrix.check }}
+
+  services-syntax:
+    name: Service JS syntax (deep-search, proxy-service, wa-bot)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+
+      # `node --check` only parses, so no dependency install is needed (wa-bot's
+      # puppeteer download is never triggered).
+      - name: node --check
+        run: |
+          set -euo pipefail
+          status=0
+          count=0
+          while IFS= read -r -d '' file; do
+            count=$((count + 1))
+            if ! node --check "$file"; then
+              echo "::error file=$file::syntax check failed"
+              status=1
+            fi
+          done < <(git ls-files -z -- \
+            'services/deep-search/*.js' 'services/deep-search/*.mjs' 'services/deep-search/*.cjs' \
+            'services/proxy-service/*.js' 'services/proxy-service/*.mjs' 'services/proxy-service/*.cjs' \
+            'services/wa-bot/*.js' 'services/wa-bot/*.mjs' 'services/wa-bot/*.cjs')
+          echo "Checked $count files"
+          if [ "$count" -eq 0 ]; then
+            echo "::error::no service JS files found"
+            exit 1
+          fi
+          exit "$status"

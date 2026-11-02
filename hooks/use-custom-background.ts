@@ -1,8 +1,17 @@
 'use client'
 
 import { useCallback } from 'react'
-import type { BackgroundType, BackgroundConfig } from '@/components/backgrounds/custom-background'
+import type {
+  BackgroundType,
+  BackgroundConfig,
+  BackgroundToggleDetail,
+} from '@/components/backgrounds/custom-background'
 
+/**
+ * Persists background changes and broadcasts them to `CustomBackground` (via the `backgroundToggle`
+ * window event). Pass only the fields that change; the server and the listener both merge them
+ * into the existing config.
+ */
 export function useCustomBackground() {
   const updateBackgroundConfig = useCallback(async (config: Partial<BackgroundConfig>) => {
     try {
@@ -18,9 +27,7 @@ export function useCustomBackground() {
 
       if (response.ok) {
         window.dispatchEvent(
-          new CustomEvent('backgroundToggle', {
-            detail: { config },
-          })
+          new CustomEvent<BackgroundToggleDetail>('backgroundToggle', { detail: { config } })
         )
         return true
       }

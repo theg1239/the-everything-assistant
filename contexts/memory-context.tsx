@@ -5,6 +5,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
 import { useMemories } from '@/hooks/use-memories'
 import type { MemorySettings, MemoryWithId } from '@/hooks/use-memories'
+import { readJson } from '@/lib/http'
+import { memorySettingsResponseSchema } from '@/types/api/memory'
 
 interface MemoryContextType {
   memories: MemoryWithId[]
@@ -45,7 +47,7 @@ function useLazyMemorySettings(enabled: boolean) {
       if (!response.ok) {
         throw new Error('Failed to fetch memory settings')
       }
-      return response.json()
+      return readJson(response, memorySettingsResponseSchema)
     },
     enabled,
     staleTime: 1000 * 60 * 10,
@@ -82,13 +84,13 @@ export function MemoryProvider({ children }: { children: ReactNode }) {
     refetch: refetchSettings,
   } = useLazyMemorySettings(enabled)
 
-  const memories = memoriesData?.data || []
+  const memories = memoriesData ?? []
   const isLoading = isMemoriesLoading || isSettingsLoading
   const error = memoriesError || settingsError
 
   const isMemoryEnabled = settingsData?.isEnabled ?? true
   const autoSave = settingsData?.autoSave ?? true
-  const autoSaveFilter = (settingsData?.autoSaveFilter as 'low' | 'medium' | 'high') ?? 'medium'
+  const autoSaveFilter = settingsData?.autoSaveFilter ?? 'medium'
 
   const refreshMemories = async () => {
     await refetchMemories()

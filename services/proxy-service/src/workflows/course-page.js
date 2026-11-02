@@ -4,6 +4,7 @@ const { spawn } = require('child_process')
 const { randomUUID } = require('crypto')
 const { BINARY_PATH, CLI_TIMEOUT } = require('../config')
 const { cleanVTOPOutput } = require('../utils/text')
+const { trackChild } = require('../child-processes')
 
 function resolveSemesterQuery(semesterQuery, semesterOptions) {
   if (!semesterQuery || !semesterOptions || semesterOptions.length === 0) {
@@ -673,10 +674,12 @@ async function executeInteractiveCoursePageWorkflow(username, password, step, fl
       })
     }
 
-    const child = spawn(BINARY_PATH, cliArgs, {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      cwd: __dirname,
-    })
+    const child = trackChild(
+      spawn(BINARY_PATH, cliArgs, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        cwd: __dirname,
+      })
+    )
     let stdout = ''
     let stderr = ''
     let currentOutput = ''

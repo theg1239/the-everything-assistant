@@ -4,8 +4,12 @@ import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useSession } from 'next-auth/react'
 import { usePathname } from 'next/navigation'
+import * as z from 'zod'
 import { readJson } from '@/lib/http'
-import type { UserPreferencesResponse } from '@/types/preferences'
+import { userPreferencesSchema } from '@/types/preferences'
+
+/** `GET /api/user/preferences` */
+const preferencesResponseSchema = z.object({ preferences: userPreferencesSchema })
 
 const Aurora = dynamic(() => import('@/components/backgrounds/aurora'), {
   ssr: false,
@@ -258,6 +262,19 @@ const defaultBackgroundConfig = {
 
 type StoredBackgroundConfig = Partial<Omit<BackgroundConfig, 'type'>> & { type?: string }
 
+/**
+ * `backgroundToggle` event detail (dispatched by hooks/use-custom-background). `config` holds
+ * only the fields that changed; they're merged over the current config.
+ */
+export type BackgroundToggleDetail = { config: Partial<BackgroundConfig> }
+
+declare global {
+  interface WindowEventMap {
+    backgroundToggle: CustomEvent<BackgroundToggleDetail>
+    auroraToggle: CustomEvent<{ enabled: boolean }>
+  }
+}
+
 const isBackgroundType = (value: unknown): value is BackgroundType =>
   BACKGROUND_TYPES.some(type => type === value)
 
@@ -299,15 +316,16 @@ export default function CustomBackground() {
         try {
           const response = await fetch('/api/user/preferences')
           if (response.ok) {
-            const data = await readJson<UserPreferencesResponse>(response)
-            const prefs = data.preferences
+            const { preferences: prefs } = await readJson(response, preferencesResponseSchema)
 
-            if (prefs.auroraBackground !== undefined) {
+            // `backgroundConfig` is the current setting (the route derives it from the legacy
+            // `auroraBackground` flag when none is stored); the flag alone is the fallback.
+            if (prefs.backgroundConfig) {
+              setBackgroundConfig(normalizeBackgroundConfig(prefs.backgroundConfig))
+            } else if (prefs.auroraBackground !== undefined) {
               setBackgroundConfig(
                 normalizeBackgroundConfig({ type: 'aurora', enabled: prefs.auroraBackground })
               )
-            } else if (prefs.backgroundConfig) {
-              setBackgroundConfig(normalizeBackgroundConfig(prefs.backgroundConfig))
             } else {
               setBackgroundConfig(normalizeBackgroundConfig())
             }
@@ -325,11 +343,19 @@ export default function CustomBackground() {
   }, [session?.user?.email, status, isLoginPage])
 
   useEffect(() => {
-    const handleBackgroundToggle = (event: CustomEvent<{ config: BackgroundConfig }>) => {
-      setBackgroundConfig(event.detail.config)
+    // Updates are partial (e.g. `{ enabled }` from a toggle): merge them so the selected
+    // type and its settings survive.
+    const handleBackgroundToggle = (event: WindowEventMap['backgroundToggle']) => {
+      const { config } = event.detail
+      setBackgroundConfig(prev => ({
+        ...prev,
+        ...config,
+        type: config.type ?? prev.type,
+        enabled: config.enabled ?? prev.enabled,
+      }))
     }
 
-    const handleAuroraToggle = (event: CustomEvent<{ enabled: boolean }>) => {
+    const handleAuroraToggle = (event: WindowEventMap['auroraToggle']) => {
       setBackgroundConfig(prev => ({
         ...prev,
         type: 'aurora',
@@ -337,13 +363,12 @@ export default function CustomBackground() {
       }))
     }
 
-    // Window events are untyped; these details are produced by hooks/use-custom-background.
-    window.addEventListener('backgroundToggle', handleBackgroundToggle as EventListener)
-    window.addEventListener('auroraToggle', handleAuroraToggle as EventListener)
+    window.addEventListener('backgroundToggle', handleBackgroundToggle)
+    window.addEventListener('auroraToggle', handleAuroraToggle)
 
     return () => {
-      window.removeEventListener('backgroundToggle', handleBackgroundToggle as EventListener)
-      window.removeEventListener('auroraToggle', handleAuroraToggle as EventListener)
+      window.removeEventListener('backgroundToggle', handleBackgroundToggle)
+      window.removeEventListener('auroraToggle', handleAuroraToggle)
     }
   }, [])
 

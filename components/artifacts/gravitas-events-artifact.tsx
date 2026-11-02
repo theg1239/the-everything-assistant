@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useSyncExternalStore } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -162,7 +162,27 @@ const parseGravitasEventsData = (value: unknown): GravitasEventsData => {
   }
 }
 
-const formatDate = (dateString: unknown) => {
+const subscribeNoop = () => () => {}
+
+/** False during SSR and hydration, true afterwards (and immediately for client-only mounts). */
+const useIsHydrated = () =>
+  useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false
+  )
+
+/**
+ * Event times are shown in the viewer's time zone, which the server doesn't know. Until
+ * hydration they're formatted in IST (Gravitas is held at VIT), so the server HTML and the
+ * hydration render agree; IST viewers see no change afterwards.
+ */
+const PRE_HYDRATION_TIME_ZONE = 'Asia/Kolkata'
+
+/** The `timeZone` option for date formatting: the viewer's zone once hydrated. */
+const useDisplayTimeZone = () => (useIsHydrated() ? undefined : PRE_HYDRATION_TIME_ZONE)
+
+const formatDate = (dateString: unknown, timeZone: string | undefined) => {
   try {
     const date = toDate(dateString)
     return date.toLocaleDateString('en-US', {
@@ -170,22 +190,25 @@ const formatDate = (dateString: unknown) => {
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      timeZone,
     })
   } catch {
     return String(dateString)
   }
 }
 
-const formatDateRange = (startDate: unknown, endDate: unknown) => {
+const formatDateRange = (startDate: unknown, endDate: unknown, timeZone: string | undefined) => {
   try {
     const start = toDate(startDate)
     const end = toDate(endDate)
-    const isSameDay = start.toDateString() === end.toDateString()
+    // Calendar day (YYYY-MM-DD) in the display zone.
+    const dayKey = (date: Date) => date.toLocaleDateString('en-CA', { timeZone })
+    const isSameDay = dayKey(start) === dayKey(end)
 
     if (isSameDay) {
-      return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • ${start.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`
+      return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone })} • ${start.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone })} - ${end.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone })}`
     } else {
-      return `${formatDate(startDate)} - ${formatDate(endDate)}`
+      return `${formatDate(startDate, timeZone)} - ${formatDate(endDate, timeZone)}`
     }
   } catch {
     return `${String(startDate)} - ${String(endDate)}`
@@ -199,6 +222,7 @@ const EventCard: React.FC<{
   onExpandChange?: (expanded: boolean) => void
 }> = ({ event, detailed = false, slots = [], onExpandChange }) => {
   const [expanded, setExpanded] = useState(false)
+  const timeZone = useDisplayTimeZone()
 
   const getCategoryColor = (category: string) => {
     switch (category.toLowerCase()) {
@@ -265,7 +289,7 @@ const EventCard: React.FC<{
             <div className="flex items-start gap-2 min-w-0">
               <Calendar className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
               <span className="break-words leading-relaxed">
-                {formatDateRange(event.startDate, event.endDate)}
+                {formatDateRange(event.startDate, event.endDate, timeZone)}
               </span>
             </div>
 
@@ -448,6 +472,7 @@ const EventCard: React.FC<{
 }
 
 const SeatsInfo: React.FC<{ seats: SeatsSummary | undefined }> = ({ seats }) => {
+  const timeZone = useDisplayTimeZone()
   if (!seats) return null
 
   return (
@@ -497,7 +522,7 @@ const SeatsInfo: React.FC<{ seats: SeatsSummary | undefined }> = ({ seats }) => 
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm break-words">{asText(slot.venue)}</div>
                       <div className="text-xs text-muted-foreground break-words">
-                        {formatDateRange(slot.startDate, slot.endDate)}
+                        {formatDateRange(slot.startDate, slot.endDate, timeZone)}
                       </div>
                     </div>
                     <div className="flex items-center justify-between md:flex-col md:items-end gap-2">
@@ -724,31 +749,6 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data: r
     }
   }
 
-  if (events.length === 0) {
-    return (
-      <Card>
-        <CardContent className="p-6 text-center">
-          <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-semibold mb-2">No Events Found</h3>
-          <p className="text-muted-foreground">
-            {data.message || 'No Gravitas events available at the moment.'}
-          </p>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  useEffect(() => {
-    if (events.length === 1) {
-      const id = events[0]?.id ?? ''
-      const existing = slotsByEventId.get(id) || []
-      if (existing.length === 0) {
-        void fetchEventSeats(id)
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [events, slotsByEventId])
-
   const fetchEventSeats = async (eventId: string) => {
     if (!eventId || loadingEventSeats[eventId] || seatsByEvent[eventId]) return
     setLoadingEventSeats(prev => ({ ...prev, [eventId]: true }))
@@ -797,6 +797,31 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data: r
     } finally {
       setLoadingEventSeats(prev => ({ ...prev, [eventId]: false }))
     }
+  }
+
+  useEffect(() => {
+    if (events.length === 1) {
+      const id = events[0]?.id ?? ''
+      const existing = slotsByEventId.get(id) || []
+      if (existing.length === 0) {
+        void fetchEventSeats(id)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [events, slotsByEventId])
+
+  if (events.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center">
+          <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-lg font-semibold mb-2">No Events Found</h3>
+          <p className="text-muted-foreground">
+            {data.message || 'No Gravitas events available at the moment.'}
+          </p>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (

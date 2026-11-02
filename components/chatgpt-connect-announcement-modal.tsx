@@ -6,29 +6,19 @@ import { Copy, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { readJson } from '@/lib/http'
+import type * as z from 'zod'
+import { readApiMessage, readJson } from '@/lib/http'
 import { errorMessage } from '@/components/narrow'
 import { CHATGPT_CONNECT_ANNOUNCEMENT_SEEN_KEY } from '@/components/chatgpt-connect-announcement-storage'
+import {
+  chatgptLoginStartSchema,
+  chatgptStatusSchema,
+  type ChatgptLoginStartResult,
+  type ChatgptStatus,
+} from '@/types/api/chatgpt'
 
 const AUTO_DISMISS_DURATION = 9000
 const STORAGE_KEY = CHATGPT_CONNECT_ANNOUNCEMENT_SEEN_KEY
-
-interface ChatgptStatusResponse {
-  available: boolean
-  connected: boolean
-  pendingLoginId?: string | null
-  lastLoginError?: string | null
-  error?: string
-}
-
-interface ChatgptLoginStartResponse {
-  authUrl: string | null
-  loginId?: string | null
-  deviceCode?: string | null
-  loginMethod?: 'browser' | 'device'
-  verificationUrl?: string | null
-  error?: string
-}
 
 interface ChatgptConnectAnnouncementModalProps {
   enabled: boolean
@@ -41,25 +31,26 @@ interface ChatgptDeviceFlowState {
 }
 
 /** POSTs to a ChatGPT auth endpoint; throws with the server's error message on failure. */
-async function postChatgptAuth<T extends { error?: string }>(
+async function postChatgptAuth<S extends z.ZodType>(
   url: string,
   init: RequestInit,
+  schema: S,
   fallbackError: string
-): Promise<T> {
+): Promise<z.infer<S>> {
   const response = await fetch(url, { method: 'POST', ...init })
-  const data = await readJson<T>(response)
   if (!response.ok) {
-    throw new Error(data?.error || fallbackError)
+    const { error } = await readApiMessage(response)
+    throw new Error(error || fallbackError)
   }
-  return data
+  return readJson(response, schema)
 }
 
-/** Current ChatGPT connection status; null on network/HTTP failure. */
-async function readChatgptStatus(): Promise<ChatgptStatusResponse | null> {
+/** Current ChatGPT connection status; null on network/HTTP/shape failure. */
+async function readChatgptStatus(): Promise<ChatgptStatus | null> {
   try {
     const response = await fetch('/api/auth/chatgpt/status', { cache: 'no-store' })
-    const data = await readJson<ChatgptStatusResponse>(response)
-    return response.ok ? data : null
+    if (!response.ok) return null
+    return await readJson(response, chatgptStatusSchema)
   } catch {
     return null
   }
@@ -114,7 +105,7 @@ export function ChatgptConnectAnnouncementModal({ enabled }: ChatgptConnectAnnou
     await openOrCopyLoginUrl(verificationUrl)
   }, [chatgptDeviceFlow])
 
-  const fetchChatgptStatus = useCallback(async (): Promise<ChatgptStatusResponse | null> => {
+  const fetchChatgptStatus = useCallback(async (): Promise<ChatgptStatus | null> => {
     const data = await readChatgptStatus()
     if (!data) return null
 
@@ -135,11 +126,12 @@ export function ChatgptConnectAnnouncementModal({ enabled }: ChatgptConnectAnnou
   const handleStartChatgptLogin = useCallback(async () => {
     setStartingChatgptLogin(true)
     setChatgptLoginError(null)
-    let data: ChatgptLoginStartResponse
+    let data: ChatgptLoginStartResult
     try {
-      data = await postChatgptAuth<ChatgptLoginStartResponse>(
+      data = await postChatgptAuth(
         '/api/auth/chatgpt/start',
         {},
+        chatgptLoginStartSchema,
         'Unable to start ChatGPT login'
       )
     } catch (error) {
@@ -174,7 +166,7 @@ export function ChatgptConnectAnnouncementModal({ enabled }: ChatgptConnectAnnou
     if (!pendingLoginId) return
     setCancelingChatgptLogin(true)
     try {
-      await postChatgptAuth<ChatgptStatusResponse>(
+      await postChatgptAuth(
         '/api/auth/chatgpt/cancel',
         {
           headers: { 'Content-Type': 'application/json' },
@@ -182,6 +174,7 @@ export function ChatgptConnectAnnouncementModal({ enabled }: ChatgptConnectAnnou
             loginId: pendingLoginId,
           }),
         },
+        chatgptStatusSchema,
         'Unable to cancel ChatGPT login'
       )
       setPendingLoginId(null)

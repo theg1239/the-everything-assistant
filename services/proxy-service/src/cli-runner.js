@@ -4,6 +4,7 @@ const { COMMAND_MAPPING, INTERACTIVE_COMMANDS, BINARY_PATH, CLI_TIMEOUT } = requ
 const { cleanVTOPOutput } = require('./utils/text')
 const { sanitizeErrorForResponse } = require('./utils/errors')
 const { record } = require('./metrics')
+const { trackChild } = require('./child-processes')
 
 const VERBOSE_LOG =
   process.env.PROXY_VERBOSE_LOGS === '1' ||
@@ -95,7 +96,7 @@ function runCommand(username, password, command, flags = {}) {
       return executeInteractiveCommand({ mappedCommand, cliArgs, username, flags, resolve, reject })
     }
 
-    execFile(BINARY_PATH, cliArgs, options, (err, stdout, stderr) => {
+    const child = execFile(BINARY_PATH, cliArgs, options, (err, stdout, stderr) => {
       if (VERBOSE_LOG) {
         console.log('[cli-runner] completed (non-interactive)', {
           command: mappedCommand,
@@ -131,6 +132,7 @@ function runCommand(username, password, command, flags = {}) {
         })
       }
     })
+    trackChild(child)
   })
 }
 
@@ -155,11 +157,13 @@ function executeInteractiveCommand({ mappedCommand, cliArgs, username, flags, re
     })
   }
 
-  const child = spawn(BINARY_PATH, cliArgs, {
-    timeout: CLI_TIMEOUT,
-    cwd: __dirname + '/..',
-    stdio: ['pipe', 'pipe', 'pipe'],
-  })
+  const child = trackChild(
+    spawn(BINARY_PATH, cliArgs, {
+      timeout: CLI_TIMEOUT,
+      cwd: __dirname + '/..',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+  )
 
   let stdout = ''
   let stderr = ''

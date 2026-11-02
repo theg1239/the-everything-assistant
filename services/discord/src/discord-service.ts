@@ -1,5 +1,6 @@
 import {
   Client,
+  Events,
   GatewayIntentBits,
   Message,
   MessageFlags,
@@ -68,9 +69,15 @@ interface ChannelHistoryMessage {
 type DiscordServiceEvents = {
   ready: []
   error: [error: Error]
+  /** Emitted once the service has given up re-logging in after an unrecoverable gateway loss. */
   disconnected: []
   ask: [request: AskRequest]
 }
+
+/** Backoff for manual re-login after a disconnect discord.js will not recover from by itself. */
+const RECONNECT_BASE_DELAY_MS = 5_000
+const RECONNECT_MAX_DELAY_MS = 5 * 60_000
+const RECONNECT_MAX_ATTEMPTS = 10
 
 type SlashCommand = SlashCommandBuilder | SlashCommandOptionsOnlyBuilder
 
@@ -94,20 +101,18 @@ class DiscordService extends EventEmitter<DiscordServiceEvents> {
 
   private slashCommands: Collection<string, SlashCommand>
 
+  private contextCleanupTimer: NodeJS.Timeout | null = null
+  private reconnectTimer: NodeJS.Timeout | null = null
+  private reconnectInFlight = false
+  private reconnectAttempts = 0
+  private shuttingDown = false
+
   constructor(token: string, ownerId: string) {
     super()
     this.botToken = token
     this.botOwnerID = ownerId
 
-    this.client = new Client({
-      intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.DirectMessages,
-        GatewayIntentBits.GuildMembers,
-      ],
-    })
+    this.client = this.createClient()
 
     this.rest = new REST({ version: '10' }).setToken(token)
     this.slashCommands = new Collection()
@@ -122,7 +127,25 @@ class DiscordService extends EventEmitter<DiscordServiceEvents> {
     this.recentBotMessages = new Set()
 
     this.setupSlashCommands()
-    this.setupEventHandlers()
+  }
+
+  /**
+   * Builds a Client with all handlers attached. A destroyed discord.js Client cannot be reliably
+   * logged in again (its WebSocketManager stays flagged as destroyed), so manual re-login always
+   * swaps in a fresh Client.
+   */
+  private createClient(): Client {
+    const client = new Client({
+      intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.DirectMessages,
+        GatewayIntentBits.GuildMembers,
+      ],
+    })
+    this.setupEventHandlers(client)
+    return client
   }
 
   private setupSlashCommands(): void {
@@ -169,10 +192,15 @@ class DiscordService extends EventEmitter<DiscordServiceEvents> {
     }
   }
 
-  private setupEventHandlers(): void {
-    this.client.on('clientReady', async () => {
-      console.log(`discord bot logged in as ${this.client.user?.tag}`)
+  private setupEventHandlers(client: Client): void {
+    // Lifecycle events from a Client that has since been replaced (during re-login) are ignored.
+    const isCurrent = (): boolean => client === this.client
+
+    client.on(Events.ClientReady, async readyClient => {
+      if (!isCurrent()) return
+      console.log(`discord bot logged in as ${readyClient.user.tag}`)
       this.isReady = true
+      this.reconnectAttempts = 0
       this.startContextCleanup()
 
       await this.registerSlashCommands()
@@ -180,13 +208,57 @@ class DiscordService extends EventEmitter<DiscordServiceEvents> {
       this.emit('ready')
     })
 
-    this.client.on('guildCreate', async (guild: Guild) => {
+    // discord.js 14 has no client-level 'disconnect' event. Gateway lifecycle is reported per shard,
+    // and discord.js resumes / re-identifies on its own for every recoverable close.
+    client.on(Events.ShardReconnecting, shardId => {
+      if (!isCurrent()) return
+      console.log(`discord shard ${shardId} disconnected; discord.js is reconnecting`)
+      this.isReady = false
+    })
+
+    client.on(Events.ShardResume, (shardId, replayedEvents) => {
+      if (!isCurrent()) return
+      console.log(`discord shard ${shardId} resumed (${replayedEvents} events replayed)`)
+      this.isReady = true
+    })
+
+    client.on(Events.ShardReady, shardId => {
+      if (!isCurrent()) return
+      console.log(`discord shard ${shardId} ready`)
+      this.isReady = true
+    })
+
+    client.on(Events.ShardError, (error, shardId) => {
+      if (!isCurrent()) return
+      console.error(`discord shard ${shardId} websocket error:`, error)
+    })
+
+    // Only emitted for unrecoverable close codes (auth failed, invalid/disallowed intents, invalid
+    // shard, sharding required, invalid API version); discord.js will not reconnect this shard.
+    client.on(Events.ShardDisconnect, (closeEvent, shardId) => {
+      if (!isCurrent()) return
+      console.error(
+        `discord shard ${shardId} disconnected with unrecoverable close code ${closeEvent.code}`
+      )
+      this.isReady = false
+      this.scheduleReconnect(`shard ${shardId} closed with code ${closeEvent.code}`)
+    })
+
+    // Declared by discord.js 14 but not currently emitted; handled in case a future 14.x restores it.
+    client.on(Events.Invalidated, () => {
+      if (!isCurrent()) return
+      console.error('discord session invalidated')
+      this.isReady = false
+      this.scheduleReconnect('session invalidated')
+    })
+
+    client.on(Events.GuildCreate, async (guild: Guild) => {
       console.log(`joined new server: ${guild.name} (${guild.id})`)
 
       await this.registerSlashCommands(guild.id)
     })
 
-    this.client.on('interactionCreate', async interaction => {
+    client.on(Events.InteractionCreate, async interaction => {
       if (!interaction.isChatInputCommand()) return
 
       try {
@@ -204,7 +276,7 @@ class DiscordService extends EventEmitter<DiscordServiceEvents> {
       }
     })
 
-    this.client.on('messageCreate', async (message: Message) => {
+    client.on(Events.MessageCreate, async (message: Message) => {
       if (!this.isReady) return
 
       try {
@@ -214,16 +286,71 @@ class DiscordService extends EventEmitter<DiscordServiceEvents> {
       }
     })
 
-    this.client.on('error', error => {
+    client.on(Events.Error, error => {
       console.error('discord client error:', error)
       this.emit('error', error)
     })
+  }
 
-    this.client.on('disconnect', () => {
-      console.log('discord client disconnected')
-      this.isReady = false
+  /** Schedules a manual re-login with exponential backoff; no-op if one is already pending. */
+  private scheduleReconnect(reason: string): void {
+    if (this.shuttingDown) return
+    if (this.reconnectTimer || this.reconnectInFlight) {
+      console.log(`discord re-login already pending; ignoring trigger (${reason})`)
+      return
+    }
+    if (this.reconnectAttempts >= RECONNECT_MAX_ATTEMPTS) {
+      console.error(
+        `discord re-login gave up after ${this.reconnectAttempts} attempts (${reason}); ` +
+          'restart the service or call POST /api/discord/restart'
+      )
       this.emit('disconnected')
-    })
+      return
+    }
+
+    const backoff = Math.min(
+      RECONNECT_BASE_DELAY_MS * 2 ** this.reconnectAttempts,
+      RECONNECT_MAX_DELAY_MS
+    )
+    const delay = backoff + Math.floor(Math.random() * 1000)
+    this.reconnectAttempts += 1
+    console.log(
+      `discord re-login attempt ${this.reconnectAttempts}/${RECONNECT_MAX_ATTEMPTS} in ${delay}ms (${reason})`
+    )
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null
+      void this.relogin()
+    }, delay)
+  }
+
+  private async relogin(): Promise<void> {
+    if (this.shuttingDown || this.reconnectInFlight) return
+    this.reconnectInFlight = true
+
+    let failure: unknown = null
+    try {
+      // Swap first so late events from the old Client are ignored by its handlers.
+      const previous = this.client
+      this.client = this.createClient()
+      await previous.destroy()
+
+      if (this.shuttingDown) return
+      await this.client.login(this.botToken)
+      if (this.shuttingDown) {
+        await this.client.destroy()
+        return
+      }
+      console.log('discord re-login succeeded')
+    } catch (error) {
+      failure = error
+    } finally {
+      this.reconnectInFlight = false
+    }
+
+    if (failure !== null) {
+      console.error('discord re-login failed:', failure)
+      this.scheduleReconnect('previous re-login failed')
+    }
   }
 
   private async handleSlashCommand(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -834,7 +961,9 @@ Keep the response concise but informative.`
   }
 
   private startContextCleanup(): void {
-    setInterval(() => {
+    // clientReady fires again after a re-login; keep a single interval.
+    if (this.contextCleanupTimer) return
+    this.contextCleanupTimer = setInterval(() => {
       const now = Date.now()
       for (const [userId, context] of this.conversationContext.entries()) {
         const validMessages = context.filter(msg => now - msg.timestamp < this.contextConfig.maxAge)
@@ -1004,7 +1133,16 @@ Keep the response concise but informative.`
 
   async shutdown(): Promise<void> {
     console.log('🛑 Shutting down Discord bot...')
+    this.shuttingDown = true
     this.isReady = false
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+    if (this.contextCleanupTimer) {
+      clearInterval(this.contextCleanupTimer)
+      this.contextCleanupTimer = null
+    }
     await this.client.destroy()
   }
 

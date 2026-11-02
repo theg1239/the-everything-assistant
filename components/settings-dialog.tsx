@@ -49,19 +49,30 @@ import { FeedbackSection } from '@/components/feedback-section'
 import { MemoryManagement } from '@/components/memory-management'
 import { VTOPSettings } from '@/components/vtop-settings'
 import { deleteAccountAction } from '@/app/actions/account'
-import { readJson } from '@/lib/http'
+import { readApiMessage, readJson } from '@/lib/http'
 import { isRecord } from '@/lib/json'
 import { asRecord, errorMessage, readString } from '@/components/narrow'
 import { useMiniPlayerStore } from '@/lib/stores/useMiniPlayerStore'
-import type { UserPreferences, UserPreferencesResponse } from '@/types/preferences'
-import type { MemorySettings } from '@/hooks/use-memories'
-import type {
-  MfaAvailabilityResponse,
-  MfaBackupCodesResponse,
-  MfaSetupResponse,
-  MfaStatusResponse,
+import { userPreferencesResponseSchema, type UserPreferences } from '@/types/preferences'
+import { memorySettingsResponseSchema } from '@/types/api/memory'
+import {
+  mfaAvailabilityResponseSchema,
+  mfaBackupCodesResponseSchema,
+  mfaMethodChangeResponseSchema,
+  mfaSetupResponseSchema,
+  mfaStatusResponseSchema,
+  webAuthnCreationOptionsSchema,
 } from '@/types/api/mfa'
-import type { PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/server'
+import {
+  chatgptLoginStartSchema,
+  chatgptStatusSchema,
+  type ChatgptStatus,
+} from '@/types/api/chatgpt'
+import {
+  chatBulkActionResponseSchema,
+  chatSummariesResponseSchema,
+  type ChatSummary,
+} from '@/types/api/chats'
 
 const Aurora = dynamic(() => import('@/components/backgrounds/aurora'), {
   ssr: false,
@@ -98,88 +109,13 @@ const GridPreview = dynamic(() => import('@/components/backgrounds/grid'), {
   loading: () => null,
 })
 
-interface ChatSummary {
-  id: string
-  title: string
-  path: string
-  createdAt: string
-  updatedAt: string
-}
-
-interface ChatActionResponse {
-  success?: boolean
-  message?: string
-  count?: number
-  error?: string
-}
-
-interface DailyBriefingTestResponse {
-  ok?: boolean
-  error?: string
-}
-
-interface PreferencesUpdateResponse {
-  preferences: UserPreferences
-  message?: string
-  error?: string
-}
-
-type ChatgptAuthMode = 'apiKey' | 'chatgpt' | 'chatgptAuthTokens' | null
-
-interface ChatgptPlanUsageWindow {
-  usedPercent: number | null
-  remainingPercent: number | null
-  windowDurationMins: number | null
-  resetsAt: number | null
-}
-
-interface ChatgptPlanUsage {
-  limitId: string | null
-  limitName: string | null
-  planType: string | null
-  primary: ChatgptPlanUsageWindow | null
-  secondary: ChatgptPlanUsageWindow | null
-  hasCredits: boolean | null
-  unlimitedCredits: boolean | null
-  creditsBalance: string | null
-}
-
-interface ChatgptStatusResponse {
-  available: boolean
-  connected: boolean
-  authMode: ChatgptAuthMode
-  email: string | null
-  planType: string | null
-  planUsage: ChatgptPlanUsage | null
-  pendingLoginId: string | null
-  lastLoginError: string | null
-  requiresOpenaiAuth: boolean | null
-  error?: string
-}
-
-interface ChatgptLoginStartResponse {
-  authUrl: string | null
-  loginId: string | null
-  status: ChatgptStatusResponse
-  loginMethod?: 'browser' | 'device'
-  deviceCode?: string | null
-  verificationUrl?: string | null
-}
+/** ChatGPT status as shown in settings; `error` is set when the status couldn't be read. */
+type ChatgptStatusResponse = ChatgptStatus & { error?: string }
 
 interface ChatgptDeviceFlowState {
   loginId: string | null
   deviceCode: string
   verificationUrl: string | null
-}
-
-type BasicApiResponse = {
-  success?: boolean
-  message?: string
-  error?: string
-}
-
-interface MfaMethodChangeResponse extends BasicApiResponse {
-  requiresRegistration?: boolean
 }
 
 type SelectableBackgroundType = Exclude<BackgroundType, 'null'>
@@ -580,7 +516,7 @@ export function SettingsDialog({
           signal: controller.signal,
         })
         if (memorySettingsResponse.ok) {
-          const memorySettings = await readJson<MemorySettings>(memorySettingsResponse)
+          const memorySettings = await readJson(memorySettingsResponse, memorySettingsResponseSchema)
           setMemoryEnabled(memorySettings.isEnabled)
         } else {
           setMemoryEnabled(true)
@@ -588,7 +524,7 @@ export function SettingsDialog({
 
         const response = await fetch('/api/user/preferences', { signal: controller.signal })
         if (response.ok) {
-          const data = await readJson<UserPreferencesResponse>(response)
+          const data = await readJson(response, userPreferencesResponseSchema)
           const prefs = data.preferences
           setCurrentPreferences(prefs)
           if (typeof window !== 'undefined') {
@@ -623,7 +559,7 @@ export function SettingsDialog({
 
         const mfaResponse = await fetch('/api/user/mfa', { signal: controller.signal })
         if (mfaResponse.ok) {
-          const mfaData = await readJson<MfaStatusResponse>(mfaResponse)
+          const mfaData = await readJson(mfaResponse, mfaStatusResponseSchema)
           setMfaEnabled(mfaData.mfaEnabled ?? false)
           loadedMfaMethod =
             mfaData.mfaMethod === 'security_key'
@@ -632,14 +568,17 @@ export function SettingsDialog({
                 ? 'authenticator'
                 : 'email'
           setMfaMethod(loadedMfaMethod)
-          setBackupCodes(new Array(mfaData.backupCodesCount || 0).fill('ΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇóΓÇó'))
+          setBackupCodes(new Array(mfaData.backupCodesCount || 0).fill('••••••••'))
         }
 
         const availabilityResponse = await fetch('/api/user/mfa/availability', {
           signal: controller.signal,
         })
         if (availabilityResponse.ok) {
-          const availabilityData = await readJson<MfaAvailabilityResponse>(availabilityResponse)
+          const availabilityData = await readJson(
+            availabilityResponse,
+            mfaAvailabilityResponseSchema
+          )
 
           const hasWebAuthnSupport = !!(
             window.navigator.credentials &&
@@ -691,10 +630,11 @@ export function SettingsDialog({
 
     try {
       const response = await fetch('/api/auth/chatgpt/status', { cache: 'no-store' })
-      const data = await readJson<ChatgptStatusResponse>(response)
       if (!response.ok) {
-        throw new Error(data?.error || 'Unable to read ChatGPT status')
+        const { error } = await readApiMessage(response)
+        throw new Error(error || 'Unable to read ChatGPT status')
       }
+      const data = await readJson(response, chatgptStatusSchema)
       setChatgptStatus(data)
       setChatgptDeviceFlow(current => {
         if (!data.pendingLoginId || data.connected) {
@@ -731,10 +671,11 @@ export function SettingsDialog({
       const response = await fetch('/api/auth/chatgpt/start', {
         method: 'POST',
       })
-      const data = await readJson<ChatgptLoginStartResponse & { error?: string }>(response)
       if (!response.ok) {
-        throw new Error(data?.error || 'Unable to start ChatGPT login')
+        const { error } = await readApiMessage(response)
+        throw new Error(error || 'Unable to start ChatGPT login')
       }
+      const data = await readJson(response, chatgptLoginStartSchema)
 
       setChatgptStatus(data.status)
       const verificationUrl = data.verificationUrl ?? data.authUrl
@@ -807,10 +748,11 @@ export function SettingsDialog({
           loginId: chatgptStatus.pendingLoginId,
         }),
       })
-      const data = await readJson<ChatgptStatusResponse & { error?: string }>(response)
       if (!response.ok) {
-        throw new Error(data?.error || 'Unable to cancel ChatGPT login')
+        const { error } = await readApiMessage(response)
+        throw new Error(error || 'Unable to cancel ChatGPT login')
       }
+      const data = await readJson(response, chatgptStatusSchema)
       setChatgptStatus(data)
       setChatgptDeviceFlow(null)
       toast.success('ChatGPT login canceled')
@@ -828,10 +770,11 @@ export function SettingsDialog({
       const response = await fetch('/api/auth/chatgpt/disconnect', {
         method: 'POST',
       })
-      const data = await readJson<ChatgptStatusResponse & { error?: string }>(response)
       if (!response.ok) {
-        throw new Error(data?.error || 'Unable to disconnect ChatGPT')
+        const { error } = await readApiMessage(response)
+        throw new Error(error || 'Unable to disconnect ChatGPT')
       }
+      const data = await readJson(response, chatgptStatusSchema)
       setChatgptStatus(data)
       setChatgptDeviceFlow(null)
       toast.success('ChatGPT disconnected')
@@ -956,14 +899,9 @@ export function SettingsDialog({
       const response = await fetch('/api/hub/daily-briefing-email/test', {
         method: 'POST',
       })
-      let payload: DailyBriefingTestResponse | null = null
-      try {
-        payload = await readJson<DailyBriefingTestResponse>(response)
-      } catch {
-        payload = null
-      }
       if (!response.ok) {
-        throw new Error(payload?.error || 'Failed to send test briefing')
+        const { error } = await readApiMessage(response)
+        throw new Error(error || 'Failed to send test briefing')
       }
       toast.success('daily briefing sent to your inbox')
     } catch (error) {
@@ -1057,7 +995,7 @@ export function SettingsDialog({
       })
 
       if (response.ok) {
-        const data = await readJson<MfaSetupResponse>(response)
+        const data = await readJson(response, mfaSetupResponseSchema)
 
         if (mfaMethod === 'authenticator') {
           setQrCodeUrl(data.qrCode || '')
@@ -1122,7 +1060,7 @@ export function SettingsDialog({
           throw new Error('Failed to get registration options')
         }
 
-        const options = await readJson<PublicKeyCredentialCreationOptionsJSON>(optionsResponse)
+        const options = await readJson(optionsResponse, webAuthnCreationOptionsSchema)
         console.log('Received WebAuthn options:', options)
         console.log(
           'Challenge type:',
@@ -1132,14 +1070,8 @@ export function SettingsDialog({
         )
         console.log('User ID type:', typeof options.user.id, 'Length:', options.user.id?.length)
 
-        const userIdBuffer: BufferSource =
-          typeof options.user.id === 'string'
-            ? base64urlToArrayBuffer(options.user.id)
-            : cloneBufferSource(options.user.id)
-        const challengeBuffer: BufferSource =
-          typeof options.challenge === 'string'
-            ? base64urlToArrayBuffer(options.challenge)
-            : cloneBufferSource(options.challenge)
+        const userIdBuffer: BufferSource = base64urlToArrayBuffer(options.user.id)
+        const challengeBuffer: BufferSource = base64urlToArrayBuffer(options.challenge)
 
         const credentialCreationOptions: PublicKeyCredentialCreationOptions = {
           rp: options.rp,
@@ -1230,13 +1162,13 @@ export function SettingsDialog({
         })
 
         if (verifyResponse.ok) {
-          const data = await readJson<MfaBackupCodesResponse>(verifyResponse)
+          const data = await readJson(verifyResponse, mfaBackupCodesResponseSchema)
           setBackupCodes(data.backupCodes)
           setMfaEnabled(true)
           setSetupStep('backup')
           toast.success('Security key registered successfully!')
         } else {
-          const errorData = await readJson<BasicApiResponse>(verifyResponse)
+          const errorData = await readApiMessage(verifyResponse)
           throw new Error(errorData.error || 'Failed to register security key')
         }
       } else {
@@ -1252,13 +1184,13 @@ export function SettingsDialog({
         })
 
         if (response.ok) {
-          const data = await readJson<MfaBackupCodesResponse>(response)
+          const data = await readJson(response, mfaBackupCodesResponseSchema)
           setBackupCodes(data.backupCodes)
           setMfaEnabled(true)
           setSetupStep('backup')
           toast.success('MFA setup completed successfully')
         } else {
-          const errorData = await readJson<BasicApiResponse>(response)
+          const errorData = await readApiMessage(response)
           throw new Error(errorData.error || 'Invalid verification code')
         }
       }
@@ -1291,7 +1223,7 @@ export function SettingsDialog({
       })
 
       if (response.ok) {
-        const data = await readJson<MfaBackupCodesResponse>(response)
+        const data = await readJson(response, mfaBackupCodesResponseSchema)
         setBackupCodes(data.backupCodes)
         toast.success('New backup codes generated successfully')
       } else {
@@ -1359,7 +1291,7 @@ export function SettingsDialog({
       })
 
       if (response.ok) {
-        const data = await readJson<MfaMethodChangeResponse>(response)
+        const data = await readJson(response, mfaMethodChangeResponseSchema)
 
         if (data.requiresRegistration && method === 'security_key') {
           setMfaMethod(method)
@@ -1371,7 +1303,7 @@ export function SettingsDialog({
           toast.success(data.message || 'MFA method updated successfully')
         }
       } else {
-        const errorData = await readJson<BasicApiResponse>(response)
+        const errorData = await readApiMessage(response)
         throw new Error(errorData.error || 'Failed to update MFA method')
       }
     } catch (error) {
@@ -1413,9 +1345,9 @@ export function SettingsDialog({
         method: 'DELETE',
       })
       if (response.ok) {
-        const result = await readJson<ChatActionResponse>(response)
+        const result = await readJson(response, chatBulkActionResponseSchema)
         window.dispatchEvent(new CustomEvent('chatsDeleted', { detail: result }))
-        toast.success(`${result.count ?? 0} chats deleted successfully`)
+        toast.success(`${result.count} chats deleted successfully`)
         onOpenChange(false)
       } else {
         throw new Error('Failed to delete chats')
@@ -1441,9 +1373,9 @@ export function SettingsDialog({
         method: 'PATCH',
       })
       if (response.ok) {
-        const result = await readJson<ChatActionResponse>(response)
+        const result = await readJson(response, chatBulkActionResponseSchema)
         window.dispatchEvent(new CustomEvent('chatsArchived', { detail: result }))
-        toast.success(`${result.count ?? 0} chats archived successfully`)
+        toast.success(`${result.count} chats archived successfully`)
         onOpenChange(false)
       } else {
         throw new Error('Failed to archive chats')
@@ -1463,7 +1395,7 @@ export function SettingsDialog({
     try {
       const response = await fetch('/api/chats?archived=true&limit=50')
       if (response.ok) {
-        const chats = await readJson<ChatSummary[]>(response)
+        const chats = await readJson(response, chatSummariesResponseSchema)
         setArchivedChats(chats)
       }
     } catch (error) {
@@ -1512,9 +1444,9 @@ export function SettingsDialog({
         method: 'DELETE',
       })
       if (response.ok) {
-        const result = await readJson<ChatActionResponse>(response)
+        const result = await readJson(response, chatBulkActionResponseSchema)
         setArchivedChats([])
-        toast.success(`${result.count ?? 0} archived chats deleted successfully`)
+        toast.success(`${result.count} archived chats deleted successfully`)
       } else {
         throw new Error('Failed to delete archived chats')
       }

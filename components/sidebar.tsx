@@ -23,30 +23,16 @@ import { formatDate } from '@/lib/utils'
 import { useSidebar } from '@/contexts/sidebar-context'
 import { readJson } from '@/lib/http'
 import { isRecord } from '@/lib/json'
+import {
+  chatSummariesResponseSchema,
+  chatSummarySchema,
+  type ChatSummary as Chat,
+} from '@/types/api/chats'
 import { useChatPrefetch } from '@/hooks/use-chat-prefetch'
-
-interface Chat {
-  id: string
-  title: string
-  path: string
-  createdAt: string
-  updatedAt: string
-}
 
 interface SidebarProps {
   isOpen: boolean
   onToggle: () => void
-}
-
-function isChat(value: unknown): value is Chat {
-  return (
-    isRecord(value) &&
-    typeof value.id === 'string' &&
-    typeof value.title === 'string' &&
-    typeof value.path === 'string' &&
-    typeof value.createdAt === 'string' &&
-    typeof value.updatedAt === 'string'
-  )
 }
 
 /** Settings is rarely opened: load its (large) chunk on demand, never during SSR. */
@@ -62,7 +48,7 @@ async function fetchChatPage(offset: number): Promise<Chat[] | null> {
   try {
     const response = await fetch(`/api/chats?limit=${CHATS_PAGE_SIZE}&offset=${offset}`)
     if (!response.ok) return null
-    return await readJson<Chat[]>(response)
+    return await readJson(response, chatSummariesResponseSchema)
   } catch (error) {
     console.error('Error fetching chats:', error)
     return null
@@ -292,8 +278,9 @@ export const Sidebar = memo(
     useEffect(() => {
       const handleNewChat = (event: Event) => {
         if (!(event instanceof CustomEvent)) return
-        const newChat: unknown = event.detail
-        if (!isChat(newChat)) return
+        const parsed = chatSummarySchema.safeParse(event.detail)
+        if (!parsed.success) return
+        const newChat = parsed.data
         setChats(prevChats => {
           const exists = prevChats.some(chat => chat.id === newChat.id)
           if (exists) return prevChats

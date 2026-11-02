@@ -3,7 +3,7 @@ import { prisma } from './prisma'
 import { sanitizeToolInvocations } from './sanitize-tools'
 import { generateChatPath } from './utils'
 import type { Attachment } from '@/types/attachment'
-import type { Prisma, TokenUsage } from '@/prisma/generated/client'
+import { Prisma, type TokenUsage } from '@/prisma/generated/client'
 
 export interface User {
   id: string
@@ -479,82 +479,55 @@ export async function getTokenUsageAllTimeSummary(): Promise<{
   }
 }
 
-export async function getTokenUsageLifetimeBuckets(granularity: 'day' | 'month' | 'hour' = 'day') {
-  const unit = granularity === 'month' ? 'month' : granularity === 'hour' ? 'hour' : 'day'
-  try {
-    const rawRows: unknown = await prisma.$queryRaw`
-      SELECT date_trunc(${unit}, "createdAt") AS bucket,
-             sum("totalTokens") AS "totalTokens",
-             sum("promptTokens") AS "promptTokens",
-             sum("completionTokens") AS "completionTokens",
-             count(*) AS count
-      FROM "TokenUsage"
-      GROUP BY bucket
-      ORDER BY bucket ASC
-    `
+/** `date_trunc` units as SQL literals (a closed set, so they're inlined rather than bound). */
+const lifetimeBucketUnit = {
+  hour: Prisma.sql`'hour'`,
+  day: Prisma.sql`'day'`,
+  month: Prisma.sql`'month'`,
+} satisfies Record<string, Prisma.Sql>
 
-    const sqlNumber = z.unknown().transform(value => Number(value || 0))
-    const rows = z
-      .array(
-        z.object({
-          bucket: z.union([z.date(), z.string()]),
-          totalTokens: sqlNumber,
-          promptTokens: sqlNumber,
-          completionTokens: sqlNumber,
-          count: sqlNumber,
-        })
-      )
-      .parse(rawRows)
+const lifetimeBucketRowsSchema = z.array(
+  z.object({
+    bucket: z.union([z.date(), z.string()]),
+    // SUM/COUNT come back as Decimal / bigint; normalize to number.
+    totalTokens: z.unknown().transform(value => Number(value ?? 0)),
+    inputTokens: z.unknown().transform(value => Number(value ?? 0)),
+    outputTokens: z.unknown().transform(value => Number(value ?? 0)),
+    count: z.unknown().transform(value => Number(value ?? 0)),
+  })
+)
 
-    return rows.map(r => ({
-      ts: new Date(r.bucket).getTime(),
-      date: new Date(r.bucket).toISOString(),
+/**
+ * Lifetime token usage grouped by hour/day/month. Identifiers follow prisma/schema.prisma:
+ * the table is `token_usage` and `inputTokens` / `outputTokens` are stored in the
+ * `promptTokens` / `completionTokens` columns.
+ */
+export async function getTokenUsageLifetimeBuckets(
+  granularity: keyof typeof lifetimeBucketUnit = 'day'
+) {
+  const unit = lifetimeBucketUnit[granularity]
+  const rawRows: unknown = await prisma.$queryRaw`
+    SELECT date_trunc(${unit}, "createdAt") AS "bucket",
+           SUM("totalTokens") AS "totalTokens",
+           SUM("promptTokens") AS "inputTokens",
+           SUM("completionTokens") AS "outputTokens",
+           COUNT(*) AS "count"
+    FROM "token_usage"
+    GROUP BY "bucket"
+    ORDER BY "bucket" ASC
+  `
+
+  return lifetimeBucketRowsSchema.parse(rawRows).map(r => {
+    const date = new Date(r.bucket)
+    return {
+      ts: date.getTime(),
+      date: date.toISOString(),
       totalTokens: r.totalTokens,
-      inputTokens: r.promptTokens,
-      outputTokens: r.completionTokens,
+      inputTokens: r.inputTokens,
+      outputTokens: r.outputTokens,
       count: r.count,
-    }))
-  } catch (err) {
-    try {
-      const all = await prisma.tokenUsage.findMany({
-        select: { createdAt: true, totalTokens: true, inputTokens: true, outputTokens: true },
-      })
-      const buckets: Record<
-        string,
-        {
-          ts: number
-          date: string
-          totalTokens: number
-          inputTokens: number
-          outputTokens: number
-          count: number
-        }
-      > = {}
-      for (const r of all) {
-        const d = new Date(r.createdAt)
-        let key: string
-        if (unit === 'hour')
-          key = d.toISOString().slice(0, 13) // YYYY-MM-DDTHH
-        else key = d.toISOString().slice(0, 10) // YYYY-MM-DD
-        const bucket = (buckets[key] ??= {
-          ts: new Date(key).getTime(),
-          date: key,
-          totalTokens: 0,
-          inputTokens: 0,
-          outputTokens: 0,
-          count: 0,
-        })
-        bucket.totalTokens += Number(r.totalTokens || 0)
-        bucket.inputTokens += Number(r.inputTokens || 0)
-        bucket.outputTokens += Number(r.outputTokens || 0)
-        bucket.count += 1
-      }
-      return Object.values(buckets).sort((a, b) => a.ts - b.ts)
-    } catch (err2) {
-      console.error('Failed to aggregate token usage buckets:', err, err2)
-      return []
     }
-  }
+  })
 }
 
 export async function getArchivedChats(

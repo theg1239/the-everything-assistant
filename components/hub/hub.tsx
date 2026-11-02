@@ -5,6 +5,7 @@ import { X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import HubShell from './hub-shell'
 import type {
+  HubSyncBatchResult,
   PersonalHubState,
   HubVTOPCommand,
   PersonalHubSnapshot,
@@ -17,6 +18,8 @@ import { shallow } from 'zustand/shallow'
 export type HubActionHandlers = {
   refreshState: () => Promise<PersonalHubState>
   syncCore: () => Promise<PersonalHubState>
+  /** One proxy /sync call for several commands (see syncHubSnapshotsBatch). */
+  syncBatch: (commands: HubVTOPCommand[]) => Promise<HubSyncBatchResult>
   refreshVTOP: (
     command: HubVTOPCommand,
     extras?: Record<string, unknown>,

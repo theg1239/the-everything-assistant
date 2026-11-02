@@ -35,7 +35,12 @@ import { HubToolProvider } from './hub-tools-context'
 import { DailyBriefingOverlay } from './daily-briefing-overlay'
 import { MinimalStatusCard } from './minimal-status-card'
 import { HUB_COMMANDS } from '@/types/hub'
-import type { PersonalHubSnapshot, HubVTOPCommand, VTOPCredentialPayload } from '@/types/hub'
+import type {
+  PersonalHubSnapshot,
+  PersonalHubState,
+  HubVTOPCommand,
+  VTOPCredentialPayload,
+} from '@/types/hub'
 import type { HubActionHandlers } from './hub'
 import { listHubCapabilities, type HubCapability } from '@/lib/hub/capabilities'
 import {
@@ -703,38 +708,26 @@ export default function HubShell({
     let cancelled = false
     setState({ dailyHydration: { running: true, completed: 0, total: hydrationQueue.length } })
     setState({ hydrationCurrentCommand: null })
-    ;(async () => {
-      for (const [idx, command] of hydrationQueue.entries()) {
-        if (cancelled) break
-        setState({ hydrationCurrentCommand: command })
-        try {
-          await runVtopCommand(command)
-        } catch (error) {
-          console.error('[hub/daily-briefing] auto hydration failed', command, error)
-          if (isCredentialError(error)) {
-            console.warn('[hub/daily-briefing] credentials required, prompting relink')
-            cancelled = true
-            handleLinkIntent()
-            break
-          }
-        }
-        if (cancelled) break
-        setState(state => ({
-          dailyHydration: { ...state.dailyHydration, completed: idx + 1 },
-        }))
+    // One batched proxy /sync (one VTOP login) instead of a server action per command:
+    // actions from one client run one at a time, so the loop was N sequential round trips.
+    void hydrateDailyBriefing(actions, hydrationQueue).then(outcome => {
+      if (cancelled) return
+      if (outcome.state) setHubState(outcome.state)
+      if (outcome.requiresCredentials) {
+        console.warn('[hub/daily-briefing] credentials required, prompting relink')
+        handleLinkIntent()
+        return
       }
-      if (!cancelled) {
-        setState(state => ({
-          dailyHydration: {
-            ...state.dailyHydration,
-            running: false,
-            completed: state.dailyHydration.total,
-          },
-          hydrationCurrentCommand: null,
-          dailyBriefingReady: true,
-        }))
-      }
-    })()
+      setState(state => ({
+        dailyHydration: {
+          ...state.dailyHydration,
+          running: false,
+          completed: state.dailyHydration.total,
+        },
+        hydrationCurrentCommand: null,
+        dailyBriefingReady: true,
+      }))
+    })
     return () => {
       cancelled = true
     }
@@ -743,7 +736,8 @@ export default function HubShell({
     linked,
     overlayMode,
     hydrationQueue,
-    runVtopCommand,
+    actions,
+    setHubState,
     handleLinkIntent,
     setState,
   ])
@@ -1613,6 +1607,26 @@ function toTimetableClass(value: Record<string, unknown>): TimetableClass {
     startTime: readText(value.startTime),
     endTime: readText(value.endTime),
     venue: readText(value.venue),
+  }
+}
+
+/**
+ * Module-level (not in the component) so React Compiler keeps HubShell compiled. Resolves,
+ * never rejects: a thrown credential error maps to `requiresCredentials` like the batch flag.
+ */
+async function hydrateDailyBriefing(
+  actions: HubActionHandlers,
+  commands: HubVTOPCommand[]
+): Promise<{ state: PersonalHubState | null; requiresCredentials: boolean }> {
+  try {
+    const result = await actions.syncBatch(commands)
+    if (result.failed.length) {
+      console.error('[hub/daily-briefing] some commands failed to sync', result.failed)
+    }
+    return { state: result.state, requiresCredentials: result.requiresCredentials }
+  } catch (error) {
+    console.error('[hub/daily-briefing] auto hydration failed', error)
+    return { state: null, requiresCredentials: isCredentialError(error) }
   }
 }
 

@@ -2122,7 +2122,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
         if (!mcpAccessToken && usesMcp) {
           const stored = await getUserMcpToken(userId)
           if (stored) {
-            const refreshed = isMcpExpired(stored) ? await refreshUserMcpToken(userId) : null
+            const refreshed = isMcpExpired(stored) ? await refreshUserMcpToken(userId, undefined, stored) : null
             mcpAccessToken = refreshed?.accessToken || stored.accessToken
           }
         }

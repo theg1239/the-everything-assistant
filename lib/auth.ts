@@ -8,6 +8,7 @@ import SpotifyProvider from 'next-auth/providers/spotify'
 import { PrismaAdapter } from '@next-auth/prisma-adapter'
 import { prisma } from '@/lib/prisma'
 import { isRecord } from '@/lib/json'
+import { mfaMethodSchema } from '@/types/api/mfa'
 import {
   clearSessionVerificationForToken,
   getCurrentSessionVerification,
@@ -64,6 +65,9 @@ if (hasSpotifyCreds) {
     console.warn('Spotify credentials not set; Spotify integration is disabled')
   }
 }
+
+/** `User.mfaMethod` is a free-form column; anything unrecognised is exposed as null. */
+const sessionMfaMethodSchema = mfaMethodSchema.nullable().catch(null)
 
 const SPOTIFY_LINK_REQUIRES_SIGN_IN = '/login?error=SpotifyLinkRequiresSignIn'
 const SPOTIFY_ALREADY_LINKED = '/?error=SpotifyAlreadyLinked'
@@ -149,21 +153,26 @@ export const authOptions: NextAuthOptions = {
     session: async ({ session, user }) => {
       if (session.user) {
         // The Prisma adapter loads the full user row with the session, so the MFA
-        // flag is normally already here; only query if it is missing.
+        // flag and method are normally already here; only query if the flag is missing.
         const inlineMfaEnabled =
           'mfaEnabled' in user && typeof user.mfaEnabled === 'boolean' ? user.mfaEnabled : undefined
-        const mfaEnabled =
-          inlineMfaEnabled ??
-          (
-            await prisma.user.findUnique({
-              where: { id: user.id },
-              select: { mfaEnabled: true },
-            })
-          )?.mfaEnabled ??
-          false
+        const mfa =
+          inlineMfaEnabled === undefined
+            ? await prisma.user.findUnique({
+                where: { id: user.id },
+                select: { mfaEnabled: true, mfaMethod: true },
+              })
+            : { mfaEnabled: inlineMfaEnabled, mfaMethod: 'mfaMethod' in user ? user.mfaMethod : null }
+        const mfaEnabled = mfa?.mfaEnabled ?? false
 
         session.user.id = user.id
         session.user.mfaRequired = mfaEnabled
+        // Which factor the challenge asks for (not a secret), so the client can start it (e.g.
+        // request the email code) without first fetching `GET /api/user/mfa`. Unknown DB values
+        // read as null, like that endpoint.
+        session.user.mfaMethod = mfaEnabled
+          ? sessionMfaMethodSchema.parse(mfa?.mfaMethod ?? null)
+          : null
         // One Redis GET, only for MFA users; any failure reads as unverified (fail closed).
         session.user.mfaVerified = mfaEnabled
           ? (await getCurrentSessionVerification(user.id)) !== null

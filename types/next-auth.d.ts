@@ -1,4 +1,5 @@
 import NextAuth, { DefaultSession } from 'next-auth'
+import type { MfaMethod } from '@/types/api/mfa'
 
 declare module 'next-auth' {
   interface Session {
@@ -11,6 +12,8 @@ declare module 'next-auth' {
       mfaRequired?: boolean
       /** This session has passed MFA (server-side record; `false` when MFA isn't required). */
       mfaVerified?: boolean
+      /** The user's MFA factor when `mfaRequired` (null otherwise, or for unknown DB values). */
+      mfaMethod?: MfaMethod | null
     } & DefaultSession['user']
   }
 

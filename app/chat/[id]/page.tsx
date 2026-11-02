@@ -6,6 +6,7 @@ import { ChatInterface } from '@/components/chat-interface'
 import {
   loadPersonalHubState,
   syncCoreHubSnapshots,
+  syncHubSnapshotsBatch,
   refreshVTOPSnapshotAction,
   runHubToolAction,
 } from '@/app/actions/hub'
@@ -53,6 +54,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
             hubActions={{
               refreshState: loadPersonalHubState,
               syncCore: syncCoreHubSnapshots,
+              syncBatch: syncHubSnapshotsBatch,
               refreshVTOP: refreshVTOPSnapshotAction,
               runTool: runHubToolAction,
             }}

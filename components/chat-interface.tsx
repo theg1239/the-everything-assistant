@@ -259,6 +259,7 @@ const areHubActionsEqual = (a?: HubActionHandlers, b?: HubActionHandlers) => {
   return (
     a.refreshState === b.refreshState &&
     a.syncCore === b.syncCore &&
+    a.syncBatch === b.syncBatch &&
     a.refreshVTOP === b.refreshVTOP &&
     a.runTool === b.runTool
   )
@@ -1066,6 +1067,12 @@ function PureChatInterfaceComponent({
     return {
       refreshState: () => hubStatePromise,
       syncCore: () => hubStatePromise,
+      syncBatch: async () => ({
+        state: await hubStatePromise,
+        updated: [],
+        failed: [],
+        requiresCredentials: false,
+      }),
       refreshVTOP: async () => {
         throw new Error('hub actions are unavailable in this context')
       },

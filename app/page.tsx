@@ -5,6 +5,7 @@ import { generateUUID } from '@/lib/utils'
 import {
   loadPersonalHubState,
   syncCoreHubSnapshots,
+  syncHubSnapshotsBatch,
   refreshVTOPSnapshotAction,
   runHubToolAction,
 } from '@/app/actions/hub'
@@ -47,6 +48,7 @@ export default async function Home({ searchParams }: HomeProps) {
                 ? {
                     refreshState: loadPersonalHubState,
                     syncCore: syncCoreHubSnapshots,
+                    syncBatch: syncHubSnapshotsBatch,
                     refreshVTOP: refreshVTOPSnapshotAction,
                     runTool: runHubToolAction,
                   }

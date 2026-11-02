@@ -18,6 +18,15 @@ export type PersonalHubState = {
   snapshots: PersonalHubSnapshot[]
 }
 
+/** Result of `syncHubSnapshotsBatch`: one proxy /sync call for many commands. */
+export type HubSyncBatchResult = {
+  state: PersonalHubState
+  updated: HubVTOPCommand[]
+  failed: { command: HubVTOPCommand; error: string }[]
+  /** The stored VTOP login is missing or was rejected; the UI should prompt a re-link. */
+  requiresCredentials: boolean
+}
+
 export type HubVTOPCommand =
   | 'profile'
   | 'marks'

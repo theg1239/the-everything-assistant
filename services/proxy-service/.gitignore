@@ -48,3 +48,6 @@ debug_captcha.jpg
 # VTOP CLI (cli-top). Only the Linux build is committed (used in deploys);
 # for local dev on other platforms set BINARY_PATH to your cli-top install.
 /binary.exe
+
+# Runtime OAuth client store written by the proxy
+mcp-oauth-clients.json

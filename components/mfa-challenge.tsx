@@ -445,8 +445,18 @@ function useMfaStatus(): MfaStatusResponse | null {
 
 /** Full-screen challenge shown by `MFAGate` until the session passes MFA. */
 export function MFAChallenge() {
-  const mfaStatus = useMfaStatus()
+  const loadedStatus = useMfaStatus()
+  const { data: session } = useSession()
   const { completeVerification } = useMFA()
+  // The session already carries the MFA method, so render the challenge right away (and send
+  // email users their code immediately) instead of waiting on GET /api/user/mfa. The loaded
+  // status (backup-code counts) replaces this placeholder when it arrives.
+  const sessionMethod = session?.user?.mfaMethod ?? null
+  const mfaStatus: MfaStatusResponse | null =
+    loadedStatus ??
+    (sessionMethod
+      ? { mfaEnabled: true, mfaMethod: sessionMethod, hasBackupCodes: true, backupCodesCount: 1 }
+      : null)
 
   if (!mfaStatus) {
     return (

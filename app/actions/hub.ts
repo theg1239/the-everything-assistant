@@ -10,6 +10,7 @@ import {
 } from '@/lib/server-vtop-credentials'
 import type { VTOPCredentials } from '@/lib/vtop-credential-store'
 import { mapWithConcurrency } from '@/lib/concurrency'
+import { getHubCapability } from '@/lib/hub/capabilities'
 import { vtopResultSchema, type VTOPFormattedResult } from '@/app/api/hub/vtop/schema'
 import {
   getToolExecutor,
@@ -25,11 +26,13 @@ import { normalizeTokenUsage } from '@/lib/token-usage'
 import { listVTOPSnapshots, upsertVTOPSnapshot } from '@/lib/vtop-snapshots'
 import { toJsonValue } from '@/lib/json'
 import { getModelConfig } from '@/lib/model-registry'
-import type {
-  HubVTOPCommand,
-  PersonalHubState,
-  PersonalHubSnapshot,
-  VTOPCredentialPayload,
+import {
+  HUB_COMMANDS,
+  type HubSyncBatchResult,
+  type HubVTOPCommand,
+  type PersonalHubState,
+  type PersonalHubSnapshot,
+  type VTOPCredentialPayload,
 } from '@/types/hub'
 
 /** Lenient read of a VTOP tool/proxy payload: wrong-typed fields become undefined. */
@@ -57,7 +60,11 @@ const proxySyncEntrySchema = z.object({
   success: z.boolean(),
   result: z.unknown(),
   error: z.unknown(),
+  errorKind: z.string().optional().catch(undefined),
 })
+
+/** Proxy error kinds that mean the stored VTOP login is missing or was rejected. */
+const CREDENTIAL_ERROR_KINDS = new Set(['missing_credentials', 'invalid_credentials', 'login_failed'])
 
 const parseProxySyncResults = (value: unknown) => {
   const results =
@@ -286,8 +293,10 @@ async function runProxySyncBatch(
   return parseProxySyncResults(payload)
 }
 
-export async function syncCoreHubSnapshots(commands: HubVTOPCommand[] = [...HUB_CORE_COMMANDS]) {
+export async function syncCoreHubSnapshots(requested: HubVTOPCommand[] = [...HUB_CORE_COMMANDS]) {
   const userId = await requireUser()
+  // Server actions receive client-controlled input: keep only known, batch-syncable commands.
+  const commands = [...new Set(requested)].filter(isBatchSyncCommand)
   // Fails here (not in the fallback below) when the proxy key is missing in production.
   const proxyHeaders = vtopProxyHeaders()
   const creds = await resolveVTOPCredentials(userId)
@@ -333,6 +342,101 @@ export async function syncCoreHubSnapshots(commands: HubVTOPCommand[] = [...HUB_
 
   console.log('[hub/actions] sync complete, updated', updatedCount, 'snapshots')
   return buildHubState(userId)
+}
+
+/**
+ * Commands the proxy's `/sync` accepts (`sync: true` in hub-capabilities.json). `/sync` rejects
+ * the whole request if any command isn't batch-syncable, so filter before sending.
+ */
+const isBatchSyncCommand = (value: string): value is HubVTOPCommand => {
+  const command = HUB_COMMANDS.find(candidate => candidate === value)
+  return command !== undefined && getHubCapability(command)?.sync === true
+}
+
+const proxyErrorSchema = z
+  .object({
+    error: z.string().optional().catch(undefined),
+    errorKind: z.string().optional().catch(undefined),
+    requiresCredentials: z.boolean().optional().catch(undefined),
+  })
+  .loose()
+
+/**
+ * Refreshes several hub snapshots with ONE proxy `/sync` call (one VTOP login), instead of
+ * the client calling `refreshVTOPSnapshotAction` per command — server actions from one client
+ * run one at a time, so that was up to N sequential round trips. Never throws for VTOP-side
+ * failures: credential problems come back as `requiresCredentials` so the UI can prompt a
+ * re-link, other per-command failures as `failed`.
+ */
+export async function syncHubSnapshotsBatch(requested: readonly string[]): Promise<HubSyncBatchResult> {
+  const userId = await requireUser()
+  const commands = [...new Set(requested)].filter(isBatchSyncCommand)
+  const result = (partial: Omit<HubSyncBatchResult, 'state'>) =>
+    buildHubState(userId).then(state => ({ state, ...partial }))
+
+  if (!commands.length) return result({ updated: [], failed: [], requiresCredentials: false })
+
+  // Fails here (clear server error) when the proxy key is missing in production.
+  const proxyHeaders = vtopProxyHeaders()
+  const creds = await getUserVTOPCredentials(userId)
+  if (!creds) return result({ updated: [], failed: [], requiresCredentials: true })
+
+  let response: Response
+  try {
+    response = await fetch(`${vtopProxyBaseUrl()}/sync`, {
+      method: 'POST',
+      headers: proxyHeaders,
+      body: JSON.stringify({ username: creds.username, password: creds.password, commands }),
+    })
+  } catch (error) {
+    console.error('[hub/actions] batch sync request failed', error)
+    const failed = commands.map(command => ({ command, error: 'VTOP proxy unreachable' }))
+    return result({ updated: [], failed, requiresCredentials: false })
+  }
+  const payload: unknown = await response.json().catch(() => null)
+  const topLevel = proxyErrorSchema.safeParse(payload)
+  const topLevelCredentialError =
+    topLevel.success &&
+    (topLevel.data.requiresCredentials === true ||
+      CREDENTIAL_ERROR_KINDS.has(topLevel.data.errorKind ?? ''))
+
+  if (!response.ok) {
+    const info = topLevel
+    const requiresCredentials = topLevelCredentialError
+    const error = (info.success && info.data.error) || `proxy sync failed: ${response.status}`
+    console.error('[hub/actions] batch sync failed', response.status, info.success ? info.data.errorKind : null)
+    return result({
+      updated: [],
+      failed: requiresCredentials ? [] : commands.map(command => ({ command, error })),
+      requiresCredentials,
+    })
+  }
+
+  const entries = parseProxySyncResults(payload)
+  // One login serves the whole batch: a credential failure on any entry (or at the top level
+  // of a 200 response) means the stored login is bad, so prompt a re-link instead.
+  if (topLevelCredentialError || entries.some(entry => CREDENTIAL_ERROR_KINDS.has(entry.errorKind ?? ''))) {
+    return result({ updated: [], failed: [], requiresCredentials: true })
+  }
+  const updated: HubVTOPCommand[] = []
+  const failed: HubSyncBatchResult['failed'] = []
+  // Formatting may call the model and each entry upserts its own row: independent, bounded.
+  await mapWithConcurrency(commands, HUB_SYNC_CONCURRENCY, async command => {
+    const entry = entries.find(candidate => candidate.command === command)
+    if (!entry || !entry.success || entry.result === undefined) {
+      failed.push({ command, error: typeof entry?.error === 'string' ? entry.error : 'no result' })
+      return
+    }
+    try {
+      await formatAndPersistVTOPResult(userId, command, entry.result)
+      updated.push(command)
+    } catch (error) {
+      console.error('[hub/actions] failed to store sync result', command, error)
+      failed.push({ command, error: 'failed to store result' })
+    }
+  })
+
+  return result({ updated, failed, requiresCredentials: false })
 }
 
 export async function loadPersonalHubState() {

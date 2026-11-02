@@ -238,7 +238,7 @@ const searchResponse = await fetch('http://localhost:3002/api/search', {
 ### Environment Variables (`.env`)
 
 ```env
-DATABASE_URL=postgres://...
+REDDIT_DATABASE=postgres://...   # dedicated Reddit knowledge DB (not the main app DB)
 PORT=3002
 NODE_ENV=development
 

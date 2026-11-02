@@ -37,9 +37,12 @@ function resolveEmbeddingConfig() {
 
 class KnowledgeBase {
   constructor() {
-    const knowledgeDbUrl = process.env.REDDIT_DATABASE || process.env.DATABASE_URL
+    // The Reddit knowledge base lives in its own database. No DATABASE_URL fallback:
+    // that's the main app's database, and the CREATE TABLE IF NOT EXISTS bootstrap
+    // below would silently recreate these tables there.
+    const knowledgeDbUrl = process.env.REDDIT_DATABASE
     if (!knowledgeDbUrl) {
-      throw new Error('REDDIT_DATABASE (preferred) or DATABASE_URL must be configured')
+      throw new Error('REDDIT_DATABASE must be configured')
     }
 
     this.pool = new Pool({
@@ -61,9 +64,7 @@ class KnowledgeBase {
     logger.info(
       `Embedding config: provider=${this.embeddingProvider}, model=${this.embeddingModelId}, dim=${this.embeddingDim}, openaiBaseURL=${this.openaiBaseURL}`
     )
-    logger.info(
-      `Knowledge DB configured: ${process.env.REDDIT_DATABASE ? 'REDDIT_DATABASE' : 'DATABASE_URL'}`
-    )
+    logger.info('Knowledge DB configured: REDDIT_DATABASE')
   }
 
   createEmbeddingModel() {

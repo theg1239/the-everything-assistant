@@ -30,6 +30,7 @@ import { mapWithConcurrency } from '@/lib/concurrency'
 import { sanitizeToolInvocations } from '@/lib/sanitize-tools'
 import { normalizeTokenUsage } from '@/lib/token-usage'
 import { enforceUserRateLimit, UserRateLimitError } from '@/lib/user-rate-limiter'
+import { providerRateLimitOf, retryAfterResetTime } from '@/lib/chat-errors'
 import {
   uiMessagesToLegacyMessages,
   type AppUIMessage,
@@ -974,17 +975,21 @@ export async function POST(req: Request) {
           error: 'RATE_LIMIT_EXCEEDED',
           message: CLIENT_ERROR_MESSAGE,
           type: 'user_rate_limit',
+          ...(error.resetTime ? { resetTime: error.resetTime } : {}),
         },
         429
       )
     }
 
-    if (error instanceof Error && error.message.toLowerCase().includes('rate limit')) {
+    const providerRateLimit = providerRateLimitOf(error)
+    if (providerRateLimit) {
+      const resetTime = retryAfterResetTime(providerRateLimit)
       return jsonResponse(
         {
           error: 'RATE_LIMIT_EXCEEDED',
           message: CLIENT_ERROR_MESSAGE,
           type: 'model_rate_limit',
+          ...(resetTime ? { resetTime } : {}),
         },
         429
       )

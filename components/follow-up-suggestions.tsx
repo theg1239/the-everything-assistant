@@ -21,84 +21,6 @@ interface FollowUpSuggestionsProps {
   inline?: boolean
 }
 
-function generateFollowUpQuestions(assistantMessage: string): string[] {
-  const message = assistantMessage.toLowerCase()
-
-  if (message.includes('vtop') || message.includes('marks') || message.includes('attendance')) {
-    return [
-      'show me my detailed attendance',
-      'what about my other subjects?',
-      'check my fee payment status',
-      'show me upcoming exams',
-    ]
-  }
-
-  if (message.includes('syllabus') || message.includes('course') || message.includes('subject')) {
-    return [
-      'get past exam papers for this course',
-      'show me course materials',
-      'what are the lab requirements?',
-      'tell me about the faculty for this course',
-    ]
-  }
-
-  if (message.includes('placement') || message.includes('company') || message.includes('package')) {
-    return [
-      'what skills should I focus on?',
-      'show me recent placement trends',
-      'tell me about internship opportunities',
-      'how to prepare for interviews?',
-    ]
-  }
-
-  if (message.includes('hostel') || message.includes('mess') || message.includes('campus')) {
-    return [
-      'what about other campus facilities?',
-      'show me club activities',
-      'tell me about events this week',
-      'what are the sports facilities?',
-    ]
-  }
-
-  if (message.includes('research') || message.includes('project') || message.includes('faculty')) {
-    return [
-      'How can I get involved in research?',
-      'Show me ongoing projects',
-      'Tell me about publication opportunities',
-      'Connect me with faculty members',
-    ]
-  }
-
-  if (
-    message.includes('code') ||
-    message.includes('programming') ||
-    message.includes('algorithm')
-  ) {
-    return [
-      'Show me similar examples',
-      'Explain the complexity',
-      'How to optimize this?',
-      'What are best practices?',
-    ]
-  }
-
-  if (message.includes('exam') || message.includes('study') || message.includes('grade')) {
-    return [
-      'Give me study tips',
-      'Show me my academic progress',
-      'What are the exam patterns?',
-      'How to improve my grades?',
-    ]
-  }
-
-  return [
-    'Tell me more about this',
-    'Can you give me an example?',
-    'What are the next steps?',
-    'How does this apply to VIT students?',
-  ]
-}
-
 export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
   const {
     lastAssistantMessage = '',
@@ -195,16 +117,11 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
         const data = await readJson(response, suggestionsResponseSchema)
         setSuggestions(data.suggestions)
       } else {
-        console.error('Failed to fetch AI suggestions, using fallback')
-        const fallbackSuggestions = generateFollowUpQuestions(lastAssistantMessage)
-        const shuffled = fallbackSuggestions.sort(() => 0.5 - Math.random())
-        setSuggestions(shuffled.slice(0, 3))
+        // No suggestions on failure; the strip hides itself when the list is empty.
+        console.error('Failed to fetch AI suggestions:', response.status)
       }
     } catch (error) {
       console.error('Failed to generate AI suggestions:', error)
-      const fallbackSuggestions = generateFollowUpQuestions(lastAssistantMessage)
-      const shuffled = fallbackSuggestions.sort(() => 0.5 - Math.random())
-      setSuggestions(shuffled.slice(0, 3))
     } finally {
       setIsLoading(false)
     }

@@ -62,32 +62,42 @@ export async function executeDirectToolCall(params: {
     const structuredResult =
       isRecord(rawResult) && ('success' in rawResult || 'data' in rawResult) ? rawResult : null
 
-    if (
-      directToolCall.toolName === 'queryVTOP' &&
-      structuredResult &&
-      structuredResult.success !== false &&
-      structuredResult.data
-    ) {
-      try {
-        const command =
-          readString(structuredResult, 'command') ??
-          (typeof directToolCall.args?.command === 'string' ? directToolCall.args.command : '')
+    if (directToolCall.toolName === 'queryVTOP' && structuredResult) {
+      const status = readString(structuredResult, 'status')
+      const pending =
+        status === 'needs_selection' || status === 'needs_input' || status === 'needs_confirmation'
+      if (!pending && structuredResult.success !== false && structuredResult.data) {
+        try {
+          const command =
+            readString(structuredResult, 'command') ??
+            (typeof directToolCall.args?.command === 'string' ? directToolCall.args.command : '')
 
-        const parsedData = await parseVTOPData(
-          structuredResult,
-          command,
-          recentUserContext(messages),
-          userId
-        )
+          const parsedData = await parseVTOPData(
+            structuredResult,
+            command,
+            recentUserContext(messages),
+            userId
+          )
 
-        Object.assign(structuredResult, {
-          parsedData,
-          formatted_content: parsedData.formatted_content,
-          structured_data: parsedData.structured_data,
-          summary: parsedData.summary,
-        })
-      } catch (parseError) {
-        console.error('Failed to parse VTOP data:', parseError)
+          Object.assign(structuredResult, {
+            parsedData,
+            formatted_content: parsedData.formatted_content,
+            structured_data: parsedData.structured_data,
+            summary: parsedData.summary,
+          })
+        } catch (parseError) {
+          console.error('Failed to parse VTOP data:', parseError)
+        }
+      }
+      // Pending steps, file downloads and errors are shown by the VTOP card itself; reply with the
+      // proxy's own text so the result streams straight back (with its card) without a model turn.
+      if (!readString(structuredResult, 'formatted_content')) {
+        const step = isRecord(structuredResult.step) ? structuredResult.step : null
+        const text =
+          (pending && step ? readString(step, 'prompt') : undefined) ??
+          readString(structuredResult, 'message') ??
+          readString(structuredResult, 'error')
+        if (text) structuredResult.formatted_content = text
       }
       return toResult(structuredResult, 'result')
     }

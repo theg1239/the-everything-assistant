@@ -755,129 +755,70 @@ class KnowledgeBase {
     }
   }
 
+  /**
+   * Candidate retrieval: pgvector similarity on the query embedding plus Postgres full-text search,
+   * fused by reciprocal rank fusion. Nothing here reads the query's words: deciding whether a result
+   * answers the question is the Decisions model's job (see relevance-judge.js).
+   */
   async search(query, limit = 10) {
     const startTime = Date.now()
 
     try {
-      const vectorOnlyResults = await this.diverseSearch(query, limit)
+      const results = await this.hybridSearch(query, limit)
       const responseTime = Date.now() - startTime
       // Analytics only (logSearchQuery never throws): don't hold the results on the insert.
-      void this.logSearchQuery(query, vectorOnlyResults.length, responseTime)
-      return vectorOnlyResults.slice(0, limit)
+      void this.logSearchQuery(query, results.length, responseTime)
+      return results.slice(0, limit)
     } catch (error) {
       logger.error('Error in search:', error)
       return []
     }
   }
+
+  /** Nearest neighbours of the query embedding across posts, comments and chunks. */
   async vectorSearch(query, limit = 10) {
-    const queryVariants = this.buildVectorQueryVariants(query)
     const candidateLimit = Math.max(limit, 80)
-    const perVariantLimit = Math.max(
-      Math.ceil(candidateLimit / Math.max(1, queryVariants.length)),
-      24
-    )
-    const postLimit = Math.ceil(perVariantLimit * 0.5)
-    const commentLimit = Math.ceil(perVariantLimit * 0.35)
-    const chunkLimit = Math.ceil(perVariantLimit * 0.15)
-
-    const merged = new Map()
-    const rrfK = 50
-
-    // One embedding request for every variant, then the per-variant searches in parallel.
-    const variantEmbeddings = await this.generateEmbeddings(queryVariants)
-    const variantResponses = await Promise.all(
-      queryVariants.map(async (variant, variantIndex) => {
-        const queryEmbedding = variantEmbeddings[variantIndex]
-        if (!queryEmbedding) {
-          logger.warn(`Skipping vector variant "${variant}" because embedding is unavailable`)
-          return { variant, rows: [] }
-        }
-
-        const rows = await this.runVectorSearchWithEmbedding(
-          queryEmbedding,
-          postLimit,
-          commentLimit,
-          chunkLimit,
-          perVariantLimit
-        )
-        return { variant, rows }
-      })
-    )
-
-    for (const { variant, rows } of variantResponses) {
-      rows.forEach((row, index) => {
-        const key = `${row.type}:${row.reddit_id}`
-        const existing = merged.get(key)
-        const rrfContribution = 1 / (rrfK + index + 1)
-        const similarity = Math.max(
-          0,
-          Math.min(1, Number(row.similarity) + (variant === query ? 0.015 : 0))
-        )
-
-        if (!existing) {
-          merged.set(key, {
-            ...row,
-            matchedVectorQuery: variant,
-            similarity,
-            rrfScore: rrfContribution,
-          })
-          return
-        }
-
-        existing.rrfScore = (existing.rrfScore || 0) + rrfContribution
-        if (similarity > (existing.similarity || 0)) {
-          existing.similarity = similarity
-          existing.matchedVectorQuery = variant
-        }
-      })
-    }
-
-    if (merged.size === 0) {
-      logger.warn('Skipping vector search because query embedding is unavailable')
+    const queryEmbedding = await this.generateEmbedding(String(query || '').trim())
+    if (!queryEmbedding) {
+      logger.warn('Skipping vector search because the query embedding is unavailable')
       return []
     }
 
-    return Array.from(merged.values())
-      .sort((a, b) => {
-        const rrfDelta = (b.rrfScore || 0) - (a.rrfScore || 0)
-        if (Math.abs(rrfDelta) > 1e-8) return rrfDelta
-        return (b.similarity || 0) - (a.similarity || 0)
-      })
-      .slice(0, candidateLimit)
-      .map(result => ({
-        ...result,
-        similarity: parseFloat((result.similarity || 0).toFixed(3)),
-      }))
+    const rows = await this.runVectorSearchWithEmbedding(
+      queryEmbedding,
+      Math.ceil(candidateLimit * 0.5),
+      Math.ceil(candidateLimit * 0.35),
+      Math.ceil(candidateLimit * 0.15),
+      candidateLimit
+    )
+
+    return rows.map(row => ({
+      ...row,
+      similarity: parseFloat(Math.max(0, Math.min(1, Number(row.similarity) || 0)).toFixed(3)),
+    }))
   }
 
+  /**
+   * Postgres full-text search. The query is parsed only by Postgres' own text-search parser
+   * (`websearch_to_tsquery` / `plainto_tsquery`, english config: tokenising, stemming and stop words
+   * are the database's). `any_q` is the same parse with its lexemes OR-ed instead of AND-ed, so
+   * documents matching some of the question's words are still candidates; `ts_rank_cd` orders them.
+   */
   async textSearch(query, limit = 10) {
-    logger.info(`Performing text search for: "${query}"`)
-
     const queryText = String(query || '').trim()
-    const queryTerms = this.extractSearchTerms(queryText).slice(0, 10)
-    const orTsQuery = queryTerms
-      .map(term => term.replace(/[^\w]/g, ''))
-      .filter(Boolean)
-      .slice(0, 8)
-      .map(term => `${term}:*`)
-      .join(' | ')
     if (!queryText) return []
 
     const textSearchSQL = `
       WITH input AS (
         SELECT
-          websearch_to_tsquery('english', $1) AS strict_q,
-          plainto_tsquery('english', $1) AS plain_q,
-          CASE
-            WHEN $4::text <> '' THEN to_tsquery('english', $4)
-            ELSE NULL::tsquery
-          END AS or_q,
-          $3::text[] AS terms
+          websearch_to_tsquery('english', $1) AS all_q,
+          NULLIF(replace(plainto_tsquery('english', $1)::text, ' & ', ' | '), '')::tsquery AS any_q
       ),
       post_results AS (
         SELECT
           'post'::text AS type,
           p.reddit_id::text AS reddit_id,
+          ('post:' || p.id::text) AS source_key,
           p.subreddit::text AS subreddit,
           p.title::text AS title,
           COALESCE(p.content, '')::text AS content,
@@ -892,34 +833,14 @@ class KnowledgeBase {
           p.images::jsonb AS images,
           p.video::jsonb AS video,
           GREATEST(
-            ts_rank_cd(
-              to_tsvector('english', COALESCE(p.title, '') || ' ' || COALESCE(p.content, '')),
-              input.strict_q,
-              32
-            ),
-            ts_rank_cd(
-              to_tsvector('english', COALESCE(p.title, '') || ' ' || COALESCE(p.content, '')),
-              input.plain_q,
-              32
-            ),
-            CASE
-              WHEN input.or_q IS NULL THEN 0
-              ELSE ts_rank_cd(
-                to_tsvector('english', COALESCE(p.title, '') || ' ' || COALESCE(p.content, '')),
-                input.or_q,
-                32
-              )
-            END
+            ts_rank_cd(to_tsvector('english', COALESCE(p.title, '') || ' ' || COALESCE(p.content, '')), input.all_q, 32),
+            COALESCE(ts_rank_cd(to_tsvector('english', COALESCE(p.title, '') || ' ' || COALESCE(p.content, '')), input.any_q, 32), 0)
           )::double precision AS text_rank
         FROM reddit_posts p
         CROSS JOIN input
         WHERE
-          to_tsvector('english', COALESCE(p.title, '') || ' ' || COALESCE(p.content, '')) @@ input.strict_q
-          OR to_tsvector('english', COALESCE(p.title, '') || ' ' || COALESCE(p.content, '')) @@ input.plain_q
-          OR (
-            input.or_q IS NOT NULL
-            AND to_tsvector('english', COALESCE(p.title, '') || ' ' || COALESCE(p.content, '')) @@ input.or_q
-          )
+          to_tsvector('english', COALESCE(p.title, '') || ' ' || COALESCE(p.content, '')) @@ input.all_q
+          OR to_tsvector('english', COALESCE(p.title, '') || ' ' || COALESCE(p.content, '')) @@ input.any_q
         ORDER BY text_rank DESC, p.score DESC
         LIMIT $2
       ),
@@ -927,6 +848,7 @@ class KnowledgeBase {
         SELECT
           'comment'::text AS type,
           c.reddit_id::text AS reddit_id,
+          ('comment:' || c.id::text) AS source_key,
           c.subreddit::text AS subreddit,
           LEFT(COALESCE(c.content, ''), 180)::text AS title,
           COALESCE(c.content, '')::text AS content,
@@ -941,22 +863,14 @@ class KnowledgeBase {
           NULL::jsonb AS images,
           NULL::jsonb AS video,
           GREATEST(
-            ts_rank_cd(to_tsvector('english', COALESCE(c.content, '')), input.strict_q, 32),
-            ts_rank_cd(to_tsvector('english', COALESCE(c.content, '')), input.plain_q, 32),
-            CASE
-              WHEN input.or_q IS NULL THEN 0
-              ELSE ts_rank_cd(to_tsvector('english', COALESCE(c.content, '')), input.or_q, 32)
-            END
+            ts_rank_cd(to_tsvector('english', COALESCE(c.content, '')), input.all_q, 32),
+            COALESCE(ts_rank_cd(to_tsvector('english', COALESCE(c.content, '')), input.any_q, 32), 0)
           )::double precision AS text_rank
         FROM reddit_comments c
         CROSS JOIN input
         WHERE
-          to_tsvector('english', COALESCE(c.content, '')) @@ input.strict_q
-          OR to_tsvector('english', COALESCE(c.content, '')) @@ input.plain_q
-          OR (
-            input.or_q IS NOT NULL
-            AND to_tsvector('english', COALESCE(c.content, '')) @@ input.or_q
-          )
+          to_tsvector('english', COALESCE(c.content, '')) @@ input.all_q
+          OR to_tsvector('english', COALESCE(c.content, '')) @@ input.any_q
         ORDER BY text_rank DESC, c.score DESC
         LIMIT $2
       ),
@@ -964,6 +878,7 @@ class KnowledgeBase {
         SELECT
           'chunk'::text AS type,
           kc.source_id::text AS reddit_id,
+          (kc.source_type || ':' || kc.source_id::text) AS source_key,
           kc.subreddit::text AS subreddit,
           LEFT(COALESCE(kc.chunk_text, ''), 180)::text AS title,
           COALESCE(kc.chunk_text, '')::text AS content,
@@ -978,23 +893,15 @@ class KnowledgeBase {
           NULL::jsonb AS images,
           NULL::jsonb AS video,
           GREATEST(
-            ts_rank_cd(to_tsvector('english', COALESCE(kc.chunk_text, '')), input.strict_q, 32),
-            ts_rank_cd(to_tsvector('english', COALESCE(kc.chunk_text, '')), input.plain_q, 32),
-            CASE
-              WHEN input.or_q IS NULL THEN 0
-              ELSE ts_rank_cd(to_tsvector('english', COALESCE(kc.chunk_text, '')), input.or_q, 32)
-            END
+            ts_rank_cd(to_tsvector('english', COALESCE(kc.chunk_text, '')), input.all_q, 32),
+            COALESCE(ts_rank_cd(to_tsvector('english', COALESCE(kc.chunk_text, '')), input.any_q, 32), 0)
           )::double precision AS text_rank
         FROM knowledge_chunks kc
         CROSS JOIN input
         WHERE
-          to_tsvector('english', COALESCE(kc.chunk_text, '')) @@ input.strict_q
-          OR to_tsvector('english', COALESCE(kc.chunk_text, '')) @@ input.plain_q
-          OR (
-            input.or_q IS NOT NULL
-            AND to_tsvector('english', COALESCE(kc.chunk_text, '')) @@ input.or_q
-          )
-        ORDER BY text_rank DESC, kc.relevance_score DESC
+          to_tsvector('english', COALESCE(kc.chunk_text, '')) @@ input.all_q
+          OR to_tsvector('english', COALESCE(kc.chunk_text, '')) @@ input.any_q
+        ORDER BY text_rank DESC
         LIMIT $2
       )
       SELECT *
@@ -1010,72 +917,14 @@ class KnowledgeBase {
     `
 
     try {
-      const result = await this.pool.query(textSearchSQL, [queryText, limit, queryTerms, orTsQuery])
-      return result.rows.map(row => {
-        const textRank = Math.max(0, Number(row.text_rank) || 0)
-        return {
-          ...row,
-          textRank: textRank,
-          similarity: parseFloat(Math.min(1, textRank).toFixed(3)),
-        }
-      })
-    } catch (error) {
-      logger.error(`Text search failed, trying simpler search: ${this.formatErrorForLog(error)}`)
-
-      const simpleSearchSQL = `
-        SELECT *
-        FROM (
-          SELECT
-            'post'::text AS type,
-            p.reddit_id::text AS reddit_id,
-            p.subreddit::text AS subreddit,
-            p.title::text AS title,
-            COALESCE(p.content, '')::text AS content,
-            p.author::text AS author,
-            COALESCE(p.score, 0)::int AS score,
-            COALESCE(p.upvotes, 0)::int AS upvotes,
-            p.created_utc AS created_utc,
-            p.url::text AS url,
-            COALESCE(p.tags, ARRAY[]::text[]) AS tags,
-            COALESCE(p.is_video, false)::boolean AS is_video,
-            COALESCE(p.post_type, 'post')::text AS post_type,
-            p.images::jsonb AS images,
-            p.video::jsonb AS video,
-            0.45::double precision AS text_rank
-          FROM reddit_posts p
-          WHERE COALESCE(p.title, '') ILIKE $1 OR COALESCE(p.content, '') ILIKE $1
-          UNION ALL
-          SELECT
-            'comment'::text AS type,
-            c.reddit_id::text AS reddit_id,
-            c.subreddit::text AS subreddit,
-            LEFT(COALESCE(c.content, ''), 180)::text AS title,
-            COALESCE(c.content, '')::text AS content,
-            c.author::text AS author,
-            COALESCE(c.score, 0)::int AS score,
-            COALESCE(c.upvotes, 0)::int AS upvotes,
-            c.created_utc AS created_utc,
-            NULL::text AS url,
-            COALESCE(c.tags, ARRAY[]::text[]) AS tags,
-            false::boolean AS is_video,
-            'comment'::text AS post_type,
-            NULL::jsonb AS images,
-            NULL::jsonb AS video,
-            0.4::double precision AS text_rank
-          FROM reddit_comments c
-          WHERE COALESCE(c.content, '') ILIKE $1
-        ) AS fallback_results
-        ORDER BY text_rank DESC, score DESC
-        LIMIT $2
-      `
-
-      const searchPattern = `%${queryText}%`
-      const result = await this.pool.query(simpleSearchSQL, [searchPattern, limit])
+      const result = await this.pool.query(textSearchSQL, [queryText, limit])
       return result.rows.map(row => ({
         ...row,
         textRank: Math.max(0, Number(row.text_rank) || 0),
-        similarity: Math.max(0, Math.min(1, Number(row.text_rank) || 0)),
       }))
+    } catch (error) {
+      logger.error(`Full-text search failed: ${this.formatErrorForLog(error)}`)
+      return []
     }
   }
 
@@ -1200,88 +1049,49 @@ class KnowledgeBase {
     return String(error)
   }
 
-  async diverseSearch(query, limit = 10) {
-    try {
-      const candidateLimit = Math.max(limit * 5, 50)
-      logger.info('Trying vector search strategy...')
-      const vectorPromise = this.vectorSearch(query, candidateLimit).catch(error => {
-        logger.warn(`vector search strategy failed: ${this.formatErrorForLog(error)}`)
+  /** Vector + full-text candidates, fused by RRF, de-duplicated, then type-balanced. */
+  async hybridSearch(query, limit = 10) {
+    const candidateLimit = Math.max(limit * 5, 50)
+
+    const [vectorResults, textResults] = await Promise.all([
+      this.vectorSearch(query, candidateLimit).catch(error => {
+        logger.warn(`vector search failed: ${this.formatErrorForLog(error)}`)
         return []
-      })
-
-      logger.info('Trying text search strategy...')
-      const textPromise = this.textSearch(query, candidateLimit).catch(error => {
-        logger.warn(`text search strategy failed: ${this.formatErrorForLog(error)}`)
+      }),
+      this.textSearch(query, candidateLimit).catch(error => {
+        logger.warn(`full-text search failed: ${this.formatErrorForLog(error)}`)
         return []
-      })
+      }),
+    ])
 
-      let [vectorResults, textResults] = await Promise.all([vectorPromise, textPromise])
-      let keywordResults = []
+    logger.info(
+      `vector search found ${vectorResults.length} results, full-text search found ${textResults.length}`
+    )
 
-      if (
-        (!vectorResults || vectorResults.length === 0) &&
-        (!textResults || textResults.length === 0)
-      ) {
-        logger.info('Trying keywords search strategy...')
-        keywordResults = await this.searchByKeywords(query, candidateLimit)
-      }
+    const fusedResults = this.fuseResultsByRrf(
+      [
+        { strategy: 'vector', results: vectorResults },
+        { strategy: 'text', results: textResults },
+      ],
+      candidateLimit
+    )
+    if (fusedResults.length === 0) return []
 
-      logger.info(`vector search found ${(vectorResults || []).length} results`)
-      logger.info(`text search found ${(textResults || []).length} results`)
-      if (keywordResults.length > 0) {
-        logger.info(`keywords search found ${keywordResults.length} results`)
-      }
+    const uniqueResults = this.removeDuplicates(fusedResults)
+    logger.info(`After deduplication: ${uniqueResults.length} unique results`)
 
-      const fusedResults = this.fuseResultsByRrf(
-        [
-          { strategy: 'vector', results: vectorResults || [] },
-          { strategy: 'text', results: textResults || [] },
-          { strategy: 'keywords', results: keywordResults || [] },
-        ],
-        candidateLimit
-      )
-
-      if (fusedResults.length === 0) return []
-
-      const uniqueResults = this.removeDuplicates(fusedResults)
-      logger.info(`After deduplication: ${uniqueResults.length} unique results`)
-
-      const queryTerms = this.extractSearchTerms(query)
-      const termWeights = this.buildDynamicTermWeights(queryTerms, uniqueResults)
-      const rankedResults = uniqueResults
-        .map(result => ({
-          ...result,
-          rankingScore: this.scoreSearchResult(result, queryTerms, termWeights),
-        }))
-        .sort((a, b) => {
-          const rankingDelta = (b.rankingScore || 0) - (a.rankingScore || 0)
-          if (Math.abs(rankingDelta) > 1e-6) return rankingDelta
-
-          const fusionDelta = (b.rrfScore || 0) - (a.rrfScore || 0)
-          if (Math.abs(fusionDelta) > 1e-8) return fusionDelta
-
-          const similarityDelta = (b.similarity || 0) - (a.similarity || 0)
-          if (Math.abs(similarityDelta) > 1e-6) return similarityDelta
-
-          return (b.score || 0) - (a.score || 0)
-        })
-        .slice(0, Math.max(limit * 4, 40))
-
-      return this.diversifyByType(rankedResults, Math.max(limit * 4, 40))
-    } catch (error) {
-      logger.error('Error in diverse search:', error)
-      return []
-    }
+    const targetLimit = Math.max(limit * 4, 40)
+    return this.diversifyByType(uniqueResults, targetLimit)
   }
 
+  /**
+   * Reciprocal rank fusion (k = 60, equal weights) over ranked result lists. Each result keeps the
+   * best cosine `similarity` it got from the vector list (0 when only full-text found it) and the
+   * best `textRank`. Ordered by fused score, then similarity.
+   */
   fuseResultsByRrf(strategyBuckets, candidateLimit) {
     const merged = new Map()
     const rrfK = 60
-    const strategyWeight = {
-      vector: 1,
-      text: 1.22,
-      keywords: 0.85,
-    }
 
     for (const bucket of strategyBuckets) {
       const strategy = bucket?.strategy || 'unknown'
@@ -1290,8 +1100,9 @@ class KnowledgeBase {
       results.forEach((result, index) => {
         const key = `${result.type}:${result.reddit_id}`
         const existing = merged.get(key)
-        const rrfContribution = (1 / (rrfK + index + 1)) * (strategyWeight[strategy] || 1)
-        const similarity = Math.max(0, Math.min(1, Number(result.similarity) || 0))
+        const rrfContribution = 1 / (rrfK + index + 1)
+        const similarity =
+          strategy === 'vector' ? Math.max(0, Math.min(1, Number(result.similarity) || 0)) : 0
         const textRank = Math.max(0, Number(result.textRank ?? result.text_rank) || 0)
 
         if (!existing) {
@@ -1300,17 +1111,15 @@ class KnowledgeBase {
             similarity,
             textRank,
             rrfScore: rrfContribution,
-            sourceStrategy: strategy,
             sourceStrategies: [strategy],
           })
           return
         }
 
-        existing.rrfScore = (existing.rrfScore || 0) + rrfContribution
-        existing.similarity = Math.max(existing.similarity || 0, similarity)
-        existing.textRank = Math.max(existing.textRank || 0, textRank)
-        existing.score = Math.max(Number(existing.score) || 0, Number(result.score) || 0)
-        existing.upvotes = Math.max(Number(existing.upvotes) || 0, Number(result.upvotes) || 0)
+        existing.rrfScore += rrfContribution
+        existing.similarity = Math.max(existing.similarity, similarity)
+        existing.textRank = Math.max(existing.textRank, textRank)
+        if (!existing.source_key && result.source_key) existing.source_key = result.source_key
         if (!existing.sourceStrategies.includes(strategy)) {
           existing.sourceStrategies.push(strategy)
         }
@@ -1319,355 +1128,42 @@ class KnowledgeBase {
 
     return Array.from(merged.values())
       .sort((a, b) => {
-        const rrfDelta = (b.rrfScore || 0) - (a.rrfScore || 0)
-        if (Math.abs(rrfDelta) > 1e-8) return rrfDelta
-
-        const textDelta = (b.textRank || 0) - (a.textRank || 0)
-        if (Math.abs(textDelta) > 1e-8) return textDelta
-
-        return (b.similarity || 0) - (a.similarity || 0)
+        const rrfDelta = b.rrfScore - a.rrfScore
+        if (Math.abs(rrfDelta) > 1e-12) return rrfDelta
+        return b.similarity - a.similarity
       })
       .slice(0, candidateLimit)
   }
-  async searchByKeywords(query, limit = 10) {
-    const keywords = this.extractSearchTerms(query).slice(0, 12)
 
-    if (keywords.length === 0) return []
-
-    try {
-      const postSQL = `
-        SELECT
-          'post' AS type,
-          reddit_id, subreddit, title, content, author,
-          score, upvotes, created_utc, url, tags,
-          (0.55 + LEAST(0.45, term_match_count::float / GREATEST($2::float, 1))) AS similarity
-        FROM (
-          SELECT
-            reddit_id, subreddit, title, content, author,
-            score, upvotes, created_utc, url, tags,
-            (
-              SELECT COUNT(*)
-              FROM unnest($1::text[]) AS term
-              WHERE lower(coalesce(title, '')) ~ ('\\m' || term || '\\M')
-                 OR lower(coalesce(content, '')) ~ ('\\m' || term || '\\M')
-            ) AS term_match_count
-          FROM reddit_posts
-        ) AS posts_ranked
-        WHERE term_match_count > 0
-        ORDER BY term_match_count DESC, score DESC, upvotes DESC
-        LIMIT $3
-      `
-
-      const commentSQL = `
-        SELECT
-          'comment' AS type,
-          reddit_id, subreddit, LEFT(content, 120) AS title, content, author,
-          score, upvotes, created_utc, NULL::text AS url, tags,
-          (0.5 + LEAST(0.45, term_match_count::float / GREATEST($2::float, 1))) AS similarity
-        FROM (
-          SELECT
-            reddit_id, subreddit, content, author,
-            score, upvotes, created_utc, tags,
-            (
-              SELECT COUNT(*)
-              FROM unnest($1::text[]) AS term
-              WHERE lower(coalesce(content, '')) ~ ('\\m' || term || '\\M')
-            ) AS term_match_count
-          FROM reddit_comments
-        ) AS comments_ranked
-        WHERE term_match_count > 0
-        ORDER BY term_match_count DESC, score DESC, upvotes DESC
-        LIMIT $3
-      `
-
-      const params = [keywords, keywords.length, Math.ceil(limit / 2)]
-
-      const [postResult, commentResult] = await Promise.all([
-        this.pool.query(postSQL, params),
-        this.pool.query(commentSQL, params),
-      ])
-
-      const allResults = [...(postResult.rows || []), ...(commentResult.rows || [])]
-
-      return allResults.slice(0, limit)
-    } catch (error) {
-      logger.error('Error in searchByKeywords:', error)
-      return []
-    }
-  }
-
+  /**
+   * Structural de-duplication, preserving order: one entry per (type, reddit_id); chunks dropped
+   * when the post/comment they were cut from is itself a candidate (same `source_key`); and
+   * byte-identical title+content (crossposts) kept once.
+   */
   removeDuplicates(results) {
-    const typePriority = { post: 0, comment: 1, chunk: 2 }
-    const orderedResults = [...results].sort((a, b) => {
-      const priorityA = typePriority[a.type] ?? 3
-      const priorityB = typePriority[b.type] ?? 3
-      if (priorityA !== priorityB) return priorityA - priorityB
-      return (Number(b.similarity) || 0) - (Number(a.similarity) || 0)
-    })
-
+    const list = Array.isArray(results) ? results : []
+    const parentSourceKeys = new Set(
+      list.filter(result => result.type !== 'chunk' && result.source_key).map(r => r.source_key)
+    )
     const seenIds = new Set()
-    const seenFingerprints = []
-    const nonChunkFingerprints = []
-    const unique = []
+    const seenText = new Set()
 
-    for (const result of orderedResults) {
+    return list.filter(result => {
       const idKey = `${result.type}:${result.reddit_id}`
-      if (seenIds.has(idKey)) continue
-
-      const fingerprint = this.createResultFingerprint(result)
-      const isDuplicate = seenFingerprints.some(existing =>
-        this.isNearDuplicateFingerprint(fingerprint, existing)
-      )
-      if (isDuplicate) continue
-
-      if (result.type === 'chunk') {
-        const overlapsNonChunk = nonChunkFingerprints.some(existing =>
-          this.isNearDuplicateFingerprint(fingerprint, existing)
-        )
-        if (overlapsNonChunk) continue
+      if (seenIds.has(idKey)) return false
+      if (result.type === 'chunk' && result.source_key && parentSourceKeys.has(result.source_key)) {
+        return false
       }
+
+      const title = String(result.title || '')
+      const content = String(result.content || '')
+      const textKey = title || content ? `${title}\u0000${content}` : null
+      if (textKey && seenText.has(textKey)) return false
 
       seenIds.add(idKey)
-      seenFingerprints.push(fingerprint)
-      if (result.type !== 'chunk') {
-        nonChunkFingerprints.push(fingerprint)
-      }
-      unique.push(result)
-    }
-
-    return unique.sort((a, b) => (Number(b.similarity) || 0) - (Number(a.similarity) || 0))
-  }
-
-  extractSearchTerms(query) {
-    const normalized = String(query || '')
-      .toLowerCase()
-      .normalize('NFKD')
-      .replace(/[^\w\s]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-
-    if (!normalized) return []
-
-    const terms = normalized.split(' ').filter(term => term.length >= 3)
-    return Array.from(new Set(terms)).slice(0, 14)
-  }
-
-  escapeRegex(value) {
-    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  }
-
-  countTermMatches(text, terms) {
-    if (!text || !Array.isArray(terms) || terms.length === 0) return 0
-
-    const haystack = String(text).toLowerCase()
-    let matches = 0
-
-    for (const term of terms) {
-      const pattern = new RegExp(`\\b${this.escapeRegex(term)}\\b`, 'i')
-      if (pattern.test(haystack)) matches++
-    }
-
-    return matches
-  }
-
-  buildDynamicTermWeights(queryTerms, candidateResults) {
-    const terms = Array.isArray(queryTerms) ? queryTerms : []
-    const results = Array.isArray(candidateResults) ? candidateResults : []
-    if (terms.length === 0 || results.length === 0) return {}
-
-    const docCount = Math.max(1, results.length)
-    const rawWeights = {}
-
-    for (const term of terms) {
-      let documentFrequency = 0
-      for (const result of results) {
-        const text = `${result.title || ''} ${result.content || ''} ${result.subreddit || ''}`
-        if (this.countTermMatches(text, [term]) > 0) {
-          documentFrequency += 1
-        }
-      }
-      rawWeights[term] = Math.log((docCount + 1) / (documentFrequency + 1)) + 1
-    }
-
-    const values = Object.values(rawWeights)
-    const maxWeight = Math.max(...values, 1)
-    const minWeight = Math.min(...values, 1)
-    const normalizedWeights = {}
-
-    for (const term of terms) {
-      const raw = rawWeights[term] || 1
-      if (maxWeight === minWeight) {
-        normalizedWeights[term] = 1
-        continue
-      }
-
-      const scaled = (raw - minWeight) / (maxWeight - minWeight)
-      normalizedWeights[term] = 0.65 + scaled * 0.7
-    }
-
-    return normalizedWeights
-  }
-
-  countWeightedTermMatches(text, queryTerms, termWeights = {}) {
-    if (!text || !queryTerms.length) return 0
-    const haystack = String(text).toLowerCase()
-    let weightedMatches = 0
-    for (const term of queryTerms) {
-      const pattern = new RegExp(`\\b${this.escapeRegex(term)}\\b`, 'i')
-      if (pattern.test(haystack)) {
-        weightedMatches += termWeights[term] || 1
-      }
-    }
-    return weightedMatches
-  }
-
-  scoreSearchResult(result, queryTerms, termWeights = {}) {
-    const normalizedSimilarity = Math.max(0, Math.min(1, Number(result.similarity) || 0))
-    const normalizedTextRank = Math.min(
-      1,
-      Math.log1p(Math.max(0, Number(result.textRank ?? result.text_rank) || 0)) / Math.log(2.5)
-    )
-    const weightedTitleMatches = this.countWeightedTermMatches(
-      result.title,
-      queryTerms,
-      termWeights
-    )
-    const weightedContentMatches = this.countWeightedTermMatches(
-      result.content,
-      queryTerms,
-      termWeights
-    )
-    const weightedSubredditMatches = this.countWeightedTermMatches(
-      result.subreddit,
-      queryTerms,
-      termWeights
-    )
-    const totalPossibleWeight = queryTerms.reduce((sum, term) => sum + (termWeights[term] || 1), 0)
-    const lexicalScore =
-      totalPossibleWeight > 0
-        ? Math.min(
-            1,
-            (weightedTitleMatches * 1.25 +
-              weightedContentMatches +
-              weightedSubredditMatches * 0.4) /
-              (totalPossibleWeight * 2.2)
-          )
-        : 0
-    const contentText = `${result.title || ''} ${result.content || ''}`
-    const exactTermMatches = this.countTermMatches(contentText, queryTerms)
-    const lexicalCoverage = queryTerms.length > 0 ? exactTermMatches / queryTerms.length : 0
-    const highSignalTerms = queryTerms.filter(term => (termWeights[term] || 1) > 1.0)
-    const highSignalMatches = this.countTermMatches(contentText, highSignalTerms)
-
-    const engagementBase = Math.max(0, Number(result.upvotes) || 0, Number(result.score) || 0)
-    const engagementScore = Math.min(1, Math.log10(engagementBase + 1) / 3)
-    const rrfScore = Math.max(0, Number(result.rrfScore) || 0)
-    const normalizedRrfScore = Math.min(1, rrfScore * 120)
-    const sourceStrategies = Array.isArray(result.sourceStrategies)
-      ? result.sourceStrategies
-      : result.sourceStrategy
-        ? [result.sourceStrategy]
-        : []
-    const multiStrategyBonus = sourceStrategies.length > 1 ? 0.06 : 0
-    const typeWeight = result.type === 'post' ? 1 : result.type === 'comment' ? 0.88 : 0.65
-    const highSignalPenalty =
-      highSignalTerms.length > 0 && highSignalMatches === 0
-        ? 0.2
-        : highSignalTerms.length >= 3 && highSignalMatches === 1
-          ? 0.55
-          : 1
-    const weakCoveragePenalty =
-      lexicalCoverage < 0.2 ? 0.45 : lexicalCoverage < 0.35 ? 0.7 : lexicalCoverage < 0.5 ? 0.86 : 1
-
-    let recencyScore = 0.5
-    if (result.created_utc) {
-      const created = new Date(result.created_utc)
-      if (!Number.isNaN(created.getTime())) {
-        const ageInDays = Math.max(0, (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24))
-        recencyScore = Math.max(0.2, 1 - ageInDays / 730)
-      }
-    }
-
-    const semanticComponent = normalizedSimilarity * (0.55 + lexicalScore * 0.45)
-    const textComponent = normalizedTextRank * (0.45 + lexicalScore * 0.55)
-
-    return (
-      (semanticComponent * 0.21 +
-        textComponent * 0.14 +
-        lexicalScore * 0.45 +
-        engagementScore * 0.05 +
-        normalizedRrfScore * 0.11 +
-        recencyScore * 0.04 +
-        multiStrategyBonus) *
-      typeWeight *
-      highSignalPenalty *
-      weakCoveragePenalty
-    )
-  }
-
-  buildVectorQueryVariants(query) {
-    const normalizedQuery = String(query || '')
-      .replace(/\s+/g, ' ')
-      .trim()
-    if (!normalizedQuery) return []
-
-    const terms = this.extractSearchTerms(normalizedQuery)
-    const variants = [normalizedQuery]
-
-    if (terms.length > 0) {
-      variants.push(terms.join(' '))
-      if (terms.length > 6) {
-        variants.push(terms.slice(0, 6).join(' '))
-      }
-    }
-
-    const normalizedPunctuation = normalizedQuery
-      .replace(/[^\w\s]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-    if (normalizedPunctuation && normalizedPunctuation !== normalizedQuery) {
-      variants.push(normalizedPunctuation)
-    }
-
-    return Array.from(new Set(variants)).slice(0, 2)
-  }
-
-  createResultFingerprint(result) {
-    const text = `${result.title || ''} ${result.content || ''}`
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-
-    if (!text) return ''
-
-    return text
-      .split(' ')
-      .filter(token => token.length > 2)
-      .slice(0, 60)
-      .join(' ')
-  }
-
-  isNearDuplicateFingerprint(current, existing) {
-    if (!current || !existing) return false
-    if (current === existing) return true
-
-    const currentHead = current.slice(0, 140)
-    const existingHead = existing.slice(0, 140)
-    if (!currentHead || !existingHead) return false
-
-    if (current.includes(existingHead) || existing.includes(currentHead)) return true
-
-    const currentTokens = new Set(currentHead.split(' ').filter(Boolean))
-    const existingTokens = new Set(existingHead.split(' ').filter(Boolean))
-    if (currentTokens.size < 6 || existingTokens.size < 6) return false
-
-    let overlap = 0
-    for (const token of currentTokens) {
-      if (existingTokens.has(token)) overlap++
-    }
-    const overlapRatio = overlap / Math.min(currentTokens.size, existingTokens.size)
-    return overlapRatio >= 0.84
+      if (textKey) seenText.add(textKey)
+      return true
+    })
   }
 
   diversifyByType(results, targetLimit) {
@@ -1714,7 +1210,8 @@ class KnowledgeBase {
       WITH post_results AS (
         SELECT
           'post' AS type,
-          reddit_id, subreddit, title, content, author,
+          reddit_id, ('post:' || id::text) AS source_key,
+          subreddit, title, content, author,
           score, upvotes, created_utc, url, tags,
           is_video, post_type::text AS post_type,
           to_jsonb(images) AS images,
@@ -1728,7 +1225,8 @@ class KnowledgeBase {
       comment_results AS (
         SELECT
           'comment' AS type,
-          reddit_id, subreddit, content AS title, content,
+          reddit_id, ('comment:' || id::text) AS source_key,
+          subreddit, content AS title, content,
           author, score, upvotes, created_utc, NULL::text AS url, tags,
           false AS is_video, 'comment'::text AS post_type, NULL::jsonb AS images, NULL::jsonb AS video,
           1 - (embedding <=> $1::vector) AS similarity
@@ -1740,7 +1238,8 @@ class KnowledgeBase {
       chunk_results AS (
         SELECT
           'chunk' AS type,
-          source_id::text AS reddit_id, subreddit,
+          source_id::text AS reddit_id, (source_type || ':' || source_id::text) AS source_key,
+          subreddit,
           chunk_text AS title, chunk_text AS content,
           NULL AS author, relevance_score AS score,
           0 AS upvotes, created_at AS created_utc,

@@ -1,109 +1,12 @@
-export const COURSE_ACRONYMS: { [key: string]: string[] } = {
-  DSA: ['BCSE202L', 'BITE201L', 'ISWE102L', 'CSI2002'],
-  'DATA STRUCTURES': ['BCSE202L', 'BITE201L', 'ISWE102L', 'CSI2002'],
-  ALGORITHMS: ['BCSE202L', 'BCSE204L', 'CSI2003'],
+/**
+ * VIT course catalog: course code -> official course title.
+ *
+ * Plain data plus two deterministic lookups. Nothing here interprets natural language (no
+ * nicknames, acronyms or fuzzy scoring): the model searches the catalog with
+ * `searchCourseCatalog`, reads the candidates, and passes exact codes to course tools.
+ */
 
-  DSD: ['BECE102L'],
-  'DIGITAL DESIGN': ['BECE102L'],
-
-  'Artificial Intelligence': ['BCSE306L'],
-
-  OS: ['BCSE303L', 'BITE303L', 'ISWE204L'],
-  'OPERATING SYSTEM': ['BCSE303L', 'BITE303L', 'ISWE204L'],
-
-  DBMS: ['BCSE302L', 'BITE302L', 'ISWE103L'],
-  DATABASE: ['BCSE302L', 'BITE302L', 'ISWE103L'],
-
-  CN: ['BCSE308L', 'BITE305L', 'UCSC203L'],
-  NETWORKS: ['BCSE308L', 'BITE305L', 'UCSC203L'],
-  'COMPUTER NETWORKS': ['BCSE308L', 'BITE305L', 'UCSC203L'],
-  'MATERIALS SCIENCE': ['BMEE209L'],
-  'MAT SCI': ['BMEE209L'],
-  SE: ['BCSE301L', 'BITE307L', 'ISWE101L'],
-  'SOFTWARE ENGINEERING': ['BCSE301L', 'BITE307L', 'ISWE101L'],
-
-  ML: ['BCSE209L', 'BITE410L', 'CSE4020'],
-  'MACHINE LEARNING': ['BCSE209L', 'BITE410L', 'CSE4020'],
-
-  AI: ['BCSE306L', 'BITE308L', 'BMEE407L', 'CBS3004'],
-  'ARTIFICIAL INTELLIGENCE': ['BCSE306L', 'BITE308L', 'BMEE407L', 'CBS3004'],
-
-  CA: ['BCSE205L', 'BITE301L', 'ISWE301L', 'CBS1004'],
-  'COMPUTER ARCHITECTURE': ['BCSE205L', 'BITE301L', 'ISWE301L', 'CBS1004'],
-  COA: ['BCSE205L', 'BITE301L', 'ISWE301L', 'CBS1004'],
-
-  TOC: ['BCSE304L', 'BITE306L', 'ISWE203L'],
-  'THEORY OF COMPUTATION': ['BCSE304L', 'BITE306L', 'ISWE203L'],
-
-  CD: ['BCSE307L', 'CSI2005'],
-  COMPILER: ['BCSE307L', 'CSI2005'],
-  'COMPILER DESIGN': ['BCSE307L', 'CSI2005'],
-
-  WT: ['BITE304L', 'ISWE206L'],
-  'WEB TECH': ['BITE304L', 'ISWE206L'],
-  'WEB TECHNOLOGIES': ['BITE304L', 'ISWE206L'],
-
-  DM: ['BCSE208L', 'BITE312E'],
-  'DATA MINING': ['BCSE208L', 'BITE312E'],
-
-  CNS: ['BCSE309L', 'BECE411L'],
-  CRYPTOGRAPHY: ['BCSE309L', 'BECE411L'],
-  'NETWORK SECURITY': ['BCSE309L', 'BECE411L'],
-
-  DSP: ['BECE301L'],
-  'SIGNAL PROCESSING': ['BECE301L', 'BEVD203L'],
-
-  VLSI: ['BECE303L'],
-  'VLSI DESIGN': ['BECE303L'],
-
-  OOP: ['BCSE102L', 'ICSE102L'],
-  OOPS: ['BCSE102L', 'ICSE102L'],
-  'OBJECT ORIENTED': ['BCSE102L', 'ICSE102L', 'BITE404E'],
-
-  HCI: ['BITE311L'],
-  'HUMAN COMPUTER INTERACTION': ['BITE311L'],
-
-  IS: ['BCSE317L', 'CBS3002'],
-  'INFO SEC': ['BCSE317L', 'CBS3002'],
-  'INFORMATION SECURITY': ['BCSE317L', 'CBS3002'],
-
-  BDA: ['BCSE402L', 'BITE411L'],
-  'BIG DATA': ['BCSE402L', 'BITE411L'],
-
-  IOT: ['BCSE401L', 'BITE403L'],
-  'INTERNET OF THINGS': ['BCSE401L', 'BITE403L'],
-
-  CC: ['BITE412L', 'SWE4002'],
-  CLOUD: ['BITE412L', 'SWE4002', 'BMEE355L', 'BECE355L'],
-  'CLOUD COMPUTING': ['BITE412L', 'SWE4002'],
-
-  CALC: ['BMAT101L', 'IMAT101L'],
-  CALCULUS: ['BMAT101L', 'IMAT101L'],
-  'LINEAR ALGEBRA': ['BMAT201L', 'BMAT203L', 'UMAT201L', 'IMAT201L'],
-  PROBABILITY: ['BMAT202L', 'TMAT201L'],
-  STATS: ['BMAT202L', 'MAT2001', 'TMAT201L'],
-  STATISTICS: ['BMAT202L', 'MAT2001', 'TMAT201L'],
-  'DISCRETE MATH': ['BMAT205L', 'MAT1014'],
-
-  PHYSICS: ['BPHY101L', 'IPHY101L'],
-  QUANTUM: ['BPHY203L'],
-  MECHANICS: ['BPHY202L', 'BMEE201L'],
-
-  CHEMISTRY: ['BCHY101L', 'ICHY101L'],
-  CHEM: ['BCHY101L', 'ICHY101L'],
-
-  ELECTRONICS: ['BEEE102L', 'IEEE102L'],
-  ANALOG: ['BECE206L', 'BECE304L'],
-  DIGITAL: ['BEEE206L', 'BECE102L'],
-  MICROPROCESSOR: ['BECE204L', 'ISWE201L'],
-  MICRO: ['BECE204L', 'ISWE201L'],
-
-  MANAGEMENT: ['BMGT101L'],
-  ENTREPRENEURSHIP: ['BMGT108L', 'CFOC508M'],
-
-  ENGLISH: ['BENG101L', 'IENG101L'],
-  COMMUNICATION: ['BENG101L', 'IENG101L', 'BHUM201L'],
-}
+export type CourseCatalogEntry = { code: string; name: string }
 
 export const COURSE_MAP: { [key: string]: string } = {
   BMAT101L: 'Calculus',
@@ -584,132 +487,39 @@ export const COURSE_MAP: { [key: string]: string } = {
   UHUM101L: 'Personal Finance',
 }
 
-export function findFullCourseName(code: string): string {
-  const upperCode = code.toUpperCase().trim()
+/** Canonical form of a course code (codes are stored upper-case, without spaces). */
+export const normalizeCourseCode = (code: string): string => code.replace(/\s+/g, '').toUpperCase()
 
-  const directMatch = COURSE_MAP[upperCode]
-  if (directMatch) {
-    return directMatch
-  }
+/** Machine-format check for a VIT course code such as BCSE302L or CSI2002 (not a catalog lookup). */
+export const COURSE_CODE_PATTERN = /^[A-Z]{3,5}\d{3,4}[A-Z]?$/
+export const isCourseCodeFormat = (code: string): boolean =>
+  COURSE_CODE_PATTERN.test(normalizeCourseCode(code))
 
-  const acronymCodes = COURSE_ACRONYMS[upperCode]
-  if (acronymCodes) {
-    const matches = acronymCodes.map(courseCode => COURSE_MAP[courseCode] || courseCode)
-    const [onlyMatch] = matches
-    if (matches.length === 1 && onlyMatch !== undefined) {
-      return onlyMatch
-    } else if (matches.length > 1) {
-      return matches.join(' / ')
-    }
-  }
-
-  const searchResults = searchCoursesByName(upperCode)
-  const [onlyResult] = searchResults
-  if (searchResults.length === 1 && onlyResult) {
-    return onlyResult.name
-  } else if (searchResults.length > 1) {
-    return searchResults.map(r => r.name).join(' / ')
-  }
-
-  return code
+/** Exact catalog lookup by course code (case/whitespace-insensitive). Null when unknown. */
+export function getCourseByCode(code: string): CourseCatalogEntry | null {
+  const normalized = normalizeCourseCode(code)
+  const name = COURSE_MAP[normalized]
+  return name === undefined ? null : { code: normalized, name }
 }
 
-export function searchCoursesByName(searchTerm: string): Array<{ code: string; name: string }> {
-  const upperSearchTerm = searchTerm.toUpperCase().trim()
-  const results: Array<{ code: string; name: string }> = []
+export const DEFAULT_COURSE_SEARCH_LIMIT = 10
+export const MAX_COURSE_SEARCH_LIMIT = 25
 
-  for (const [code, name] of Object.entries(COURSE_MAP)) {
-    if (name.toUpperCase().includes(upperSearchTerm)) {
-      results.push({ code, name })
-    }
-  }
-
-  const uniqueResults = results.filter(
-    (item, index, self) => index === self.findIndex(t => t.name === item.name)
-  )
-
-  return uniqueResults.slice(0, 10) // Limit to top 10 results
-}
-
-export function getAllCourseMatches(
-  searchTerm: string
-): Array<{ code: string; name: string; matchType: string }> {
-  const upperSearchTerm = searchTerm.toUpperCase().trim()
-  const results: Array<{ code: string; name: string; matchType: string }> = []
-
-  if (COURSE_MAP[upperSearchTerm]) {
-    results.push({
-      code: upperSearchTerm,
-      name: COURSE_MAP[upperSearchTerm],
-      matchType: 'exact_code',
-    })
-  }
-
-  if (COURSE_ACRONYMS[upperSearchTerm]) {
-    COURSE_ACRONYMS[upperSearchTerm].forEach(courseCode => {
-      if (COURSE_MAP[courseCode]) {
-        results.push({
-          code: courseCode,
-          name: COURSE_MAP[courseCode],
-          matchType: 'acronym',
-        })
-      }
-    })
-  }
-
-  for (const [code, name] of Object.entries(COURSE_MAP)) {
-    if (name.toUpperCase().includes(upperSearchTerm) && !results.some(r => r.code === code)) {
-      results.push({
-        code,
-        name,
-        matchType: 'partial_name',
-      })
-    }
-  }
-
-  return results.slice(0, 15) // Limit results
-}
-
-export function recognizeCourseInText(
-  text: string
-): Array<{ original: string; matches: Array<{ code: string; name: string }> }> {
-  const upperText = text.toUpperCase()
-  const recognizedCourses: Array<{
-    original: string
-    matches: Array<{ code: string; name: string }>
-  }> = []
-
-  const courseCodePattern = /\b[A-Z]{3,6}[0-9]{3,4}[A-Z]?\b/g
-  const codeMatches = text.match(courseCodePattern) || []
-
-  codeMatches.forEach(match => {
-    const upperMatch = match.toUpperCase()
-    if (COURSE_MAP[upperMatch]) {
-      recognizedCourses.push({
-        original: match,
-        matches: [{ code: upperMatch, name: COURSE_MAP[upperMatch] }],
-      })
-    }
-  })
-
-  Object.entries(COURSE_ACRONYMS).forEach(([acronym, courseCodes]) => {
-    const regex = new RegExp(`\\b${acronym}\\b`, 'gi')
-    const acronymMatches = text.match(regex) || []
-
-    if (acronymMatches.length > 0) {
-      const matches = courseCodes.map(courseCode => ({
-        code: courseCode,
-        name: COURSE_MAP[courseCode] || courseCode,
-      }))
-
-      acronymMatches.forEach(match => {
-        recognizedCourses.push({
-          original: match,
-          matches,
-        })
-      })
-    }
-  })
-
-  return recognizedCourses
+/**
+ * Case-insensitive substring search over catalog codes and titles, in catalog order.
+ * Returns candidates only; callers (the model) choose among them.
+ */
+export function searchCourseCatalog(
+  query: string,
+  limit: number = DEFAULT_COURSE_SEARCH_LIMIT
+): { total: number; results: CourseCatalogEntry[] } {
+  const needle = query.trim().toLowerCase()
+  if (!needle) return { total: 0, results: [] }
+  const cap = Math.max(1, Math.min(Math.trunc(limit), MAX_COURSE_SEARCH_LIMIT))
+  const matches = Object.entries(COURSE_MAP)
+    .filter(
+      ([code, name]) => code.toLowerCase().includes(needle) || name.toLowerCase().includes(needle)
+    )
+    .map(([code, name]) => ({ code, name }))
+  return { total: matches.length, results: matches.slice(0, cap) }
 }

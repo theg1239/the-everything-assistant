@@ -1,7 +1,6 @@
 const crypto = require('node:crypto')
 const express = require('express')
 const cors = require('cors')
-const RAGService = require('./knowledge-base/rag-service')
 const AgenticRAGService = require('./knowledge-base/agentic-rag-service')
 const KnowledgeBase = require('./knowledge-base/knowledge-base')
 
@@ -67,7 +66,6 @@ app.use((req, res, next) => {
 })
 
 const ragService = new AgenticRAGService()
-const legacyRagService = new RAGService()
 const knowledgeBase = new KnowledgeBase()
 
 app.get('/health', (req, res) => {
@@ -134,7 +132,7 @@ app.post('/api/search', async (req, res) => {
 
 app.post('/api/ask', async (req, res) => {
   try {
-    const { query, conversationHistory = [], useAgentic = true } = req.body
+    const { query, conversationHistory = [] } = req.body
     if (!query || typeof query !== 'string' || !query.trim()) {
       return res.status(400).json({
         success: false,
@@ -142,10 +140,10 @@ app.post('/api/ask', async (req, res) => {
       })
     }
 
-    console.log(`RAG request: "${query}" (agentic: ${useAgentic})`)
+    console.log(`RAG request: "${query}"`)
 
-    const activeRagService = useAgentic ? ragService : legacyRagService
-    const response = await activeRagService.generateResponse(query, conversationHistory)
+    // `useAgentic` is still accepted but ignored: the legacy keyword RAG service was removed.
+    const response = await ragService.generateResponse(query, conversationHistory)
 
     res.json({
       success: true,
@@ -156,7 +154,7 @@ app.post('/api/ask', async (req, res) => {
       searchAttempts: response.searchAttempts,
       refinedQueries: response.refinedQueries,
       note: response.note,
-      serviceUsed: useAgentic ? 'agentic' : 'legacy',
+      serviceUsed: 'agentic',
       query: query,
     })
   } catch (error) {
@@ -227,47 +225,6 @@ app.get('/api/trending', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Internal server error while fetching trending topics',
-    })
-  }
-})
-
-app.post('/api/compare', async (req, res) => {
-  try {
-    const { query, conversationHistory = [] } = req.body
-    if (!query || typeof query !== 'string' || !query.trim()) {
-      return res.status(400).json({
-        success: false,
-        error: 'Query is required and must be a non-empty string',
-      })
-    }
-
-    console.log(`Comparison request: "${query}"`)
-
-    const [agenticResponse, legacyResponse] = await Promise.allSettled([
-      ragService.generateResponse(query, conversationHistory),
-      legacyRagService.generateResponse(query, conversationHistory),
-    ])
-
-    res.json({
-      success: true,
-      agentic: {
-        status: agenticResponse.status,
-        result: agenticResponse.status === 'fulfilled' ? agenticResponse.value : null,
-        error: agenticResponse.status === 'rejected' ? agenticResponse.reason.message : null,
-      },
-      legacy: {
-        status: legacyResponse.status,
-        result: legacyResponse.status === 'fulfilled' ? legacyResponse.value : null,
-        error: legacyResponse.status === 'rejected' ? legacyResponse.reason.message : null,
-      },
-      query: query,
-    })
-  } catch (error) {
-    console.error('Comparison API error:', error)
-    res.status(500).json({
-      success: false,
-      error: 'Internal server error during comparison',
-      message: error.message,
     })
   }
 })

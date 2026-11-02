@@ -8,10 +8,9 @@ const { parseEnvelope } = require('../src/cli/envelope')
 const { classifyAuthFailure, classifyExecutionError } = require('../src/cli/errors')
 const { Catalog, ValidationError } = require('../src/catalog')
 const { TokenSealer } = require('../src/workflow/token')
-const { matchOne, matchMany } = require('../src/workflow/match')
 const { buildOptions, renderTable } = require('../src/cli/output')
 const { Scheduler } = require('../src/scheduler')
-const { parseFormOptions } = require('../src/service')
+const { parseFormOptions, parseSelectChoice } = require('../src/service')
 
 const catalog = Catalog.fromFile(path.resolve(__dirname, '../../../hub-capabilities.json'))
 
@@ -49,17 +48,29 @@ describe('catalog', () => {
 
   it('builds argv only from allow-listed, canonical flags', () => {
     const entry = catalog.get('nightslip')
-    const { flags } = catalog.normalizeParams(entry, { apply: 'true', 'cost-centre-id': 'CC1', details: 'Late lab', eventId: 'EV1' })
+    const flags = catalog.normalizeParams(entry, { apply: 'true', 'cost-centre-id': 'CC1', details: 'Late lab', eventId: 'EV1' })
     assert.deepEqual(catalog.toCliArgs(flags), ['--apply', 'true', '--cost-centre-id', 'CC1', '--details', 'Late lab', '--event-id', 'EV1'])
     assert.throws(() => catalog.normalizeParams(entry, { '--apply': true, x: 1 }), ValidationError)
     assert.throws(() => catalog.toCliArgs({ details: '-x' }), ValidationError)
   })
 
-  it('maps legacy query fields to hints and free text for index steps to hints', () => {
+  it('accepts only exact machine values (no natural-language fields)', () => {
     const entry = catalog.get('course-page')
-    const { flags, hints } = catalog.normalizeParams(entry, { courseQuery: 'dsa', course: 'CSE2001', fuzzyIndex: 2, materialSelection: 'all' })
-    assert.deepEqual(flags, { materials: '0' })
-    assert.deepEqual(hints, { course: 'dsa' })
+    assert.deepEqual(catalog.normalizeParams(entry, { course: 2, faculty: '1', materials: 'all', fuzzyIndex: 2 }), { course: 2, faculty: 1, materials: '0' })
+    assert.deepEqual(catalog.normalizeParams(entry, { materials: [1, 3, 4] }), { materials: '1,3,4' })
+    assert.equal(catalog.normalizeParams(entry, { semester: 'list' }).semester, 9999)
+    for (const legacy of ['courseQuery', 'semesterQuery', 'facultyQuery', 'materialQuery']) {
+      assert.throws(() => catalog.normalizeParams(entry, { [legacy]: 'dsa' }), err => err.field === legacy)
+    }
+    // course is an index-only step in course-page: text is rejected, not interpreted
+    assert.throws(() => catalog.normalizeParams(entry, { course: 'CSE2001' }), /positive integer option index/)
+    assert.throws(() => catalog.normalizeParams(entry, { semester: 'previous' }), /positive integer/)
+    assert.throws(() => catalog.normalizeParams(entry, { materials: 'module 2' }), /materials must look like/)
+    assert.throws(() => catalog.normalizeParams(entry, { materials: 'everything' }), /materials must look like/)
+    assert.throws(() => catalog.normalizeParams(catalog.get('leave'), { apply: 'yes' }), /boolean/)
+    // where cli-top runs its own search (select: "fuzzy") a string is forwarded verbatim
+    assert.deepEqual(catalog.normalizeParams(entry, { faculty: 'anuj' }), { faculty: 'anuj' })
+    assert.deepEqual(catalog.normalizeParams(catalog.get('syllabus'), { course: 'CSE2001' }), { course: 'CSE2001' })
   })
 })
 
@@ -81,28 +92,27 @@ describe('continuation tokens', () => {
   })
 })
 
-describe('matching', () => {
-  const courses = buildOptions({ headers: ['COURSE CODE', 'COURSE NAME'], rows: [['CSE1001', 'Problem Solving and Programming'], ['CSE2001', 'Data Structures and Algorithms'], ['MAT1011', 'Calculus for Engineers']] })
-  const semesters = buildOptions({ headers: ['SEMESTER'], rows: [['Winter Semester 2024-25'], ['Fall Semester 2025-26']] })
-  const materials = buildOptions({ headers: ['DATE', 'MODULE', 'TOPIC', 'REF COUNT'], rows: [['1', '1', 'Intro', '1'], ['2', '2', 'Trees slides', '1'], ['3', '2', 'Graphs', '1']] })
+describe('select choices', () => {
+  const ids = ['1', '2', '3', '4', '5']
+  const single = { param: 'course', label: 'Course', multiple: false }
+  const multi = { param: 'materials', label: 'Materials', multiple: true }
 
-  it('matches codes, acronyms and words', () => {
-    assert.equal(matchOne(courses, 'cse2001').option.index, 2)
-    assert.equal(matchOne(courses, 'DSA').option.index, 2)
-    assert.equal(matchOne(courses, 'calculus').option.index, 3)
-    assert.equal(matchOne(courses, 'physics').option, undefined)
+  it('accepts option ids only', () => {
+    assert.deepEqual(parseSelectChoice(single, '2', ids), { value: 2, ids: ['2'] })
+    assert.deepEqual(parseSelectChoice(single, 3, ids), { value: 3, ids: ['3'] })
+    assert.deepEqual(parseSelectChoice(single, ['4'], ids), { value: 4, ids: ['4'] })
+    for (const bad of ['dsa', 'CSE1001', '9', '0', '1,2', 'all', ['1', '2'], true, '', undefined]) {
+      assert.throws(() => parseSelectChoice(single, bad, ids), err => err.kind === 'invalid_input' && err.validIds.join() === ids.join(), String(bad))
+    }
   })
 
-  it('resolves relative semesters', () => {
-    assert.equal(matchOne(semesters, 'previous semester', { param: 'semester' }).option.index, 1)
-    assert.equal(matchOne(semesters, 'fall 2025', { param: 'semester' }).option.index, 2)
-  })
-
-  it('selects materials by module, words or all', () => {
-    assert.equal(matchMany(materials, 'module 2 slides').selection, '2,3')
-    assert.equal(matchMany(materials, 'graphs').selection, '3')
-    assert.equal(matchMany(materials, 'all of the materials').selection, '0')
-    assert.equal(matchMany(materials, '1, 3').selection, '1,3')
+  it('accepts id lists, id ranges and "all" for multi-select', () => {
+    assert.deepEqual(parseSelectChoice(multi, '1,3-4', ids), { value: '1,3,4', ids: ['1', '3', '4'] })
+    assert.deepEqual(parseSelectChoice(multi, ['3', 1], ids), { value: '1,3', ids: ['1', '3'] })
+    assert.deepEqual(parseSelectChoice(multi, 'all', ids), { value: '0', ids: 'all' })
+    for (const bad of ['module 2', 'everything', '0', '4-2', '1,9', [], ['x'], 'ALL']) {
+      assert.throws(() => parseSelectChoice(multi, bad, ids), err => err.validIds.includes('all'), String(bad))
+    }
   })
 
   it('parses VTOP form option lists', () => {

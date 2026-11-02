@@ -51,6 +51,13 @@ describe('MCP tools (inline credentials, shared-secret protected)', () => {
     }
     const coursePage = result.tools.find(tool => tool.name === 'course-page')
     assert.match(coursePage.description, /vtop-continue/)
+    assert.match(coursePage.description, /WITHOUT the step flags/)
+    const props = coursePage.inputSchema.properties
+    assert.equal(props.select, undefined, 'no natural-language hint parameter')
+    assert.deepEqual(Object.keys(props.flags.properties).sort(), ['course', 'faculty', 'materials', 'semester'])
+    assert.equal(props.flags.properties.course.type, 'integer')
+    const cont = result.tools.find(tool => tool.name === 'vtop-continue')
+    assert.deepEqual(Object.keys(cont.inputSchema.properties).filter(key => !['username', 'password', 'encryptedPassword', 'sessionKey'].includes(key)).sort(), ['choice', 'continuation'])
   })
 
   it('runs a read command', async () => {
@@ -60,12 +67,20 @@ describe('MCP tools (inline credentials, shared-secret protected)', () => {
     assert.match(result.structuredContent.data, /Test Student/)
   })
 
-  it('drives a multi-step workflow through vtop-continue with absolute file URLs', async () => {
-    let { result } = await call('course-page', { username: '21BCE0001', password: 'pw', select: { course: 'CSE1001' } })
+  it('drives a multi-step workflow through vtop-continue with option ids and absolute file URLs', async () => {
+    const auth = { username: '21BCE0001', password: 'pw' }
+    let { result } = await call('course-page', auth)
     assert.equal(result.structuredContent.status, 'needs_selection')
+    assert.equal(result.structuredContent.step.id, 'course')
+    ;({ result } = await call('vtop-continue', { ...auth, continuation: result.structuredContent.continuation, choice: '1' }))
     assert.equal(result.structuredContent.step.id, 'faculty')
-    ;({ result } = await call('vtop-continue', { username: '21BCE0001', password: 'pw', continuation: result.structuredContent.continuation, choice: 'anuj' }))
-    ;({ result } = await call('vtop-continue', { username: '21BCE0001', password: 'pw', continuation: result.structuredContent.continuation, choice: '1,2' }))
+    const token = result.structuredContent.continuation
+    const rejected = (await call('vtop-continue', { ...auth, continuation: token, choice: 'anuj' })).result
+    assert.equal(rejected.isError, true)
+    assert.equal(rejected.structuredContent.errorKind, 'invalid_input')
+    assert.deepEqual(rejected.structuredContent.validIds, ['1', '2', '3'])
+    ;({ result } = await call('vtop-continue', { ...auth, continuation: token, choice: 1 }))
+    ;({ result } = await call('vtop-continue', { ...auth, continuation: result.structuredContent.continuation, choice: ['1', '2'] }))
     assert.equal(result.structuredContent.status, 'completed')
     assert.ok(result.structuredContent.files[0].url.startsWith(p.base))
   })
@@ -77,9 +92,21 @@ describe('MCP tools (inline credentials, shared-secret protected)', () => {
     assert.equal(typeof result.structuredContent.error, 'string')
   })
 
+  it('rejects select hints through MCP too', async () => {
+    const { result } = await call('course-page', { username: '21BCE0001', password: 'pw', select: { course: 'CSE1001' } })
+    assert.equal(result.isError, true)
+    assert.equal(result.structuredContent.field, 'select')
+  })
+
   it('validates flags through MCP too', async () => {
-    const { result } = await call('marks', { username: '21BCE0001', password: 'pw', flags: { semester: '-1' } })
+    // typed schema: rejected by the MCP input validation before the proxy runs anything
+    const typed = (await call('marks', { username: '21BCE0001', password: 'pw', flags: { semester: '-1' } })).result
+    assert.equal(typed.isError, true)
+    assert.match(typed.content[0].text, /semester/)
+    // unknown flags reach the proxy's allow-list and come back as structured invalid_input
+    const { result } = await call('marks', { username: '21BCE0001', password: 'pw', flags: { semesterQuery: 'previous' } })
     assert.equal(result.isError, true)
     assert.equal(result.structuredContent.errorKind, 'invalid_input')
+    assert.equal(result.structuredContent.field, 'semesterQuery')
   })
 })

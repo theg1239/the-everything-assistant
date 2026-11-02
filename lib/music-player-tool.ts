@@ -14,6 +14,22 @@ export type MusicPlayerToolState = {
   tracks: Array<{ id: string; title: string; artist: string }>
 }
 
+type PlayerTrack = MusicPlayerToolState['tracks'][number]
+
+const MAX_SEARCH_RESULTS = 10
+
+/**
+ * Case-insensitive substring search over the loaded tracks' title and artist. Returns every
+ * candidate in queue order; the model picks one by id (nothing is chosen here).
+ */
+export function searchTracks(tracks: readonly PlayerTrack[], query: string): PlayerTrack[] {
+  const needle = query.trim().toLowerCase()
+  if (!needle) return []
+  return tracks.filter(
+    track => track.title.toLowerCase().includes(needle) || track.artist.toLowerCase().includes(needle)
+  )
+}
+
 export function createMusicPlayerTool(playerState?: MusicPlayerToolState | null) {
   return {
     musicPlayer: tool({
@@ -21,7 +37,7 @@ export function createMusicPlayerTool(playerState?: MusicPlayerToolState | null)
 - Get information about what song is currently playing
 - Search for songs in the user's library
 - Play, pause, skip to next/previous track
-- Play a specific song by searching for it
+- Play a specific song: first call action "search" (case-insensitive substring match on title/artist, returns candidates with ids), choose the right candidate yourself, then call action "playTrack" with that exact trackId. If several candidates fit and the user's request doesn't decide it, ask the user.
 - Toggle shuffle, loop modes
 
 The music player plays YouTube videos as audio with an optional video view. The user can minimize it to a floating bubble.`,
@@ -41,18 +57,18 @@ The music player plays YouTube videos as audio with an optional video view. The 
             'setLoopMode',
           ])
           .describe(
-            'Action to perform: getStatus (current playback info), search (find songs), play/pause/togglePlay (playback control), next/previous (skip tracks), playTrack (play specific song), toggleShuffle, toggleLoop, setLoopMode'
+            'Action to perform: getStatus (current playback info), search (find songs), play/pause/togglePlay (playback control), next/previous (skip tracks), playTrack (play the track with the exact trackId), toggleShuffle, toggleLoop, setLoopMode'
           ),
         query: z
           .string()
           .optional()
           .describe(
-            'Search query for "search" or "playTrack" actions. Can be song title, artist name, or partial match.'
+            'Search text for the "search" action: matched as a case-insensitive substring of track titles and artists.'
           ),
         trackId: z
           .string()
           .optional()
-          .describe('Specific track ID to play (for playTrack action when ID is known)'),
+          .describe('Exact track id to play (required for playTrack); take it from search results or the current status.'),
         loopMode: z
           .enum(['none', 'all', 'current'])
           .optional()
@@ -125,18 +141,14 @@ The music player plays YouTube videos as audio with an optional video view. The 
               }
             }
 
-            const q = query.toLowerCase()
-            const results = playerState.tracks.filter(t => 
-              t.title.toLowerCase().includes(q) ||
-              t.artist.toLowerCase().includes(q)
-            )
+            const results = searchTracks(playerState.tracks, query)
 
             return {
               success: true,
               action: 'search',
               query,
               clientAction: 'SEARCH',
-              searchResults: results.slice(0, 10),
+              searchResults: results.slice(0, MAX_SEARCH_RESULTS),
               totalResults: results.length,
               message: results.length > 0 
                 ? `Found ${results.length} track${results.length > 1 ? 's' : ''} matching "${query}"`
@@ -190,71 +202,25 @@ The music player plays YouTube videos as audio with an optional video view. The 
           }
 
           case 'playTrack': {
-            if (trackId) {
-              return {
-                success: true,
-                action: 'playTrack',
-                trackId,
-                clientAction: 'PLAY_TRACK',
-                message: `Playing track with ID: ${trackId}`,
-              }
-            }
-
-            if (!query) {
+            if (!trackId) {
               return {
                 success: false,
                 action: 'playTrack',
-                error: 'Track ID or search query required',
-                message: 'Please specify which song to play by name or ID.',
+                error: 'trackId required',
+                message:
+                  'playTrack needs an exact trackId. Call action "search" first and pick the id from searchResults.',
               }
             }
-
-            if (playerState?.tracks?.length) {
-              const q = query.toLowerCase()
-              
-              const exactTitle = playerState.tracks.find(t => t.title.toLowerCase() === q)
-              if (exactTitle) {
-                return {
-                  success: true,
-                  action: 'playTrack',
-                  trackId: exactTitle.id,
-                  clientAction: 'PLAY_TRACK',
-                  matchedTrack: exactTitle,
-                  message: `Playing: "${exactTitle.title}" by ${exactTitle.artist}`,
-                }
-              }
-
-              const containsTitle = playerState.tracks.find(t => t.title.toLowerCase().includes(q))
-              if (containsTitle) {
-                return {
-                  success: true,
-                  action: 'playTrack',
-                  trackId: containsTitle.id,
-                  clientAction: 'PLAY_TRACK',
-                  matchedTrack: containsTitle,
-                  message: `Playing: "${containsTitle.title}" by ${containsTitle.artist}`,
-                }
-              }
-
-              const artistMatch = playerState.tracks.find(t => t.artist.toLowerCase().includes(q))
-              if (artistMatch) {
-                return {
-                  success: true,
-                  action: 'playTrack',
-                  trackId: artistMatch.id,
-                  clientAction: 'PLAY_TRACK',
-                  matchedTrack: artistMatch,
-                  message: `Playing: "${artistMatch.title}" by ${artistMatch.artist}`,
-                }
-              }
-            }
-
+            const knownTrack = playerState?.tracks.find(track => track.id === trackId)
             return {
               success: true,
               action: 'playTrack',
-              query,
-              clientAction: 'SEARCH_AND_PLAY',
-              message: `Searching for and playing: "${query}"`,
+              trackId,
+              clientAction: 'PLAY_TRACK',
+              ...(knownTrack ? { matchedTrack: knownTrack } : {}),
+              message: knownTrack
+                ? `Playing: "${knownTrack.title}" by ${knownTrack.artist}`
+                : `Playing track with ID: ${trackId}`,
             }
           }
 

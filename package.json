@@ -22,7 +22,6 @@
     "test:performance:stress": "tsx scripts/test-performance.ts stress",
     "test:performance:report": "tsx scripts/test-performance.ts report",
     "test:performance:seed": "tsx scripts/test-performance.ts seed",
-    "papers:index": "tsx scripts/papers.ts",
     "preview": "opennextjs-cloudflare build && tsx scripts/minify-handler.ts && opennextjs-cloudflare preview",
     "deploy": "npx prisma generate && opennextjs-cloudflare build && tsx scripts/minify-handler.ts && opennextjs-cloudflare deploy -- --minify",
     "upload": "opennextjs-cloudflare build && tsx scripts/minify-handler.ts && opennextjs-cloudflare upload -- --minify",

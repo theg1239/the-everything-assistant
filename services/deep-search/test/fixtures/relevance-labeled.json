@@ -1,0 +1,93 @@
+{
+  "description": "Hand-labeled VIT Reddit-style retrieval candidates for choosing and checking the deep-search relevance threshold. label=true means the candidate contains information, experiences or advice that directly helps answer the query (partial answers and closely related rules count); label=false means a different topic, a different campus, or no usable content. Candidates include lexical traps (shared keywords, different topic/place) and paraphrased positives with little word overlap, as real pgvector/full-text retrieval returns.",
+  "queries": [
+    {
+      "query": "how strict is attendance in vit vellore",
+      "candidates": [
+        { "type": "post", "subreddit": "vit", "upvotes": 212, "title": "PSA: 75% attendance rule is real, I got debarred from 2 FATs", "content": "Every semester people think they can skip and talk to the faculty later. Below 75% you are debarred from the final assessment test for that course, no exceptions unless you have a medical certificate submitted on time through VTOP. Plan your bunks.", "label": true },
+        { "type": "comment", "subreddit": "vit", "upvotes": 48, "title": "", "content": "Faculty mark attendance every class through VTOP. Some profs are chill about 5 min late, others mark you absent. On-duty for club events gets counted if your coordinator uploads the OD before the deadline.", "label": true },
+        { "type": "comment", "subreddit": "Vitap", "upvotes": 15, "title": "", "content": "At VIT-AP the attendance requirement is enforced through the biometric system and the HOD can give condonation for up to 10 percent if you appeal.", "label": false },
+        { "type": "post", "subreddit": "vit", "upvotes": 33, "title": "How strict is the dress code in Vellore campus?", "content": "Do they actually stop you at the gate for wearing shorts or is that just for the academic blocks? Seniors please tell.", "label": false },
+        { "type": "comment", "subreddit": "vit", "upvotes": 22, "title": "", "content": "Medical leave only counts if you submit the hospital certificate within the window, otherwise it's just absent. Learned that the hard way in second year when I fell below the cutoff.", "label": true },
+        { "type": "post", "subreddit": "vit", "upvotes": 9, "title": "Best laptop for CSE first year?", "content": "Budget is around 70k, mostly coding and some light gaming. Is a MacBook fine for the lab software?", "label": false }
+      ]
+    },
+    {
+      "query": "branch change cgpa required in vit vellore",
+      "candidates": [
+        { "type": "post", "subreddit": "vit", "upvotes": 140, "title": "Branch change after first year - my experience", "content": "I moved from Mech to CSE core. You need a really high GPA after the first two semesters, I had 9.4 and it was barely enough because seats are limited to vacancies. Apply through the academic office form when it opens in May.", "label": true },
+        { "type": "comment", "subreddit": "vit", "upvotes": 37, "title": "", "content": "The cutoff isn't fixed, it depends on how many students leave each branch. Last year people with 9+ got IT and ECE, CSE needed above 9.5.", "label": true },
+        { "type": "post", "subreddit": "vit", "upvotes": 56, "title": "What CGPA do companies need for placements?", "content": "Most dream companies keep 7.5 or 8 as the cutoff for applying. Is it worth grinding GPA in first year?", "label": false },
+        { "type": "comment", "subreddit": "Vitchennai", "upvotes": 12, "title": "", "content": "In Chennai campus branch change is allowed only within the school, so you can't go from SMEC to SCOPE.", "label": false },
+        { "type": "comment", "subreddit": "vit", "upvotes": 18, "title": "", "content": "Also note you lose your current seat once the transfer is approved and you have to clear any arrear before you're eligible. No backlogs allowed.", "label": true },
+        { "type": "post", "subreddit": "vit", "upvotes": 4, "title": "Changing my FFCS slot after registration", "content": "I messed up my timetable, can I change a slot after the registration window closes or do I have to drop the course?", "label": false }
+      ]
+    },
+    {
+      "query": "vit vellore hostel outing rules and curfew",
+      "candidates": [
+        { "type": "post", "subreddit": "vit", "upvotes": 188, "title": "Ladies hostel in-time is 9:30 now, men's blocks 10pm?", "content": "New circular says girls have to be back by 9:30 pm and need a leave request on VTOP for night outs. Men's hostel gate closes at 10 pm and late entries get noted by the warden.", "label": true },
+        { "type": "comment", "subreddit": "vit", "upvotes": 41, "title": "", "content": "For a weekend home outing you apply for leave on VTOP and the proctor approves it. General outing during the day is fine, just scan your ID at the gate.", "label": true },
+        { "type": "post", "subreddit": "vit", "upvotes": 72, "title": "Which hostel block has the best rooms?", "content": "Planning to book for second year, is Q block worth the extra fees over the older blocks? AC vs non AC?", "label": false },
+        { "type": "comment", "subreddit": "vit", "upvotes": 14, "title": "", "content": "Hostel wifi goes down every night around 1 am and comes back by 6, super annoying during exams.", "label": false },
+        { "type": "comment", "subreddit": "vit", "upvotes": 26, "title": "", "content": "If you come back after the in-time without a leave approval, your parents get an SMS and repeated violations go to the disciplinary committee.", "label": true },
+        { "type": "post", "subreddit": "Vitap", "upvotes": 30, "title": "VIT-AP hostel timings are ridiculous", "content": "Amaravati campus hostel closes at 9 pm for everyone and there is no weekend outpass for first years.", "label": false }
+      ]
+    },
+    {
+      "query": "is vit vellore wifi blocked for sites",
+      "candidates": [
+        { "type": "post", "subreddit": "vit", "upvotes": 97, "title": "Campus network blocks Reddit, Discord and most streaming", "content": "The university network filters a lot of sites. Discord, torrent sites and some streaming apps don't load in hostel or academic blocks. GitHub and Stack Overflow work fine.", "label": true },
+        { "type": "comment", "subreddit": "vit", "upvotes": 52, "title": "", "content": "Most people just use mobile data or a VPN for the blocked stuff. Some VPN protocols get throttled so try a few.", "label": true },
+        { "type": "post", "subreddit": "vit", "upvotes": 20, "title": "How to register my laptop for the hostel wifi?", "content": "I got the login from the hostel office but my laptop's MAC isn't registered. Where do I go?", "label": false },
+        { "type": "comment", "subreddit": "vit", "upvotes": 8, "title": "", "content": "Jio signal is terrible in the new library, Airtel is better there.", "label": false },
+        { "type": "comment", "subreddit": "vit", "upvotes": 19, "title": "", "content": "Online gaming servers are restricted on the campus internet, Valorant used to get blocked after 11.", "label": true },
+        { "type": "post", "subreddit": "Vitchennai", "upvotes": 11, "title": "Chennai campus wifi speed", "content": "Speeds in the Chennai hostel are around 20 Mbps at night, is it the same at other campuses?", "label": false }
+      ]
+    },
+    {
+      "query": "how are placements for cse in vit vellore",
+      "candidates": [
+        { "type": "post", "subreddit": "vit", "upvotes": 260, "title": "2025 placement stats for CSE core", "content": "Around 85% of CSE core got placed by March. Median was about 8 LPA, a handful of dream offers above 30 LPA from product companies, mass recruiters took the rest.", "label": true },
+        { "type": "comment", "subreddit": "vit", "upvotes": 64, "title": "", "content": "Honestly computer science students here do fine if they code. The service companies come in bulk, the good product firms shortlist on CGPA and DSA rounds.", "label": true },
+        { "type": "post", "subreddit": "vit", "upvotes": 45, "title": "Mechanical placements are dead?", "content": "Barely any core mech companies visited this year, most mech students sat for IT roles.", "label": false },
+        { "type": "comment", "subreddit": "vit", "upvotes": 29, "title": "", "content": "The CSE department building is the new SJT annex, the labs have decent systems.", "label": false },
+        { "type": "comment", "subreddit": "vit", "upvotes": 17, "title": "", "content": "Internships through the placement cell start in 6th sem and a PPO from one of those is the easiest way into a good company.", "label": true },
+        { "type": "post", "subreddit": "Vitap", "upvotes": 38, "title": "VIT-AP CSE placement report", "content": "At the Amaravati campus the CSE median this year was around 6 LPA with fewer dream companies.", "label": false }
+      ]
+    },
+    {
+      "query": "good food spots near vit vellore campus",
+      "candidates": [
+        { "type": "post", "subreddit": "vit", "upvotes": 150, "title": "Underrated places to eat around Katpadi", "content": "Try the biryani place near the main gate, the dosa stall at Katpadi junction is cheap and amazing, and there's a decent cafe on the Gandhinagar road for weekends.", "label": true },
+        { "type": "comment", "subreddit": "vit", "upvotes": 31, "title": "", "content": "Darling Residency's restaurant is good for family dinners when parents visit. A bit pricey but worth it.", "label": true },
+        { "type": "post", "subreddit": "vit", "upvotes": 85, "title": "Mess food quality has gone down this semester", "content": "The special mess caterer changed and the food is way worse. Is anyone else complaining to the mess committee?", "label": false },
+        { "type": "comment", "subreddit": "vit", "upvotes": 22, "title": "", "content": "Food Street inside campus is open till midnight and has shawarma, maggi and juice, good for late night cravings.", "label": true },
+        { "type": "post", "subreddit": "Vitchennai", "upvotes": 40, "title": "Best food spots near Chennai campus", "content": "Kelambakkam has some great places, the Vandalur road dhaba is my favourite.", "label": false },
+        { "type": "comment", "subreddit": "vit", "upvotes": 6, "title": "", "content": "Spot admissions for the remaining seats happen in July, keep checking the website.", "label": false }
+      ]
+    },
+    {
+      "query": "cat 1 cat 2 fee difference in vit",
+      "candidates": [
+        { "type": "post", "subreddit": "vit", "upvotes": 120, "title": "Fee categories explained (Cat 1 to Cat 5)", "content": "Your VITEEE rank decides the fee category. Cat 1 has the lowest tuition, around 1.98 lakh per year for CSE, and it goes up with each category; Cat 2 is roughly 50k more per year.", "label": true },
+        { "type": "comment", "subreddit": "vit", "upvotes": 35, "title": "", "content": "Category is fixed for all four years, so getting a better rank saves you a couple of lakhs overall.", "label": true },
+        { "type": "post", "subreddit": "vit", "upvotes": 60, "title": "CAT 1 exam tips for maths?", "content": "Continuous assessment test 1 is next week, what topics usually come for calculus? Any previous papers?", "label": false },
+        { "type": "comment", "subreddit": "vit", "upvotes": 12, "title": "", "content": "Hostel fees are separate from tuition and depend on the block and AC or non AC.", "label": false },
+        { "type": "comment", "subreddit": "vit", "upvotes": 9, "title": "", "content": "If you are in a higher category you can still apply for the merit scholarship after first year if you top your branch.", "label": true },
+        { "type": "post", "subreddit": "vit", "upvotes": 14, "title": "Cat 2 marks out, how do I check?", "content": "Where on VTOP are the CAT 2 marks uploaded? I can only see CAT 1.", "label": false }
+      ]
+    },
+    {
+      "query": "can i get a single room in first year hostel",
+      "candidates": [
+        { "type": "post", "subreddit": "vit", "upvotes": 90, "title": "First year room options - 1 bed AC exists but fills fast", "content": "Freshers can pick single, 2, 3, 4 or 6 bedded rooms during hostel booking. Single AC rooms are very limited and go in the first hour, so be online when the portal opens.", "label": true },
+        { "type": "comment", "subreddit": "vit", "upvotes": 28, "title": "", "content": "I wanted a 1 bed room but only got a 2 bedded non AC. You can request a room change in second semester if beds free up.", "label": true },
+        { "type": "post", "subreddit": "vit", "upvotes": 44, "title": "Is first year too hard for CSE?", "content": "I am scared of the maths courses and programming labs, how much study is needed in the first year?", "label": false },
+        { "type": "comment", "subreddit": "vit", "upvotes": 16, "title": "", "content": "Room booking order is decided by the date you paid the hostel fee, earlier payment gets an earlier slot.", "label": true },
+        { "type": "comment", "subreddit": "vit", "upvotes": 7, "title": "", "content": "The single entry pass for the gym is 500 rupees a month.", "label": false },
+        { "type": "post", "subreddit": "vit", "upvotes": 19, "title": "Day scholar life at VIT", "content": "Staying at home in Vellore and commuting daily, bus passes are available from the transport office.", "label": false }
+      ]
+    }
+  ]
+}

@@ -3,8 +3,7 @@ import { scrapePapersService } from '@/lib/scrapers/papers-scraper'
 import { scrapePapersCodeChef } from '@/lib/scrapers/papers-codechef'
 import { scrapeVITPaperVault } from '@/lib/scrapers/vit-papervault'
 import { scrapeExamCooker } from '@/lib/scrapers/examcooker'
-import { getCourseCode } from '@/lib/question-generator'
-import { getAllCourseMatches } from '@/lib/course-map'
+import { isCourseCodeFormat, normalizeCourseCode, searchCourseCatalog } from '@/lib/course-map'
 
 export const runtime = 'nodejs'
 
@@ -24,6 +23,14 @@ function rejectionMessage(reason: unknown): string {
   return 'rejected'
 }
 
+/**
+ * GET /api/public/papers/search?courseCode=BCSE302L[&examType=cat1][&year=2023]
+ *
+ * `courseCode` (aliases: course, q, query) is either an exact course code, or text that is
+ * substring-matched (case-insensitive) against catalog codes and titles. A search with exactly one
+ * catalog match uses that course; several matches return 400 `ambiguous_course` with
+ * `candidates` so the caller can retry with an exact code. No nickname/acronym resolution.
+ */
 export async function GET(req: NextRequest) {
   const started = Date.now()
   try {
@@ -41,41 +48,37 @@ export async function GET(req: NextRequest) {
         {
           success: false,
           error: 'course_code_required',
-          message: 'Provide a course code or recognizable course name.',
+          message: 'Provide a course code, or part of a course title to search the catalog.',
         },
         { status: 400 }
       )
     }
 
-    let resolvedCourseCode = courseInput.trim().toUpperCase()
-    if (!/^[A-Z]{4}\d{3}[A-Z]?$/.test(resolvedCourseCode)) {
-      const mapped = getCourseCode(courseInput)
-      if (mapped) {
-        resolvedCourseCode = mapped
+    let resolvedCourseCode = normalizeCourseCode(courseInput)
+    if (!isCourseCodeFormat(resolvedCourseCode)) {
+      const { total, results: candidates } = searchCourseCatalog(courseInput)
+      const [onlyMatch] = candidates
+      if (total === 1 && onlyMatch) {
+        resolvedCourseCode = onlyMatch.code
       } else {
-        const matches = getAllCourseMatches(courseInput)
-        const [firstMatch] = matches
-        if (firstMatch) {
-          resolvedCourseCode = firstMatch.code
-        }
-      }
-    }
-
-    if (!/^[A-Z]{4}\d{3}[A-Z]?$/.test(resolvedCourseCode)) {
-      return NextResponse.json(
-        {
-          success: false,
-            error: 'unresolved_course_code',
+        return NextResponse.json(
+          {
+            success: false,
+            error: total > 1 ? 'ambiguous_course' : 'unresolved_course_code',
             input: courseInput,
-            message: `Could not resolve a valid course code for "${courseInput}"`,
+            message:
+              total > 1
+                ? `"${courseInput}" matches ${total} catalog courses; retry with one of the candidate course codes.`
+                : `No catalog course code or title contains "${courseInput}".`,
+            candidates,
             suggestions: [
               'Use the exact VIT course code (e.g., BCSE302L)',
-              'Try a different spelling of the course name',
-              'Provide at least 2 distinctive words from the course title',
+              'Pick a course code from `candidates`',
             ],
-        },
-        { status: 400 }
-      )
+          },
+          { status: 400 }
+        )
+      }
     }
 
     const results = await Promise.allSettled([

@@ -3,6 +3,21 @@ const { generateText, Output } = require('ai')
 const { openai } = require('@ai-sdk/openai')
 const { z } = require('zod')
 const logger = require('../utils/logger')
+const {
+  DEFAULT_DECISION_MODEL_ID,
+  DEFAULT_RELEVANCE_THRESHOLD,
+  MAX_QUESTIONS_PER_REQUEST,
+  judgeRelevance,
+  selectRelevantResults,
+  countAboveThreshold,
+  meanRelevance,
+} = require('./relevance-judge')
+
+/** Query refinement and answer generation stay on the chat model. */
+const CHAT_MODEL_ID = 'gpt-6.1-terra'
+
+/** Results kept, in retrieval (RRF) order, when the relevance call fails before anything was judged. */
+const RETRIEVAL_FALLBACK_RESULTS = 8
 
 function parsePositiveInt(value, fallback) {
   const parsed = Number.parseInt(value || '', 10)
@@ -24,12 +39,28 @@ function createAbortSignal(timeoutMs) {
   return AbortSignal.timeout(timeoutMs)
 }
 
+function resultKey(result) {
+  return `${result?.type}:${result?.reddit_id}`
+}
+
+/**
+ * Agentic retrieval over the Reddit knowledge base.
+ *
+ * Each iteration: hybrid retrieval (pgvector + Postgres full-text, RRF) -> one OpenAI Decisions
+ * call that returns P(relevant) for every new candidate -> stop once enough candidates clear the
+ * threshold, otherwise ask the chat model for a refined query and repeat. Selection runs over every
+ * candidate judged in any iteration (probabilities are all against the original question, so they
+ * are comparable). Answer generation stays on the chat model.
+ */
 class AgenticRAGService {
   constructor(options = {}) {
-    this.knowledgeBase = new KnowledgeBase()
+    this.knowledgeBase = options.knowledgeBase || new KnowledgeBase()
     this.maxContextLength = parseInt(process.env.MAX_CONTEXT_LENGTH || '3200', 10)
-    this.searchLimit = parseInt(process.env.AGENTIC_SEARCH_LIMIT || '20', 10)
-    this.relevanceCandidateLimit = parseInt(process.env.AGENTIC_RELEVANCE_CANDIDATES || '15', 10)
+    this.searchLimit = parsePositiveInt(process.env.AGENTIC_SEARCH_LIMIT, 20)
+    this.relevanceCandidateLimit = Math.min(
+      MAX_QUESTIONS_PER_REQUEST,
+      parsePositiveInt(process.env.AGENTIC_RELEVANCE_CANDIDATES, 15)
+    )
     this.relevanceTimeoutMs = parsePositiveInt(process.env.AGENTIC_RELEVANCE_TIMEOUT_MS, 3000)
     this.refinementTimeoutMs = parsePositiveInt(process.env.AGENTIC_REFINEMENT_TIMEOUT_MS, 3000)
     this.responseTimeoutMs = parsePositiveInt(process.env.AGENTIC_RESPONSE_TIMEOUT_MS, 12000)
@@ -45,23 +76,21 @@ class AgenticRAGService {
       process.env.AGENTIC_RESPONSE_RETRY_MAX_OUTPUT_TOKENS,
       550
     )
-    this.firstPassMinResults = parsePositiveInt(process.env.AGENTIC_FIRST_PASS_MIN_RESULTS, 4)
-    this.firstPassMinAvgRelevance = parseFraction(
-      process.env.AGENTIC_FIRST_PASS_MIN_AVG_RELEVANCE,
-      0.5
-    )
-    this.firstPassMinQuality = parseFraction(process.env.AGENTIC_FIRST_PASS_MIN_QUALITY, 0.58)
-    this.firstPassMinLexicalCoverage = parseFraction(
-      process.env.AGENTIC_FIRST_PASS_MIN_LEXICAL_COVERAGE,
-      0.38
+    // Stop searching once this many judged candidates have P(relevant) >= threshold.
+    this.minConfidentResults = parsePositiveInt(process.env.AGENTIC_FIRST_PASS_MIN_RESULTS, 4)
+    this.relevanceThreshold = parseFraction(
+      process.env.DEEP_SEARCH_RELEVANCE_THRESHOLD,
+      DEFAULT_RELEVANCE_THRESHOLD
     )
 
-    this.thinkingBudget = options.thinkingBudget !== undefined ? options.thinkingBudget : 1024
-
-    this.chatModel = openai('gpt-6.1-terra')
+    this.chatModel = options.chatModel || openai(CHAT_MODEL_ID)
+    this.decisionModelId = process.env.DEEP_SEARCH_DECISION_MODEL || DEFAULT_DECISION_MODEL_ID
+    this.decisionModel = options.decisionModel || openai.decisionModel(this.decisionModelId)
+    this.refinementAgent =
+      options.refinementAgent ||
+      new QueryRefinementAgent(this.chatModel, { timeoutMs: this.refinementTimeoutMs })
 
     this.maxIterations = 2
-    this.relevanceThreshold = 0.5
   }
 
   async generateResponse(query, conversationHistory = []) {
@@ -94,10 +123,7 @@ class AgenticRAGService {
         sources: this.formatSources(
           this.prioritizeResponseResults(agenticResult.relevantResults, 8).slice(0, 8)
         ),
-        confidence: this.calculateConfidence(
-          agenticResult.relevantResults,
-          agenticResult.maxRelevanceScore
-        ),
+        confidence: this.calculateConfidence(agenticResult.relevantResults),
         searchResults: agenticResult.relevantResults.length,
         searchAttempts: agenticResult.attempts,
         refinedQueries: agenticResult.queriesUsed,
@@ -114,258 +140,103 @@ class AgenticRAGService {
     }
   }
 
-  async agenticSearch(originalQuery, options = {}) {
-    const { includeThoughts = false } = options
-
-    if (includeThoughts) {
-      logger.info('Thought logging is enabled for this search session')
-    }
-
+  async agenticSearch(originalQuery) {
     logger.info(`Starting agentic search for: "${originalQuery}"`)
 
-    const relevanceAgent = new QueryRelevanceAgent(this.chatModel, 512, {
-      includeThoughts,
-      timeoutMs: this.relevanceTimeoutMs,
-    })
-    const refinementAgent = new QueryRefinementAgent(this.chatModel, 512, {
-      includeThoughts,
-      timeoutMs: this.refinementTimeoutMs,
-    })
-    const qualityAgent = new ResultQualityAgent(this.chatModel, 512, { includeThoughts })
-
-    let bestResults = []
-    let maxRelevanceScore = 0
-    let bestSelectionScore = 0
+    const threshold = this.relevanceThreshold
+    const judged = new Map() // resultKey -> candidate with relevanceScore = P(relevant)
+    const seen = new Set() // every candidate sent to the judge (incl. refused ones)
     const attempts = []
     const queriesUsed = []
-
-    let failedRefinements = 0
-    const MAX_FAILED_REFINEMENTS = 2
+    let fallbackResults = null
 
     for (let i = 0; i < this.maxIterations; i++) {
-      let currentQuery
+      let currentQuery = originalQuery
 
-      if (i === 0) {
-        currentQuery = originalQuery
-      } else {
-        if (failedRefinements >= MAX_FAILED_REFINEMENTS) {
-          logger.info('Too many failed refinements, using best results so far')
+      if (i > 0) {
+        const confident = [...judged.values()].filter(r => r.relevanceScore >= threshold)
+        const refinedQuery = await this.refinementAgent.refineQuery(originalQuery, confident, i)
+        if (!refinedQuery || queriesUsed.includes(refinedQuery)) {
+          logger.info('Query refinement produced no new query; using results so far')
           break
         }
-
-        const refinedQuery = await this.getNextQuery(originalQuery, bestResults, refinementAgent, i)
-
-        if (
-          !refinedQuery ||
-          queriesUsed.includes(refinedQuery) ||
-          refinedQuery === originalQuery ||
-          refinedQuery.length < 5
-        ) {
-          logger.info('Query refinement exhausted, duplicate, or invalid')
-          failedRefinements++
-          continue
-        }
-
+        logger.info(`Generated refined query: "${refinedQuery}"`)
         currentQuery = refinedQuery
       }
 
       queriesUsed.push(currentQuery)
       attempts.push({ iteration: i, query: currentQuery })
-
       logger.info(`Iteration ${i + 1}: Searching with query: "${currentQuery}"`)
 
       const searchResults = await this.knowledgeBase.search(currentQuery, this.searchLimit)
+      const candidates = searchResults
+        .filter(result => !seen.has(resultKey(result)))
+        .slice(0, this.relevanceCandidateLimit)
 
-      if (searchResults.length === 0) {
-        logger.info(`No results found for query: "${currentQuery}"`)
+      if (candidates.length === 0) {
+        logger.info(`No new candidates for query: "${currentQuery}"`)
         continue
       }
 
-      const relevanceCandidates = searchResults.slice(0, this.relevanceCandidateLimit)
-      const heuristicScores = relevanceCandidates.map(result =>
-        this.estimateRelevanceFromRetrieval(originalQuery, result)
-      )
-      const useLlmRelevance = i === 0 && relevanceAgent.shouldUseLlmRelevance(heuristicScores)
-      const relevanceStart = Date.now()
-      const relevanceScores = useLlmRelevance
-        ? await relevanceAgent.analyzeRelevance(originalQuery, relevanceCandidates, heuristicScores)
-        : heuristicScores
-      logger.info(
-        `Relevance scoring mode=${useLlmRelevance ? 'llm' : 'heuristic'} took ${Date.now() - relevanceStart}ms`
-      )
+      // The question is always the student's original one, so probabilities from every iteration
+      // are on the same scale.
+      const verdict = await judgeRelevance({
+        model: this.decisionModel,
+        query: originalQuery,
+        candidates,
+        timeoutMs: this.relevanceTimeoutMs,
+      })
 
-      const relevantResults = this.selectRelevantResults(
-        originalQuery,
-        relevanceCandidates.map((result, index) => ({
-          ...result,
-          relevanceScore: relevanceScores[index] || 0,
-        }))
-      )
-
-      logger.info(
-        `Found ${relevantResults.length} relevant results out of ${relevanceCandidates.length} ranked candidates`
-      )
-
-      if (relevantResults.length > 0) {
-        const avgRelevance =
-          relevantResults.reduce((sum, r) => sum + r.relevanceScore, 0) / relevantResults.length
-        const avgLexicalCoverage = this.calculateAverageLexicalCoverage(
-          originalQuery,
-          relevantResults
+      if (!verdict.ok) {
+        logger.warn(
+          `Relevance judging unavailable (${verdict.reason}); ${
+            judged.size > 0
+              ? 'keeping candidates judged in earlier iterations'
+              : `falling back to the top ${RETRIEVAL_FALLBACK_RESULTS} candidates in retrieval order`
+          }`
         )
-
-        const qualityScore = await qualityAgent.assessQuality(originalQuery, relevantResults)
-
-        logger.info(
-          `Average relevance: ${avgRelevance.toFixed(2)}, Quality score: ${qualityScore.toFixed(2)}, Lexical coverage: ${avgLexicalCoverage.toFixed(2)}`
-        )
-
-        const coverageScore = Math.min(
-          1,
-          relevantResults.length / Math.max(4, this.relevanceCandidateLimit)
-        )
-        const selectionScore = avgRelevance * 0.45 + qualityScore * 0.35 + coverageScore * 0.2
-
-        if (
-          selectionScore > bestSelectionScore ||
-          (Math.abs(selectionScore - bestSelectionScore) < 1e-6 &&
-            relevantResults.length > bestResults.length)
-        ) {
-          bestSelectionScore = selectionScore
-          maxRelevanceScore = avgRelevance
-          bestResults = relevantResults
+        if (judged.size === 0) {
+          fallbackResults = candidates
+            .slice(0, RETRIEVAL_FALLBACK_RESULTS)
+            .map(result => ({ ...result, relevanceScore: null }))
         }
+        break
+      }
 
-        if (
-          (i === 0 &&
-            relevantResults.length >= this.firstPassMinResults &&
-            avgRelevance >= this.firstPassMinAvgRelevance &&
-            qualityScore >= this.firstPassMinQuality &&
-            avgLexicalCoverage >= this.firstPassMinLexicalCoverage) ||
-          (avgRelevance > 0.72 && qualityScore > 0.72 && relevantResults.length >= 4)
-        ) {
-          logger.info('Sufficient quality reached, stopping search early')
-          break
-        }
+      candidates.forEach((candidate, index) => {
+        seen.add(resultKey(candidate))
+        const probability = verdict.probabilities[index]
+        if (probability == null) return // refused: never selected
+        judged.set(resultKey(candidate), {
+          ...candidate,
+          relevanceScore: probability,
+          matchedQuery: currentQuery,
+        })
+      })
+
+      const confidentCount = countAboveThreshold([...judged.values()], threshold)
+      logger.info(
+        `Decisions judged ${candidates.length} candidates in ${verdict.latencyMs}ms; ${confidentCount} total at P>=${threshold}`
+      )
+
+      if (confidentCount >= this.minConfidentResults) {
+        logger.info('Enough relevant results, stopping search early')
+        break
       }
     }
 
+    const relevantResults =
+      fallbackResults || selectRelevantResults([...judged.values()], { threshold })
+    const confidentResults = fallbackResults ? 0 : countAboveThreshold(relevantResults, threshold)
+
     return {
-      success: bestResults.length > 0,
-      relevantResults: bestResults,
-      maxRelevanceScore,
+      success: relevantResults.length > 0,
+      relevantResults,
+      maxRelevanceScore: meanRelevance(relevantResults),
+      confidentResults,
+      relevanceMode: fallbackResults ? 'retrieval-order' : 'decisions',
       attempts,
       queriesUsed,
-    }
-  }
-
-  selectRelevantResults(originalQuery, scoredResults) {
-    const queryTerms = AgenticRAGService.extractKeyTerms(originalQuery)
-    const rescoredResults = scoredResults.map((result, index) => ({
-      ...result,
-      resultIndex: index,
-      relevanceScore: this.scoreResultRelevance(result, queryTerms),
-    }))
-
-    const topScore = rescoredResults.reduce(
-      (maxScore, item) => Math.max(maxScore, Number(item.relevanceScore) || 0),
-      0
-    )
-    let effectiveThreshold = this.relevanceThreshold
-
-    if (topScore > 0 && topScore < this.relevanceThreshold) {
-      effectiveThreshold = Math.max(0.25, topScore * 0.8)
-      logger.info(
-        `Adaptive relevance threshold enabled: topScore=${topScore.toFixed(3)}, base=${this.relevanceThreshold.toFixed(3)}, effective=${effectiveThreshold.toFixed(3)}`
-      )
-    }
-
-    const selected = rescoredResults
-      .filter(result => {
-        const titleMatches = this.countTermMatches(result.title, queryTerms)
-        const contentMatches = this.countTermMatches(result.content, queryTerms)
-        const lexicalMatches = titleMatches + contentMatches
-        const lexicalCoverage = queryTerms.length > 0 ? lexicalMatches / queryTerms.length : 0
-        const similarity = Math.max(0, Math.min(1, Number(result.similarity) || 0))
-        const rankingScore = Math.max(0, Math.min(1, Number(result.rankingScore) || 0))
-
-        if (result.relevanceScore < effectiveThreshold) return false
-
-        // Keep semantic matches even when literal overlap is weak, but reject low-signal fuzz.
-        if (
-          lexicalMatches === 0 &&
-          similarity < 0.45 &&
-          result.relevanceScore < effectiveThreshold + 0.12
-        ) {
-          return false
-        }
-
-        // Reject low-coverage chunk noise unless ranking signal is very strong.
-        if (
-          result.type === 'chunk' &&
-          lexicalCoverage < 0.34 &&
-          rankingScore < 0.42 &&
-          similarity < 0.72
-        ) {
-          return false
-        }
-
-        return true
-      })
-      .sort((a, b) => b.relevanceScore - a.relevanceScore)
-      .slice(0, 12)
-
-    if (selected.length > 0) return selected
-
-    // Never return an empty set when retrieval produced candidates; keep the strongest signals.
-    return rescoredResults
-      .sort((a, b) => {
-        const relevanceDelta = (b.relevanceScore || 0) - (a.relevanceScore || 0)
-        if (Math.abs(relevanceDelta) > 1e-6) return relevanceDelta
-        return (b.similarity || 0) - (a.similarity || 0)
-      })
-      .slice(0, Math.min(8, rescoredResults.length))
-  }
-
-  async getNextQuery(originalQuery, currentBestResults, refinementAgent, iteration) {
-    try {
-      const refinedQuery = await refinementAgent.refineQuery(
-        originalQuery,
-        currentBestResults,
-        iteration
-      )
-
-      logger.info(`Generated refined query: "${refinedQuery}"`)
-      return refinedQuery
-    } catch (error) {
-      logger.error('Error generating refined query:', error)
-      return AgenticRAGService.extractKeyTerms(originalQuery).join(' ')
-    }
-  }
-
-  static extractKeyTerms(query) {
-    if (!query || typeof query !== 'string') return []
-
-    try {
-      const normalized = query
-        .toLowerCase()
-        .normalize('NFKD')
-        .replace(/[^\w\s]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-
-      if (!normalized) return []
-
-      const terms = normalized.split(' ').filter(term => term.length >= 3 && !/^\d+$/.test(term))
-
-      return Array.from(new Set(terms)).slice(0, 8)
-    } catch (error) {
-      logger.error('Error extracting key terms:', error)
-      return (query || '')
-        .toLowerCase()
-        .split(/\s+/)
-        .filter(term => term.length >= 3)
-        .slice(0, 3)
     }
   }
 
@@ -389,16 +260,13 @@ class AgenticRAGService {
     return context.trim()
   }
 
+  /** Posts, then comments, then chunks; within a type by P(relevant); otherwise incoming order. */
   prioritizeResponseResults(searchResults = [], minCount = 5) {
     const ranked = [...(Array.isArray(searchResults) ? searchResults : [])].sort((a, b) => {
       const typeScore = value => (value?.type === 'post' ? 2 : value?.type === 'comment' ? 1 : 0)
       const typeDelta = typeScore(b) - typeScore(a)
       if (typeDelta !== 0) return typeDelta
-
-      const relevanceDelta = (Number(b?.relevanceScore) || 0) - (Number(a?.relevanceScore) || 0)
-      if (Math.abs(relevanceDelta) > 1e-6) return relevanceDelta
-
-      return (Number(b?.similarity) || 0) - (Number(a?.similarity) || 0)
+      return (Number(b?.relevanceScore) || 0) - (Number(a?.relevanceScore) || 0)
     })
 
     const nonChunk = ranked.filter(item => item.type !== 'chunk')
@@ -407,95 +275,6 @@ class AgenticRAGService {
     const chunks = ranked.filter(item => item.type === 'chunk')
     const target = Math.min(ranked.length, Math.max(minCount, nonChunk.length))
     return [...nonChunk, ...chunks].slice(0, target)
-  }
-
-  countTermMatches(text, queryTerms) {
-    if (!text || !queryTerms.length) return 0
-
-    const haystack = String(text).toLowerCase()
-    let matches = 0
-
-    for (const term of queryTerms) {
-      const escaped = String(term || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      if (!escaped) continue
-      const pattern = new RegExp(`\\b${escaped}\\b`, 'i')
-      if (pattern.test(haystack)) matches++
-    }
-
-    return matches
-  }
-
-  calculateAverageLexicalCoverage(query, results = []) {
-    const queryTerms = AgenticRAGService.extractKeyTerms(query)
-    if (!queryTerms.length || !Array.isArray(results) || results.length === 0) return 0
-
-    const coverageSum = results.reduce((sum, item) => {
-      const titleMatches = this.countTermMatches(item.title, queryTerms)
-      const contentMatches = this.countTermMatches(item.content, queryTerms)
-      const lexicalMatches = titleMatches + contentMatches
-      return sum + lexicalMatches / queryTerms.length
-    }, 0)
-
-    return coverageSum / results.length
-  }
-
-  scoreResultRelevance(result, queryTerms) {
-    const llmRelevance = Math.max(0, Math.min(1, Number(result.relevanceScore) || 0))
-    const similarity = Math.max(0, Math.min(1, Number(result.similarity) || 0))
-    const rankingScore = Math.max(0, Math.min(1, Number(result.rankingScore) || 0))
-    const titleMatches = this.countTermMatches(result.title, queryTerms)
-    const contentMatches = this.countTermMatches(result.content, queryTerms)
-    const lexicalCoverage =
-      queryTerms.length > 0
-        ? Math.min(1, (titleMatches * 1.4 + contentMatches) / (queryTerms.length * 1.8))
-        : 0
-    const contentLength = (result.content || result.title || '').length
-    const contentQuality = Math.min(1, contentLength / 220)
-    const engagementBase = Math.max(0, Number(result.upvotes) || 0, Number(result.score) || 0)
-    const engagementScore = Math.min(1, Math.log10(engagementBase + 1) / 3)
-    const typeWeight = result.type === 'post' ? 1 : result.type === 'comment' ? 0.9 : 0.62
-    const strategyPenalty = result.sourceStrategy === 'keywords' && lexicalCoverage < 0.5 ? 0.9 : 1
-
-    return Math.min(
-      1,
-      (llmRelevance * 0.43 +
-        lexicalCoverage * 0.24 +
-        similarity * 0.12 +
-        rankingScore * 0.11 +
-        contentQuality * 0.04 +
-        engagementScore * 0.06) *
-        strategyPenalty *
-        typeWeight
-    )
-  }
-
-  estimateRelevanceFromRetrieval(originalQuery, result) {
-    const queryTerms = AgenticRAGService.extractKeyTerms(originalQuery)
-    const titleMatches = this.countTermMatches(result.title, queryTerms)
-    const contentMatches = this.countTermMatches(result.content, queryTerms)
-    const lexicalCoverage =
-      queryTerms.length > 0
-        ? Math.min(1, (titleMatches * 1.4 + contentMatches) / (queryTerms.length * 1.8))
-        : 0
-    const similarity = Math.max(0, Math.min(1, parseFloat(result.similarity) || 0))
-    const rankingScore = Math.max(0, Math.min(1, parseFloat(result.rankingScore) || 0))
-    const contentQuality = Math.min(1, String(result.content || result.title || '').length / 220)
-    const engagementBase = Math.max(0, Number(result.upvotes) || 0, Number(result.score) || 0)
-    const engagementScore = Math.min(1, Math.log10(engagementBase + 1) / 3)
-    const typeWeight = result.type === 'post' ? 1 : result.type === 'comment' ? 0.9 : 0.62
-
-    return Math.min(
-      1,
-      Math.max(
-        0.15,
-        (lexicalCoverage * 0.42 +
-          similarity * 0.22 +
-          rankingScore * 0.23 +
-          contentQuality * 0.05 +
-          engagementScore * 0.08) *
-          typeWeight
-      )
-    )
   }
 
   formatResultForContext(result) {
@@ -605,6 +384,10 @@ ${content}
       agenticResult.attempts.length > 1
         ? `Search refined ${agenticResult.attempts.length} times to find the most relevant results.`
         : 'Direct search results found.'
+    const evidenceNote =
+      agenticResult.relevanceMode === 'decisions' && agenticResult.confidentResults === 0
+        ? '\n- None of the retrieved discussions was judged directly relevant to the question: say the evidence is weak.'
+        : ''
     const systemPrompt = `You are a student assistant summarizing Reddit evidence for college queries.
 
 Return ONLY HTML with this structure:
@@ -620,7 +403,7 @@ Rules:
 - Cite source handles and upvotes when present (e.g., u/name, ↑32).
 - Do not invent users, votes, or facts.
 - If evidence is weak, say so clearly.
-- ${searchInfo}`
+- ${searchInfo}${evidenceNote}`
 
     // AI SDK v7 rejects `role: 'system'` entries in `messages`; the system prompt goes in
     // `instructions`, and client-supplied history is limited to user/assistant turns.
@@ -714,7 +497,7 @@ Do not use markdown.`
     }))
   }
 
-  calculateConfidence(searchResults, maxRelevanceScore) {
+  calculateConfidence(searchResults) {
     if (searchResults.length === 0) return 0
 
     const relevanceScores = searchResults.map(r => r.relevanceScore || 0)
@@ -741,195 +524,7 @@ Do not use markdown.`
   }
 }
 
-class QueryRelevanceAgent {
-  static RELEVANCE_OUTPUT_SCHEMA = z.object({
-    scores: z.array(z.number().min(0).max(1)),
-  })
-
-  constructor(model, thinkingBudget = 512, options = {}) {
-    this.model = model
-    this.thinkingBudget = thinkingBudget
-    this.includeThoughts = options.includeThoughts || false
-    this.timeoutMs = parsePositiveInt(options.timeoutMs, 5000)
-    this.maxOutputTokens = parsePositiveInt(options.maxOutputTokens, 192)
-    logger.info(
-      `QueryRelevanceAgent initialized with thinkingBudget: ${thinkingBudget}, includeThoughts: ${this.includeThoughts}`
-    )
-  }
-
-  shouldUseLlmRelevance(heuristicScores = []) {
-    if (!Array.isArray(heuristicScores) || heuristicScores.length === 0) return false
-
-    const sorted = [...heuristicScores]
-      .map(value => Math.max(0, Math.min(1, Number(value) || 0)))
-      .sort((a, b) => b - a)
-    const top1 = sorted[0] || 0
-    const top3Avg =
-      sorted.slice(0, Math.min(3, sorted.length)).reduce((sum, value) => sum + value, 0) /
-      Math.min(3, sorted.length)
-    const spread = (sorted[0] || 0) - (sorted[Math.min(4, sorted.length - 1)] || 0)
-
-    // Skip LLM relevance unless retrieval confidence is genuinely ambiguous.
-    if (top1 >= 0.62 && top3Avg >= 0.5) return false
-    return spread < 0.12 || top3Avg < 0.48
-  }
-
-  formatForLog(value) {
-    if (value == null) return 'unknown'
-    if (typeof value === 'string') return value
-    try {
-      return JSON.stringify(value)
-    } catch {
-      return String(value)
-    }
-  }
-
-  estimateFallbackScores(originalQuery, searchResults) {
-    const queryTerms = AgenticRAGService.extractKeyTerms(originalQuery)
-    return searchResults.map(result => {
-      const titleMatches = this.countTermMatches(result.title, queryTerms)
-      const contentMatches = this.countTermMatches(result.content, queryTerms)
-      const lexicalCoverage =
-        queryTerms.length > 0
-          ? Math.min(1, (titleMatches * 1.4 + contentMatches) / (queryTerms.length * 1.8))
-          : 0
-      const similarity = Math.max(0, Math.min(1, parseFloat(result.similarity) || 0))
-      const rankingScore = Math.max(0, Math.min(1, parseFloat(result.rankingScore) || 0))
-      const engagementBase = Math.max(0, Number(result.upvotes) || 0, Number(result.score) || 0)
-      const engagementScore = Math.min(1, Math.log10(engagementBase + 1) / 3)
-      const typeWeight = result.type === 'post' ? 1 : result.type === 'comment' ? 0.9 : 0.62
-
-      return Math.min(
-        1,
-        Math.max(
-          0.15,
-          (lexicalCoverage * 0.42 +
-            similarity * 0.22 +
-            rankingScore * 0.28 +
-            engagementScore * 0.08) *
-            typeWeight
-        )
-      )
-    })
-  }
-
-  async analyzeRelevance(originalQuery, searchResults, precomputedFallbackScores = null) {
-    logger.info(
-      `Analyzing relevance for query: "${originalQuery}" with ${searchResults.length} results, thinkingBudget: ${this.thinkingBudget}`
-    )
-    const fallbackScores =
-      Array.isArray(precomputedFallbackScores) &&
-      precomputedFallbackScores.length === searchResults.length
-        ? precomputedFallbackScores
-        : this.estimateFallbackScores(originalQuery, searchResults)
-
-    try {
-      if (searchResults.length === 0) {
-        return []
-      }
-
-      const resultsText = searchResults
-        .map(
-          (result, index) =>
-            `Result ${index}: title="${String(result.title || '').slice(0, 90)}" excerpt="${String(
-              result.content || ''
-            )
-              .replace(/\s+/g, ' ')
-              .slice(0, 70)}"`
-        )
-        .join('\n')
-
-      const prompt = `Score each result for relevance to the user query. Return only the schema output.
-
-Original Query: "${originalQuery}"
-
-Search Results:
-${resultsText}
-
-Rules:
-- Return exactly ${searchResults.length} scores.
-- Each score must be a number from 0 to 1.
-- Preserve input order.`
-
-      const result = await generateText({
-        model: this.model,
-        prompt: prompt,
-        maxOutputTokens: this.maxOutputTokens,
-        maxRetries: 0,
-        abortSignal: createAbortSignal(this.timeoutMs),
-        output: Output.object({
-          schema: QueryRelevanceAgent.RELEVANCE_OUTPUT_SCHEMA,
-        }),
-        providerOptions: {
-          openai: {
-            reasoningEffort: 'none',
-          },
-        },
-      })
-
-      const scores = result.output?.scores
-      if (Array.isArray(scores) && scores.length > 0) {
-        const normalizedScores = scores.slice(0, searchResults.length)
-        const padValue = Math.max(
-          0,
-          Math.min(1, Number(normalizedScores[normalizedScores.length - 1]) || 0.5)
-        )
-        while (normalizedScores.length < searchResults.length) {
-          normalizedScores.push(padValue)
-        }
-
-        const queryTerms = AgenticRAGService.extractKeyTerms(originalQuery)
-        return this.blendRelevanceScores(normalizedScores, searchResults, queryTerms)
-      }
-
-      const warningCount = Array.isArray(result?.warnings) ? result.warnings.length : 0
-      logger.warn(
-        `Structured relevance output missing (finishReason=${this.formatForLog(result?.finishReason)}, warnings=${warningCount}), using heuristic fallback`
-      )
-      return fallbackScores
-    } catch (error) {
-      logger.error('Error in relevance analysis:', error)
-      return fallbackScores
-    }
-  }
-
-  blendRelevanceScores(scores, searchResults, queryTerms) {
-    return scores.map((score, index) => {
-      const llmScore = Math.max(0, Math.min(1, parseFloat(score) || 0))
-      const item = searchResults[index] || {}
-      const titleMatches = this.countTermMatches(item.title, queryTerms)
-      const contentMatches = this.countTermMatches(item.content, queryTerms)
-      const lexicalCoverage =
-        queryTerms.length > 0
-          ? Math.min(1, (titleMatches * 1.4 + contentMatches) / (queryTerms.length * 1.8))
-          : 0
-      const similarity = Math.max(0, Math.min(1, parseFloat(item.similarity) || 0))
-      const rankingScore = Math.max(0, Math.min(1, parseFloat(item.rankingScore) || 0))
-
-      return Math.min(
-        1,
-        llmScore * 0.65 + lexicalCoverage * 0.2 + similarity * 0.1 + rankingScore * 0.05
-      )
-    })
-  }
-
-  countTermMatches(text, queryTerms) {
-    if (!text || !queryTerms.length) return 0
-
-    const haystack = String(text).toLowerCase()
-    let matches = 0
-
-    for (const term of queryTerms) {
-      const escaped = String(term || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      if (!escaped) continue
-      const pattern = new RegExp(`\\b${escaped}\\b`, 'i')
-      if (pattern.test(haystack)) matches++
-    }
-
-    return matches
-  }
-}
-
+/** Generates the next search query with the chat model. Returns null when it has nothing new. */
 class QueryRefinementAgent {
   static QUERY_REFINEMENT_OUTPUT_SCHEMA = z.object({
     refinedQuery: z.string().min(5),
@@ -937,38 +532,28 @@ class QueryRefinementAgent {
     confidence: z.number().min(0).max(1),
   })
 
-  constructor(model, thinkingBudget = 512, options = {}) {
+  constructor(model, options = {}) {
     this.model = model
-    this.thinkingBudget = thinkingBudget
-    this.includeThoughts = options.includeThoughts || false
     this.timeoutMs = parsePositiveInt(options.timeoutMs, 3500)
     this.maxOutputTokens = parsePositiveInt(options.maxOutputTokens, 96)
-    logger.info(
-      `QueryRefinementAgent initialized with thinkingBudget: ${thinkingBudget}, includeThoughts: ${this.includeThoughts}`
-    )
   }
 
-  async refineQuery(originalQuery, currentResults, iteration) {
-    logger.info(
-      `Refining query: "${originalQuery}" (iteration: ${iteration}), thinkingBudget: ${this.thinkingBudget}`
-    )
+  async refineQuery(originalQuery, relevantResults, iteration) {
+    logger.info(`Refining query: "${originalQuery}" (iteration: ${iteration})`)
     try {
       const resultsSummary =
-        currentResults.length > 0
-          ? currentResults
+        relevantResults.length > 0
+          ? relevantResults
               .slice(0, 3)
               .map(r => `"${(r.title || r.content || '').slice(0, 100)}..."`)
               .join(', ')
           : 'No relevant results found'
 
-      const keyTerms = AgenticRAGService.extractKeyTerms(originalQuery)
-
       const prompt = `You are a search query refinement expert. Your task is to IMPROVE the search query while PRESERVING the original intent.
 
 ORIGINAL USER QUERY: "${originalQuery}"
-Original key terms: ${keyTerms.join(', ')}
 Iteration: ${iteration + 1}
-Current Results: ${resultsSummary}
+Relevant results found so far: ${resultsSummary}
 
 Create a BETTER search query that:
 1. Preserves the core intent
@@ -1002,64 +587,18 @@ Return:
       })
 
       const parsed = result.output
-      if (parsed && parsed.refinedQuery && parsed.refinedQuery.length >= 5) {
-        if (parsed.preservesIntent === false && (parsed.confidence || 0) < 0.6) {
-          logger.warn('Refined query flagged as intent drift; using original query')
-          return originalQuery
-        }
-
-        return parsed.refinedQuery.trim()
+      if (!parsed?.refinedQuery) return null
+      if (parsed.preservesIntent === false && (parsed.confidence || 0) < 0.6) {
+        logger.warn('Refined query flagged as intent drift; not searching with it')
+        return null
       }
-
-      return originalQuery
+      return parsed.refinedQuery.trim()
     } catch (error) {
       logger.error('Error refining query:', error)
-      return originalQuery
-    }
-  }
-}
-
-class ResultQualityAgent {
-  constructor(model, thinkingBudget = 512, options = {}) {
-    this.model = model
-    this.thinkingBudget = thinkingBudget
-    this.includeThoughts = options.includeThoughts || false
-    logger.info(
-      `ResultQualityAgent initialized with thinkingBudget: ${thinkingBudget}, includeThoughts: ${this.includeThoughts}`
-    )
-  }
-
-  async assessQuality(originalQuery, results) {
-    logger.info(
-      `Assessing quality for query: "${originalQuery}" with ${results.length} results, thinkingBudget: ${this.thinkingBudget}`
-    )
-    try {
-      const resultsInfo = results.slice(0, 5).map(r => ({
-        upvotes: r.upvotes || 0,
-        score: r.score || 0,
-        hasContent: (r.content || '').length > 50,
-        relevance: r.relevanceScore || 0,
-      }))
-
-      let qualityScore = 0
-
-      if (results.length >= 3) qualityScore += 0.3
-
-      const avgUpvotes = resultsInfo.reduce((sum, r) => sum + r.upvotes, 0) / resultsInfo.length
-      if (avgUpvotes > 10) qualityScore += 0.3
-
-      const contentRatio = resultsInfo.filter(r => r.hasContent).length / resultsInfo.length
-      qualityScore += contentRatio * 0.2
-
-      const avgRelevance = resultsInfo.reduce((sum, r) => sum + r.relevance, 0) / resultsInfo.length
-      qualityScore += avgRelevance * 0.2
-
-      return Math.min(1.0, qualityScore)
-    } catch (error) {
-      logger.error('Error assessing quality:', error)
-      return 0.5
+      return null
     }
   }
 }
 
 module.exports = AgenticRAGService
+module.exports.QueryRefinementAgent = QueryRefinementAgent

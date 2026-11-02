@@ -13,7 +13,7 @@ function deriveKey(secret, info) {
 /**
  * Opaque continuation tokens for multi-step workflows.
  *
- * Payload = the accumulated, already-validated flags + hints + which step is pending + the
+ * Payload = the accumulated, already-validated flags + which step is pending (and its option ids) + the
  * user it belongs to (as an HMAC tag, never the password). Sealed with AES-256-GCM so it is
  * confidential (leave reasons etc. stay private) and tamper-proof, deflated to stay short, and
  * stamped with an expiry. Any instance sharing PROXY_TOKEN_SECRET can resume it, which is what

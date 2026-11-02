@@ -52,12 +52,12 @@ export default function RedditPanel() {
     const q = (query || '').trim()
     if (!q) {
       if (mode === 'smart') {
-        await smart.run({ query: 'reddit overview for vit' })
+        await smart.run({ query: 'VIT', includeTrending: true })
       }
       return
     }
     if (mode === 'smart') {
-      await smart.run({ query: q })
+      await smart.run({ query: q, includeTrending: true })
     } else {
       await knowledge.run({ query: q })
     }

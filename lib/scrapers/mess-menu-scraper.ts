@@ -28,6 +28,9 @@ const parseMessMenuData = (value: unknown): MessMenuData | null => {
 
 const toIsoDate = (date: Date = new Date()): string => date.toISOString().slice(0, 10)
 
+/** Why `getMessMenu` failed: no menu published for the date, or the menu source was unreachable. */
+export type MessMenuErrorKind = 'menu_unavailable' | 'menu_fetch_failed'
+
 export interface MessMenuResponse {
   success: boolean
   data?: {
@@ -41,6 +44,7 @@ export interface MessMenuResponse {
   }
   message?: string
   error?: string
+  errorKind?: MessMenuErrorKind
 }
 
 const MESS_ENDPOINTS = {
@@ -168,6 +172,7 @@ export async function getMessMenu(
         success: false,
         message: `Could not find mess menu for ${dayName}, ${formattedDate} at ${lookupName(MESS_TYPES, menuData.mess)} in ${lookupName(HOSTEL_TYPES, menuData.hostel)}.`,
         error: `Menu not available for date: ${today}`,
+        errorKind: 'menu_unavailable',
       }
     }
     const weekMenu = getWeekMenu(menuData.menu, today)
@@ -201,6 +206,7 @@ export async function getMessMenu(
     return {
       success: false,
       error: error instanceof Error ? error.message : String(error),
+      errorKind: 'menu_fetch_failed',
       message: 'Unable to fetch mess menu. Please try again later.',
     }
   }

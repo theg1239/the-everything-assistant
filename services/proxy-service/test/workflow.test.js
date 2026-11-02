@@ -51,63 +51,107 @@ describe('multi-step workflows', () => {
     assert.deepEqual(last.argv.slice(4), ['--course', '1', '--faculty', '2', '--materials', '1,3'])
   })
 
-  it('resolves natural-language hints automatically (one request)', async () => {
-    const res = await start('course-page', { select: { course: 'dsa', faculty: 'meera', materials: 'all' } })
-    assert.equal(res.json.status, 'completed')
-    assert.equal(res.json.files.length, 5)
-    assert.deepEqual(res.json.meta.autoSelected.map(a => a.step).sort(), ['course', 'faculty', 'materials'])
-    assert.equal(res.json.meta.runs, 3, '"all" is sent up front: no extra run for the materials table')
+  it('rejects the removed select hints and legacy *Query flags', async () => {
+    const res = await start('course-page', { select: { course: 'dsa' } }, creds('21BCE0300'))
+    assert.equal(res.status, 400)
+    assert.equal(res.json.errorKind, 'invalid_input')
+    assert.equal(res.json.field, 'select')
+    assert.match(res.json.error, /"select" is not supported/)
+    for (const legacy of ['courseQuery', 'semesterQuery', 'facultyQuery', 'materialQuery']) {
+      const bad = await start('course-page', { flags: { [legacy]: 'x' } }, creds('21BCE0300'))
+      assert.equal(bad.status, 400, legacy)
+      assert.equal(bad.json.field, legacy)
+    }
+    const text = await start('course-page', { flags: { course: 'CSE1001' } }, creds('21BCE0300'))
+    assert.equal(text.status, 400)
+    assert.equal(text.json.field, 'course')
+    assert.equal(p.readLog().filter(e => e.argv[1] === '21BCE0300').length, 0, 'nothing reached cli-top')
   })
 
-  it('accepts free-text choices on continue and re-asks when ambiguous', async () => {
-    let res = await start('course-page', {}, creds('21BCE0301'))
-    res = await cont(res.json.continuation, 'CSE1001')
+  it('rejects free-text and unknown choices with the valid ids; the step stays resumable', async () => {
+    let res = await start('course-page', { flags: { course: 1 } }, creds('21BCE0301'))
     assert.equal(res.json.step.id, 'faculty')
-    const ambiguous = await cont(res.json.continuation, 'an')
-    assert.equal(ambiguous.json.status, 'needs_selection')
-    assert.match(ambiguous.json.step.prompt, /matches several options/)
-    res = await cont(ambiguous.json.continuation, 'ravi')
+    const token = res.json.continuation
+    const spawns = p.spawns()
+    for (const bad of ['anuj', 'Anuj Kumar', '42', '1,2', 'all', true]) {
+      const rejected = await cont(token, bad)
+      assert.equal(rejected.status, 400, String(bad))
+      assert.equal(rejected.json.errorKind, 'invalid_input')
+      assert.equal(rejected.json.field, 'choice')
+      assert.deepEqual(rejected.json.validIds, ['1', '2', '3'])
+      assert.match(rejected.json.error, /Valid ids: 1, 2, 3/)
+    }
+    assert.equal(p.spawns(), spawns, 'rejected choices never run cli-top')
+    res = await cont(token, '3')
     assert.equal(res.json.step.id, 'materials')
-    res = await cont(res.json.continuation, 'module 1')
+    assert.equal(res.json.step.multiple, true)
+    const multi = await cont(res.json.continuation, 'module 1')
+    assert.equal(multi.status, 400)
+    assert.deepEqual(multi.json.validIds, ['1', '2', '3', '4', '5', 'all'])
+    res = await cont(res.json.continuation, '1-2,5')
     assert.equal(res.json.status, 'completed')
-    assert.equal(res.json.files.length, 2)
+    assert.equal(res.json.files.length, 3)
+    assert.deepEqual(p.readLog().at(-1).argv.slice(4), ['--course', '1', '--faculty', '3', '--materials', '1,2,5'])
   })
 
-  it('recovers when cli-top fuzzy matching is ambiguous (filtered table)', async () => {
-    // "an" matches two faculty in cli-top: the proxy re-runs for stable indices instead of
-    // returning cli-top's re-numbered rows.
+  it('auto-advances only when cli-top offers exactly one option (auto: true)', async () => {
+    // CSE2001 has a single faculty: that step is taken, materials (5 options) is asked.
+    const res = await start('course-page', { flags: { course: 2 } }, creds('21BCE0313'))
+    assert.equal(res.json.status, 'needs_selection')
+    assert.equal(res.json.step.id, 'materials')
+    assert.equal(res.json.step.options.length, 5, 'all options listed')
+    assert.deepEqual(res.json.progress, [{ step: 'faculty', label: 'Faculty', choice: 'Meera Iyer', value: ['1'], auto: true }])
+    assert.deepEqual(res.json.meta.autoSelected, [{ step: 'faculty', choice: 'Meera Iyer', value: '1' }])
+    assert.equal(res.json.meta.runs, 2)
+    const done = await cont(res.json.continuation, 'all')
+    assert.equal(done.json.status, 'completed')
+    assert.equal(done.json.files.length, 5)
+    assert.deepEqual(p.readLog().at(-1).argv.slice(4), ['--course', '2', '--faculty', '1', '--materials', '0'])
+  })
+
+  it("re-runs for stable numbering when cli-top's own search is ambiguous (no proxy matching)", async () => {
+    // "an" matches two faculty in cli-top's fuzzy search; its re-numbered subset is discarded.
     const res = await start('course-page', { flags: { course: 1, faculty: 'an' } }, creds('21BCE0302'))
     assert.equal(res.json.status, 'needs_selection')
     assert.equal(res.json.step.id, 'faculty')
-    assert.equal(res.json.step.options.length, 3, 'full faculty list with original indices')
-    assert.equal(res.json.step.unmatchedHint, 'an')
+    assert.deepEqual(res.json.step.options.map(o => [o.id, o.label]), [['1', 'Anuj Kumar'], ['2', 'Anjali Sharma'], ['3', 'Ravi Shankar']])
+    assert.equal(res.json.step.cliQuery, 'an')
+    const runs = p.readLog().filter(e => e.argv[1] === '21BCE0302').map(e => e.argv.slice(4))
+    assert.deepEqual(runs, [['--course', '1', '--faculty', 'an'], ['--course', '1']])
   })
 
-  it('lists and resolves semesters by name', async () => {
-    let res = await start('course-page', { select: { semester: 'winter 2024' } }, creds('21BCE0303'))
-    assert.equal(res.json.step.id, 'course')
-    assert.equal(res.json.step.options[0].label, 'PHY1001 — Engineering Physics')
-    assert.equal(res.json.progress[0].choice, 'Winter Semester 2024-25')
+  it('lists semesters on request and takes the semester by option id', async () => {
+    let res = await start('course-page', { flags: { semester: 'list' } }, creds('21BCE0303'))
+    assert.equal(res.json.step.id, 'semester')
+    assert.deepEqual(res.json.step.options.map(o => o.label), ['Winter Semester 2024-25', 'Fall Semester 2025-26'])
+    res = await cont(res.json.continuation, '1')
+    // the older semester has one course and one faculty: both auto-advance
+    assert.equal(res.json.step.id, 'materials')
+    assert.deepEqual(res.json.progress.map(s => [s.step, s.choice, Boolean(s.auto)]), [
+      ['semester', 'Winter Semester 2024-25', false],
+      ['course', 'PHY1001 — Engineering Physics', true],
+      ['faculty', 'Old Physics Prof', true],
+    ])
 
-    res = await start('marks', { select: { semester: 'previous' } }, creds('21BCE0303'))
+    res = await start('marks', { flags: { semester: 'list' } }, creds('21BCE0303'))
+    assert.equal(res.json.step.id, 'semester')
+    res = await cont(res.json.continuation, '1')
     assert.equal(res.json.status, 'completed')
     const marksRuns = p.readLog().filter(e => e.argv[1] === '21BCE0303' && e.argv[3] === 'marks')
     assert.deepEqual(marksRuns.map(r => r.argv.slice(4)), [['--semester', '9999'], ['--semester', '1']])
+
+    const relative = await start('marks', { flags: { semester: 'previous' } }, creds('21BCE0303'))
+    assert.equal(relative.status, 400)
   })
 
   it('asks for the class group in calendar', async () => {
     let res = await start('calendar', {}, creds('21BCE0304'))
     assert.equal(res.json.step.id, 'classGroup')
     assert.equal(res.json.step.options[0].label, 'General Semester')
-    res = await cont(res.json.continuation, 'weekend')
+    assert.equal((await cont(res.json.continuation, 'weekend')).status, 400)
+    res = await cont(res.json.continuation, '2')
     assert.equal(res.json.status, 'completed')
-  })
-
-  it('supports cancel', async () => {
-    const res = await start('syllabus', {}, creds('21BCE0305'))
-    assert.equal(res.json.step.id, 'course')
-    const cancelled = await cont(res.json.continuation, 'cancel')
-    assert.equal(cancelled.json.status, 'cancelled')
+    assert.deepEqual(p.readLog().at(-1).argv.slice(4), ['--class-group', '2'])
   })
 
   it('rejects tampered, foreign and garbage continuation tokens', async () => {
@@ -121,60 +165,75 @@ describe('multi-step workflows', () => {
     assert.match(foreign.json.error, /different VTOP account/)
   })
 
-  it('validates index choices against the offered options', async () => {
-    const res = await start('syllabus', {}, creds('21BCE0307'))
-    const wrong = await cont(res.json.continuation, '42')
-    assert.equal(wrong.json.status, 'needs_selection')
-    assert.match(wrong.json.step.prompt, /doesn't exist/)
-  })
-
-  it('downloads a syllabus and DA question paper', async () => {
-    let res = await start('syllabus', { select: { course: 'CSE2001' } }, creds('21BCE0308'))
+  it('downloads a syllabus by option id (and forwards a cli-top search string verbatim)', async () => {
+    let res = await start('syllabus', {}, creds('21BCE0308'))
+    assert.equal(res.json.step.id, 'course')
+    assert.equal(res.json.step.options.length, 3)
+    assert.equal((await cont(res.json.continuation, 'CSE2001')).status, 400)
+    res = await cont(res.json.continuation, '2')
     assert.equal(res.json.status, 'completed')
     assert.equal(res.json.files[0].name, 'Data Structures and Algorithms_CSE2001.pdf')
     assert.equal(res.json.files[0].contentType, 'application/pdf')
+    assert.deepEqual(p.readLog().at(-1).argv.slice(4), ['--course', '2'])
 
-    res = await start('da', {}, creds('21BCE0308'))
+    res = await start('syllabus', { flags: { course: 'CSE1001' } }, creds('21BCE0308'))
+    assert.equal(res.json.status, 'completed', 'cli-top resolved its own search')
+    assert.deepEqual(p.readLog().at(-1).argv.slice(4), ['--course', 'CSE1001'])
+  })
+
+  it('downloads a DA question paper by subject and assignment ids', async () => {
+    let res = await start('da', {}, creds('21BCE0314'))
     assert.equal(res.json.step.id, 'course')
+    assert.equal(res.json.step.label, 'Subject')
     assert.equal(res.json.step.options[0].label, 'Problem Solving and Programming')
     res = await cont(res.json.continuation, '1')
     assert.equal(res.json.step.id, 'assignment')
-    res = await cont(res.json.continuation, 'DA1')
+    assert.deepEqual(res.json.step.options.map(o => o.label), ['DA1', 'DA2'])
+    assert.equal((await cont(res.json.continuation, 'DA1')).status, 400)
+    res = await cont(res.json.continuation, '1')
     assert.equal(res.json.status, 'completed')
     assert.equal(res.json.files[0].name, 'DA1.pdf')
+    assert.deepEqual(p.readLog().at(-1).argv.slice(4), ['--course', '1', '--assignment', '1'])
   })
 
-  it('registers a facility only after confirmation', async () => {
+  it('registers a facility only after a boolean confirmation', async () => {
     let res = await start('facility', {}, creds('21BCE0309'))
     assert.equal(res.json.step.id, 'facility')
-    res = await cont(res.json.continuation, 'gym')
+    res = await cont(res.json.continuation, '1')
     assert.equal(res.json.status, 'needs_confirmation')
     assert.equal(res.json.step.kind, 'confirm')
+    assert.deepEqual(res.json.step.options, [])
     const runsBefore = p.spawns()
-    const declined = await cont(res.json.continuation, 'no')
+    for (const bad of ['confirm', 'yes', '1']) assert.equal((await cont(res.json.continuation, bad)).status, 400, bad)
+    const declined = await cont(res.json.continuation, false)
     assert.equal(declined.json.status, 'cancelled')
     assert.equal(p.spawns(), runsBefore, 'declining never runs cli-top')
-    res = await cont(res.json.continuation, 'confirm')
+    res = await cont(res.json.continuation, true)
     assert.equal(res.json.status, 'completed')
     assert.deepEqual(p.readLog().at(-1).argv.slice(4), ['--facility', '1', '--confirm', 'true'])
 
-    const conflict = await start('facility', { flags: { facility: 'badminton', confirm: true } }, creds('21BCE0309'))
+    const conflict = await start('facility', { flags: { facility: 2, confirm: true } }, creds('21BCE0309'))
     assert.equal(conflict.status, 409)
     assert.equal(conflict.json.errorKind, 'conflict')
   })
 
-  it('gates leave applications behind confirmation and collects missing fields', async () => {
+  it('gates leave applications behind confirmation and collects missing fields as typed inputs', async () => {
     const user = creds('21BCE0310')
     const runsBefore = p.spawns()
     let res = await start('leave', { flags: { apply: true, leaveCode: 'HT1', visitingPlace: 'Chennai', reason: 'Family function' } }, user)
     assert.equal(res.json.status, 'needs_confirmation')
     assert.match(res.json.step.prompt, /Visiting Place: Chennai/)
+    assert.deepEqual(res.json.step.summary, { leaveCode: 'HT1', visitingPlace: 'Chennai', reason: 'Family function' })
     assert.equal(p.spawns(), runsBefore, 'nothing submitted before confirmation')
 
-    res = await cont(res.json.continuation, 'confirm')
+    res = await cont(res.json.continuation, true)
     assert.equal(res.json.status, 'needs_input')
     assert.equal(res.json.step.id, 'fromDate')
     assert.equal(res.json.step.inputType, 'date')
+    assert.match(res.json.step.format, /YYYY-MM-DD/)
+    const badDate = await cont(res.json.continuation, 'tomorrow')
+    assert.equal(badDate.status, 400)
+    assert.equal(badDate.json.field, 'fromDate')
     res = await cont(res.json.continuation, '2025-11-20')
     assert.equal(res.json.step.id, 'fromTime')
     res = await cont(res.json.continuation, '09:00')
@@ -183,24 +242,35 @@ describe('multi-step workflows', () => {
     assert.equal(res.json.status, 'completed')
     assert.match(res.json.message, /submitted successfully/)
 
-    const invalid = await start('leave', { confirm: true, flags: { apply: true, leaveCode: 'XYZ', visitingPlace: 'x', reason: 'y', fromDate: '2025-11-20', fromTime: '09:00', toDate: '2025-11-22', toTime: '18:00' } }, user)
+    const full = { apply: true, leaveCode: 'XYZ', visitingPlace: 'x', reason: 'y', fromDate: '2025-11-20', fromTime: '09:00', toDate: '2025-11-22', toTime: '18:00' }
+    const invalid = await start('leave', { confirm: true, flags: full }, user)
     assert.equal(invalid.json.status, 'needs_input')
     assert.equal(invalid.json.step.id, 'leaveCode')
+    assert.equal(invalid.json.step.inputType, 'option')
     assert.ok(invalid.json.step.options.some(o => o.id === 'HT1' && o.label === 'HOME TOWN (HT1)'))
+    const byLabel = await cont(invalid.json.continuation, 'HOME TOWN')
+    assert.equal(byLabel.status, 400)
+    assert.ok(byLabel.json.validIds.includes('HT1'))
+    res = await cont(invalid.json.continuation, 'HT1')
+    assert.equal(res.json.status, 'completed')
 
-    const pending = await start('leave', { confirm: true, flags: { apply: true, leaveCode: 'HT1', visitingPlace: 'x', reason: 'y', fromDate: '2025-11-20', fromTime: '09:00', toDate: '2025-11-22', toTime: '18:00' } }, creds('21BCE0310', 'pending'))
+    const pending = await start('leave', { confirm: true, flags: { ...full, leaveCode: 'HT1' } }, creds('21BCE0310', 'pending'))
     assert.equal(pending.status, 409)
     assert.equal(pending.json.errorKind, 'conflict')
   })
 
-  it('offers VTOP form options for night slip fields', async () => {
-    let res = await start('nightslip', { confirm: true, flags: { apply: true, details: 'Hackathon', fromDate: '2025-11-20', fromTime: '20:00', toDate: '2025-11-20', toTime: '23:30' } }, creds('21BCE0311'))
+  it('collects night slip fields from VTOP option ids', async () => {
+    let res = await start('nightslip', { flags: { apply: true, details: 'Hackathon', fromDate: '2025-11-20', fromTime: '20:00', toDate: '2025-11-20', toTime: '23:30' } }, creds('21BCE0311'))
+    assert.equal(res.json.status, 'needs_confirmation')
+    res = await cont(res.json.continuation, true)
     assert.equal(res.json.status, 'needs_input')
     assert.equal(res.json.step.id, 'costCentreId')
     assert.deepEqual(res.json.step.options.map(o => o.id), ['CC1', 'CC2'])
-    res = await cont(res.json.continuation, 'hostel office')
+    assert.equal((await cont(res.json.continuation, 'hostel office')).status, 400)
+    assert.equal((await cont(res.json.continuation, '1')).status, 400, 'indices are not ids for VTOP form options')
+    res = await cont(res.json.continuation, 'CC1')
     assert.equal(res.json.step.id, 'appliedTo')
-    res = await cont(res.json.continuation, '2')
+    res = await cont(res.json.continuation, 'W200')
     assert.equal(res.json.step.id, 'eventId')
     res = await cont(res.json.continuation, 'EV1')
     assert.equal(res.json.status, 'completed')
@@ -209,7 +279,7 @@ describe('multi-step workflows', () => {
 
   it('exposes new read commands', async () => {
     for (const command of ['today', 'tomorrow', 'dayafter', 'holiday', 'events', 'course-allocation', 'course-page-archive']) {
-      const res = await start(command, command === 'course-allocation' ? { select: { category: 'core', course: 'CSE2001' } } : {}, creds('21BCE0312'))
+      const res = await start(command, command === 'course-allocation' ? { flags: { category: 1, course: 2 } } : {}, creds('21BCE0312'))
       assert.equal(res.json.success, true, command)
       if (command === 'course-page-archive') assert.equal(res.json.step.id, 'course')
       else assert.equal(res.json.status, 'completed', command)
@@ -222,7 +292,7 @@ describe('downloads', () => {
   let result
   before(async () => {
     p = await startProxy()
-    result = (await p.post('/vtop', { command: 'course-page', ...creds(), select: { course: 'CSE1001', faculty: 'anuj kumar', materials: 'module 1' } })).json
+    result = (await p.post('/vtop', { command: 'course-page', ...creds(), flags: { course: 1, faculty: 1, materials: '1-2' } })).json
   })
   after(() => p.close())
 
@@ -341,13 +411,20 @@ describe('legacy course-page API', () => {
   })
   after(() => p.close())
 
-  it('/vtop-interactive and /vtop-interactive-continue keep their response shape', async () => {
-    let res = await p.post('/vtop-interactive', { command: 'course-page-interactive', step: 'semester', ...creds(), flags: { courseQuery: 'CSE1001' } })
+  it('/vtop-interactive and /vtop-interactive-continue keep their response shape (exact selections)', async () => {
+    const hinted = await p.post('/vtop-interactive', { command: 'course-page-interactive', ...creds(), flags: { courseQuery: 'CSE1001' } })
+    assert.equal(hinted.status, 400)
+    assert.equal(hinted.json.errorKind, 'invalid_input')
+    assert.equal(hinted.json.interactiveState, 'error')
+    let res = await p.post('/vtop-interactive', { command: 'course-page-interactive', step: 'semester', ...creds(), flags: { course: 1 } })
     assert.equal(res.status, 200)
     assert.equal(res.json.step, 'faculty')
     assert.equal(res.json.interactiveState, 'waiting_for_input')
     assert.equal(res.json.nextStep, 'materials')
     assert.deepEqual(res.json.options[0], { number: 1, id: '1', description: 'Anuj Kumar', text: 'Anuj Kumar', values: { FACULTY: 'Anuj Kumar' } })
+    const text = await p.post('/vtop-interactive-continue', { sessionData: res.json.sessionData, selection: 'anuj', step: 'faculty', password: 'pw' })
+    assert.equal(text.status, 400)
+    assert.deepEqual(text.json.validIds, ['1', '2', '3'])
     res = await p.post('/vtop-interactive-continue', { sessionData: res.json.sessionData, selection: '1', step: 'faculty', password: 'pw' })
     assert.equal(res.json.step, 'materials')
     res = await p.post('/vtop-interactive-continue', { sessionData: res.json.sessionData, selection: '0', step: 'materials', password: 'pw' })

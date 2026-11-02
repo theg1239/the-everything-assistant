@@ -67,7 +67,46 @@ function extractPdfUrlsFromToolResult(toolCall: ToolInvocationLike): Attachment[
 }
 
 /** Short text form of a successful VTOP tool payload, or '' when there is nothing to say. */
+/**
+ * A pending VTOP workflow step as JSON for the model's context: chat history reaches the model
+ * as text, and the next turn needs the continuation token and the offered option ids to continue
+ * (e.g. when the user replies "the second one").
+ */
+function describeVTOPPendingStep(payload: UnknownRecord, command: string): string | null {
+  const status = readString(payload, 'status')
+  if (status !== 'needs_selection' && status !== 'needs_input' && status !== 'needs_confirmation') {
+    return null
+  }
+  const step = isRecord(payload.step) ? payload.step : null
+  return JSON.stringify({
+    command,
+    status,
+    continuation: readString(payload, 'continuation') ?? null,
+    step: step
+      ? {
+          id: readString(step, 'id'),
+          kind: readString(step, 'kind'),
+          label: readString(step, 'label'),
+          prompt: readString(step, 'prompt'),
+          multiple: step.multiple === true,
+          format: readString(step, 'format'),
+          options: records(step.options).map(option => ({
+            id: readString(option, 'id'),
+            label: readString(option, 'label'),
+            ...(readString(option, 'description')
+              ? { description: readString(option, 'description') }
+              : {}),
+          })),
+          ...(isRecord(step.summary) ? { summary: step.summary } : {}),
+        }
+      : null,
+    nextAction: readString(payload, 'nextAction'),
+  })
+}
+
 function describeVTOPPayload(payload: UnknownRecord, command: string): string {
+  const pendingStep = describeVTOPPendingStep(payload, command)
+  if (pendingStep) return pendingStep
   const formatted = readString(payload, 'formatted_content')
   if (formatted) return formatted
   const summary = readString(payload, 'summary')

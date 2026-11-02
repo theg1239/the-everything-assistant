@@ -115,11 +115,18 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
     description: 'Searching exam paper archives',
   },
 
-  resolveCourseCode: {
-    name: 'Course Resolver',
+  searchCourseCatalog: {
+    name: 'Course Catalog',
     icon: BookOpen,
-    message: 'resolving course code...',
-    description: 'Finding the correct course',
+    message: 'searching the course catalog...',
+    description: 'Finding matching courses',
+  },
+
+  lookupCourseCode: {
+    name: 'Course Catalog',
+    icon: BookOpen,
+    message: 'looking up course code...',
+    description: 'Checking the course code',
   },
 
   smartPaperSearch: {
@@ -420,7 +427,8 @@ const TOOL_PRIORITIES: Record<string, number> = {
   getCourseInfo: 7,
   getFacultyInfo: 7,
   getPlacementInfo: 6,
-  resolveCourseCode: 6,
+  searchCourseCatalog: 6,
+  lookupCourseCode: 6,
   searchRedditKnowledge: 5,
   searchRedditWithContext: 5,
   webSearch: 5,
@@ -540,6 +548,7 @@ function getDetailedToolMessage(toolName: string, rawArgs?: ToolArgs): string {
   const args = {
     courseCode: argText(rawArgs.courseCode),
     query: argText(rawArgs.query),
+    code: argText(rawArgs.code),
     command: argText(rawArgs.command),
     courseQuery: argText(rawArgs.courseQuery),
     facultyName: argText(rawArgs.facultyName),
@@ -553,9 +562,15 @@ function getDetailedToolMessage(toolName: string, rawArgs?: ToolArgs): string {
       }
       return baseMessage
 
-    case 'resolveCourseCode':
+    case 'searchCourseCatalog':
       if (args.query) {
-        return `resolving "${args.query}"`
+        return `searching courses for "${args.query}"`
+      }
+      return baseMessage
+
+    case 'lookupCourseCode':
+      if (args.code) {
+        return `looking up ${args.code}`
       }
       return baseMessage
 

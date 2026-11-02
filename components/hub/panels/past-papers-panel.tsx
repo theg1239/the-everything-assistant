@@ -27,7 +27,11 @@ export default function PastPapersPanel() {
   const [year, setYear] = useState('')
 
   const onRun = async () => {
-    await run({ courseCode, examType: examType || undefined, year: year || undefined })
+    await run({
+      courseCode,
+      examType: examType && examType !== 'any' ? examType : undefined,
+      year: year || undefined,
+    })
   }
 
   const data = asRecord(result)
@@ -51,7 +55,7 @@ export default function PastPapersPanel() {
       <CardContent className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-1.5">
-            <Label htmlFor="courseCode">course code or name</Label>
+            <Label htmlFor="courseCode">course code</Label>
             <Input
               id="courseCode"
               placeholder="e.g. bcse302l"
@@ -67,10 +71,10 @@ export default function PastPapersPanel() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="any">any</SelectItem>
-                <SelectItem value="CAT-1">cat-1</SelectItem>
-                <SelectItem value="CAT-2">cat-2</SelectItem>
-                <SelectItem value="FAT">fat</SelectItem>
-                <SelectItem value="Quiz">quiz</SelectItem>
+                <SelectItem value="cat1">cat-1</SelectItem>
+                <SelectItem value="cat2">cat-2</SelectItem>
+                <SelectItem value="fat">fat</SelectItem>
+                <SelectItem value="quiz">quiz</SelectItem>
               </SelectContent>
             </Select>
           </div>

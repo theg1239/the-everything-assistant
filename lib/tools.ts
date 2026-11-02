@@ -5,14 +5,16 @@ import { scrapePapersCodeChef } from './scrapers/papers-codechef'
 import { scrapePapersService } from './scrapers/papers-scraper'
 import { scrapeVITPaperVault } from './scrapers/vit-papervault'
 import { scrapeExamCooker } from './scrapers/examcooker'
+import { EXAM_TYPES } from './scrapers/exam-type'
 import { scrapePlacementInfo } from './scrapers/placement-scraper'
 import { getMessMenu, formatMenuItems, getAvailableDateRange } from './scrapers/mess-menu-scraper'
-import { getCourseCode } from './question-generator'
 import {
-  findFullCourseName,
-  searchCoursesByName,
-  getAllCourseMatches,
-  recognizeCourseInText,
+  DEFAULT_COURSE_SEARCH_LIMIT,
+  MAX_COURSE_SEARCH_LIMIT,
+  getCourseByCode,
+  isCourseCodeFormat,
+  normalizeCourseCode,
+  searchCourseCatalog,
 } from './course-map'
 import { getCourseData, School } from './ffcs-tool'
 import { createKnowledgeTools } from './knowledge-tools'
@@ -20,25 +22,22 @@ import { createMemoryTool } from './memory/memory-tools'
 import { createFeedbackIssue } from './feedback'
 import { getVTOPCredentialsForUser } from './vtop-credential-store'
 import {
-  VTOP_COMMANDS,
   VtopProxyUnavailableError,
   callVtopProxy,
-  isPendingVtopStatus,
-  vtopParamsFor,
   vtopProxyResultSchema,
   type VtopCredentialFields,
   type VtopProxyResult,
 } from './vtop-proxy'
+import {
+  autoAdvanceSelections,
+  buildVtopFlags,
+  latestUserText,
+  queryVTOPInputSchema,
+  toQueryVTOPResult,
+} from './vtop-tool'
 import { getUserMcpToken, refreshUserMcpToken, isExpired as isMcpExpired } from './mcp-tokens'
 import { createMusicPlayerTool, type MusicPlayerToolState } from './music-player-tool'
 import { memoizeAsync, publicAssetUrl } from './static-data'
-// import {
-//   indexPastPapers,
-//   askIndexedPaperQuestion,
-//   smartPaperSearchByQuestion,
-//   getPaperIndexMeta,
-// } from './agents/paper-agent'
-// import { analyzeQuestionFrequencies } from './agents/question-frequency-agent'
 import type {
   FacultyCourseRecord,
   FacultyResultEntry,
@@ -309,203 +308,6 @@ async function callVtopViaMcp(options: {
   return mcpFailure('Invalid MCP response shape', 'protocol_error')
 }
 
-const vtopApplicationSchema = z.object({
-  leaveCode: z
-    .string()
-    .optional()
-    .describe(
-      'leave: type code or label - HT1 (HOME TOWN), EY1 (EMERGENCY LEAVE), LG1 (LOCAL GUARDIAN), WP (WITH PARENT LEAVE), WV (WINTER VACATION), SV (SUMMER VACATION), EP (OFFICIAL LEAVES)'
-    ),
-  visitingPlace: z.string().optional().describe('leave: place being visited'),
-  reason: z.string().optional().describe('leave: reason'),
-  details: z.string().optional().describe('nightslip: what the late stay is for'),
-  fromDate: z.string().optional().describe('leave/nightslip: start date YYYY-MM-DD'),
-  fromTime: z.string().optional().describe('leave/nightslip: start time HH:MM (24h)'),
-  toDate: z.string().optional().describe('leave/nightslip: end date YYYY-MM-DD'),
-  toTime: z.string().optional().describe('leave/nightslip: end time HH:MM (24h)'),
-  costCentreId: z.string().optional().describe('nightslip: cost centre id (offered by a needs_input step)'),
-  appliedTo: z.string().optional().describe('nightslip: approver id (offered by a needs_input step)'),
-  roomTypeId: z.string().optional().describe('nightslip: room type id'),
-  buildingId: z.string().optional().describe('nightslip: building id'),
-  venue: z.string().optional().describe('nightslip: venue'),
-  eventId: z.string().optional().describe('nightslip: late-hour event id'),
-})
-
-const vtopIdOrText = z.union([z.number().int().positive(), z.string()])
-
-const queryVTOPInputSchema = z.object({
-  command: z
-    .enum(VTOP_COMMANDS)
-    .describe(
-      "profile; marks/grades/attendance/timetable/exams (exam-schedule) - optional semester; today/tomorrow/dayafter (classes + whether attendance allows skipping); holiday; calendar (asks class group); cgpa; receipts; hostel; library-dues; msg (class-message, announcements); events (campus events, view only); leave (leave-status) and nightslip (status, or apply=true to submit); da (digital assignments: subject -> assignment, downloads the question paper); facility (sports/hostel facility registration); syllabus (download a course syllabus PDF); course-page (download course materials: semester -> course -> faculty -> materials); course-page-archive (same, legacy course page); course-allocation (faculty/slots offered for a curriculum course)"
-    ),
-  continuation: z
-    .string()
-    .optional()
-    .describe(
-      'Token from a previous queryVTOP result whose status was needs_selection / needs_input / needs_confirmation. Pass it back with `choice` (and the same command) to continue that workflow.'
-    ),
-  choice: z
-    .union([z.string(), z.number(), z.array(z.union([z.string(), z.number()]))])
-    .optional()
-    .describe(
-      'Answer for the pending step: an option id from step.options, several ids for multi-select (e.g. "1,3-5" or "all"), free text to match by name/code (e.g. "CSE1001", "anuj kumar", "module 2"), a value for needs_input, or "confirm"/"cancel" for needs_confirmation.'
-    ),
-  semester: z
-    .number()
-    .int()
-    .positive()
-    .optional()
-    .describe('Semester option number from a previous semester list. Omit for the latest semester.'),
-  semesterQuery: z
-    .string()
-    .optional()
-    .describe('Semester by name: "previous", "fall 2024", "winter semester 2024-25". Omit for latest.'),
-  classGroup: z.number().int().positive().optional().describe('Class group option number (calendar/today/tomorrow/holiday).'),
-  course: vtopIdOrText
-    .optional()
-    .describe(
-      'Course: option number, or a course code/name/acronym such as "CSE1001", "data structures", "DSA" (course-page, course-page-archive, da, syllabus, course-allocation).'
-    ),
-  courseQuery: z.string().optional().describe('Alias of course as free text.'),
-  faculty: vtopIdOrText.optional().describe('Faculty option number or name, e.g. "anuj kumar" (course-page).'),
-  facultyQuery: z.string().optional().describe('Alias of faculty as free text.'),
-  materials: z
-    .string()
-    .optional()
-    .describe('Course-page materials: "all", indices like "1,3-5", or a description like "module 2" / "lab slides".'),
-  materialQuery: z.string().optional().describe('Alias of materials as free text.'),
-  assignment: vtopIdOrText.optional().describe('da: assignment option number or title (e.g. "DA1").'),
-  facility: vtopIdOrText.optional().describe('facility: option number or facility name.'),
-  category: z.string().optional().describe('course-allocation: curriculum category (e.g. "programme core").'),
-  apply: z.boolean().optional().describe('leave/nightslip: submit a NEW application (fill `application`).'),
-  application: vtopApplicationSchema.optional().describe('Fields for leave/nightslip applications.'),
-  confirm: z
-    .boolean()
-    .optional()
-    .describe(
-      'Only true when the user has EXPLICITLY confirmed a write action (leave/nightslip apply, facility registration) in this conversation.'
-    ),
-  fresh: z.boolean().optional().describe('Bypass the short-lived cache (user asked to refresh).'),
-  username: z.string().optional().describe('Internal. Leave unset: the linked VTOP account is used.'),
-  password: z.string().optional().describe('Internal. Never ask for or pass a password; leave unset.'),
-  encryptedPassword: z.string().optional().describe('Internal legacy field. Leave unset.'),
-  sessionKey: z.string().optional().describe('Internal legacy field. Leave unset.'),
-  interactiveStep: z.string().optional().describe('Deprecated, ignored.'),
-  fuzzyIndex: z.number().optional().describe('Deprecated, ignored.'),
-  debug: z.boolean().optional().describe('Deprecated, ignored.'),
-})
-type QueryVTOPInput = z.infer<typeof queryVTOPInputSchema>
-
-const MATERIAL_SELECTION = /^\s*(all|0|\d+(\s*-\s*\d+)?(\s*,\s*\d+(\s*-\s*\d+)?)*)\s*$/i
-const LATEST_SEMESTER = /^(latest|current)( semester)?$/i
-
-/**
- * Splits tool input into proxy `flags` (exact values) and `select` hints (natural language the
- * proxy matches against VTOP's option lists), keeping only params the command accepts.
- */
-function buildVtopRequest(input: QueryVTOPInput) {
-  const allowed = new Set(vtopParamsFor(input.command))
-  const flags: Record<string, string | number | boolean> = {}
-  const select: Record<string, string> = {}
-  const ignored: string[] = []
-  const put = (name: string, value: string | number | boolean | undefined) => {
-    if (value === undefined || value === '') return
-    if (!allowed.has(name)) ignored.push(name)
-    else flags[name] = value
-  }
-  const hint = (name: string, value: string | undefined) => {
-    const text = value?.trim()
-    if (!text) return
-    if (!allowed.has(name)) ignored.push(name)
-    else select[name] = text
-  }
-  const idOrHint = (name: string, value: number | string | undefined) => {
-    if (typeof value === 'number') put(name, value)
-    else if (typeof value === 'string' && /^\s*\d+\s*$/.test(value)) put(name, Number(value))
-    else hint(name, value)
-  }
-
-  put('semester', input.semester)
-  if (input.semesterQuery && !LATEST_SEMESTER.test(input.semesterQuery.trim())) {
-    hint('semester', input.semesterQuery)
-  }
-  put('classGroup', input.classGroup)
-  idOrHint('course', input.course)
-  hint('course', input.course === undefined ? input.courseQuery : undefined)
-  idOrHint('faculty', input.faculty)
-  hint('faculty', input.faculty === undefined ? input.facultyQuery : undefined)
-  idOrHint('assignment', input.assignment)
-  idOrHint('facility', input.facility)
-  hint('category', input.category)
-  const materials = input.materials ?? input.materialQuery
-  if (materials !== undefined) {
-    if (MATERIAL_SELECTION.test(materials)) put('materials', materials.replace(/\s+/g, ''))
-    else hint('materials', materials)
-  }
-  if (input.apply) put('apply', true)
-  for (const [name, value] of Object.entries(input.application ?? {})) put(name, value)
-  if (input.confirm && allowed.has('confirm')) flags.confirm = true
-
-  return { flags, select, ignored: [...new Set(ignored)] }
-}
-
-const VTOP_NEXT_ACTION: Record<string, string> = {
-  needs_selection:
-    'If the user already named the option, call queryVTOP again with the same command, this continuation and choice (option id or name); otherwise show step.options and ask. Multi-select steps accept "1,3-5" or "all".',
-  needs_input:
-    'Ask the user for this value (offer step.options when present), then call queryVTOP with the same command, this continuation and choice = the value.',
-  needs_confirmation:
-    'Show the summary and ask the user to confirm. ONLY after they explicitly confirm, call queryVTOP with the same command, this continuation and choice "confirm". Never confirm on their behalf.',
-}
-
-/** Proxy result -> queryVTOP tool output (keeps the legacy fields existing renderers read). */
-function toQueryVTOPResult(command: string, result: VtopProxyResult, ignored: string[] = []) {
-  const status = result.status ?? (result.success ? 'completed' : 'error')
-  const pending = isPendingVtopStatus(status)
-  const files = result.files ?? []
-  return {
-    success: result.success,
-    command: result.command || command,
-    status,
-    message: result.message || result.error || `VTOP ${command} ${status}`,
-    data: pending ? result.step?.prompt ?? result.message ?? '' : result.data ?? result.output ?? '',
-    structured_data: pending ? null : result.structured_data ?? null,
-    raw: false,
-    meta: result.meta ?? null,
-    ...(result.step ? { step: result.step } : {}),
-    ...(result.continuation ? { continuation: result.continuation } : {}),
-    ...(result.progress?.length ? { progress: result.progress } : {}),
-    ...(files.length
-      ? {
-          files,
-          downloadInfo: {
-            filesDownloaded: files.length,
-            totalFiles: files.length,
-            servedFiles: files.map(file => ({
-              name: file.name,
-              size: file.size,
-              downloadUrl: file.url,
-              expiry: file.expiresAt,
-            })),
-          },
-        }
-      : {}),
-    ...(result.bundle ? { bundle: result.bundle } : {}),
-    ...(result.links?.length ? { links: result.links } : {}),
-    ...(pending ? { type: 'vtop-workflow', nextAction: VTOP_NEXT_ACTION[status] } : {}),
-    ...(result.success
-      ? {}
-      : {
-          error: result.error || 'VTOP request failed',
-          errorKind: result.errorKind,
-          retryable: result.retryable ?? false,
-          requiresCredentials: result.requiresCredentials ?? false,
-        }),
-    ...(ignored.length ? { ignoredFlags: ignored } : {}),
-  }
-}
-
 const VTOP_CREDENTIALS_REQUIRED = (command: string) => ({
   success: false,
   status: 'error',
@@ -670,68 +472,34 @@ type RedditSearchResult = {
   error?: string
 }
 
-export async function searchRedditWithContext(query: string): Promise<RedditSearchResult> {
+/**
+ * Reddit knowledge-base search, optionally combined with the trending-topics feed. Whether to
+ * include trending topics is an explicit caller decision (`includeTrending`), never inferred
+ * from the query text.
+ */
+export async function searchRedditWithContext(
+  query: string,
+  { includeTrending = false }: { includeTrending?: boolean } = {}
+): Promise<RedditSearchResult> {
   try {
-    const broadQueryKeywords = [
-      "what's happening",
-      'what is happening',
-      'currently',
-      'current',
-      'trending',
-      'recent',
-      'latest',
-      'now',
-      'today',
-      'active',
-      'popular',
-      'hot topics',
-      'hot',
-      'discussions',
-      'activity',
-      'updates',
-      'news',
-      'look up reddit',
-      'check reddit',
-      'reddit overview',
-      'happening on reddit',
-      'reddit activity',
-      'tell me about',
-      'overview',
-      'summary',
-      'whats going on',
-      "what's going on",
-    ]
+    if (!includeTrending) return await searchRedditKnowledge(query)
 
-    const isBroadQuery =
-      broadQueryKeywords.some(keyword => query.toLowerCase().includes(keyword.toLowerCase())) ||
-      (query.toLowerCase().includes('reddit') &&
-        (query.toLowerCase().includes('current') ||
-          query.toLowerCase().includes('happening') ||
-          query.toLowerCase().includes('trending') ||
-          query.toLowerCase().includes('latest') ||
-          query.toLowerCase().includes('now') ||
-          query.toLowerCase().includes('today')))
+    const [trendingTopics, searchResults] = await Promise.all([
+      getTrendingRedditTopics(),
+      searchRedditKnowledge(query),
+    ])
 
-    if (isBroadQuery) {
-      const [trendingTopics, searchResults] = await Promise.all([
-        getTrendingRedditTopics(),
-        searchRedditKnowledge(query),
-      ])
-
-      return {
-        success: true,
-        response:
-          searchResults.response ||
-          'Here are the current trending topics and recent discussions from Reddit.',
-        sources: searchResults.sources,
-        trending: trendingTopics,
-        confidence: searchResults.confidence,
-        totalResults: searchResults.totalResults,
-        isBroadQuery: true,
-        message: `Found recent VIT discussions and ${trendingTopics.length} trending topics`,
-      }
-    } else {
-      return await searchRedditKnowledge(query)
+    return {
+      success: true,
+      response:
+        searchResults.response ||
+        'Here are the current trending topics and recent discussions from Reddit.',
+      sources: searchResults.sources,
+      trending: trendingTopics,
+      confidence: searchResults.confidence,
+      totalResults: searchResults.totalResults,
+      isBroadQuery: true,
+      message: `Found recent VIT discussions and ${trendingTopics.length} trending topics`,
     }
   } catch (error) {
     console.error('Error in contextual Reddit search:', error)
@@ -781,127 +549,84 @@ function organizeMenuByMealType(menuItems: Array<{ type: number; menu: string }>
   return mealTypes
 }
 
-const DEPARTMENT_ACRONYMS: Record<string, string[]> = {
-  cse: [
-    'computer science and engineering',
-    'computer science',
-    'school of computer science and engineering',
-    'scope',
-  ],
-  scope: [
-    'computer science and engineering',
-    'computer science',
-    'school of computer science and engineering',
-    'cse',
-  ],
-  smec: ['mechanical engineering', 'school of mechanical engineering', 'mechanical'],
-  mech: ['mechanical engineering', 'school of mechanical engineering', 'mechanical', 'smec'],
-  ece: [
-    'electronics and communication engineering',
-    'electronics',
-    'school of electronics engineering',
-  ],
-  ssl: ['school of social sciences and languages', 'social sciences', 'languages'],
-  sas: ['school of advanced sciences', 'advanced sciences', 'sas'],
-  score: [
-    'information technology',
-    'it',
-    'school of information technology and engineering',
-    'score',
-  ],
-  civil: ['civil engineering', 'school of civil engineering', 'civil', 'sce'],
-  sce: ['civil engineering', 'school of civil engineering', 'civil', 'sce'],
+/** Case-insensitive substring test; an empty needle matches nothing. */
+const containsText = (haystack: string | undefined, needle: string): boolean =>
+  needle.length > 0 && (haystack ?? '').toLowerCase().includes(needle)
+
+/**
+ * Joins a faculty.json name to the FFCS dataset's FACULTY column (two data sources that format
+ * the same name differently: "Dr. Anuj Kumar" vs "ANUJ KUMAR"). Data normalisation, not query
+ * interpretation.
+ */
+const facultyJoinKey = (name: string | undefined) =>
+  (name ?? '')
+    .replace(/^Dr\.?\s*|\s+/g, '')
+    .toLowerCase()
+    .trim()
+
+type FfcsCourse = Awaited<ReturnType<typeof getCourseData>>['allCourses'][number]
+
+/** FFCS rows taught by `facultyName`, optionally restricted to a code/title substring. */
+function coursesTaughtBy(
+  facultyName: string,
+  allCourses: FfcsCourse[],
+  courseFilter: string | null
+): FacultyCourseRecord[] {
+  const key = facultyJoinKey(facultyName)
+  if (!key) return []
+  return allCourses
+    .filter(course => {
+      const courseKey = facultyJoinKey(course.FACULTY)
+      const sameFaculty = courseKey.length > 0 && (courseKey.includes(key) || key.includes(courseKey))
+      return (
+        sameFaculty &&
+        (!courseFilter ||
+          containsText(course.TITLE, courseFilter) ||
+          containsText(course.CODE, courseFilter))
+      )
+    })
+    .map(course => ({
+      code: course.CODE,
+      title: course.TITLE,
+      slot: course.SLOT,
+      type: course.TYPE,
+      venue: course.VENUE,
+    }))
 }
 
-function matchesDepartment(deptName: string, filter: string): boolean {
-  const normDept = normalizeString(deptName)
-  const normFilter = normalizeString(filter)
+const SYLLABUS_BASE_URL = 'https://storage.googleapis.com/examcooker/syllabi/'
+const SYLLABUS_MATCH_LIMIT = 10
 
-  if (normDept.includes(normFilter) || normFilter.includes(normDept)) return true
-
-  if (DEPARTMENT_ACRONYMS[normFilter]) {
-    if (DEPARTMENT_ACRONYMS[normFilter].some(full => normDept.includes(normalizeString(full)))) {
-      return true
-    }
-  }
-
-  if (DEPARTMENT_ACRONYMS[normDept]) {
-    if (DEPARTMENT_ACRONYMS[normDept].some(full => normFilter.includes(normalizeString(full)))) {
-      return true
-    }
-  }
-
-  for (const [acronym, names] of Object.entries(DEPARTMENT_ACRONYMS)) {
-    if (
-      names.some(
-        n =>
-          normDept.includes(normalizeString(n)) &&
-          (normFilter === acronym || normFilter.includes(acronym) || acronym.includes(normFilter))
-      )
-    ) {
-      return true
-    }
-    if (
-      names.some(
-        n =>
-          normFilter.includes(normalizeString(n)) &&
-          (normDept === acronym || normDept.includes(acronym) || acronym.includes(normDept))
-      )
-    ) {
-      return true
-    }
-  }
-
-  const deptTokens = normDept.split(' ')
-  const filterTokens = normFilter.split(' ')
-  if (filterTokens.every(f => deptTokens.some(d => d.startsWith(f) || d === f))) return true
-  if (deptTokens.every(d => filterTokens.some(f => f.startsWith(d) || f === d))) return true
-
-  return false
+type SyllabusCandidate = {
+  filename: string
+  code: string | null
+  title: string | null
+  url: string
 }
 
-export const courseUtils = {
-  findFullCourseName,
-  searchCoursesByName,
-  getAllCourseMatches,
-  recognizeCourseInText,
-
-  getCourseInfo: (input: string) => {
-    const matches = getAllCourseMatches(input)
-    if (matches.length > 0) {
-      return {
-        success: true,
-        query: input,
-        matches: matches.map(m => ({ code: m.code, name: m.name, matchType: m.matchType })),
-        primary: matches[0],
-      }
-    }
-    return {
-      success: false,
-      query: input,
-      matches: [],
-      primary: null,
-    }
-  },
-
-  recognizeCoursesInText: (text: string) => {
-    const recognized = recognizeCourseInText(text)
-    const acronymMatches = []
-
-    const words = text.toUpperCase().split(/\s+/)
-    for (const word of words) {
-      const matches = getAllCourseMatches(word)
-      if (matches.length > 0) {
-        acronymMatches.push({ original: word, matches })
-      }
-    }
-
-    return {
-      directRecognitions: recognized,
-      acronymMatches,
-      totalFound: recognized.length + acronymMatches.length,
-    }
-  },
+/**
+ * One syllabus index entry as `{ filename, code, title, url }`. Bare entries are filenames in
+ * the index's `<CODE>_<Title_Words>.pdf` format, which is parsed for code and title.
+ */
+function syllabusCandidate(entry: SyllabusEntry): SyllabusCandidate[] {
+  const fields: Exclude<SyllabusEntry, string> = typeof entry === 'string' ? { file: entry } : entry
+  const filename = fields.file || fields.filename || (fields.code ? `${fields.code}.pdf` : '')
+  if (!filename) return []
+  const base = (filename.split('/').pop() || filename).replace(/\.[^.]+$/, '')
+  const [codePart = '', titlePart = ''] = base.split(/_(.+)/)
+  const parsedTitle = titlePart
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, char => char.toUpperCase())
+  return [
+    {
+      filename,
+      code: fields.code || codePart || null,
+      title: fields.title || parsedTitle || null,
+      url: `${SYLLABUS_BASE_URL}${filename}`,
+    },
+  ]
 }
 
 export function createVITTools(userId: string, options: VITToolsOptions = {}) {
@@ -921,10 +646,18 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
   const findPastPapersInputSchema = z.object({
     courseCode: z
       .string()
+      .describe(
+        'Exact VIT course code, e.g. BCSE302L. If the user named the course some other way, call searchCourseCatalog first and use a code from its results.'
+      ),
+    examType: z
+      .enum(EXAM_TYPES)
       .optional()
-      .describe("course code like BCSE302L or course name like 'database systems'"),
-    examType: z.string().optional().describe('exam type: cat1, cat2, fat, quiz'),
-    year: z.string().optional().describe('academic year like 2023, 2022'),
+      .describe('Exam type filter. Omit for all exam types.'),
+    year: z
+      .string()
+      .regex(/^\d{4}$/, 'year must be four digits, e.g. 2023')
+      .optional()
+      .describe('Calendar year filter, e.g. "2023". Omit for all years.'),
   })
 
   const feedbackSubmissionSchema = z.object({
@@ -1090,7 +823,7 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
     }),
     findPastPapers: tool({
       description:
-        "find past examination papers for VIT courses from real repositories. You can use course names or codes. You don' need the user to specify the year, when no year is specified, the tool will search for all available years.",
+        'Find past exam papers for one VIT course from the paper archives. Takes an exact course code. Returns `{ success, courseCode, papers: [{ title, url, examType, year, ... }], totalFound, sources }`; on failure `success: false` with `errorKind`: "invalid_course_code" (not a course code: search the catalog first) or "no_papers" (none found for the filters).',
       inputSchema: findPastPapersInputSchema,
       execute: async ({
         courseCode,
@@ -1098,40 +831,14 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
         year,
       }: z.infer<typeof findPastPapersInputSchema>) => {
         try {
-          if (!courseCode) {
+          const resolvedCourseCode = normalizeCourseCode(courseCode)
+          if (!isCourseCodeFormat(resolvedCourseCode)) {
             return {
               success: false,
-              error: 'Course code required',
-              requiresCourseCode: true,
-              message: 'I could not find the course code for the course, can you provide it?',
-              suggestion:
-                'You can use course codes like BCSE302L or course names like "database systems".',
-            }
-          }
-
-          let resolvedCourseCode = courseCode.trim().toUpperCase()
-
-          if (!/^[A-Z]{4}\d{3}[A-Z]?$/.test(resolvedCourseCode)) {
-            const mappedCode = getCourseCode(courseCode)
-            if (mappedCode) {
-              resolvedCourseCode = mappedCode
-            } else {
-              const [firstCourseMatch] = getAllCourseMatches(courseCode)
-              if (firstCourseMatch) {
-                resolvedCourseCode = firstCourseMatch.code
-              } else {
-                return {
-                  success: false,
-                  courseCode,
-                  papers: [],
-                  message: `Could not find a valid course code for "${courseCode}". Please provide a valid VIT course code.`,
-                  suggestions: [
-                    'Use the exact VIT course code',
-                    'Check your course timetable or VTOP for the exact course code',
-                    'Contact course faculty for the correct course code',
-                  ],
-                }
-              }
+              errorKind: 'invalid_course_code',
+              courseCode,
+              papers: [],
+              message: `"${courseCode}" is not a course code. Use searchCourseCatalog to find the exact code.`,
             }
           }
 
@@ -1151,17 +858,15 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
           if (papers.length === 0) {
             return {
               success: false,
+              errorKind: 'no_papers',
               courseCode: resolvedCourseCode,
-              originalQuery: courseCode,
               papers: [],
               message: `No papers found for course code "${resolvedCourseCode}"${
-                resolvedCourseCode !== courseCode ? ` (searched for: "${courseCode}")` : ''
-              }${examType ? ` (${examType})` : ''}${year ? ` from ${year}` : ''}.`,
+                examType ? ` (${examType})` : ''
+              }${year ? ` from ${year}` : ''}.`,
               suggestions: [
-                resolvedCourseCode !== courseCode
-                  ? `Double-check that "${resolvedCourseCode}" is the correct course code for "${courseCode}"`
-                  : 'Verify the course code format (e.g., MECH2001, BMEE302L)',
-                'Try different exam types: CAT1, CAT2, FAT, or Quiz',
+                'Verify the course code with searchCourseCatalog',
+                'Try without the exam type or year filter',
                 'Check with course faculty for official study materials',
                 'Visit VIT library for physical copies of past papers',
                 'Contact senior students or study groups for materials',
@@ -1171,12 +876,12 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
 
           return {
             success: true,
-            courseCode,
+            courseCode: resolvedCourseCode,
             examType,
             year,
             papers,
             totalFound: papers.length,
-            message: `found ${papers.length} papers for ${courseCode}${
+            message: `found ${papers.length} papers for ${resolvedCourseCode}${
               examType ? ` (${examType})` : ''
             }${year ? ` from ${year}` : ''}`,
             sources,
@@ -1192,84 +897,46 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
         }
       },
     }),
-    resolveCourseCode: tool({
+    searchCourseCatalog: tool({
       description:
-        'Resolve a VIT course name, acronym, or partial description to canonical course codes using the local course map. Use this before any course-specific tools (past papers, VTOP course materials, FFCS lookups) when the user did not provide the exact course code.',
+        'Search the VIT course catalog (course code -> official title). Case-insensitive substring match of `query` against course codes and titles, in catalog order; no nicknames or acronyms are expanded. Use it to turn the user\'s description of a course into exact course codes: try a distinctive part of the official title (e.g. "data structures") or a code prefix (e.g. "BCSE3"). Returns `{ query, total, candidates: [{ code, name }] }`. Pick the code that fits the user\'s request; if several plausibly fit, list them and ask which one. `total: 0` means nothing contains the query: try a different title fragment.',
       inputSchema: z.object({
         query: z
           .string()
-          .min(1, 'Provide a course name, acronym, or code to resolve.')
-          .describe(
-            'Course name, acronym, or partial code. Examples: "database systems", "DSA", "BCSE302L", "machine learning lab".'
-          ),
+          .trim()
+          .min(1, 'Provide part of a course title or code.')
+          .describe('Substring of the official course title or code, e.g. "database", "BMAT2".'),
         limit: z
           .number()
           .int()
           .min(1)
-          .max(10)
+          .max(MAX_COURSE_SEARCH_LIMIT)
           .optional()
-          .describe('Maximum number of candidate codes to return (default 5).'),
+          .describe(`Maximum candidates to return (default ${DEFAULT_COURSE_SEARCH_LIMIT}).`),
       }),
       execute: async ({ query, limit }) => {
-        const cleanedQuery = query.trim()
-        if (!cleanedQuery) {
-          return {
-            success: false,
-            message: 'Please provide a course name, acronym, or partial code to resolve.',
-          }
-        }
+        const { total, results } = searchCourseCatalog(query, limit)
+        return { success: true, query, total, candidates: results }
+      },
+    }),
 
-        const limitValue = Math.max(1, Math.min(limit ?? 5, 10))
-        let matches = getAllCourseMatches(cleanedQuery)
-
-        if (matches.length === 0) {
-          const fallback = searchCoursesByName(cleanedQuery)
-          matches = fallback.map(match => ({
-            code: match.code,
-            name: match.name,
-            matchType: 'name_similarity',
-          }))
-        }
-
-        const recognizedCourses = recognizeCourseInText(cleanedQuery)
-        const limitedMatches = matches.slice(0, limitValue)
-        const [primaryMatch] = limitedMatches
-        const normalizedName = findFullCourseName(primaryMatch?.code || cleanedQuery.toUpperCase())
-
-        if (!primaryMatch) {
-          return {
-            success: false,
-            query: cleanedQuery,
-            message: `No VIT course matches found for "${cleanedQuery}".`,
-            suggestions: [
-              'Check the spelling or include more of the course title (e.g., "database systems lab").',
-              'Include any known acronym such as DSA, DBMS, ML, etc.',
-              'Mention part of the official course code if available (e.g., BCSE, BMAT).',
-            ],
-            recognizedCourses,
-          }
-        }
-
-        return {
-          success: true,
-          query: cleanedQuery,
-          matches: limitedMatches,
-          totalMatches: matches.length,
-          normalizedName,
-          recognizedCourses,
-          primary: primaryMatch,
-          limitUsed: limitValue,
-          message:
-            limitedMatches.length === 1
-              ? `Resolved "${cleanedQuery}" to ${primaryMatch.code} (${primaryMatch.name}).`
-              : `Found ${limitedMatches.length} candidate course codes for "${cleanedQuery}".`,
-        }
+    lookupCourseCode: tool({
+      description:
+        'Exact lookup of one VIT course code in the course catalog. Returns `{ found: true, code, name }`, or `{ found: false, code }` when the catalog does not list the code (the code may still be valid; the catalog is not exhaustive).',
+      inputSchema: z.object({
+        code: z.string().trim().min(1).describe('Exact course code, e.g. BCSE302L.'),
+      }),
+      execute: async ({ code }) => {
+        const course = getCourseByCode(code)
+        return course
+          ? { success: true, found: true, code: course.code, name: course.name }
+          : { success: true, found: false, code: normalizeCourseCode(code) }
       },
     }),
 
     getCourseInfo: tool({
       description:
-        'Get information about courses from the FFCS dataset (supports all schools: SMEC, SCORE, SCOPE, SBST, SCE, SCHEME, SELECT, SENSE). Returns faculty names, slots, venue, etc.',
+        'Look up course offerings (faculty, slot, type) in one school\'s FFCS dataset. `courseQuery` is a case-insensitive substring of the course code or title; `slot` is an exact slot. Returns `{ success, results: [{ code, title, faculty, slot, type }] }` (empty `results` when nothing matches).',
       inputSchema: z.object({
         school: z
           .enum(['smec', 'score', 'scope', 'sbst', 'sce', 'scheme', 'select', 'sense'])
@@ -1278,31 +945,22 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
           ),
         courseQuery: z
           .string()
-          .describe('The course code or title to search for. Can be a partial match.'),
+          .trim()
+          .min(1)
+          .describe('Substring of the course code or official title, e.g. "BCSE302" or "database".'),
         slot: z
           .string()
           .optional()
-          .describe('An optional specific slot to filter by (e.g., "A1", "L1+L2").'),
+          .describe('An optional exact slot to filter by (e.g., "A1", "L1+L2").'),
       }),
       execute: async ({ school, courseQuery, slot }) => {
         try {
           const { allCourses } = await getCourseData(school)
+          const needle = courseQuery.toLowerCase()
 
-          let matchCodes: string[] = []
-          const matches = getAllCourseMatches(courseQuery)
-          if (matches.length > 0) {
-            matchCodes = matches.map(m => m.code.toUpperCase())
-          }
-
-          let filteredCourses = allCourses.filter(course => {
-            if (matchCodes.length) {
-              return matchCodes.includes(course.CODE.toUpperCase())
-            }
-            return (
-              course.CODE.toLowerCase().includes(courseQuery.toLowerCase()) ||
-              course.TITLE.toLowerCase().includes(courseQuery.toLowerCase())
-            )
-          })
+          let filteredCourses = allCourses.filter(
+            course => containsText(course.CODE, needle) || containsText(course.TITLE, needle)
+          )
 
           if (slot) {
             filteredCourses = filteredCourses.filter(course => course.SLOT === slot)
@@ -1343,15 +1001,21 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
     }),
 
     getFacultyInfo: tool({
-      description: `Get current faculty information from a local JSON file (public/faculty.json). NEVER return all faculty members at once—ALWAYS require at least a department or faculty name filter. If no filter is provided, ask the user to specify a department or faculty name. Returns school, department, and faculty info. Do NOT provide a full list of all faculty.
-
-For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'CIVIL') and full or partial department names (e.g., 'computer science', 'school of mechanical engineering', 'information technology', 'civil engineering'). The search is robust to acronyms, full names, and partial matches in either direction.`,
+      description:
+        'Look up VIT faculty from the faculty directory. Filters (combine as needed; at least one is expected, never list the whole directory): `school` (exact school acronym), `department` (case-insensitive substring of the school or department name as listed, e.g. "computer science"), `facultyName` (case-insensitive substring of the name as listed, e.g. "anuj kumar"), `courseQuery` (substring of a course code/title the faculty teaches in FFCS). Returns `{ success, total, faculty: [{ name, department, school, email, profileUrl, courses? }] }`; when several people match, show them and let the user pick. No spelling correction is applied: if nothing matches, try a shorter or different substring.',
       inputSchema: z.object({
         department: z
           .string()
+          .trim()
+          .min(1)
           .optional()
-          .describe('Department name or acronym to filter faculty (e.g., CSE, Mechanical).'),
-        facultyName: z.string().optional().describe('Specific faculty member name'),
+          .describe('Substring of the school or department name as listed, e.g. "mechanical".'),
+        facultyName: z
+          .string()
+          .trim()
+          .min(1)
+          .optional()
+          .describe('Substring of the faculty member\'s name as listed in the directory.'),
         includeCourses: z
           .boolean()
           .optional()
@@ -1360,12 +1024,14 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           .enum(['smec', 'score', 'scope', 'sbst', 'sce', 'scheme', 'select', 'sense'])
           .optional()
           .describe(
-            'Limit course lookup to a specific school; defaults to all, while using the parameter, use the acronym (like smec, score, scope, sbst, sce, scheme, select, sense)'
+            'Only faculty of this school (smec mechanical, score information technology, scope computer science, sbst biosciences, sce civil, scheme chemical, select electrical, sense electronics).'
           ),
         courseQuery: z
           .string()
+          .trim()
+          .min(1)
           .optional()
-          .describe('Course code or title to filter faculty who teach a specific course.'),
+          .describe('Substring of a course code or title; keeps only faculty teaching a matching course.'),
       }),
       execute: async ({ department, facultyName, includeCourses = false, school, courseQuery }) => {
         try {
@@ -1385,175 +1051,26 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             }
             await Promise.allSettled([...schoolKeys].map(key => getCourseData(key)))
           }
-          for (const school of schools) {
-            const schoolName = school.school
+          for (const schoolEntry of schools) {
+            const schoolName = schoolEntry.school
             if (!schoolName) continue
-            const departments = school.departments || []
-            let schoolMatches = false
-            if (deptFilter && matchesDepartment(schoolName, deptFilter)) {
-              schoolMatches = true
-            }
-            for (const dept of departments) {
-              if (schoolMatches) {
-                const facultyArr = dept.faculty || []
-                for (const faculty of facultyArr) {
-                  const facultyNameValue = faculty.name
-                  if (!facultyNameValue) continue
-                  if (facultyFilter) {
-                    const name = normalizeString(facultyNameValue)
-                    const filter = normalizeString(facultyFilter)
-                    const nameTokens = name.split(' ')
-                    const filterTokens = filter.split(' ')
-                    let allTokensMatch = true
-                    for (const fToken of filterTokens) {
-                      let tokenMatched = false
-                      for (const nToken of nameTokens) {
-                        if (fToken.length < 4) {
-                          if (nToken === fToken) {
-                            tokenMatched = true
-                            break
-                          }
-                        } else {
-                          const dist = getLevenshteinDistance(nToken, fToken)
-                          if (nToken.includes(fToken) || dist <= 1) {
-                            tokenMatched = true
-                            break
-                          }
-                        }
-                      }
-                      if (!tokenMatched) {
-                        allTokensMatch = false
-                        break
-                      }
-                    }
-                    if (!allTokensMatch) continue
-                  }
-
-                  const facultyEntry: FacultyResultEntry = {
-                    name: facultyNameValue,
-                    department: faculty.department || dept.department || dept.name || schoolName,
-                    school: schoolName,
-                    email: faculty.email || undefined,
-                    profileUrl: faculty.profile_url || faculty.profileUrl || undefined,
-                    ...faculty,
-                    image: faculty.image_url || faculty.image || undefined,
-                  }
-                  let teachesCourse = true
-                  if (courseFilter) {
-                    const normalizedSchool = toSchool(deriveSchoolAcronym(schoolName))
-                    if (!normalizedSchool) {
-                      teachesCourse = false
-                      continue
-                    }
-                    try {
-                      const { allCourses } = await getCourseData(normalizedSchool)
-                      const normalizeName = (value?: string) =>
-                        (value ?? '')
-                          .replace(/^Dr\.?\s*|\s+/g, '')
-                          .toLowerCase()
-                          .trim()
-                      const facultyNameNormalized = normalizeName(facultyNameValue)
-                      const facultyCourses = allCourses.filter(course => {
-                        const courseFacultyNormalized = normalizeName(course.FACULTY)
-                        const courseTitle = course.TITLE.toLowerCase()
-                        const courseCode = course.CODE.toLowerCase()
-                        return (
-                          facultyNameNormalized.length > 0 &&
-                          (courseFacultyNormalized.includes(facultyNameNormalized) ||
-                            facultyNameNormalized.includes(courseFacultyNormalized)) &&
-                          (courseTitle.includes(courseFilter) || courseCode.includes(courseFilter))
-                        )
-                      })
-                      if (facultyCourses.length === 0) {
-                        teachesCourse = false
-                      } else if (includeCourses) {
-                        facultyEntry.courses = facultyCourses.map(course => ({
-                          code: course.CODE,
-                          title: course.TITLE,
-                          slot: course.SLOT,
-                          type: course.TYPE,
-                          venue: course.VENUE,
-                        }))
-                      }
-                    } catch {
-                      teachesCourse = false
-                    }
-                  } else if (includeCourses) {
-                    const normalizedSchool = toSchool(deriveSchoolAcronym(schoolName))
-                    if (!normalizedSchool) {
-                      facultyEntry.courses = []
-                      continue
-                    }
-                    try {
-                      const { allCourses } = await getCourseData(normalizedSchool)
-                      const normalizeName = (value?: string) =>
-                        (value ?? '')
-                          .replace(/^Dr\.?\s*|\s+/g, '')
-                          .toLowerCase()
-                          .trim()
-                      const facultyNameNormalized = normalizeName(facultyNameValue)
-                      const facultyCourses = allCourses.filter(course => {
-                        const courseFacultyNormalized = normalizeName(course.FACULTY)
-                        return (
-                          facultyNameNormalized.length > 0 &&
-                          (courseFacultyNormalized.includes(facultyNameNormalized) ||
-                            facultyNameNormalized.includes(courseFacultyNormalized))
-                        )
-                      })
-                      facultyEntry.courses = facultyCourses.map(course => ({
-                        code: course.CODE,
-                        title: course.TITLE,
-                        slot: course.SLOT,
-                        type: course.TYPE,
-                        venue: course.VENUE,
-                      }))
-                    } catch {
-                      facultyEntry.courses = []
-                    }
-                  }
-                  if (teachesCourse) {
-                    results.push(facultyEntry)
-                  }
-                }
-                continue
-              }
+            const schoolKey = toSchool(deriveSchoolAcronym(schoolName))
+            if (school && schoolKey !== school) continue
+            // A department filter that names the school keeps all of its departments.
+            const wholeSchool = deptFilter !== null && containsText(schoolName, deptFilter)
+            for (const dept of schoolEntry.departments || []) {
               const departmentName = dept.department || dept.name || ''
-              if (deptFilter && !matchesDepartment(departmentName || schoolName, deptFilter)) {
+              if (
+                deptFilter !== null &&
+                !wholeSchool &&
+                !containsText(departmentName || schoolName, deptFilter)
+              ) {
                 continue
               }
-              const facultyArr = dept.faculty || []
-              for (const faculty of facultyArr) {
+              for (const faculty of dept.faculty || []) {
                 const facultyNameValue = faculty.name
                 if (!facultyNameValue) continue
-                if (facultyFilter) {
-                  const name = normalizeString(facultyNameValue)
-                  const filter = normalizeString(facultyFilter)
-                  const nameTokens = name.split(' ')
-                  const filterTokens = filter.split(' ')
-                  let allTokensMatch = true
-                  for (const fToken of filterTokens) {
-                    let tokenMatched = false
-                    for (const nToken of nameTokens) {
-                      if (fToken.length < 4) {
-                        if (nToken === fToken) {
-                          tokenMatched = true
-                          break
-                        }
-                      } else {
-                        const dist = getLevenshteinDistance(nToken, fToken)
-                        if (nToken.includes(fToken) || dist <= 1) {
-                          tokenMatched = true
-                          break
-                        }
-                      }
-                    }
-                    if (!tokenMatched) {
-                      allTokensMatch = false
-                      break
-                    }
-                  }
-                  if (!allTokensMatch) continue
-                }
+                if (facultyFilter && !containsText(facultyNameValue, facultyFilter)) continue
 
                 const facultyEntry: FacultyResultEntry = {
                   name: facultyNameValue,
@@ -1564,82 +1081,20 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                   ...faculty,
                   image: faculty.image_url || faculty.image || undefined,
                 }
-                let teachesCourse = true
-                if (courseFilter) {
-                  const normalizedSchool = toSchool(deriveSchoolAcronym(schoolName))
-                  if (!normalizedSchool) {
-                    teachesCourse = false
-                    continue
-                  }
-                  try {
-                    const { allCourses } = await getCourseData(normalizedSchool)
-                    const normalizeName = (value?: string) =>
-                      (value ?? '')
-                        .replace(/^Dr\.?\s*|\s+/g, '')
-                        .toLowerCase()
-                        .trim()
-                    const facultyNameNormalized = normalizeName(facultyNameValue)
-                    const facultyCourses = allCourses.filter(course => {
-                      const courseFacultyNormalized = normalizeName(course.FACULTY)
-                      const courseTitle = course.TITLE.toLowerCase()
-                      const courseCode = course.CODE.toLowerCase()
-                      return (
-                        facultyNameNormalized.length > 0 &&
-                        (courseFacultyNormalized.includes(facultyNameNormalized) ||
-                          facultyNameNormalized.includes(courseFacultyNormalized)) &&
-                        (courseTitle.includes(courseFilter) || courseCode.includes(courseFilter))
-                      )
-                    })
-                    if (facultyCourses.length === 0) {
-                      teachesCourse = false
-                    } else if (includeCourses) {
-                      facultyEntry.courses = facultyCourses.map(course => ({
-                        code: course.CODE,
-                        title: course.TITLE,
-                        slot: course.SLOT,
-                        type: course.TYPE,
-                        venue: course.VENUE,
-                      }))
+                if (courseFilter || includeCourses) {
+                  let courses: FacultyCourseRecord[] = []
+                  if (schoolKey) {
+                    try {
+                      const { allCourses } = await getCourseData(schoolKey)
+                      courses = coursesTaughtBy(facultyNameValue, allCourses, courseFilter)
+                    } catch {
+                      courses = []
                     }
-                  } catch {
-                    teachesCourse = false
                   }
-                } else if (includeCourses) {
-                  const normalizedSchool = toSchool(deriveSchoolAcronym(schoolName))
-                  if (!normalizedSchool) {
-                    facultyEntry.courses = []
-                    continue
-                  }
-                  try {
-                    const { allCourses } = await getCourseData(normalizedSchool)
-                    const normalizeName = (value?: string) =>
-                      (value ?? '')
-                        .replace(/^Dr\.?\s*|\s+/g, '')
-                        .toLowerCase()
-                        .trim()
-                    const facultyNameNormalized = normalizeName(facultyNameValue)
-                    const facultyCourses = allCourses.filter(course => {
-                      const courseFacultyNormalized = normalizeName(course.FACULTY)
-                      return (
-                        facultyNameNormalized.length > 0 &&
-                        (courseFacultyNormalized.includes(facultyNameNormalized) ||
-                          facultyNameNormalized.includes(courseFacultyNormalized))
-                      )
-                    })
-                    facultyEntry.courses = facultyCourses.map(course => ({
-                      code: course.CODE,
-                      title: course.TITLE,
-                      slot: course.SLOT,
-                      type: course.TYPE,
-                      venue: course.VENUE,
-                    }))
-                  } catch {
-                    facultyEntry.courses = []
-                  }
+                  if (courseFilter && courses.length === 0) continue
+                  if (includeCourses) facultyEntry.courses = courses
                 }
-                if (teachesCourse) {
-                  results.push(facultyEntry)
-                }
+                results.push(facultyEntry)
               }
             }
           }
@@ -1654,27 +1109,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             if (schoolAsEnum && faculty.name) {
               try {
                 const { allCourses } = await getCourseData(schoolAsEnum)
-                const normalizeName = (name?: string) =>
-                  (name ?? '')
-                    .replace(/^Dr\.?\s*|\s+/g, '')
-                    .toLowerCase()
-                    .trim()
-                const facultyNameNormalized = normalizeName(faculty.name)
-                const facultyCourses = allCourses.filter(course => {
-                  const courseFacultyNormalized = normalizeName(course.FACULTY)
-                  return (
-                    courseFacultyNormalized.includes(facultyNameNormalized) ||
-                    facultyNameNormalized.includes(courseFacultyNormalized)
-                  )
-                })
-
-                const courses: FacultyCourseRecord[] = facultyCourses.map(course => ({
-                  code: course.CODE,
-                  title: course.TITLE,
-                  slot: course.SLOT,
-                  type: course.TYPE,
-                  venue: course.VENUE,
-                }))
+                const courses = coursesTaughtBy(faculty.name, allCourses, null)
                 faculty.courses = courses
 
                 return {
@@ -1700,7 +1135,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             faculty: results,
             message: results.length
               ? `Found ${results.length} faculty${department ? ' in ' + department : ''}${facultyName ? ' matching ' + facultyName : ''}${courseQuery ? ' teaching ' + courseQuery : ''}.`
-              : 'No faculty found. Please check the spelling or try a different department, name, or course.',
+              : 'No faculty found for these filters. Try a shorter or different substring of the name or department.',
           }
         } catch (error) {
           return {
@@ -1756,22 +1191,16 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
 
     getSyllabus: tool({
       description:
-        'Fetch the syllabus PDF for a given course. The tool looks up available syllabus filenames from public/syllabi.json and constructs a Google Storage URL like https://storage.googleapis.com/examcooker/syllabi/<FILENAME>. Use course code or partial course name to search.',
+        'Find the syllabus PDF for a VIT course in the syllabus index. Pass an exact course code, or a substring of the course title/filename. An exact code match, or a single substring match, returns `{ success: true, filename, code, title, url }`; several substring matches return `{ success: true, ambiguous: true, matches: [{ filename, code, title, url }] }` for you to choose from (ask the user if the request does not decide it); none returns `success: false`.',
       inputSchema: z.object({
         query: z
           .string()
-          .describe('Course code (e.g., ACXC101N) or course name (e.g., "Art of Advertising")'),
+          .trim()
+          .min(1, 'Provide a course code or part of the course title.')
+          .describe('Exact course code (e.g. ACXC101N) or a substring of the course title (e.g. "art of advertising").'),
       }),
       execute: async ({ query }) => {
         try {
-          if (!query || query.trim().length === 0) {
-            return {
-              success: false,
-              error: 'Query required',
-              message: 'Please provide a course code or course name to lookup the syllabus.',
-            }
-          }
-
           let entries: SyllabusEntry[]
           try {
             entries = await loadSyllabusEntries()
@@ -1784,232 +1213,38 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             }
           }
 
-          const qRaw = query.trim()
-          const q = qRaw.toLowerCase()
-          const tokens = q
-            .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()\[\]]/g, ' ')
-            .split(/\s+/)
-            .filter(Boolean)
-
-          const normalizeFilename = (fn: string) => {
-            if (!fn || typeof fn !== 'string') return { code: null, title: null }
-            const base = fn.split('/').pop() || fn
-            const withoutExt = base.replace(/\.[^.]+$/, '')
-            const parts = withoutExt.split(/_(.+)/)
-            const codePart = parts[0] || ''
-            const titlePart = parts[1] || ''
-            const title = titlePart
-              .replace(/[_-]+/g, ' ')
-              .replace(/\s+/g, ' ')
-              .trim()
-              .replace(/\b\w/g, c => c.toUpperCase())
-            return { code: codePart, title: title || null }
-          }
-
-          const scoreCandidate = (cand: SyllabusEntry) => {
-            let code = ''
-            let title = ''
-            let filename = ''
-            if (typeof cand === 'string') {
-              filename = cand
-              code = cand.split('_')[0] || ''
-            } else {
-              code = cand.code || ''
-              title = cand.title || ''
-              filename = cand.file || cand.filename || ''
-            }
-            const hay = (code + ' ' + title + ' ' + filename).toLowerCase()
-            let score = 0
-            if (code.toLowerCase() === q) score += 100
-            if (filename.toLowerCase() === q) score += 80
-            for (const t of tokens) {
-              if (hay.includes(t)) score += 10
-              const re = new RegExp('\\b' + t.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&') + '\\b')
-              if (re.test(hay)) score += 5
-            }
-            return score
-          }
-
-          if (entries.length > 0) {
-            if (typeof entries[0] === 'string') {
-              const fileNames = entries.filter(entry => typeof entry === 'string')
-              const exact = fileNames.find(fn => (fn.split('_')[0] ?? '').toLowerCase() === q)
-              if (exact) {
-                debugLog('[getSyllabus] exact code match:', exact)
-                const norm = normalizeFilename(exact)
-                return {
-                  success: true,
-                  filename: exact,
-                  code: norm.code,
-                  title: norm.title,
-                  url: `https://storage.googleapis.com/examcooker/syllabi/${exact}`,
-                  message: `Found syllabus file for query: ${query}`,
-                }
-              }
-
-              const scored = fileNames
-                .map(fn => ({ fn, score: scoreCandidate(fn) }))
-                .sort((a, b) => b.score - a.score)
-              debugLog('[getSyllabus] top candidates (string):', scored.slice(0, 5))
-              const [top] = scored
-              if (top && top.score > 0) {
-                const topScore = top.score
-                const topMatches = scored
-                  .filter(s => s.score > 0 && s.score >= Math.max(1, topScore - 5))
-                  .slice(0, 8)
-                if (topMatches.length > 1) {
-                  const matches = topMatches.map(s => {
-                    const norm = normalizeFilename(s.fn)
-                    return {
-                      filename: s.fn,
-                      code: norm.code,
-                      title: norm.title,
-                      url: `https://storage.googleapis.com/examcooker/syllabi/${s.fn}`,
-                      score: s.score,
-                    }
-                  })
-                  return {
-                    success: true,
-                    ambiguous: true,
-                    query,
-                    matches,
-                    message: `Multiple syllabus files may match "${query}". Please pick one.`,
-                  }
-                }
-
-                const matched = top.fn
-                const norm = normalizeFilename(matched)
-                return {
-                  success: true,
-                  filename: matched,
-                  code: norm.code,
-                  title: norm.title,
-                  url: `https://storage.googleapis.com/examcooker/syllabi/${matched}`,
-                  message: `Found syllabus file matching query: ${query}`,
-                }
-              }
-            } else {
-              // Mirrors the object-shaped entry fields; a bare filename has none of them.
-              const fieldsOf = (item: SyllabusEntry) => (typeof item === 'string' ? {} : item)
-              const scored = entries
-                .map(item => ({ item: fieldsOf(item), score: scoreCandidate(item) }))
-                .sort((a, b) => b.score - a.score)
-              debugLog(
-                '[getSyllabus] top candidates (objects):',
-                scored.slice(0, 6).map(s => ({
-                  code: s.item.code,
-                  title: s.item.title,
-                  filename: s.item.file || s.item.filename,
-                  score: s.score,
-                }))
+          const candidates = entries.flatMap(syllabusCandidate)
+          const needle = query.toLowerCase()
+          const exact = candidates.filter(candidate => candidate.code?.toLowerCase() === needle)
+          const matches = exact.length
+            ? exact
+            : candidates.filter(
+                candidate =>
+                  containsText(candidate.code ?? undefined, needle) ||
+                  containsText(candidate.title ?? undefined, needle) ||
+                  containsText(candidate.filename, needle)
               )
-              const [top] = scored
-              if (top && top.score > 0) {
-                const topScore = top.score
-                const topMatches = scored
-                  .filter(s => s.score > 0 && s.score >= Math.max(1, topScore - 5))
-                  .slice(0, 8)
-                if (topMatches.length > 1) {
-                  const matches = topMatches.map(s => {
-                    const best = s.item
-                    const filename = best.file || best.filename || `${best.code || 'syllabus'}.pdf`
-                    const norm = normalizeFilename(filename)
-                    return {
-                      filename,
-                      code: best.code || norm.code,
-                      title: best.title || norm.title,
-                      url: `https://storage.googleapis.com/examcooker/syllabi/${filename}`,
-                      score: s.score,
-                    }
-                  })
-                  return {
-                    success: true,
-                    ambiguous: true,
-                    query,
-                    matches,
-                    message: `Multiple syllabi may match "${query}". Please pick one.`,
-                  }
-                }
 
-                const best = top.item
-                const filename = best.file || best.filename || `${best.code || 'syllabus'}.pdf`
-                let codeOut = best.code || null
-                let titleOut = best.title || null
-                if (!codeOut || !titleOut) {
-                  const norm = normalizeFilename(filename)
-                  codeOut = codeOut || norm.code
-                  titleOut = titleOut || norm.title
-                }
-                return {
-                  success: true,
-                  filename,
-                  code: codeOut,
-                  title: titleOut,
-                  url: `https://storage.googleapis.com/examcooker/syllabi/${filename}`,
-                  message: `Found syllabus for ${codeOut || titleOut}`,
-                }
-              }
+          const [only] = matches
+          if (matches.length === 1 && only) {
+            return { success: true, ...only, message: `Found syllabus for ${only.code || only.title || query}` }
+          }
+          if (matches.length > 1) {
+            return {
+              success: true,
+              ambiguous: true,
+              query,
+              total: matches.length,
+              matches: matches.slice(0, SYLLABUS_MATCH_LIMIT),
+              message: `${matches.length} syllabi match "${query}". Choose one.`,
             }
           }
-
-          try {
-            const lowered = entries.map(d =>
-              typeof d === 'string' ? d.toLowerCase() : JSON.stringify(d).toLowerCase()
-            )
-            const matchesFound: Array<{
-              filename: string | null
-              code: string | null
-              title: string | null
-              url: string | null
-            }> = []
-            lowered.forEach((text, i) => {
-              const orig = entries[i]
-              if (orig === undefined || !text.includes(q)) return
-              const filename = typeof orig === 'string' ? orig : orig.file || orig.filename || null
-              const norm =
-                typeof filename === 'string'
-                  ? normalizeFilename(filename)
-                  : { code: null, title: null }
-              matchesFound.push({
-                filename,
-                code: norm.code,
-                title: norm.title,
-                url: filename
-                  ? `https://storage.googleapis.com/examcooker/syllabi/${filename}`
-                  : null,
-              })
-            })
-            if (matchesFound.length > 1) {
-              return {
-                success: true,
-                ambiguous: true,
-                query,
-                matches: matchesFound,
-                message: `Multiple syllabus files match "${query}". Please pick one.`,
-              }
-            }
-            const [m] = matchesFound
-            if (m) {
-              return {
-                success: true,
-                filename: m.filename,
-                code: m.code,
-                title: m.title,
-                url: m.url,
-                message: `Found syllabus matching query: ${query}`,
-              }
-            }
-          } catch {}
 
           debugLog('[getSyllabus] no match for query:', query)
           return {
             success: false,
             query,
-            message: `No syllabus found matching "${query}". Try using the exact course code (e.g., ACXC101N) or a more distinctive part of the course title.`,
-            suggestions: [
-              'Use the exact course code like ACXC101N',
-              'Try a shorter distinctive phrase from the course title (e.g., include a module name or code)',
-            ],
+            message: `No syllabus code, title or filename contains "${query}". Use the exact course code (searchCourseCatalog can find it) or a different part of the title.`,
           }
         } catch (error) {
           console.error('[getSyllabus] error', error)
@@ -2027,16 +1262,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
         "get mess menu for VIT hostels (both men's and ladies' hostels). Use this when users ask about mess menu, today's food, what's for lunch/dinner/breakfast/snacks, tomorrow's menu, etc. Covers special mess, veg mess, and non-veg mess for both hostels. IMPORTANT: Do NOT ask for hostelType and messType if you are already aware of the user's preference through memory, populate them from memory.",
       inputSchema: z.object({
         hostelType: z
-          .preprocess(
-            val => {
-              if (typeof val === 'string') {
-                const cleaned = val.toLowerCase().replace(/[’']/g, '')
-                if (cleaned === 'mens' || cleaned === 'ladies') return cleaned
-              }
-              return val
-            },
-            z.enum(['mens', 'ladies'])
-          )
+          .enum(['mens', 'ladies'])
           .describe(
             "REQUIRED: type of hostel: mens (men's hostel) or ladies (ladies' hostel). Must be specified by user."
           ),
@@ -2047,9 +1273,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           ),
         date: z
           .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD')
           .optional()
           .describe(
-            "date in YYYY-MM-DD format. If not provided, uses today's date. Can also accept 'today', 'tomorrow', etc."
+            'Menu date as YYYY-MM-DD (work it out from the current date in your instructions, e.g. for "tomorrow"). Omit for today.'
           ),
         mealType: z
           .enum(['breakfast', 'lunch', 'snacks', 'dinner'])
@@ -2057,23 +1284,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           .describe('specific meal type to filter. If not provided, returns all meals for the day'),
       }),
       execute: async ({ hostelType, messType, date, mealType }) => {
-        let processedDate = date
-        if (date) {
-          const today = new Date()
-          if (date.toLowerCase() === 'today') {
-            processedDate = today.toISOString().split('T')[0]
-          } else if (date.toLowerCase() === 'tomorrow') {
-            const tomorrow = new Date(today)
-            tomorrow.setDate(today.getDate() + 1)
-            processedDate = tomorrow.toISOString().split('T')[0]
-          } else if (date.toLowerCase() === 'yesterday') {
-            const yesterday = new Date(today)
-            yesterday.setDate(today.getDate() - 1)
-            processedDate = yesterday.toISOString().split('T')[0]
-          }
-        }
-
-        const result = await getMessMenu(hostelType, messType, processedDate, mealType)
+        const result = await getMessMenu(hostelType, messType, date, mealType)
 
         if (result.success && result.data?.todayMenu) {
           const organizedTodayMenu = organizeMenuByMealType(result.data.todayMenu.menu)
@@ -2107,12 +1318,28 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
 
     queryVTOP: tool({
       description:
-        "Access the student's PERSONAL VTOP (VIT portal) data and actions through their linked VTOP account: grades, marks, attendance, timetable, today/tomorrow's classes and skip budget, exams, calendar/holidays, CGPA, hostel, receipts, library dues, class messages, events, leave and night-slip status or applications, digital assignments, facility registration, syllabus PDFs, course materials (course-page) and course allocation. Not for general VIT information. Multi-step commands return status needs_selection / needs_input / needs_confirmation with `step` (options) and a `continuation` token: pass what the user already said up front (e.g. course='CSE1001', faculty='anuj kumar', materials='module 2') so steps resolve automatically, otherwise continue with `continuation` + `choice`. Write actions (leave/nightslip apply=true, facility registration) always stop for confirmation - only confirm after the user explicitly agrees. Downloaded files come back in `files` with signed, expiring links: share them as links.",
+        "Access the student's PERSONAL VTOP (VIT portal) data and actions through their linked VTOP account: grades, marks, attendance, timetable, today/tomorrow's classes and skip budget, exams, calendar/holidays, CGPA, hostel, receipts, library dues, class messages, events, leave and night-slip status or applications, digital assignments, facility registration, syllabus PDFs, course materials (course-page) and course allocation. Not for general VIT information.\n" +
+        'Multi-step commands (course-page, da, syllabus, facility, calendar, ...): call with just the command (and semester if known). The result has `status`: "completed" (data in `data`/`structured_data`, downloads in `files` with signed expiring links: share them as links), or "needs_selection" / "needs_input" / "needs_confirmation" with `step: { id, kind, label, prompt, multiple, options: [{ id, label, description }] }` (every option VTOP offered), `continuation`, `progress` (choices made so far; `auto: true` when VTOP offered a single option), `autoSelected` (steps already resolved from the latest user message, with what was picked: mention these to the user) and `nextAction`. To continue, call queryVTOP again with the same command, `continuation`, and `choice` = the option id(s) you pick from step.options for what the user asked; ask the user only when their request does not determine the option.\n' +
+        'Write actions (leave/nightslip apply=true, facility registration) always stop at needs_confirmation: answer choice true only after the user explicitly agrees in this conversation.\n' +
+        'Errors: `success: false` with `errorKind` (e.g. "invalid_input" with `field` and `validIds` for a choice that is not an offered id, "token_invalid" when the continuation expired (start the command again), "invalid_credentials"/"login_failed" when the linked account was rejected, "busy"/"vtop_unavailable"/"timeout" with `retryable: true`) and `requiresCredentials: true` when the account must be (re)linked: the app then shows a secure dialog, so never ask for credentials in chat.',
       inputSchema: queryVTOPInputSchema,
-      execute: async input => {
+      execute: async (input, { messages, abortSignal }) => {
         const { command } = input
-        const isWrite = Boolean(input.apply || input.confirm || input.continuation)
-        const { flags, select, ignored } = buildVtopRequest(input)
+        const continuation = input.continuation
+        const choice = input.choice
+        if (continuation !== undefined && choice === undefined) {
+          return {
+            success: false,
+            status: 'error',
+            command,
+            errorKind: 'invalid_input',
+            field: 'choice',
+            error: 'choice is required with continuation',
+            message: 'Pass `choice` (an id from step.options, a value, or true/false) together with `continuation`.',
+          }
+        }
+        const isWrite = Boolean(input.apply || continuation)
+        const { flags, ignored } = buildVtopFlags(input)
         const isBotChannel = channel === 'whatsapp' || channel === 'discord'
 
         // ---- MCP (WhatsApp / Discord / connector clients): credentials live in the OAuth token.
@@ -2136,23 +1363,16 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           }
         }
         if (usesMcp && mcpConfig && mcpAccessToken) {
-          const args: Record<string, JsonValue> = input.continuation
-            ? {
-                continuation: input.continuation,
-                choice: input.choice ?? '',
-                ...(input.confirm ? { confirm: true } : {}),
-              }
-            : {
-                flags,
-                select,
-                ...(input.confirm ? { confirm: true } : {}),
-                ...(input.fresh ? { fresh: true } : {}),
-              }
+          const args: Record<string, JsonValue> =
+            continuation !== undefined && choice !== undefined
+              ? { continuation, choice }
+              : { flags, ...(input.fresh ? { fresh: true } : {}) }
           try {
+            const mcp = { ...mcpConfig, accessToken: mcpAccessToken }
             const mcpResult = await callVtopViaMcp({
-              toolName: input.continuation ? 'vtop-continue' : command,
+              toolName: continuation !== undefined ? 'vtop-continue' : command,
               args,
-              mcp: { ...mcpConfig, accessToken: mcpAccessToken },
+              mcp,
             })
             if (mcpResult) {
               if (isBotChannel && mcpResult.errorKind === 'unauthorized') {
@@ -2163,7 +1383,31 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                   message: 'Your VTOP session token expired. Send !linkvtop again to refresh access.',
                 }
               }
-              if (mcpResult.success || isBotChannel) return toQueryVTOPResult(command, mcpResult, ignored)
+              if (mcpResult.success || isBotChannel) {
+                // Same Decisions-based step resolution as the direct path (bots especially benefit:
+                // each chat-model round trip is a visible delay in WhatsApp/Discord).
+                const { result, decided } = await autoAdvanceSelections({
+                  result: mcpResult,
+                  request: latestUserText(messages),
+                  command,
+                  continueWith: async (next, nextChoice) =>
+                    (await callVtopViaMcp({
+                      toolName: 'vtop-continue',
+                      args: { continuation: next, choice: nextChoice },
+                      mcp,
+                    })) ?? {
+                      success: false,
+                      status: 'error',
+                      command,
+                      error: 'VTOP MCP request failed',
+                    },
+                  abortSignal,
+                })
+                return {
+                  ...toQueryVTOPResult(command, result, ignored),
+                  ...(decided.length ? { autoSelected: decided } : {}),
+                }
+              }
             }
           } catch (error) {
             if (isBotChannel) {
@@ -2201,22 +1445,30 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
         let last: ReturnType<typeof toQueryVTOPResult> | null = null
         for (let attempt = 1; attempt <= attempts; attempt++) {
           try {
-            const result = input.continuation
-              ? await callVtopProxy('/vtop/continue', {
-                  ...credentials,
-                  continuation: input.continuation,
-                  choice: input.choice ?? '',
-                  ...(input.confirm ? { confirm: true } : {}),
-                })
-              : await callVtopProxy('/vtop', {
-                  ...credentials,
-                  command,
-                  flags,
-                  select,
-                  ...(input.confirm ? { confirm: true } : {}),
-                  ...(input.fresh ? { fresh: true } : {}),
-                })
-            last = toQueryVTOPResult(command, result, ignored)
+            const firstResult =
+              continuation !== undefined && choice !== undefined
+                ? await callVtopProxy('/vtop/continue', { ...credentials, continuation, choice })
+                : await callVtopProxy('/vtop', {
+                    ...credentials,
+                    command,
+                    flags,
+                    ...(input.fresh ? { fresh: true } : {}),
+                  })
+            // Resolve selection steps the user's own message already determines with one fast
+            // Decisions call each, instead of a chat-model round trip per step.
+            const stored = credentials
+            const { result, decided } = await autoAdvanceSelections({
+              result: firstResult,
+              request: latestUserText(messages),
+              command,
+              continueWith: (next, nextChoice) =>
+                callVtopProxy('/vtop/continue', { ...stored, continuation: next, choice: nextChoice }),
+              abortSignal,
+            })
+            last = {
+              ...toQueryVTOPResult(command, result, ignored),
+              ...(decided.length ? { autoSelected: decided } : {}),
+            }
             // The proxy already retries VTOP hiccups; only retry here when it was too busy.
             if (result.success || result.errorKind !== 'busy') return last
           } catch (error) {
@@ -2280,17 +1532,19 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
 
     searchRedditWithContext: tool({
       description:
-        'Search Reddit with enhanced capabilities to handle trending topics and broader queries about current events, popular discussions, and more. This combines trending topic retrieval with the knowledge base search for comprehensive results.',
+        'Search the VIT Reddit knowledge base, optionally together with the current trending-topics feed. Set `includeTrending: true` when the user wants what is currently popular or happening (trending topics are then returned in `trending`). Returns `{ success, response, sources, trending, confidence, totalResults }`.',
       inputSchema: z.object({
         query: z
           .string()
-          .describe(
-            'The search query for finding relevant information from Reddit discussions, or broad queries about current trends and popular topics.'
-          ),
+          .describe('The search query for finding relevant information from Reddit discussions.'),
+        includeTrending: z
+          .boolean()
+          .optional()
+          .describe('Also fetch the trending-topics feed (default false).'),
       }),
-      execute: async ({ query }) => {
+      execute: async ({ query, includeTrending }) => {
         try {
-          const results = await searchRedditWithContext(query)
+          const results = await searchRedditWithContext(query, { includeTrending })
 
           return {
             success: results.success,
@@ -2490,35 +1744,4 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       },
     }),
   }
-}
-
-function getLevenshteinDistance(a: string, b: string): number {
-  // Two-row dynamic programme: `prev` is row i-1, `curr` is row i of the edit matrix.
-  let prev = Array.from({ length: b.length + 1 }, (_, j) => j)
-  for (let i = 1; i <= a.length; i++) {
-    const curr = [i]
-    for (let j = 1; j <= b.length; j++) {
-      const diagonal = prev[j - 1] ?? 0
-      curr[j] =
-        a[i - 1] === b[j - 1]
-          ? diagonal
-          : Math.min(
-              (prev[j] ?? 0) + 1, // deletion
-              (curr[j - 1] ?? 0) + 1, // insertion
-              diagonal + 1 // substitution
-            )
-    }
-    prev = curr
-  }
-  return prev[b.length] ?? 0
-}
-
-function normalizeString(str?: string): string {
-  return (str ?? '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(/[^a-z0-9 ]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
 }

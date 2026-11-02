@@ -1,5 +1,6 @@
 import * as z from 'zod'
-import { findFullCourseName } from '../course-map'
+import { getCourseByCode } from '../course-map'
+import { labelHasExamType } from './exam-type'
 
 const DEBUG_PAPERS =
   process.env.DEBUG_PAPERS_CODECHEF === '1' ||
@@ -132,7 +133,7 @@ async function tryAPIApproach(
   year?: string
 ): Promise<ScraperResult> {
   try {
-    const fullCourseName = findFullCourseName(courseCode)
+    const fullCourseName = getCourseByCode(courseCode)?.name ?? courseCode
     dbg('tryAPIApproach fullCourseName', { courseCode, fullCourseName })
     const searchUrl = `https://papers.codechefvit.com/api/papers?subject=${encodeURIComponent(fullCourseName)}`
     const fullNameResult = await fetchAndParsePapers(searchUrl, courseCode, examType, year)
@@ -421,16 +422,9 @@ async function fetchAndParsePapers(
 
   if (examType) {
     const before = papers.length
-    const examTypeLower = examType.toLowerCase()
-    papers = papers.filter(paper => {
-      const paperTitle = paper.title.toLowerCase()
-      const paperMeta = paper.metadata.toLowerCase()
-      return (
-        paperTitle.includes(examTypeLower) ||
-        paperMeta.includes(examTypeLower) ||
-        (paper.examType && paper.examType.toLowerCase().includes(examTypeLower))
-      )
-    })
+    papers = papers.filter(paper =>
+      [paper.title, paper.metadata, paper.examType].some(field => labelHasExamType(field, examType))
+    )
     dbg('examType filter', { examType, before, after: papers.length })
   }
 
@@ -475,7 +469,7 @@ async function fetchAndParsePapers(
 //       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
 //     )
 
-//     const fullCourseName = findFullCourseName(courseCode)
+//     const fullCourseName = getCourseByCode(courseCode)?.name ?? courseCode
 //     const searchUrl = `https://papers.codechefvit.com/catalogue?subject=${encodeURIComponent(fullCourseName)}`
 //     dbg('browser goto', { searchUrl, fullCourseName })
 //     await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 10000 }) // Faster loading

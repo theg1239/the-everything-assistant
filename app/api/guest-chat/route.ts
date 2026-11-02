@@ -46,7 +46,8 @@ import {
 const GUEST_TOOLS: ReadonlySet<string> = new Set([
   'getMessMenu',
   'getCourseInfo',
-  'resolveCourseCode',
+  'searchCourseCatalog',
+  'lookupCourseCode',
   'getFacultyInfo',
   'getSyllabus',
   'getCampusInfo',

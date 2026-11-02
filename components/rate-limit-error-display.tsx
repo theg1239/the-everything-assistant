@@ -43,8 +43,6 @@ export function RateLimitErrorDisplay() {
 
   const resetTimeFormatted = formatResetTime(rateLimitError.resetTime)
 
-  const estimated = rateLimitError.estimated ?? false
-
   const errorDisplay = (
     <AnimatePresence>
       <motion.div

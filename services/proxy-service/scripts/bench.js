@@ -118,21 +118,24 @@ async function main() {
     results['D: single cold cgpa'] = `${r.ms.toFixed(0)}ms status=${r.status}`
   }
 
-  // E. Course-page download "module 2 slides for CSE1001 by Anuj" through the new workflow API
+  // E. Course-page "module 2 of CSE1001 by Anuj" the way a model drives it: start without
+  //    selections, then pick option ids from each returned step (course 1, faculty 1, materials 3-4).
   {
     const t0 = performance.now()
-    let r = await post('/vtop', {
-      command: 'course-page',
-      ...creds(400),
-      select: { course: 'CSE1001', faculty: 'anuj kumar', materials: 'module 2' },
-    })
+    let r = await post('/vtop', { command: 'course-page', ...creds(400) })
+    const picks = { course: '1', faculty: '1', materials: '3-4' }
     let steps = 1
-    while (r.json && r.json.status && r.json.status.startsWith('needs_') && steps < 6) {
-      const first = r.json.step.options[0]
-      r = await post('/vtop/continue', { ...creds(400), continuation: r.json.continuation, choice: first.id })
+    while (r.json && r.json.status === 'needs_selection' && steps < 6) {
+      r = await post('/vtop/continue', { ...creds(400), continuation: r.json.continuation, choice: picks[r.json.step.id] })
       steps++
     }
-    results['E: course-page module download (new API)'] = `${(performance.now() - t0).toFixed(0)}ms status=${r.status} result=${r.json && r.json.status} files=${(r.json && r.json.files && r.json.files.length) || 0} http-calls=${steps}`
+    results['E: course-page by option ids (model flow)'] = `${(performance.now() - t0).toFixed(0)}ms status=${r.status} result=${r.json && r.json.status} files=${(r.json && r.json.files && r.json.files.length) || 0} http-calls=${steps}`
+  }
+
+  // F. Same download when the caller already holds the indices (exact flags, one call).
+  {
+    const r = await post('/vtop', { command: 'course-page', ...creds(401), flags: { course: 1, faculty: 1, materials: '3-4' } })
+    results['F: course-page with exact flags'] = `${r.ms.toFixed(0)}ms status=${r.status} result=${r.json && r.json.status} files=${(r.json && r.json.files && r.json.files.length) || 0}`
   }
 
   for (const [k, v] of Object.entries(results)) console.log(`${k.padEnd(44)} ${v}`)

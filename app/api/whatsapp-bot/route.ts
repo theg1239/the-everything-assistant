@@ -7,6 +7,7 @@ import type { Prisma } from '@/prisma/generated/client'
 import { getModelConfig } from '@/lib/model-registry'
 import { normalizeTokenUsage } from '@/lib/token-usage'
 import { enforceUserRateLimit, UserRateLimitError } from '@/lib/user-rate-limiter'
+import { providerRateLimitOf, retryAfterResetTime } from '@/lib/chat-errors'
 import { isJsonObject } from '@/lib/json'
 import { toToolSet } from '@/app/api/chat/lib/tool-helpers'
 import { createBackgroundTasks } from '@/app/api/chat/lib/background'
@@ -471,22 +472,27 @@ CRITICAL TOOL CONTINUATION RULES:
           error: 'RATE_LIMIT_EXCEEDED',
           message: 'Too many requests. Please try again later.',
           type: 'user_rate_limit',
+          ...(error.resetTime ? { resetTime: error.resetTime } : {}),
+        },
+        { status: 429 }
+      )
+    }
+
+    const providerRateLimit = providerRateLimitOf(error)
+    if (providerRateLimit) {
+      const resetTime = retryAfterResetTime(providerRateLimit)
+      return NextResponse.json(
+        {
+          error: 'RATE_LIMIT_EXCEEDED',
+          message: 'The model is currently overloaded. Please try again later.',
+          type: 'model_rate_limit',
+          ...(resetTime ? { resetTime } : {}),
         },
         { status: 429 }
       )
     }
 
     const errorMessage = error instanceof Error ? error.message : ''
-    if (errorMessage.includes('rate limit')) {
-      return NextResponse.json(
-        {
-          error: 'RATE_LIMIT_EXCEEDED',
-          message: 'The model is currently overloaded. Please try again later.',
-          type: 'model_rate_limit',
-        },
-        { status: 429 }
-      )
-    }
 
     return NextResponse.json(
       { error: errorMessage || 'An unexpected error occurred' },

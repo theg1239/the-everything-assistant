@@ -8,8 +8,8 @@ const TITLE_TIMEOUT_MS = 5000
 
 export async function generateChatTitle(userMessage: string, userId?: string): Promise<string> {
   try {
-    const cleanMessage = userMessage.trim().toLowerCase()
-    if (cleanMessage.length < 10 || ['hi', 'hello', 'hey', 'test', 'help'].includes(cleanMessage)) {
+    // A message this short is already a usable title; no LLM call needed.
+    if (userMessage.trim().length < 10) {
       return extractTitleFromContent(userMessage)
     }
 

@@ -9,7 +9,7 @@ The Reddit Knowledge Base system provides AI-powered search and responses based 
 The system includes an **intelligent multi-agent RAG** that:
 
 - **Recursively refines search queries** when initial results are poor
-- **Scores result relevance** using AI to filter out irrelevant content
+- **Judges result relevance** with one OpenAI Decisions call per search pass (P(relevant) per result)
 - **Never fabricates data** - only uses real usernames, upvotes, and sources
 - **Provides transparent search metadata** showing refinement attempts
 
@@ -137,10 +137,11 @@ The system includes an **intelligent multi-agent RAG** that:
 
 ### 2. Knowledge Base (`knowledge-base.js`)
 
-- **Vector search**: Primary search using cosine similarity on embeddings
-- **Text fallback**: Full-text search when vector search yields no results
-- **Multiple data types**: Posts, comments, and knowledge chunks
-- **Smart thresholds**: Configurable similarity thresholds (default: 0.5)
+- **Hybrid retrieval**: pgvector cosine similarity on the query embedding and Postgres full-text
+  search (`websearch_to_tsquery` / `ts_rank_cd`), run in parallel and fused by reciprocal rank fusion
+- **No hand-written query processing**: no term extraction, keyword weighting or query rewriting;
+  relevance is judged by the Decisions model (see AGENTIC_RAG.md)
+- **Multiple data types**: Posts, comments, and knowledge chunks (chunks of a retrieved post are dropped)
 
 **Database Schema:**
 
@@ -159,12 +160,12 @@ reddit_comments (
 )
 ```
 
-### 3. RAG Service (`rag-service.js`)
+### 3. Agentic RAG Service (`agentic-rag-service.js`, `relevance-judge.js`)
 
-- **AI-powered responses**: Uses OpenAI GPT-5.6 Luna to generate intelligent answers
-- **Context building**: Combines multiple search results into coherent context
-- **Confidence scoring**: Calculates confidence based on similarity and community validation
-- **Fallback strategies**: Tries keyword search if no vector results found
+- **Relevance**: one `experimental_decide` call (OpenAI Decisions, `gpt-6-luna`) per search pass;
+  `relevanceScore` is P(relevant)
+- **Query refinement and answers**: chat model (`gpt-6.1-terra`)
+- **Confidence scoring**: from P(relevant), community scores, result count and source diversity
 
 ### 4. API Server (`api-server.js`)
 
@@ -184,7 +185,7 @@ bearer token.
 
 - `GET /health` - Health check
 - `POST /api/search` - Raw search results
-- `POST /api/ask` - RAG-powered Q&A (recommended)
+- `POST /api/ask` - RAG-powered Q&A (recommended; always the agentic service, `useAgentic` is ignored)
 - `GET /api/stats` - Database statistics
 - `GET /api/trending` - Trending topics
 
@@ -201,10 +202,10 @@ bearer token.
 
 Users can ask natural language questions about VIT, and the system will:
 
-1. Search the knowledge base using vector similarity
-2. Generate AI-powered responses based on Reddit discussions
-3. Provide source citations and confidence scores
-4. Fall back to keyword search if needed
+1. Retrieve candidates with vector similarity and full-text search
+2. Keep the ones the Decisions model judges relevant, refining the query once if too few are
+3. Generate AI-powered responses based on Reddit discussions
+4. Provide source citations and confidence scores
 
 **Example queries:**
 
@@ -271,6 +272,9 @@ MAX_CONTEXT_LENGTH=4000
 OPENAI_API_KEY=your_key_here
 DEEP_SEARCH_EMBEDDING_MODEL=text-embedding-3-large
 DEEP_SEARCH_EMBEDDING_DIM=768
+
+DEEP_SEARCH_DECISION_MODEL=gpt-6-luna        # relevance judge (OpenAI Decisions)
+DEEP_SEARCH_RELEVANCE_THRESHOLD=0.5          # keep results with P(relevant) >= this
 ```
 
 After changing the embedding model, regenerate the stored embeddings before relying on similarity
@@ -304,10 +308,9 @@ models are not interchangeable.
 
 ### Content Validation
 
-- **Community scores**: Uses Reddit upvotes/downvotes for relevance
-- **Similarity ranking**: Vector embeddings ensure semantic relevance
+- **Model-judged relevance**: every candidate gets P(relevant) from the Decisions model
+- **Hybrid ranking**: vector similarity and full-text rank fused by RRF
 - **Multi-source**: Combines posts, comments, and extracted knowledge chunks
-- **Recency weighting**: Recent content gets slight preference
 
 ### AI-Generated Enhancements
 
@@ -366,7 +369,7 @@ node test-integration.js
 
 ### Adding New Features
 
-1. Update the appropriate service (scraper, knowledge-base, or rag-service)
+1. Update the appropriate service (scraper, knowledge-base, or agentic-rag-service)
 2. Add corresponding API endpoints if needed
 3. Update the frontend tool integration
 4. Add tests and documentation

@@ -18,6 +18,20 @@ export type PersonalHubState = {
   snapshots: PersonalHubSnapshot[]
 }
 
+/**
+ * Result of `refreshVTOPSnapshotAction`. Credential failures come back as data (not a thrown
+ * error) because Next.js strips server-action error messages in production.
+ */
+export type HubVTOPRefreshResult =
+  | { ok: true; snapshot: PersonalHubSnapshot }
+  | {
+      ok: false
+      /** The stored VTOP login is missing or was rejected; the UI should prompt a re-link. */
+      requiresCredentials: boolean
+      errorKind?: string
+      error: string
+    }
+
 /** Result of `syncHubSnapshotsBatch`: one proxy /sync call for many commands. */
 export type HubSyncBatchResult = {
   state: PersonalHubState

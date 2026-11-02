@@ -6,7 +6,6 @@ import type {
 import * as z from 'zod'
 
 export type MemoryImportance = 1 | 2 | 3 | 4 | 5
-export type AutoSaveFilter = 'low' | 'medium' | 'high'
 
 export const memorySchema = z.object({
   id: z.string().optional(),
@@ -73,10 +72,6 @@ export class MemoryService {
   private readonly MAX_MEMORY_TOKENS = 2000
   private readonly DEFAULT_IMPORTANCE: MemoryImportance = 3
 
-  private estimateTokenCount(text: string): number {
-    return Math.ceil(text.length / 4)
-  }
-
   private toMemorySettingsResponse(settings: MemorySettingsRow): MemorySettings {
     const maxTokens = settings.maxTokens
 
@@ -85,16 +80,6 @@ export class MemoryService {
       maxTokens,
       maxOutputTokens: maxTokens,
     }
-  }
-
-  calculateSimilarity(a: string, b: string): number {
-    const setA = new Set(a.toLowerCase().split(/\s+/))
-    const setB = new Set(b.toLowerCase().split(/\s+/))
-
-    const intersection = new Set([...setA].filter(x => setB.has(x)))
-    const union = new Set([...setA, ...setB])
-
-    return union.size > 0 ? intersection.size / union.size : 0
   }
 
   async upsertMemory(userId: string, data: z.infer<typeof memorySchema>): Promise<Memory> {
@@ -141,41 +126,6 @@ export class MemoryService {
     return rows.map(toMemory)
   }
 
-  async getRelevantMemories(
-    userId: string,
-    query: string,
-    maxTokens: number = this.MAX_MEMORY_TOKENS
-  ): Promise<Memory[]> {
-    const memories = await this.getUserMemories(userId)
-    const queryTerms = new Set(query.toLowerCase().split(/\s+/))
-
-    const scoredMemories = memories.map((memory: Memory) => {
-      const contentTerms = new Set(memory.content.toLowerCase().split(/\s+/))
-      const intersection = new Set([...queryTerms].filter(term => contentTerms.has(term)))
-      const score = intersection.size / queryTerms.size
-      return { ...memory, score }
-    })
-
-    const relevantMemories = scoredMemories
-      .sort((a, b) => {
-        if (a.score !== b.score) return b.score - a.score
-        return b.importance - a.importance
-      })
-      .filter(m => m.score > 0)
-
-    let totalTokens = 0
-    const result: Memory[] = []
-
-    for (const memory of relevantMemories) {
-      const tokens = this.estimateTokenCount(memory.content)
-      if (totalTokens + tokens > maxTokens) break
-      result.push(memory)
-      totalTokens += tokens
-    }
-
-    return result
-  }
-
   /**
    * Hot-path read for the chat routes: only the flag, no default-row upsert.
    * A missing settings row means the schema default (`isEnabled: true`).
@@ -188,16 +138,19 @@ export class MemoryService {
     return settings?.isEnabled ?? true
   }
 
-  /** Memories for the system prompt, same order as `getUserMemories`, only the used columns. */
+  /**
+   * Memories for the system prompt, same order as `getUserMemories`, only the used columns.
+   * `id` is shown to the model so `saveMemory` can update a memory by exact id.
+   */
   async getMemoriesForPrompt(
     userId: string,
     limit: number
-  ): Promise<Array<{ content: string; updatedAt: Date }>> {
+  ): Promise<Array<{ id: string; content: string; updatedAt: Date }>> {
     return prisma.memory.findMany({
       where: { userId },
       orderBy: [{ importance: 'desc' }, { lastUsedAt: 'desc' }],
       take: limit,
-      select: { content: true, updatedAt: true },
+      select: { id: true, content: true, updatedAt: true },
     })
   }
 
@@ -291,89 +244,10 @@ export class MemoryService {
     return memory ? toMemory(memory) : null
   }
 
-  async extractAndSaveMemory(
-    userId: string,
-    content: string,
-    importance: MemoryImportance = 3
-  ): Promise<Memory | null> {
-    const settings = await this.getUserMemorySettings(userId)
-    if (!settings?.autoSave) return null
-
-    const sentences = content.split(/[.!?]+/).filter(Boolean)
-    const relevantSentences = sentences.filter(
-      (s: string) =>
-        (s.includes('I ') || s.includes('My ') || s.includes(`I'm `)) &&
-        s.length > 20 &&
-        s.length < 200
-    )
-
-    if (relevantSentences.length === 0) return null
-
-    const memoryContent = relevantSentences.join('. ').trim()
-
-    const existingMemory = await this.findSimilarMemory(userId, memoryContent)
-    if (existingMemory) return null
-
-    return this.upsertMemory(userId, {
-      content: memoryContent,
-      importance,
-      tags: [],
-    })
-  }
-
-  private isPotentialMemory(text: string): boolean {
-    const hasPersonalPronoun = /\b(I|you|your|my|mine|we|our|us)\b/i.test(text)
-    const isQuestion = text.trim().endsWith('?')
-    const isTooShort = text.length < 20
-    const isTooLong = text.length > 500
-
-    return hasPersonalPronoun && !isQuestion && !isTooShort && !isTooLong
-  }
-
-  private async checkSimilarMemoryExists(userId: string, text: string): Promise<boolean> {
-    const existingMemories = await prisma.memory.findMany({
-      where: { userId },
-      select: { content: true },
-    })
-
-    const normalizedText = text.toLowerCase().trim()
-
-    return existingMemories.some(memory => {
-      const normalizedMemory = memory.content.toLowerCase().trim()
-      return (
-        normalizedMemory.includes(normalizedText) ||
-        normalizedText.includes(normalizedMemory) ||
-        this.calculateSimilarity(normalizedText, normalizedMemory) > 0.8
-      )
-    })
-  }
-
-  private estimateMemoryImportance(text: string, filter: AutoSaveFilter): MemoryImportance {
-    let importance = 3
-
-    if (/(schedule|time|meeting|class|exam)/i.test(text)) importance += 1
-    if (/(prefer|like|dislike|hate|love)/i.test(text)) importance += 1
-    if (/(important|critical|urgent|must)/i.test(text)) importance = 5
-
-    const filterThreshold = {
-      low: 2,
-      medium: 3,
-      high: 4,
-    }[filter]
-
-    return toImportance(Math.min(Math.max(importance, filterThreshold), 5))
-  }
-
-  async findSimilarMemory(
-    userId: string,
-    content: string,
-    threshold: number = 0.8
-  ): Promise<Memory | null> {
-    const memories = await this.getUserMemories(userId)
-
-    return (
-      memories.find(memory => this.calculateSimilarity(memory.content, content) > threshold) || null
-    )
+  /** One of the user's memories whose stored content is exactly `content` (trimmed), if any. */
+  async findMemoryWithContent(userId: string, content: string): Promise<Memory | null> {
+    const row = await prisma.memory.findFirst({ where: { userId, content: content.trim() } })
+    return row ? toMemory(row) : null
   }
 }
 

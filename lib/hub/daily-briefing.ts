@@ -114,8 +114,7 @@ function normalizeNameToken(value?: string | null) {
   if (!value) return 'there'
   const trimmed = value.trim()
   if (!trimmed) return 'there'
-  const sanitized = trimmed.toLowerCase().startsWith('hey ') ? trimmed.slice(4).trim() : trimmed
-  const token = sanitized.split(/[\s._-]+/).filter(Boolean)[0] || 'there'
+  const token = trimmed.split(/[\s._-]+/).filter(Boolean)[0] || 'there'
   if (!token) return 'there'
   const lower = token.replace(/[^A-Za-z]/g, '') || token
   if (!lower) return 'there'
@@ -780,20 +779,11 @@ const MONTH_INDEX_MAP: Record<string, number> = {
   december: 11,
 }
 
-function parseDateString(value?: string, referenceDate: Date = new Date()): Date | null {
+/** Parses a VTOP date value (ISO / `D-M-YYYY` / `D Mon [YYYY]`); relative words are not dates. */
+export function parseDateString(value?: string, referenceDate: Date = new Date()): Date | null {
   if (!value || typeof value !== 'string') return null
   const trimmed = value.trim()
   if (!trimmed) return null
-  const lower = trimmed.toLowerCase()
-
-  if (lower.includes('today')) {
-    return new Date(referenceDate)
-  }
-  if (lower.includes('tomorrow')) {
-    const tomorrow = new Date(referenceDate)
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    return tomorrow
-  }
 
   const parsed = Date.parse(trimmed)
   if (!Number.isNaN(parsed)) {
@@ -1086,16 +1076,20 @@ function resolveDayIndex(dayValue?: string): number | null {
   return typeof index === 'number' ? index : null
 }
 
-function parseStartTime(value?: string) {
+/** VTOP exam session codes (the whole value), mapped to their start times. */
+const EXAM_SESSION_START: Record<string, { hour: number; minute: number }> = {
+  FN: { hour: 9, minute: 0 },
+  FORENOON: { hour: 9, minute: 0 },
+  AN: { hour: 13, minute: 30 },
+  AFTERNOON: { hour: 13, minute: 30 },
+}
+
+/** Start time of a VTOP time value: a session code (FN/AN), `HH:MM[ am|pm]`, a range, or `HHMM`. */
+export function parseStartTime(value?: string) {
   if (!value || typeof value !== 'string') return null
-  const lower = value.toLowerCase()
-  if (lower.includes('fn') || lower.includes('forenoon')) {
-    return { hour: 9, minute: 0 }
-  }
-  if (lower.includes('an') || lower.includes('afternoon')) {
-    return { hour: 13, minute: 30 }
-  }
-  const primary = value.split(/-|–|—|to/i)[0]?.trim() || ''
+  const session = EXAM_SESSION_START[value.trim().toUpperCase()]
+  if (session) return { ...session }
+  const primary = value.split(/\s*(?:-|–|—|\bto\b)\s*/i)[0]?.trim() || ''
   if (!primary) return null
   const sanitized = primary.replace(/(hrs|hours)/gi, '').trim()
   const match = sanitized.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i)

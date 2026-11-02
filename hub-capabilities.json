@@ -201,7 +201,7 @@
       { "subject": "faculty", "param": "faculty", "select": "fuzzy", "label": "Faculty" },
       { "subject": "material", "param": "materials", "select": "multi", "label": "Materials" }
     ],
-    "flags": { "semester": true, "course": true, "faculty": true, "fuzzyIndex": true },
+    "flags": { "semester": true, "course": true, "faculty": true },
     "interactive": { "requiresCourse": true, "requiresFaculty": true, "requiresSemester": true }
   },
   {
@@ -379,7 +379,7 @@
     "command": "syllabus",
     "cliCommand": "syllabus",
     "title": "syllabus vault",
-    "description": "Course syllabus PDF downloader with fuzzy/acronym search.",
+    "description": "Download a course syllabus PDF: pick the course from the list VTOP returns.",
     "group": "documents",
     "autoSync": false,
     "kind": "download",

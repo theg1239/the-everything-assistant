@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import dynamic from 'next/dynamic'
 import { useStore } from 'zustand'
 import { useChat } from '@ai-sdk/react'
-import { DefaultChatTransport } from 'ai'
+import { APICallError, DefaultChatTransport } from 'ai'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useSession, signIn } from 'next-auth/react'
 import { VirtualizedMessages } from '@/components/virtualized-messages'
@@ -25,6 +25,8 @@ import { ShareModal } from '@/components/share-modal'
 import { HUB_COMMANDS } from '@/types/hub'
 import type { PersonalHubState, HubVTOPCommand } from '@/types/hub'
 import { extractTitleFromContent, generateUUID } from '@/lib/utils'
+import { classifyChatError, parseChatErrorBody } from '@/lib/chat-errors'
+import { classifyVtopFailure } from '@/lib/vtop-errors'
 import UpsellBanner from '@/components/upsell-banner'
 import { VTOPToolHandler } from '@/components/vtop-tool-handler'
 import { VTOPProvider, useVTOP } from '@/contexts/vtop-context'
@@ -59,6 +61,7 @@ import { CHAT_COMPOSER_INPUT_ID, createChatInputStore } from '@/lib/stores/chat-
 import { readPreHydrationValue } from '@/lib/hydration-safe'
 import { CHAT_HISTORY_PAGE_SIZE, chatHistoryPageResponseSchema } from '@/lib/chat-history'
 import { mapWithConcurrency } from '@/components/concurrency'
+import { VTOP_WORKFLOW_CHOICE_EVENT, vtopWorkflowChoiceSchema } from '@/lib/vtop-tool'
 
 // Rarely-opened, client-only overlays: loaded on first open instead of with the chat route.
 const loadHub = () => import('@/components/hub/hub')
@@ -1006,17 +1009,8 @@ const submitVtopCredentials = async (
             )
           }, 500)
         }
-      } else if (toolResultRecord && toolResultRecord.success === false) {
-        const errorMessage =
-          readString(toolResultRecord.error) ||
-          readString(toolResultRecord.message) ||
-          'Unknown error occurred'
-        if (
-          errorMessage.includes('Invalid LoginId/Password') ||
-          errorMessage.includes('Login failed')
-        ) {
-          toast.error('Invalid VTOP credentials. Please check your username and password.')
-        }
+      } else if (classifyVtopFailure(toolResultRecord) === 'auth_rejected') {
+        toast.error('Invalid VTOP credentials. Please check your username and password.')
       }
       setVtopLoading(false)
     } else {
@@ -1382,16 +1376,6 @@ function PureChatInterfaceComponent({
     [initialMessages]
   )
 
-  const shouldAutoRetryStreamError = (errorMessage: string, responseBody: string) => {
-    const combined = `${errorMessage || ''} ${responseBody || ''}`.toLowerCase()
-    const isTypeValidation = combined.includes('type validation failed')
-    const isAbort = combined.includes('"type":"abort"') || combined.includes(' abort')
-    const isTimeout = combined.includes('timeout') || combined.includes('timed out')
-    const isUserAbort =
-      combined.includes('user cancelled') || combined.includes('user canceled') || combined.includes('user aborted')
-    return isTypeValidation && isAbort && isTimeout && !isUserAbort
-  }
-
   const chatTransport = useMemo(() => {
     return new DefaultChatTransport<MutableAppMessage>({
       api: isGuest ? '/api/guest-chat' : '/api/chat',
@@ -1533,12 +1517,9 @@ function PureChatInterfaceComponent({
       }
     },
   onError: err => {
-      const errorMessage = err.message || err.toString()
-      const responseBody: unknown =
-        typeof err === 'object' && err !== null && 'responseBody' in err ? err.responseBody : ''
-      const bodyString = typeof responseBody === 'string' ? responseBody : ''
+      const classified = classifyChatError(err)
 
-      if (shouldAutoRetryStreamError(errorMessage, bodyString)) {
+      if (classified.kind === 'stream_abort') {
         if (autoRetryRef.current < 1) {
           autoRetryRef.current += 1
           runIgnoringErrors(clearError)
@@ -1549,29 +1530,10 @@ function PureChatInterfaceComponent({
         return
       }
 
-      if (isGuest) {
-        const guestLimitError =
-          /guest limit/i.test(errorMessage) ||
-          bodyString.includes('GUEST_LIMIT') ||
-          bodyString.toLowerCase().includes('guest mode includes 2')
-        if (guestLimitError) {
-          setShowGuestLimitModal(true)
-          return
-        }
+      if (isGuest && classified.kind === 'guest_limit') {
+        setShowGuestLimitModal(true)
+        return
       }
-
-      const isGeminiStreamingError =
-        errorMessage.includes('contents.parts must not be empty') ||
-        errorMessage.includes('INVALID_ARGUMENT') ||
-        errorMessage.includes('GenerateContentRequest.contents') ||
-        errorMessage.includes('streamGenerateContent') ||
-        (typeof responseBody === 'string' &&
-          responseBody.includes('contents.parts must not be empty'))
-
-      const localRateLimitDetected =
-        /rate limit|too many requests|quota exceeded|rate_limited/i.test(
-          String(errorMessage || responseBody || '')
-        )
 
       let isRateLimit = false
       try {
@@ -1581,10 +1543,12 @@ function PureChatInterfaceComponent({
 
       const contextRateLimit = !!rateLimitError?.isRateLimit
 
+      const responseBody = APICallError.isInstance(err) ? err.responseBody : undefined
       const friendlyError =
-        typeof responseBody === 'string' && responseBody
-          ? responseBody
-          : errorMessage || 'Sorry, something went wrong while streaming the reply.'
+        parseChatErrorBody(responseBody)?.message ||
+        responseBody ||
+        err.message ||
+        'Sorry, something went wrong while streaming the reply.'
 
       setUiMessages(prev => [
         ...prev,
@@ -1596,7 +1560,7 @@ function PureChatInterfaceComponent({
         },
       ])
 
-      if (!localRateLimitDetected && !isRateLimit && !contextRateLimit && !isGeminiStreamingError) {
+      if (!isRateLimit && !contextRateLimit) {
         toast.error('Something went wrong. Please try again.')
       }
     },
@@ -1889,37 +1853,8 @@ function PureChatInterfaceComponent({
   }, [messages.length, isMobile, isInitialRender, throttledScrollToBottom, autoScrollEnabled])
 
   useEffect(() => {
-    if (error) {
-      const errorMessage = error.message || error.toString()
-      const responseBody: unknown =
-        typeof error === 'object' && error !== null && 'responseBody' in error ? error.responseBody : ''
-      const bodyString = typeof responseBody === 'string' ? responseBody : ''
-
-      if (shouldAutoRetryStreamError(errorMessage, bodyString)) {
-        return
-      }
-
-      const isGeminiStreamingError =
-        errorMessage.includes('contents.parts must not be empty') ||
-        errorMessage.includes('INVALID_ARGUMENT') ||
-        errorMessage.includes('GenerateContentRequest') ||
-        (typeof responseBody === 'string' &&
-          responseBody.includes('contents.parts must not be empty'))
-
-      if (isGeminiStreamingError) {
-        setErrorMessage('An error occurred. Please start a new chat.')
-        setUiMessages(prev =>
-          prev.map((msg, idx) =>
-            idx === prev.length - 1 && msg.role === 'assistant'
-              ? { ...msg, content: '', error: 'streaming_error' }
-              : msg
-          )
-        )
-        return
-      }
-
-      const isRateLimit = checkForRateLimitError(error)
-      if (isRateLimit) return
+    if (error && classifyChatError(error).kind !== 'stream_abort') {
+      checkForRateLimitError(error)
     }
   }, [error, checkForRateLimitError])
 
@@ -2079,6 +2014,53 @@ function PureChatInterfaceComponent({
       setShowGuestLimitModal,
     ]
   )
+
+  // The VTOP workflow card answers a pending step with a structured choice (option id(s), value or
+  // confirm boolean). Record the card's description as the user's message and continue the
+  // workflow as a direct queryVTOP call, so the exact option id reaches the proxy (the model never
+  // has to re-read the choice from text) and the next step / result lands in this chat.
+  useEffect(() => {
+    const handleWorkflowChoice = (event: Event) => {
+      const parsed = vtopWorkflowChoiceSchema.safeParse(customEventDetail(event))
+      if (!parsed.success || isGuest) return
+      if (status === 'submitted' || status === 'streaming') {
+        toast.info('Wait for the current reply to finish, then pick again.')
+        return
+      }
+      const { command, continuation, choice, display } = parsed.data
+      setShowFullChat(true)
+      setShowFollowUpSuggestions(false)
+      setErrorMessage(null)
+      clearRateLimitError()
+      setHasUserInitiatedConversation(true)
+      sendMessage(
+        { text: display },
+        {
+          body: {
+            directToolCall: {
+              toolName: 'queryVTOP',
+              toolCallId: `vtop-${Date.now()}`,
+              args: { command, continuation, choice },
+            },
+          },
+        }
+      ).catch((err: unknown) => {
+        console.error('Error continuing VTOP workflow:', err)
+        setErrorMessage('Failed to send your choice. Please try again.')
+      })
+    }
+    window.addEventListener(VTOP_WORKFLOW_CHOICE_EVENT, handleWorkflowChoice)
+    return () => window.removeEventListener(VTOP_WORKFLOW_CHOICE_EVENT, handleWorkflowChoice)
+  }, [
+    isGuest,
+    status,
+    sendMessage,
+    setShowFullChat,
+    setShowFollowUpSuggestions,
+    setErrorMessage,
+    clearRateLimitError,
+    setHasUserInitiatedConversation,
+  ])
 
   const handleToolSelection = useCallback(
     (toolId: string) => {

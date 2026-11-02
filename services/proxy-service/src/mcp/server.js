@@ -12,8 +12,38 @@ const { startLegacyWorkflow, continueLegacyWorkflow } = require('../workflows/co
 
 const SSE_MESSAGES_PATH = '/mcp/messages'
 
-const WORKFLOW_HINT =
-  'If the result status is needs_selection / needs_input / needs_confirmation, either ask the user or, when their request already identifies the answer, call vtop-continue with { continuation, choice } (choice = option id, several ids like "1,3-4" for multi-select, free text to match by name, or "confirm"/"cancel").'
+const WORKFLOW_GUIDE =
+  'Multi-step: call this tool first WITHOUT the step flags (you do not know the option indices yet). ' +
+  'If the result status is needs_selection, read result.step.options (every option VTOP offered, with id, label, description, values), pick the one(s) that match what the user wants yourself, ' +
+  'and call vtop-continue with { continuation, choice }: choice is an option id ("2"); if step.multiple, an array of ids (["1","3"]), a range over ids ("1,3-5") or "all". ' +
+  'needs_input: choice is the raw value in step.format, or one of step.options[].id when options are listed. needs_confirmation: choice true submits, false cancels (only after the user agreed). ' +
+  'Only use ids from the latest result; anything else is rejected with the valid ids. Steps cli-top offers a single option for are taken automatically (progress[].auto = true).'
+
+const positiveInt = z.number().int().min(1)
+
+/** Zod schema for one flag, mirroring the proxy's validation (src/catalog.js). */
+function flagSchema(name, spec, entry) {
+  const describe = schema => schema.describe(spec.description)
+  switch (spec.type) {
+    case 'index':
+      return describe(name === 'semester' ? z.union([positiveInt, z.literal('list')]) : positiveInt)
+    case 'selection': {
+      const step = entry.steps.find(candidate => candidate.param === name)
+      if (step && step.select === 'fuzzy') {
+        return z
+          .union([positiveInt, z.string()])
+          .describe(`${spec.description} A string is passed verbatim to cli-top's own search; if that is not a unique hit you get the full option list back.`)
+      }
+      return describe(positiveInt)
+    }
+    case 'materials':
+      return describe(z.union([z.string(), z.array(positiveInt)]))
+    case 'boolean':
+      return describe(z.boolean())
+    default:
+      return describe(z.string())
+  }
+}
 
 function createMcpHandlers({ service, catalog, config, logger, requestContext }) {
   const oauthEnabled = process.env.MCP_OAUTH_ENABLED !== 'false'
@@ -58,31 +88,30 @@ function createMcpHandlers({ service, catalog, config, logger, requestContext })
     const flagsSchema = z
       .preprocess(value => (Array.isArray(value) ? {} : value), z.record(z.string(), z.unknown()))
       .optional()
-      .describe('Command flags (see params in the description)')
-    const selectSchema = z
-      .record(z.string(), z.string())
-      .optional()
-      .describe('Natural-language hints per step, e.g. { "course": "CSE1001", "faculty": "anuj", "materials": "module 2" }')
+      .describe('Exact cli-top flags')
 
     for (const entry of catalog.list()) {
       if (entry.command === 'sync') continue
-      const params = entry.params.length
-        ? ` Params: ${entry.params.map(name => `${name} (${catalog.paramSpec(name).type})`).join(', ')}.`
+      const shape = Object.fromEntries(entry.params.map(name => [name, flagSchema(name, catalog.paramSpec(name), entry).optional()]))
+      const steps = entry.steps.length ? ` Steps: ${entry.steps.map(step => step.label).join(' -> ')}. ${WORKFLOW_GUIDE}` : ''
+      const write = entry.writeWhen
+        ? ` Setting ${entry.writeWhen}=true performs a write; the proxy asks for confirmation (needs_confirmation) unless confirm=true is passed.`
         : ''
-      const steps = entry.steps.length ? ` Steps: ${entry.steps.map(step => step.label).join(' -> ')}. ${WORKFLOW_HINT}` : ''
-      const write = entry.writeWhen ? ` Setting ${entry.writeWhen}=true performs a write and requires confirmation.` : ''
       server.registerTool(
         entry.command,
         {
           title: entry.title,
-          description: `${entry.description}${params}${steps}${write}`,
-          inputSchema: z.object({
-            ...credentialFields,
-            flags: flagsSchema,
-            select: selectSchema,
-            confirm: z.boolean().optional().describe('Explicit user confirmation for write actions'),
-            fresh: z.boolean().optional().describe('Bypass the short-lived result cache'),
-          }),
+          description: `${entry.description}${steps}${write}`,
+          inputSchema: z
+            .object({
+              ...credentialFields,
+              ...(entry.params.length
+                ? { flags: z.object(shape).loose().optional().describe('Exact cli-top flags for this command (option indices, not names).') }
+                : {}),
+              confirm: z.boolean().optional().describe('Explicit user confirmation for write actions'),
+              fresh: z.boolean().optional().describe('Bypass the short-lived result cache'),
+            })
+            .loose(),
         },
         (input, extra) =>
           guarded(async () => {
@@ -103,18 +132,19 @@ function createMcpHandlers({ service, catalog, config, logger, requestContext })
       'vtop-continue',
       {
         title: 'continue a VTOP workflow',
-        description: `Continue a multi-step VTOP command after a needs_* result. ${WORKFLOW_HINT}`,
+        description: `Continue a multi-step VTOP command after a needs_selection / needs_input / needs_confirmation result. ${WORKFLOW_GUIDE}`,
         inputSchema: z.object({
           ...credentialFields,
-          continuation: z.string().min(1),
-          choice: z.union([z.string(), z.number(), z.boolean(), z.array(z.union([z.string(), z.number()]))]),
-          confirm: z.boolean().optional(),
+          continuation: z.string().min(1).describe('result.continuation from the previous call'),
+          choice: z
+            .union([z.string(), z.number().int(), z.boolean(), z.array(z.union([z.string(), z.number().int()]))])
+            .describe('select: option id, array of ids, or (multiple) "1,3-5" / "all"; input: the value; confirmation: true/false'),
         }),
       },
       (input, extra) =>
         guarded(async () => {
           const creds = credentialsFor(input, extra)
-          return service.continueWorkflow({ continuation: input.continuation, choice: input.choice, confirm: input.confirm === true, ...creds })
+          return service.continueWorkflow({ continuation: input.continuation, choice: input.choice, ...creds })
         })
     )
 
@@ -143,7 +173,7 @@ function createMcpHandlers({ service, catalog, config, logger, requestContext })
       'course-page-interactive',
       {
         title: 'course-page interactive (legacy)',
-        description: `Deprecated: use course-page + vtop-continue. Runs the course materials workflow.`,
+        description: 'Deprecated: use course-page + vtop-continue. Runs the course materials workflow with exact flags (option indices).',
         inputSchema: z.object({
           ...credentialFields,
           step: z.string().optional(),
@@ -151,14 +181,13 @@ function createMcpHandlers({ service, catalog, config, logger, requestContext })
           sessionData: z.string().optional(),
         }),
       },
-      (input, extra) =>
-        guarded(async () => startLegacyWorkflow(service, { ...credentialsFor(input, extra), flags: input.flags, sessionData: input.sessionData }))
+      (input, extra) => guarded(async () => startLegacyWorkflow(service, { ...credentialsFor(input, extra), flags: input.flags }))
     )
     server.registerTool(
       'course-page-interactive-continue',
       {
         title: 'course-page interactive continue (legacy)',
-        description: 'Deprecated: use vtop-continue.',
+        description: 'Deprecated: use vtop-continue. selection must be option id(s) from the previous result ("0" = all materials).',
         inputSchema: z.object({
           ...credentialFields,
           sessionData: z.string(),
@@ -172,7 +201,6 @@ function createMcpHandlers({ service, catalog, config, logger, requestContext })
             ...credentialsFor(input, extra),
             sessionData: input.sessionData,
             selection: input.selection,
-            step: input.step,
           })
         )
     )

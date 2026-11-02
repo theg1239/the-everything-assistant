@@ -38,7 +38,7 @@ export const GROUPS = {
   papers: {
     id: 'papers',
     label: 'Past Papers',
-    tools: ['findPastPapers', 'resolveCourseCode', 'getCourseInfo'],
+    tools: ['findPastPapers', 'searchCourseCatalog', 'lookupCourseCode', 'getCourseInfo'],
     systemPrompt:
       'The user is looking for past papers. Use findPastPapers; always surface direct download links plus course code / exam type / slot / year.',
   },

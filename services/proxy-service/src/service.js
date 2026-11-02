@@ -4,18 +4,17 @@ const crypto = require('crypto')
 const { ProxyError, kindInfo, classifyAuthFailure, classifyExecutionError } = require('./cli/errors')
 const { parseSyncEntries } = require('./cli/envelope')
 const { digestMessages, composeText, buildOptions, publicOption, renderTable } = require('./cli/output')
-const { matchOne, matchMany } = require('./workflow/match')
-const { ValidationError, normalizeValue, PARAMS } = require('./catalog')
+const { ValidationError, normalizeValue, PARAMS, FORMATS, LIST_SEMESTERS } = require('./catalog')
 const { TtlCache } = require('./cache')
 const { deriveKey } = require('./workflow/token')
 
-const LIST_SEMESTERS = 9999 // out-of-range index: cli-top answers with the full semester table
 const MAX_RUNS_PER_REQUEST = 5
+// cli-top selection_request messages for a search that was ambiguous / missed / out of range:
+// the table it returns is re-numbered (or partial), so the proxy re-runs for stable indices.
 const FILTERED_SELECTION = /^(multiple matches|no matches|no valid matches|invalid)/i
 const DEFAULT_SYNC = ['profile', 'timetable', 'attendance', 'marks', 'cgpa', 'exams', 'da']
 const RETRYABLE_KINDS = new Set(['vtop_unavailable', 'captcha_failed', 'cli_crashed'])
-const CANCEL_WORDS = /^(cancel|exit|stop|abort|no|nevermind|never mind)$/i
-const CONFIRM_WORDS = /^(confirm|yes|y|ok|okay|proceed|submit|register|true)$/i
+const ID_RANGES = /^\s*\d+(\s*-\s*\d+)?(\s*,\s*\d+(\s*-\s*\d+)?)*\s*$/
 
 const stable = value => JSON.stringify(Object.keys(value).sort().map(key => [key, value[key]]))
 
@@ -275,6 +274,7 @@ class VtopService {
       httpStatus: info.status,
       message: error.message || info.message,
       ...(error.field ? { field: error.field } : {}),
+      ...(error.validIds ? { validIds: error.validIds } : {}),
       ...(error.retryAfterMs ? { retryAfterMs: error.retryAfterMs } : {}),
     }
   }
@@ -293,9 +293,15 @@ class VtopService {
       un: state.creds.username, // encrypted inside the token; lets clients continue without resending it
       c: entry.command,
       f: state.flags,
-      h: state.hints,
       cf: state.confirmed || undefined,
-      s: { param: step.id, kind: step.kind, select: step.select, label: step.label },
+      s: {
+        param: step.id,
+        kind: step.kind,
+        label: step.label,
+        multiple: step.multiple || undefined,
+        type: step.kind === 'input' ? step.inputType : undefined,
+        ids: options ? options.map(option => option.id) : undefined,
+      },
       hist: state.history,
     })
     if (options) this.optionCache.set(jti, options, this.config.workflowTtlSeconds * 1000)
@@ -324,16 +330,22 @@ class VtopService {
       return this.errorResult(null, new ProxyError('unsupported_command', `Unsupported command: ${command}`))
     }
     try {
+      if (select !== undefined) {
+        throw new ValidationError(
+          '"select" is not supported. Pass exact flags (option indices), or call without them and choose option ids from the returned step via /vtop/continue.',
+          'select'
+        )
+      }
       const creds = this.validateCredentials(username, password)
-      const { flags: normalized, hints } = this.catalog.normalizeParams(entry, flags, select)
-      const state = { creds, flags: normalized, hints, confirmed: confirm === true, history: [], autoSelected: [], runs: 0 }
+      const normalized = this.catalog.normalizeParams(entry, flags)
+      const state = { creds, flags: normalized, confirmed: confirm === true, history: [], autoSelected: [], runs: 0, queries: {} }
       return await this.drive(entry, state, { fresh, signal })
     } catch (error) {
       return this.errorResult(entry, toProxyError(error, this.logger))
     }
   }
 
-  async continueWorkflow({ continuation, choice, username, password, confirm, signal }) {
+  async continueWorkflow({ continuation, choice, username, password, signal }) {
     let entry
     try {
       const body = this.tokens.open(continuation, username ? String(username).trim().toUpperCase() : null)
@@ -343,36 +355,45 @@ class VtopService {
       const state = {
         creds,
         flags: body.f || {},
-        hints: body.h || {},
-        confirmed: Boolean(body.cf) || confirm === true,
+        confirmed: Boolean(body.cf),
         history: body.hist || [],
         autoSelected: [],
         runs: 0,
+        queries: {},
       }
       const step = body.s || {}
-      const raw = Array.isArray(choice) ? choice.map(String).join(',') : choice === undefined || choice === null ? '' : String(choice).trim()
-      if (CANCEL_WORDS.test(raw)) {
-        return { ...this.baseResult(entry, null, state), success: true, status: 'cancelled', message: 'Cancelled.', httpStatus: 200 }
-      }
       const cachedOptions = this.optionCache.get(body.jti)
       const options = cachedOptions ? cachedOptions.value : null
+      const ids = step.ids || (options ? options.map(option => option.id) : null)
 
       if (step.kind === 'confirm') {
-        if (!(CONFIRM_WORDS.test(raw) || choice === true || confirm === true)) {
+        if (typeof choice !== 'boolean') {
+          throw new ValidationError(`choice must be true (confirm) or false (cancel) for "${step.label}"`, 'choice')
+        }
+        if (!choice) {
           return { ...this.baseResult(entry, null, state), success: true, status: 'cancelled', message: 'Not confirmed; nothing was submitted.', httpStatus: 200 }
         }
         state.confirmed = true
         if (step.param === 'confirm') state.flags.confirm = true
-        state.history.push({ step: step.param, label: step.label, choice: 'Confirmed' })
+        state.history.push({ step: step.param, label: step.label, choice: 'Confirmed', value: true })
       } else if (step.kind === 'input') {
-        if (!raw) throw new ValidationError(`A value for ${step.label} is required`, step.param)
-        const value = options && options.length ? resolveInputOption(options, raw) : raw
-        state.flags[step.param] = normalizeValue(step.param, value)
-        state.history.push({ step: step.param, label: step.label, choice: String(value) })
+        if (ids && ids.length) {
+          const id = typeof choice === 'number' ? String(choice) : choice
+          if (typeof id !== 'string' || !ids.includes(id)) {
+            throw new ValidationError(`${describeChoice(choice)} is not a valid ${step.label}. Valid ids: ${ids.join(', ')}`, 'choice', { validIds: ids })
+          }
+          state.flags[step.param] = normalizeValue(step.param, id)
+        } else {
+          if (choice === undefined || choice === null || choice === '') throw new ValidationError(`A value for ${step.label} is required`, 'choice')
+          state.flags[step.param] = normalizeValue(step.param, choice)
+        }
+        const option = options && options.find(candidate => candidate.id === state.flags[step.param])
+        state.history.push({ step: step.param, label: step.label, choice: option ? option.label : String(state.flags[step.param]), value: state.flags[step.param] })
       } else if (step.kind === 'select') {
-        if (!raw) throw new ValidationError('choice is required', 'choice')
-        const pending = this.applySelection(entry, state, step, raw, options)
-        if (pending) return pending
+        if (!ids) throw new ProxyError('token_invalid')
+        const picked = parseSelectChoice(step, choice, ids)
+        state.flags[step.param] = picked.value
+        state.history.push({ step: step.param, label: step.label, choice: describeSelection(picked, options), value: picked.ids })
       } else {
         throw new ProxyError('token_invalid')
       }
@@ -382,84 +403,22 @@ class VtopService {
     }
   }
 
-  /** Applies a client's choice for a selection step. Returns a result only if it needs re-asking. */
-  applySelection(entry, state, step, raw, options) {
-    const param = step.param
-    if (step.select === 'multi') {
-      let selection
-      try {
-        selection = normalizeValue(param, raw)
-      } catch {
-        const matched = options ? matchMany(options, raw) : {}
-        if (!matched.selection) {
-          if (!options) {
-            state.hints[param] = raw
-            return null
-          }
-          return this.reask(entry, state, step, options, `Nothing matched "${raw}". Choose option numbers (e.g. 1,3-5) or "all".`)
-        }
-        selection = matched.selection
-      }
-      state.flags[param] = selection
-      state.history.push({ step: param, label: step.label, choice: describeSelection(selection, options) })
-      return null
-    }
-    if (/^\d+$/.test(raw)) {
-      const index = parseInt(raw, 10)
-      if (options && !options.some(option => option.index === index)) {
-        return this.reask(entry, state, step, options, `Option ${raw} doesn't exist; choose one of the listed options.`)
-      }
-      state.flags[param] = index
-      const option = options && options.find(candidate => candidate.index === index)
-      state.history.push({ step: param, label: step.label, choice: option ? option.label : raw })
-      return null
-    }
-    if (!options) {
-      state.hints[param] = raw
-      return null
-    }
-    const matched = matchOne(options, raw, { param })
-    if (matched.option) {
-      state.flags[param] = matched.option.index
-      state.history.push({ step: param, label: step.label, choice: matched.option.label })
-      return null
-    }
-    const narrowed = matched.ranked.length ? matched.ranked : options
-    return this.reask(entry, state, step, options, `"${raw}" matches ${matched.ranked.length ? 'several' : 'no'} options; pick one by number.`, narrowed)
-  }
-
-  reask(entry, state, step, options, prompt, shown = options) {
-    const view = { id: step.param, kind: 'select', select: step.select, label: step.label, multiple: step.select === 'multi', prompt, options: shown.map(publicOption) }
-    return this.pendingResult(entry, null, state, 'needs_selection', view, options)
-  }
-
-  /** The workflow loop: run cli-top, resolve what it asks for from hints, or hand it to the client. */
+  /**
+   * The workflow loop: run cli-top; when it asks for a selection, hand the full option list to the
+   * client. The only automatic step is structural: cli-top offering exactly one option.
+   */
   async drive(entry, state, { fresh, signal } = {}) {
     let inv = null
     while (state.runs < MAX_RUNS_PER_REQUEST) {
       if (this.catalog.isWrite(entry, state.flags) && entry.writeWhen === 'apply' && !state.confirmed) {
         return this.pendingResult(entry, null, state, 'needs_confirmation', confirmationStep(entry, state.flags), null)
       }
-      if (state.hints.semester && state.flags.semester === undefined && entry.steps.some(s => s.param === 'semester')) {
-        if (/^(latest|current|this|now)( semester)?$/i.test(state.hints.semester.trim())) delete state.hints.semester
-        else state.flags.semester = LIST_SEMESTERS
-      }
-      // "all" / explicit indices need no table: send them up front and save a VTOP round trip.
-      for (const step of entry.steps) {
-        const hint = state.hints[step.param]
-        if (step.select !== 'multi' || !hint || state.flags[step.param] !== undefined) continue
-        const direct = matchMany([], hint)
-        if (direct.selection) {
-          delete state.hints[step.param]
-          this.autoSelect(state, step, direct.selection, describeSelection(direct.selection, null), hint)
-        }
-      }
 
       state.runs++
       inv = await this.invoke(entry, state.flags, state.creds, { fresh, signal })
 
       if (inv.kind === 'ok') {
-        if (state.flags.semester === LIST_SEMESTERS) delete state.flags.semester // only one semester exists
+        if (state.flags.semester === LIST_SEMESTERS) delete state.flags.semester // cli-top did not ask
         return this.completedResult(entry, inv, state)
       }
 
@@ -476,64 +435,31 @@ class VtopService {
         this.logger.warn(`[service] ${entry.command}: unmapped selection subject "${selection.subject}"`)
         return this.completedResult(entry, inv, state)
       }
-      const options = buildOptions(selection.table)
       const current = state.flags[step.param]
+      delete state.flags[step.param] // this step is being asked; the client's choice replaces it
       if (FILTERED_SELECTION.test(selection.message || '') && current !== undefined && current !== LIST_SEMESTERS) {
-        // cli-top's own fuzzy match was ambiguous (or the index was out of range). The rows it
-        // returned are re-numbered, so re-run without the flag to get stable indices and match here.
-        if (typeof current === 'string') state.hints[step.param] = state.hints[step.param] || current
-        delete state.flags[step.param]
+        // cli-top's own search was ambiguous or missed (or the index was out of range) and the
+        // rows it returned are re-numbered: re-run without the flag to get stable indices.
+        if (typeof current === 'string') state.queries[step.param] = current
         continue
       }
-      if (current === LIST_SEMESTERS) delete state.flags[step.param]
 
-      let unmatched = null
-      let shown = options
-      const hint = state.hints[step.param]
-      if (hint) {
-        delete state.hints[step.param]
-        if (step.select === 'multi') {
-          const matched = matchMany(options, hint)
-          if (matched.selection) {
-            this.autoSelect(state, step, matched.selection, describeSelection(matched.selection, options), hint)
-            continue
-          }
-        } else {
-          const matched = matchOne(options, hint, { param: step.param })
-          if (matched.option) {
-            this.autoSelect(state, step, matched.option.index, matched.option.label, hint)
-            continue
-          }
-          if (matched.ranked.length) shown = [...matched.ranked, ...options.filter(o => !matched.ranked.includes(o))]
-        }
-        unmatched = hint
+      const options = buildOptions(selection.table)
+      const isData = entry.selectionIsData && entry.steps[0] === step // the table is what was asked for
+      if (options.length === 1 && !isData) {
+        this.autoSelect(state, step, options[0])
+        continue
       }
-
-      const prompt = unmatched
-        ? `Couldn't pick a ${step.label.toLowerCase()} for "${unmatched}" automatically. Choose one:`
-        : step.select === 'multi'
-          ? `Choose ${step.label.toLowerCase()} to download (numbers/ranges like 1,3-5, or "all").`
-          : `Choose a ${step.label.toLowerCase()}.`
-      const view = {
-        id: step.param,
-        kind: 'select',
-        select: step.select,
-        label: step.label,
-        multiple: step.select === 'multi',
-        ...(step.select === 'multi' ? { allowAll: true } : {}),
-        prompt,
-        ...(unmatched ? { unmatchedHint: unmatched } : {}),
-        options: shown.map(publicOption),
-      }
-      return this.pendingResult(entry, inv, state, 'needs_selection', view, options)
+      return this.pendingResult(entry, inv, state, 'needs_selection', selectStep(step, options, state.queries[step.param]), options)
     }
-    return this.errorResult(entry, { kind: 'execution_error', message: 'The VTOP workflow did not converge; please choose options manually.' }, inv, state)
+    return this.errorResult(entry, { kind: 'execution_error', message: 'The VTOP workflow did not converge.' }, inv, state)
   }
 
-  autoSelect(state, step, value, label, hint) {
-    state.flags[step.param] = value
-    state.history.push({ step: step.param, label: step.label, choice: label, auto: true })
-    state.autoSelected.push({ step: step.param, hint, choice: label })
+  /** cli-top offered exactly one option: take it (structural, never text-based). */
+  autoSelect(state, step, option) {
+    state.flags[step.param] = step.select === 'multi' ? option.id : option.index
+    state.history.push({ step: step.param, label: step.label, choice: option.label, value: [option.id], auto: true })
+    state.autoSelected.push({ step: step.param, choice: option.label, value: option.id })
     this.counters.autoSelections++
   }
 
@@ -545,11 +471,9 @@ class VtopService {
         id: 'confirm',
         kind: 'confirm',
         label: 'Confirm registration',
-        prompt: 'Register for the selected facility? This submits the registration on VTOP.',
-        options: [
-          { id: 'confirm', index: 1, label: 'Confirm' },
-          { id: 'cancel', index: 2, label: 'Cancel' },
-        ],
+        prompt: 'Register for the selected facility? This submits the registration on VTOP. Continue with choice true to register or false to cancel.',
+        multiple: false,
+        options: [],
       }, null)
     }
     const match = detail.match(/^(missing|invalid) --([a-z-]+)(?: "[^"]*")?(?:;\s*available \w+ values:\s*(.+))?/i)
@@ -559,16 +483,19 @@ class VtopService {
     const options = match[3] ? parseFormOptions(match[3]) : null
     delete state.flags[param]
     const spec = PARAMS[param]
+    const label = humanize(param)
     const view = {
       id: param,
       kind: 'input',
-      label: humanize(param),
-      inputType: options ? 'choice' : spec.type,
+      label,
       prompt: options
-        ? `Choose ${humanize(param).toLowerCase()}.`
-        : `${match[1].toLowerCase() === 'missing' ? 'Provide' : 'Correct'} ${humanize(param).toLowerCase()}: ${detail}`,
+        ? `Choose ${label.toLowerCase()}: continue with one of the option ids.`
+        : `${match[1].toLowerCase() === 'missing' ? 'Provide' : 'Correct'} ${label.toLowerCase()} (${FORMATS[spec.type]}). cli-top: ${detail}`,
+      multiple: false,
+      inputType: options ? 'option' : spec.type,
+      format: options ? 'one of options[].id' : FORMATS[spec.type],
       ...(spec.description ? { description: spec.description } : {}),
-      ...(options ? { options: options.map(publicOption) } : {}),
+      options: options ? options.map(publicOption) : [],
     }
     return this.pendingResult(entry, inv, state, 'needs_input', view, options)
   }
@@ -588,7 +515,7 @@ class VtopService {
       return entry
     })
     const syncEntry = this.catalog.get('sync')
-    const { flags: shared } = this.catalog.normalizeParams(syncEntry, flags || {})
+    const shared = this.catalog.normalizeParams(syncEntry, flags || {})
     delete shared.commands
     const userTag = this.tokens.userTag(creds.username)
     const ck = this.credentialKey(creds)
@@ -712,16 +639,72 @@ function humanize(param) {
   return param.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, c => c.toUpperCase())
 }
 
-function describeSelection(selection, options) {
-  if (selection === '0') return 'All materials'
-  if (!options) return `Items ${selection}`
-  const wanted = new Set()
-  for (const part of String(selection).split(',')) {
-    const [a, b] = part.split('-').map(n => parseInt(n, 10))
-    for (let i = a; i <= (b || a); i++) wanted.add(i)
+/** The needs_selection step shown to clients: every option cli-top listed, in cli-top's order. */
+function selectStep(step, options, query) {
+  const multiple = step.select === 'multi'
+  const what = step.label.toLowerCase()
+  const ask = multiple
+    ? `Choose ${what}: continue with option ids (e.g. ["1","3"] or "1,3-5") or "all".`
+    : `Choose one ${what}: continue with its option id.`
+  return {
+    id: step.param,
+    kind: 'select',
+    label: step.label,
+    prompt: query ? `cli-top's search for "${query}" did not identify a single ${what}. ${ask}` : ask,
+    multiple,
+    ...(query ? { cliQuery: query } : {}),
+    options: options.map(publicOption),
   }
-  const labels = options.filter(option => wanted.has(option.index)).map(option => option.label)
-  return labels.length > 3 ? `${labels.slice(0, 3).join(', ')} +${labels.length - 3} more` : labels.join(', ') || `Items ${selection}`
+}
+
+const describeChoice = choice => (typeof choice === 'string' ? `"${choice}"` : JSON.stringify(choice) || String(choice))
+
+/**
+ * Validates a continue choice for a select step against the option ids that were offered.
+ * Accepts an id (string, or integer), an array of ids, and for multi-select the id range grammar
+ * "1,3-5" or "all". Anything else is rejected with the valid ids; nothing is matched by text.
+ * Returns { value: flag value for cli-top, ids: chosen option ids | "all" }.
+ */
+function parseSelectChoice(step, choice, ids) {
+  const reject = () => {
+    const how = step.multiple ? 'option ids (string, array, or range like "1,3-5") or "all"' : 'exactly one option id'
+    return new ValidationError(`${describeChoice(choice)} is not a valid choice for ${step.label}; expected ${how}. Valid ids: ${ids.join(', ')}`, 'choice', {
+      validIds: step.multiple ? [...ids, 'all'] : ids,
+    })
+  }
+  const isId = value => (typeof value === 'string' || (typeof value === 'number' && Number.isInteger(value))) && ids.includes(String(value))
+  let picked
+  if (step.multiple) {
+    if (choice === 'all') return { value: '0', ids: 'all' }
+    if (Array.isArray(choice)) {
+      if (!choice.length || !choice.every(isId)) throw reject()
+      picked = choice.map(String)
+    } else if (typeof choice === 'number' && isId(choice)) {
+      picked = [String(choice)]
+    } else if (typeof choice === 'string' && ID_RANGES.test(choice)) {
+      picked = []
+      for (const part of choice.replace(/\s+/g, '').split(',')) {
+        const [a, b] = part.split('-').map(n => parseInt(n, 10))
+        if (b !== undefined && b < a) throw reject()
+        for (let i = a; i <= (b === undefined ? a : b); i++) picked.push(String(i))
+      }
+      if (!picked.every(isId)) throw reject()
+    } else throw reject()
+    const unique = [...new Set(picked)].sort((x, y) => parseInt(x, 10) - parseInt(y, 10))
+    return { value: unique.join(','), ids: unique }
+  }
+  const single = Array.isArray(choice) && choice.length === 1 ? choice[0] : choice
+  if (!isId(single)) throw reject()
+  return { value: parseInt(String(single), 10), ids: [String(single)] }
+}
+
+function describeSelection(picked, options) {
+  if (picked.ids === 'all') return 'All'
+  const labels = picked.ids.map(id => {
+    const option = options && options.find(candidate => candidate.id === id)
+    return option ? option.label : `#${id}`
+  })
+  return labels.length > 3 ? `${labels.slice(0, 3).join(', ')} +${labels.length - 3} more` : labels.join(', ')
 }
 
 /** "CC1 (Hostel Office), CC2 (Academic Block)" -> options with id = value. */
@@ -737,18 +720,6 @@ function parseFormOptions(text) {
     }))
 }
 
-function resolveInputOption(options, raw) {
-  const direct = options.find(option => option.id.toLowerCase() === raw.toLowerCase())
-  if (direct) return direct.id
-  if (/^\d+$/.test(raw)) {
-    const byIndex = options.find(option => option.index === parseInt(raw, 10))
-    if (byIndex) return byIndex.id
-  }
-  const matched = matchOne(options, raw)
-  if (matched.option) return matched.option.id
-  throw new ValidationError(`"${raw}" is not one of: ${options.map(o => o.id).join(', ')}`, 'choice')
-}
-
 function confirmationStep(entry, flags) {
   const summary = Object.fromEntries(Object.entries(flags).filter(([key]) => key !== 'apply'))
   const lines = Object.entries(summary).map(([key, value]) => `${humanize(key)}: ${value}`)
@@ -756,13 +727,11 @@ function confirmationStep(entry, flags) {
     id: 'apply',
     kind: 'confirm',
     label: `Submit ${entry.command} application`,
-    prompt: `This will submit a ${entry.command} application on VTOP${lines.length ? ` with:\n${lines.join('\n')}` : ''}.\nConfirm to proceed.`,
+    prompt: `This will submit a ${entry.command} application on VTOP${lines.length ? ` with:\n${lines.join('\n')}` : ''}.\nContinue with choice true to submit or false to cancel.`,
+    multiple: false,
     summary,
-    options: [
-      { id: 'confirm', index: 1, label: 'Confirm and submit' },
-      { id: 'cancel', index: 2, label: 'Cancel' },
-    ],
+    options: [],
   }
 }
 
-module.exports = { VtopService, parseFormOptions, LIST_SEMESTERS }
+module.exports = { VtopService, parseFormOptions, parseSelectChoice }

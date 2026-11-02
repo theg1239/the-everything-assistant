@@ -8,7 +8,7 @@ const rateLimit = require('express-rate-limit')
 const { randomUUID } = require('crypto')
 const { AsyncLocalStorage } = require('async_hooks')
 
-const { Catalog, ValidationError } = require('./catalog')
+const { Catalog, ValidationError, FORMATS } = require('./catalog')
 const { CliRunner } = require('./cli/runner')
 const { LatestJsonCache } = require('./cli/latest-json')
 const { ProxyError, kindInfo } = require('./cli/errors')
@@ -52,6 +52,7 @@ function errorBody(error) {
       requiresCredentials: info.requiresCredentials,
       message,
       ...(error.field ? { field: error.field } : {}),
+      ...(error.validIds ? { validIds: error.validIds } : {}),
     },
   }
 }
@@ -195,13 +196,23 @@ function createProxy(config, { logger = createLogger(config) } = {}) {
         writeWhen: entry.writeWhen || null,
         cacheTtlSeconds: entry.cacheTtlSeconds,
         sync: entry.sync,
-        params: entry.params.map(name => ({ name, type: catalog.paramSpec(name).type, description: catalog.paramSpec(name).description })),
+        params: entry.params.map(name => ({
+          name,
+          type: catalog.paramSpec(name).type,
+          format: FORMATS[catalog.paramSpec(name).type],
+          description: catalog.paramSpec(name).description,
+        })),
         steps: entry.steps,
       })),
       version: config.version,
       workflow: {
-        start: 'POST /vtop { command, username, password, flags?, select?, confirm?, fresh? }',
+        start: 'POST /vtop { command, username, password, flags?, confirm?, fresh? }',
         continue: 'POST /vtop/continue { continuation, choice, password, username? }',
+        choice: {
+          select: 'option id ("2"), array of ids (["1","3"]); multiple only: range over ids ("1,3-5") or "all"',
+          input: 'raw value in step.format; when step.options is non-empty, one of step.options[].id',
+          confirm: 'boolean (false cancels)',
+        },
         statuses: ['completed', 'needs_selection', 'needs_input', 'needs_confirmation', 'cancelled', 'error'],
       },
     })
@@ -250,11 +261,10 @@ function createProxy(config, { logger = createLogger(config) } = {}) {
       const body = req.body || {}
       const password = resolvePassword(body, { logger })
       return service.continueWorkflow({
-        continuation: body.continuation || body.sessionData,
-        choice: body.choice !== undefined ? body.choice : body.selection,
+        continuation: body.continuation,
+        choice: body.choice,
         username: body.username,
         password,
-        confirm: body.confirm === true,
         signal: abortOnClose(req, res),
       })
     })
@@ -313,7 +323,7 @@ function createProxy(config, { logger = createLogger(config) } = {}) {
       const body = req.body || {}
       const creds = credentialsFrom(body)
       logRun(req, 'course-page(legacy)', creds.username)
-      return startLegacyWorkflow(service, { ...creds, flags: body.flags, sessionData: body.sessionData })
+      return startLegacyWorkflow(service, { ...creds, flags: body.flags })
     })
   )
   app.post(
@@ -331,7 +341,6 @@ function createProxy(config, { logger = createLogger(config) } = {}) {
         password,
         sessionData: body.sessionData,
         selection: body.selection,
-        step: body.step,
       })
     })
   )

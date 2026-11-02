@@ -400,7 +400,25 @@ async function handleSseMessagePost(req, res) {
   }
 }
 
+/** Close every open MCP transport (ending SSE streams) and the shared server. Used on shutdown. */
+async function closeMcpSessions() {
+  const open = [...transports.values(), ...sseTransports.values()]
+  transports.clear()
+  sseTransports.clear()
+
+  const results = await Promise.allSettled([
+    ...open.map(transport => transport.close()),
+    server.close(),
+  ])
+  results
+    .filter(result => result.status === 'rejected')
+    .forEach(result => console.warn('[mcp] error closing session during shutdown:', result.reason))
+
+  return open.length
+}
+
 module.exports = {
   handleMcpRequest,
   handleSseMessagePost,
+  closeMcpSessions,
 }

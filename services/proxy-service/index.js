@@ -20,7 +20,8 @@ const { sanitizeErrorForResponse } = require('./src/utils/errors')
 const { normalizeResultPayload } = require('./src/utils/shape')
 const { normalizeFlagsForCommand } = require('./src/utils/flags')
 const { resolvePassword } = require('./src/utils/credentials')
-const { handleMcpRequest, handleSseMessagePost } = require('./src/mcp/server')
+const { handleMcpRequest, handleSseMessagePost, closeMcpSessions } = require('./src/mcp/server')
+const { terminateActiveChildren } = require('./src/child-processes')
 const { setupMcpOAuth } = require('./src/oauth')
 const {
   executeInteractiveCoursePageWorkflow,
@@ -34,6 +35,17 @@ const VERBOSE_LOG =
   (process.env.NODE_ENV || '').toLowerCase() !== 'production'
 
 const app = express()
+
+const SHUTDOWN_TIMEOUT_MS = 10_000
+let shuttingDown = false
+
+// server.close() stops new connections, but kept-alive sockets can still send requests; refuse
+// them so no new CLI processes are spawned mid-shutdown.
+app.use((req, res, next) => {
+  if (!shuttingDown) return next()
+  res.set('Connection', 'close')
+  res.status(503).json({ error: 'Server is shutting down' })
+})
 
 const DEFAULT_SYNC_COMMANDS = ['profile', 'timetable', 'attendance', 'marks', 'cgpa', 'exams', 'da']
 
@@ -546,16 +558,55 @@ const server = app.listen(PORT, error => {
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`)
 })
 
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down gracefully')
-  server.close(() => {
-    console.log('Process terminated')
+function closeHttpServer() {
+  return new Promise(resolve => {
+    server.close(error => {
+      if (error && error.code !== 'ERR_SERVER_NOT_RUNNING') {
+        console.warn('Error closing HTTP server:', error.message)
+      }
+      resolve()
+    })
+    server.closeIdleConnections()
   })
-})
+}
 
-process.on('SIGINT', () => {
-  console.log('SIGINT received, shutting down gracefully')
-  server.close(() => {
+async function shutdown(signal) {
+  if (shuttingDown) {
+    console.log(`${signal} received again; shutdown already in progress`)
+    return
+  }
+  shuttingDown = true
+  console.log(`${signal} received, shutting down gracefully`)
+
+  const forceExit = setTimeout(() => {
+    console.error(`Graceful shutdown exceeded ${SHUTDOWN_TIMEOUT_MS}ms; forcing exit`)
+    process.exit(1)
+  }, SHUTDOWN_TIMEOUT_MS)
+  forceExit.unref()
+
+  try {
+    const httpClosed = closeHttpServer()
+
+    const [children, mcpSessions] = await Promise.all([
+      terminateActiveChildren({ graceMs: 3000, killWaitMs: 1000 }),
+      closeMcpSessions(),
+    ])
+    console.log(
+      `Terminated ${children.total} CLI process(es) (${children.forced} force-killed); closed ${mcpSessions} MCP session(s)`
+    )
+
+    // In-flight requests settle once their CLI children are gone; drop any sockets still open after that.
+    const lingering = setTimeout(() => server.closeAllConnections(), 2000)
+    await httpClosed
+    clearTimeout(lingering)
+
     console.log('Process terminated')
-  })
-})
+    process.exit(0)
+  } catch (error) {
+    console.error('Error during shutdown:', error)
+    process.exit(1)
+  }
+}
+
+process.on('SIGTERM', () => void shutdown('SIGTERM'))
+process.on('SIGINT', () => void shutdown('SIGINT'))

@@ -240,15 +240,10 @@ class DiscordBotServer {
       console.error('Discord service error:', error)
     })
 
+    // DiscordService handles reconnection itself (discord.js resumes recoverable drops; the service
+    // re-logs in with backoff otherwise). This only fires once it has given up.
     this.discordService.on('disconnected', () => {
-      console.log('Discord disconnected')
-
-      setTimeout(() => {
-        console.log('Attempting to reconnect Discord...')
-        this.setupDiscord().catch(error => {
-          console.error('Failed to reconnect Discord:', error)
-        })
-      }, 30000)
+      console.error('Discord disconnected and automatic re-login gave up')
     })
 
     this.discordService.on('ask', async data => {

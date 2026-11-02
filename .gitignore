@@ -1,25 +1,13 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
 # dependencies
-/node_modules
+node_modules
 
-# next.js
+# next.js / build output
 /.next/
 /out/
-
-# production
 /build
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-ai-chatbot
-# env files
-.env
-.env.local
+dist
+.open-next
+.wrangler
 
 # vercel
 .vercel
@@ -28,16 +16,26 @@ ai-chatbot
 *.tsbuildinfo
 next-env.d.ts
 
-ai-chatbot-main
+# prisma
+prisma/generated
 
+# env files
+.env
+.env.local
+.env*.local
+
+# logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# editor / OS
 .vscode/
-reddit-post.md
+.DS_Store
+
+# local scratch
 downloads/
 scripts/dump/
-node_modules
-dist
-.wrangler
-.open-next
-
-prisma/generated
-.env*.local

@@ -1,5 +1,7 @@
 'use server'
 
+import { generateText, Output, type LanguageModelUsage } from 'ai'
+import * as z from 'zod'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createVITTools } from '@/lib/tools'
@@ -7,10 +9,12 @@ import {
   getFormattedVTOPCredentials as getServerFormattedVTOPCredentials,
   hasVTOPCredentials,
 } from '@/lib/server-vtop-credentials'
-import { vtopResultSchema } from '@/app/api/hub/vtop/schema'
+import { vtopResultSchema, type VTOPFormattedResult } from '@/app/api/hub/vtop/schema'
+import { getToolExecutor } from '@/app/api/chat/lib/tool-helpers'
 import { parseHubCommandResult } from '@/lib/hub/parsers'
 import type { RawVTOPResult } from '@/lib/hub/parsers/attendance'
-import { rateLimitedAI } from '@/lib/rate-limited-ai'
+import { defaultProviderOptions, languageModel } from '@/lib/ai'
+import { enforceUserRateLimit } from '@/lib/user-rate-limiter'
 import { saveTokenUsage } from '@/lib/db'
 import { normalizeTokenUsage } from '@/lib/token-usage'
 import { listVTOPSnapshots, upsertVTOPSnapshot } from '@/lib/vtop-snapshots'
@@ -20,13 +24,53 @@ import type {
   HubVTOPCommand,
   PersonalHubState,
   PersonalHubSnapshot,
-  ProxySyncResponse,
-  ProxySyncResultEntry,
   VTOPCredentialPayload,
 } from '@/types/hub'
-import { z } from 'zod/v3';
 
-type VTOPFormattedResult = z.infer<typeof vtopResultSchema>
+/** Lenient read of a VTOP tool/proxy payload: wrong-typed fields become undefined. */
+const rawVTOPResultSchema = z
+  .object({
+    success: z.boolean().optional().catch(undefined),
+    command: z.string().optional().catch(undefined),
+    data: z.unknown(),
+    output: z.string().optional().catch(undefined),
+    raw: z.boolean().optional().catch(undefined),
+    message: z.string().optional().catch(undefined),
+    structured_data: z.unknown(),
+    meta: z.unknown(),
+  })
+  .loose()
+
+const toRawVTOPResult = (value: unknown): RawVTOPResult | null => {
+  const parsed = rawVTOPResultSchema.safeParse(value)
+  return parsed.success ? parsed.data : null
+}
+
+/** `POST {VTOP_PROXY_URL}/sync` response; malformed entries are dropped. */
+const proxySyncEntrySchema = z.object({
+  command: z.string(),
+  success: z.boolean(),
+  result: z.unknown(),
+  error: z.unknown(),
+})
+
+const parseProxySyncResults = (value: unknown) => {
+  const results =
+    typeof value === 'object' && value !== null && 'results' in value ? value.results : undefined
+  if (!Array.isArray(results)) return []
+  return results.flatMap(entry => {
+    const parsed = proxySyncEntrySchema.safeParse(entry)
+    return parsed.success ? [parsed.data] : []
+  })
+}
+
+/** Snapshot rows store a `VTOPFormattedResult`; tolerate partial/legacy rows. */
+const storedSnapshotSchema = vtopResultSchema.partial()
+
+const isHubVTOPCommand = (
+  command: string,
+  commands: readonly HubVTOPCommand[]
+): command is HubVTOPCommand => commands.some(candidate => candidate === command)
 
 const HUB_CORE_COMMANDS: HubVTOPCommand[] = [
   'profile',
@@ -49,9 +93,9 @@ async function requireUser() {
 
 async function buildHubState(userId: string): Promise<PersonalHubState> {
   const [linked, rows] = await Promise.all([hasVTOPCredentials(), listVTOPSnapshots(userId)])
-  ;('')
-  const snapshots: PersonalHubSnapshot[] = rows.map((row: any) => {
-    const data = row.data as VTOPFormattedResult | null
+  const snapshots: PersonalHubSnapshot[] = rows.map(row => {
+    const parsed = storedSnapshotSchema.safeParse(row.data)
+    const data = parsed.success ? parsed.data : null
     return {
       command: row.command,
       title: data?.title || row.command,
@@ -62,12 +106,10 @@ async function buildHubState(userId: string): Promise<PersonalHubState> {
       fetchedAt: row.fetchedAt.toISOString(),
     }
   })
-  const lastSyncedAt = rows.length
-    ? rows.reduce(
-        (latest, row) => (row.fetchedAt > latest ? row.fetchedAt : latest),
-        rows[0].fetchedAt
-      )
-    : null
+  const lastSyncedAt = rows.reduce<Date | null>(
+    (latest, row) => (!latest || row.fetchedAt > latest ? row.fetchedAt : latest),
+    null
+  )
   return {
     isLinked: linked,
     lastSyncedAt: lastSyncedAt ? lastSyncedAt.toISOString() : null,
@@ -89,7 +131,7 @@ async function resolveVTOPCredentials(
 }
 
 function buildCredentialPayload(creds: VTOPCredentialPayload) {
-  const payload: Record<string, any> = { username: creds.username }
+  const payload: Record<string, string | undefined> = { username: creds.username }
   if (creds.encryptedPassword?.includes(':::')) {
     const [encryptedPassword, sessionKey] = creds.encryptedPassword.split(':::')
     payload.encryptedPassword = encryptedPassword
@@ -103,10 +145,13 @@ function buildCredentialPayload(creds: VTOPCredentialPayload) {
 async function formatAndPersistVTOPResult(
   userId: string,
   command: HubVTOPCommand,
-  raw: RawVTOPResult
+  raw: unknown
 ): Promise<VTOPFormattedResult> {
-  let object: z.infer<typeof vtopResultSchema> | null = parseHubCommandResult(command, raw)
-  let usage: any = null
+  const rawResult = toRawVTOPResult(raw)
+  let object: VTOPFormattedResult | null = rawResult
+    ? parseHubCommandResult(command, rawResult)
+    : null
+  let usage: LanguageModelUsage | null = null
   let modelConfig: ReturnType<typeof getModelConfig> | null = null
 
   if (!object) {
@@ -119,21 +164,16 @@ async function formatAndPersistVTOPResult(
     ].join('\n')
 
     modelConfig = getModelConfig('hubVtop')
-    const providerClient = rateLimitedAI[modelConfig.provider as keyof typeof rateLimitedAI]
-    if (!providerClient) {
-      throw new Error(`Unsupported model provider for hub actions: ${modelConfig.provider}`)
-    }
 
-    const response = await providerClient.generateObject(
-      {
-        model: { modelId: modelConfig.modelId },
-        schema: vtopResultSchema,
-        prompt,
-      },
-      userId
-    )
+    await enforceUserRateLimit(userId)
+    const response = await generateText({
+      model: languageModel('hubVtop'),
+      providerOptions: defaultProviderOptions,
+      output: Output.object({ schema: vtopResultSchema }),
+      prompt,
+    })
 
-    object = response.object as z.infer<typeof vtopResultSchema> | null
+    object = response.output
     usage = response.usage
 
     if (!object) {
@@ -158,38 +198,36 @@ async function formatAndPersistVTOPResult(
     })
   }
 
-  return object as VTOPFormattedResult
+  return object
 }
 
 async function executeVTOPCommand(
   userId: string,
   command: HubVTOPCommand,
-  extras: Record<string, any> = {},
+  extras: Record<string, unknown> = {},
   credentials?: VTOPCredentialPayload
 ): Promise<VTOPFormattedResult> {
-  const tools = createVITTools(userId)
-  const vtop = (tools as any)['queryVTOP']
-  if (!vtop || typeof vtop.execute !== 'function') {
+  const executeVtop = getToolExecutor(createVITTools(userId), 'queryVTOP')
+  if (!executeVtop) {
     throw new Error('VTOP tool is unavailable')
   }
 
   const creds = await resolveVTOPCredentials(credentials)
 
-  const args: Record<string, any> = {
+  const args: Record<string, unknown> = {
     command,
     username: creds.username,
     ...extras,
+    ...buildCredentialPayload(creds),
   }
 
-  Object.assign(args, buildCredentialPayload(creds))
-
-  const raw = await vtop.execute(args, { toolCallId: `vtop-${Date.now()}`, messages: [] })
+  const raw = await executeVtop(args, `vtop-${Date.now()}`)
   return formatAndPersistVTOPResult(userId, command, raw)
 }
 
 export async function refreshVTOPSnapshotAction(
   command: HubVTOPCommand,
-  extras: Record<string, any> = {},
+  extras: Record<string, unknown> = {},
   credentials?: VTOPCredentialPayload
 ): Promise<PersonalHubSnapshot> {
   const userId = await requireUser()
@@ -221,8 +259,8 @@ async function runProxySyncBatch(commands: HubVTOPCommand[], creds: VTOPCredenti
     throw new Error(`proxy sync failed: ${response.status}`)
   }
 
-  const payload: ProxySyncResponse = await response.json()
-  return Array.isArray(payload.results) ? payload.results : []
+  const payload: unknown = await response.json()
+  return parseProxySyncResults(payload)
 }
 
 export async function syncCoreHubSnapshots(commands: HubVTOPCommand[] = [...HUB_CORE_COMMANDS]) {
@@ -234,10 +272,10 @@ export async function syncCoreHubSnapshots(commands: HubVTOPCommand[] = [...HUB_
   try {
     const entries = await runProxySyncBatch(commands, creds)
     console.log('[hub/actions] sync batch returned', entries.length, 'entries')
-    
+
     for (const entry of entries) {
-      const command = entry.command as HubVTOPCommand
-      if (!commands.includes(command)) continue
+      const command = entry.command
+      if (!isHubVTOPCommand(command, commands)) continue
       if (!entry.success || !entry.result) {
         console.error('[hub/actions] sync skipped', command, entry.error || 'unknown error')
         continue
@@ -250,7 +288,7 @@ export async function syncCoreHubSnapshots(commands: HubVTOPCommand[] = [...HUB_
         console.error('[hub/actions] failed to store sync result', command, error)
       }
     }
-    
+
     if (updatedCount === 0 && entries.length === 0) {
       console.log('[hub/actions] no batch results, falling back to sequential refresh')
       throw new Error('Empty batch results')
@@ -278,12 +316,14 @@ export async function loadPersonalHubState() {
   return buildHubState(userId)
 }
 
-export async function runHubToolAction(toolName: string, args: Record<string, any> = {}) {
+export async function runHubToolAction(
+  toolName: string,
+  args: Record<string, unknown> = {}
+): Promise<unknown> {
   const userId = await requireUser()
-  const tools = createVITTools(userId)
-  const tool = (tools as any)[toolName]
-  if (!tool || typeof tool.execute !== 'function') {
+  const execute = getToolExecutor(createVITTools(userId), toolName)
+  if (!execute) {
     throw new Error(`Unknown hub tool: ${toolName}`)
   }
-  return tool.execute(args)
+  return execute(args)
 }

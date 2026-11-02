@@ -13,12 +13,22 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useHubTool } from '../use-hub-tool'
+import { asRecord, readArray, readText } from '@/components/narrow'
 import { Utensils, Search, X } from 'lucide-react'
 
+type HostelType = 'mens' | 'ladies'
+type MessType = 'special' | 'veg' | 'nonveg'
+
+const HOSTEL_TYPES: readonly string[] = ['mens', 'ladies'] satisfies HostelType[]
+const MESS_TYPES: readonly string[] = ['special', 'veg', 'nonveg'] satisfies MessType[]
+
+const isHostelType = (value: string): value is HostelType => HOSTEL_TYPES.includes(value)
+const isMessType = (value: string): value is MessType => MESS_TYPES.includes(value)
+
 export default function MessMenuPanel() {
-  const { run, loading, error, result, reset } = useHubTool<any>('getMessMenu')
-  const [hostelType, setHostelType] = useState<'mens' | 'ladies' | ''>('')
-  const [messType, setMessType] = useState<'special' | 'veg' | 'nonveg' | ''>('')
+  const { run, loading, error, result, reset } = useHubTool('getMessMenu')
+  const [hostelType, setHostelType] = useState<HostelType | ''>('')
+  const [messType, setMessType] = useState<MessType | ''>('')
   const [date, setDate] = useState('')
   const [mealType, setMealType] = useState('all')
 
@@ -31,7 +41,8 @@ export default function MessMenuPanel() {
     })
   }
 
-  const meals = result?.data?.todayMenu || null
+  const data = asRecord(result)
+  const meals = asRecord(asRecord(data?.data)?.todayMenu)
 
   return (
     <Card className="border-0 shadow-none bg-transparent">
@@ -45,7 +56,12 @@ export default function MessMenuPanel() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="space-y-1.5">
             <Label htmlFor="hostel">hostel</Label>
-            <Select value={hostelType} onValueChange={value => setHostelType(value as any)}>
+            <Select
+              value={hostelType}
+              onValueChange={value => {
+                if (isHostelType(value)) setHostelType(value)
+              }}
+            >
               <SelectTrigger id="hostel">
                 <SelectValue placeholder="select hostel" />
               </SelectTrigger>
@@ -57,7 +73,12 @@ export default function MessMenuPanel() {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="mess">mess</Label>
-            <Select value={messType} onValueChange={value => setMessType(value as any)}>
+            <Select
+              value={messType}
+              onValueChange={value => {
+                if (isMessType(value)) setMessType(value)
+              }}
+            >
               <SelectTrigger id="mess">
                 <SelectValue placeholder="select mess" />
               </SelectTrigger>
@@ -103,7 +124,7 @@ export default function MessMenuPanel() {
             <Search className="mr-2 h-4 w-4" />
             {loading ? 'fetching...' : 'fetch menu'}
           </Button>
-          {(error || result) && (
+          {(error || Boolean(result)) && (
             <Button variant="ghost" onClick={reset} className="sm:w-auto w-full">
               <X className="mr-2 h-4 w-4" />
               clear
@@ -125,8 +146,10 @@ export default function MessMenuPanel() {
                 <CardContent>
                   <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1.5">
                     {Array.isArray(items)
-                      ? (items as any[]).map((i: any, idx: number) => (
-                          <li key={idx}>{typeof i === 'string' ? i : i.menu}</li>
+                      ? readArray(items).map((i, idx) => (
+                          <li key={idx}>
+                            {typeof i === 'string' ? i : readText(asRecord(i)?.menu)}
+                          </li>
                         ))
                       : null}
                   </ul>
@@ -136,9 +159,9 @@ export default function MessMenuPanel() {
           </div>
         )}
 
-        {result && !meals && (
+        {Boolean(result) && !meals && (
           <div className="text-sm text-muted-foreground text-center py-8">
-            {result?.message || 'no menu available for the selected criteria.'}
+            {readText(data?.message) || 'no menu available for the selected criteria.'}
           </div>
         )}
       </CardContent>

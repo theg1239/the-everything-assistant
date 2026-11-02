@@ -14,8 +14,8 @@ export async function POST(request: Request) {
   let loginId: string | null = null
   try {
     const body = await request.json().catch(() => null)
-    if (body && typeof body === 'object') {
-      const rawLoginId = (body as Record<string, unknown>).loginId
+    if (body && typeof body === 'object' && 'loginId' in body) {
+      const rawLoginId = body.loginId
       if (typeof rawLoginId === 'string') {
         loginId = rawLoginId
       }
@@ -27,10 +27,10 @@ export async function POST(request: Request) {
   try {
     const status = await cancelChatgptLogin(session.user.id, loginId)
     return NextResponse.json(status)
-  } catch (error: any) {
+  } catch (error) {
     console.error('[chatgpt-auth] cancel failed:', error)
     return NextResponse.json(
-      { error: error?.message || 'Unable to cancel ChatGPT login' },
+      { error: (error instanceof Error && error.message) || 'Unable to cancel ChatGPT login' },
       { status: 500 }
     )
   }

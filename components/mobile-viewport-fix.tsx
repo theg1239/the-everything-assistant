@@ -39,8 +39,11 @@ export default function MobileViewportFix() {
     }
 
     const handleFocusIn = (e: Event) => {
-      const target = e.target as HTMLElement
-      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') {
+      const target = e.target
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
+      ) {
         handleKeyboardVisibility(true)
         requestAnimationFrame(() => {
           const pageScrollable = document.documentElement.scrollHeight > window.innerHeight
@@ -56,8 +59,9 @@ export default function MobileViewportFix() {
     }
 
     const preventOverscroll = (e: TouchEvent) => {
-      const target = e.target as HTMLElement
-      const allowWithin = target?.closest('.chat-content, [data-allow-touch-scroll]')
+      const target = e.target
+      const allowWithin =
+        target instanceof Element ? target.closest('.chat-content, [data-allow-touch-scroll]') : null
       if (!allowWithin) {
         e.preventDefault()
       }

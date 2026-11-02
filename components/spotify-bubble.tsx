@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback, type RefObject, type SyntheticEvent } from 'react'
 import ReactPlayer from 'react-player'
 import { AnimatePresence, motion, useMotionValue } from 'framer-motion'
 import type { PanInfo } from 'framer-motion'
@@ -36,6 +36,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useMiniPlayerStore, formatTime } from '@/lib/stores/useMiniPlayerStore'
 import { useMiniLyrics } from '@/hooks/useMiniLyrics'
+import { errorMessage } from '@/components/narrow'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { useSession } from 'next-auth/react'
 
@@ -94,11 +95,24 @@ const ControlButton = ({
   </button>
 )
 
+// react-player v3 forwards YouTube embed params directly (no `playerVars`).
+const YOUTUBE_PLAYER_CONFIG = {
+  rel: 0,
+  iv_load_policy: 3,
+  fs: 0,
+  disablekb: 1,
+  cc_load_policy: 0,
+} as const
+
+function seekPlayer(ref: RefObject<HTMLVideoElement | null>, seconds: number) {
+  if (ref.current) ref.current.currentTime = seconds
+}
+
 export default function SpotifyBubble() {
-  // Main player ref for both audio and video - using ReactPlayer type
-  const playerRef = useRef<ReactPlayer>(null)
+  // Main player ref for both audio and video (react-player v3 exposes the media element)
+  const playerRef = useRef<HTMLVideoElement>(null)
   // Visual player ref for mobile drawer (muted, synced with audio player)
-  const visualPlayerRef = useRef<ReactPlayer>(null)
+  const visualPlayerRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const dragX = useMotionValue(0)
   const dragY = useMotionValue(0)
@@ -119,7 +133,7 @@ export default function SpotifyBubble() {
   const [hasInteracted, setHasInteracted] = useState(false)
   const activatePlayer = useCallback(() => setHasInteracted(true), [])
   
-  const log = useCallback((...args: any[]) => {
+  const log = useCallback((...args: unknown[]) => {
     // eslint-disable-next-line no-console
     console.debug('[MiniPlayer]', ...args)
   }, [])
@@ -230,14 +244,14 @@ export default function SpotifyBubble() {
       const { innerWidth, innerHeight } = window
       const horizontal = info.point.x < innerWidth / 2 ? 'left' : 'right'
       const vertical = info.point.y < innerHeight / 2 ? 'top' : 'bottom'
-      setDesktopCorner(`${vertical}-${horizontal}` as CornerPosition)
+      const corner: CornerPosition = `${vertical}-${horizontal}`
+      setDesktopCorner(corner)
     },
     [clamp, dragX, dragY, isMobile]
   )
 
   const currentTrack = useMemo(() => {
-    if (currentIndex >= 0 && currentIndex < tracks.length) return tracks[currentIndex]
-    return null
+    return tracks[currentIndex] ?? null
   }, [currentIndex, tracks])
 
   const trackUrl = useMemo(() => {
@@ -253,7 +267,7 @@ export default function SpotifyBubble() {
         if (!videoId && u.hostname === 'youtu.be') videoId = u.pathname.slice(1)
         if (!videoId) {
           const match = u.pathname.match(/\/(embed|shorts)\/([a-zA-Z0-9_-]{11})/)
-          if (match) videoId = match[2]
+          if (match?.[2]) videoId = match[2]
         }
         if (videoId) {
           const normalizedUrl = `https://www.youtube.com/watch?v=${videoId}`
@@ -335,10 +349,11 @@ export default function SpotifyBubble() {
     if (open && visualPlayerRef.current && elapsedTime > 0) {
       // Small delay to ensure player is ready
       const timer = setTimeout(() => {
-        visualPlayerRef.current?.seekTo(elapsedTime, 'seconds')
+        seekPlayer(visualPlayerRef, elapsedTime)
       }, 100)
       return () => clearTimeout(timer)
     }
+    return undefined
   }, [open]) // Only run when drawer opens, not on every elapsedTime change
 
   // mobile layout removed; player and panel always mounted (desktop flow)
@@ -350,12 +365,13 @@ export default function SpotifyBubble() {
   }, [currentTrack?.id])
 
   // Player event handlers (matching ryos pattern)
-  const handleProgress = useCallback((state: { playedSeconds: number }) => {
-    setElapsedTime(Math.floor(state.playedSeconds))
+  const handleTimeUpdate = useCallback((event: SyntheticEvent<HTMLVideoElement>) => {
+    setElapsedTime(Math.floor(event.currentTarget.currentTime))
   }, [])
 
-  const handleDuration = useCallback((duration: number) => {
-    setTotalTime(duration)
+  const handleDurationChange = useCallback((event: SyntheticEvent<HTMLVideoElement>) => {
+    const { duration } = event.currentTarget
+    if (Number.isFinite(duration)) setTotalTime(duration)
   }, [])
 
   const handlePlay = useCallback(() => {
@@ -372,7 +388,7 @@ export default function SpotifyBubble() {
 
   const handleTrackEnd = useCallback(() => {
     if (loopCurrent) {
-      playerRef.current?.seekTo(0)
+      seekPlayer(playerRef, 0)
       setIsPlaying(true)
     } else {
       nextTrack()
@@ -392,8 +408,8 @@ export default function SpotifyBubble() {
         setUrl('')
         setOpen(true)
       }
-    } catch (e: any) {
-      toast.error(e?.message || 'Could not add track')
+    } catch (e) {
+      toast.error(errorMessage(e) || 'Could not add track')
       log('addTrack error', e)
     } finally {
       setPendingAdd(false)
@@ -405,7 +421,7 @@ export default function SpotifyBubble() {
     const seconds = value / 1000
     setElapsedTime(seconds)
     log('seek', seconds)
-    playerRef.current?.seekTo(seconds, 'seconds')
+    seekPlayer(playerRef, seconds)
   }
 
   const disabled = !currentTrack || !trackUrl
@@ -430,7 +446,7 @@ export default function SpotifyBubble() {
           e.preventDefault()
           if (!disabled) {
             const newTime = Math.min(elapsedTime + 10, totalTime)
-            playerRef.current?.seekTo(newTime, 'seconds')
+            seekPlayer(playerRef, newTime)
             setElapsedTime(newTime)
             showStatus('+10s')
           }
@@ -439,7 +455,7 @@ export default function SpotifyBubble() {
           e.preventDefault()
           if (!disabled) {
             const newTime = Math.max(elapsedTime - 10, 0)
-            playerRef.current?.seekTo(newTime, 'seconds')
+            seekPlayer(playerRef, newTime)
             setElapsedTime(newTime)
             showStatus('-10s')
           }
@@ -462,8 +478,8 @@ export default function SpotifyBubble() {
     return tracks
       .filter((t) =>
         [t.title, t.artist, t.album, t.url]
-          .filter(Boolean)
-          .some((field) => field!.toLowerCase().includes(q))
+          .filter((field): field is string => Boolean(field))
+          .some((field) => field.toLowerCase().includes(q))
       )
       .slice(0, 6)
   }, [search, tracks])
@@ -613,7 +629,7 @@ export default function SpotifyBubble() {
               {/* Scale up the player to crop out YouTube branding */}
               <div className="absolute inset-[-15%] scale-[1.15]">
                 <ReactPlayer
-                  url={trackUrl}
+                  src={trackUrl}
                   playing={isPlaying}
                   controls={false}
                   width="100%"
@@ -621,23 +637,8 @@ export default function SpotifyBubble() {
                   muted={true}
                   loop={loopCurrent}
                   volume={0}
-                  playsinline={true}
-                  config={{
-                    youtube: {
-                      playerVars: {
-                        modestbranding: 1,
-                        rel: 0,
-                        showinfo: 0,
-                        iv_load_policy: 3,
-                        fs: 0,
-                        disablekb: 1,
-                        playsinline: 1,
-                        controls: 0,
-                        cc_load_policy: 0,
-                        autohide: 1,
-                      },
-                    },
-                  }}
+                  playsInline
+                  config={{ youtube: YOUTUBE_PLAYER_CONFIG }}
                 />
               </div>
               {/* Transparent overlay to block YouTube hover controls */}
@@ -765,8 +766,8 @@ export default function SpotifyBubble() {
             max={effectiveDuration || 1}
             value={sliderValue}
             onChange={(e) => setSeeking(Number(e.target.value))}
-            onMouseUp={(e) => onSeekCommit(Number((e.target as HTMLInputElement).value))}
-            onTouchEnd={(e) => onSeekCommit(Number((e.target as HTMLInputElement).value))}
+            onMouseUp={(e) => onSeekCommit(Number(e.currentTarget.value))}
+            onTouchEnd={(e) => onSeekCommit(Number(e.currentTarget.value))}
             disabled={disabled}
           />
         </div>
@@ -1245,8 +1246,8 @@ export default function SpotifyBubble() {
             max={effectiveDuration || 1}
             value={sliderValue}
             onChange={(e) => setSeeking(Number(e.target.value))}
-            onMouseUp={(e) => onSeekCommit(Number((e.target as HTMLInputElement).value))}
-            onTouchEnd={(e) => onSeekCommit(Number((e.target as HTMLInputElement).value))}
+            onMouseUp={(e) => onSeekCommit(Number(e.currentTarget.value))}
+            onTouchEnd={(e) => onSeekCommit(Number(e.currentTarget.value))}
             disabled={disabled}
           />
         </div>
@@ -1334,7 +1335,7 @@ export default function SpotifyBubble() {
           )}>
             <div className="absolute inset-[-15%] scale-[1.15]">
               <ReactPlayer
-                url={trackUrl}
+                src={trackUrl}
                 playing={isPlaying}
                 controls={false}
                 width="100%"
@@ -1342,21 +1343,8 @@ export default function SpotifyBubble() {
                 muted={true}
                 loop={loopCurrent}
                 volume={0}
-                playsinline={true}
-                config={{
-                  youtube: {
-                    playerVars: {
-                      modestbranding: 1,
-                      rel: 0,
-                      showinfo: 0,
-                      iv_load_policy: 3,
-                      fs: 0,
-                      disablekb: 1,
-                      playsinline: 1,
-                      controls: 0,
-                    },
-                  },
-                }}
+                playsInline
+                config={{ youtube: YOUTUBE_PLAYER_CONFIG }}
               />
             </div>
             <div className="absolute inset-0 z-[5]" />
@@ -1463,8 +1451,8 @@ export default function SpotifyBubble() {
             max={effectiveDuration || 1}
             value={sliderValue}
             onChange={(e) => setSeeking(Number(e.target.value))}
-            onMouseUp={(e) => onSeekCommit(Number((e.target as HTMLInputElement).value))}
-            onTouchEnd={(e) => onSeekCommit(Number((e.target as HTMLInputElement).value))}
+            onMouseUp={(e) => onSeekCommit(Number(e.currentTarget.value))}
+            onTouchEnd={(e) => onSeekCommit(Number(e.currentTarget.value))}
             disabled={disabled}
           />
         </div>
@@ -1651,36 +1639,21 @@ export default function SpotifyBubble() {
           <div className="sr-only pointer-events-none" aria-hidden="true">
             <ReactPlayer
               ref={playerRef}
-              url={trackUrl}
+              src={trackUrl}
               playing={isPlaying}
               controls={false}
               width={1}
               height={1}
               onEnded={handleTrackEnd}
-              onProgress={handleProgress}
-              onDuration={handleDuration}
+              onTimeUpdate={handleTimeUpdate}
+              onDurationChange={handleDurationChange}
               onPlay={handlePlay}
               onPause={handlePause}
               onReady={handleReady}
               loop={loopCurrent}
               volume={1}
-              playsinline={true}
-              config={{
-                youtube: {
-                  playerVars: {
-                    modestbranding: 1,
-                    rel: 0,
-                    showinfo: 0,
-                    iv_load_policy: 3,
-                    fs: 0,
-                    disablekb: 1,
-                    playsinline: 1,
-                    controls: 0,
-                    cc_load_policy: 0,
-                    autohide: 1,
-                  },
-                },
-              }}
+              playsInline
+              config={{ youtube: YOUTUBE_PLAYER_CONFIG }}
             />
           </div>
         )}
@@ -1773,7 +1746,7 @@ export default function SpotifyBubble() {
                               {/* Visual-only player for video display - audio handled by persistent player */}
                               <ReactPlayer
                                 ref={visualPlayerRef}
-                                url={trackUrl}
+                                src={trackUrl}
                                 playing={isPlaying}
                                 controls={false}
                                 width="100%"
@@ -1781,21 +1754,8 @@ export default function SpotifyBubble() {
                                 muted={true}
                                 loop={loopCurrent}
                                 volume={0}
-                                playsinline={true}
-                                config={{
-                                  youtube: {
-                                    playerVars: {
-                                      modestbranding: 1,
-                                      rel: 0,
-                                      showinfo: 0,
-                                      iv_load_policy: 3,
-                                      fs: 0,
-                                      disablekb: 1,
-                                      playsinline: 1,
-                                      controls: 0,
-                                    },
-                                  },
-                                }}
+                                playsInline
+                                config={{ youtube: YOUTUBE_PLAYER_CONFIG }}
                               />
                             </div>
                             <div className="absolute inset-0 z-[5]" />
@@ -1871,7 +1831,7 @@ export default function SpotifyBubble() {
                           max={effectiveDuration || 1}
                           value={sliderValue}
                           onChange={(e) => setSeeking(Number(e.target.value))}
-                          onTouchEnd={(e) => onSeekCommit(Number((e.target as HTMLInputElement).value))}
+                          onTouchEnd={(e) => onSeekCommit(Number(e.currentTarget.value))}
                           disabled={disabled}
                         />
                       </div>
@@ -2153,36 +2113,21 @@ export default function SpotifyBubble() {
         <div className="sr-only pointer-events-none" aria-hidden="true">
           <ReactPlayer
             ref={playerRef}
-            url={trackUrl}
+            src={trackUrl}
             playing={isPlaying}
             controls={false}
             width={1}
             height={1}
             onEnded={handleTrackEnd}
-            onProgress={handleProgress}
-            onDuration={handleDuration}
+            onTimeUpdate={handleTimeUpdate}
+            onDurationChange={handleDurationChange}
             onPlay={handlePlay}
             onPause={handlePause}
             onReady={handleReady}
             loop={loopCurrent}
             volume={1}
-            playsinline={true}
-            config={{
-              youtube: {
-                playerVars: {
-                  modestbranding: 1,
-                  rel: 0,
-                  showinfo: 0,
-                  iv_load_policy: 3,
-                  fs: 0,
-                  disablekb: 1,
-                  playsinline: 1,
-                  controls: 0,
-                  cc_load_policy: 0,
-                  autohide: 1,
-                },
-              },
-            }}
+            playsInline
+            config={{ youtube: YOUTUBE_PLAYER_CONFIG }}
           />
         </div>
       )}

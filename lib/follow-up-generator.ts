@@ -1,8 +1,9 @@
-import { rateLimitedAI } from '@/lib/rate-limited-ai'
+import { generateText } from 'ai'
 import { getServerSession } from 'next-auth'
+import { defaultProviderOptions, languageModel } from '@/lib/ai'
 import { authOptions } from '@/lib/auth'
 import { getCurrentVITContext } from '@/lib/data/context-integration'
-import { getModelConfig } from '@/lib/model-registry'
+import { enforceUserRateLimit } from '@/lib/user-rate-limiter'
 
 type ConversationMessage = {
   role: 'user' | 'assistant'
@@ -109,22 +110,13 @@ DO NOT generate generic questions like "tell me more" or "what else can you do".
 
 Output exactly 3 questions, one per line, without numbering or bullet points.`
 
-    const followUpModel = getModelConfig('followUps')
-    const providerClient = rateLimitedAI[followUpModel.provider as keyof typeof rateLimitedAI]
-    if (!providerClient) {
-      throw new Error(`Unsupported model provider for follow ups: ${followUpModel.provider}`)
-    }
-
-    const result = await providerClient.generateText(
-      {
-        model: { modelId: followUpModel.modelId },
-        prompt,
-        maxOutputTokens: 150,
-        temperature: 0.7,
-      },
-      userId
-    )
-
+    await enforceUserRateLimit(userId)
+    const result = await generateText({
+      model: languageModel('followUps'),
+      prompt,
+      maxOutputTokens: 150,
+      providerOptions: defaultProviderOptions,
+    })
 
     const suggestions = result.text
       .split('\n')

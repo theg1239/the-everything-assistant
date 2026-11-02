@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import { MessageSquare, Plus, Search } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import { isRecord } from '@/lib/json'
 import { useChatPrefetch } from '@/hooks/use-chat-prefetch'
 
 interface ChatSummary {
@@ -16,6 +17,14 @@ interface ChatSummary {
   createdAt: string
   updatedAt: string
 }
+
+const isChatSummary = (value: unknown): value is ChatSummary =>
+  isRecord(value) &&
+  typeof value.id === 'string' &&
+  (typeof value.title === 'string' || value.title === null) &&
+  (value.path === undefined || value.path === null || typeof value.path === 'string') &&
+  typeof value.createdAt === 'string' &&
+  typeof value.updatedAt === 'string'
 
 interface ChatHistoryDialogProps {
   /** When provided, takes full control of open state from outside. */
@@ -58,7 +67,11 @@ export function ChatHistoryDialog({
     let cancelled = false
     setLoading(true)
     fetch('/api/chats?limit=40', { cache: 'no-store' })
-      .then(async r => (r.ok ? ((await r.json()) as ChatSummary[]) : []))
+      .then(async r => {
+        if (!r.ok) return []
+        const json: unknown = await r.json()
+        return Array.isArray(json) ? json.filter(isChatSummary) : []
+      })
       .then(list => {
         if (cancelled) return
         setChats(list)

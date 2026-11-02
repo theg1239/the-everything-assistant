@@ -22,17 +22,26 @@ import {
   Utensils,
   Check,
   PenLine,
+  type LucideIcon,
 } from 'lucide-react'
 import React, { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
+import type { LegacyMessage } from '@/lib/ai-message-conversion'
 
 interface ToolInfo {
   name: string
-  icon: React.ComponentType<any>
+  icon: LucideIcon
   message: string
   description: string
   retryMessage?: string
   retryDescription?: string
+}
+
+const DEFAULT_TOOL_INFO: ToolInfo = {
+  name: 'Processing',
+  icon: Settings,
+  message: 'processing...',
+  description: 'Working on your request',
 }
 
 const TOOL_CONFIGS: Record<string, ToolInfo> = {
@@ -267,16 +276,55 @@ const TOOL_CONFIGS: Record<string, ToolInfo> = {
     description: 'Adding to knowledge base',
   },
 
-  default: {
-    name: 'Processing',
-    icon: Settings,
-    message: 'processing...',
-    description: 'Working on your request',
-  },
+  default: DEFAULT_TOOL_INFO,
+}
+
+type IndicatorMessage = Pick<LegacyMessage, 'role' | 'content' | 'toolInvocations' | 'parts'>
+
+type ToolArgs = Record<string, unknown>
+
+/** Loose view of a tool invocation, from `toolInvocations` or a legacy `tool-invocation` part. */
+interface RawToolInvocation {
+  toolCallId?: string
+  toolName: string
+  state?: string
+  args?: ToolArgs
+  result?: unknown
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
+/** Reads the nested `toolInvocation` of a legacy (AI SDK v4) `tool-invocation` part. */
+function getLegacyPartInvocation(part: unknown): RawToolInvocation | null {
+  if (!isRecord(part) || part.type !== 'tool-invocation') return null
+  const inv = part.toolInvocation
+  if (!isRecord(inv)) return null
+  return {
+    toolCallId: typeof inv.toolCallId === 'string' ? inv.toolCallId : undefined,
+    toolName: typeof inv.toolName === 'string' ? inv.toolName : '',
+    state: typeof inv.state === 'string' ? inv.state : undefined,
+    args: isRecord(inv.args) ? inv.args : undefined,
+    result: inv.result,
+  }
+}
+
+/** All tool invocations on a message: `toolInvocations` first, then legacy parts. */
+function collectToolInvocations(message: IndicatorMessage): {
+  fromInvocations: RawToolInvocation[]
+  fromParts: RawToolInvocation[]
+} {
+  const fromInvocations: RawToolInvocation[] = message.toolInvocations ?? []
+  const fromParts: RawToolInvocation[] = []
+  for (const part of message.parts ?? []) {
+    const inv = getLegacyPartInvocation(part)
+    if (inv) fromParts.push(inv)
+  }
+  return { fromInvocations, fromParts }
 }
 
 interface DynamicLoadingIndicatorProps {
-  messages: any[]
+  messages: IndicatorMessage[]
   isLoading: boolean
   showForFirstMessage?: boolean
   className?: string
@@ -288,8 +336,8 @@ interface ActiveToolCall {
   toolName: string
   toolCallId: string
   state: 'call' | 'partial-call' | 'result'
-  args?: any
-  result?: any
+  args?: ToolArgs
+  result?: unknown
   stepIndex?: number
   timestamp?: number
 }
@@ -298,60 +346,33 @@ interface FlowStep {
   id: string
   type: 'thinking' | 'tool' | 'writing'
   toolName?: string
-  args?: any
+  args?: ToolArgs
   status: 'pending' | 'active' | 'completed'
   startTime?: number
   endTime?: number
 }
 
-function getActiveToolCalls(messages: any[]): ActiveToolCall[] {
+function getActiveToolCalls(messages: IndicatorMessage[]): ActiveToolCall[] {
   const activeTools: ActiveToolCall[] = []
   const seenToolCallIds = new Set<string>()
 
   for (const message of messages) {
     if (message.role !== 'assistant') continue
 
-    if (message.toolInvocations) {
-      for (const inv of message.toolInvocations) {
-        if (!inv.toolCallId || seenToolCallIds.has(inv.toolCallId)) continue
-        seenToolCallIds.add(inv.toolCallId)
+    // `toolInvocations` first, then parts array (for newer AI SDK format)
+    const { fromInvocations, fromParts } = collectToolInvocations(message)
+    for (const inv of [...fromInvocations, ...fromParts]) {
+      if (!inv.toolCallId || seenToolCallIds.has(inv.toolCallId)) continue
+      seenToolCallIds.add(inv.toolCallId)
 
-        const isActive = 
-          (inv.state === 'call' || inv.state === 'partial-call') && 
-          inv.result === undefined
-
-        if (isActive) {
-          activeTools.push({
-            toolName: inv.toolName,
-            toolCallId: inv.toolCallId,
-            state: inv.state,
-            args: inv.args,
-          })
-        }
-      }
-    }
-
-    // Also check parts array (for newer AI SDK format)
-    if (message.parts) {
-      for (const part of message.parts) {
-        if (part.type === 'tool-invocation' && part.toolInvocation) {
-          const inv = part.toolInvocation
-          if (!inv.toolCallId || seenToolCallIds.has(inv.toolCallId)) continue
-          seenToolCallIds.add(inv.toolCallId)
-
-          const isActive = 
-            (inv.state === 'call' || inv.state === 'partial-call') && 
-            inv.result === undefined
-
-          if (isActive) {
-            activeTools.push({
-              toolName: inv.toolName,
-              toolCallId: inv.toolCallId,
-              state: inv.state,
-              args: inv.args,
-            })
-          }
-        }
+      const state = inv.state
+      if ((state === 'call' || state === 'partial-call') && inv.result === undefined) {
+        activeTools.push({
+          toolName: inv.toolName,
+          toolCallId: inv.toolCallId,
+          state,
+          args: inv.args,
+        })
       }
     }
   }
@@ -363,7 +384,7 @@ function getActiveToolCalls(messages: any[]): ActiveToolCall[] {
  * Get all completed tool calls from the current assistant turn
  * Used to show what steps have been completed
  */
-function getCompletedToolCalls(messages: any[]): ActiveToolCall[] {
+function getCompletedToolCalls(messages: IndicatorMessage[]): ActiveToolCall[] {
   const completedTools: ActiveToolCall[] = []
   const seenToolCallIds = new Set<string>()
 
@@ -371,40 +392,19 @@ function getCompletedToolCalls(messages: any[]): ActiveToolCall[] {
   const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant')
   if (!lastAssistant) return completedTools
 
-  if (lastAssistant.toolInvocations) {
-    for (const inv of lastAssistant.toolInvocations) {
-      if (!inv.toolCallId || seenToolCallIds.has(inv.toolCallId)) continue
-      seenToolCallIds.add(inv.toolCallId)
+  const { fromInvocations, fromParts } = collectToolInvocations(lastAssistant)
+  for (const inv of [...fromInvocations, ...fromParts]) {
+    if (!inv.toolCallId || seenToolCallIds.has(inv.toolCallId)) continue
+    seenToolCallIds.add(inv.toolCallId)
 
-      if (inv.state === 'result' || inv.result !== undefined) {
-        completedTools.push({
-          toolName: inv.toolName,
-          toolCallId: inv.toolCallId,
-          state: 'result',
-          args: inv.args,
-          result: inv.result,
-        })
-      }
-    }
-  }
-
-  if (lastAssistant.parts) {
-    for (const part of lastAssistant.parts) {
-      if (part.type === 'tool-invocation' && part.toolInvocation) {
-        const inv = part.toolInvocation
-        if (!inv.toolCallId || seenToolCallIds.has(inv.toolCallId)) continue
-        seenToolCallIds.add(inv.toolCallId)
-
-        if (inv.state === 'result' || inv.result !== undefined) {
-          completedTools.push({
-            toolName: inv.toolName,
-            toolCallId: inv.toolCallId,
-            state: 'result',
-            args: inv.args,
-            result: inv.result,
-          })
-        }
-      }
+    if (inv.state === 'result' || inv.result !== undefined) {
+      completedTools.push({
+        toolName: inv.toolName,
+        toolCallId: inv.toolCallId,
+        state: 'result',
+        args: inv.args,
+        result: inv.result,
+      })
     }
   }
 
@@ -432,7 +432,7 @@ const TOOL_PRIORITIES: Record<string, number> = {
 }
 
 function buildFlowSteps(
-  messages: any[],
+  messages: IndicatorMessage[],
   isLoading: boolean,
   isAssistantStreaming: boolean
 ): FlowStep[] {
@@ -443,48 +443,27 @@ function buildFlowSteps(
   const justSentMessage = lastMessage?.role === 'user' && isLoading
   
   const hasTextContent = lastAssistant?.parts?.some(
-    (p: any) => p?.type === 'text' && typeof p.text === 'string' && p.text.trim().length > 0
+    p => p?.type === 'text' && typeof p.text === 'string' && p.text.trim().length > 0
   ) || (typeof lastAssistant?.content === 'string' && lastAssistant.content.trim().length > 0)
   
   const hasReasoning = lastAssistant?.parts?.some(
-    (p: any) => p?.type === 'reasoning' && typeof p.text === 'string'
+    p => p?.type === 'reasoning' && typeof p.text === 'string'
   )
 
-  const toolInvocations: Array<{
-    toolCallId: string
-    toolName: string
-    state: string
-    args?: any
-    result?: any
-  }> = []
+  const toolInvocations: Array<RawToolInvocation & { toolCallId: string }> = []
 
-  if (lastAssistant?.toolInvocations) {
-    for (const inv of lastAssistant.toolInvocations) {
-      if (inv.toolCallId) {
-        toolInvocations.push({
-          toolCallId: inv.toolCallId,
-          toolName: inv.toolName,
-          state: inv.state,
-          args: inv.args,
-          result: inv.result,
-        })
+  if (lastAssistant) {
+    const { fromInvocations, fromParts } = collectToolInvocations(lastAssistant)
+    for (const inv of fromInvocations) {
+      const toolCallId = inv.toolCallId
+      if (toolCallId) {
+        toolInvocations.push({ ...inv, toolCallId })
       }
     }
-  }
-
-  if (lastAssistant?.parts) {
-    for (const part of lastAssistant.parts) {
-      if (part.type === 'tool-invocation' && part.toolInvocation) {
-        const inv = part.toolInvocation
-        if (inv.toolCallId && !toolInvocations.some(t => t.toolCallId === inv.toolCallId)) {
-          toolInvocations.push({
-            toolCallId: inv.toolCallId,
-            toolName: inv.toolName,
-            state: inv.state,
-            args: inv.args,
-            result: inv.result,
-          })
-        }
+    for (const inv of fromParts) {
+      const toolCallId = inv.toolCallId
+      if (toolCallId && !toolInvocations.some(t => t.toolCallId === toolCallId)) {
+        toolInvocations.push({ ...inv, toolCallId })
       }
     }
   }
@@ -546,11 +525,26 @@ function buildFlowSteps(
   return steps
 }
 
-function getDetailedToolMessage(toolName: string, args?: any): string {
-  const toolInfo = TOOL_CONFIGS[toolName] || TOOL_CONFIGS.default
+/** Mirrors truthy interpolation of a tool arg: non-empty strings and non-zero numbers. */
+function argText(value: unknown): string | undefined {
+  if (typeof value === 'string') return value || undefined
+  if (typeof value === 'number') return value ? String(value) : undefined
+  return undefined
+}
+
+function getDetailedToolMessage(toolName: string, rawArgs?: ToolArgs): string {
+  const toolInfo = TOOL_CONFIGS[toolName] || DEFAULT_TOOL_INFO
   const baseMessage = toolInfo.message.replace(/\.{3}$/, '')
   
-  if (!args) return baseMessage
+  if (!rawArgs) return baseMessage
+  const args = {
+    courseCode: argText(rawArgs.courseCode),
+    query: argText(rawArgs.query),
+    command: argText(rawArgs.command),
+    courseQuery: argText(rawArgs.courseQuery),
+    facultyName: argText(rawArgs.facultyName),
+    department: argText(rawArgs.department),
+  }
 
   switch (toolName) {
     case 'findPastPapers':
@@ -681,7 +675,7 @@ export function DynamicLoadingIndicator({
   const lastAssistantHasReasoningPanel =
     lastMessage?.role === 'assistant' &&
     Array.isArray(lastMessage?.parts) &&
-    lastMessage.parts.some((p: any) => p?.type === 'reasoning')
+    lastMessage.parts.some(p => p?.type === 'reasoning')
 
   const activeStep = flowSteps.find(s => s.status === 'active')
   
@@ -763,7 +757,7 @@ export function DynamicLoadingIndicator({
   )
 }
 
-export function getCurrentActiveTool(messages: any[]): string | null {
+export function getCurrentActiveTool(messages: IndicatorMessage[]): string | null {
   const activeTools = getActiveToolCalls(messages)
   if (activeTools.length === 0) return null
 

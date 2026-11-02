@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Track } from '@/lib/stores/useMiniPlayerStore'
+import { isRecord } from '@/lib/json'
+import { errorMessage } from '@/components/narrow'
 
 export interface MiniLyricLine {
   startTimeMs: number
@@ -13,7 +15,7 @@ const parseLrc = (lrcText: string): MiniLyricLine[] => {
     .map((line) => {
       const match = line.match(/\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\](.+)/)
       if (!match) return null
-      const [, min, sec, frac = '0', text] = match
+      const [, min, sec, frac = '0', text = ''] = match
       const ms = Number(min) * 60 * 1000 + Number(sec) * 1000 + Number(frac.padEnd(3, '0'))
       return { startTimeMs: ms, words: text.trim() }
     })
@@ -51,15 +53,13 @@ export function useMiniLyrics(track: Track | null, currentTimeMs: number) {
       if (!res.ok) {
         throw new Error('Lyrics unavailable')
       }
-      const json = (await res.json().catch(() => null)) as
-        | { lyrics?: string; title?: string; artist?: string; album?: string }
-        | null
-      const lyricsText = typeof json?.lyrics === 'string' ? json.lyrics : ''
+      const json: unknown = await res.json().catch(() => null)
+      const lyricsText = isRecord(json) && typeof json.lyrics === 'string' ? json.lyrics : ''
       const parsed = parseLrc(lyricsText)
       setLines(parsed)
-    } catch (err: any) {
+    } catch (err) {
       setLines([])
-      setError(err?.message || 'Lyrics unavailable')
+      setError(errorMessage(err) || 'Lyrics unavailable')
     } finally {
       setLoading(false)
     }
@@ -76,8 +76,8 @@ export function useMiniLyrics(track: Track | null, currentTimeMs: number) {
     }
     const t = currentTimeMs + lyricOffset
     let idx = -1
-    for (let i = 0; i < lines.length; i++) {
-      if (t >= lines[i].startTimeMs) {
+    for (const [i, line] of lines.entries()) {
+      if (t >= line.startTimeMs) {
         idx = i
       } else {
         break

@@ -2,30 +2,33 @@
 
 import { Card, CardContent } from '@/components/ui/card'
 import { OptimizedMarkdown } from '@/components/optimized-markdown'
+import { asArray, asRecord, asString, asText } from './artifact-data'
 
-export default function PapersQAArtifact({ data }: { data: any }) {
-  const answer = data?.answer
-  const sources = Array.isArray(data?.sources) ? data.sources : []
-  const meta = data?.indexMeta
+export default function PapersQAArtifact({ data }: { data: unknown }) {
+  const record = asRecord(data)
+  const question = record.question
+  const answer = record.answer
+  const sources = asArray(record.sources)
+  const meta = record.indexMeta ? asRecord(record.indexMeta) : undefined
+  const metaCourse = asText(meta?.course)
+  const metaExamType = asText(meta?.examType)
+  const metaYear = asText(meta?.year)
+  const metaTotalPapers = asText(meta?.totalPapers)
 
   return (
     <Card className="hover:shadow-md transition-shadow border-0">
       <CardContent className="p-4 space-y-4 border-0">
-        {data?.question && (
+        {Boolean(question) && (
           <div className="text-xs text-muted-foreground">
             Q:{' '}
             <OptimizedMarkdown
               id="question"
-              content={
-                typeof data.question === 'string'
-                  ? data.question
-                  : JSON.stringify(data.question, null, 2)
-              }
+              content={typeof question === 'string' ? question : JSON.stringify(question, null, 2)}
             />
           </div>
         )}
 
-        {answer && (
+        {Boolean(answer) && (
           <div className="p-3 rounded border border-border/40 bg-card/40">
             <div className="text-sm leading-relaxed break-words">
               <OptimizedMarkdown
@@ -42,41 +45,44 @@ export default function PapersQAArtifact({ data }: { data: any }) {
               sources
             </div>
             <div className="space-y-1">
-              {sources.map((s: any, idx: number) => (
-                <a
-                  key={idx}
-                  href={s?.url || s?.link || '#'}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block p-2 rounded border border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-colors text-xs break-words"
-                >
-                  {s?.title || s?.url || s?.link || 'source'}
-                </a>
-              ))}
+              {sources.map((rawSource, idx) => {
+                const source = asRecord(rawSource)
+                return (
+                  <a
+                    key={idx}
+                    href={asString(source.url) || asString(source.link) || '#'}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block p-2 rounded border border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-colors text-xs break-words"
+                  >
+                    {asText(source.title) || asText(source.url) || asText(source.link) || 'source'}
+                  </a>
+                )
+              })}
             </div>
           </div>
         )}
 
         {meta && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-muted-foreground">
-            {meta.course && (
+            {metaCourse && (
               <div>
-                <span className="font-medium text-foreground/80">course:</span> {meta.course}
+                <span className="font-medium text-foreground/80">course:</span> {metaCourse}
               </div>
             )}
-            {meta.examType && (
+            {metaExamType && (
               <div>
-                <span className="font-medium text-foreground/80">exam:</span> {meta.examType}
+                <span className="font-medium text-foreground/80">exam:</span> {metaExamType}
               </div>
             )}
-            {meta.year && (
+            {metaYear && (
               <div>
-                <span className="font-medium text-foreground/80">year:</span> {meta.year}
+                <span className="font-medium text-foreground/80">year:</span> {metaYear}
               </div>
             )}
-            {meta.totalPapers && (
+            {metaTotalPapers && (
               <div>
-                <span className="font-medium text-foreground/80">papers:</span> {meta.totalPapers}
+                <span className="font-medium text-foreground/80">papers:</span> {metaTotalPapers}
               </div>
             )}
           </div>

@@ -1,4 +1,6 @@
-import type { MCPClientConfig, MCPTransportType } from './mcp-config'
+import type { experimental_MCPClient as MCPClient } from '@ai-sdk/mcp'
+import type { ToolSet } from 'ai'
+import { parseMCPConfigList, type MCPClientConfig, type MCPTransportType } from './mcp-config'
 
 export type { MCPClientConfig, MCPTransportType } from './mcp-config'
 
@@ -31,11 +33,6 @@ async function isMCPAvailable(): Promise<boolean> {
   }
 }
 
-interface MCPClient {
-  tools: () => Promise<Record<string, unknown>>
-  close: () => Promise<void>
-}
-
 export async function createMCPClientFromConfig(config: MCPClientConfig): Promise<MCPClient | null> {
   try {
     if (!(await isMCPAvailable())) {
@@ -43,21 +40,13 @@ export async function createMCPClientFromConfig(config: MCPClientConfig): Promis
       return null
     }
     
-    const mcpModule = require('@ai-sdk/mcp')
-    const createMCPClient = mcpModule.experimental_createMCPClient
-    
-    if (!createMCPClient) {
-      console.error('experimental_createMCPClient not found in @ai-sdk/mcp')
-      return null
-    }
+    const { experimental_createMCPClient: createMCPClient } = await import('@ai-sdk/mcp')
     
     const transport = createTransportConfig(config)
     
-    const client = await createMCPClient({
+    return await createMCPClient({
       transport,
     })
-    
-    return client as MCPClient
   } catch (error) {
     console.error(`Failed to create MCP client for ${config.name}:`, error)
     return null
@@ -65,8 +54,8 @@ export async function createMCPClientFromConfig(config: MCPClientConfig): Promis
 }
 
 export async function fetchMCPTools(configs: MCPClientConfig[]): Promise<{
-  tools: Record<string, any>
-  clients: any[]
+  tools: ToolSet
+  clients: MCPClient[]
   errors: Array<{ config: MCPClientConfig; error: string }>
 }> {
   const enabledConfigs = configs.filter(c => c.enabled)
@@ -82,18 +71,18 @@ export async function fetchMCPTools(configs: MCPClientConfig[]): Promise<{
         throw new Error(`Failed to create client for ${config.name}`)
       }
       
-      const tools = await client.tools()
+      const tools: ToolSet = await client.tools()
       return { config, client, tools }
     })
   )
   
-  const tools: Record<string, any> = {}
-  const clients: any[] = []
+  const tools: ToolSet = {}
+  const clients: MCPClient[] = []
   const errors: Array<{ config: MCPClientConfig; error: string }> = []
   
-  for (let i = 0; i < results.length; i++) {
-    const result = results[i]
+  for (const [i, result] of results.entries()) {
     const config = enabledConfigs[i]
+    if (!config) continue
     
     if (result.status === 'fulfilled') {
       const configTools = result.value.tools
@@ -105,7 +94,7 @@ export async function fetchMCPTools(configs: MCPClientConfig[]): Promise<{
     } else {
       errors.push({
         config,
-        error: result.reason?.message || 'Unknown error',
+        error: (result.reason instanceof Error && result.reason.message) || 'Unknown error',
       })
     }
   }
@@ -113,7 +102,7 @@ export async function fetchMCPTools(configs: MCPClientConfig[]): Promise<{
   return { tools, clients, errors }
 }
 
-export async function closeMCPClients(clients: any[]): Promise<void> {
+export async function closeMCPClients(clients: readonly MCPClient[]): Promise<void> {
   await Promise.allSettled(
     clients.map(async (client) => {
       try {
@@ -129,20 +118,7 @@ export function parseMCPConfigsFromJSON(json: string | null | undefined): MCPCli
   if (!json) return []
   
   try {
-    const parsed = JSON.parse(json)
-    if (!Array.isArray(parsed)) return []
-    
-    return parsed.filter((item): item is MCPClientConfig => {
-      return (
-        typeof item === 'object' &&
-        item !== null &&
-        typeof item.id === 'string' &&
-        typeof item.name === 'string' &&
-        typeof item.url === 'string' &&
-        (item.transportType === 'http' || item.transportType === 'sse') &&
-        typeof item.enabled === 'boolean'
-      )
-    })
+    return parseMCPConfigList(JSON.parse(json))
   } catch {
     return []
   }

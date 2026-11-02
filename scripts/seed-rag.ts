@@ -7,11 +7,22 @@ import { encoding_for_model } from 'tiktoken'
 import 'dotenv/config'
 import pg from 'pg'
 import { randomUUID } from 'crypto'
-import { rateLimitedAI } from '../lib/rate-limited-ai'
+import { embed } from 'ai'
+import { openai } from '../lib/ai'
 import { ragEmbeddingDim, ragEmbeddingModelId, ragEmbeddingProvider } from '../lib/rag-config'
 import fs from 'fs'
 import path from 'path'
 const { Pool } = pg
+
+const embedRagText = async (value: string): Promise<number[]> => {
+  const { embedding } = await embed({ model: openai.embeddingModel(ragEmbeddingModelId), value })
+  return embedding
+}
+
+const argAfter = (flag: string): string | undefined => {
+  const index = process.argv.indexOf(flag)
+  return index === -1 ? undefined : process.argv[index + 1]
+}
 
 async function extractTextFromPDF(pdfPath: string): Promise<string> {
   const { PDFParse } = await import('pdf-parse')
@@ -60,26 +71,16 @@ async function promptForChunkSize(defaultSize: number): Promise<number> {
 
 async function main() {
   const fresh = process.argv.includes('--fresh')
-  const chunkArgIndex = process.argv.findIndex(arg => arg === '--chunk')
-  const customArgIndex = process.argv.findIndex(arg => arg === '--custom')
-  const pdfArgIndex = process.argv.findIndex(arg => arg === '--pdf')
+  const chunkArg = argAfter('--chunk')
   let chunkSize = 200
-  let customText: string | null = null
-  let pdfPath: string | null = null
+  const customText: string | null = argAfter('--custom') || null
+  const pdfPath: string | null = argAfter('--pdf') || null
 
-  if (chunkArgIndex !== -1 && process.argv[chunkArgIndex + 1]) {
-    const parsed = parseInt(process.argv[chunkArgIndex + 1], 10)
+  if (chunkArg) {
+    const parsed = parseInt(chunkArg, 10)
     if (!isNaN(parsed)) chunkSize = parsed
   } else {
     chunkSize = await promptForChunkSize(chunkSize)
-  }
-
-  if (customArgIndex !== -1 && process.argv[customArgIndex + 1]) {
-    customText = process.argv[customArgIndex + 1]
-  }
-
-  if (pdfArgIndex !== -1 && process.argv[pdfArgIndex + 1]) {
-    pdfPath = process.argv[pdfArgIndex + 1]
   }
 
   if (!process.env.DATABASE_URL2) {
@@ -122,12 +123,7 @@ async function main() {
   if (customText) {
     console.log('Inserting custom chunk:', customText)
     try {
-      const embedClient =
-        rateLimitedAI[ragEmbeddingProvider as keyof typeof rateLimitedAI] || rateLimitedAI.openai
-      const { embedding } = await embedClient.embed({
-        model: { modelId: ragEmbeddingModelId },
-        value: customText,
-      })
+      const embedding = await embedRagText(customText)
       const id = randomUUID()
       const metadata = {
         source: 'custom',
@@ -177,13 +173,7 @@ async function main() {
 
           for (const [idx, doc] of pdfDocs.entries()) {
             try {
-              const embedClient =
-                rateLimitedAI[ragEmbeddingProvider as keyof typeof rateLimitedAI] ||
-                rateLimitedAI.openai
-              const { embedding } = await embedClient.embed({
-                model: { modelId: ragEmbeddingModelId },
-                value: doc.pageContent,
-              })
+              const embedding = await embedRagText(doc.pageContent)
 
               const id = randomUUID()
               const metadata = {
@@ -242,12 +232,7 @@ async function main() {
 
   for (const [idx, doc] of docs.entries()) {
     try {
-      const embedClient =
-        rateLimitedAI[ragEmbeddingProvider as keyof typeof rateLimitedAI] || rateLimitedAI.openai
-      const { embedding } = await embedClient.embed({
-        model: { modelId: ragEmbeddingModelId },
-        value: doc.pageContent,
-      })
+      const embedding = await embedRagText(doc.pageContent)
 
       const id = randomUUID()
       const metadata = {

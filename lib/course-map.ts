@@ -587,24 +587,26 @@ export const COURSE_MAP: { [key: string]: string } = {
 export function findFullCourseName(code: string): string {
   const upperCode = code.toUpperCase().trim()
 
-  if (COURSE_MAP[upperCode]) {
-    return COURSE_MAP[upperCode]
+  const directMatch = COURSE_MAP[upperCode]
+  if (directMatch) {
+    return directMatch
   }
 
-  if (COURSE_ACRONYMS[upperCode]) {
-    const matches = COURSE_ACRONYMS[upperCode].map(
-      courseCode => COURSE_MAP[courseCode] || courseCode
-    )
-    if (matches.length === 1) {
-      return matches[0]
+  const acronymCodes = COURSE_ACRONYMS[upperCode]
+  if (acronymCodes) {
+    const matches = acronymCodes.map(courseCode => COURSE_MAP[courseCode] || courseCode)
+    const [onlyMatch] = matches
+    if (matches.length === 1 && onlyMatch !== undefined) {
+      return onlyMatch
     } else if (matches.length > 1) {
       return matches.join(' / ')
     }
   }
 
   const searchResults = searchCoursesByName(upperCode)
-  if (searchResults.length === 1) {
-    return searchResults[0].name
+  const [onlyResult] = searchResults
+  if (searchResults.length === 1 && onlyResult) {
+    return onlyResult.name
   } else if (searchResults.length > 1) {
     return searchResults.map(r => r.name).join(' / ')
   }
@@ -690,12 +692,12 @@ export function recognizeCourseInText(
     }
   })
 
-  Object.keys(COURSE_ACRONYMS).forEach(acronym => {
+  Object.entries(COURSE_ACRONYMS).forEach(([acronym, courseCodes]) => {
     const regex = new RegExp(`\\b${acronym}\\b`, 'gi')
     const acronymMatches = text.match(regex) || []
 
     if (acronymMatches.length > 0) {
-      const matches = COURSE_ACRONYMS[acronym].map(courseCode => ({
+      const matches = courseCodes.map(courseCode => ({
         code: courseCode,
         name: COURSE_MAP[courseCode] || courseCode,
       }))

@@ -1,14 +1,33 @@
-export type MCPTransportType = 'http' | 'sse'
+import * as z from 'zod'
 
-export interface MCPClientConfig {
-  id: string
-  name: string
-  transportType: MCPTransportType
-  url: string
-  headers?: Record<string, string>
-  enabled: boolean
-  createdAt: number
-  updatedAt: number
+const mcpTransportTypeSchema = z.enum(['http', 'sse'])
+
+export type MCPTransportType = z.infer<typeof mcpTransportTypeSchema>
+
+/**
+ * Configs come from localStorage / request JSON. Identity fields are required;
+ * bookkeeping fields fall back instead of rejecting the entry.
+ */
+const mcpClientConfigSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  transportType: mcpTransportTypeSchema,
+  url: z.string(),
+  headers: z.record(z.string(), z.string()).optional().catch(undefined),
+  enabled: z.boolean(),
+  createdAt: z.number().catch(0),
+  updatedAt: z.number().catch(0),
+})
+
+export type MCPClientConfig = z.infer<typeof mcpClientConfigSchema>
+
+/** Keeps the entries of an untrusted array that are valid MCP client configs. */
+export function parseMCPConfigList(value: unknown): MCPClientConfig[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap(item => {
+    const parsed = mcpClientConfigSchema.safeParse(item)
+    return parsed.success ? [parsed.data] : []
+  })
 }
 
 const MCP_CONFIGS_STORAGE_KEY = 'custom-mcp-configs'
@@ -20,10 +39,7 @@ export function getMCPConfigs(): MCPClientConfig[] {
     const stored = localStorage.getItem(MCP_CONFIGS_STORAGE_KEY)
     if (!stored) return []
     
-    const configs = JSON.parse(stored)
-    if (!Array.isArray(configs)) return []
-    
-    return configs
+    return parseMCPConfigList(JSON.parse(stored))
   } catch (error) {
     console.error('Failed to parse MCP configs from localStorage:', error)
     return []
@@ -59,17 +75,19 @@ export function addMCPConfig(config: Omit<MCPClientConfig, 'id' | 'createdAt' | 
 export function updateMCPConfig(id: string, updates: Partial<Omit<MCPClientConfig, 'id' | 'createdAt'>>): MCPClientConfig | null {
   const configs = getMCPConfigs()
   const index = configs.findIndex(c => c.id === id)
+  const existing = configs[index]
   
-  if (index === -1) return null
+  if (!existing) return null
   
-  configs[index] = {
-    ...configs[index],
+  const updated: MCPClientConfig = {
+    ...existing,
     ...updates,
     updatedAt: Date.now(),
   }
+  configs[index] = updated
   
   saveMCPConfigs(configs)
-  return configs[index]
+  return updated
 }
 
 export function removeMCPConfig(id: string): boolean {

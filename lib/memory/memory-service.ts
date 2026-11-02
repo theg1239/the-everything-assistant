@@ -1,5 +1,9 @@
 import { prisma } from '@/lib/prisma'
-import * as z from 'zod/v3';
+import type {
+  Memory as MemoryRow,
+  MemorySettings as MemorySettingsRow,
+} from '@/prisma/generated/client'
+import * as z from 'zod'
 
 export type MemoryImportance = 1 | 2 | 3 | 4 | 5
 export type AutoSaveFilter = 'low' | 'medium' | 'high'
@@ -7,7 +11,9 @@ export type AutoSaveFilter = 'low' | 'medium' | 'high'
 export const memorySchema = z.object({
   id: z.string().optional(),
   content: z.string().min(1, 'Memory content is required').max(1000, 'Memory is too long'),
-  tags: z.array(z.string()).optional().default([]),
+  // No `.default([])`: zod 4 applies defaults inside `.partial()`, which would wipe tags on PATCH.
+  // `upsertMemory` fills in `[]` for new memories.
+  tags: z.array(z.string()).optional(),
   importance: z.number().min(1).max(5).optional(),
 })
 
@@ -42,17 +48,26 @@ export interface MemorySettings {
   updatedAt: Date
 }
 
-type MemorySettingsDb = {
-  id: string
-  userId: string
-  isEnabled: boolean
-  maxTokens?: number | null
-  maxOutputTokens?: number | null
-  autoSave: boolean
-  autoSaveFilter: string
-  createdAt: Date
-  updatedAt: Date
+/** DB importance is a plain Int; clamp it into the 1-5 scale the app uses. */
+const toImportance = (value: number): MemoryImportance => {
+  const rounded = Math.round(value)
+  if (rounded <= 1) return 1
+  if (rounded === 2) return 2
+  if (rounded === 3) return 3
+  if (rounded === 4) return 4
+  return 5
 }
+
+const toMemory = (row: MemoryRow): Memory => ({
+  id: row.id,
+  userId: row.userId,
+  content: row.content,
+  tags: row.tags,
+  importance: toImportance(row.importance),
+  lastUsedAt: row.lastUsedAt,
+  createdAt: row.createdAt,
+  updatedAt: row.updatedAt,
+})
 
 export class MemoryService {
   private readonly MAX_MEMORY_TOKENS = 2000
@@ -62,13 +77,8 @@ export class MemoryService {
     return Math.ceil(text.length / 4)
   }
 
-  private toMemorySettingsResponse(settings: MemorySettingsDb): MemorySettings {
-    const maxTokens =
-      typeof settings.maxTokens === 'number'
-        ? settings.maxTokens
-        : typeof settings.maxOutputTokens === 'number'
-          ? settings.maxOutputTokens
-          : this.MAX_MEMORY_TOKENS
+  private toMemorySettingsResponse(settings: MemorySettingsRow): MemorySettings {
+    const maxTokens = settings.maxTokens
 
     return {
       ...settings,
@@ -99,33 +109,36 @@ export class MemoryService {
     }
 
     if (id) {
-      return (prisma as any).memory.update({
+      const updated = await prisma.memory.update({
         where: { id, userId },
         data: {
           ...memoryData,
           lastUsedAt: new Date(),
         },
-      }) as Promise<Memory>
+      })
+      return toMemory(updated)
     }
 
-    return (prisma as any).memory.create({
+    const created = await prisma.memory.create({
       data: {
         ...memoryData,
         userId,
         lastUsedAt: new Date(),
       },
     })
+    return toMemory(created)
   }
 
   async getUserMemories(userId: string, { page = 1, pageSize = 20 } = {}): Promise<Memory[]> {
     const skip = (page - 1) * pageSize
 
-    return (prisma as any).memory.findMany({
+    const rows = await prisma.memory.findMany({
       where: { userId },
       orderBy: [{ importance: 'desc' }, { lastUsedAt: 'desc' }],
       skip,
       take: pageSize,
-    }) as Promise<Memory[]>
+    })
+    return rows.map(toMemory)
   }
 
   async getRelevantMemories(
@@ -164,12 +177,12 @@ export class MemoryService {
   }
 
   async getUserMemorySettings(userId: string): Promise<MemorySettings | null> {
-    let settings = (await (prisma as any).memorySettings.findUnique({
+    let settings = await prisma.memorySettings.findUnique({
       where: { userId },
-    })) as MemorySettingsDb | null
+    })
 
     if (!settings) {
-      settings = (await (prisma as any).memorySettings.upsert({
+      settings = await prisma.memorySettings.upsert({
         where: { userId },
         update: {},
         create: {
@@ -179,7 +192,7 @@ export class MemoryService {
           autoSave: true,
           autoSaveFilter: 'medium',
         },
-      })) as MemorySettingsDb
+      })
     }
 
     return this.toMemorySettingsResponse(settings)
@@ -194,14 +207,14 @@ export class MemoryService {
     const { maxTokens: _maxTokens, maxOutputTokens: _maxOutputTokens, ...rest } = settings
     const dbSettings = resolvedMaxTokens === undefined ? rest : { ...rest, maxTokens: resolvedMaxTokens }
 
-    const result = (await (prisma as any).memorySettings.upsert({
+    const result = await prisma.memorySettings.upsert({
       where: { userId },
       update: dbSettings,
       create: {
         userId,
         ...dbSettings,
       },
-    })) as MemorySettingsDb
+    })
 
     return this.toMemorySettingsResponse(result)
   }
@@ -211,16 +224,16 @@ export class MemoryService {
   }
 
   async deleteMemory(userId: string, memoryId: string): Promise<void> {
-    return (prisma as any).memory.delete({
+    await prisma.memory.delete({
       where: { id: memoryId, userId },
     })
   }
 
   async getMemory(id: string, userId: string): Promise<Memory | null> {
-    const memory = await (prisma as any).memory.findUnique({
+    const memory = await prisma.memory.findUnique({
       where: { id, userId },
     })
-    return memory as Memory | null
+    return memory ? toMemory(memory) : null
   }
 
   async extractAndSaveMemory(
@@ -263,14 +276,14 @@ export class MemoryService {
   }
 
   private async checkSimilarMemoryExists(userId: string, text: string): Promise<boolean> {
-    const existingMemories = await (prisma as any).memory.findMany({
+    const existingMemories = await prisma.memory.findMany({
       where: { userId },
       select: { content: true },
     })
 
     const normalizedText = text.toLowerCase().trim()
 
-    return existingMemories.some((memory: { content: string }) => {
+    return existingMemories.some(memory => {
       const normalizedMemory = memory.content.toLowerCase().trim()
       return (
         normalizedMemory.includes(normalizedText) ||
@@ -281,7 +294,7 @@ export class MemoryService {
   }
 
   private estimateMemoryImportance(text: string, filter: AutoSaveFilter): MemoryImportance {
-    let importance: MemoryImportance = 3
+    let importance = 3
 
     if (/(schedule|time|meeting|class|exam)/i.test(text)) importance += 1
     if (/(prefer|like|dislike|hate|love)/i.test(text)) importance += 1
@@ -293,7 +306,7 @@ export class MemoryService {
       high: 4,
     }[filter]
 
-    return Math.min(Math.max(importance, filterThreshold), 5) as MemoryImportance
+    return toImportance(Math.min(Math.max(importance, filterThreshold), 5))
   }
 
   async findSimilarMemory(

@@ -6,7 +6,7 @@ import { MessageSquarePlus } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface SelectionMenuProps {
-  containerRef: React.RefObject<HTMLElement>
+  containerRef: React.RefObject<HTMLElement | null>
   onQuote: (text: string) => void
 }
 

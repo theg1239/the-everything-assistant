@@ -17,6 +17,7 @@ import {
   Zap,
   Star,
   Heart,
+  type LucideIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
@@ -31,14 +32,14 @@ interface OnboardingStep {
   id: string
   title: string
   description: string
-  icon: any
+  icon: LucideIcon
   gradient: string
   artworkImage: string
   examples: string[] | null
   isLastStep?: boolean
 }
 
-const onboardingSteps: OnboardingStep[] = [
+const onboardingSteps: [OnboardingStep, ...OnboardingStep[]] = [
   {
     id: 'welcome',
     title: 'welcome to the everything assistant',
@@ -175,11 +176,13 @@ export function OnboardingDialog({ isOpen, onClose }: OnboardingDialogProps) {
 
   const onTouchStart = (e: React.TouchEvent) => {
     setTouchEnd(null)
-    setTouchStart(e.targetTouches[0].clientX)
+    const touch = e.targetTouches[0]
+    if (touch) setTouchStart(touch.clientX)
   }
 
   const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX)
+    const touch = e.targetTouches[0]
+    if (touch) setTouchEnd(touch.clientX)
   }
 
   const onTouchEnd = () => {
@@ -197,7 +200,7 @@ export function OnboardingDialog({ isOpen, onClose }: OnboardingDialogProps) {
     }
   }
 
-  const currentStepData = onboardingSteps[currentStep]
+  const currentStepData = onboardingSteps[currentStep] ?? onboardingSteps[0]
   const IconComponent = currentStepData.icon // Portal chevrons to body to avoid dialog positioning issues
   const ChevronNavigation = () => {
     if (!isOpen) return null
@@ -255,8 +258,8 @@ export function OnboardingDialog({ isOpen, onClose }: OnboardingDialogProps) {
         <DialogContent
           className="max-w-2xl w-[95vw] sm:w-full h-[55vh] sm:h-[60vh] md:h-[65vh] max-h-[600px] min-h-[400px] p-0 bg-white dark:bg-slate-900 rounded-2xl overflow-hidden shadow-2xl border-0"
           onPointerDownOutside={e => {
-            const target = e.target as Element
-            if (target.closest('button[data-chevron]')) {
+            const target = e.target
+            if (target instanceof Element && target.closest('button[data-chevron]')) {
               e.preventDefault()
             }
           }}

@@ -55,60 +55,93 @@ import { cn } from '@/lib/utils'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { ResponsiveCard } from '@/components/responsive-card'
 import FFCSArtifact from './artifacts/ffcs-artifact'
-import FfcsCourseSearchResult from './artifacts/get-course-info-artifact'
+import FfcsCourseSearchResult, {
+  parseCourseSearchResult,
+} from './artifacts/get-course-info-artifact'
 import { ResponsiveTable } from '@/components/responsive-table'
 import { Copy } from 'lucide-react'
 import PapersIndexArtifact from './artifacts/papers-index-artifact'
 import PapersQAArtifact from './artifacts/papers-qa-artifact'
-import { usePdfDock } from '@/contexts/pdf-dock-context'
+import QuestionPatternsArtifact from './artifacts/question-patterns-artifact'
+import GravitasEventsArtifact from './artifacts/gravitas-events-artifact'
+import GravitasEventRegistrationArtifact from './artifacts/gravitas-event-registration-artifact'
+import {
+  asArray,
+  asNumber,
+  asRecord,
+  asString,
+  asText,
+  isRecord,
+  isUnknownArray,
+  textOf,
+  toDate,
+  type TextValue,
+  type UnknownRecord,
+} from './artifacts/artifact-data'
+import { usePdfDock, type PdfItem } from '@/contexts/pdf-dock-context'
+
+/** Opaque handle for the maximized artifact; ArtifactDisplay only checks whether one is set. */
+export type MaximizedArtifactItem = unknown
+
+export type ArtifactType =
+  | 'papers'
+  | 'syllabi'
+  | 'faculty'
+  | 'companies'
+  | 'placements'
+  | 'mess-menu'
+  | 'vtop-data'
+  | 'interactive-course-page'
+  | 'reddit-knowledge'
+  | 'reddit-overview'
+  | 'error'
+  | 'campus-info'
+  | 'getPlacementInfo'
+  | 'ffcs-planner'
+  | 'course-info'
+  | 'papers-index'
+  | 'papers-qa'
+  | 'question-patterns'
+  | 'gravitas-events'
+  | 'gravitas-event-registration'
+  | 'generated-image'
+  | 'general'
 
 interface ArtifactDisplayProps {
   title: string
   icon?: React.ReactNode
-  data: any
-  type:
-    | 'papers'
-    | 'syllabi'
-    | 'faculty'
-    | 'companies'
-    | 'placements'
-    | 'mess-menu'
-    | 'vtop-data'
-    | 'interactive-course-page'
-    | 'reddit-knowledge'
-    | 'reddit-overview'
-    | 'error'
-    | 'campus-info'
-    | 'getPlacementInfo'
-    | 'ffcs-planner'
-    | 'course-info'
-    | 'papers-index'
-    | 'papers-qa'
-    | 'question-patterns'
-    | 'gravitas-events'
-    | 'gravitas-event-registration'
-    | 'generated-image'
-    | 'general'
+  /** Raw tool result; each renderer narrows the fields it needs. */
+  data: unknown
+  type: ArtifactType
   className?: string
   onLoginClick?: () => void
-  maximizedItem?: any
-  setMaximizedItem?: (item: any) => void
+  maximizedItem?: MaximizedArtifactItem
+  setMaximizedItem?: (item: MaximizedArtifactItem) => void
 }
 
-const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?: () => void }) => {
-  const {
-    command,
-    content,
-    rawOutput,
-    success,
-    data,
-    parsedData,
-    formatted_content,
-    structured_data,
-    summary,
-    error,
-    message,
-  } = vtopData
+type CliTable = UnknownRecord & { headers: unknown[]; rows: unknown[] }
+
+const VTOPDataCard = ({
+  vtopData,
+  onLoginClick,
+}: {
+  vtopData: unknown
+  onLoginClick?: () => void
+}) => {
+  const vtop = asRecord(vtopData)
+  const command = asString(vtop.command)
+  const content = vtop.content
+  const rawOutput = asString(vtop.rawOutput)
+  const success = vtop.success
+  const data = vtop.data
+  const parsedData = asRecord(vtop.parsedData)
+  const formatted_content = vtop.formatted_content
+  const structured_data = vtop.structured_data
+  const summary = vtop.summary
+  const error = vtop.error
+  const message = vtop.message
+  const formattedContentHtml = asString(vtop.formatted_content)
+  const requiresCredentials = Boolean(vtop.requiresCredentials)
   const CUSTOM_RENDER_COMMANDS = ['attendance']
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [expandedSubject, setExpandedSubject] = useState<number | null>(null)
@@ -129,18 +162,15 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
     return slug || fallback
   }
 
-  const isPlainObject = (value: any): value is Record<string, any> =>
-    value !== null && typeof value === 'object' && !Array.isArray(value)
+  const isCliTable = (value: unknown): value is CliTable =>
+    isRecord(value) && Array.isArray(value.headers) && Array.isArray(value.rows)
 
-  const isCliTable = (value: any) =>
-    isPlainObject(value) && Array.isArray(value.headers) && Array.isArray(value.rows)
-
-  const formatTableCell = (value: any) => {
+  const formatTableCell = (value: unknown): string => {
     if (value === null || value === undefined) return '—'
     if (typeof value === 'boolean') return value ? 'Yes' : 'No'
     if (typeof value === 'number') return String(value)
     if (typeof value === 'string') return value.trim() === '' ? '—' : value
-    if (Array.isArray(value)) {
+    if (isUnknownArray(value)) {
       if (!value.length) return '—'
       if (value.every(item => typeof item !== 'object' || item === null)) {
         return value
@@ -152,7 +182,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
     return JSON.stringify(value)
   }
 
-  const renderPrimitiveValue = (value: any) => {
+  const renderPrimitiveValue = (value: unknown) => {
     if (
       value === null ||
       value === undefined ||
@@ -179,7 +209,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
     )
   }
 
-  const renderCliTables = (tables: any[]) => {
+  const renderCliTables = (tables: unknown[]) => {
     const validTables = tables.filter(isCliTable)
     if (!validTables.length) {
       return <span className="text-xs text-muted-foreground">No structured rows found.</span>
@@ -188,8 +218,8 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
     return (
       <div className="space-y-4">
         {validTables.map((table, tableIdx) => {
-          const headers = Array.isArray(table.headers) ? table.headers : []
-          const rows = Array.isArray(table.rows) ? table.rows : []
+          const headers = table.headers
+          const rows = table.rows
           if (!headers.length || !rows.length) {
             return (
               <div key={`table-${tableIdx}`} className="text-xs text-muted-foreground">
@@ -199,26 +229,31 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
           }
 
           type ColumnDef = { key: string; header: string; accessor: number }
-          const columns: ColumnDef[] = headers.map((header: string, headerIdx: number) => ({
-            key: `${slugifyKey(header, `column-${headerIdx}`)}-${tableIdx}-${headerIdx}`,
-            header: formatKeyLabel(header || `Column ${headerIdx + 1}`),
-            accessor: headerIdx,
-          }))
+          const columns: ColumnDef[] = headers.map((rawHeader, headerIdx) => {
+            const header = asString(rawHeader)
+            return {
+              key: `${slugifyKey(header, `column-${headerIdx}`)}-${tableIdx}-${headerIdx}`,
+              header: formatKeyLabel(header || `Column ${headerIdx + 1}`),
+              accessor: headerIdx,
+            }
+          })
 
-          const dataRows = rows.map((row: any[]) => {
-            const rowObj: Record<string, any> = {}
+          const dataRows = rows.map(row => {
+            const cells = isUnknownArray(row) ? row : []
+            const rowObj: Record<string, string> = {}
             columns.forEach((column: ColumnDef, columnIdx: number) => {
-              rowObj[column.key] = formatTableCell(row[columnIdx])
+              rowObj[column.key] = formatTableCell(cells[columnIdx])
             })
             return rowObj
           })
+          const heading = textOf(table.heading) || textOf(table.title)
 
           return (
             <div key={`table-${tableIdx}`} className="space-y-2">
-              {(table.heading || table.title) && (
+              {heading && (
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
                   <Calendar className="h-3 w-3 text-blue-500" />
-                  {(table.heading || table.title) as string}
+                  {heading}
                 </div>
               )}
               <ResponsiveTable
@@ -236,44 +271,47 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
     )
   }
 
-  const renderSectionsArray = (sections: any[], depth: number) => (
+  const renderSectionsArray = (sections: unknown[], depth: number) => (
     <div className="space-y-3">
-      {sections.map((section, idx) => (
-        <div
-          key={`${section?.title || 'section'}-${idx}`}
-          className="rounded-lg border border-border/40 bg-card/30 p-3 space-y-2"
-        >
-          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            <Calendar className="h-3 w-3 text-blue-500" />
-            {section?.title || `Section ${idx + 1}`}
+      {sections.map((rawSection, idx) => {
+        const section = asRecord(rawSection)
+        const sectionTitle = asText(section.title)
+        const note = asText(section.note)
+        const exams = section.exams
+        const schedule = section.schedule
+        return (
+          <div
+            key={`${sectionTitle || 'section'}-${idx}`}
+            className="rounded-lg border border-border/40 bg-card/30 p-3 space-y-2"
+          >
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <Calendar className="h-3 w-3 text-blue-500" />
+              {sectionTitle || `Section ${idx + 1}`}
+            </div>
+            {note && <p className="text-xs text-muted-foreground">{note}</p>}
+            {isUnknownArray(exams) && exams.length > 0 ? (
+              <div className="mt-2">
+                {renderStructuredArray(`${sectionTitle || 'section'}-exams`, exams, depth + 1)}
+              </div>
+            ) : isUnknownArray(schedule) && schedule.length > 0 ? (
+              <div className="mt-2">
+                {renderStructuredArray(
+                  `${sectionTitle || 'section'}-schedule`,
+                  schedule,
+                  depth + 1
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">No entries found.</p>
+            )}
           </div>
-          {section?.note && <p className="text-xs text-muted-foreground">{section.note}</p>}
-          {Array.isArray(section?.exams) && section.exams.length > 0 ? (
-            <div className="mt-2">
-              {renderStructuredArray(
-                `${section?.title || 'section'}-exams`,
-                section.exams,
-                depth + 1
-              )}
-            </div>
-          ) : Array.isArray(section?.schedule) && section.schedule.length > 0 ? (
-            <div className="mt-2">
-              {renderStructuredArray(
-                `${section?.title || 'section'}-schedule`,
-                section.schedule,
-                depth + 1
-              )}
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">No entries found.</p>
-          )}
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 
-  const renderObjectArray = (arrayKey: string, rows: any[], depth: number) => {
-    const objectRows = rows.filter(isPlainObject)
+  const renderObjectArray = (arrayKey: string, rows: unknown[], depth: number) => {
+    const objectRows = rows.filter(isRecord)
     if (!objectRows.length) {
       return (
         <span className="text-xs text-card-foreground">
@@ -292,7 +330,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
               typeof val === 'string' ||
               typeof val === 'number' ||
               typeof val === 'boolean' ||
-              (Array.isArray(val) && val.every(item => typeof item !== 'object'))
+              (isUnknownArray(val) && val.every(item => typeof item !== 'object'))
             )
           })
         )
@@ -308,7 +346,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
       }))
 
       const dataRows = objectRows.map(row => {
-        const rowObj: Record<string, any> = {}
+        const rowObj: Record<string, string> = {}
         columnDefs.forEach((column: ObjectColumnDef) => {
           rowObj[column.key] = formatTableCell(row[column.accessor])
         })
@@ -345,7 +383,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
 
   const renderStructuredArray = (
     arrayKey: string,
-    value: any[],
+    value: unknown[],
     depth: number
   ): React.ReactNode => {
     if (!value.length) {
@@ -363,14 +401,14 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
     }
 
     const looksLikeSections = value.every(
-      item => isPlainObject(item) && (Array.isArray(item.exams) || Array.isArray(item.schedule))
+      item => isRecord(item) && (Array.isArray(item.exams) || Array.isArray(item.schedule))
     )
 
     if (looksLikeSections) {
       return renderSectionsArray(value, depth)
     }
 
-    const hasObjectEntries = value.some(isPlainObject)
+    const hasObjectEntries = value.some(isRecord)
     if (hasObjectEntries) {
       return renderObjectArray(arrayKey, value, depth)
     }
@@ -382,7 +420,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
     )
   }
 
-  const renderStructuredObject = (obj: Record<string, any>, depth: number): React.ReactNode => {
+  const renderStructuredObject = (obj: UnknownRecord, depth: number): React.ReactNode => {
     const entries = Object.entries(obj)
     if (!entries.length) {
       return <span className="text-xs text-muted-foreground">—</span>
@@ -402,47 +440,16 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
     )
   }
 
-  function renderStructuredValue(key: string, value: any, depth = 0): React.ReactNode {
-    if (Array.isArray(value)) {
+  function renderStructuredValue(key: string, value: unknown, depth = 0): React.ReactNode {
+    if (isUnknownArray(value)) {
       return renderStructuredArray(key, value, depth)
     }
 
-    if (isPlainObject(value)) {
+    if (isRecord(value)) {
       return renderStructuredObject(value, depth)
     }
 
     return renderPrimitiveValue(value)
-  }
-
-  if (success === false || error) {
-    let errorMessage = error || message || ''
-
-    if (!errorMessage || errorMessage === '500') {
-      if (rawOutput && typeof rawOutput === 'string') {
-        if (
-          rawOutput.includes('Login failed') ||
-          rawOutput.includes('session could not be established')
-        ) {
-          errorMessage = 'Login failed - incorrect username/password'
-        } else if (rawOutput.includes('Invalid LoginId/Password')) {
-          errorMessage = 'Invalid LoginId/Password'
-        } else if (
-          rawOutput.includes('credentials required') ||
-          rawOutput.includes('VTOP credentials required')
-        ) {
-          errorMessage = 'VTOP credentials required'
-        }
-      }
-    }
-
-    const isCredentialError =
-      errorMessage.includes('VTOP credentials required') || errorMessage.includes('credentials')
-    const isAuthError =
-      errorMessage.includes('Invalid LoginId/Password') ||
-      errorMessage.includes('Login failed') ||
-      errorMessage.includes('session could not be established') ||
-      errorMessage.includes('incorrect username/password')
-
   }
 
   const formatCommandName = (cmd: string) => {
@@ -457,15 +464,19 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
     return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ')
   }
 
-  const renderCustomVTOPCommand = (command: string, content: any) => {
+  const renderCustomVTOPCommand = (command: string, content: unknown) => {
     switch (command) {
-      case 'attendance':
-        let attendanceData = []
+      case 'attendance': {
+        let attendanceData: UnknownRecord[] = []
 
-        if (Array.isArray(content) && content.length > 0) {
+        if (isUnknownArray(content) && content.length > 0) {
           const firstItem = content[0]
-          if (firstItem && firstItem.SUBJECT && firstItem.SUBJECT.trim() !== '') {
-            attendanceData = content
+          if (
+            isRecord(firstItem) &&
+            typeof firstItem.SUBJECT === 'string' &&
+            firstItem.SUBJECT.trim() !== ''
+          ) {
+            attendanceData = content.filter(isRecord)
           }
         }
 
@@ -482,9 +493,8 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                 /^\s*\d+\s*│/.test(line)
             )
 
-
             attendanceData = dataLines
-              .map(line => {
+              .map((line): UnknownRecord | null => {
                 const allColumns = line.split('│').map(col => col.trim())
 
                 if (allColumns.length >= 7) {
@@ -503,21 +513,20 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                   return null
                 }
               })
-              .filter(Boolean)
+              .filter((row): row is UnknownRecord => row !== null)
           } catch (error) {
             attendanceData = []
           }
         }
 
         if (!Array.isArray(attendanceData) || attendanceData.length === 0) {
-
-          if (vtopData.formatted_content) {
+          if (formattedContentHtml) {
             return (
               <div className="space-y-3">
                 <div className="p-3 bg-muted/50 rounded-md overflow-x-auto">
                   <div
                     className="text-sm text-muted-foreground prose prose-sm max-w-none"
-                    dangerouslySetInnerHTML={{ __html: vtopData.formatted_content }}
+                    dangerouslySetInnerHTML={{ __html: formattedContentHtml }}
                   />
                 </div>
               </div>
@@ -538,15 +547,12 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
         }
 
         if (Array.isArray(attendanceData) && attendanceData.length > 0) {
+          const percentOf = (subject: UnknownRecord) =>
+            parseFloat(textOf(subject.PERCENTAGE) || textOf(subject.percentage) || '0')
 
-          const validSubjects = attendanceData.filter((subject: any) => {
-            const subjectName = subject.SUBJECT || subject.subject || subject.name || ''
-            const percentage = parseFloat(
-              subject.PERCENTAGE || subject.percentage || subject.attendance || '0'
-            )
-            const attended =
-              subject['CLASSES ATTENDED'] || subject.attended || subject.classesAttended || '0'
-            const total = subject['TOTAL CLASSES'] || subject.total || subject.totalClasses || '0'
+          const validSubjects = attendanceData.filter(subject => {
+            const subjectName =
+              textOf(subject.SUBJECT) || textOf(subject.subject) || textOf(subject.name) || ''
 
             const isValid =
               subjectName && subjectName.trim() !== '' && !subjectName.match(/^Subject \d+$/i)
@@ -568,20 +574,33 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
               </div>
 
               <div className="grid gap-3">
-                {validSubjects.map((subject: any, index: number) => {
+                {validSubjects.map((subject, index) => {
                   const subjectName =
-                    subject.SUBJECT || subject.subject || subject.name || `Subject ${index + 1}`
+                    textOf(subject.SUBJECT) ||
+                    textOf(subject.subject) ||
+                    textOf(subject.name) ||
+                    `Subject ${index + 1}`
                   const percentage = parseFloat(
-                    subject.PERCENTAGE || subject.percentage || subject.attendance || '0'
+                    textOf(subject.PERCENTAGE) ||
+                      textOf(subject.percentage) ||
+                      textOf(subject.attendance) ||
+                      '0'
                   )
                   const attended =
-                    subject['CLASSES ATTENDED'] ||
-                    subject.attended ||
-                    subject.classesAttended ||
+                    textOf(subject['CLASSES ATTENDED']) ||
+                    textOf(subject.attended) ||
+                    textOf(subject.classesAttended) ||
                     'N/A'
                   const total =
-                    subject['TOTAL CLASSES'] || subject.total || subject.totalClasses || 'N/A'
-                  let alert = subject['75% ALERT'] || subject.alert || subject.status || ''
+                    textOf(subject['TOTAL CLASSES']) ||
+                    textOf(subject.total) ||
+                    textOf(subject.totalClasses) ||
+                    'N/A'
+                  let alert =
+                    textOf(subject['75% ALERT']) ||
+                    textOf(subject.alert) ||
+                    textOf(subject.status) ||
+                    ''
 
                   if (alert) {
                     alert = alert
@@ -721,19 +740,15 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                 <div className="grid grid-cols-3 gap-4 text-xs">
                   <div className="text-center">
                     <div className="text-green-600 font-medium">
-                      {
-                        validSubjects.filter(
-                          (s: any) => parseFloat(s.PERCENTAGE || s.percentage || '0') >= 85
-                        ).length
-                      }
+                      {validSubjects.filter(s => percentOf(s) >= 85).length}
                     </div>
                     <div className="text-muted-foreground">Excellent</div>
                   </div>
                   <div className="text-center">
                     <div className="text-amber-600 font-medium">
                       {
-                        validSubjects.filter((s: any) => {
-                          const p = parseFloat(s.PERCENTAGE || s.percentage || '0')
+                        validSubjects.filter(s => {
+                          const p = percentOf(s)
                           return p >= 75 && p < 85
                         }).length
                       }
@@ -742,11 +757,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
                   </div>
                   <div className="text-center">
                     <div className="text-red-600 font-medium">
-                      {
-                        validSubjects.filter(
-                          (s: any) => parseFloat(s.PERCENTAGE || s.percentage || '0') < 75
-                        ).length
-                      }
+                      {validSubjects.filter(s => percentOf(s) < 75).length}
                     </div>
                     <div className="text-muted-foreground">Below 75%</div>
                   </div>
@@ -756,13 +767,13 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
           )
         }
 
-        if (vtopData.formatted_content) {
+        if (formattedContentHtml) {
           return (
             <div className="space-y-3">
               <div className="p-3 bg-muted/50 rounded-md overflow-x-auto">
                 <div
                   className="text-sm text-muted-foreground prose prose-sm max-w-none"
-                  dangerouslySetInnerHTML={{ __html: vtopData.formatted_content }}
+                  dangerouslySetInnerHTML={{ __html: formattedContentHtml }}
                 />
               </div>
             </div>
@@ -780,11 +791,10 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
         }
 
         return <div className="text-muted-foreground text-sm">No attendance data available.</div>
-        break
+      }
 
-      case 'marks':
-        const formattedContent =
-          vtopData.formatted_content || vtopData.parsedData?.formatted_content
+      case 'marks': {
+        const formattedContent = formattedContentHtml || asString(parsedData.formatted_content)
         if (formattedContent) {
           return (
             <div className="space-y-3">
@@ -797,8 +807,10 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
             </div>
           )
         }
-        if (Array.isArray(content) && content.length > 0) {
-          const headers = Object.keys(content[0])
+        const markRows = isUnknownArray(content) ? content.filter(isRecord) : []
+        const firstMarkRow = markRows[0]
+        if (firstMarkRow) {
+          const headers = Object.keys(firstMarkRow)
           const columns = headers.map(header => ({
             key: header,
             header: header,
@@ -806,7 +818,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
           return (
             <div className="space-y-3">
               <ResponsiveTable
-                data={content}
+                data={markRows}
                 columns={columns}
                 maxMobileColumns={3}
                 emptyMessage="No marks data available"
@@ -815,20 +827,19 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
           )
         }
         break
+      }
 
-      case 'profile':
-        let profileData: any = {}
+      case 'profile': {
+        let profileData: UnknownRecord = {}
 
-        if (typeof content === 'object' && content !== null) {
-          if (Array.isArray(content)) {
-            content.forEach((item: any) => {
-              if (typeof item === 'object' && item !== null) {
-                Object.assign(profileData, item)
-              }
-            })
-          } else {
-            profileData = content
-          }
+        if (isUnknownArray(content)) {
+          content.forEach(item => {
+            if (typeof item === 'object' && item !== null) {
+              Object.assign(profileData, item)
+            }
+          })
+        } else if (isRecord(content)) {
+          profileData = content
         }
 
         if (profileData && Object.keys(profileData).length > 0) {
@@ -892,10 +903,11 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
           )
         }
         break
+      }
       case 'course-info':
         try {
-          const parsedOutput = JSON.parse(content)
-          return <FfcsCourseSearchResult data={parsedOutput} />
+          const parsedOutput: unknown = JSON.parse(String(content))
+          return <FfcsCourseSearchResult data={parseCourseSearchResult(parsedOutput)} />
         } catch (error) {
           return (
             <pre className="text-xs text-red-400">Error parsing tool output: {String(error)}</pre>
@@ -910,7 +922,8 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
   const renderVTOPContent = () => {
     const [showRawData, setShowRawData] = useState(false)
     if (success === false || error) {
-      let errorMessage = error || message || 'An error occurred while retrieving VTOP data'
+      let errorMessage =
+        asString(error) || asString(message) || 'An error occurred while retrieving VTOP data'
 
       if ((!errorMessage || errorMessage === '500') && rawOutput && typeof rawOutput === 'string') {
         if (
@@ -944,7 +957,6 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
         }
       }
 
-
       return (
         <div className="space-y-3">
           <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-md">
@@ -953,7 +965,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
               <h4 className="text-sm font-medium text-destructive">Error Retrieving Data</h4>
             </div>
             <p className="text-sm text-destructive font-medium">{errorMessage}</p>
-            {vtopData.requiresCredentials && (
+            {requiresCredentials && (
               <p className="text-xs text-muted-foreground mt-2">
                 Credentials required to view this data.
               </p>
@@ -973,7 +985,7 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
       )
     }
 
-    if (CUSTOM_RENDER_COMMANDS.includes(command) && content) {
+    if (command !== undefined && CUSTOM_RENDER_COMMANDS.includes(command) && content) {
       const customRender = renderCustomVTOPCommand(command, content)
       if (customRender) {
         return customRender
@@ -981,26 +993,24 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
     }
 
     const finalParsedData = parsedData
-    const finalFormattedContent = formatted_content || finalParsedData?.formatted_content
-    const finalStructuredData = structured_data || finalParsedData?.structured_data
-    const finalSummary = summary || finalParsedData?.summary
+    const finalFormattedContent = formatted_content || finalParsedData.formatted_content
+    const finalStructuredData = structured_data || finalParsedData.structured_data
+    const finalSummary = summary || finalParsedData.summary
+    const structuredEntries: [string, unknown][] =
+      finalStructuredData && typeof finalStructuredData === 'object'
+        ? Object.entries(finalStructuredData)
+        : []
 
-    if (
-      finalFormattedContent ||
-      finalSummary ||
-      (finalStructuredData &&
-        typeof finalStructuredData === 'object' &&
-        Object.keys(finalStructuredData).length > 0)
-    ) {
+    if (finalFormattedContent || finalSummary || structuredEntries.length > 0) {
       return (
         <div className="space-y-4">
-          {finalSummary && typeof finalSummary === 'string' && (
+          {typeof finalSummary === 'string' && finalSummary && (
             <div className="p-3 bg-primary/10 rounded-md">
               <p className="text-sm text-card-foreground font-medium">{finalSummary}</p>
             </div>
           )}
 
-          {finalFormattedContent && typeof finalFormattedContent === 'string' && (
+          {typeof finalFormattedContent === 'string' && finalFormattedContent && (
             <div className="p-3 bg-muted/50 rounded-md overflow-x-auto">
               <h4 className="text-sm font-medium text-card-foreground mb-2"></h4>
               <div
@@ -1027,38 +1037,36 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
             </div>
           )}
 
-          {finalStructuredData &&
-            typeof finalStructuredData === 'object' &&
-            Object.keys(finalStructuredData).length > 0 && (
+          {structuredEntries.length > 0 && (
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium text-card-foreground">Structured Details:</h4>
               <div className="space-y-3">
-                <h4 className="text-sm font-medium text-card-foreground">Structured Details:</h4>
-                <div className="space-y-3">
-                  {Object.entries(finalStructuredData).map(([key, value]) => (
-                    <div
-                      key={key}
-                      className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        <User className="h-3 w-3 text-blue-400 shrink-0" />
-                        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                          {formatKeyLabel(key)}
-                        </span>
-                      </div>
-                      <div className="text-xs text-card-foreground">
-                        {renderStructuredValue(key, value)}
-                      </div>
+                {structuredEntries.map(([key, value]) => (
+                  <div
+                    key={key}
+                    className="rounded-lg border border-border/50 bg-muted/20 p-3 space-y-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <User className="h-3 w-3 text-blue-400 shrink-0" />
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        {formatKeyLabel(key)}
+                      </span>
                     </div>
-                  ))}
-                </div>
+                    <div className="text-xs text-card-foreground">
+                      {renderStructuredValue(key, value)}
+                    </div>
+                  </div>
+                ))}
               </div>
-            )}
+            </div>
+          )}
         </div>
       )
     }
 
     return (
       <div className="space-y-2">
-        {data && (
+        {Boolean(data) && (
           <div className="p-3 bg-muted/50 rounded-md">
             <div className="flex justify-between items-center mb-2">
               <div className="text-xs font-medium text-card-foreground">VTOP Data:</div>
@@ -1089,9 +1097,9 @@ const VTOPDataCard = ({ vtopData, onLoginClick }: { vtopData: any; onLoginClick?
       title={`VTOP ${formatCommandName(command || 'data')}`}
       icon={<GraduationCap className="h-4 w-4 text-blue-500" />}
       actions={
-        success !== false && !vtopData.requiresCredentials ? (
+        success !== false && !requiresCredentials ? (
           <CheckCircle className="h-4 w-4 text-green-500" />
-        ) : vtopData.requiresCredentials ? (
+        ) : requiresCredentials ? (
           <GraduationCap className="h-4 w-4 text-blue-500" />
         ) : (
           <AlertTriangle className="h-4 w-4 text-amber-500" />
@@ -1111,60 +1119,66 @@ const COURSE_CODE_REGEX = /\b([A-Z]{2,4}\d{3,4}[A-Z]?)\b/gi
 const EXAM_TYPE_REGEX = /\b(FAT|CAT[-\s]?[12]|CAT)\b/gi
 
 // Parse metadata from paper title if not provided
-const parsePaperMetadata = (paper: any) => {
-  const title = paper.title || ''
-  
+const parsePaperMetadata = (paper: UnknownRecord) => {
+  const title = textOf(paper.title)
+
   // Extract slot if not provided
-  let slot = paper.slot
+  let slot = textOf(paper.slot)
   if (!slot) {
     const slotMatch = title.match(SLOT_REGEX)
     if (slotMatch) {
       slot = slotMatch[0].toUpperCase()
     }
   }
-  
+
   // Extract year if not provided
-  let year = paper.year
+  let year = textOf(paper.year)
   if (!year) {
     const yearMatch = title.match(YEAR_REGEX)
     if (yearMatch) {
       year = yearMatch[0]
     }
   }
-  
+
   // Extract exam type if not provided
-  let examType = paper.examType
+  let examType = textOf(paper.examType)
   if (!examType) {
     const examMatch = title.match(EXAM_TYPE_REGEX)
     if (examMatch) {
       examType = examMatch[0].toUpperCase().replace(/[-\s]/g, '-')
     }
   }
-  
+
   // Extract course code if not provided (for display purposes)
-  let courseCode = paper.courseCode
+  let courseCode = textOf(paper.courseCode)
   if (!courseCode) {
     const codeMatch = title.match(COURSE_CODE_REGEX)
     if (codeMatch) {
       courseCode = codeMatch[0].toUpperCase()
     }
   }
-  
+
   return { slot, year, examType, courseCode }
 }
 
 const PaperCard = ({
-  paper,
+  paper: rawPaper,
   onViewPdf,
 }: {
-  paper: any
+  paper: unknown
   onViewPdf: (url: string, title?: string) => void
 }) => {
+  const paper = asRecord(rawPaper)
+  const paperTitle = textOf(paper.title)
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [isLoading, setIsLoading] = useState(false)
 
   const handleViewPaper = async () => {
-    const urlToView = paper.link || paper.url || paper.pdfUrl || paper.downloadUrl
+    const urlToView =
+      asString(paper.link) ||
+      asString(paper.url) ||
+      asString(paper.pdfUrl) ||
+      asString(paper.downloadUrl)
     const fromExamCooker =
       typeof paper.source === 'string' && paper.source.toLowerCase() === 'examcooker'
 
@@ -1177,7 +1191,7 @@ const PaperCard = ({
 
     setIsLoading(true)
     try {
-      onViewPdf(urlToView, paper.title)
+      if (urlToView) onViewPdf(urlToView, paperTitle || undefined)
     } finally {
       setTimeout(() => setIsLoading(false), 1000)
     }
@@ -1191,7 +1205,7 @@ const PaperCard = ({
 
   // Remove slot/year/exam markers from the title to avoid duplication
   const cleanedTitle = React.useMemo(() => {
-    let t = paper.title || ''
+    let t = paperTitle
 
     if (!t) return t
 
@@ -1208,10 +1222,13 @@ const PaperCard = ({
     }
 
     // Collapse extra separators like extra dashes or spaces
-    t = t.replace(/[-–]+\s*$/g, '').replace(/\s{2,}/g, ' ').trim()
+    t = t
+      .replace(/[-–]+\s*$/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
 
-    return t || (courseCode || paper.title || '')
-  }, [paper.title, slot, courseCode])
+    return t || courseCode || paperTitle
+  }, [paperTitle, slot, courseCode])
 
   return (
     <button
@@ -1222,7 +1239,7 @@ const PaperCard = ({
     >
       <span
         className="mb-1.5 line-clamp-2 text-sm font-medium text-card-foreground group-hover:text-primary"
-        title={paper.title}
+        title={paperTitle || undefined}
       >
         {cleanedTitle}
       </span>
@@ -1256,20 +1273,28 @@ const PaperCard = ({
 }
 
 const SyllabusCard = ({
-  syllabus,
+  syllabus: rawSyllabus,
   onViewPdf,
 }: {
-  syllabus: any
+  syllabus: unknown
   onViewPdf: (url: string, title?: string) => void
 }) => {
+  const syllabus = asRecord(rawSyllabus)
+  const syllabusTitle = textOf(syllabus.title)
+  const filename = textOf(syllabus.filename)
+  const code = asText(syllabus.code)
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [isLoading, setIsLoading] = useState(false)
 
   const handleView = async () => {
     setIsLoading(true)
     try {
-      const urlToView = syllabus.url || syllabus.link || syllabus.pdf || syllabus.downloadUrl
-      onViewPdf(urlToView, syllabus.title || syllabus.filename || 'Syllabus')
+      const urlToView =
+        asString(syllabus.url) ||
+        asString(syllabus.link) ||
+        asString(syllabus.pdf) ||
+        asString(syllabus.downloadUrl)
+      if (urlToView) onViewPdf(urlToView, syllabusTitle || filename || 'Syllabus')
     } finally {
       setTimeout(() => setIsLoading(false), 800)
     }
@@ -1280,20 +1305,19 @@ const SyllabusCard = ({
       <CardHeader className="pb-3 flex-shrink-0">
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-sm font-medium line-clamp-3 text-card-foreground group-hover:text-primary transition-colors leading-snug">
-            {syllabus.title || syllabus.filename || syllabus.code}
+            {syllabusTitle || filename || code}
           </CardTitle>
         </div>
       </CardHeader>
       <CardContent className="pt-0 space-y-3 flex-1 flex flex-col">
         <div className="space-y-2 text-xs text-muted-foreground flex-1">
-          {syllabus.code && (
+          {code && (
             <div className="flex items-center gap-2 text-[11px] text-muted-foreground/80">
               <Badge variant="secondary" className="text-[10px] h-5 px-2">
-                {syllabus.code}
+                {code}
               </Badge>
             </div>
           )}
-
         </div>
 
         <div className="flex-shrink-0 pt-1">
@@ -1324,111 +1348,117 @@ const SyllabusCard = ({
   )
 }
 
-interface Course {
+interface CourseWithSlots {
   code: string
-  title: string
-  slot?: string
-  type?: string
-  [key: string]: any
-}
-
-interface CourseWithSlots extends Course {
+  title: TextValue | undefined
   slots: string[]
   count: number
 }
 
-const FacultyCard = ({ faculty }: { faculty: any }) => {
+/** True for strings longer than 30 chars (the "long field" threshold for Show More). */
+const isLongText = (value: unknown) => typeof value === 'string' && value.length > 30
+
+const FacultyCard = ({ faculty: rawFaculty }: { faculty: unknown }) => {
+  const faculty = asRecord(rawFaculty)
+  const name = asText(faculty.name)
+  const image = asString(faculty.image)
+  const designation = asText(faculty.designation)
+  const school = asText(faculty.school)
+  const department = asText(faculty.department)
+  const specialization = asText(faculty.specialization)
+  const email = asText(faculty.email)
+  const phone = asText(faculty.phone)
+  const profileUrl = asString(faculty.profileUrl)
+  const courses = faculty.courses
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [expanded, setExpanded] = useState(false)
   const [showCourses, setShowCourses] = useState(false)
-  const hasCourses = Array.isArray(faculty.courses) && faculty.courses.length > 0
+  const hasCourses = isUnknownArray(courses) && courses.length > 0
 
   const groupedCourses = React.useMemo(() => {
     if (!hasCourses) return []
 
     const courseMap: Record<string, CourseWithSlots> = {}
 
-    faculty.courses.forEach((course: Course) => {
-      if (!courseMap[course.code]) {
-        courseMap[course.code] = {
-          ...course,
-          slots: course.slot ? [course.slot] : [],
+    asArray(courses).forEach(rawCourse => {
+      const course = asRecord(rawCourse)
+      const code = textOf(course.code)
+      const slot = asString(course.slot)
+      const existing = courseMap[code]
+      if (!existing) {
+        courseMap[code] = {
+          code,
+          title: asText(course.title),
+          slots: slot ? [slot] : [],
           count: 1,
         }
       } else {
-        const existing = courseMap[course.code]
-        if (course.slot && !existing.slots.includes(course.slot)) {
-          existing.slots.push(course.slot)
+        if (slot && !existing.slots.includes(slot)) {
+          existing.slots.push(slot)
         }
         existing.count++
       }
     })
 
     return Object.values(courseMap)
-  }, [faculty.courses, hasCourses])
+  }, [courses, hasCourses])
 
   return (
     <Card className="w-full max-w-full hover:shadow-sm transition-all duration-200 border-border bg-card">
       <CardHeader className="pb-3">
         <div className="space-y-2 flex items-center gap-3">
-          {faculty.image && (
+          {image && (
             <img
-              src={faculty.image}
-              alt={faculty.name}
+              src={image}
+              alt={asString(faculty.name)}
               className="h-12 w-12 rounded-full object-cover border border-border"
               loading="lazy"
             />
           )}
           <div>
-            <CardTitle className="text-sm font-medium text-card-foreground">
-              {faculty.name}
-            </CardTitle>
-            {faculty.designation && (
+            <CardTitle className="text-sm font-medium text-card-foreground">{name}</CardTitle>
+            {designation && (
               <Badge variant="secondary" className="text-xs w-fit">
-                {faculty.designation}
+                {designation}
               </Badge>
             )}
-            {faculty.school && (
-              <div className="text-xs text-muted-foreground mt-1">{faculty.school}</div>
-            )}
+            {school && <div className="text-xs text-muted-foreground mt-1">{school}</div>}
           </div>
         </div>
       </CardHeader>
       <CardContent className="pt-0">
         <div className="space-y-2 text-xs text-muted-foreground">
-          {faculty.department && (
+          {department && (
             <div className="flex items-start gap-2">
               <Building2 className="h-3 w-3 shrink-0 mt-0.5" />
-              <span className={isMobile && !expanded ? 'line-clamp-1' : ''}>
-                {faculty.department}
-              </span>
+              <span className={isMobile && !expanded ? 'line-clamp-1' : ''}>{department}</span>
             </div>
           )}
-          {faculty.specialization && (
+          {specialization && (
             <div className="flex items-start gap-2">
               <GraduationCap className="h-3 w-3 shrink-0 mt-0.5" />
               <span className={isMobile && !expanded ? 'line-clamp-1' : 'line-clamp-2'}>
-                {faculty.specialization}
+                {specialization}
               </span>
             </div>
           )}
-          {faculty.email && (
+          {email && (
             <div className="flex items-start gap-2">
               <Mail className="h-3 w-3 shrink-0 mt-0.5" />
-              <span className={isMobile && !expanded ? 'line-clamp-1' : ''}>{faculty.email}</span>
+              <span className={isMobile && !expanded ? 'line-clamp-1' : ''}>{email}</span>
             </div>
           )}
-          {faculty.phone && (
+          {phone && (
             <div className="flex items-center gap-2">
               <Phone className="h-3 w-3 shrink-0" />
-              <span>{faculty.phone}</span>
+              <span>{phone}</span>
             </div>
           )}
-          {faculty.profileUrl && (
+          {profileUrl && (
             <div className="flex items-center gap-2">
               <Globe className="h-3 w-3 shrink-0" />
               <a
-                href={faculty.profileUrl}
+                href={profileUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-600 hover:underline break-all"
@@ -1468,7 +1498,7 @@ const FacultyCard = ({ faculty }: { faculty: any }) => {
                       <span>Title & Slots</span>
                     </div>
                     <div className="max-h-[300px] overflow-y-auto">
-                      {groupedCourses.map((course: any, idx: number) => (
+                      {groupedCourses.map((course, idx) => (
                         <div
                           key={`${course.code}-${idx}`}
                           className="p-2 px-3 text-sm hover:bg-muted/30 transition-colors"
@@ -1479,9 +1509,9 @@ const FacultyCard = ({ faculty }: { faculty: any }) => {
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="font-medium text-foreground">{course.title}</div>
-                              {course.slots && course.slots.length > 0 && (
+                              {course.slots.length > 0 && (
                                 <div className="mt-1 flex flex-wrap gap-1">
-                                  {course.slots.map((slot: string, slotIdx: number) => (
+                                  {course.slots.map((slot, slotIdx) => (
                                     <Badge
                                       key={slotIdx}
                                       variant="outline"
@@ -1506,9 +1536,9 @@ const FacultyCard = ({ faculty }: { faculty: any }) => {
 
         {(() => {
           const longFields = [
-            faculty.specialization?.length > 30 ? 'specialization' : null,
-            faculty.department?.length > 30 ? 'department' : null,
-            faculty.email?.length > 30 ? 'email' : null,
+            isLongText(faculty.specialization) ? 'specialization' : null,
+            isLongText(faculty.department) ? 'department' : null,
+            isLongText(faculty.email) ? 'email' : null,
           ].filter(Boolean)
 
           if (longFields.length > 1) {
@@ -1533,13 +1563,20 @@ const FacultyCard = ({ faculty }: { faculty: any }) => {
               </Button>
             )
           }
+          return null
         })()}
       </CardContent>
     </Card>
   )
 }
 
-const CompanyCard = ({ company }: { company: any }) => {
+const CompanyCard = ({ company: rawCompany }: { company: unknown }) => {
+  const company = asRecord(rawCompany)
+  const name = asText(company.name)
+  const sector = asText(company.sector)
+  const description = asText(company.description)
+  const location = asText(company.location)
+  const website = asString(company.website)
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [expanded, setExpanded] = useState(false)
 
@@ -1547,28 +1584,28 @@ const CompanyCard = ({ company }: { company: any }) => {
     <Card className="w-full hover:shadow-sm transition-all duration-200 border-border bg-card">
       <CardHeader className="pb-3">
         <div className="space-y-2">
-          <CardTitle className="text-sm font-medium text-card-foreground">{company.name}</CardTitle>
-          {company.sector && (
+          <CardTitle className="text-sm font-medium text-card-foreground">{name}</CardTitle>
+          {sector && (
             <Badge variant="secondary" className="text-xs w-fit">
-              {company.sector}
+              {sector}
             </Badge>
           )}
         </div>
       </CardHeader>
       <CardContent className="pt-0 space-y-3">
         <div className="space-y-2 text-xs text-muted-foreground">
-          {company.description && (
-            <p className={isMobile && !expanded ? 'line-clamp-2' : ''}>{company.description}</p>
+          {description && (
+            <p className={isMobile && !expanded ? 'line-clamp-2' : ''}>{description}</p>
           )}
-          {company.location && (
+          {location && (
             <div className="flex items-center gap-2">
               <MapPin className="h-3 w-3 shrink-0" />
-              <span>{company.location}</span>
+              <span>{location}</span>
             </div>
           )}
         </div>
 
-        {isMobile && company.description?.length > 100 && (
+        {isMobile && typeof description === 'string' && description.length > 100 && (
           <Button
             variant="ghost"
             size="sm"
@@ -1589,12 +1626,12 @@ const CompanyCard = ({ company }: { company: any }) => {
           </Button>
         )}
 
-        {company.website && (
+        {website && (
           <Button
             variant="outline"
             size="sm"
             className="h-7 px-3 text-xs"
-            onClick={() => window.open(company.website, '_blank')}
+            onClick={() => window.open(website, '_blank')}
           >
             <Globe className="h-3 w-3 mr-1" />
             Visit Website
@@ -1605,17 +1642,14 @@ const CompanyCard = ({ company }: { company: any }) => {
   )
 }
 
-const MessMenuCard = ({ menuData }: { menuData: any }) => {
-  const {
-    hostelType,
-    messType,
-    todayMenu,
-    requestedDate,
-    actualDate,
-    isExactMatch,
-    formattedMenu,
-    message,
-  } = menuData
+const MessMenuCard = ({ menuData }: { menuData: unknown }) => {
+  const menu = asRecord(menuData)
+  const hostelType = textOf(menu.hostelType)
+  const messType = textOf(menu.messType)
+  const todayMenu = menu.todayMenu
+  const actualDate = asText(menu.actualDate)
+  const isExactMatch = menu.isExactMatch
+  const message = asText(menu.message)
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [expandedMeal, setExpandedMeal] = useState<string | null>(null)
 
@@ -1640,8 +1674,10 @@ const MessMenuCard = ({ menuData }: { menuData: any }) => {
     return meal.charAt(0).toUpperCase() + meal.slice(1).toLowerCase()
   }
 
-  const renderMenuItems = (menuItems: any) => {
-    if (!menuItems || Object.keys(menuItems).length === 0) {
+  const renderMenuItems = (menuItems: unknown) => {
+    const mealEntries: [string, unknown][] =
+      menuItems && typeof menuItems === 'object' ? Object.entries(menuItems) : []
+    if (mealEntries.length === 0) {
       return (
         <div className="text-center py-4 text-muted-foreground">
           <UtensilsCrossed className="h-6 w-6 mx-auto mb-2 opacity-50" />
@@ -1652,9 +1688,9 @@ const MessMenuCard = ({ menuData }: { menuData: any }) => {
 
     return (
       <div className="space-y-4">
-        {Object.entries(menuItems).map(([mealType, items]: [string, any]) => {
+        {mealEntries.map(([mealType, items]) => {
           const isExpanded = expandedMeal === mealType
-          const itemsArray = Array.isArray(items) ? items : [items]
+          const itemsArray = isUnknownArray(items) ? items : [items]
           const shouldCollapse = isMobile && itemsArray.length > 3
 
           return (
@@ -1684,9 +1720,9 @@ const MessMenuCard = ({ menuData }: { menuData: any }) => {
               <div className="ml-6 space-y-1">
                 {itemsArray
                   .slice(0, shouldCollapse && !isExpanded ? 3 : undefined)
-                  .map((item: string, index: number) => (
+                  .map((item, index) => (
                     <p key={index} className="text-sm text-muted-foreground">
-                      • {item}
+                      • {asText(item)}
                     </p>
                   ))}
                 {shouldCollapse && !isExpanded && itemsArray.length > 3 && (
@@ -1736,14 +1772,17 @@ const MessMenuCard = ({ menuData }: { menuData: any }) => {
           </div>
         )}
 
-        {todayMenu && renderMenuItems(todayMenu)}
+        {Boolean(todayMenu) && renderMenuItems(todayMenu)}
       </div>
     </ResponsiveCard>
   )
 }
 
-const ErrorCard = ({ errorData }: { errorData: any }) => {
-  const { error, message, availableDateRange } = errorData
+const ErrorCard = ({ errorData }: { errorData: unknown }) => {
+  const errorRecord = asRecord(errorData)
+  const error = asString(errorRecord.error)
+  const message = asString(errorRecord.message)
+  const availableDateRange = errorRecord.availableDateRange
   const isMobile = useMediaQuery('(max-width: 640px)')
 
   const getErrorMessage = () => {
@@ -1764,12 +1803,13 @@ const ErrorCard = ({ errorData }: { errorData: any }) => {
     return 'An error occurred while processing your request'
   }
 
-  const formatDateRange = (range: any) => {
-    if (!range || !range.start || !range.end) return null
+  const formatDateRange = (rawRange: unknown) => {
+    const range = asRecord(rawRange)
+    if (!range.start || !range.end) return null
 
     try {
-      const startDate = new Date(range.start)
-      const endDate = new Date(range.end)
+      const startDate = toDate(range.start)
+      const endDate = toDate(range.end)
       const startFormatted = startDate.toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
@@ -1782,7 +1822,7 @@ const ErrorCard = ({ errorData }: { errorData: any }) => {
       })
       return `${startFormatted} to ${endFormatted}`
     } catch {
-      return `${range.start} to ${range.end}`
+      return `${String(range.start)} to ${String(range.end)}`
     }
   }
   return (
@@ -1799,7 +1839,7 @@ const ErrorCard = ({ errorData }: { errorData: any }) => {
           </div>
         </div>
 
-        {availableDateRange && (
+        {Boolean(availableDateRange) && (
           <div className="border-t border-red-200 dark:border-red-700 bg-red-100 dark:bg-red-900/30">
             <div className={cn('p-4 sm:p-6')}>
               <div
@@ -1841,20 +1881,19 @@ const ErrorCard = ({ errorData }: { errorData: any }) => {
   )
 }
 
-const RedditKnowledgeCard = ({ data }: { data: any }) => {
+const RedditKnowledgeCard = ({ data }: { data: unknown }) => {
   const [showAllSources, setShowAllSources] = useState(false)
   const [showAllTrending, setShowAllTrending] = useState(false)
   const isMobile = useMediaQuery('(max-width: 640px)')
 
-  const {
-    response,
-    sources = [],
-    trending = [],
-    confidence = 0,
-    totalResults = 0,
-    note,
-    isBroadQuery = false,
-  } = data
+  const record = asRecord(data)
+  const response = asString(record.response) ?? ''
+  const sources = asArray(record.sources).map(asRecord)
+  const trending = asArray(record.trending).map(asRecord)
+  const confidence = asNumber(record.confidence) ?? 0
+  const totalResults = asText(record.totalResults) ?? 0
+  const note = asText(record.note)
+  const isBroadQuery = Boolean(record.isBroadQuery)
 
   const displayConfidence =
     confidence === 0 && sources.length > 0 ? Math.floor(Math.random() * 21) + 60 : confidence
@@ -1884,9 +1923,9 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
     return 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'
   }
 
-  const formatTimeAgo = (dateString: string) => {
+  const formatTimeAgo = (dateString: unknown) => {
     try {
-      const date = new Date(dateString)
+      const date = toDate(dateString)
       const now = new Date()
       const diffMs = now.getTime() - date.getTime()
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
@@ -1973,74 +2012,81 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
           </div>
 
           <div className="divide-y divide-border">
-            {displaySources.map((source: any, index: number) => (
-              <div
-                key={index}
-                className="p-3 sm:p-4 hover:bg-muted/50 transition-colors reddit-source-item"
-              >
-                <div className="flex items-start gap-2 sm:gap-3">
-                  <div className="flex flex-col items-center gap-1 min-w-0 flex-shrink-0">
-                    <Badge variant="outline" className="text-xs px-1.5 py-0.5">
-                      {source.type}
-                    </Badge>
-                    <div className="text-xs text-muted-foreground text-center">
-                      {Math.round(source.similarity * 100)}%
-                    </div>
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-1 reddit-source-meta">
-                      <span className="text-xs font-medium text-primary">
-                        r/{source.subreddit === 'redtaganna' ? 'redtaganna' : source.subreddit}
-                      </span>
-                      {source.upvotes &&
-                        source.upvotes > 0 &&
-                        source.upvotes !== 'N/A' &&
-                        !isNaN(Number(source.upvotes)) && (
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <ChevronUp className="h-3 w-3" />
-                            {source.upvotes}
-                          </div>
-                        )}
-                      <span className="text-xs text-muted-foreground">
-                        {formatTimeAgo(source.created)}
-                      </span>
-                    </div>
-
-                    <h5
-                      className="text-sm font-medium text-foreground mb-1 overflow-hidden reddit-post-title"
-                      style={{
-                        display: '-webkit-box',
-                        WebkitLineClamp: isMobile ? 3 : 2,
-                        WebkitBoxOrient: 'vertical',
-                        lineHeight: '1.4em',
-                        maxHeight: isMobile ? '4.2em' : '2.8em',
-                      }}
-                    >
-                      {source.title}
-                    </h5>
-
-                    {source.author && (
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <User className="h-3 w-3" />
-                        <span className="truncate">u/{source.author}</span>
+            {displaySources.map((source, index) => {
+              const upvotes = asText(source.upvotes)
+              const sourceUrl = asString(source.url)
+              return (
+                <div
+                  key={index}
+                  className="p-3 sm:p-4 hover:bg-muted/50 transition-colors reddit-source-item"
+                >
+                  <div className="flex items-start gap-2 sm:gap-3">
+                    <div className="flex flex-col items-center gap-1 min-w-0 flex-shrink-0">
+                      <Badge variant="outline" className="text-xs px-1.5 py-0.5">
+                        {asText(source.type)}
+                      </Badge>
+                      <div className="text-xs text-muted-foreground text-center">
+                        {Math.round(Number(source.similarity) * 100)}%
                       </div>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-1 reddit-source-meta">
+                        <span className="text-xs font-medium text-primary">
+                          r/
+                          {source.subreddit === 'redtaganna'
+                            ? 'redtaganna'
+                            : asText(source.subreddit)}
+                        </span>
+                        {upvotes &&
+                          Number(upvotes) > 0 &&
+                          upvotes !== 'N/A' &&
+                          !isNaN(Number(upvotes)) && (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <ChevronUp className="h-3 w-3" />
+                              {upvotes}
+                            </div>
+                          )}
+                        <span className="text-xs text-muted-foreground">
+                          {formatTimeAgo(source.created)}
+                        </span>
+                      </div>
+
+                      <h5
+                        className="text-sm font-medium text-foreground mb-1 overflow-hidden reddit-post-title"
+                        style={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: isMobile ? 3 : 2,
+                          WebkitBoxOrient: 'vertical',
+                          lineHeight: '1.4em',
+                          maxHeight: isMobile ? '4.2em' : '2.8em',
+                        }}
+                      >
+                        {asText(source.title)}
+                      </h5>
+
+                      {Boolean(source.author) && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <User className="h-3 w-3" />
+                          <span className="truncate">u/{asText(source.author)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {sourceUrl && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 flex-shrink-0"
+                        onClick={() => window.open(sourceUrl, '_blank')}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                      </Button>
                     )}
                   </div>
-
-                  {source.url && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 flex-shrink-0"
-                      onClick={() => window.open(source.url, '_blank')}
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                    </Button>
-                  )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           {showAllSources && sources.length > 6 && (
@@ -2083,66 +2129,69 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
           </div>
 
           <div className="divide-y divide-border">
-            {(showAllTrending ? trending : trending.slice(0, 5)).map((post: any, index: number) => (
-              <div key={index} className="p-3 sm:p-4 hover:bg-muted/50 transition-colors">
-                <div className="flex items-start gap-2 sm:gap-3">
-                  <div className="flex flex-col items-center gap-1 min-w-0 flex-shrink-0">
-                    <Badge variant="outline" className="text-xs px-1.5 py-0.5">
-                      {post.type || 'post'}
-                    </Badge>
-                    {post.score &&
-                      post.score > 0 &&
-                      post.score !== 'N/A' &&
-                      !isNaN(Number(post.score)) && (
+            {(showAllTrending ? trending : trending.slice(0, 5)).map((post, index) => {
+              const score = asText(post.score)
+              const postUrl = asString(post.url)
+              return (
+                <div key={index} className="p-3 sm:p-4 hover:bg-muted/50 transition-colors">
+                  <div className="flex items-start gap-2 sm:gap-3">
+                    <div className="flex flex-col items-center gap-1 min-w-0 flex-shrink-0">
+                      <Badge variant="outline" className="text-xs px-1.5 py-0.5">
+                        {asText(post.type) || 'post'}
+                      </Badge>
+                      {score && Number(score) > 0 && score !== 'N/A' && !isNaN(Number(score)) && (
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
                           <ChevronUp className="h-3 w-3" />
-                          {post.score}
+                          {score}
                         </div>
                       )}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-1">
-                      <span className="text-xs font-medium text-primary">r/{post.subreddit}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {formatTimeAgo(post.created)}
-                      </span>
                     </div>
 
-                    <h5
-                      className="text-sm font-medium text-foreground mb-1 overflow-hidden"
-                      style={{
-                        display: '-webkit-box',
-                        WebkitLineClamp: isMobile ? 3 : 2,
-                        WebkitBoxOrient: 'vertical',
-                        lineHeight: '1.4em',
-                        maxHeight: isMobile ? '4.2em' : '2.8em',
-                      }}
-                    >
-                      {post.title}
-                    </h5>
-
-                    {post.author && (
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <User className="h-3 w-3" />
-                        <span className="truncate">u/{post.author}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-1">
+                        <span className="text-xs font-medium text-primary">
+                          r/{asText(post.subreddit)}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatTimeAgo(post.created)}
+                        </span>
                       </div>
+
+                      <h5
+                        className="text-sm font-medium text-foreground mb-1 overflow-hidden"
+                        style={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: isMobile ? 3 : 2,
+                          WebkitBoxOrient: 'vertical',
+                          lineHeight: '1.4em',
+                          maxHeight: isMobile ? '4.2em' : '2.8em',
+                        }}
+                      >
+                        {asText(post.title)}
+                      </h5>
+
+                      {Boolean(post.author) && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <User className="h-3 w-3" />
+                          <span className="truncate">u/{asText(post.author)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {postUrl && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 flex-shrink-0"
+                        onClick={() => window.open(postUrl, '_blank')}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                      </Button>
                     )}
                   </div>
-
-                  {post.url && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 flex-shrink-0"
-                      onClick={() => window.open(post.url, '_blank')}
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                    </Button>
-                  )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           {showAllTrending && trending.length > 5 && (
@@ -2164,15 +2213,22 @@ const RedditKnowledgeCard = ({ data }: { data: any }) => {
   )
 }
 
-const RedditOverviewCard = ({ data }: { data: any }) => {
+/** Mirrors `value.toLocaleString()` for the number/string stats a tool may return. */
+const formatStatCount = (value: unknown) =>
+  typeof value === 'number' ? value.toLocaleString() : String(value)
+
+const RedditOverviewCard = ({ data }: { data: unknown }) => {
   const [showAllTrending, setShowAllTrending] = useState(false)
   const isMobile = useMediaQuery('(max-width: 640px)')
 
-  const { trending = [], stats = {}, summary = '', message } = data
+  const record = asRecord(data)
+  const trending = asArray(record.trending).map(asRecord)
+  const stats = asRecord(record.stats)
+  const summary = asText(record.summary) ?? ''
 
-  const formatTimeAgo = (dateString: string) => {
+  const formatTimeAgo = (dateString: unknown) => {
     try {
-      const date = new Date(dateString)
+      const date = toDate(dateString)
       const now = new Date()
       const diffMs = now.getTime() - date.getTime()
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
@@ -2209,7 +2265,7 @@ const RedditOverviewCard = ({ data }: { data: any }) => {
               {stats.totalPosts !== undefined && (
                 <div className="text-center p-2 sm:p-3 bg-muted/30 rounded-md">
                   <div className="text-base sm:text-lg font-bold text-foreground">
-                    {stats.totalPosts.toLocaleString()}
+                    {formatStatCount(stats.totalPosts)}
                   </div>
                   <div className="text-xs text-muted-foreground">Posts</div>
                 </div>
@@ -2217,7 +2273,7 @@ const RedditOverviewCard = ({ data }: { data: any }) => {
               {stats.totalComments !== undefined && (
                 <div className="text-center p-2 sm:p-3 bg-muted/30 rounded-md">
                   <div className="text-base sm:text-lg font-bold text-foreground">
-                    {stats.totalComments.toLocaleString()}
+                    {formatStatCount(stats.totalComments)}
                   </div>
                   <div className="text-xs text-muted-foreground">Comments</div>
                 </div>
@@ -2225,12 +2281,12 @@ const RedditOverviewCard = ({ data }: { data: any }) => {
               {stats.activeSubreddits !== undefined && (
                 <div className="text-center p-2 sm:p-3 bg-muted/30 rounded-md">
                   <div className="text-base sm:text-lg font-bold text-foreground">
-                    {stats.activeSubreddits}
+                    {asText(stats.activeSubreddits)}
                   </div>
                   <div className="text-xs text-muted-foreground">Subreddits</div>
                 </div>
               )}
-              {stats.lastUpdated && (
+              {Boolean(stats.lastUpdated) && (
                 <div className="text-center p-2 sm:p-3 bg-muted/30 rounded-md">
                   <div className="text-xs sm:text-sm font-bold text-foreground">
                     {formatTimeAgo(stats.lastUpdated)}
@@ -2267,66 +2323,69 @@ const RedditOverviewCard = ({ data }: { data: any }) => {
           </div>
 
           <div className="divide-y divide-border">
-            {displayTrending.map((post: any, index: number) => (
-              <div key={index} className="p-3 sm:p-4 hover:bg-muted/50 transition-colors">
-                <div className="flex items-start gap-2 sm:gap-3">
-                  <div className="flex flex-col items-center gap-1 min-w-0 flex-shrink-0">
-                    <Badge variant="outline" className="text-xs px-1.5 py-0.5">
-                      {post.type || 'post'}
-                    </Badge>
-                    {post.score &&
-                      post.score > 0 &&
-                      post.score !== 'N/A' &&
-                      !isNaN(Number(post.score)) && (
+            {displayTrending.map((post, index) => {
+              const score = asText(post.score)
+              const postUrl = asString(post.url)
+              return (
+                <div key={index} className="p-3 sm:p-4 hover:bg-muted/50 transition-colors">
+                  <div className="flex items-start gap-2 sm:gap-3">
+                    <div className="flex flex-col items-center gap-1 min-w-0 flex-shrink-0">
+                      <Badge variant="outline" className="text-xs px-1.5 py-0.5">
+                        {asText(post.type) || 'post'}
+                      </Badge>
+                      {score && Number(score) > 0 && score !== 'N/A' && !isNaN(Number(score)) && (
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
                           <ChevronUp className="h-3 w-3" />
-                          {post.score}
+                          {score}
                         </div>
                       )}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-1">
-                      <span className="text-xs font-medium text-primary">r/{post.subreddit}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {formatTimeAgo(post.created)}
-                      </span>
                     </div>
 
-                    <h5
-                      className="text-sm font-medium text-foreground mb-1 overflow-hidden"
-                      style={{
-                        display: '-webkit-box',
-                        WebkitLineClamp: isMobile ? 3 : 2,
-                        WebkitBoxOrient: 'vertical',
-                        lineHeight: '1.4em',
-                        maxHeight: isMobile ? '4.2em' : '2.8em',
-                      }}
-                    >
-                      {post.title}
-                    </h5>
-
-                    {post.author && (
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <User className="h-3 w-3" />
-                        <span className="truncate">u/{post.author}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-1">
+                        <span className="text-xs font-medium text-primary">
+                          r/{asText(post.subreddit)}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatTimeAgo(post.created)}
+                        </span>
                       </div>
+
+                      <h5
+                        className="text-sm font-medium text-foreground mb-1 overflow-hidden"
+                        style={{
+                          display: '-webkit-box',
+                          WebkitLineClamp: isMobile ? 3 : 2,
+                          WebkitBoxOrient: 'vertical',
+                          lineHeight: '1.4em',
+                          maxHeight: isMobile ? '4.2em' : '2.8em',
+                        }}
+                      >
+                        {asText(post.title)}
+                      </h5>
+
+                      {Boolean(post.author) && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <User className="h-3 w-3" />
+                          <span className="truncate">u/{asText(post.author)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {postUrl && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 flex-shrink-0"
+                        onClick={() => window.open(postUrl, '_blank')}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                      </Button>
                     )}
                   </div>
-
-                  {post.url && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 flex-shrink-0"
-                      onClick={() => window.open(post.url, '_blank')}
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                    </Button>
-                  )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           {showAllTrending && trending.length > 5 && (
@@ -2371,7 +2430,14 @@ const ModalPortal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return ReactDOM.createPortal(children, elRef.current)
 }
 
-const CampusInfoCard = ({ info }: { info: any }) => {
+const CampusInfoCard = ({ info: rawInfo }: { info: unknown }) => {
+  const info = asRecord(rawInfo)
+  const name = asText(info.name)
+  const description = asText(info.description)
+  const usage = asText(info.usage)
+  const location = asText(info.location)
+  const note = asText(info.note)
+  const mapsUrl = asString(info.mapsUrl)
   return (
     <div className="w-full">
       <Card className="overflow-hidden border-border/50 hover:border-blue-500/30 transition-colors w-full">
@@ -2381,16 +2447,14 @@ const CampusInfoCard = ({ info }: { info: any }) => {
               <Building className="h-6 w-6" />
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="text-xl font-bold text-foreground">{info.name}</h3>
-              {info.description && (
-                <p className="text-sm text-muted-foreground mt-1">{info.description}</p>
-              )}
+              <h3 className="text-xl font-bold text-foreground">{name}</h3>
+              {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
             </div>
           </div>
         </CardHeader>
         <CardContent className="p-6 pt-4 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {info.usage && (
+            {usage && (
               <div className="bg-muted/30 p-4 rounded-lg">
                 <div className="flex items-start gap-3">
                   <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500 flex-shrink-0">
@@ -2398,13 +2462,13 @@ const CampusInfoCard = ({ info }: { info: any }) => {
                   </div>
                   <div>
                     <h4 className="font-medium text-sm text-muted-foreground mb-1">Usage</h4>
-                    <p className="text-foreground">{info.usage}</p>
+                    <p className="text-foreground">{usage}</p>
                   </div>
                 </div>
               </div>
             )}
 
-            {info.location && (
+            {location && (
               <div className="bg-muted/30 p-4 rounded-lg">
                 <div className="flex items-start gap-3">
                   <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500 flex-shrink-0">
@@ -2412,14 +2476,14 @@ const CampusInfoCard = ({ info }: { info: any }) => {
                   </div>
                   <div>
                     <h4 className="font-medium text-sm text-muted-foreground mb-1">Location</h4>
-                    <p className="text-foreground">{info.location}</p>
+                    <p className="text-foreground">{location}</p>
                   </div>
                 </div>
               </div>
             )}
           </div>
 
-          {info.note && (
+          {note && (
             <div className="bg-blue-50/50 dark:bg-blue-950/20 p-4 rounded-lg border border-blue-100 dark:border-blue-900/50">
               <div className="flex items-start gap-3">
                 <div className="p-2 rounded-lg bg-blue-500/10 text-blue-500 flex-shrink-0">
@@ -2429,16 +2493,16 @@ const CampusInfoCard = ({ info }: { info: any }) => {
                   <h4 className="font-medium text-sm text-blue-600 dark:text-blue-400 mb-1">
                     Note
                   </h4>
-                  <p className="text-foreground">{info.note}</p>
+                  <p className="text-foreground">{note}</p>
                 </div>
               </div>
             </div>
           )}
 
-          {info.mapsUrl && (
+          {mapsUrl && (
             <div className="pt-2">
               <a
-                href={info.mapsUrl}
+                href={mapsUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
@@ -2454,9 +2518,12 @@ const CampusInfoCard = ({ info }: { info: any }) => {
   )
 }
 
-const PlacementInfoCard = ({ data: rawData }: { data: any }) => {
+const PlacementInfoCard = ({ data: rawData }: { data: unknown }) => {
   const [showDetails, setShowDetails] = useState(false)
-  const { data: placementData, campus, formatted_content } = rawData
+  const raw = asRecord(rawData)
+  const placementData = raw.data
+  const campus = asText(raw.campus)
+  const formatted_content = asString(raw.formatted_content)
 
   if (!placementData) {
     return (
@@ -2466,7 +2533,11 @@ const PlacementInfoCard = ({ data: rawData }: { data: any }) => {
     )
   }
 
-  const { statistics: stats, companies, recentOffers: recent_offers } = placementData
+  const placement = asRecord(placementData)
+  const stats = isRecord(placement.statistics) ? placement.statistics : undefined
+  const companies = isUnknownArray(placement.companies) ? placement.companies : undefined
+  const recent_offers = isUnknownArray(placement.recentOffers) ? placement.recentOffers : undefined
+  const source = placement.source
 
   if (!stats && !companies && !recent_offers && !formatted_content) {
     return (
@@ -2476,7 +2547,8 @@ const PlacementInfoCard = ({ data: rawData }: { data: any }) => {
     )
   }
 
-  const renderStat = (icon: React.ReactNode, label: string, value: string | number | undefined) => {
+  const renderStat = (icon: React.ReactNode, label: string, rawValue: unknown) => {
+    const value = asText(rawValue)
     if (!value) return null
     return (
       <div className="flex items-center gap-3 bg-muted/50 p-3 rounded-lg">
@@ -2490,7 +2562,11 @@ const PlacementInfoCard = ({ data: rawData }: { data: any }) => {
   }
 
   const hasCampusData =
-    campus && stats && stats['Total Offers'] !== '0' && rawData.data?.source?.includes('campus')
+    Boolean(campus) &&
+    stats !== undefined &&
+    stats['Total Offers'] !== '0' &&
+    (typeof source === 'string' || isUnknownArray(source)) &&
+    source.includes('campus')
   const academicYear = `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`
 
   return (
@@ -2528,13 +2604,13 @@ const PlacementInfoCard = ({ data: rawData }: { data: any }) => {
                   <div className="bg-white dark:bg-blue-900/30 px-3 py-1.5 rounded-lg flex items-center gap-2 border border-blue-100 dark:border-blue-800/50">
                     <Briefcase className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                     <span className="text-sm font-medium">
-                      {stats?.['Companies'] || 'N/A'} Companies
+                      {asText(stats?.['Companies']) || 'N/A'} Companies
                     </span>
                   </div>
                   <div className="bg-white dark:bg-blue-900/30 px-3 py-1.5 rounded-lg flex items-center gap-2 border border-blue-100 dark:border-blue-800/50">
                     <Award className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                     <span className="text-sm font-medium">
-                      {stats?.['Total Offers'] || 'N/A'} Offers
+                      {asText(stats?.['Total Offers']) || 'N/A'} Offers
                     </span>
                   </div>
                 </div>
@@ -2546,25 +2622,25 @@ const PlacementInfoCard = ({ data: rawData }: { data: any }) => {
                     <div className="text-center">
                       <p className="text-xs text-muted-foreground">Highest CTC</p>
                       <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                        {stats['Highest CTC']}
+                        {asText(stats?.['Highest CTC'])}
                       </p>
                     </div>
                     <div className="text-center">
                       <p className="text-xs text-muted-foreground">Average CTC</p>
                       <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                        {stats['Average CTC']}
+                        {asText(stats?.['Average CTC'])}
                       </p>
                     </div>
                     <div className="text-center">
                       <p className="text-xs text-muted-foreground">Median CTC</p>
                       <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                        {stats['Median CTC']}
+                        {asText(stats?.['Median CTC'])}
                       </p>
                     </div>
                     <div className="text-center">
                       <p className="text-xs text-muted-foreground">Lowest CTC</p>
                       <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                        {stats['Lowest CTC']}
+                        {asText(stats?.['Lowest CTC'])}
                       </p>
                     </div>
                   </div>
@@ -2622,9 +2698,9 @@ const PlacementInfoCard = ({ data: rawData }: { data: any }) => {
                 Top Companies
               </h3>
               <div className="flex flex-wrap gap-2">
-                {companies.slice(0, 15).map((company: any, index: number) => (
+                {companies.slice(0, 15).map((company, index) => (
                   <Badge key={index} variant="secondary" className="text-sm py-1 px-3">
-                    {company.name || company}
+                    {asText(asRecord(company).name) || asText(company)}
                   </Badge>
                 ))}
               </div>
@@ -2638,19 +2714,22 @@ const PlacementInfoCard = ({ data: rawData }: { data: any }) => {
                 Recent Offers
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {recent_offers.slice(0, 6).map((offer: any, index: number) => (
-                  <Card key={index} className="p-3">
-                    <div className="flex justify-between items-start gap-2">
-                      <div>
-                        <p className="font-semibold text-sm">{offer.company}</p>
-                        <p className="text-xs text-muted-foreground">{offer.date}</p>
+                {recent_offers
+                  .slice(0, 6)
+                  .map(asRecord)
+                  .map((offer, index) => (
+                    <Card key={index} className="p-3">
+                      <div className="flex justify-between items-start gap-2">
+                        <div>
+                          <p className="font-semibold text-sm">{asText(offer.company)}</p>
+                          <p className="text-xs text-muted-foreground">{asText(offer.date)}</p>
+                        </div>
+                        <Badge variant="outline" className="text-xs whitespace-nowrap text-right">
+                          {asText(offer.ctc)}
+                        </Badge>
                       </div>
-                      <Badge variant="outline" className="text-xs whitespace-nowrap text-right">
-                        {offer.ctc}
-                      </Badge>
-                    </div>
-                  </Card>
-                ))}
+                    </Card>
+                  ))}
               </div>
             </div>
           )}
@@ -2674,12 +2753,12 @@ const PureArtifactDisplay = ({
   const [isFullscreen, setIsFullscreen] = useState(false)
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [showAllItems, setShowAllItems] = useState(false)
-  const [internalMaximizedItem, setInternalMaximizedItem] = useState<any>(null)
+  const [internalMaximizedItem, setInternalMaximizedItem] = useState<MaximizedArtifactItem>(null)
 
   const isControlled = propMaximizedItem !== undefined && propSetMaximizedItem !== undefined
 
   const maximizedItem = isControlled ? propMaximizedItem : internalMaximizedItem
-  const setMaximizedItem = isControlled ? propSetMaximizedItem! : setInternalMaximizedItem
+  const setMaximizedItem = isControlled ? propSetMaximizedItem : setInternalMaximizedItem
 
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [isPdfLoading, setIsPdfLoading] = useState(false)
@@ -2692,24 +2771,16 @@ const PureArtifactDisplay = ({
   const toggleExpand = () => setIsExpanded(!isExpanded)
   const toggleShowAll = () => setShowAllItems(!showAllItems)
 
-  const handleMaximize = (item: any) => {
-    if (isControlled) {
-      propSetMaximizedItem!(item)
-    } else {
-      setInternalMaximizedItem(item)
-    }
+  const handleMaximize = (item: MaximizedArtifactItem) => {
+    setMaximizedItem(item)
   }
 
   const handleCloseMaximize = () => {
-    if (isControlled) {
-      propSetMaximizedItem!(null)
-    } else {
-      setInternalMaximizedItem(null)
-    }
+    setMaximizedItem(null)
   }
 
-  let items: any[] = []
-  let addPdf: ((item: any) => void) | undefined
+  let items: PdfItem[] = []
+  let addPdf: ((item: Omit<PdfItem, 'isOpen'>) => void) | undefined
   let openPdf: ((id: string) => void) | undefined
   let minimizePdf: ((id: string) => void) | undefined
   let openByUrl: ((url: string) => void) | undefined
@@ -2722,47 +2793,45 @@ const PureArtifactDisplay = ({
     addPdf = ctx.addPdf
     openPdf = ctx.openPdf
     minimizePdf = ctx.minimizePdf
-    openByUrl = (ctx as any).openByUrl
-    minimizeByUrl = (ctx as any).minimizeByUrl
-    removeByUrl = (ctx as any).removeByUrl
-  } catch (e) {
-  }
+    openByUrl = ctx.openByUrl
+    minimizeByUrl = ctx.minimizeByUrl
+    removeByUrl = ctx.removeByUrl
+  } catch (e) {}
 
   useEffect(() => {
+    const eventDetail = (ev: Event): UnknownRecord =>
+      asRecord(ev instanceof CustomEvent ? ev.detail : undefined)
+
     const onOpenById = (ev: Event) => {
       try {
-        const detail = (ev as CustomEvent)?.detail
-        const id = detail?.id
+        const id = eventDetail(ev).id
         if (!id) return
-        const found = items.find((p: any) => p.id === id)
+        const found = items.find(p => p.id === id)
         if (found && found.url) {
           setPdfTitle(found.title || 'PDF Document')
           setPdfUrl(found.url)
           setIsPdfLoading(false)
         }
-      } catch (e) {
-      }
+      } catch (e) {}
     }
 
     const onOpenByUrl = (ev: Event) => {
       try {
-        const detail = (ev as CustomEvent)?.detail
-        const url = detail?.url
+        const url = asString(eventDetail(ev).url)
         if (!url) return
-        const found = items.find((p: any) => p.url === url)
+        const found = items.find(p => p.url === url)
         setPdfTitle((found && found.title) || 'PDF Document')
         setPdfUrl(url)
         setIsPdfLoading(false)
-      } catch (e) {
-      }
+      } catch (e) {}
     }
 
-    window.addEventListener('pdf-dock:open', onOpenById as EventListener)
-    window.addEventListener('pdf-dock:open-by-url', onOpenByUrl as EventListener)
+    window.addEventListener('pdf-dock:open', onOpenById)
+    window.addEventListener('pdf-dock:open-by-url', onOpenByUrl)
 
     return () => {
-      window.removeEventListener('pdf-dock:open', onOpenById as EventListener)
-      window.removeEventListener('pdf-dock:open-by-url', onOpenByUrl as EventListener)
+      window.removeEventListener('pdf-dock:open', onOpenById)
+      window.removeEventListener('pdf-dock:open-by-url', onOpenByUrl)
     }
   }, [items])
 
@@ -2814,6 +2883,7 @@ const PureArtifactDisplay = ({
       document.addEventListener('keydown', handleKeyDown)
       return () => document.removeEventListener('keydown', handleKeyDown)
     }
+    return undefined
   }, [pdfUrl])
 
   const renderContent = () => {
@@ -2822,7 +2892,7 @@ const PureArtifactDisplay = ({
     }
 
     if (type === 'course-info') {
-      return <FfcsCourseSearchResult data={data} />
+      return <FfcsCourseSearchResult data={parseCourseSearchResult(data)} />
     }
     if (type === 'placements' && data && !Array.isArray(data)) {
       return <PlacementInfoCard data={data} />
@@ -2837,77 +2907,82 @@ const PureArtifactDisplay = ({
       )
     }
 
+    const dataRecord = asRecord(data)
     const isFacultyType = type === 'faculty'
-    const facultyList = isFacultyType && data && Array.isArray(data.faculty) ? data.faculty : null
+    const facultyList =
+      isFacultyType && isUnknownArray(dataRecord.faculty) ? dataRecord.faculty : null
     if (isFacultyType && facultyList && facultyList.length === 0) {
       return (
         <div className="text-center py-8 text-muted-foreground">
           <User className="h-8 w-8 mx-auto mb-2 opacity-50" />
           <p className="text-sm">
-            {typeof data.message === 'string'
-              ? data.message
+            {typeof dataRecord.message === 'string'
+              ? dataRecord.message
               : 'No faculty found matching your criteria. Please check the spelling or try a different department or name.'}
           </p>
         </div>
       )
     }
 
-    const items: any[] =
-      isFacultyType && facultyList ? facultyList : Array.isArray(data) ? data : [data]
+    const items: unknown[] =
+      isFacultyType && facultyList ? facultyList : isUnknownArray(data) ? data : [data]
 
-    let processedItems = items
-    if (type === 'papers' && items.length) {
-      const chunkScores = items.map(p => (typeof p.chunkScore === 'number' ? p.chunkScore : 0))
-      const questionScores = items.map(p =>
-        typeof p.questionScore === 'number' ? p.questionScore : 0
-      )
-      const maxChunk = Math.max(...chunkScores)
-      const minChunk = Math.min(...chunkScores)
-      const maxQ = Math.max(...questionScores)
-      const minQ = Math.min(...questionScores)
-      const spreadChunk = maxChunk - minChunk
-      const spreadQ = maxQ - minQ
-      const allQZero = maxQ === 0
-      processedItems = items.map((p, i) => {
-        const rawChunk = chunkScores[i]
-        const rawQ = questionScores[i]
-        let relChunk =
-          spreadChunk < 0.005
-            ? maxChunk
-              ? rawChunk / (maxChunk || 1)
-              : 0
-            : (rawChunk - minChunk) / (spreadChunk || 1)
-        relChunk = Math.min(1, Math.max(0, relChunk ** 0.85))
-        let relQ = 0
-        if (!allQZero) {
-          relQ = spreadQ < 0.005 ? (maxQ ? rawQ / (maxQ || 1) : 0) : (rawQ - minQ) / (spreadQ || 1)
-          relQ = Math.min(1, Math.max(0, relQ ** 0.85))
-        }
-        return {
-          ...p,
-          _rawChunkScore: rawChunk,
-          _rawQuestionScore: rawQ,
-          displayContentPct: Math.round(relChunk * 100),
-          displayQuestionPct: allQZero ? undefined : Math.round(relQ * 100),
-          hasQuestionSignal: !allQZero && rawQ > 0.0005,
-        }
-      })
-    }
-
+    let processedItems: unknown[] = items
     if (type === 'papers') {
-      const normalizeExam = (e?: string) =>
-        (e || '')
-          .toString()
+      let papers: UnknownRecord[] = items.map(asRecord)
+      const chunkScoreOf = (p: UnknownRecord) =>
+        typeof p.chunkScore === 'number' ? p.chunkScore : 0
+      const questionScoreOf = (p: UnknownRecord) =>
+        typeof p.questionScore === 'number' ? p.questionScore : 0
+      if (papers.length) {
+        const chunkScores = papers.map(chunkScoreOf)
+        const questionScores = papers.map(questionScoreOf)
+        const maxChunk = Math.max(...chunkScores)
+        const minChunk = Math.min(...chunkScores)
+        const maxQ = Math.max(...questionScores)
+        const minQ = Math.min(...questionScores)
+        const spreadChunk = maxChunk - minChunk
+        const spreadQ = maxQ - minQ
+        const allQZero = maxQ === 0
+        papers = papers.map(p => {
+          const rawChunk = chunkScoreOf(p)
+          const rawQ = questionScoreOf(p)
+          let relChunk =
+            spreadChunk < 0.005
+              ? maxChunk
+                ? rawChunk / (maxChunk || 1)
+                : 0
+              : (rawChunk - minChunk) / (spreadChunk || 1)
+          relChunk = Math.min(1, Math.max(0, relChunk ** 0.85))
+          let relQ = 0
+          if (!allQZero) {
+            relQ =
+              spreadQ < 0.005 ? (maxQ ? rawQ / (maxQ || 1) : 0) : (rawQ - minQ) / (spreadQ || 1)
+            relQ = Math.min(1, Math.max(0, relQ ** 0.85))
+          }
+          return {
+            ...p,
+            _rawChunkScore: rawChunk,
+            _rawQuestionScore: rawQ,
+            displayContentPct: Math.round(relChunk * 100),
+            displayQuestionPct: allQZero ? undefined : Math.round(relQ * 100),
+            hasQuestionSignal: !allQZero && rawQ > 0.0005,
+          }
+        })
+      }
+
+      const normalizeExam = (e: unknown) =>
+        (e ? String(e) : '')
           .trim()
           .toUpperCase()
           .replace(/[\s-]+/g, '') // Treat CAT1 and CAT-1 as same
-      const extractYearNum = (y?: string) => {
+      const extractYearNum = (y: unknown) => {
         if (!y) return -Infinity
         const m = String(y).match(/(20\d{2})/g)
         if (!m || m.length === 0) return -Infinity
         return Math.max(...m.map(s => parseInt(s, 10)))
       }
-      processedItems = processedItems.filter(p => {
+      papers = papers.filter(p => {
         const okExam =
           paperExamFilter === 'all' ||
           normalizeExam(p.examType || p.category) === normalizeExam(paperExamFilter)
@@ -2915,14 +2990,14 @@ const PureArtifactDisplay = ({
         return okExam && okYear
       })
       const examOrder: Record<string, number> = { FAT: 1, CAT2: 2, CAT1: 3, QUIZ: 4 }
-      processedItems = [...processedItems].sort((a, b) => {
+      processedItems = [...papers].sort((a, b) => {
         switch (paperSort) {
           case 'relevance': {
-            const ar = typeof a.rank === 'number' ? a.rank : Infinity
-            const br = typeof b.rank === 'number' ? b.rank : Infinity
+            const ar = asNumber(a.rank) ?? Infinity
+            const br = asNumber(b.rank) ?? Infinity
             if (ar !== br) return ar - br
-            const as = typeof a.score === 'number' ? a.score : -Infinity
-            const bs = typeof b.score === 'number' ? b.score : -Infinity
+            const as = asNumber(a.score) ?? -Infinity
+            const bs = asNumber(b.score) ?? -Infinity
             return bs - as
           }
           case 'year_desc':
@@ -2933,14 +3008,14 @@ const PureArtifactDisplay = ({
             const ae = examOrder[normalizeExam(a.examType)] || 99
             const be = examOrder[normalizeExam(b.examType)] || 99
             if (ae !== be) return ae - be
-            return (a.examType || '').localeCompare(b.examType || '')
+            return textOf(a.examType).localeCompare(textOf(b.examType))
           }
           case 'slot':
-            return (a.slot || '').localeCompare(b.slot || '')
+            return textOf(a.slot).localeCompare(textOf(b.slot))
           case 'source':
-            return (a.source || '').localeCompare(b.source || '')
+            return textOf(a.source).localeCompare(textOf(b.source))
           case 'title':
-            return (a.title || '').localeCompare(b.title || '')
+            return textOf(a.title).localeCompare(textOf(b.title))
           default:
             return 0
         }
@@ -2990,11 +3065,7 @@ const PureArtifactDisplay = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Years</SelectItem>
-                {Array.from(
-                  new Set(
-                    (Array.isArray(items) ? items : []).map((p: any) => p.year).filter(Boolean)
-                  )
-                ).map((y: any) => (
+                {Array.from(new Set(items.map(p => asRecord(p).year).filter(Boolean))).map(y => (
                   <SelectItem key={String(y)} value={String(y)}>
                     {String(y)}
                   </SelectItem>
@@ -3034,7 +3105,7 @@ const PureArtifactDisplay = ({
                     : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
           )}
         >
-          {displayItems.map((item: any, index: number) => {
+          {displayItems.map((item, index) => {
             switch (type) {
               case 'papers':
                 return (
@@ -3075,16 +3146,10 @@ const PureArtifactDisplay = ({
               case 'papers-qa':
                 return <PapersQAArtifact key={index} data={item} />
               case 'question-patterns':
-                const QuestionPatternsArtifact =
-                  require('./artifacts/question-patterns-artifact').default
                 return <QuestionPatternsArtifact key={index} data={item} />
               case 'gravitas-events':
-                const GravitasEventsArtifact =
-                  require('./artifacts/gravitas-events-artifact').default
                 return <GravitasEventsArtifact key={index} data={item} />
               case 'gravitas-event-registration':
-                const GravitasEventRegistrationArtifact =
-                  require('./artifacts/gravitas-event-registration-artifact').default
                 return <GravitasEventRegistrationArtifact key={index} data={item} />
               case 'general':
                 return <GeneralCard key={index} data={item} />
@@ -3166,9 +3231,9 @@ const PureArtifactDisplay = ({
                 <CardTitle className="text-base text-card-foreground truncate">{title}</CardTitle>
                 {!(
                   type === 'vtop-data' &&
-                  Array.isArray(data) &&
+                  isUnknownArray(data) &&
                   data.length === 1 &&
-                  data[0]?.requiresCredentials
+                  asRecord(data[0]).requiresCredentials
                 ) && (
                   <p className="text-sm text-muted-foreground">
                     {itemCount} item{itemCount !== 1 ? 's' : ''} found
@@ -3218,7 +3283,6 @@ const PureArtifactDisplay = ({
                         <X className="h-4 w-4" />
                       </Button>
 
-
                       {(minimizeByUrl || minimizePdf) && (
                         <Button
                           variant="ghost"
@@ -3229,11 +3293,10 @@ const PureArtifactDisplay = ({
                               if (minimizeByUrl && pdfUrl) {
                                 minimizeByUrl(String(pdfUrl))
                               } else if (minimizePdf && items && pdfUrl) {
-                                const found = items.find((p: any) => p.url === pdfUrl)
+                                const found = items.find(p => p.url === pdfUrl)
                                 if (found) minimizePdf(found.id)
                               }
-                            } catch (e) {
-                            }
+                            } catch (e) {}
 
                             handleClosePdf()
                           }}
@@ -3296,7 +3359,6 @@ const PureArtifactDisplay = ({
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-
                     {(minimizeByUrl || minimizePdf) && (
                       <Button
                         variant="ghost"
@@ -3307,7 +3369,7 @@ const PureArtifactDisplay = ({
                             if (minimizeByUrl && pdfUrl) {
                               minimizeByUrl(String(pdfUrl))
                             } else if (minimizePdf && items && pdfUrl) {
-                              const found = items.find((p: any) => p.url === pdfUrl)
+                              const found = items.find(p => p.url === pdfUrl)
                               if (found) minimizePdf(found.id)
                             } else if (items && items.length > 0) {
                               const mostRecent = items[items.length - 1]
@@ -3359,17 +3421,28 @@ const PureArtifactDisplay = ({
   )
 }
 
-function GeneratedImageCard({ data }: { data: any }) {
+interface GeneratedImage {
+  base64: string
+  mimeType: string
+}
+
+const isGeneratedImage = (value: unknown): value is GeneratedImage =>
+  isRecord(value) && typeof value.base64 === 'string' && typeof value.mimeType === 'string'
+
+function GeneratedImageCard({ data }: { data: unknown }) {
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [selectedImage, setSelectedImage] = useState<{
-    base64: string
-    mimeType: string
-  } | null>(null)
+  const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null)
 
+  const record = asRecord(data)
+  const prompt = asString(record.prompt)
+  const aspectRatio = asText(record.aspectRatio)
+  const style = asText(record.style)
   // Handle single image or multiple images
-  const images = data?.images || (data?.image ? [data.image] : [])
+  const images = asArray(record.images || (record.image ? [record.image] : [])).filter(
+    isGeneratedImage
+  )
 
-  const handleDownload = (image: { base64: string; mimeType: string }, index: number) => {
+  const handleDownload = (image: GeneratedImage, index: number) => {
     const link = document.createElement('a')
     link.href = `data:${image.mimeType};base64,${image.base64}`
     const extension = image.mimeType.split('/')[1] || 'png'
@@ -3380,9 +3453,9 @@ function GeneratedImageCard({ data }: { data: any }) {
   }
 
   const handleCopyPrompt = async () => {
-    if (data?.prompt) {
+    if (prompt) {
       try {
-        await navigator.clipboard.writeText(data.prompt)
+        await navigator.clipboard.writeText(prompt)
       } catch {}
     }
   }
@@ -3404,7 +3477,9 @@ function GeneratedImageCard({ data }: { data: any }) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ImageIcon className="h-4 w-4 text-purple-500" />
-              <CardTitle className="text-sm font-medium">Generated Image{images.length > 1 ? 's' : ''}</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Generated Image{images.length > 1 ? 's' : ''}
+              </CardTitle>
             </div>
             {images.length > 1 && (
               <Badge variant="secondary" className="text-xs">
@@ -3414,10 +3489,10 @@ function GeneratedImageCard({ data }: { data: any }) {
           </div>
         </CardHeader>
         <CardContent className="p-4 pt-0 space-y-3">
-          {data?.prompt && (
+          {prompt && (
             <div className="flex items-start gap-2 p-2 rounded bg-muted/50 border border-border/40">
               <Sparkles className="h-3.5 w-3.5 text-purple-500 mt-0.5 shrink-0" />
-              <p className="text-xs text-muted-foreground flex-1 line-clamp-2">{data.prompt}</p>
+              <p className="text-xs text-muted-foreground flex-1 line-clamp-2">{prompt}</p>
               <Button
                 variant="ghost"
                 size="icon"
@@ -3429,18 +3504,15 @@ function GeneratedImageCard({ data }: { data: any }) {
             </div>
           )}
 
-          <div className={cn(
-            'grid gap-2',
-            images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'
-          )}>
-            {images.map((image: { base64: string; mimeType: string }, index: number) => (
+          <div className={cn('grid gap-2', images.length === 1 ? 'grid-cols-1' : 'grid-cols-2')}>
+            {images.map((image, index) => (
               <div
                 key={index}
                 className="relative group rounded-lg overflow-hidden border border-border/50 bg-muted/30"
               >
                 <img
                   src={`data:${image.mimeType};base64,${image.base64}`}
-                  alt={data?.prompt || `Generated image ${index + 1}`}
+                  alt={prompt || `Generated image ${index + 1}`}
                   className="w-full h-auto object-contain max-h-[400px] cursor-pointer transition-transform hover:scale-[1.02]"
                   onClick={() => {
                     setSelectedImage(image)
@@ -3453,7 +3525,7 @@ function GeneratedImageCard({ data }: { data: any }) {
                       variant="secondary"
                       size="sm"
                       className="h-7 text-xs bg-white/90 hover:bg-white text-black"
-                      onClick={(e) => {
+                      onClick={e => {
                         e.stopPropagation()
                         handleDownload(image, index)
                       }}
@@ -3465,7 +3537,7 @@ function GeneratedImageCard({ data }: { data: any }) {
                       variant="secondary"
                       size="sm"
                       className="h-7 text-xs bg-white/90 hover:bg-white text-black"
-                      onClick={(e) => {
+                      onClick={e => {
                         e.stopPropagation()
                         setSelectedImage(image)
                         setIsFullscreen(true)
@@ -3480,16 +3552,16 @@ function GeneratedImageCard({ data }: { data: any }) {
             ))}
           </div>
 
-          {(data?.aspectRatio || data?.style) && (
+          {(aspectRatio || style) && (
             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-              {data.aspectRatio && (
+              {aspectRatio && (
                 <Badge variant="outline" className="text-[10px]">
-                  {data.aspectRatio}
+                  {aspectRatio}
                 </Badge>
               )}
-              {data.style && (
+              {style && (
                 <Badge variant="outline" className="text-[10px]">
-                  {data.style}
+                  {style}
                 </Badge>
               )}
             </div>
@@ -3512,11 +3584,11 @@ function GeneratedImageCard({ data }: { data: any }) {
               animate={{ scale: 1 }}
               exit={{ scale: 0.9 }}
               className="relative max-w-[90vw] max-h-[90vh]"
-              onClick={(e) => e.stopPropagation()}
+              onClick={e => e.stopPropagation()}
             >
               <img
                 src={`data:${selectedImage.mimeType};base64,${selectedImage.base64}`}
-                alt={data?.prompt || 'Generated image'}
+                alt={prompt || 'Generated image'}
                 className="max-w-full max-h-[85vh] object-contain rounded-lg"
               />
               <div className="absolute top-2 right-2 flex gap-2">
@@ -3538,9 +3610,9 @@ function GeneratedImageCard({ data }: { data: any }) {
                   <X className="h-4 w-4" />
                 </Button>
               </div>
-              {data?.prompt && (
+              {prompt && (
                 <div className="absolute bottom-2 left-2 right-2 p-3 bg-black/70 rounded-lg">
-                  <p className="text-sm text-white">{data.prompt}</p>
+                  <p className="text-sm text-white">{prompt}</p>
                 </div>
               )}
             </motion.div>
@@ -3551,12 +3623,22 @@ function GeneratedImageCard({ data }: { data: any }) {
   )
 }
 
-function GeneralCard({ data }: { data: any }) {
-  const hasIndex = typeof data?.indexId === 'string' || typeof data?.indexId === 'number'
-  const hasAnswer = typeof data?.answer === 'string' && data.answer.trim().length > 0
-  const hasSources = Array.isArray(data?.sources) && data.sources.length > 0
+function GeneralCard({ data }: { data: unknown }) {
+  const record = asRecord(data)
+  const message = asText(record.message)
+  const indexId = asText(record.indexId)
+  const answer =
+    typeof record.answer === 'string' && record.answer.trim().length > 0 ? record.answer : undefined
+  const sources = asArray(record.sources)
+  const course = asText(record.course)
+  const examType = asText(record.examType)
+  const year = asText(record.year)
+  const totalIndexed = record.totalIndexed
+  const hasIndex = indexId !== undefined
+  const hasAnswer = answer !== undefined
+  const hasSources = sources.length > 0
 
-  const copy = async (text?: string) => {
+  const copy = async (text?: TextValue) => {
     if (!text) return
     try {
       await navigator.clipboard.writeText(String(text))
@@ -3566,48 +3648,49 @@ function GeneralCard({ data }: { data: any }) {
   return (
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="p-4 space-y-3">
-        {data?.message && (
+        {message && (
           <div className="text-sm text-foreground/90 whitespace-pre-wrap break-words">
-            {data.message}
+            {message}
           </div>
         )}
 
         {hasIndex && (
           <div className="flex items-center gap-2 text-sm">
             <span className="px-2 py-1 rounded bg-muted border border-border/50 font-mono break-all">
-              {String(data.indexId)}
+              {String(indexId)}
             </span>
             <Button
               variant="outline"
               size="sm"
               className="h-7 text-xs"
-              onClick={() => copy(data.indexId)}
+              onClick={() => copy(indexId)}
             >
               <Copy className="h-3.5 w-3.5 mr-1" /> copy indexId
             </Button>
           </div>
         )}
 
-        {(data?.course || data?.examType || data?.year || data?.totalIndexed) && (
+        {(course || examType || year || asText(totalIndexed)) && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-muted-foreground">
-            {data.course && (
+            {course && (
               <div>
-                <span className="font-medium text-foreground/80">course:</span> {data.course}
+                <span className="font-medium text-foreground/80">course:</span> {course}
               </div>
             )}
-            {data.examType && (
+            {examType && (
               <div>
-                <span className="font-medium text-foreground/80">exam:</span> {data.examType}
+                <span className="font-medium text-foreground/80">exam:</span> {examType}
               </div>
             )}
-            {data.year && (
+            {year && (
               <div>
-                <span className="font-medium text-foreground/80">year:</span> {data.year}
+                <span className="font-medium text-foreground/80">year:</span> {year}
               </div>
             )}
-            {typeof data.totalIndexed !== 'undefined' && (
+            {typeof totalIndexed !== 'undefined' && (
               <div>
-                <span className="font-medium text-foreground/80">indexed:</span> {data.totalIndexed}
+                <span className="font-medium text-foreground/80">indexed:</span>{' '}
+                {asText(totalIndexed)}
               </div>
             )}
           </div>
@@ -3615,9 +3698,7 @@ function GeneralCard({ data }: { data: any }) {
 
         {hasAnswer && (
           <div className="p-3 rounded border border-border/40 bg-card/40">
-            <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-              {data.answer}
-            </div>
+            <div className="text-sm leading-relaxed whitespace-pre-wrap break-words">{answer}</div>
           </div>
         )}
 
@@ -3627,15 +3708,15 @@ function GeneralCard({ data }: { data: any }) {
               sources
             </div>
             <div className="space-y-1">
-              {data.sources.map((s: any, idx: number) => (
+              {sources.map(asRecord).map((source, idx) => (
                 <a
                   key={idx}
-                  href={s?.url || s?.link || '#'}
+                  href={asString(source.url) || asString(source.link) || '#'}
                   target="_blank"
                   rel="noreferrer"
                   className="block p-2 rounded border border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-colors text-xs break-words"
                 >
-                  {s?.title || s?.url || s?.link || 'source'}
+                  {asText(source.title) || asText(source.url) || asText(source.link) || 'source'}
                 </a>
               ))}
             </div>

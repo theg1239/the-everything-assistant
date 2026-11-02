@@ -1,3 +1,4 @@
+import * as z from 'zod'
 import { findFullCourseName } from '../course-map'
 
 const DEBUG_PAPERS =
@@ -6,7 +7,7 @@ const DEBUG_PAPERS =
   process.env.DEBUG_SCRAPERS === '1' ||
   process.env.DEBUG_SCRAPERS === 'true'
 
-function dbg(...args: any[]) {
+function dbg(...args: unknown[]) {
   if (DEBUG_PAPERS) console.log('[papers-codechef]', ...args)
 }
 
@@ -19,31 +20,53 @@ interface Paper {
   year: string
 }
 
-interface ApiPaper {
-  _id: string
-  title?: string
-  name?: string
-  paperName?: string
-  url?: string
-  downloadUrl?: string
-  link?: string
-  paperUrl?: string
-  finalUrl?: string
-  final_url?: string
-  file_url?: string
-  metadata?: string
-  description?: string
-  examType?: string
-  exam?: string
-  paperType?: string
-  year?: string
-  academicYear?: string
-  slot?: string
-  semester?: string
-  subject?: string
-  paperDate?: string
-  paper_link?: string
+/** Every API field is optional text; a value of another type is treated as absent. */
+const apiText = z.string().optional().catch(undefined)
+
+const apiPaperSchema = z.object({
+  _id: apiText,
+  title: apiText,
+  name: apiText,
+  paperName: apiText,
+  url: apiText,
+  downloadUrl: apiText,
+  link: apiText,
+  paperUrl: apiText,
+  finalUrl: apiText,
+  final_url: apiText,
+  file_url: apiText,
+  metadata: apiText,
+  description: apiText,
+  examType: apiText,
+  exam: apiText,
+  paperType: apiText,
+  year: apiText,
+  academicYear: apiText,
+  slot: apiText,
+  semester: apiText,
+  subject: apiText,
+  paperDate: apiText,
+  paper_link: apiText,
+})
+
+type ApiPaper = z.infer<typeof apiPaperSchema>
+
+/** The API returns either a bare array or `{ papers }`. */
+const papersApiResponseSchema = z.union([
+  z.array(z.unknown()),
+  z.object({ papers: z.array(z.unknown()).optional().catch(undefined) }),
+])
+
+const parsePapersResponse = (value: unknown): ApiPaper[] => {
+  const data = papersApiResponseSchema.parse(value)
+  const items = Array.isArray(data) ? data : data.papers || []
+  return items.flatMap(item => {
+    const paper = apiPaperSchema.safeParse(item)
+    return paper.success ? [paper.data] : []
+  })
 }
+
+const papersCountSchema = z.array(z.object({ name: z.string(), count: z.number() }))
 
 interface ScraperResult {
   success: boolean
@@ -53,9 +76,6 @@ interface ScraperResult {
   searchUrl?: string
 }
 
-type PapersApiResponse = ApiPaper[] | { papers?: ApiPaper[] }
-
-type PapersCountEntry = { name: string; count: number }
 
 function deduplicatePapers(papers: Paper[]): Paper[] {
   const seen = new Set<string>()
@@ -142,8 +162,7 @@ async function tryAPIApproach(
 
     if (codeResponse.ok) {
       dbg('response ok for codeOnly search')
-      const codeData = (await codeResponse.json()) as PapersApiResponse
-      const papersArray = Array.isArray(codeData) ? codeData : codeData.papers || []
+      const papersArray = parsePapersResponse(await codeResponse.json())
       dbg('api returned items (codeOnly)', papersArray.length)
 
       if (papersArray) {
@@ -159,7 +178,7 @@ async function tryAPIApproach(
               `${paper.subject || courseCode} ${paper.exam || ''} ${paper.slot || ''} ${paper.year || ''} ${paper.semester || ''}`.trim()
 
             let extractedExamType =
-              paper.examType || paper.exam || (paper as any).paperType || examType || ''
+              paper.examType || paper.exam || paper.paperType || examType || ''
             if (!extractedExamType) {
               const titleLower = title.toLowerCase()
               if (titleLower.includes('cat-1') || titleLower.includes('cat 1'))
@@ -179,9 +198,9 @@ async function tryAPIApproach(
 
             const finalUrlCandidate =
               paper.finalUrl ||
-              (paper as any).final_url ||
+              paper.final_url ||
               paper.downloadUrl ||
-              (paper as any).file_url
+              paper.file_url
             const paperUrl =
               finalUrlCandidate ||
               paper.paperUrl ||
@@ -273,7 +292,7 @@ async function findSubjectFromCounts(courseCode: string, fullCourseName: string)
 
     if (!res.ok) return null
 
-    const data = (await res.json()) as PapersCountEntry[]
+    const data = papersCountSchema.parse(await res.json())
     const targetCode = courseCode.toUpperCase()
     const targetName = fullCourseName.toLowerCase()
 
@@ -316,8 +335,7 @@ async function fetchAndParsePapers(
     return null
   }
 
-  const data = (await response.json()) as PapersApiResponse
-  const papersArray = Array.isArray(data) ? data : data.papers || []
+  const papersArray = parsePapersResponse(await response.json())
   dbg('api returned items', papersArray.length)
 
   if (!papersArray || papersArray.length === 0) return { success: true, papers: [], source: 'papers.codechefvit.com', searchUrl }
@@ -334,7 +352,7 @@ async function fetchAndParsePapers(
         `${paper.subject || courseCode} ${paper.exam || ''} ${paper.slot || ''} ${paper.year || ''} ${paper.semester || ''}`.trim()
 
       let extractedExamType =
-        paper.examType || paper.exam || (paper as any).paperType || examType || ''
+        paper.examType || paper.exam || paper.paperType || examType || ''
       if (!extractedExamType || extractedExamType === 'unknown') {
         const titleLower = title.toLowerCase()
         if (titleLower.includes('cat-1') || titleLower.includes('cat 1')) extractedExamType = 'CAT-1'
@@ -351,7 +369,7 @@ async function fetchAndParsePapers(
       }
 
       const finalUrlCandidate =
-        paper.finalUrl || (paper as any).final_url || paper.downloadUrl || (paper as any).file_url
+        paper.finalUrl || paper.final_url || paper.downloadUrl || paper.file_url
       const paperUrl =
         finalUrlCandidate ||
         paper.paperUrl ||

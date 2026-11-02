@@ -22,6 +22,7 @@ import { formatDate } from '@/lib/utils'
 import { SettingsDialog } from '@/components/settings-dialog'
 import { useSidebar } from '@/contexts/sidebar-context'
 import { readJson } from '@/lib/http'
+import { isRecord } from '@/lib/json'
 import { useChatPrefetch } from '@/hooks/use-chat-prefetch'
 
 interface Chat {
@@ -34,7 +35,18 @@ interface Chat {
 
 interface SidebarProps {
   isOpen: boolean
-  [key: string]: any
+  onToggle: () => void
+}
+
+function isChat(value: unknown): value is Chat {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.title === 'string' &&
+    typeof value.path === 'string' &&
+    typeof value.createdAt === 'string' &&
+    typeof value.updatedAt === 'string'
+  )
 }
 
 const SIDEBAR_WIDTH = 280
@@ -67,7 +79,7 @@ const overlayVariants = {
 
 export const Sidebar = memo(
   function Sidebar(props: SidebarProps) {
-    const { isOpen, onToggle } = props as { isOpen: boolean; onToggle: () => void }
+    const { isOpen, onToggle } = props
     const { isInitialized, chats, setChats, chatsLoaded, setChatsLoaded, pdfOpen } = useSidebar()
 
     const hasLoadedOnceRef = useRef(chatsLoaded)
@@ -106,6 +118,7 @@ export const Sidebar = memo(
 
       const handleGlobalTouchStart = (e: TouchEvent) => {
         const touch = e.touches[0]
+        if (!touch) return
         setSwipeStartX(touch.clientX)
         setSwipeStartY(touch.clientY)
 
@@ -119,6 +132,7 @@ export const Sidebar = memo(
         if (!isSwipeGesture) return
 
         const touch = e.touches[0]
+        if (!touch) return
         const deltaX = touch.clientX - swipeStartX
         const deltaY = Math.abs(touch.clientY - swipeStartY)
 
@@ -222,13 +236,14 @@ export const Sidebar = memo(
 
     useEffect(() => {
       const match = pathname.match(/\/chat\/(.+)$/)
-      if (match) setSelectedChatId(match[1])
-      else setSelectedChatId(null)
+      setSelectedChatId(match?.[1] ?? null)
     }, [pathname])
 
     useEffect(() => {
-      const handleNewChat = (event: CustomEvent) => {
-        const newChat = event.detail
+      const handleNewChat = (event: Event) => {
+        if (!(event instanceof CustomEvent)) return
+        const newChat: unknown = event.detail
+        if (!isChat(newChat)) return
         setChats(prevChats => {
           const exists = prevChats.some(chat => chat.id === newChat.id)
           if (exists) return prevChats
@@ -236,23 +251,26 @@ export const Sidebar = memo(
         })
       }
 
-      window.addEventListener('newChatCreated', handleNewChat as EventListener)
+      window.addEventListener('newChatCreated', handleNewChat)
       return () => {
-        window.removeEventListener('newChatCreated', handleNewChat as EventListener)
+        window.removeEventListener('newChatCreated', handleNewChat)
       }
     }, [setChats])
 
     useEffect(() => {
-      const handleChatTitleUpdate = (event: CustomEvent) => {
-        const { chatId, title } = event.detail
+      const handleChatTitleUpdate = (event: Event) => {
+        if (!(event instanceof CustomEvent)) return
+        const detail: unknown = event.detail
+        if (!isRecord(detail) || typeof detail.title !== 'string') return
+        const { chatId, title } = detail
         setChats(prevChats =>
           prevChats.map(chat => (chat.id === chatId ? { ...chat, title } : chat))
         )
       }
 
-      window.addEventListener('chatTitleUpdated', handleChatTitleUpdate as EventListener)
+      window.addEventListener('chatTitleUpdated', handleChatTitleUpdate)
       return () => {
-        window.removeEventListener('chatTitleUpdated', handleChatTitleUpdate as EventListener)
+        window.removeEventListener('chatTitleUpdated', handleChatTitleUpdate)
       }
     }, [setChats])
 
@@ -301,6 +319,7 @@ export const Sidebar = memo(
 
     const handleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
       const touch = e.touches[0]
+      if (!touch) return
       const scrollContainer = e.currentTarget
       setTouchStartY(touch.clientY)
       setTouchStartScrollTop(scrollContainer.scrollTop)
@@ -312,6 +331,7 @@ export const Sidebar = memo(
         if (!isDragging) return
 
         const touch = e.touches[0]
+        if (!touch) return
         const scrollContainer = e.currentTarget
         const deltaY = touchStartY - touch.clientY
         const newScrollTop = touchStartScrollTop + deltaY

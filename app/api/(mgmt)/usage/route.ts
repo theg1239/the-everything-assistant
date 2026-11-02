@@ -43,12 +43,12 @@ export async function GET(req: NextRequest) {
       lifetimeBuckets,
       detailedStats,
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Usage retrieval failed:', error)
     return NextResponse.json(
       {
         error: 'Failed to get usage logs',
-        message: error.message || 'Unknown error',
+        message: error instanceof Error && error.message ? error.message : 'Unknown error',
       },
       { status: 500 }
     )

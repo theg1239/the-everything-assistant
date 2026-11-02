@@ -33,8 +33,8 @@ const TimetableGrid: React.FC<TimetableGridProps> = ({ timetable, schema }) => {
     const days = sortedDayKeys.map(d => d.charAt(0).toUpperCase() + d.slice(1))
 
     const timeToMinutes = (timeStr: string) => {
-      const [time, period] = timeStr.split(' ')
-      let [hours, minutes] = time.split(':').map(Number)
+      const [time = '', period] = timeStr.split(' ')
+      let [hours = NaN, minutes = NaN] = time.split(':').map(Number)
       if (period === 'PM' && hours !== 12) hours += 12
       if (period === 'AM' && hours === 12) hours = 0
       return hours * 60 + minutes
@@ -73,7 +73,7 @@ const TimetableGrid: React.FC<TimetableGridProps> = ({ timetable, schema }) => {
     return { days, timeHeaders, slotGridMap, rowCount: timeHeaders.length }
   }, [schema])
 
-  const courseColors = [
+  const courseColors: [string, ...string[]] = [
     'bg-rose-500/80',
     'bg-fuchsia-500/80',
     'bg-indigo-500/80',
@@ -88,7 +88,10 @@ const TimetableGrid: React.FC<TimetableGridProps> = ({ timetable, schema }) => {
 
   const getCourseColor = (courseCode: string) => {
     if (!courseToColorMap.has(courseCode)) {
-      courseToColorMap.set(courseCode, courseColors[colorIndex % courseColors.length])
+      courseToColorMap.set(
+        courseCode,
+        courseColors[colorIndex % courseColors.length] ?? courseColors[0]
+      )
       colorIndex++
     }
     return courseToColorMap.get(courseCode)

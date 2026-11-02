@@ -1,26 +1,27 @@
 import { PrismaClient } from "@/prisma/generated/client"
 import { PrismaPg } from '@prisma/adapter-pg'
 
-const globalForPrisma = global as unknown as {
-  prisma: PrismaClient
-  prismaBeforeExitHookRegistered?: boolean
+declare global {
+  // Reused across dev HMR reloads so we don't open a new pool per reload.
+  var __prismaClient: PrismaClient | undefined
+  var __prismaBeforeExitHookRegistered: boolean | undefined
 }
 
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! })
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL })
 
 export const prisma =
-  globalForPrisma.prisma ??
+  globalThis.__prismaClient ??
   new PrismaClient({ adapter })
 
 if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma
+  globalThis.__prismaClient = prisma
 } 
 
-if (!globalForPrisma.prismaBeforeExitHookRegistered) {
+if (!globalThis.__prismaBeforeExitHookRegistered) {
   process.on('beforeExit', async () => {
     await prisma.$disconnect()
   })
-  globalForPrisma.prismaBeforeExitHookRegistered = true
+  globalThis.__prismaBeforeExitHookRegistered = true
 }
 
 export async function checkDatabaseConnection(): Promise<boolean> {

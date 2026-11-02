@@ -14,14 +14,16 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useHubTool } from '../use-hub-tool'
+import { asRecord, readString } from '@/components/narrow'
 import { Briefcase, Search, X } from 'lucide-react'
 
 export default function PlacementPanel() {
-  const { run, loading, error, result, reset } = useHubTool<any>('getPlacementInfo')
+  const { run, loading, error, result, reset } = useHubTool('getPlacementInfo')
   const [year, setYear] = useState('')
   const [companyFilter, setCompanyFilter] = useState('')
   const [campus, setCampus] = useState('any')
   const [combineWitch, setCombineWitch] = useState(false)
+  const formattedContent = readString(asRecord(result)?.formatted_content)
 
   const onRun = async () => {
     await run({
@@ -87,7 +89,7 @@ export default function PlacementPanel() {
             <Search className="mr-2 h-4 w-4" />
             {loading ? 'loading...' : 'fetch'}
           </Button>
-          {(error || result) && (
+          {(error || Boolean(result)) && (
             <Button variant="ghost" onClick={reset} className="sm:w-auto w-full">
               <X className="mr-2 h-4 w-4" />
               clear
@@ -99,16 +101,16 @@ export default function PlacementPanel() {
           <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">{error}</div>
         )}
 
-        {result && (
+        {Boolean(result) && (
           <Card className="mt-4 bg-muted/20 border-border/30">
             <CardHeader>
               <CardTitle className="text-base">placement results</CardTitle>
             </CardHeader>
             <CardContent>
-              {result?.formatted_content ? (
+              {formattedContent ? (
                 <div
                   className="prose prose-sm dark:prose-invert max-w-none"
-                  dangerouslySetInnerHTML={{ __html: result.formatted_content }}
+                  dangerouslySetInnerHTML={{ __html: formattedContent }}
                 />
               ) : (
                 <pre className="text-xs overflow-auto max-h-96 bg-background/50 p-3 rounded-md">

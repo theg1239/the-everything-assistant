@@ -39,6 +39,9 @@ interface HeaderEntry {
   value: string
 }
 
+const isMCPTransportType = (value: string): value is MCPTransportType =>
+  value === 'http' || value === 'sse'
+
 export function MCPConfigDialog({ open, onOpenChange, onConfigsChange }: MCPConfigDialogProps) {
   const [configs, setConfigs] = useState<MCPClientConfig[]>([])
   const [isAdding, setIsAdding] = useState(false)
@@ -178,7 +181,9 @@ export function MCPConfigDialog({ open, onOpenChange, onConfigsChange }: MCPConf
   
   const updateHeader = (index: number, field: 'key' | 'value', value: string) => {
     const newHeaders = [...headers]
-    newHeaders[index][field] = value
+    const entry = newHeaders[index]
+    if (!entry) return
+    entry[field] = value
     setHeaders(newHeaders)
   }
   
@@ -214,7 +219,12 @@ export function MCPConfigDialog({ open, onOpenChange, onConfigsChange }: MCPConf
         
         <div className="grid gap-2">
           <Label htmlFor="mcp-transport" className="text-xs">transport type</Label>
-          <Select value={transportType} onValueChange={(v) => setTransportType(v as MCPTransportType)}>
+          <Select
+            value={transportType}
+            onValueChange={v => {
+              if (isMCPTransportType(v)) setTransportType(v)
+            }}
+          >
             <SelectTrigger id="mcp-transport" className={selectTriggerStyles}>
               <SelectValue />
             </SelectTrigger>

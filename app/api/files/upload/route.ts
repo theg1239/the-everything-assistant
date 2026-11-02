@@ -56,9 +56,9 @@ export async function POST(request: Request) {
 
   try {
     const formData = await request.formData()
-    const file = formData.get('file') as File | null
+    const file = formData.get('file')
 
-    if (!file) {
+    if (!(file instanceof File)) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
     }
 
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
 
-    const safeName = (file as File).name?.replace(/[^a-zA-Z0-9._-]/g, '_') || 'upload'
+    const safeName = file.name?.replace(/[^a-zA-Z0-9._-]/g, '_') || 'upload'
     const key = `${session.user.id}/${Date.now()}-${nanoid(8)}-${safeName}`
 
     const client = getS3Client()

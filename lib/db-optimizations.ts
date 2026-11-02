@@ -1,4 +1,27 @@
+import * as z from 'zod'
 import { prisma } from './prisma'
+
+const messageSearchRowsSchema = z.array(
+  z.object({
+    messageId: z.string(),
+    chatId: z.string(),
+    chatTitle: z.string(),
+    content: z.string(),
+    created_at: z.date(),
+  })
+)
+
+/** `DATE(...)` comes back from the pg driver as a `Date`; other drivers may return a string. */
+const activityRowsSchema = z.array(
+  z.object({
+    date: z.union([z.date(), z.string()]),
+    messageCount: z.number(),
+  })
+)
+
+const countRowsSchema = z.array(
+  z.object({ count: z.union([z.bigint(), z.number(), z.string()]).transform(Number) })
+)
 
 export class DbOptimizations {
   static async batchGetChatsWithMetadata(
@@ -80,13 +103,7 @@ export class DbOptimizations {
       LIMIT ${limit}
     `
 
-    return results as Array<{
-      messageId: string
-      chatId: string
-      chatTitle: string
-      content: string
-      created_at: Date
-    }>
+    return messageSearchRowsSchema.parse(results)
   }
 
   static async getUserActivitySummary(
@@ -96,7 +113,7 @@ export class DbOptimizations {
     totalChats: number
     totalMessages: number
     activeChats: number
-    recentActivity: Array<{ date: string; messageCount: number }>
+    recentActivity: Array<{ date: Date | string; messageCount: number }>
   }> {
     const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
 
@@ -142,7 +159,7 @@ export class DbOptimizations {
       totalChats,
       totalMessages,
       activeChats,
-      recentActivity: recentActivity as Array<{ date: string; messageCount: number }>,
+      recentActivity: activityRowsSchema.parse(recentActivity),
     }
   }
 
@@ -189,11 +206,13 @@ export class DbOptimizations {
 
       let connectionCount: number | undefined
       try {
-        const result = (await prisma.$queryRaw`
+        const result = countRowsSchema.parse(
+          await prisma.$queryRaw`
           SELECT count(*) as count 
           FROM pg_stat_activity 
           WHERE datname = current_database()
-        `) as Array<{ count: bigint }>
+        `
+        )
         connectionCount = Number(result[0]?.count || 0)
       } catch {}
 
@@ -274,7 +293,7 @@ export class DbOptimizations {
 }
 
 export class QueryCache {
-  private static cache = new Map<string, { data: any; expiry: number }>()
+  private static cache = new Map<string, { data: unknown; expiry: number }>()
   private static readonly DEFAULT_TTL = 5 * 60 * 1000
 
   static get<T>(key: string): T | null {
@@ -286,6 +305,7 @@ export class QueryCache {
       return null
     }
 
+    // Heterogeneous string-keyed cache: the caller that chose the key knows the stored type.
     return cached.data as T
   }
 

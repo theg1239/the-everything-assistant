@@ -2,14 +2,14 @@
 
 import { useCallback, useRef } from 'react'
 
-export function useDebounce<T extends (...args: any[]) => any>(
-  callback: T,
+export function useDebounce<Args extends unknown[]>(
+  callback: (...args: Args) => void,
   delay: number
-): (...args: Parameters<T>) => void {
-  const timeoutRef = useRef<NodeJS.Timeout>()
+): (...args: Args) => void {
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   return useCallback(
-    (...args: Parameters<T>) => {
+    (...args: Args) => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current)
       }
@@ -22,15 +22,15 @@ export function useDebounce<T extends (...args: any[]) => any>(
   )
 }
 
-export function useThrottle<T extends (...args: any[]) => any>(
-  callback: T,
+export function useThrottle<Args extends unknown[]>(
+  callback: (...args: Args) => void,
   delay: number
-): (...args: Parameters<T>) => void {
+): (...args: Args) => void {
   const lastCallRef = useRef<number>(0)
-  const timeoutRef = useRef<NodeJS.Timeout>()
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   return useCallback(
-    (...args: Parameters<T>) => {
+    (...args: Args) => {
       const now = Date.now()
       const timeSinceLastCall = now - lastCallRef.current
 

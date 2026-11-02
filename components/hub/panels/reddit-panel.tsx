@@ -13,13 +13,14 @@ import {
   SelectItem,
 } from '@/components/ui/select'
 import { useHubTool } from '../use-hub-tool'
+import { asRecord, readArray, readString, readText } from '@/components/narrow'
 import { Flame, Search, Sparkles, X } from 'lucide-react'
 
 type Mode = 'smart' | 'knowledge'
 
 export default function RedditPanel() {
-  const smart = useHubTool<any>('searchRedditWithContext')
-  const knowledge = useHubTool<any>('searchRedditKnowledge')
+  const smart = useHubTool('searchRedditWithContext')
+  const knowledge = useHubTool('searchRedditKnowledge')
   const [mode, setMode] = useState<Mode>('smart')
   const [query, setQuery] = useState('')
 
@@ -27,7 +28,11 @@ export default function RedditPanel() {
 
   const loading = active.loading
   const error = active.error
-  const result = active.result
+  const result = asRecord(active.result)
+  const hasResult = Boolean(active.result)
+  const trending = readArray(result?.trending)
+  const sources = readArray(result?.sources)
+  const markdownContent = readString(result?.response) || readString(result?.message)
 
   const placeholders: Record<Mode, string> = {
     smart: "try 'what's trending at vit', 'placements discussions', 'hostel complaints'",
@@ -97,7 +102,7 @@ export default function RedditPanel() {
                 <SelectItem value="knowledge">direct knowledge</SelectItem>
               </SelectContent>
             </Select>
-            {(error || result) && (
+            {(error || hasResult) && (
               <Button variant="ghost" onClick={clear} className="h-9 w-full md:w-auto">
                 <X className="h-4 w-4 mr-1" /> clear
               </Button>
@@ -135,20 +140,22 @@ export default function RedditPanel() {
           </div>
         )}
 
-        {result && (
+        {hasResult && (
           <div className="space-y-6">
-            {result.trending && Array.isArray(result.trending) && result.trending.length > 0 && (
+            {trending.length > 0 && (
               <div>
                 <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
                   trending topics
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {result.trending.map((t: any, idx: number) => (
+                  {trending.map((t, idx) => (
                     <div key={idx} className="p-3 rounded-md border border-border/40 bg-card/40">
                       <div className="flex items-start gap-2">
                         <Sparkles className="h-4 w-4 mt-0.5 text-amber-500" />
                         <div className="text-sm break-words">
-                          {typeof t === 'string' ? t : t?.title || JSON.stringify(t)}
+                          {typeof t === 'string'
+                            ? t
+                            : readText(asRecord(t)?.title) || JSON.stringify(t)}
                         </div>
                       </div>
                     </div>
@@ -157,38 +164,43 @@ export default function RedditPanel() {
               </div>
             )}
 
-            {(result.response || result.message) && (
+            {markdownContent && (
               <div className="p-4 rounded-md border border-border/40 bg-card/40">
-                <OptimizedMarkdown id="reddit-result" content={result.response || result.message} />
+                <OptimizedMarkdown id="reddit-result" content={markdownContent} />
               </div>
             )}
 
-            {result.sources && Array.isArray(result.sources) && result.sources.length > 0 && (
+            {sources.length > 0 && (
               <div>
                 <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
                   sources
                 </div>
                 <div className="space-y-2">
-                  {result.sources.map((s: any, idx: number) => (
-                    <a
-                      key={idx}
-                      href={s?.url || s?.link || '#'}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block p-3 rounded-md border border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-colors text-sm break-words"
-                    >
-                      {s?.title || s?.url || s?.link || 'source'}
-                    </a>
-                  ))}
+                  {sources.map((item, idx) => {
+                    const s = asRecord(item)
+                    const url = readString(s?.url)
+                    const link = readString(s?.link)
+                    return (
+                      <a
+                        key={idx}
+                        href={url || link || '#'}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block p-3 rounded-md border border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-colors text-sm break-words"
+                      >
+                        {readText(s?.title) || url || link || 'source'}
+                      </a>
+                    )
+                  })}
                 </div>
               </div>
             )}
 
-            {(result.totalResults || result.searchAttempts || result.note) && (
+            {Boolean(result?.totalResults || result?.searchAttempts || result?.note) && (
               <div className="text-xs text-muted-foreground">
-                {result.totalResults ? `results: ${result.totalResults}` : ''}
-                {result.searchAttempts ? ` • attempts: ${result.searchAttempts}` : ''}
-                {result.note ? ` • ${result.note}` : ''}
+                {result?.totalResults ? `results: ${String(result.totalResults)}` : ''}
+                {result?.searchAttempts ? ` • attempts: ${String(result.searchAttempts)}` : ''}
+                {result?.note ? ` • ${String(result.note)}` : ''}
               </div>
             )}
           </div>

@@ -3,9 +3,19 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { useMiniPlayerStore, Track } from '@/lib/stores/useMiniPlayerStore'
 import { toast } from 'sonner'
+import { asRecord, readString } from '@/components/narrow'
+
+/** Minimal shape of a tool invocation this handler inspects. `result` is unvalidated. */
+type MusicToolInvocation = {
+  toolName?: string
+  toolCallId?: string
+  id?: string
+  state?: string
+  result?: unknown
+}
 
 interface MusicPlayerToolHandlerProps {
-  toolInvocations?: any[]
+  toolInvocations?: MusicToolInvocation[]
 }
 
 const PROCESSED_TOOL_IDS_KEY = 'ea.musicPlayer.processedToolIds'
@@ -16,9 +26,9 @@ function getPersistedProcessedIds(): Set<string> {
   try {
     const stored = sessionStorage.getItem(PROCESSED_TOOL_IDS_KEY)
     if (stored) {
-      const parsed = JSON.parse(stored)
+      const parsed: unknown = JSON.parse(stored)
       if (Array.isArray(parsed)) {
-        return new Set(parsed)
+        return new Set(parsed.filter((id): id is string => typeof id === 'string'))
       }
     }
   } catch (e) {
@@ -97,7 +107,11 @@ export function MusicPlayerToolHandler({ toolInvocations }: MusicPlayerToolHandl
       
       if (processedToolIds.current.has(toolId)) continue
       
-      const { clientAction, query, trackId, loopMode } = tool.result
+      const result = asRecord(tool.result)
+      const clientAction = readString(result?.clientAction)
+      const query = readString(result?.query)
+      const trackId = readString(result?.trackId)
+      const loopMode = result?.loopMode
       if (!clientAction) continue
       
       processedToolIds.current.add(toolId)

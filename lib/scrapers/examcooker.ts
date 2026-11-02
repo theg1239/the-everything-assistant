@@ -1,3 +1,4 @@
+import * as z from 'zod'
 import { findFullCourseName } from '../course-map'
 
 const SOURCE = 'ExamCooker'
@@ -21,47 +22,45 @@ const YEAR_RANGE_REGEX = /\b((?:20)?\d{2})\s*-\s*((?:20)?\d{2})\b/
 const YEAR_REGEX = /\b(20\d{2})\b/
 const COURSE_CODE_REGEX = /([A-Z]{2,4}\d{3}[A-Z]{0,3})/g
 
-interface ApiPaper {
-  _id: string
-  id: string
-  title: string | null
-  name: string | null
-  paperName: string | null
-  subject: string | null
-  courseName: string | null
-  courseCode: string | null
-  url: string | null
-  paperUrl: string | null
-  link: string | null
-  paper_link: string | null
-  downloadUrl: string | null
-  finalUrl: string | null
-  final_url: string | null
-  file_url: string | null
-  metadata: string | null
-  description: string | null
-  examType: string | null
-  exam: string | null
-  paperType: string | null
-  slot: string | null
-  year: string | null
-  academicYear: string | null
-  subjectCode: string | null
-  tags?: string[]
-  thumbnailUrl: string | null
-  thumbNailUrl: string | null
-  createdAt: string
-  updatedAt: string
-  paperDate?: string | null
-  source: string | null
-}
+/** Every ExamCooker field is optional text; anything else is treated as absent. */
+const apiText = z.string().nullable().catch(null)
 
-interface ApiResponse {
-  success: boolean
-  source: string
-  papers: ApiPaper[]
-  error?: string
-}
+const apiPaperSchema = z.object({
+  title: apiText,
+  name: apiText,
+  paperName: apiText,
+  subject: apiText,
+  courseName: apiText,
+  courseCode: apiText,
+  url: apiText,
+  paperUrl: apiText,
+  link: apiText,
+  paper_link: apiText,
+  downloadUrl: apiText,
+  finalUrl: apiText,
+  final_url: apiText,
+  file_url: apiText,
+  metadata: apiText,
+  description: apiText,
+  examType: apiText,
+  exam: apiText,
+  paperType: apiText,
+  slot: apiText,
+  year: apiText,
+  academicYear: apiText,
+  subjectCode: apiText,
+  tags: z.array(z.unknown()).optional().catch(undefined),
+  paperDate: apiText,
+  source: apiText,
+})
+
+type ApiPaper = z.infer<typeof apiPaperSchema>
+
+const apiResponseSchema = z.object({
+  success: z.boolean().catch(false),
+  papers: z.array(z.unknown()).optional().catch(undefined),
+  error: z.string().optional().catch(undefined),
+})
 
 interface ScraperResult {
   success: boolean
@@ -200,7 +199,7 @@ function extractExamType(title: string): string | undefined {
 
 function extractSlot(title: string): string | undefined {
   const match = title.match(SLOT_REGEX)
-  return match ? match[1].toUpperCase() : undefined
+  return match?.[1]?.toUpperCase()
 }
 
 function extractYearInfo(title: string): { academicYear?: string; year?: string } {
@@ -229,7 +228,7 @@ function extractCourseCode(title: string): string | undefined {
   let courseCode: string | undefined
   let match: RegExpExecArray | null
   while ((match = COURSE_CODE_REGEX.exec(title.toUpperCase())) !== null) {
-    courseCode = match[1].toUpperCase()
+    courseCode = match[1]?.toUpperCase()
   }
   COURSE_CODE_REGEX.lastIndex = 0
   return courseCode
@@ -289,7 +288,7 @@ function normalizeYear(value?: string): string | undefined {
   return undefined
 }
 
-function sanitizeTags(tags?: string[] | null): string[] {
+function sanitizeTags(tags?: readonly unknown[] | null): string[] {
   if (!Array.isArray(tags)) return []
   return tags.map(tag => (typeof tag === 'string' ? tag.trim() : '')).filter(Boolean)
 }
@@ -305,7 +304,8 @@ function resolveSlot(
     const trimmed = candidate.trim()
     if (SLOT_TAG_REGEX.test(trimmed)) return trimmed.toUpperCase()
     const match = trimmed.match(SLOT_REGEX)
-    if (match) return match[1].toUpperCase()
+    const slot = match?.[1]
+    if (slot) return slot.toUpperCase()
   }
   return undefined
 }
@@ -355,8 +355,8 @@ async function queryExamCooker(
       }
     }
 
-    const data = (await response.json()) as ApiResponse
-    if (!data.success || !Array.isArray(data.papers)) {
+    const data = apiResponseSchema.parse(await response.json())
+    if (!data.success || !data.papers) {
       return {
         papers: [],
         error: data.error || 'ExamCooker returned unexpected payload',
@@ -364,16 +364,23 @@ async function queryExamCooker(
       }
     }
 
-    const mapped = data.papers
-      .map(p => mapPaper(p, examType, year))
-      .filter((p): p is Paper => Boolean(p))
+    const mapped = data.papers.flatMap(raw => {
+      const paper = apiPaperSchema.safeParse(raw)
+      const mappedPaper = paper.success ? mapPaper(paper.data, examType, year) : null
+      return mappedPaper ? [mappedPaper] : []
+    })
 
     return {
       papers: mapped,
       searchUrl,
     }
-  } catch (error: any) {
-    const message = error?.name === 'AbortError' ? 'ExamCooker request timed out' : error?.message
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.name === 'AbortError'
+          ? 'ExamCooker request timed out'
+          : error.message
+        : undefined
     return {
       papers: [],
       error: message || 'ExamCooker request failed',

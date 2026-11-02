@@ -51,11 +51,11 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       setIsOpenState(false)
     }
     const handlePdfClose = () => setPdfOpen(false)
-    window.addEventListener('pdfViewerOpen', handlePdfOpen as EventListener)
-    window.addEventListener('pdfViewerClosed', handlePdfClose as EventListener)
+    window.addEventListener('pdfViewerOpen', handlePdfOpen)
+    window.addEventListener('pdfViewerClosed', handlePdfClose)
     return () => {
-      window.removeEventListener('pdfViewerOpen', handlePdfOpen as EventListener)
-      window.removeEventListener('pdfViewerClosed', handlePdfClose as EventListener)
+      window.removeEventListener('pdfViewerOpen', handlePdfOpen)
+      window.removeEventListener('pdfViewerClosed', handlePdfClose)
     }
   }, [])
 

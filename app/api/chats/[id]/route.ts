@@ -31,10 +31,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           content: msg.content,
           toolInvocations: msg.toolInvocations,
           parts:
-            msg.toolInvocations && msg.toolInvocations.length > 0
+            Array.isArray(msg.toolInvocations) && msg.toolInvocations.length > 0
               ? [
                   ...(msg.content ? [{ type: 'text', text: msg.content }] : []),
-                  ...msg.toolInvocations.map((toolInvocation: any) => ({
+                  ...msg.toolInvocations.map((toolInvocation: unknown) => ({
                     type: 'tool-invocation',
                     toolInvocation,
                   })),

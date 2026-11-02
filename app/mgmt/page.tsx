@@ -3,79 +3,6 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 
 
-type UsageLog = {
-  id: string
-  userId?: string | null
-  chatId?: string | null
-  model?: string | null
-  stepIndex?: number | null
-  promptTokens: number
-  completionTokens: number
-  totalTokens: number
-  createdAt: string
-}
-
-interface RateLimitStatus {
-  status: string
-  timestamp: string
-  environment: {
-    validation: { isValid: boolean; errors: string[]; warnings: string[] }
-    summary: {
-      hasRedis: boolean
-      apiKeys: { totalAvailable: number }
-      adminAccess: { email: string }
-    }
-  }
-  configuration: {
-    apiKeys: {
-      enableRotation: boolean
-      rotateOnRateLimit: boolean
-      keyCount: number
-      rateLimit: { requestsPerMinute: number; requestsPerHour: number }
-      retryConfig: { maxRetries: number; baseDelay: number; maxDelay: number }
-      keyHealthCheckInterval: number
-    }
-    userRateLimit: {
-      enabled: boolean
-      requestsPerMinute: number
-      requestsPerHour: number
-      requestsPerDay: number
-    }
-  }
-  keyUsage: {
-    [keyIndex: string]: {
-      requests: number
-      failures: number
-      lastUsed: number | null
-      lastFailed: number | null
-      availableTokens: { minute: number; hour: number; day: number }
-      isRateLimited: boolean
-      isCurrent: boolean
-    }
-  }
-  healthCheck: { redis: string; apiKeys: string }
-}
-
-interface Stats {
-  totalUsers: number
-  messagesInLast30Minutes: number
-  toolCallStats: { toolName: string; count: number }[]
-}
-
-interface BroadcastSlide {
-  title: string
-  text: string
-  image: string
-}
-
-interface PastBroadcast {
-  id: string
-  slides: BroadcastSlide[]
-  timestamp: string
-  sentBy: string
-}
-
-
 const EMOJI_SET_NEAR = ['🤡', '🦄', '🪄', '🌈', '🥳', '🍩', '☕', '🛸', '👾', '🧪']
 const EMOJI_SET_FAR = ['🐄', '🐥', '💥', '🍕', '🧃', '🍌', '🧨', '🌀', '🐸', '🪅']
 
@@ -164,7 +91,7 @@ function EmojiRain({ countNear = 38, countFar = 26 }: { countNear?: number; coun
               fontSize: `${Math.max(12, d.size - 8)}px`,
               transform: `rotate(${d.rotate}deg)`,
               filter: d.blur,
-              opacity: d.opacity as any,
+              opacity: d.opacity,
             }}
             className="absolute top-0 select-none"
           >
@@ -185,7 +112,7 @@ function EmojiRain({ countNear = 38, countFar = 26 }: { countNear?: number; coun
               animationDelay: `${d.delay}s`,
               fontSize: `${d.size}px`,
               transform: `rotate(${d.rotate}deg)`,
-              opacity: d.opacity as any,
+              opacity: d.opacity,
             }}
             className="absolute top-0 select-none"
           >

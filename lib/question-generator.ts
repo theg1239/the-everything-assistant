@@ -103,14 +103,14 @@ function extractSections(text: string): { [key: string]: string[] } {
   let lastSection = ''
 
   while ((match = sectionRegex.exec(text)) !== null) {
-    const sectionName = match[1].trim()
+    const sectionName = (match[1] ?? '').trim()
     lastSection = sectionName
     sections[sectionName] = []
   }
 
   const subSectionRegex = /### ([^\n]+)/gi
   while ((match = subSectionRegex.exec(text)) !== null) {
-    const subSectionName = match[1].trim()
+    const subSectionName = (match[1] ?? '').trim()
     let parentSection = lastSection
     for (const section of Object.keys(sections)) {
       if (
@@ -120,8 +120,9 @@ function extractSections(text: string): { [key: string]: string[] } {
         parentSection = section
       }
     }
-    if (parentSection && sections[parentSection]) {
-      sections[parentSection].push(subSectionName)
+    const parentList = parentSection ? sections[parentSection] : undefined
+    if (parentList) {
+      parentList.push(subSectionName)
     }
   }
 
@@ -255,7 +256,7 @@ export function getRandomQuestions(count: number = 6, isFirstMessage: boolean = 
     for (let i = 0; i < Math.min(2, vtopQuestions.length) && questions.length < count; i++) {
       const randomIndex = Math.floor(Math.random() * vtopQuestions.length)
       const question = vtopQuestions.splice(randomIndex, 1)[0]
-      questions.push(question)
+      if (question !== undefined) questions.push(question)
     }
   }
 
@@ -263,21 +264,22 @@ export function getRandomQuestions(count: number = 6, isFirstMessage: boolean = 
     const redditQuestions = [...allCategories['reddit']]
     const randomIndex = Math.floor(Math.random() * redditQuestions.length)
     const redditQuestion = redditQuestions[randomIndex]
-    if (!questions.includes(redditQuestion)) {
+    if (redditQuestion !== undefined && !questions.includes(redditQuestion)) {
       questions.push(redditQuestion)
     }
   }
 
   priorityCategories.forEach(category => {
+    const categoryQuestions = allCategories[category]
     if (
-      allCategories[category] &&
+      categoryQuestions &&
       questions.length < count &&
       category !== 'vtop' &&
       category !== 'reddit'
     ) {
-      const randomIndex = Math.floor(Math.random() * allCategories[category].length)
-      const question = allCategories[category][randomIndex]
-      if (!questions.includes(question)) {
+      const randomIndex = Math.floor(Math.random() * categoryQuestions.length)
+      const question = categoryQuestions[randomIndex]
+      if (question !== undefined && !questions.includes(question)) {
         questions.push(question)
       }
     }
@@ -285,11 +287,12 @@ export function getRandomQuestions(count: number = 6, isFirstMessage: boolean = 
 
   while (questions.length < count) {
     const randomCategory = categories[Math.floor(Math.random() * categories.length)]
-    const categoryQuestions = allCategories[randomCategory]
+    const categoryQuestions =
+      randomCategory === undefined ? undefined : allCategories[randomCategory]
     if (categoryQuestions && categoryQuestions.length > 0) {
       const randomIndex = Math.floor(Math.random() * categoryQuestions.length)
       const question = categoryQuestions[randomIndex]
-      if (!questions.includes(question)) {
+      if (question !== undefined && !questions.includes(question)) {
         questions.push(question)
       }
     }

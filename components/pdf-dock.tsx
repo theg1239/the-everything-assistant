@@ -104,7 +104,8 @@ export const DesktopPdfDockButton: React.FC = () => {
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
       if (!containerRef.current) return
-      if (!containerRef.current.contains(e.target as Node)) setOpen(false)
+      const target = e.target instanceof Node ? e.target : null
+      if (!containerRef.current.contains(target)) setOpen(false)
     }
     document.addEventListener('click', onDocClick)
     return () => document.removeEventListener('click', onDocClick)

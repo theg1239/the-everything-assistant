@@ -13,23 +13,23 @@ import {
   ReferenceDot,
   Brush,
 } from 'recharts'
+import type { StatsResponse, UsageResponse } from '../types'
 
-export default function Overview({ stats, usage }: any) {
-  const sparkData = useMemo(() => {
-    if (
-      usage?.lifetimeBuckets &&
-      Array.isArray(usage.lifetimeBuckets) &&
-      usage.lifetimeBuckets.length
-    ) {
-      return usage.lifetimeBuckets.map((p: any) => ({
+type SparkPoint = { t: string; ts: number; v: number }
+
+interface OverviewProps {
+  stats: StatsResponse | null
+  usage: UsageResponse | null
+}
+
+const formatDateTick = (val: unknown) => new Date(Number(val)).toLocaleDateString()
+
+export default function Overview({ stats, usage }: OverviewProps) {
+  const sparkData = useMemo((): SparkPoint[] => {
+    if (usage?.lifetimeBuckets && usage.lifetimeBuckets.length) {
+      return usage.lifetimeBuckets.map(p => ({
         t: new Date(p.ts).toLocaleDateString(),
         ts: p.ts,
-        v: p.totalTokens,
-      }))
-    }
-    if (usage?.summaryAllTime && Array.isArray(usage.summaryAllTime)) {
-      return usage.summaryAllTime.map((p: any) => ({
-        t: new Date(p.ts).toLocaleDateString(),
         v: p.totalTokens,
       }))
     }
@@ -37,7 +37,7 @@ export default function Overview({ stats, usage }: any) {
     return usage.recent
       .slice()
       .reverse()
-      .map((u: any) => {
+      .map(u => {
         const ts = new Date(u.createdAt).getTime()
         return { t: new Date(u.createdAt).toLocaleDateString(), ts, v: Number(u.totalTokens || 0) }
       })
@@ -47,24 +47,22 @@ export default function Overview({ stats, usage }: any) {
     if (!usage?.recent) return []
     return usage.recent
       .slice()
-      .sort((a: any, b: any) => Number(b.totalTokens || 0) - Number(a.totalTokens || 0))
+      .sort((a, b) => Number(b.totalTokens || 0) - Number(a.totalTokens || 0))
       .slice(0, 5)
   }, [usage])
 
   const derived = useMemo(() => {
-    const vals = (sparkData || [])
-      .map((d: any) => Number(d.v || 0))
-      .filter((n: any) => !Number.isNaN(n))
-    if (!vals.length) return { avg: 0, median: 0, peak: 0, last7d: 0 }
+    const vals = sparkData.map(d => Number(d.v || 0)).filter(n => !Number.isNaN(n))
+    if (!vals.length) return { avg: 0, median: 0, peak: 0, peakTs: undefined, last7d: 0 }
     const sum = vals.reduce((s: number, x: number) => s + x, 0)
     const avg = Math.round(sum / vals.length)
     const sorted = vals.slice().sort((a: number, b: number) => a - b)
     const mid = Math.floor(sorted.length / 2)
+    const midValue = sorted[mid] ?? 0
     const median =
-      sorted.length % 2 === 1 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2)
+      sorted.length % 2 === 1 ? midValue : Math.round(((sorted[mid - 1] ?? 0) + midValue) / 2)
     const peak = Math.max(...vals)
-    const peakIndex = (sparkData || []).findIndex((d: any) => Number(d.v || 0) === peak)
-    const peakTs = peakIndex >= 0 ? sparkData[peakIndex].ts : undefined
+    const peakTs = sparkData.find(d => Number(d.v || 0) === peak)?.ts
     const last7 = vals.slice(-7)
     const prev7 = vals.slice(-14, -7)
     const last7Avg = last7.length
@@ -76,6 +74,8 @@ export default function Overview({ stats, usage }: any) {
     const last7d = prev7Avg ? Math.round(((last7Avg - prev7Avg) / prev7Avg) * 100) : 0
     return { avg, median, peak, peakTs, last7d }
   }, [sparkData])
+
+  const lastPoint = sparkData.at(-1)
 
   return (
     <div className="space-y-4">
@@ -89,9 +89,8 @@ export default function Overview({ stats, usage }: any) {
         <div className="flex gap-4 items-center text-sm">
           <div className="text-muted-foreground lowercase">total tokens</div>
           <div className="font-semibold text-lg">
-            {(
-              usage?.summaryAllTime?.totalTokens ?? usage?.summary?.totalTokens
-            )?.toLocaleString?.() ?? '—'}
+            {(usage?.summaryAllTime?.totalTokens ?? usage?.summary?.totalTokens)?.toLocaleString() ??
+              '—'}
           </div>
         </div>
       </div>
@@ -128,13 +127,13 @@ export default function Overview({ stats, usage }: any) {
                   dataKey="ts"
                   type="number"
                   domain={['dataMin', 'dataMax']}
-                  tickFormatter={(val: any) => new Date(val).toLocaleDateString()}
+                  tickFormatter={formatDateTick}
                   tick={{ fontSize: 11 }}
                 />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip
-                  labelFormatter={(val: any) => new Date(val).toLocaleString()}
-                  formatter={(v: any) => [v?.toLocaleString?.() ?? v, 'tokens']}
+                  labelFormatter={val => new Date(Number(val)).toLocaleString()}
+                  formatter={v => [typeof v === 'number' ? v.toLocaleString() : v, 'tokens']}
                 />
                 <Area
                   type="monotone"
@@ -153,10 +152,10 @@ export default function Overview({ stats, usage }: any) {
                     stroke="none"
                   />
                 )}
-                {sparkData.length > 0 && (
+                {lastPoint && (
                   <ReferenceDot
-                    x={sparkData[sparkData.length - 1].ts}
-                    y={sparkData[sparkData.length - 1].v}
+                    x={lastPoint.ts}
+                    y={lastPoint.v}
                     r={3}
                     fill="#34D399"
                     stroke="none"
@@ -167,7 +166,7 @@ export default function Overview({ stats, usage }: any) {
                   height={24}
                   stroke="#475569"
                   travellerWidth={8}
-                  tickFormatter={(val: any) => new Date(val).toLocaleDateString()}
+                  tickFormatter={formatDateTick}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -178,7 +177,7 @@ export default function Overview({ stats, usage }: any) {
           <div className="text-sm font-medium lowercase mb-2">top events</div>
           <ul className="space-y-2 text-sm">
             {topEvents.length === 0 && <li className="text-muted-foreground">no events</li>}
-            {topEvents.map((e: any) => (
+            {topEvents.map(e => (
               <li key={e.id} className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-xs">

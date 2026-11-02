@@ -31,7 +31,7 @@ import { NewChatHotkey } from '@/components/new-chat-hotkey'
 import { DataStreamProvider } from '@/components/data-stream-provider'
 import { ChatHistoryDialog } from '@/components/chat-history-dialog'
 import { BotIdClient } from 'botid/client'
-import type { LatestBroadcastResponse } from '@/types/api/broadcast'
+import { broadcastRecordSchema, type LatestBroadcastResponse } from '@/types/api/broadcast'
 
 const googleSansFlex = localFont({
   src: '../public/GoogleSansFlex.ttf',
@@ -265,7 +265,8 @@ async function getLatestBroadcast(): Promise<LatestBroadcastResponse | null> {
       { cache: 'no-store' }
     )
     if (!res.ok) return null
-    return (await res.json()) as LatestBroadcastResponse | null
+    const parsed = broadcastRecordSchema.nullable().safeParse(await res.json())
+    return parsed.success ? parsed.data : null
   } catch (error) {
     console.error('failed to load latest broadcast', error)
     return null

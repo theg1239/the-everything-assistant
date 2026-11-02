@@ -207,16 +207,16 @@ const PureMultimodalInput = ({
             await new Promise(resolve => setTimeout(resolve, 300))
 
             // Try to find individual pages first
-            let pageNodes = Array.from(container.querySelectorAll('.docx-render section.docx')) as HTMLElement[]
+            let pageNodes = Array.from(container.querySelectorAll<HTMLElement>('.docx-render section.docx'))
             
             // If no section pages, try wrapper articles or the main wrapper
             if (!pageNodes.length) {
-              pageNodes = Array.from(container.querySelectorAll('.docx-wrapper > article, .docx-wrapper section')) as HTMLElement[]
+              pageNodes = Array.from(container.querySelectorAll<HTMLElement>('.docx-wrapper > article, .docx-wrapper section'))
             }
 
             // Fallback: render the entire container as one page
             if (!pageNodes.length) {
-              const wrapper = container.querySelector('.docx-wrapper') as HTMLElement
+              const wrapper = container.querySelector<HTMLElement>('.docx-wrapper')
               if (wrapper) {
                 pageNodes = [wrapper]
               } else if (container.children.length) {
@@ -249,10 +249,8 @@ const PureMultimodalInput = ({
               }
 
               const pdfBytes = await pdf.save()
-              const pdfBuffer = pdfBytes.buffer.slice(
-                pdfBytes.byteOffset,
-                pdfBytes.byteOffset + pdfBytes.byteLength
-              ) as ArrayBuffer
+              // Copy into a plain ArrayBuffer-backed view (File rejects SharedArrayBuffer views).
+              const pdfBuffer = new Uint8Array(pdfBytes)
               const pdfName = file.name.replace(/\.docx?$/i, '.pdf') || `${file.name}.pdf`
               return new File([pdfBuffer], pdfName, { type: 'application/pdf' })
             }
@@ -294,10 +292,8 @@ const PureMultimodalInput = ({
         }
 
         const pdfBytes = await pdf.save()
-        const pdfBuffer = pdfBytes.buffer.slice(
-          pdfBytes.byteOffset,
-          pdfBytes.byteOffset + pdfBytes.byteLength
-        ) as ArrayBuffer
+        // Copy into a plain ArrayBuffer-backed view (File rejects SharedArrayBuffer views).
+        const pdfBuffer = new Uint8Array(pdfBytes)
         const pdfName = file.name.replace(/\.docx?$/i, '.pdf') || `${file.name}.pdf`
         return new File([pdfBuffer], pdfName, { type: 'application/pdf' })
       } catch (error) {
@@ -310,11 +306,12 @@ const PureMultimodalInput = ({
 
   const lightenColor = (color: string, amount = 0.22) => {
     const m = color.replace(/\s+/g, '').match(/^rgba?\((\d+),(\d+),(\d+)(?:,(\d*\.?\d+))?\)$/i)
-    if (m) {
-      const r = Math.min(255, Math.max(0, parseInt(m[1], 10)))
-      const g = Math.min(255, Math.max(0, parseInt(m[2], 10)))
-      const b = Math.min(255, Math.max(0, parseInt(m[3], 10)))
-      const a = m[4] !== undefined ? Math.max(0, Math.min(1, parseFloat(m[4]))) : 1
+    const [, rStr, gStr, bStr, aStr] = m ?? []
+    if (rStr && gStr && bStr) {
+      const r = Math.min(255, Math.max(0, parseInt(rStr, 10)))
+      const g = Math.min(255, Math.max(0, parseInt(gStr, 10)))
+      const b = Math.min(255, Math.max(0, parseInt(bStr, 10)))
+      const a = aStr !== undefined ? Math.max(0, Math.min(1, parseFloat(aStr))) : 1
       const nr = Math.round(r + (255 - r) * amount)
       const ng = Math.round(g + (255 - g) * amount)
       const nb = Math.round(b + (255 - b) * amount)
@@ -425,7 +422,7 @@ const PureMultimodalInput = ({
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (inputDisabled) return
-      if ((e as any).isComposing || (e as any).keyCode === 229) return
+      if (e.nativeEvent.isComposing || e.keyCode === 229) return
 
       const caretAtEnd =
         textareaRef.current &&
@@ -678,8 +675,7 @@ const PureMultimodalInput = ({
     }
 
     compute()
-    const RO = (window as any).ResizeObserver
-    const ro = RO ? new RO(() => compute()) : null
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => compute()) : null
     if (ro) ro.observe(node)
     window.addEventListener('resize', compute)
     return () => {

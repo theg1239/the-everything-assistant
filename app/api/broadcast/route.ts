@@ -2,7 +2,6 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { Prisma } from '@/prisma/generated/client'
 import {
   broadcastDeleteSchema,
   broadcastSlidesSchema,
@@ -102,7 +101,7 @@ export async function PUT(req: NextRequest) {
         id: id,
       },
       data: {
-        slides: slides as Prisma.InputJsonValue,
+        slides,
       },
     })
 

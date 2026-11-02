@@ -3,15 +3,30 @@
 import React, { useState, useEffect } from 'react'
 import { VTOPCredentialsDialog } from './vtop-credentials-dialog'
 import { hasVTOPCredentials, getFormattedVTOPCredentials } from '@/lib/vtop-credentials'
+import { asRecord, readString } from '@/components/narrow'
+
+/** Minimal shape of a (legacy) tool invocation this handler inspects. `result` is unvalidated. */
+export type VTOPToolCall = {
+  toolName?: string
+  toolCallId?: string
+  args?: Record<string, unknown>
+  result?: unknown
+  meta?: Record<string, unknown>
+}
 
 interface VTOPToolHandlerProps {
   children: React.ReactNode
-  toolInvocations?: any[]
+  toolInvocations?: VTOPToolCall[]
   onCredentialsSubmit?: (
     credentials: { username: string; encryptedPassword: string },
-    originalToolCall: any
+    originalToolCall: VTOPToolCall
   ) => void
 }
+
+const commandOf = (tool: VTOPToolCall) =>
+  readString(asRecord(tool.result)?.command) || readString(tool.args?.command)
+
+const detailOf = (event: Event) => (event instanceof CustomEvent ? asRecord(event.detail) : null)
 
 export function VTOPToolHandler({
   children,
@@ -19,12 +34,12 @@ export function VTOPToolHandler({
   onCredentialsSubmit,
 }: VTOPToolHandlerProps) {
   const [showCredentialsDialog, setShowCredentialsDialog] = useState(false)
-  const [pendingToolCall, setPendingToolCall] = useState<any>(null)
+  const [pendingToolCall, setPendingToolCall] = useState<VTOPToolCall | null>(null)
   const [command, setCommand] = useState('')
   const [dismissedToolCallIds, setDismissedToolCallIds] = useState<Set<string>>(new Set())
   const [disclaimerShownIds] = useState<Set<string>>(new Set())
 
-  const dispatchDisclaimer = (toolCall: any, cmd: string) => {
+  const dispatchDisclaimer = (toolCall: VTOPToolCall | null, cmd: string) => {
     const id = toolCall?.toolCallId || `queryVTOP-${cmd}`
     if (disclaimerShownIds.has(id)) return
     disclaimerShownIds.add(id)
@@ -41,17 +56,16 @@ export function VTOPToolHandler({
     } catch {}
   }
   useEffect(() => {
-    const handleVTOPLoginTrigger = (event: CustomEvent) => {
-      const {
-        command: triggerCommand,
-        toolCallId: triggerToolCallId,
-        linkOnly,
-      } = event.detail || {}
+    const handleVTOPLoginTrigger = (event: Event) => {
+      const detail = detailOf(event)
+      const triggerCommand = readString(detail?.command)
+      const triggerToolCallId = readString(detail?.toolCallId)
+      const linkOnly = detail?.linkOnly
 
       if (hasVTOPCredentials()) {
         const savedCredentials = getFormattedVTOPCredentials()
         if (savedCredentials && onCredentialsSubmit) {
-          let vtopToolCall = null
+          let vtopToolCall: VTOPToolCall | null | undefined = null
           if (triggerToolCallId) {
             vtopToolCall = toolInvocations?.find(tool => tool.toolCallId === triggerToolCallId)
           }
@@ -71,29 +85,32 @@ export function VTOPToolHandler({
         }
       }
 
-      let vtopToolCall = null
+      let vtopToolCall: VTOPToolCall | null | undefined = null
 
       if (triggerToolCallId) {
         vtopToolCall = toolInvocations?.find(tool => tool.toolCallId === triggerToolCallId)
       }
 
       if (!vtopToolCall) {
-        vtopToolCall = toolInvocations?.find(
-          tool =>
+        vtopToolCall = toolInvocations?.find(tool => {
+          const result = asRecord(tool.result)
+          const error = readString(result?.error)
+          return (
             tool.toolName === 'queryVTOP' &&
-            tool.result &&
-            (tool.result.requiresCredentials === true ||
-              (tool.result.error &&
-                (tool.result.error.includes('VTOP credentials required') ||
-                  tool.result.error.includes('credentials') ||
-                  tool.result.error.includes('Invalid LoginId/Password') ||
-                  tool.result.error.includes('Login failed')))) &&
-            !tool.result.data &&
-            !tool.result.output
-        )
+            result &&
+            (result.requiresCredentials === true ||
+              (error &&
+                (error.includes('VTOP credentials required') ||
+                  error.includes('credentials') ||
+                  error.includes('Invalid LoginId/Password') ||
+                  error.includes('Login failed')))) &&
+            !result.data &&
+            !result.output
+          )
+        })
       }
 
-      const resolvedToolCall = vtopToolCall
+      const resolvedToolCall: VTOPToolCall = vtopToolCall
         ? {
             ...vtopToolCall,
             meta: {
@@ -109,11 +126,7 @@ export function VTOPToolHandler({
             meta: { linkOnly: !!linkOnly },
           }
 
-      const commandToRun =
-        resolvedToolCall.result.command ||
-        resolvedToolCall.args?.command ||
-        triggerCommand ||
-        'attendance'
+      const commandToRun = commandOf(resolvedToolCall) || triggerCommand || 'attendance'
 
       setCommand(commandToRun)
       setPendingToolCall(resolvedToolCall)
@@ -123,9 +136,9 @@ export function VTOPToolHandler({
       }
     }
 
-    window.addEventListener('vtopLoginTrigger', handleVTOPLoginTrigger as EventListener)
-    const handleOpenCredentials = (e: CustomEvent) => {
-      const requestedId = e.detail?.toolCallId
+    window.addEventListener('vtopLoginTrigger', handleVTOPLoginTrigger)
+    const handleOpenCredentials = (e: Event) => {
+      const requestedId = detailOf(e)?.toolCallId
       if (requestedId && pendingToolCall && requestedId !== pendingToolCall.toolCallId) {
         if (toolInvocations) {
           const match = toolInvocations.find(t => t.toolCallId === requestedId)
@@ -134,27 +147,30 @@ export function VTOPToolHandler({
       }
       if (pendingToolCall) setShowCredentialsDialog(true)
     }
-    window.addEventListener('vtopOpenCredentials', handleOpenCredentials as EventListener)
+    window.addEventListener('vtopOpenCredentials', handleOpenCredentials)
     return () => {
-      window.removeEventListener('vtopLoginTrigger', handleVTOPLoginTrigger as EventListener)
-      window.removeEventListener('vtopOpenCredentials', handleOpenCredentials as EventListener)
+      window.removeEventListener('vtopLoginTrigger', handleVTOPLoginTrigger)
+      window.removeEventListener('vtopOpenCredentials', handleOpenCredentials)
     }
   }, [toolInvocations, onCredentialsSubmit, pendingToolCall])
   useEffect(() => {
     if (toolInvocations && !showCredentialsDialog) {
-      const vtopToolCall = toolInvocations.find(
-        tool =>
+      const vtopToolCall = toolInvocations.find(tool => {
+        const result = asRecord(tool.result)
+        const error = readString(result?.error)
+        return (
           tool.toolName === 'queryVTOP' &&
-          tool.result &&
-          (tool.result.requiresCredentials === true ||
-            (tool.result.error && tool.result.error.includes('VTOP credentials required'))) &&
-          !tool.result.data &&
-          !tool.result.output &&
-          !dismissedToolCallIds.has(tool.toolCallId)
-      )
+          result &&
+          (result.requiresCredentials === true ||
+            (error && error.includes('VTOP credentials required'))) &&
+          !result.data &&
+          !result.output &&
+          !(tool.toolCallId !== undefined && dismissedToolCallIds.has(tool.toolCallId))
+        )
+      })
       if (vtopToolCall) {
         setPendingToolCall(vtopToolCall)
-        const cmd = vtopToolCall.result.command || vtopToolCall.args?.command || 'VTOP command'
+        const cmd = commandOf(vtopToolCall) || 'VTOP command'
         setCommand(cmd)
         dispatchDisclaimer(vtopToolCall, cmd)
       }
@@ -173,10 +189,11 @@ export function VTOPToolHandler({
   }
 
   const handleCredentialsClose = () => {
-    if (pendingToolCall && pendingToolCall.toolCallId) {
+    const pendingId = pendingToolCall?.toolCallId
+    if (pendingId) {
       setDismissedToolCallIds(prev => {
         const next = new Set(prev)
-        next.add(pendingToolCall.toolCallId)
+        next.add(pendingId)
         return next
       })
     }

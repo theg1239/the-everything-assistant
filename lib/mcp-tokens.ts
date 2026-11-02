@@ -1,19 +1,36 @@
+import * as z from 'zod'
+import { isJsonObject } from '@/lib/json'
 import { prisma } from '@/lib/prisma'
+import type { Prisma } from '@/prisma/generated/client'
 
-export type McpTokenBundle = {
-  accessToken: string
-  refreshToken?: string
-  expiresAt?: string | null
-  scope?: string
-  tokenType?: string
-  clientId?: string
-}
+const mcpTokenBundleSchema = z.object({
+  accessToken: z.string(),
+  refreshToken: z.string().optional(),
+  expiresAt: z.string().nullable().optional(),
+  scope: z.string().optional(),
+  tokenType: z.string().optional(),
+  clientId: z.string().optional(),
+})
+
+export type McpTokenBundle = z.infer<typeof mcpTokenBundleSchema>
+
+const tokenResponseSchema = z.object({
+  access_token: z.string(),
+  refresh_token: z.string().optional(),
+  expires_in: z.number().optional(),
+  scope: z.string().optional(),
+  token_type: z.string().optional(),
+})
 
 const PROVIDER = 'vtop'
 
-function parsePreferences(pref: any) {
-  if (!pref || typeof pref !== 'object') return {}
-  return pref
+function parsePreferences(pref: Prisma.JsonValue | undefined): Prisma.JsonObject {
+  return isJsonObject(pref) ? pref : {}
+}
+
+function getMcpTokens(prefs: Prisma.JsonObject): Prisma.JsonObject {
+  const tokens = prefs.mcpTokens
+  return isJsonObject(tokens) ? tokens : {}
 }
 
 export async function getUserMcpToken(userId: string, provider: string = PROVIDER) {
@@ -22,9 +39,10 @@ export async function getUserMcpToken(userId: string, provider: string = PROVIDE
     select: { preferences: true },
   })
   const prefs = parsePreferences(user?.preferences)
-  const bundle = prefs?.mcpTokens?.[provider]
+  const bundle = getMcpTokens(prefs)[provider]
   if (!bundle) return null
-  return bundle as McpTokenBundle
+  const parsed = mcpTokenBundleSchema.safeParse(bundle)
+  return parsed.success ? parsed.data : null
 }
 
 export async function saveUserMcpToken(
@@ -40,7 +58,7 @@ export async function saveUserMcpToken(
   const nextPrefs = {
     ...prefs,
     mcpTokens: {
-      ...(prefs.mcpTokens || {}),
+      ...getMcpTokens(prefs),
       [provider]: bundle,
     },
   }
@@ -85,15 +103,8 @@ export async function refreshUserMcpToken(userId: string, provider: string = PRO
 
   if (!res.ok) return null
 
-  type TokenResponse = {
-    access_token: string
-    refresh_token?: string
-    expires_in?: number
-    scope?: string
-    token_type?: string
-  }
-
-  const json = (await res.json().catch(() => null)) as TokenResponse | null
+  const parsedJson = tokenResponseSchema.safeParse(await res.json().catch(() => null))
+  const json = parsedJson.success ? parsedJson.data : null
   if (!json?.access_token) return null
 
   const next: McpTokenBundle = {
@@ -115,8 +126,9 @@ export async function clearUserMcpToken(userId: string, provider: string = PROVI
     select: { preferences: true },
   })
   const prefs = parsePreferences(current?.preferences)
-  if (!prefs?.mcpTokens?.[provider]) return
-  const { [provider]: _removed, ...rest } = prefs.mcpTokens
+  const tokens = getMcpTokens(prefs)
+  if (!tokens[provider]) return
+  const { [provider]: _removed, ...rest } = tokens
   await prisma.user.update({
     where: { id: userId },
     data: { preferences: { ...prefs, mcpTokens: rest } },

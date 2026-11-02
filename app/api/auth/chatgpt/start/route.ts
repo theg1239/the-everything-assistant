@@ -14,10 +14,10 @@ export async function POST() {
   try {
     const result = await startChatgptLogin(session.user.id)
     return NextResponse.json(result)
-  } catch (error: any) {
+  } catch (error) {
     console.error('[chatgpt-auth] start failed:', error)
     return NextResponse.json(
-      { error: error?.message || 'Unable to start ChatGPT login' },
+      { error: (error instanceof Error && error.message) || 'Unable to start ChatGPT login' },
       { status: 500 }
     )
   }

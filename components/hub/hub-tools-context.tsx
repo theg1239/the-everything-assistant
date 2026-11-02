@@ -1,8 +1,9 @@
 'use client'
 
 import { createContext, useContext } from 'react'
+import type { HubToolArgs } from './types'
 
-export type HubToolExecutor = (toolName: string, args?: Record<string, any>) => Promise<any>
+export type HubToolExecutor = (toolName: string, args?: HubToolArgs) => Promise<unknown>
 
 const HubToolContext = createContext<HubToolExecutor | null>(null)
 

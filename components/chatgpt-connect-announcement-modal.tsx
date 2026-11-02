@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { readJson } from '@/lib/http'
+import { errorMessage } from '@/components/narrow'
 
 const AUTO_DISMISS_DURATION = 9000
 const STORAGE_KEY = 'ea.chatgpt-connect-announcement.seen'
@@ -145,9 +146,9 @@ export function ChatgptConnectAnnouncementModal({ enabled }: ChatgptConnectAnnou
         toast.success('Complete ChatGPT sign-in in the opened browser tab.')
         handleClose()
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error starting ChatGPT login:', error)
-      toast.error(error?.message || 'Unable to start ChatGPT login')
+      toast.error(errorMessage(error) || 'Unable to start ChatGPT login')
     } finally {
       setStartingChatgptLogin(false)
     }
@@ -172,9 +173,9 @@ export function ChatgptConnectAnnouncementModal({ enabled }: ChatgptConnectAnnou
       setChatgptDeviceFlow(null)
       setChatgptLoginError(null)
       toast.success('ChatGPT login canceled')
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error canceling ChatGPT login:', error)
-      toast.error(error?.message || 'Unable to cancel ChatGPT login')
+      toast.error(errorMessage(error) || 'Unable to cancel ChatGPT login')
     } finally {
       setCancelingChatgptLogin(false)
     }

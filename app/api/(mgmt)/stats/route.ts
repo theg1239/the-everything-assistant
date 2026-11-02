@@ -27,10 +27,13 @@ export async function GET(req: NextRequest) {
       messagesInLast30Minutes,
       toolCallStats,
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching stats:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch stats', message: error.message || 'Unknown error' },
+      {
+        error: 'Failed to fetch stats',
+        message: error instanceof Error && error.message ? error.message : 'Unknown error',
+      },
       { status: 500 }
     )
   }

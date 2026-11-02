@@ -1,22 +1,25 @@
+import { asArray, asRecord, getRawText } from '../guards'
+import type { ParsedHubResult } from './attendance'
 import { stripAnsiCodes } from './utils'
-import type { HubVTOPCommand } from '@/types/hub'
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 
 const DAY_REGEX = new RegExp(`^(${DAYS.join('|')})`, 'i')
 
-export function parseTimetable(raw: any) {
-  const classes: TimetableClass[] = extractClassesFromTables((raw?.structured_data as any)?.tables)
+export function parseTimetable(raw: unknown): ParsedHubResult | null {
+  const classes: TimetableClass[] = extractClassesFromTables(
+    asRecord(asRecord(raw)?.structured_data)?.tables
+  )
 
   if (!classes.length) {
-    const text =
-      typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
-    const lines = text.split('\n').map((line: string) => stripAnsiCodes(line).trimEnd())
+    const text = getRawText(raw)
+    const lines = text.split('\n').map(line => stripAnsiCodes(line).trimEnd())
     let currentDay: string | null = null
     let buffer: string[] = []
 
     const flush = () => {
-      if (!currentDay || !buffer.length) {
+      const day = currentDay
+      if (!day || !buffer.length) {
         buffer = []
         return
       }
@@ -28,7 +31,7 @@ export function parseTimetable(raw: any) {
           const startTime = match ? match[1] : undefined
           const endTime = match ? match[2] : undefined
           classes.push({
-            day: currentDay!,
+            day,
             subject,
             slot,
             venue,
@@ -69,7 +72,7 @@ export function parseTimetable(raw: any) {
     : `${classes.length} scheduled sessions`
 
   return {
-    command: 'timetable' as HubVTOPCommand,
+    command: 'timetable',
     title: 'timetable pulse',
     summary,
     formatted_content: `<p>next class: ${summary}</p>`,
@@ -85,9 +88,9 @@ export function parseTimetable(raw: any) {
 
 type TimetableClass = {
   day: string
-  subject: string
-  slot: string
-  venue: string
+  subject?: string
+  slot?: string
+  venue?: string
   startTime?: string
   endTime?: string
   startISO?: string
@@ -102,8 +105,8 @@ type ParsedTable = {
 
 function parseBlock(lines: string[]): ParsedTable | null {
   const cleaned = lines.filter(line => line.includes('│'))
-  if (!cleaned.length) return null
   const headerLine = cleaned[0]
+  if (headerLine === undefined) return null
   const headers = headerLine
     .split('│')
     .map(part => part.trim())
@@ -147,7 +150,7 @@ function computeNextClass(classes: TimetableClass[]): TimetableClass | null {
     let diff = idx - currentDayIdx
     if (diff < 0) diff += 7
     const start = new Date(now)
-    start.setHours(sh, sm || 0, 0, 0)
+    start.setHours(sh ?? Number.NaN, sm || 0, 0, 0)
     start.setDate(start.getDate() + diff)
     if (diff === 0 && start <= now) {
       start.setDate(start.getDate() + 7)
@@ -170,15 +173,15 @@ function computeNextClass(classes: TimetableClass[]): TimetableClass | null {
   return best
 }
 
-function extractClassesFromTables(tables?: any[]): TimetableClass[] {
+function extractClassesFromTables(tables: unknown): TimetableClass[] {
   if (!Array.isArray(tables)) return []
   const classes: TimetableClass[] = []
 
-  tables.forEach(table => {
-    const headers: string[] = Array.isArray(table?.headers)
-      ? table.headers.map((h: string) => (typeof h === 'string' ? h.toLowerCase() : ''))
-      : []
-    const rows: string[][] = Array.isArray(table?.rows) ? table.rows : []
+  tables.forEach(entry => {
+    const table = asRecord(entry)
+    const headers: string[] =
+      asArray(table?.headers)?.map(h => (typeof h === 'string' ? h.toLowerCase() : '')) ?? []
+    const rows = asArray(table?.rows) ?? []
     if (!headers.length || !rows.length) return
 
     const dayIdx = headers.findIndex(h => h.includes('day'))
@@ -188,14 +191,20 @@ function extractClassesFromTables(tables?: any[]): TimetableClass[] {
     const facultyIdx = headers.findIndex(h => h.includes('faculty') || h.includes('instructor'))
     const timeIdx = headers.findIndex(h => h.includes('time'))
 
-    rows.forEach(row => {
-      const rawDay = dayIdx >= 0 ? row[dayIdx] : undefined
+    rows.forEach(entryRow => {
+      const row = asArray(entryRow)
+      if (!row) return
+      const cell = (idx: number) => {
+        const value = idx >= 0 ? row[idx] : undefined
+        return typeof value === 'string' ? value : undefined
+      }
+      const rawDay = cell(dayIdx)
       const day = rawDay ? capitalize(rawDay) : undefined
-      const subject = subjectIdx >= 0 ? row[subjectIdx] : ''
-      const slot = slotIdx >= 0 ? row[slotIdx] : ''
-      const venue = venueIdx >= 0 ? row[venueIdx] : ''
-      const faculty = facultyIdx >= 0 ? row[facultyIdx] : undefined
-      const timeRaw = timeIdx >= 0 ? row[timeIdx] : ''
+      const subject = subjectIdx >= 0 ? cell(subjectIdx) : ''
+      const slot = slotIdx >= 0 ? cell(slotIdx) : ''
+      const venue = venueIdx >= 0 ? cell(venueIdx) : ''
+      const faculty = cell(facultyIdx)
+      const timeRaw = timeIdx >= 0 ? cell(timeIdx) : ''
 
       if (!day || !subject) return
 
@@ -211,7 +220,7 @@ function extractClassesFromTables(tables?: any[]): TimetableClass[] {
         startTime,
         endTime,
         faculty,
-      } as TimetableClass)
+      })
     })
   })
 

@@ -42,9 +42,23 @@ const registry: Record<ModelKey, ModelConfig> = {
 
 export const modelRegistry = registry
 
-export const modelIds: Record<ModelKey, string> = Object.fromEntries(
-  Object.entries(registry).map(([key, value]) => [key, value.modelId])
-) as Record<ModelKey, string>
+export const modelIds: Record<ModelKey, string> = {
+  chat: registry.chat.modelId,
+  chatLite: registry.chatLite.modelId,
+  chatAttachment: registry.chatAttachment.modelId,
+  chatAutocomplete: registry.chatAutocomplete.modelId,
+  embedding: registry.embedding.modelId,
+  knowledgeEmbedding: registry.knowledgeEmbedding.modelId,
+  followUps: registry.followUps.modelId,
+  whatsappBot: registry.whatsappBot.modelId,
+  hubVtop: registry.hubVtop.modelId,
+  hubVtopFormatter: registry.hubVtopFormatter.modelId,
+  placementFormatter: registry.placementFormatter.modelId,
+  vtopParser: registry.vtopParser.modelId,
+  chatTitle: registry.chatTitle.modelId,
+  thinkHarder: registry.thinkHarder.modelId,
+  thinkHarderAdmin: registry.thinkHarderAdmin.modelId,
+}
 
 export function getModelConfig(key: ModelKey): ModelConfig {
   return registry[key]

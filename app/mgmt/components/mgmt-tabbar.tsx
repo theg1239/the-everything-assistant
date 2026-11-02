@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { Button } from '@/components/ui/button'
-import { Activity, Send, Key, Database, Users } from 'lucide-react'
+import { Activity, Send, Database, Users } from 'lucide-react'
 import {
   Select,
   SelectTrigger,
@@ -10,21 +10,33 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui/select'
+import type { MgmtTab } from '../types'
 
-export default function MgmtTabBar({ active, onChange }: any) {
-  const tabs = [
-    { id: 'overview', label: 'overview', icon: Activity },
-    { id: 'tokens', label: 'token usage', icon: Activity },
-    { id: 'broadcasts', label: 'broadcasts', icon: Send },
-    { id: 'keys', label: 'api keys', icon: Key },
-    { id: 'stats', label: 'stats', icon: Database },
-    { id: 'users', label: 'users', icon: Users },
-  ]
+const tabs: { id: MgmtTab; label: string; icon: typeof Activity }[] = [
+  { id: 'overview', label: 'overview', icon: Activity },
+  { id: 'tokens', label: 'token usage', icon: Activity },
+  { id: 'broadcasts', label: 'broadcasts', icon: Send },
+  { id: 'stats', label: 'stats', icon: Database },
+  { id: 'users', label: 'users', icon: Users },
+]
 
+const isMgmtTab = (value: string): value is MgmtTab => tabs.some(t => t.id === value)
+
+interface MgmtTabBarProps {
+  active: MgmtTab
+  onChange?: (tab: MgmtTab) => void
+}
+
+export default function MgmtTabBar({ active, onChange }: MgmtTabBarProps) {
   return (
     <div className="mt-4">
       <div className="sm:hidden">
-        <Select value={active} onValueChange={v => onChange?.(v)}>
+        <Select
+          value={active}
+          onValueChange={v => {
+            if (isMgmtTab(v)) onChange?.(v)
+          }}
+        >
           <SelectTrigger className="w-full">
             <SelectValue placeholder="tab" />
           </SelectTrigger>

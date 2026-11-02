@@ -1,9 +1,9 @@
-import type { HubVTOPCommand } from '@/types/hub'
+import { getRawText } from '../guards'
+import type { ParsedHubResult } from './attendance'
 import { extractCliTables } from './utils'
 
-export function parseAssignments(raw: any) {
-  const text =
-    typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
+export function parseAssignments(raw: unknown): ParsedHubResult | null {
+  const text = getRawText(raw)
   if (!text.trim()) return null
   const tables = extractCliTables(text)
   const summaryTable = tables.find(table =>
@@ -33,7 +33,7 @@ export function parseAssignments(raw: any) {
     : `${subjects.length} subjects tracked`
 
   return {
-    command: 'da' as HubVTOPCommand,
+    command: 'da',
     title: 'digital assignments',
     summary,
     formatted_content: `<p>${summary}</p>`,

@@ -3,14 +3,14 @@
 import React from 'react'
 import { motion } from 'framer-motion'
 
-export default function MgmtLayout({
-  title = 'mgmt',
-  subtitle,
-  headerActions,
-  lastUpdate,
-  nav,
-  children,
-}: any) {
+interface MgmtLayoutProps {
+  title?: string
+  subtitle?: string
+  nav?: React.ReactNode
+  children?: React.ReactNode
+}
+
+export default function MgmtLayout({ title = 'mgmt', subtitle, nav, children }: MgmtLayoutProps) {
   return (
     <div
       className="flex flex-col h-screen bg-transparent text-foreground overflow-hidden"

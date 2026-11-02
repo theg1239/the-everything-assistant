@@ -9,8 +9,17 @@ import {
   type VerifyAuthenticationResponseOpts,
   type AuthenticatorTransport,
 } from '@simplewebauthn/server'
+import {
+  webAuthnAuthenticationCredentialSchema,
+  type WebAuthnAuthenticationCredential,
+} from '@/types/api/mfa'
 
 const VALID_TRANSPORTS: AuthenticatorTransport[] = ['usb', 'nfc', 'ble', 'hybrid', 'internal']
+const VALID_TRANSPORT_SET: ReadonlySet<string> = new Set(VALID_TRANSPORTS)
+
+function isAuthenticatorTransport(transport: string): transport is AuthenticatorTransport {
+  return VALID_TRANSPORT_SET.has(transport)
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,7 +28,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    let requestBody: any = {}
+    let requestBody: unknown = {}
     try {
       const text = await request.text()
       if (text.trim()) {
@@ -28,14 +37,22 @@ export async function POST(request: NextRequest) {
     } catch (parseError) {
     }
 
-    const { credential } = requestBody
+    const rawCredential =
+      typeof requestBody === 'object' && requestBody !== null && 'credential' in requestBody
+        ? requestBody.credential
+        : undefined
 
-    if (!credential) {
+    if (!rawCredential) {
       return await generateAuthOptions(session.user.email)
     }
 
-    return await verifyAuthCredential(credential, session.user.email, request)
-  } catch (err: any) {
+    const parsedCredential = webAuthnAuthenticationCredentialSchema.safeParse(rawCredential)
+    if (!parsedCredential.success) {
+      return NextResponse.json({ error: 'Invalid credential' }, { status: 400 })
+    }
+
+    return await verifyAuthCredential(parsedCredential.data, session.user.email, request)
+  } catch (err) {
     console.error('🔐 WebAuthn authentication error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
@@ -71,9 +88,7 @@ async function generateAuthOptions(userEmail: string) {
     allowCredentials: user.webAuthnCredentials.map(cred => ({
       id: cred.credentialId,
       type: 'public-key' as const,
-      transports: cred.transports.filter((t): t is AuthenticatorTransport =>
-        VALID_TRANSPORTS.includes(t as AuthenticatorTransport)
-      ),
+      transports: cred.transports.filter(isAuthenticatorTransport),
     })),
   })
 
@@ -88,7 +103,11 @@ async function generateAuthOptions(userEmail: string) {
   return NextResponse.json(options)
 }
 
-async function verifyAuthCredential(credential: any, userEmail: string, request: NextRequest) {
+async function verifyAuthCredential(
+  credential: WebAuthnAuthenticationCredential,
+  userEmail: string,
+  request: NextRequest
+) {
   const user = await prisma.user.findUnique({
     where: { email: userEmail },
     select: {
@@ -151,14 +170,12 @@ async function verifyAuthCredential(credential: any, userEmail: string, request:
       authenticatorData: credential.response.authenticatorData,
       clientDataJSON: credential.response.clientDataJSON,
       signature: credential.response.signature,
-      userHandle: credential.response.userHandle,
+      userHandle: credential.response.userHandle ?? undefined,
     },
     clientExtensionResults: credential.clientExtensionResults || {},
   }
 
-  const filteredTransports: AuthenticatorTransport[] = stored.transports.filter(
-    (t): t is AuthenticatorTransport => VALID_TRANSPORTS.includes(t as AuthenticatorTransport)
-  )
+  const filteredTransports: AuthenticatorTransport[] = stored.transports.filter(isAuthenticatorTransport)
   const transportsToUse = filteredTransports.length ? filteredTransports : VALID_TRANSPORTS
 
   const verificationOpts: VerifyAuthenticationResponseOpts = {
@@ -166,9 +183,9 @@ async function verifyAuthCredential(credential: any, userEmail: string, request:
     expectedChallenge: user.tempMfaSecret,
     expectedOrigin:
       process.env.NODE_ENV === 'production'
-        ? process.env.WEBAUTHN_ORIGIN!
+        ? (process.env.WEBAUTHN_ORIGIN ?? '')
         : 'http://localhost:3000',
-    expectedRPID: process.env.NODE_ENV === 'production' ? process.env.WEBAUTHN_RP_ID! : 'localhost',
+    expectedRPID: process.env.NODE_ENV === 'production' ? (process.env.WEBAUTHN_RP_ID ?? '') : 'localhost',
     credential: {
       id: stored.credentialId,
       publicKey: credentialPublicKey,

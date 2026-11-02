@@ -5,7 +5,15 @@ import { mkdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { Writable } from 'node:stream'
-import { asSchema } from 'ai'
+import { asSchema, type FlexibleSchema } from 'ai'
+import * as z from 'zod'
+
+/** Any non-null object (arrays included), for reading untrusted JSON-RPC/proxy payloads. */
+const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
+const readObject = (value: unknown): Record<string, unknown> | null =>
+  isObjectRecord(value) ? value : null
 
 type JsonRpcError = {
   code?: number
@@ -36,15 +44,6 @@ type PendingRequest = {
   timer: NodeJS.Timeout
 }
 
-type AccountReadResult = {
-  account?: {
-    type?: 'apiKey' | 'chatgpt' | 'chatgptAuthTokens'
-    email?: string
-    planType?: string
-  } | null
-  requiresOpenaiAuth?: boolean
-}
-
 type AccountRateLimitWindow = {
   usedPercent: number | null
   remainingPercent: number | null
@@ -61,19 +60,6 @@ type AccountPlanUsage = {
   hasCredits: boolean | null
   unlimitedCredits: boolean | null
   creditsBalance: string | null
-}
-
-type AccountRateLimitsReadResult = {
-  rateLimits?: unknown
-  rate_limits?: unknown
-  rateLimitsByLimitId?: Record<string, unknown> | null
-  rate_limits_by_limit_id?: Record<string, unknown> | null
-}
-
-type LoginChatgptResult = {
-  type?: string
-  loginId?: string
-  authUrl?: string
 }
 
 type JsonRpcServerRequest = {
@@ -172,13 +158,10 @@ class JsonRpcConnection extends EventEmitter {
       return
     }
 
-    if (!payload || typeof payload !== 'object') {
+    const message = readObject(payload)
+    if (!message) {
       return
     }
-
-    const message = payload as Partial<
-      JsonRpcRequest & JsonRpcResponse & JsonRpcNotification
-    >
 
     if (typeof message.id === 'number' && typeof message.method === 'string') {
       this.emit('serverRequest', {
@@ -196,8 +179,9 @@ class JsonRpcConnection extends EventEmitter {
       }
       this.pending.delete(message.id)
       clearTimeout(pending.timer)
-      if (message.error?.message) {
-        pending.reject(new Error(message.error.message))
+      const errorMessage = readObject(message.error)?.message
+      if (typeof errorMessage === 'string' && errorMessage) {
+        pending.reject(new Error(errorMessage))
       } else {
         pending.resolve(message.result)
       }
@@ -244,6 +228,7 @@ const sanitizeCodexArgsForReadOnly = (args: string[], source: string): string[] 
 
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i]
+    if (arg === undefined) continue
     const lower = arg.toLowerCase()
 
     const dropCurrentAndMaybeValue = (reason: string) => {
@@ -288,15 +273,13 @@ const sanitizeCodexArgsForReadOnly = (args: string[], source: string): string[] 
 
 const sanitizePathSegment = (value: string) => value.replace(/[^a-zA-Z0-9._-]/g, '_')
 
-const readObject = (value: unknown): Record<string, unknown> | null => {
-  if (!value || typeof value !== 'object') return null
-  return value as Record<string, unknown>
-}
-
 const readString = (value: unknown): string | null => (typeof value === 'string' ? value : null)
 const readNumber = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? value : null
 const readBoolean = (value: unknown): boolean | null => (typeof value === 'boolean' ? value : null)
+
+const readAuthMode = (value: unknown): ChatgptStatus['authMode'] =>
+  value === 'apiKey' || value === 'chatgpt' || value === 'chatgptAuthTokens' ? value : null
 
 const clampPercent = (value: number): number => {
   if (!Number.isFinite(value)) return 0
@@ -366,9 +349,8 @@ const parsePlanUsageSnapshot = (value: unknown): AccountPlanUsage | null => {
   }
 }
 
-const pickPlanUsageSnapshot = (
-  payload: AccountRateLimitsReadResult | null | undefined
-): AccountPlanUsage | null => {
+const pickPlanUsageSnapshot = (value: unknown): AccountPlanUsage | null => {
+  const payload = readObject(value)
   if (!payload) return null
 
   const byLimitId =
@@ -477,8 +459,23 @@ export type CodexToolEvent =
 
 type ExecutableTool = {
   description?: string
-  inputSchema?: unknown
-  execute?: (input: unknown, options: unknown) => unknown
+  inputSchema: FlexibleSchema<unknown>
+  execute: (input: unknown, options: unknown) => unknown
+}
+
+/**
+ * Tool records arrive as `Record<string, unknown>`; anything with an `execute`
+ * function and an object/function `inputSchema` is treated as an AI SDK tool.
+ */
+const isExecutableTool = (value: unknown): value is ExecutableTool => {
+  if (!value || typeof value !== 'object') return false
+  const execute: unknown = Reflect.get(value, 'execute')
+  const inputSchema: unknown = Reflect.get(value, 'inputSchema')
+  return (
+    typeof execute === 'function' &&
+    !!inputSchema &&
+    (typeof inputSchema === 'object' || typeof inputSchema === 'function')
+  )
 }
 
 type ActiveTurnContext = {
@@ -488,7 +485,9 @@ type ActiveTurnContext = {
 }
 
 const isAsyncIterable = (value: unknown): value is AsyncIterable<unknown> =>
-  Boolean(value && typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function')
+  isObjectRecord(value) &&
+  Symbol.asyncIterator in value &&
+  typeof value[Symbol.asyncIterator] === 'function'
 
 const isLikelyImageUrl = (value: string): boolean =>
   /^data:image\//i.test(value) ||
@@ -517,11 +516,11 @@ const stringifyToolOutput = (value: unknown): string => {
 
 const extractImageContentItems = (value: unknown): DynamicToolCallContentItem[] => {
   const items: DynamicToolCallContentItem[] = []
-  if (!value || typeof value !== 'object') {
+  const record = readObject(value)
+  if (!record) {
     return items
   }
 
-  const record = value as Record<string, unknown>
   const pushImageUrl = (url: unknown) => {
     if (typeof url === 'string' && isLikelyImageUrl(url)) {
       items.push({ type: 'inputImage', imageUrl: url })
@@ -529,9 +528,9 @@ const extractImageContentItems = (value: unknown): DynamicToolCallContentItem[] 
   }
 
   pushImageUrl(record.url)
-  pushImageUrl((record.image as Record<string, unknown> | undefined)?.url)
+  const imageObj = readObject(record.image)
+  pushImageUrl(imageObj?.url)
 
-  const imageObj = record.image as Record<string, unknown> | undefined
   if (imageObj && typeof imageObj.base64 === 'string') {
     const mimeType = typeof imageObj.mimeType === 'string' ? imageObj.mimeType : 'image/png'
     items.push({
@@ -542,8 +541,8 @@ const extractImageContentItems = (value: unknown): DynamicToolCallContentItem[] 
 
   if (Array.isArray(record.images)) {
     for (const entry of record.images.slice(0, 3)) {
-      if (!entry || typeof entry !== 'object') continue
-      const imageEntry = entry as Record<string, unknown>
+      const imageEntry = readObject(entry)
+      if (!imageEntry) continue
       pushImageUrl(imageEntry.url)
       if (typeof imageEntry.base64 === 'string') {
         const mimeType =
@@ -575,38 +574,90 @@ const toDynamicToolContentItems = (value: unknown): DynamicToolCallContentItem[]
   return [...textItems, ...imageItems].slice(0, 4)
 }
 
-type ProxyTurnStartPayload = {
-  runId: string
-  threadId: string
-  turnId: string
-  model: string | null
-}
+/** Proxy responses: missing/mistyped fields fall back to null/'' instead of failing the turn. */
+const nullableOf = <T extends z.ZodType>(schema: T) => schema.nullable().catch(null)
+const textOrEmpty = z.string().catch('')
 
-type ProxyTurnEventPayload =
-  | {
-      type: 'text-delta'
-      delta: string
-    }
-  | {
-      type: 'tool-call-request'
-      requestId: string
-      toolCallId: string
-      toolName: string
-      input: unknown
-    }
-  | {
-      type: 'turn-complete'
-      threadId: string
-      turnId: string
-      model: string | null
-      text: string
-      usage: CodexTurnUsage | null
-      error: string | null
-    }
+const rateLimitWindowSchema = z.object({
+  usedPercent: nullableOf(z.number()),
+  remainingPercent: nullableOf(z.number()),
+  windowDurationMins: nullableOf(z.number()),
+  resetsAt: nullableOf(z.number()),
+})
 
-type ProxyTurnNextPayload = {
-  event: ProxyTurnEventPayload | null
-}
+const planUsageSchema = z.object({
+  limitId: nullableOf(z.string()),
+  limitName: nullableOf(z.string()),
+  planType: nullableOf(z.string()),
+  primary: nullableOf(rateLimitWindowSchema),
+  secondary: nullableOf(rateLimitWindowSchema),
+  hasCredits: nullableOf(z.boolean()),
+  unlimitedCredits: nullableOf(z.boolean()),
+  creditsBalance: nullableOf(z.string()),
+})
+
+const chatgptStatusSchema = z.object({
+  available: z.boolean().catch(false),
+  connected: z.boolean().catch(false),
+  authMode: nullableOf(z.enum(['apiKey', 'chatgpt', 'chatgptAuthTokens'])),
+  email: nullableOf(z.string()),
+  planType: nullableOf(z.string()),
+  planUsage: nullableOf(planUsageSchema),
+  pendingLoginId: nullableOf(z.string()),
+  lastLoginError: nullableOf(z.string()),
+  requiresOpenaiAuth: nullableOf(z.boolean()),
+})
+
+const chatgptLoginStartSchema = z.object({
+  authUrl: nullableOf(z.string()),
+  loginId: nullableOf(z.string()),
+  status: chatgptStatusSchema.catch(() => chatgptStatusSchema.parse({})),
+  loginMethod: z.enum(['browser', 'device']).optional().catch(undefined),
+  deviceCode: z.string().nullish().catch(undefined),
+  verificationUrl: z.string().nullish().catch(undefined),
+})
+
+const proxyTurnStartSchema = z.object({
+  runId: z.string(),
+  threadId: textOrEmpty,
+  turnId: textOrEmpty,
+  model: nullableOf(z.string()),
+})
+
+const codexTurnUsageSchema = z.object({
+  totalTokens: z.number(),
+  inputTokens: z.number(),
+  cachedInputTokens: z.number(),
+  outputTokens: z.number(),
+  reasoningOutputTokens: z.number(),
+})
+
+const proxyTurnEventSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('text-delta'), delta: textOrEmpty }),
+  z.object({
+    type: z.literal('tool-call-request'),
+    requestId: z.string(),
+    toolCallId: z.string(),
+    toolName: z.string(),
+    input: z.unknown(),
+  }),
+  z.object({
+    type: z.literal('turn-complete'),
+    threadId: textOrEmpty,
+    turnId: textOrEmpty,
+    model: nullableOf(z.string()),
+    text: textOrEmpty,
+    usage: nullableOf(codexTurnUsageSchema),
+    error: nullableOf(z.string()),
+  }),
+])
+
+type ProxyTurnEventPayload = z.infer<typeof proxyTurnEventSchema>
+
+/** Unknown or malformed events are skipped, like an empty poll. */
+const proxyTurnNextSchema = z.object({
+  event: proxyTurnEventSchema.nullable().catch(null),
+})
 
 const resolveExecutableToolResult = async (result: unknown): Promise<unknown> => {
   if (!isAsyncIterable(result)) {
@@ -633,15 +684,11 @@ const prepareProxyDynamicTools = async (
     return { dynamicTools, toolMap }
   }
 
-  for (const [name, rawTool] of Object.entries(tools)) {
-    if (!rawTool || typeof rawTool !== 'object') continue
-    const tool = rawTool as ExecutableTool
-    if (typeof tool.execute !== 'function' || !tool.inputSchema) {
-      continue
-    }
+  for (const [name, tool] of Object.entries(tools)) {
+    if (!isExecutableTool(tool)) continue
 
     try {
-      const inputSchema = await Promise.resolve(asSchema(tool.inputSchema as any).jsonSchema)
+      const inputSchema = await Promise.resolve(asSchema(tool.inputSchema).jsonSchema)
       dynamicTools.push({
         name,
         ...(typeof tool.description === 'string' && tool.description.trim().length > 0
@@ -692,7 +739,7 @@ const executeProxyToolCall = async (options: {
   try {
     const rawResult = await tool.execute(event.input, {
       toolCallId: event.toolCallId,
-      messages: Array.isArray(toolExecutionMessages) ? (toolExecutionMessages as any[]) : [],
+      messages: Array.isArray(toolExecutionMessages) ? toolExecutionMessages : [],
     })
     const output = await resolveExecutableToolResult(rawResult)
     onToolEvent?.({
@@ -741,18 +788,15 @@ class CodexAppServerSession {
   ) {}
 
   async getStatus(): Promise<ChatgptStatus> {
-    const [accountResult, rateLimitsResult] = await Promise.all([
+    const [rawAccountResult, rateLimitsResult] = await Promise.all([
       this.request('account/read', {
         refreshToken: false,
-      }) as Promise<AccountReadResult>,
-      this.request('account/rateLimits/read').catch(() => null) as Promise<AccountRateLimitsReadResult | null>,
+      }),
+      this.request('account/rateLimits/read').catch(() => null),
     ])
+    const accountResult = readObject(rawAccountResult)
     const account = readObject(accountResult?.account ?? null)
-    const authMode = readString(account?.type) as
-      | 'apiKey'
-      | 'chatgpt'
-      | 'chatgptAuthTokens'
-      | null
+    const authMode = readAuthMode(account?.type)
     const planUsage = pickPlanUsageSnapshot(rateLimitsResult)
 
     if (authMode === 'chatgpt' || authMode === 'chatgptAuthTokens') {
@@ -769,17 +813,16 @@ class CodexAppServerSession {
       planUsage,
       pendingLoginId: this.pendingLoginId,
       lastLoginError: this.lastLoginError,
-      requiresOpenaiAuth:
-        typeof accountResult?.requiresOpenaiAuth === 'boolean'
-          ? accountResult.requiresOpenaiAuth
-          : null,
+      requiresOpenaiAuth: readBoolean(accountResult?.requiresOpenaiAuth),
     }
   }
 
   async startChatgptLogin(): Promise<ChatgptLoginStartResult> {
-    const result = (await this.request('account/login/start', {
-      type: 'chatgpt',
-    })) as LoginChatgptResult
+    const result = readObject(
+      await this.request('account/login/start', {
+        type: 'chatgpt',
+      })
+    )
 
     this.pendingLoginId = readString(result?.loginId)
     this.lastLoginError = null
@@ -835,7 +878,7 @@ class CodexAppServerSession {
       ephemeral: true,
       experimentalRawEvents: false,
       persistExtendedHistory: false,
-    })) as Record<string, unknown>
+    }).then(readObject))
 
     const thread = readObject(threadResult?.thread)
     const threadId = readString(thread?.id)
@@ -848,7 +891,7 @@ class CodexAppServerSession {
       threadId,
       input: [{ type: 'text', text: prompt, text_elements: [] }],
       approvalPolicy: 'never',
-    })) as Record<string, unknown>
+    }).then(readObject))
 
     const turn = readObject(turnStartResult?.turn)
     const turnId = readString(turn?.id)
@@ -1092,15 +1135,11 @@ class CodexAppServerSession {
     }
 
     const entries = Object.entries(tools)
-    for (const [name, rawTool] of entries) {
-      if (!rawTool || typeof rawTool !== 'object') continue
-      const tool = rawTool as ExecutableTool
-      if (typeof tool.execute !== 'function' || !tool.inputSchema) {
-        continue
-      }
+    for (const [name, tool] of entries) {
+      if (!isExecutableTool(tool)) continue
 
       try {
-        const inputSchema = await Promise.resolve(asSchema(tool.inputSchema as any).jsonSchema)
+        const inputSchema = await Promise.resolve(asSchema(tool.inputSchema).jsonSchema)
         dynamicTools.push({
           name,
           ...(typeof tool.description === 'string' && tool.description.trim().length > 0
@@ -1199,7 +1238,7 @@ class CodexAppServerSession {
 
       const rawResult = await tool.execute(toolArgs, {
         toolCallId: callId,
-        messages: turnContext.toolExecutionMessages as any[],
+        messages: turnContext.toolExecutionMessages,
       })
       const output = await this.resolveToolExecuteResult(rawResult)
       turnContext.onToolEvent?.({
@@ -1487,7 +1526,12 @@ const resolveProxyConfig = (): ProxyConfig | null => {
   }
 }
 
-const proxyRequest = async <T>(config: ProxyConfig, path: string, payload: unknown): Promise<T> => {
+const proxyRequest = async <S extends z.ZodType>(
+  config: ProxyConfig,
+  path: string,
+  payload: unknown,
+  schema: S
+): Promise<z.infer<S>> => {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs)
 
@@ -1508,7 +1552,7 @@ const proxyRequest = async <T>(config: ProxyConfig, path: string, payload: unkno
 
     if (text) {
       try {
-        data = JSON.parse(text) as Record<string, unknown>
+        data = readObject(JSON.parse(text))
       } catch {
         data = null
       }
@@ -1522,9 +1566,9 @@ const proxyRequest = async <T>(config: ProxyConfig, path: string, payload: unkno
       throw new Error(errorMessage)
     }
 
-    return (data as T) ?? ({} as T)
-  } catch (error: any) {
-    if (error?.name === 'AbortError') {
+    return schema.parse(data ?? {})
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
       throw new Error(`codex proxy request timed out after ${config.timeoutMs}ms`)
     }
     throw error
@@ -1546,9 +1590,8 @@ const getRegistry = (): SessionRegistry => {
 
   // Hot reload can retain older config/session objects. Refresh config every time and
   // reset stale sessions if legacy config did not include the turn timeout field.
-  const hadLegacyConfig =
-    typeof (registry.config as Partial<SessionConfig>)?.turnTimeoutMs !== 'number' ||
-    !Number.isFinite((registry.config as Partial<SessionConfig>)?.turnTimeoutMs)
+  const turnTimeoutMs: unknown = registry.config?.turnTimeoutMs
+  const hadLegacyConfig = typeof turnTimeoutMs !== 'number' || !Number.isFinite(turnTimeoutMs)
   if (hadLegacyConfig && registry.sessions.size > 0) {
     for (const session of registry.sessions.values()) {
       session.dispose?.()
@@ -1562,10 +1605,10 @@ const getRegistry = (): SessionRegistry => {
 
 const getOrCreateSession = (userId: string): CodexAppServerSession => {
   const registry = getRegistry()
-  const existing = registry.sessions.get(userId) as
-    | (CodexAppServerSession & { runChatgptTurn?: unknown })
-    | undefined
-  if (existing && typeof existing.runChatgptTurn === 'function') {
+  // Sessions can outlive a hot reload; an instance from older code may lack newer methods.
+  const existing = registry.sessions.get(userId)
+  const runChatgptTurn: unknown = existing?.runChatgptTurn
+  if (existing && typeof runChatgptTurn === 'function') {
     return existing
   }
   if (existing) {
@@ -1581,7 +1624,7 @@ const getOrCreateSession = (userId: string): CodexAppServerSession => {
 export async function getChatgptStatus(userId: string): Promise<ChatgptStatus> {
   const proxy = resolveProxyConfig()
   if (proxy) {
-    return proxyRequest<ChatgptStatus>(proxy, '/v1/chatgpt/status', { userId })
+    return proxyRequest(proxy, '/v1/chatgpt/status', { userId }, chatgptStatusSchema)
   }
 
   const session = getOrCreateSession(userId)
@@ -1591,7 +1634,7 @@ export async function getChatgptStatus(userId: string): Promise<ChatgptStatus> {
 export async function startChatgptLogin(userId: string): Promise<ChatgptLoginStartResult> {
   const proxy = resolveProxyConfig()
   if (proxy) {
-    return proxyRequest<ChatgptLoginStartResult>(proxy, '/v1/chatgpt/start', { userId })
+    return proxyRequest(proxy, '/v1/chatgpt/start', { userId }, chatgptLoginStartSchema)
   }
 
   const session = getOrCreateSession(userId)
@@ -1604,10 +1647,15 @@ export async function cancelChatgptLogin(
 ): Promise<ChatgptStatus> {
   const proxy = resolveProxyConfig()
   if (proxy) {
-    return proxyRequest<ChatgptStatus>(proxy, '/v1/chatgpt/cancel', {
-      userId,
-      loginId,
-    })
+    return proxyRequest(
+      proxy,
+      '/v1/chatgpt/cancel',
+      {
+        userId,
+        loginId,
+      },
+      chatgptStatusSchema
+    )
   }
 
   const session = getOrCreateSession(userId)
@@ -1617,7 +1665,7 @@ export async function cancelChatgptLogin(
 export async function disconnectChatgpt(userId: string): Promise<ChatgptStatus> {
   const proxy = resolveProxyConfig()
   if (proxy) {
-    return proxyRequest<ChatgptStatus>(proxy, '/v1/chatgpt/disconnect', { userId })
+    return proxyRequest(proxy, '/v1/chatgpt/disconnect', { userId }, chatgptStatusSchema)
   }
 
   const session = getOrCreateSession(userId)
@@ -1631,30 +1679,40 @@ export async function runChatgptManagedTurn(
   const proxy = resolveProxyConfig()
   if (proxy) {
     const { dynamicTools, toolMap } = await prepareProxyDynamicTools(options.tools)
-    const start = await proxyRequest<ProxyTurnStartPayload>(proxy, '/v1/chatgpt/turn/start', {
-      userId,
-      options: {
-        prompt: options.prompt,
-        model: options.model ?? null,
-        cwd: options.cwd ?? null,
-        baseInstructions: options.baseInstructions ?? null,
-        developerInstructions: options.developerInstructions ?? null,
-        personality: options.personality ?? 'none',
-        dynamicTools: dynamicTools.length > 0 ? dynamicTools : undefined,
+    const start = await proxyRequest(
+      proxy,
+      '/v1/chatgpt/turn/start',
+      {
+        userId,
+        options: {
+          prompt: options.prompt,
+          model: options.model ?? null,
+          cwd: options.cwd ?? null,
+          baseInstructions: options.baseInstructions ?? null,
+          developerInstructions: options.developerInstructions ?? null,
+          personality: options.personality ?? 'none',
+          dynamicTools: dynamicTools.length > 0 ? dynamicTools : undefined,
+        },
       },
-    })
+      proxyTurnStartSchema
+    )
 
     let streamedText = ''
     let completed: RunChatgptTurnResult | null = null
 
     try {
       while (!completed) {
-        const next = await proxyRequest<ProxyTurnNextPayload>(proxy, '/v1/chatgpt/turn/next', {
-          userId,
-          runId: start.runId,
-          timeoutMs: 25_000,
-        })
-        const event = next?.event
+        const next = await proxyRequest(
+          proxy,
+          '/v1/chatgpt/turn/next',
+          {
+            userId,
+            runId: start.runId,
+            timeoutMs: 25_000,
+          },
+          proxyTurnNextSchema
+        )
+        const event = next.event
         if (!event) {
           continue
         }
@@ -1675,12 +1733,17 @@ export async function runChatgptManagedTurn(
             onToolEvent: options.onToolEvent,
           })
 
-          await proxyRequest<{ ok: boolean }>(proxy, '/v1/chatgpt/turn/tool-result', {
-            userId,
-            runId: start.runId,
-            requestId: event.requestId,
-            result: toolResult,
-          })
+          await proxyRequest(
+            proxy,
+            '/v1/chatgpt/turn/tool-result',
+            {
+              userId,
+              runId: start.runId,
+              requestId: event.requestId,
+              result: toolResult,
+            },
+            z.unknown()
+          )
           continue
         }
 
@@ -1707,10 +1770,15 @@ export async function runChatgptManagedTurn(
       return completed
     } finally {
       try {
-        await proxyRequest<{ ok: boolean }>(proxy, '/v1/chatgpt/turn/close', {
-          userId,
-          runId: start.runId,
-        })
+        await proxyRequest(
+          proxy,
+          '/v1/chatgpt/turn/close',
+          {
+            userId,
+            runId: start.runId,
+          },
+          z.unknown()
+        )
       } catch {
         // non-fatal cleanup failure
       }

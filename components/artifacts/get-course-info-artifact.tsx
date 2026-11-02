@@ -1,4 +1,5 @@
 import React from 'react'
+import { asArray, asRecord, asString, textOf } from './artifact-data'
 
 interface CourseResult {
   code: string
@@ -8,10 +9,30 @@ interface CourseResult {
   faculty: string
 }
 
+export interface FfcsCourseSearchData {
+  results: CourseResult[]
+  message?: string
+}
+
 interface FfcsCourseSearchResultProps {
-  data: {
-    results: CourseResult[]
-    message: string
+  data: FfcsCourseSearchData
+}
+
+/** Narrows an untyped course-search tool result into the shape this artifact renders. */
+export const parseCourseSearchResult = (value: unknown): FfcsCourseSearchData => {
+  const record = asRecord(value)
+  return {
+    results: asArray(record.results).map(item => {
+      const course = asRecord(item)
+      return {
+        code: textOf(course.code),
+        slot: textOf(course.slot),
+        type: textOf(course.type),
+        title: textOf(course.title),
+        faculty: textOf(course.faculty),
+      }
+    }),
+    message: asString(record.message),
   }
 }
 
@@ -28,18 +49,17 @@ const FfcsCourseSearchResult: React.FC<FfcsCourseSearchResultProps> = ({ data })
 
   const facultyMap = new Map<string, Map<string, { title: string; slots: string[] }>>()
   results.forEach(course => {
-    if (!facultyMap.has(course.faculty)) {
-      facultyMap.set(course.faculty, new Map())
+    let coursesMap = facultyMap.get(course.faculty)
+    if (!coursesMap) {
+      coursesMap = new Map()
+      facultyMap.set(course.faculty, coursesMap)
     }
-    const coursesMap = facultyMap.get(course.faculty)!
 
-    if (!coursesMap.has(course.code)) {
-      coursesMap.set(course.code, {
-        title: course.title,
-        slots: [],
-      })
+    let courseData = coursesMap.get(course.code)
+    if (!courseData) {
+      courseData = { title: course.title, slots: [] }
+      coursesMap.set(course.code, courseData)
     }
-    const courseData = coursesMap.get(course.code)!
     if (!courseData.slots.includes(course.slot)) {
       courseData.slots.push(course.slot)
     }
@@ -50,7 +70,7 @@ const FfcsCourseSearchResult: React.FC<FfcsCourseSearchResultProps> = ({ data })
 
   return (
     <div className="p-4 bg-gray-900 text-white rounded-lg font-sans">
-      <h3 className="text-xl font-bold mb-4">{results[0].title}</h3>
+      <h3 className="text-xl font-bold mb-4">{results[0]?.title}</h3>
       <p className="text-gray-400 mb-4">{dynamicMessage}</p>
       <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
         {Array.from(facultyMap.entries()).map(([faculty, coursesMap]) => (

@@ -32,7 +32,18 @@ import {
   XCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { readJson } from '@/lib/http'
+import {
+  asArray,
+  asNumber,
+  asRecord,
+  asString,
+  asText,
+  isRecord,
+  isUnknownArray,
+  textOf,
+  toDate,
+  type TextValue,
+} from './artifact-data'
 
 interface EventSlot {
   id: string
@@ -58,28 +69,32 @@ interface Event {
   startDate: string
   endDate: string
   teamSize: string
-  price: number
+  price?: number
   scope: string
   image: string
   shortDescription?: string
   judgementCriteria?: string
   rules?: string
   prizes?: string
-  slots?: any
+  /** Raw slot records attached to the event; read via normalizeSlots. */
+  slots?: unknown
+}
+
+interface SeatsSummary {
+  totalSeatsAvailable?: TextValue
+  currentRegistrations?: TextValue
+  seatsLeft?: TextValue
+  registrationStatus?: TextValue
+  /** Raw API slot records or normalized EventSlots; read via normalizeSlots / SeatsInfo. */
+  slots?: unknown[]
 }
 
 interface GravitasEventsData {
   events?: Event[]
   event?: Event
-  seats?: {
-    totalSeatsAvailable: number
-    currentRegistrations: number
-    seatsLeft: number
-    registrationStatus: string
-    slots: EventSlot[]
-  }
-  eventSlots?: any[]
-  totalEvents?: number
+  seats?: SeatsSummary
+  eventSlots?: unknown[]
+  totalEvents?: TextValue
   message?: string
   filters?: {
     searchQuery?: string
@@ -89,72 +104,66 @@ interface GravitasEventsData {
 }
 
 interface GravitasEventsArtifactProps {
-  data: GravitasEventsData
+  data: unknown
 }
 
-type GravitasApiEvent = Partial<{
-  id: string | number
-  name: string
-  type: string
-  category: string
-  description: string
-  club: string
-  tagline: string
-  start_date: string
-  end_date: string
-  startDate: string
-  endDate: string
-  team_size: string | number
-  price_per_ticket: number
-  scope: string
-  image: string
-  short_description: string
-}>
-
-type GravitasEventsApiResponse = {
-  data?: {
-    events?: GravitasApiEvent[]
-    eventSlots?: GravitasEventSlotRecord[]
+const parseEvent = (value: unknown): Event => {
+  const e = asRecord(value)
+  return {
+    id: textOf(e.id),
+    name: textOf(e.name),
+    type: textOf(e.type),
+    category: textOf(e.category),
+    description: textOf(e.description),
+    club: textOf(e.club),
+    tagline: textOf(e.tagline),
+    startDate: textOf(e.startDate),
+    endDate: textOf(e.endDate),
+    teamSize: textOf(e.teamSize),
+    price: asNumber(e.price),
+    scope: textOf(e.scope),
+    image: textOf(e.image),
+    shortDescription: asString(e.shortDescription),
+    judgementCriteria: asString(e.judgementCriteria),
+    rules: asString(e.rules),
+    prizes: asString(e.prizes),
+    slots: e.slots,
   }
-  seats?: GravitasEventsData['seats']
 }
 
-type GravitasEventSlotRecord = Partial<{
-  id: string | number
-  eventId: string | number
-  event_id: string | number
-  venue: string
-  location: string
-  start_date: string
-  end_date: string
-  startDate: string
-  endDate: string
-  total_entries: number
-  totalEntries: number
-  seats_left: number
-  seatsLeft: number
-  availableEntries: number
-  available_entries: number
-  entries_left: number
-  remaining: number
-  remaining_entries: number
-  overall_entries: number
-  totalSeats: number
-  isRegistrable: boolean
-  is_registrable: boolean
-}>
-
-type GravitasEventSeatsResponse = {
-  data?: {
-    seats?: GravitasEventsData['seats']
-    eventSlots?: GravitasEventSlotRecord[]
+const parseSeats = (value: unknown): SeatsSummary | undefined => {
+  if (!isRecord(value)) return undefined
+  return {
+    totalSeatsAvailable: asText(value.totalSeatsAvailable),
+    currentRegistrations: asText(value.currentRegistrations),
+    seatsLeft: asText(value.seatsLeft),
+    registrationStatus: asText(value.registrationStatus),
+    slots: isUnknownArray(value.slots) ? value.slots : undefined,
   }
-  seats?: GravitasEventsData['seats']
 }
 
-const formatDate = (dateString: string) => {
+/** Narrows an untyped gravitasEvents tool result into the shape this artifact renders. */
+const parseGravitasEventsData = (value: unknown): GravitasEventsData => {
+  const record = asRecord(value)
+  const filters = isRecord(record.filters) ? record.filters : undefined
+  return {
+    events: isUnknownArray(record.events) ? record.events.map(parseEvent) : undefined,
+    event: isRecord(record.event) ? parseEvent(record.event) : undefined,
+    seats: parseSeats(record.seats),
+    eventSlots: isUnknownArray(record.eventSlots) ? record.eventSlots : undefined,
+    totalEvents: asText(record.totalEvents),
+    message: asString(record.message),
+    filters: filters && {
+      searchQuery: asString(filters.searchQuery),
+      eventType: asString(filters.eventType),
+      category: asString(filters.category),
+    },
+  }
+}
+
+const formatDate = (dateString: unknown) => {
   try {
-    const date = new Date(dateString)
+    const date = toDate(dateString)
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -162,14 +171,14 @@ const formatDate = (dateString: string) => {
       minute: '2-digit',
     })
   } catch {
-    return dateString
+    return String(dateString)
   }
 }
 
-const formatDateRange = (startDate: string, endDate: string) => {
+const formatDateRange = (startDate: unknown, endDate: unknown) => {
   try {
-    const start = new Date(startDate)
-    const end = new Date(endDate)
+    const start = toDate(startDate)
+    const end = toDate(endDate)
     const isSameDay = start.toDateString() === end.toDateString()
 
     if (isSameDay) {
@@ -178,7 +187,7 @@ const formatDateRange = (startDate: string, endDate: string) => {
       return `${formatDate(startDate)} - ${formatDate(endDate)}`
     }
   } catch {
-    return `${startDate} - ${endDate}`
+    return `${String(startDate)} - ${String(endDate)}`
   }
 }
 
@@ -251,7 +260,6 @@ const EventCard: React.FC<{
 
       <CardContent className="pt-0">
         <div className="space-y-3">
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
             <div className="flex items-start gap-2 min-w-0">
               <Calendar className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
@@ -264,7 +272,6 @@ const EventCard: React.FC<{
               <Users className="h-4 w-4 text-primary flex-shrink-0" />
               <span className="break-words">Team Size: {event.teamSize}</span>
             </div>
-
 
             {Array.isArray(slots) && slots.length > 0 && (
               <div className="flex items-start gap-2 min-w-0 md:col-span-2">
@@ -293,13 +300,11 @@ const EventCard: React.FC<{
             </div>
           </div>
 
-
           <div>
             <p className="text-sm text-muted-foreground leading-relaxed break-words whitespace-pre-wrap">
               {event.shortDescription || event.description}
             </p>
           </div>
-
 
           {detailed &&
             (event.description || event.judgementCriteria || event.rules || event.prizes) && (
@@ -365,7 +370,6 @@ const EventCard: React.FC<{
               </div>
             )}
 
-
           {Array.isArray(slots) && slots.length > 0 && (
             <div className="bg-muted/50 rounded-lg p-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
@@ -424,7 +428,6 @@ const EventCard: React.FC<{
             </div>
           )}
 
-
           {event.image && (
             <div className="mt-3">
               <img
@@ -432,7 +435,7 @@ const EventCard: React.FC<{
                 alt={event.name}
                 className="w-full h-32 object-cover rounded-md border border-border/50"
                 onError={e => {
-                  ;(e.target as HTMLImageElement).style.display = 'none'
+                  e.currentTarget.style.display = 'none'
                 }}
               />
             </div>
@@ -443,7 +446,7 @@ const EventCard: React.FC<{
   )
 }
 
-const SeatsInfo: React.FC<{ seats: GravitasEventsData['seats'] }> = ({ seats }) => {
+const SeatsInfo: React.FC<{ seats: SeatsSummary | undefined }> = ({ seats }) => {
   if (!seats) return null
 
   return (
@@ -485,21 +488,21 @@ const SeatsInfo: React.FC<{ seats: GravitasEventsData['seats'] }> = ({ seats }) 
             <div>
               <h4 className="font-medium text-sm mb-3">Event Slots</h4>
               <div className="space-y-2">
-                {seats.slots.map(slot => (
+                {seats.slots.map(asRecord).map(slot => (
                   <div
-                    key={slot.id}
+                    key={textOf(slot.id)}
                     className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 p-3 border border-border/50 rounded-lg"
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm break-words">{slot.venue}</div>
+                      <div className="font-medium text-sm break-words">{asText(slot.venue)}</div>
                       <div className="text-xs text-muted-foreground break-words">
                         {formatDateRange(slot.startDate, slot.endDate)}
                       </div>
                     </div>
                     <div className="flex items-center justify-between md:flex-col md:items-end gap-2">
-                      <div className="text-sm font-medium">{slot.seatsLeft} seats left</div>
+                      <div className="text-sm font-medium">{asText(slot.seatsLeft)} seats left</div>
                       <div className="text-xs text-muted-foreground">
-                        {slot.currentRegistrations}/{slot.totalSeats} registered
+                        {asText(slot.currentRegistrations)}/{asText(slot.totalSeats)} registered
                       </div>
                       <Badge
                         variant={slot.isRegistrable ? 'default' : 'secondary'}
@@ -519,24 +522,23 @@ const SeatsInfo: React.FC<{ seats: GravitasEventsData['seats'] }> = ({ seats }) 
   )
 }
 
-const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data }) => {
+const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data: rawData }) => {
+  const data = useMemo(() => parseGravitasEventsData(rawData), [rawData])
   const [searchQuery, setSearchQuery] = useState(data.filters?.searchQuery || '')
   const [typeFilter, setTypeFilter] = useState(data.filters?.eventType || 'all')
   const [categoryFilter, setCategoryFilter] = useState(data.filters?.category || 'all')
-  const [seatsByEvent, setSeatsByEvent] = useState<Record<string, GravitasEventsData['seats']>>({})
+  const [seatsByEvent, setSeatsByEvent] = useState<Record<string, SeatsSummary>>({})
   const [loadingEventSeats, setLoadingEventSeats] = useState<Record<string, boolean>>({})
   const initialEvents = data.events || (data.event ? [data.event] : [])
   const [events, setEvents] = useState<Event[]>(initialEvents)
   const [serverLoading, setServerLoading] = useState(false)
   const [serverExhausted, setServerExhausted] = useState(false)
 
-  const normalizeSlots = (
-    slots: GravitasEventSlotRecord[] | undefined,
-    fallbackEventId?: string
-  ): NormalizedSlot[] => {
-    if (!Array.isArray(slots)) return []
+  const normalizeSlots = (slots: unknown, fallbackEventId?: string): NormalizedSlot[] => {
+    if (!isUnknownArray(slots)) return []
     return slots
-      .map((s: any) => {
+      .map((raw): NormalizedSlot | null => {
+        const s = asRecord(raw)
         const eventId = s.eventId || s.event_id || fallbackEventId
         const start = s.startDate || s.start_date
         const end = s.endDate || s.end_date
@@ -565,16 +567,16 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
           currentRegistrations: Math.max(0, Number(maxSeats) - Number(seatsLeft)),
           seatsLeft: Number(seatsLeft),
           isRegistrable: Boolean(registrable),
-        } as NormalizedSlot
+        }
       })
-      .filter(Boolean) as NormalizedSlot[]
+      .filter((slot): slot is NormalizedSlot => slot !== null)
   }
 
   const slotsByEventId = useMemo(() => {
     const map = new Map<string, NormalizedSlot[]>()
 
-    if (Array.isArray((data as any).eventSlots)) {
-      const normalized = normalizeSlots((data as any).eventSlots)
+    if (Array.isArray(data.eventSlots)) {
+      const normalized = normalizeSlots(data.eventSlots)
       for (const s of normalized) {
         if (!s.eventId) continue
         const arr = map.get(s.eventId) || []
@@ -598,8 +600,8 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
     }
 
     for (const ev of events) {
-      if (Array.isArray((ev as any).slots)) {
-        const normalized = normalizeSlots((ev as any).slots, ev.id)
+      if (Array.isArray(ev.slots)) {
+        const normalized = normalizeSlots(ev.slots, ev.id)
         const arr = map.get(ev.id) || []
         map.set(ev.id, [...arr, ...normalized])
       }
@@ -677,14 +679,14 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
         setServerExhausted(true)
         return
       }
-      const json = await readJson<GravitasEventsApiResponse>(res)
-      const apiEvents: GravitasApiEvent[] = json?.data?.events || []
-      if (!Array.isArray(apiEvents) || apiEvents.length === 0) {
+      const json: unknown = await res.json()
+      const apiEvents = asArray(asRecord(asRecord(json).data).events)
+      if (apiEvents.length === 0) {
         setServerExhausted(true)
         return
       }
 
-      const mapped: Event[] = apiEvents.map(ev => ({
+      const mapped: Event[] = apiEvents.map(asRecord).map(ev => ({
         id: String(ev.id ?? ''),
         name: String(ev.name || ''),
         type: String(ev.type || ''),
@@ -733,7 +735,7 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
 
   useEffect(() => {
     if (events.length === 1) {
-      const id = events[0].id
+      const id = events[0]?.id ?? ''
       const existing = slotsByEventId.get(id) || []
       if (existing.length === 0) {
         void fetchEventSeats(id)
@@ -750,17 +752,19 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
       const url = `${base}/api/events/${eventId}`
       const res = await fetch(url)
       if (res.ok) {
-        const json = await readJson<GravitasEventSeatsResponse>(res)
-        if (json?.data?.seats) {
-          setSeatsByEvent(prev => ({ ...prev, [eventId]: json.data!.seats! }))
-        } else if (json?.seats) {
-          setSeatsByEvent(prev => ({ ...prev, [eventId]: json.seats }))
+        const json = asRecord(await res.json())
+        const seats = parseSeats(asRecord(json.data).seats) ?? parseSeats(json.seats)
+        if (seats) {
+          setSeatsByEvent(prev => ({ ...prev, [eventId]: seats }))
         }
       } else {
         const alt = await fetch(`https://gravitas.vit.ac.in/api/events/${eventId}`)
         if (alt.ok) {
-          const data = await readJson<GravitasEventSeatsResponse>(alt)
-          const normalizedSlots = normalizeSlots(data?.data?.eventSlots || [], eventId)
+          const altJson: unknown = await alt.json()
+          const normalizedSlots = normalizeSlots(
+            asRecord(asRecord(altJson).data).eventSlots,
+            eventId
+          )
           const eventSlots: EventSlot[] = normalizedSlots.map(({ eventId: _ignored, ...slot }) => ({
             id: slot.id,
             venue: slot.venue,
@@ -792,7 +796,6 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
 
   return (
     <div className="space-y-6">
-
       <div className="text-left">
         <h2 className="text-2xl font-bold text-foreground mb-2">
           Gravitas Events {data.totalEvents ? `(${data.totalEvents})` : ''}
@@ -800,9 +803,7 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
         {data.message && <p className="text-muted-foreground">{data.message}</p>}
       </div>
 
-
-      {events.length === 1 && <SeatsInfo seats={data.seats || seatsByEvent[events[0].id]} />}
-
+      {events.length === 1 && <SeatsInfo seats={data.seats || seatsByEvent[events[0]?.id ?? '']} />}
 
       {events.length > 1 && (
         <Card>
@@ -883,7 +884,6 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data })
           </CardContent>
         </Card>
       )}
-
 
       {events.length === 1 ? (
         <div className="grid grid-cols-1 gap-4 lg:gap-6">

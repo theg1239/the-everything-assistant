@@ -1,9 +1,10 @@
 import { EventEmitter } from 'events'
+import { isRecord } from '../json'
 
 export interface PaperProgressEvent {
   runId: string
   step: string
-  detail?: any
+  detail?: unknown
   ts: number
   userMessage?: string
   status?: 'info' | 'progress' | 'success' | 'warning' | 'error'
@@ -16,7 +17,7 @@ class PaperProgress extends EventEmitter {
   private buffer: Map<string, PaperProgressEvent[]> = new Map()
   private MAX_BUFFER = 150
 
-  emitStep(runId: string, step: string, detail?: any) {
+  emitStep(runId: string, step: string, detail?: unknown) {
     const { userMessage, status, stage, totalStages, progressPercent } = this.format(step, detail)
     const event: PaperProgressEvent = {
       runId,
@@ -43,13 +44,13 @@ class PaperProgress extends EventEmitter {
     }
 
     try {
-      const rt = (process as any).env?.NEXT_RUNTIME
+      const rt = process.env.NEXT_RUNTIME
       if (rt && rt !== 'nodejs' && typeof fetch !== 'undefined') {
         fetch('/api/paper-progress/push', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(event),
-          // @ts-ignore keepalive hint (OK if ignored in some runtimes)
+          // keepalive hint (OK if ignored in some runtimes)
           keepalive: true,
         }).catch(() => {})
       }
@@ -62,7 +63,7 @@ class PaperProgress extends EventEmitter {
 
   private format(
     step: string,
-    detail: any
+    detail: unknown
   ): {
     userMessage: string
     status: PaperProgressEvent['status']
@@ -93,9 +94,10 @@ class PaperProgress extends EventEmitter {
     const totalStages = ordered.length
     const baseStage = Math.max(0, ordered.indexOf(step))
 
-    const num = (n: any) =>
+    const field = (key: string): unknown => (isRecord(detail) ? detail[key] : undefined)
+    const num = (n: unknown) =>
       typeof n === 'number' ? n : typeof n === 'string' && !isNaN(Number(n)) ? Number(n) : undefined
-    const bytesFmt = (b?: number) =>
+    const bytesFmt = (b: unknown) =>
       typeof b === 'number'
         ? b > 1_000_000
           ? (b / 1_000_000).toFixed(2) + ' MB'
@@ -112,19 +114,19 @@ class PaperProgress extends EventEmitter {
         userMessage = 'starting search for relevant past exam papers…'
         break
       case 'resolveCourse':
-        userMessage = `course identified: ${detail?.courseCode || 'detecting…'}`
+        userMessage = `course identified: ${field('courseCode') || 'detecting…'}`
         break
       case 'fetchedMetadata':
-        userMessage = `found ${detail?.count ?? detail?.total ?? 0} candidate paper(s)`
+        userMessage = `found ${field('count') ?? field('total') ?? 0} candidate paper(s)`
         break
       case 'selectedSubset':
-        userMessage = `analyzing ${detail?.selected ?? 0} paper(s)`
+        userMessage = `analyzing ${field('selected') ?? 0} paper(s)`
         break
       case 'processPaperStart':
-        userMessage = `analyzing paper: ${detail?.title || 'Untitled paper'}`
+        userMessage = `analyzing paper: ${field('title') || 'Untitled paper'}`
         break
       case 'paperDownloadSuccess':
-        userMessage = `downloaded paper (${bytesFmt(detail?.bytes)})`
+        userMessage = `downloaded paper (${bytesFmt(field('bytes'))})`
         status = 'success'
         break
       case 'paperDownloadFailed':
@@ -151,14 +153,14 @@ class PaperProgress extends EventEmitter {
         status = 'warning'
         break
       case 'driveFallbackPagesDetected':
-        userMessage = `captured ${detail?.pages ?? '?'} page image(s)`
+        userMessage = `captured ${field('pages') ?? '?'} page image(s)`
         break
       case 'driveFallbackScreenshotsFailed':
         userMessage = 'could not capture page images'
         status = 'warning'
         break
       case 'driveFallbackSuccess':
-        userMessage = `rebuilt PDF from ${detail?.pages ?? '?'} page image(s)`
+        userMessage = `rebuilt PDF from ${field('pages') ?? '?'} page image(s)`
         status = 'success'
         break
       case 'ocrExtractStart':
@@ -168,7 +170,7 @@ class PaperProgress extends EventEmitter {
         userMessage = 'reading embedded PDF text…'
         break
       case 'ocrParseSuccess':
-        userMessage = `read text directly (${num(detail?.pages) || '?'} page(s))`
+        userMessage = `read text directly (${num(field('pages')) || '?'} page(s))`
         status = 'success'
         break
       case 'ocrParseFailed':
@@ -180,10 +182,10 @@ class PaperProgress extends EventEmitter {
         status = 'info'
         break
       case 'ocrImageFallbackStart':
-        userMessage = `running extraction on ${detail?.pages ?? '?'} pages…`
+        userMessage = `running extraction on ${field('pages') ?? '?'} pages…`
         break
       case 'ocrOcrFallbackSuccess':
-        userMessage = `extraction complete (${num(detail?.chars) || 0} characters)`
+        userMessage = `extraction complete (${num(field('chars')) || 0} characters)`
         status = 'success'
         break
       case 'ocrFailed':
@@ -195,10 +197,10 @@ class PaperProgress extends EventEmitter {
         status = 'warning'
         break
       case 'extractedQuestions':
-        userMessage = `detected ${detail?.questions ?? 0} possible question(s)`
+        userMessage = `detected ${field('questions') ?? 0} possible question(s)`
         break
       case 'chunked':
-        userMessage = `segmented paper into ${detail?.chunks ?? 0} parts`
+        userMessage = `segmented paper into ${field('chunks') ?? 0} parts`
         break
       case 'chunkEmbeddings':
         userMessage = 'indexing paper content…'
@@ -211,7 +213,7 @@ class PaperProgress extends EventEmitter {
         status = 'warning'
         break
       case 'indexBuilt':
-        userMessage = `search index ready (${detail?.papers ?? 0} paper(s))`
+        userMessage = `search index ready (${field('papers') ?? 0} paper(s))`
         status = 'success'
         break
       case 'questionEmbedded':
@@ -245,18 +247,9 @@ class PaperProgress extends EventEmitter {
   }
 }
 
-const g = globalThis as any
-export const paperProgress: PaperProgress =
-  g.__paperProgress || (g.__paperProgress = new PaperProgress())
-
-export interface PaperProgressEvent {
-  runId: string
-  step: string
-  detail?: any
-  ts: number
-  userMessage?: string
-  status?: 'info' | 'progress' | 'success' | 'warning' | 'error'
-  stage?: number
-  totalStages?: number
-  progressPercent?: number
+declare global {
+  // Shared across module instances (dev HMR / multiple route bundles in one process).
+  var __paperProgress: PaperProgress | undefined
 }
+
+export const paperProgress: PaperProgress = (globalThis.__paperProgress ??= new PaperProgress())

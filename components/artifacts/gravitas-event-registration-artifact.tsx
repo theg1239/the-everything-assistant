@@ -12,6 +12,15 @@ import {
   ChevronRight,
   Link as LinkIcon,
 } from 'lucide-react'
+import { asRecord, asString, isRecord, isUnknownArray, textOf } from './artifact-data'
+
+interface RegistrationAlternative {
+  id: string
+  name: string
+  type?: string
+  category?: string
+  startDate?: string
+}
 
 interface RegistrationResult {
   success?: boolean
@@ -28,21 +37,51 @@ interface RegistrationResult {
     endDate?: string
   }
   ambiguous?: boolean
-  alternatives?: Array<{
-    id: string
-    name: string
-    type?: string
-    category?: string
-    startDate?: string
-  }>
-  matches?: Array<{
-    id: string
-    name: string
-    type?: string
-    category?: string
-    startDate?: string
-  }>
+  alternatives?: RegistrationAlternative[]
+  matches?: RegistrationAlternative[]
   error?: string
+}
+
+const asBoolean = (value: unknown): boolean | undefined =>
+  typeof value === 'boolean' ? value : undefined
+
+const parseAlternatives = (value: unknown): RegistrationAlternative[] | undefined => {
+  if (!isUnknownArray(value)) return undefined
+  return value.map(item => {
+    const alt = asRecord(item)
+    return {
+      id: textOf(alt.id),
+      name: textOf(alt.name),
+      type: asString(alt.type),
+      category: asString(alt.category),
+      startDate: asString(alt.startDate),
+    }
+  })
+}
+
+/** Narrows an untyped gravitasEventRegistration tool result. */
+const parseRegistrationResult = (value: unknown): RegistrationResult => {
+  const record = asRecord(value)
+  const event = isRecord(record.event) ? record.event : undefined
+  return {
+    success: asBoolean(record.success),
+    message: asString(record.message),
+    registrationUrl: asString(record.registrationUrl),
+    event: event && {
+      id: textOf(event.id),
+      name: textOf(event.name),
+      type: textOf(event.type),
+      category: textOf(event.category),
+      club: asString(event.club),
+      tagline: asString(event.tagline),
+      startDate: asString(event.startDate),
+      endDate: asString(event.endDate),
+    },
+    ambiguous: asBoolean(record.ambiguous),
+    alternatives: parseAlternatives(record.alternatives),
+    matches: parseAlternatives(record.matches),
+    error: asString(record.error),
+  }
 }
 
 const formatDate = (d?: string) => {
@@ -60,9 +99,11 @@ const formatDate = (d?: string) => {
   }
 }
 
-export default function GravitasEventRegistrationArtifact({ data }: { data: RegistrationResult }) {
+export default function GravitasEventRegistrationArtifact({ data: rawData }: { data: unknown }) {
+  const data = parseRegistrationResult(rawData)
   const base = 'https://gravitas.vit.ac.in/events'
   const alts = data.alternatives || data.matches || []
+  const registrationUrl = data.registrationUrl
 
   if (data.success === false) {
     return (
@@ -140,7 +181,7 @@ export default function GravitasEventRegistrationArtifact({ data }: { data: Regi
                 <Button
                   size="sm"
                   className="h-8 w-full sm:w-auto"
-                  onClick={() => window.open(data.registrationUrl!, '_blank')}
+                  onClick={() => window.open(registrationUrl, '_blank')}
                 >
                   <ExternalLink className="h-3.5 w-3.5 mr-1" />
                   Open Registration
@@ -151,7 +192,7 @@ export default function GravitasEventRegistrationArtifact({ data }: { data: Regi
                   className="h-8 w-full sm:w-auto"
                   onClick={async () => {
                     try {
-                      await navigator.clipboard.writeText(data.registrationUrl!)
+                      if (registrationUrl) await navigator.clipboard.writeText(registrationUrl)
                     } catch {}
                   }}
                 >

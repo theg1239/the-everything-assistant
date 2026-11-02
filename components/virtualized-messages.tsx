@@ -1,17 +1,18 @@
 import { memo } from 'react'
 import { AnimatePresence } from 'framer-motion'
-import { MessageBubble } from '@/components/message-bubble'
+import { MessageBubble, type MaximizedItem } from '@/components/message-bubble'
+import type { LegacyMessage } from '@/lib/ai-message-conversion'
 import { FollowUpSuggestions } from '@/components/follow-up-suggestions'
 
 interface VirtualizedMessagesProps {
-  messages: any[]
+  messages: LegacyMessage[]
   chatId?: string
   isLoading: boolean
   onCreateCanvas: (content: string) => void
   onLoginClick: () => void
   onPlacementSearch: (company: string) => void
-  maximizedItem?: any
-  setMaximizedItem?: (item: any) => void
+  maximizedItem?: MaximizedItem | null
+  setMaximizedItem?: (item: MaximizedItem | null) => void
   showFollowUpSuggestions?: boolean
   lastAssistantMessage?: string
   lastUserMessage?: string

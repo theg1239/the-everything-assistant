@@ -6,12 +6,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { useHubTool } from '../use-hub-tool'
+import { asRecord, readRecords, readString, readText, type UnknownRecord } from '@/components/narrow'
 import { useSidebar } from '@/contexts/sidebar-context'
 import { FileText, Search, X } from 'lucide-react'
 import PdfViewer from '@/components/pdf-viewer'
 
 export default function SyllabiPanel() {
-  const { run, loading, error, result, reset } = useHubTool<any>('getSyllabus')
+  const { run, loading, error, result, reset } = useHubTool('getSyllabus')
   const { setIsOpen: setSidebarOpen } = useSidebar()
   const [query, setQuery] = useState('')
 
@@ -19,13 +20,21 @@ export default function SyllabiPanel() {
     await run({ query })
   }
 
-  const syllabi = (() => {
-    if (!result) return []
-    if (Array.isArray(result.syllabi) && result.syllabi.length > 0) return result.syllabi
-    if (result.ambiguous && Array.isArray(result.matches)) return result.matches
-    if (result.filename || result.url || result.code || result.title) return [result]
+  const data = asRecord(result)
+  const syllabi = ((): UnknownRecord[] => {
+    if (!data) return []
+    if (Array.isArray(data.syllabi) && data.syllabi.length > 0) return readRecords(data.syllabi)
+    if (data.ambiguous && Array.isArray(data.matches)) return readRecords(data.matches)
+    if (data.filename || data.url || data.code || data.title) return [data]
     return []
-  })()
+  })().map(s => ({
+    title: readText(s.title),
+    filename: readText(s.filename),
+    code: readText(s.code),
+    type: readText(s.type),
+    url: readString(s.url),
+    link: readString(s.link),
+  }))
 
   return (
     <Card className="border-0 shadow-none bg-transparent">
@@ -52,7 +61,7 @@ export default function SyllabiPanel() {
             <Search className="mr-2 h-4 w-4" />
             {loading ? 'searching...' : 'search'}
           </Button>
-          {(error || result) && (
+          {(error || Boolean(result)) && (
             <Button variant="ghost" onClick={reset} className="sm:w-auto w-full">
               <X className="mr-2 h-4 w-4" />
               clear
@@ -66,7 +75,7 @@ export default function SyllabiPanel() {
 
         {syllabi.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pt-4">
-            {syllabi.map((s: any, i: number) => (
+            {syllabi.map((s, i) => (
               <Card
                 key={i}
                 className="bg-muted/20 border-border/30 hover:bg-muted/40 transition-colors flex flex-col"
@@ -112,9 +121,9 @@ export default function SyllabiPanel() {
         )}
         <PdfViewer />
 
-        {result && syllabi.length === 0 && (
+        {Boolean(result) && syllabi.length === 0 && (
           <div className="text-sm text-muted-foreground text-center py-8">
-            {result?.message || 'no syllabi found for the given query.'}
+            {readText(data?.message) || 'no syllabi found for the given query.'}
           </div>
         )}
       </CardContent>

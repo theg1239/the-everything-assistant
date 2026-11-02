@@ -1,7 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { saveVote } from '@/lib/db'
-import * as z from 'zod/v3';
+import * as z from 'zod'
 
 const voteSchema = z.object({
   chatId: z.string().min(1),

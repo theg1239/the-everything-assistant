@@ -1,6 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
+import { isRecord } from '@/lib/json'
 
 export type PdfItem = {
   id: string
@@ -8,6 +9,13 @@ export type PdfItem = {
   title?: string
   isOpen?: boolean
 }
+
+const isPdfItem = (value: unknown): value is PdfItem =>
+  isRecord(value) &&
+  typeof value.id === 'string' &&
+  typeof value.url === 'string' &&
+  (value.title === undefined || typeof value.title === 'string') &&
+  (value.isOpen === undefined || typeof value.isOpen === 'boolean')
 
 type PdfDockContextType = {
   items: PdfItem[]
@@ -36,8 +44,8 @@ export const PdfDockProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (typeof window === 'undefined') return []
       const raw = localStorage.getItem(STORAGE_KEY)
       if (!raw) return []
-      const parsed = JSON.parse(raw) as PdfItem[]
-      return Array.isArray(parsed) ? parsed : []
+      const parsed: unknown = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed.filter(isPdfItem) : []
     } catch (e) {
       console.warn('Failed to read pdf dock from localStorage', e)
       return []

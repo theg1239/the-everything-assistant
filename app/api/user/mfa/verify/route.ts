@@ -82,9 +82,9 @@ export async function POST(request: NextRequest) {
 
     const tempSecret = user.tempMfaSecret
     if (user.tempMfaMethod === 'email') {
-      isValidCode = await bcrypt.compare(code as string, tempSecret)
+      isValidCode = code !== undefined && (await bcrypt.compare(code, tempSecret))
     } else if (user.tempMfaMethod === 'authenticator') {
-      isValidCode = verifyTOTP(code as string, tempSecret)
+      isValidCode = code !== undefined && verifyTOTP(code, tempSecret)
     } else if (user.tempMfaMethod === 'security_key') {
       return NextResponse.json(
         { error: 'Please use the WebAuthn verification endpoint for security keys' },

@@ -1,4 +1,4 @@
-import * as z from 'zod/v3';
+import * as z from 'zod'
 import type { RawVTOPResult } from '@/lib/hub/parsers/attendance'
 import type { JsonValue } from '@/types/tools'
 
@@ -86,12 +86,12 @@ export type ProxySyncResponse = {
 export const sendBriefingRequestSchema = z
   .object({
     userId: z.string().min(1).optional(),
-    email: z.string().email().optional(),
+    email: z.email().optional(),
     scheduledAt: z.string().optional(),
     referenceTime: z.string().optional(),
   })
   .refine(data => data.userId || data.email, {
-    message: 'Provide either userId or email',
+    error: 'Provide either userId or email',
     path: ['userId'],
   })
 export type SendBriefingRequest = z.infer<typeof sendBriefingRequestSchema>

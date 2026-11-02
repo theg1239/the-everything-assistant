@@ -1,4 +1,4 @@
-import * as z from 'zod/v3';
+import * as z from 'zod'
 
 export const canvasCreateSchema = z.object({
   chatId: z.string().min(1),

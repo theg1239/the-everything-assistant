@@ -13,10 +13,10 @@ export async function GET() {
     } finally {
       client.release()
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('[api/knowledge] Error fetching knowledge base chunks:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch knowledge base content.', details: error.message },
+      { error: 'Failed to fetch knowledge base content.', details: error instanceof Error ? error.message : undefined },
       { status: 500 }
     )
   }

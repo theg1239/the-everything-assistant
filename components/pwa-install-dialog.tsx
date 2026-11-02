@@ -12,7 +12,9 @@ export function PWAInstallDialog() {
 
   useEffect(() => {
     setIsMounted(true)
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream
+    // Legacy IE/Edge Mobile flag, not in lib.dom.
+    const legacyWindow: Window & { MSStream?: unknown } = window
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !legacyWindow.MSStream
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches
     const hasSeenPrompt = localStorage.getItem('seen-pwa-install-prompt')
 

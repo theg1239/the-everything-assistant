@@ -14,10 +14,10 @@ export async function POST() {
   try {
     const status = await disconnectChatgpt(session.user.id)
     return NextResponse.json(status)
-  } catch (error: any) {
+  } catch (error) {
     console.error('[chatgpt-auth] disconnect failed:', error)
     return NextResponse.json(
-      { error: error?.message || 'Unable to disconnect ChatGPT' },
+      { error: (error instanceof Error && error.message) || 'Unable to disconnect ChatGPT' },
       { status: 500 }
     )
   }

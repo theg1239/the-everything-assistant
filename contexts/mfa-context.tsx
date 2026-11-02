@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, usePathname } from 'next/navigation'
+import { isRecord } from '@/lib/json'
 
 interface MFAContextType {
   isMFAVerified: boolean
@@ -38,8 +39,8 @@ export function MFAProvider({ children }: { children: React.ReactNode }) {
     }
     const storedMFAVerification = sessionStorage.getItem(`mfa_verified_${session.user.id}`)
     if (storedMFAVerification) {
-      const verificationData = JSON.parse(storedMFAVerification)
-      if (verificationData.verified) {
+      const verificationData: unknown = JSON.parse(storedMFAVerification)
+      if (isRecord(verificationData) && verificationData.verified) {
         setIsMFAVerified(true)
         setIsCheckingMFA(false)
         return

@@ -44,8 +44,8 @@ export class UserTokenBucket {
     let lastRefill = now
 
     if (state && Object.keys(state).length > 0) {
-      currentTokens = parseFloat(state.tokens as string) || this.capacity
-      lastRefill = parseInt(state.lastRefill as string) || now
+      currentTokens = parseFloat(String(state.tokens)) || this.capacity
+      lastRefill = parseInt(String(state.lastRefill)) || now
     }
 
     const timePassed = (now - lastRefill) / 1000
@@ -82,8 +82,8 @@ export class UserTokenBucket {
       return this.capacity
     }
 
-    const currentTokens = parseFloat(state.tokens as string) || this.capacity
-    const lastRefill = parseInt(state.lastRefill as string) || now
+    const currentTokens = parseFloat(String(state.tokens)) || this.capacity
+    const lastRefill = parseInt(String(state.lastRefill)) || now
 
     const timePassed = (now - lastRefill) / 1000
     const tokensToAdd = Math.min(timePassed * this.refillRate, this.capacity - currentTokens)
@@ -274,4 +274,27 @@ export function loadUserRateLimitConfig(): UserRateLimitConfig {
     requestsPerDay: parseInt(process.env.USER_RATE_LIMIT_REQUESTS_PER_DAY || '1000'),
     enabled: process.env.USER_RATE_LIMITING_ENABLED !== 'false',
   }
+}
+
+let sharedLimiter: UserRateLimiter | null = null
+
+/** Process-wide per-user limiter, configured from `USER_RATE_LIMIT_*` env vars. */
+export function getUserRateLimiter(): UserRateLimiter {
+  sharedLimiter ??= new UserRateLimiter(loadUserRateLimitConfig())
+  return sharedLimiter
+}
+
+export class UserRateLimitError extends Error {
+  constructor(reason: string | undefined) {
+    super(`Rate limit: ${reason ?? 'too many requests'}`)
+    this.name = 'UserRateLimitError'
+  }
+}
+
+/** Throws `UserRateLimitError` when `userId` is over quota. No-op when disabled or anonymous. */
+export async function enforceUserRateLimit(userId: string | null | undefined): Promise<void> {
+  const limiter = getUserRateLimiter()
+  if (!userId || !limiter.getConfig().enabled) return
+  const result = await limiter.checkRateLimit(userId)
+  if (!result.allowed) throw new UserRateLimitError(result.error)
 }

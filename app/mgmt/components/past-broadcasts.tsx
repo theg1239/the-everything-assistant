@@ -3,6 +3,26 @@
 import React from 'react'
 import { Button } from '@/components/ui/button'
 import { Loader2, Edit, Trash2, Calendar, CheckCircle, Plus, Eye, History } from 'lucide-react'
+import type { BroadcastSlide, PastBroadcast } from '@/types/api/broadcast'
+import type { BroadcastSlideField } from '../types'
+
+interface PastBroadcastsProps {
+  pastBroadcasts: PastBroadcast[]
+  loadingBroadcasts: boolean
+  editingBroadcast: string | null
+  setEditingBroadcast: (id: string | null) => void
+  editSlides: BroadcastSlide[]
+  setEditSlides: (slides: BroadcastSlide[]) => void
+  handleEditBroadcast: (broadcast: PastBroadcast) => void
+  handleDeleteBroadcast: (id: string) => void
+  handleEditSlideChange: (index: number, field: BroadcastSlideField, value: string) => void
+  addEditSlide: () => void
+  removeEditSlide: (index: number) => void
+  showEditPreview: boolean
+  setShowEditPreview: (show: boolean) => void
+  handleSaveEditedBroadcast: () => void
+  loading: boolean
+}
 
 export default function PastBroadcasts({
   pastBroadcasts,
@@ -20,7 +40,7 @@ export default function PastBroadcasts({
   setShowEditPreview,
   handleSaveEditedBroadcast,
   loading,
-}: any) {
+}: PastBroadcastsProps) {
   return (
     <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
       <div className="flex flex-col space-y-1.5 mb-6">
@@ -43,7 +63,7 @@ export default function PastBroadcasts({
         <div className="text-center py-8 text-muted-foreground">No past broadcasts found.</div>
       ) : (
         <div className="space-y-4">
-          {pastBroadcasts.map((broadcast: any) => (
+          {pastBroadcasts.map(broadcast => (
             <div key={broadcast.id} className="border border-border/20 rounded-lg bg-black/20 p-4">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
@@ -84,7 +104,7 @@ export default function PastBroadcasts({
                   <div className="text-sm font-medium text-yellow-400 mb-2">
                     Editing broadcast slides:
                   </div>
-                  {editSlides.map((slide: any, index: number) => (
+                  {editSlides.map((slide, index) => (
                     <div
                       key={index}
                       className="p-3 rounded-lg bg-slate-800/50 border border-slate-700 relative space-y-3"
@@ -135,7 +155,7 @@ export default function PastBroadcasts({
                         className="gap-1"
                         disabled={
                           !editSlides.some(
-                            (slide: any) =>
+                            slide =>
                               slide.title.trim() || slide.text.trim() || slide.image.trim()
                           )
                         }
@@ -177,7 +197,7 @@ export default function PastBroadcasts({
                   <div className="text-sm font-medium text-blue-400 mb-2">
                     Broadcast slides ({broadcast.slides.length}):
                   </div>
-                  {broadcast.slides.map((slide: any, index: number) => (
+                  {broadcast.slides.map((slide, index) => (
                     <div
                       key={index}
                       className="p-3 rounded-lg bg-slate-800/30 border border-slate-700/50"

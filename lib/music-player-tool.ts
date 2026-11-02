@@ -1,5 +1,5 @@
 import { tool } from 'ai'
-import * as z from 'zod/v3';
+import * as z from 'zod'
 
 export type MusicPlayerToolState = {
   isPlaying: boolean

@@ -1,18 +1,31 @@
-interface MenuItem {
-  type: number
-  menu: string
+import * as z from 'zod'
+
+const menuItemSchema = z.object({
+  type: z.number(),
+  menu: z.string(),
+})
+
+const dayMenuSchema = z.object({
+  date: z.string(),
+  menu: z.array(menuItemSchema),
+})
+
+const messMenuDataSchema = z.object({
+  hostel: z.number().optional().catch(undefined),
+  mess: z.number().optional().catch(undefined),
+  menu: z.array(dayMenuSchema),
+})
+
+type MenuItem = z.infer<typeof menuItemSchema>
+type DayMenu = z.infer<typeof dayMenuSchema>
+type MessMenuData = z.infer<typeof messMenuDataSchema>
+
+const parseMessMenuData = (value: unknown): MessMenuData | null => {
+  const parsed = messMenuDataSchema.safeParse(value)
+  return parsed.success ? parsed.data : null
 }
 
-interface DayMenu {
-  date: string
-  menu: MenuItem[]
-}
-
-interface MessMenuData {
-  hostel: number
-  mess: number
-  menu: DayMenu[]
-}
+const toIsoDate = (date: Date = new Date()): string => date.toISOString().slice(0, 10)
 
 export interface MessMenuResponse {
   success: boolean
@@ -38,18 +51,21 @@ const MESS_ENDPOINTS = {
   'ladies-nonveg': 'https://messit.vinnovateit.com/menu-data/hostel-2-mess-3.json',
 }
 
-const HOSTEL_TYPES = {
+const HOSTEL_TYPES: Partial<Record<number, string>> = {
   1: "Men's Hostel",
   2: "Ladies' Hostel",
 }
 
-const MESS_TYPES = {
+const MESS_TYPES: Partial<Record<number, string>> = {
   1: 'Special Mess',
   2: 'Veg Mess',
   3: 'Non-Veg Mess',
 }
 
-const MEAL_TYPES = {
+const lookupName = (names: Partial<Record<number, string>>, key: number | undefined) =>
+  key === undefined ? undefined : names[key]
+
+const MEAL_TYPES: Partial<Record<number, string>> = {
   1: 'Breakfast',
   2: 'Lunch',
   3: 'Snacks',
@@ -90,12 +106,12 @@ export async function getMessMenu(
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
 
-    const menuData: MessMenuData = await response.json()
+    const menuData = parseMessMenuData(await response.json())
 
-    if (!menuData || !menuData.menu || !Array.isArray(menuData.menu)) {
+    if (!menuData) {
       throw new Error('Invalid menu data structure received')
     }
-    const today = requestedDate || new Date().toISOString().split('T')[0]
+    const today = requestedDate || toIsoDate()
 
     const todayMenu = menuData.menu.find(day => day.date === today)
 
@@ -110,20 +126,20 @@ export async function getMessMenu(
 
       return {
         success: false,
-        message: `Could not find mess menu for ${dayName}, ${formattedDate} at ${MESS_TYPES[menuData.mess as keyof typeof MESS_TYPES]} in ${HOSTEL_TYPES[menuData.hostel as keyof typeof HOSTEL_TYPES]}.`,
+        message: `Could not find mess menu for ${dayName}, ${formattedDate} at ${lookupName(MESS_TYPES, menuData.mess)} in ${lookupName(HOSTEL_TYPES, menuData.hostel)}.`,
         error: `Menu not available for date: ${today}`,
       }
     }
     const weekMenu = getWeekMenu(menuData.menu, today)
 
     const filteredTodayMenu = filterByMealType(todayMenu, mealType)
-    const filteredWeekMenu = weekMenu
-      .map(day => filterByMealType(day, mealType))
-      .filter(Boolean) as DayMenu[]
+    const filteredWeekMenu = weekMenu.flatMap(day => {
+      const filtered = filterByMealType(day, mealType)
+      return filtered ? [filtered] : []
+    })
 
-    const messTypeName = MESS_TYPES[menuData.mess as keyof typeof MESS_TYPES] || 'Unknown Mess'
-    const hostelTypeName =
-      HOSTEL_TYPES[menuData.hostel as keyof typeof HOSTEL_TYPES] || 'Unknown Hostel'
+    const messTypeName = lookupName(MESS_TYPES, menuData.mess) || 'Unknown Mess'
+    const hostelTypeName = lookupName(HOSTEL_TYPES, menuData.hostel) || 'Unknown Hostel'
 
     const message = generateMenuMessage(filteredTodayMenu, messTypeName, mealType, today)
 
@@ -140,11 +156,11 @@ export async function getMessMenu(
       },
       message,
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Mess menu fetch error:', error)
     return {
       success: false,
-      error: error?.message ?? String(error),
+      error: error instanceof Error ? error.message : String(error),
       message: 'Unable to fetch mess menu. Please try again later.',
     }
   }
@@ -157,7 +173,7 @@ function getWeekMenu(allMenus: DayMenu[], startDate: string): DayMenu[] {
   for (let i = 0; i < 7; i++) {
     const currentDate = new Date(start)
     currentDate.setDate(start.getDate() + i)
-    const dateStr = currentDate.toISOString().split('T')[0]
+    const dateStr = toIsoDate(currentDate)
 
     const dayMenu = allMenus.find(menu => menu.date === dateStr)
     if (dayMenu) {
@@ -224,7 +240,7 @@ function generateMenuMessage(
 function formatMenuItems(menuItems: MenuItem[]): string {
   return menuItems
     .map(item => {
-      const mealTypeName = MEAL_TYPES[item.type as keyof typeof MEAL_TYPES] || `Meal ${item.type}`
+      const mealTypeName = MEAL_TYPES[item.type] || `Meal ${item.type}`
 
       let cleanMenu = item.menu
         .replace(/\s+/g, ' ')
@@ -266,14 +282,13 @@ export async function getAvailableDateRange(
 
     if (!response.ok) return null
 
-    const menuData: MessMenuData = await response.json()
-    if (!menuData?.menu?.length) return null
+    const menuData = parseMessMenuData(await response.json())
+    const dates = (menuData?.menu ?? []).map(day => day.date).sort()
+    const start = dates[0]
+    const end = dates[dates.length - 1]
+    if (start === undefined || end === undefined) return null
 
-    const dates = menuData.menu.map(day => day.date).sort()
-    return {
-      start: dates[0],
-      end: dates[dates.length - 1],
-    }
+    return { start, end }
   } catch {
     return null
   }

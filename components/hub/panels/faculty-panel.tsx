@@ -8,10 +8,11 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/componen
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { useHubTool } from '../use-hub-tool'
+import { asRecord, readRecords, readText } from '@/components/narrow'
 import { Search, X, BookOpen } from 'lucide-react'
 
 export default function FacultyPanel() {
-  const { run, loading, error, result, reset } = useHubTool<any>('getFacultyInfo')
+  const { run, loading, error, result, reset } = useHubTool('getFacultyInfo')
   const [department, setDepartment] = useState('')
   const [facultyName, setFacultyName] = useState('')
   const [courseQuery, setCourseQuery] = useState('')
@@ -26,7 +27,16 @@ export default function FacultyPanel() {
     })
   }
 
-  const list = Array.isArray(result?.faculty) ? result.faculty : []
+  const data = asRecord(result)
+  const list = readRecords(data?.faculty).map(f => ({
+    name: readText(f.name),
+    department: readText(f.department),
+    school: readText(f.school),
+    email: readText(f.email),
+    courses: Array.isArray(f.courses)
+      ? readRecords(f.courses).map(c => ({ code: readText(c.code), title: readText(c.title) }))
+      : null,
+  }))
 
   return (
     <Card className="border-0 shadow-none bg-transparent">
@@ -79,7 +89,7 @@ export default function FacultyPanel() {
             <Search className="mr-2 h-4 w-4" />
             {loading ? 'searching...' : 'search'}
           </Button>
-          {(error || result) && (
+          {(error || Boolean(result)) && (
             <Button variant="ghost" onClick={reset} className="sm:w-auto w-full">
               <X className="mr-2 h-4 w-4" />
               clear
@@ -93,7 +103,7 @@ export default function FacultyPanel() {
 
         {list.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {list.map((f: any, i: number) => (
+            {list.map((f, i) => (
               <Card
                 key={i}
                 className="bg-muted/20 border-border/30 hover:bg-muted/40 transition-colors"
@@ -112,14 +122,14 @@ export default function FacultyPanel() {
                     </Badge>
                   )}
                 </CardContent>
-                {Array.isArray(f.courses) && f.courses.length > 0 && (
+                {f.courses && f.courses.length > 0 && (
                   <CardFooter className="flex-col items-start gap-2 pt-4">
                     <div className="text-xs text-muted-foreground font-medium flex items-center">
                       <BookOpen className="mr-2 h-4 w-4" />
                       courses taught
                     </div>
                     <ul className="text-xs text-muted-foreground list-disc pl-5 space-y-1">
-                      {f.courses.map((c: any, idx: number) => (
+                      {f.courses.map((c, idx) => (
                         <li key={idx}>
                           {c.code}: {c.title}
                         </li>
@@ -132,9 +142,9 @@ export default function FacultyPanel() {
           </div>
         )}
 
-        {result && list.length === 0 && (
+        {Boolean(result) && list.length === 0 && (
           <div className="text-sm text-muted-foreground text-center py-8">
-            {result?.message || 'No faculty found matching your criteria.'}
+            {readText(data?.message) || 'No faculty found matching your criteria.'}
           </div>
         )}
       </CardContent>

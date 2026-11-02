@@ -3,6 +3,18 @@
 import React from 'react'
 import { Button } from '@/components/ui/button'
 import { Plus, Send, Trash2, Eye } from 'lucide-react'
+import type { BroadcastSlide } from '@/types/api/broadcast'
+import type { BroadcastSlideField } from '../types'
+
+interface BroadcastFormProps {
+  broadcastSlides: BroadcastSlide[]
+  handleSlideChange: (index: number, field: BroadcastSlideField, value: string) => void
+  addSlide: () => void
+  removeSlide: (index: number) => void
+  setShowPreview: (show: boolean) => void
+  handleSendBroadcast: () => void
+  loading: boolean
+}
 
 export default function BroadcastForm({
   broadcastSlides,
@@ -12,7 +24,7 @@ export default function BroadcastForm({
   setShowPreview,
   handleSendBroadcast,
   loading,
-}: any) {
+}: BroadcastFormProps) {
   return (
     <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
       <div className="flex flex-col space-y-1.5 mb-6">
@@ -25,7 +37,7 @@ export default function BroadcastForm({
       </div>
 
       <div className="space-y-4">
-        {broadcastSlides.map((slide: any, index: number) => (
+        {broadcastSlides.map((slide, index) => (
           <div
             key={index}
             className="p-4 rounded-lg bg-black/20 border border-border/20 relative space-y-3"
@@ -76,7 +88,7 @@ export default function BroadcastForm({
             className="gap-2"
             disabled={
               !broadcastSlides.some(
-                (slide: any) => slide.title.trim() || slide.text.trim() || slide.image.trim()
+                slide => slide.title.trim() || slide.text.trim() || slide.image.trim()
               )
             }
           >

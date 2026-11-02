@@ -1,9 +1,10 @@
+import { generateText, Output } from 'ai'
 import fs from 'fs/promises'
 import path from 'path'
 import Papa from 'papaparse'
-import { rateLimitedAI } from '@/lib/rate-limited-ai'
-import * as z from 'zod/v3';
-import { getModelConfig } from '@/lib/model-registry'
+import * as z from 'zod'
+import { defaultProviderOptions, languageModel } from '@/lib/ai'
+import { enforceUserRateLimit } from '@/lib/user-rate-limiter'
 
 interface Company {
   name: string
@@ -32,14 +33,16 @@ export interface PlacementResponse {
   error?: string
 }
 
-interface PlacementRecord {
-  Reg_No: string
-  Branch: string
-  Company: string
-  CTC: string
-  Month?: string
-  Campus?: string
-}
+const placementRecordSchema = z.object({
+  Reg_No: z.string(),
+  Branch: z.string(),
+  Company: z.string(),
+  CTC: z.string(),
+  Month: z.string().optional(),
+  Campus: z.string().optional(),
+})
+
+type PlacementRecord = z.infer<typeof placementRecordSchema>
 
 function convertCtcToNumeric(ctc: string): number | null {
   if (!ctc) return null
@@ -56,15 +59,23 @@ async function readCsvFile(filePath: string): Promise<PlacementRecord[]> {
   try {
     console.log(`Attempting to read CSV file from: ${filePath}`)
     const fileContent = await fs.readFile(filePath, 'utf-8')
-    const result = Papa.parse<PlacementRecord>(fileContent, {
+    const result = Papa.parse<unknown>(fileContent, {
       header: true,
       skipEmptyLines: true,
     })
-    console.log(`Successfully read ${result.data.length} records from ${filePath}`)
-    if (result.data.length > 0) {
-      console.log('Sample record:', JSON.stringify(result.data[0], null, 2))
+    const records = result.data.flatMap(row => {
+      const parsed = placementRecordSchema.safeParse(row)
+      return parsed.success ? [parsed.data] : []
+    })
+    const skipped = result.data.length - records.length
+    console.log(`Successfully read ${records.length} records from ${filePath}`)
+    if (skipped > 0) {
+      console.warn(`Skipped ${skipped} malformed placement rows in ${filePath}`)
     }
-    return result.data
+    if (records.length > 0) {
+      console.log('Sample record:', JSON.stringify(records[0], null, 2))
+    }
+    return records
   } catch (error) {
     console.error(`Error reading or parsing CSV file at ${filePath}:`, error)
     return []
@@ -72,20 +83,18 @@ async function readCsvFile(filePath: string): Promise<PlacementRecord[]> {
 }
 
 function preprocessAndFilterData(records: PlacementRecord[]): PlacementRecord[] {
-  const recordsWithNumericCtc = records.map(
-    record =>
-      (({
-        ...record,
-        numericCTC: convertCtcToNumeric(record.CTC)
-      }) as PlacementRecord & { numericCTC: number | null })
-  )
+  const recordsWithNumericCtc: Array<PlacementRecord & { numericCTC: number | null }> =
+    records.map(record => ({
+      ...record,
+      numericCTC: convertCtcToNumeric(record.CTC),
+    }))
 
   const sorted = recordsWithNumericCtc.sort((a, b) => {
     if (a.Reg_No !== b.Reg_No) {
       return a.Reg_No.localeCompare(b.Reg_No)
     }
-    if ((b as any).numericCTC !== (a as any).numericCTC) {
-      return ((b as any).numericCTC ?? 0) - ((a as any).numericCTC ?? 0)
+    if (b.numericCTC !== a.numericCTC) {
+      return (b.numericCTC ?? 0) - (a.numericCTC ?? 0)
     }
     return a.Company.localeCompare(b.Company)
   })
@@ -155,8 +164,10 @@ export async function scrapePlacementInfo(
     }
 
     const totalOffers = processedOffers.length
-    const offersWithCtc = processedOffers.filter(o => convertCtcToNumeric(o.CTC) !== null)
-    const ctcValues = offersWithCtc.map(o => convertCtcToNumeric(o.CTC)!)
+    const ctcValues = processedOffers.flatMap(o => {
+      const value = convertCtcToNumeric(o.CTC)
+      return value === null ? [] : [value]
+    })
 
     const highestCTC = ctcValues.length > 0 ? Math.max(...ctcValues) : 0
     const lowestCTC = ctcValues.length > 0 ? Math.min(...ctcValues) : 0
@@ -164,11 +175,12 @@ export async function scrapePlacementInfo(
       ctcValues.length > 0 ? ctcValues.reduce((a, b) => a + b, 0) / ctcValues.length : 0
 
     const sortedCtc = [...ctcValues].sort((a, b) => a - b)
+    const mid = Math.floor(sortedCtc.length / 2)
     const medianCTC =
       sortedCtc.length > 0
         ? sortedCtc.length % 2 === 0
-          ? (sortedCtc[sortedCtc.length / 2 - 1] + sortedCtc[sortedCtc.length / 2]) / 2
-          : sortedCtc[Math.floor(sortedCtc.length / 2)]
+          ? ((sortedCtc[mid - 1] ?? 0) + (sortedCtc[mid] ?? 0)) / 2
+          : (sortedCtc[mid] ?? 0)
         : 0
 
     const companyStats = new Map<string, { count: number; ctcSum: number; ctcCount: number }>()
@@ -217,35 +229,36 @@ export async function scrapePlacementInfo(
       message: `Retrieved placement information for ${year}`,
       lastUpdated: new Date().toISOString(),
     }
-  } catch (err: any) {
+  } catch (err) {
     console.error('Placement scraper error:', err)
     return {
       success: false,
-      error: err?.message ?? String(err),
+      error: err instanceof Error ? err.message : String(err),
       message: 'Unable to fetch placement information. Please try again later.',
     }
   }
 }
 
-export async function parsePlacementData(rawData: any, userContext: string = '', userId?: string) {
+const placementParseSchema = z.object({
+  success: z.boolean(),
+  formatted_content: z.string(),
+  summary: z.string(),
+})
+
+export type ParsedPlacementData = z.infer<typeof placementParseSchema> & { error?: string }
+
+export async function parsePlacementData(
+  rawData: Pick<PlacementResponse, 'data' | 'year'>,
+  userContext: string = '',
+  userId?: string
+): Promise<ParsedPlacementData> {
   try {
-    const placementParseSchema = z.object({
-      success: z.boolean(),
-      formatted_content: z.string(),
-      summary: z.string(),
-    })
-
-    const placementModel = getModelConfig('placementFormatter')
-    const providerClient = rateLimitedAI[placementModel.provider as keyof typeof rateLimitedAI]
-    if (!providerClient) {
-      throw new Error(`Unsupported model provider for placements: ${placementModel.provider}`)
-    }
-
-    const result = await providerClient.generateObject(
-      {
-        model: { modelId: placementModel.modelId },
-        schema: placementParseSchema,
-        prompt: `You are a friendly and insightful university career advisor. Your goal is to summarize placement data in a clear, engaging, and easy-to-understand way for students.
+    await enforceUserRateLimit(userId)
+    const result = await generateText({
+      model: languageModel('placementFormatter'),
+      providerOptions: defaultProviderOptions,
+      output: Output.object({ schema: placementParseSchema }),
+      prompt: `You are a friendly and insightful university career advisor. Your goal is to summarize placement data in a clear, engaging, and easy-to-understand way for students.
 
 USER'S ORIGINAL REQUEST: ${userContext}
 Raw Placement Data: ${JSON.stringify(rawData.data)}
@@ -306,11 +319,9 @@ Please analyze this data and generate a response in HTML format. Follow these in
 You can also use HTML formatted tables to display the data in a more structured way.
 Your response should be a single block of HTML content for the 'formatted_content' field.
 `,
-      },
-      userId
-    )
+    })
 
-    return result.object
+    return result.output
   } catch (error) {
     console.error('Error parsing Placement data with AI SDK:', error)
     return {

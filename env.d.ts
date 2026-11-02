@@ -9,7 +9,6 @@ declare namespace NodeJS {
     REDDIT_API_URL: string
     WHATSAPP_BOT_API_KEY: string
     OPENAI_API_KEY: string
-    OPENAI_API_KEYS?: string
     OPENAI_EMBEDDING_MODEL?: string
     OPENAI_MAX_OUTPUT_TOKENS?: string
     EXAMCOOKER_API_KEY?: string

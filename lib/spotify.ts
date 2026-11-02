@@ -1,5 +1,63 @@
+import * as z from 'zod'
 import { prisma } from '@/lib/prisma'
 import type { Account } from '@/prisma/generated/client'
+
+/** Lenient field: a wrong type is treated as absent rather than failing the whole payload. */
+const optionalOf = <T extends z.ZodType>(schema: T) => schema.nullish().catch(undefined)
+
+const spotifyTokenResponseSchema = z.object({
+  access_token: optionalOf(z.string()),
+  refresh_token: optionalOf(z.string()),
+  expires_in: optionalOf(z.number()),
+  scope: optionalOf(z.string()),
+  token_type: optionalOf(z.string()),
+  error: optionalOf(z.string()),
+  error_description: optionalOf(z.string()),
+})
+
+const spotifyErrorBodySchema = z.object({
+  error: optionalOf(z.object({ message: optionalOf(z.string()) })),
+})
+
+const spotifyPlaybackStateSchema = z.object({
+  is_playing: optionalOf(z.boolean()),
+  progress_ms: optionalOf(z.number()),
+  item: optionalOf(
+    z.object({
+      type: optionalOf(z.string()),
+      id: optionalOf(z.string()),
+      name: optionalOf(z.string()),
+      duration_ms: optionalOf(z.number()),
+      album: optionalOf(
+        z.object({
+          name: optionalOf(z.string()),
+          images: optionalOf(z.array(z.object({ url: optionalOf(z.string()) }))),
+        })
+      ),
+      artists: optionalOf(z.array(z.object({ name: optionalOf(z.string()) }))),
+      external_urls: optionalOf(z.object({ spotify: optionalOf(z.string()) })),
+    })
+  ),
+  device: optionalOf(
+    z.object({
+      id: optionalOf(z.string()),
+      name: optionalOf(z.string()),
+      type: optionalOf(z.string()),
+      volume_percent: optionalOf(z.number()),
+    })
+  ),
+})
+
+export type SpotifyPlaybackState = z.infer<typeof spotifyPlaybackStateSchema>
+
+/** Parses a JSON body leniently; unparseable or non-object bodies become `{}`. */
+const readJsonBody = async <T extends z.ZodType>(
+  response: Response,
+  schema: T
+): Promise<z.infer<T> | Record<string, never>> => {
+  const parsed = schema.safeParse(await response.json().catch(() => ({})))
+  return parsed.success ? parsed.data : {}
+}
 
 const SPOTIFY_API_BASE = 'https://api.spotify.com/v1'
 const REQUIRED_SCOPES = [
@@ -73,7 +131,7 @@ export async function refreshSpotifyAccessToken(account: Account) {
     }),
   })
 
-  const json: any = await res.json().catch(() => ({}))
+  const json = await readJsonBody(res, spotifyTokenResponseSchema)
 
   if (!res.ok) {
     throw new SpotifyTokenError(
@@ -86,7 +144,7 @@ export async function refreshSpotifyAccessToken(account: Account) {
   const updated = await prisma.account.update({
     where: { id: account.id },
     data: {
-      access_token: json?.access_token,
+      access_token: json?.access_token ?? undefined,
       expires_at: expiresAt,
       refresh_token: json?.refresh_token ?? account.refresh_token,
       scope: json?.scope ?? account.scope,
@@ -117,7 +175,8 @@ export async function ensureSpotifyAccess(userId: string) {
   return { token: refreshed.access_token, account: refreshed }
 }
 
-export async function fetchSpotifyProfile(userId: string) {
+/** Raw `GET /me` payload; callers validate the fields they surface. */
+export async function fetchSpotifyProfile(userId: string): Promise<unknown> {
   const auth = await ensureSpotifyAccess(userId)
   if (!auth?.token) throw new SpotifyNotLinkedError()
 
@@ -143,7 +202,7 @@ export async function fetchSpotifyProfile(userId: string) {
   return response.json()
 }
 
-export async function getCurrentPlayback(userId: string) {
+export async function getCurrentPlayback(userId: string): Promise<SpotifyPlaybackState | null> {
   const auth = await ensureSpotifyAccess(userId)
   if (!auth?.token) throw new SpotifyNotLinkedError()
 
@@ -157,18 +216,26 @@ export async function getCurrentPlayback(userId: string) {
 
   if (response.status === 401 && auth.account) {
     const refreshed = await refreshSpotifyAccessToken(auth.account)
-    response = await fetchState(refreshed.access_token!)
+    if (!refreshed.access_token) {
+      throw new SpotifyTokenError('Spotify access token missing after refresh')
+    }
+    response = await fetchState(refreshed.access_token)
   }
 
   if (response.status === 204) return null
 
-  const json: any = await response.json().catch(() => ({}))
+  const body: unknown = await response.json().catch(() => ({}))
 
   if (!response.ok) {
-    throw new SpotifyApiError(json?.error?.message || 'Failed to fetch playback', response.status)
+    const errorBody = spotifyErrorBodySchema.safeParse(body)
+    throw new SpotifyApiError(
+      (errorBody.success && errorBody.data.error?.message) || 'Failed to fetch playback',
+      response.status
+    )
   }
 
-  return json
+  const state = spotifyPlaybackStateSchema.safeParse(body)
+  return state.success ? state.data : {}
 }
 
 export async function sendSpotifyCommand(
@@ -214,12 +281,15 @@ export async function sendSpotifyCommand(
 
   if (response.status === 401 && auth.account) {
     const refreshed = await refreshSpotifyAccessToken(auth.account)
-    response = await buildRequest(refreshed.access_token!)
+    if (!refreshed.access_token) {
+      throw new SpotifyTokenError('Spotify access token missing after refresh')
+    }
+    response = await buildRequest(refreshed.access_token)
   }
 
   if (!response.ok && response.status !== 204) {
-    const json: any = await response.json().catch(() => ({}))
-    throw new SpotifyApiError(json?.error?.message || 'Spotify command failed', response.status)
+    const json = await readJsonBody(response, spotifyErrorBodySchema)
+    throw new SpotifyApiError(json.error?.message || 'Spotify command failed', response.status)
   }
 
   return true
@@ -245,28 +315,32 @@ export type SimplifiedPlayback = {
   }
 }
 
-export function mapPlaybackToSimplified(state: any): SimplifiedPlayback | null {
+export function mapPlaybackToSimplified(
+  state: SpotifyPlaybackState | null
+): SimplifiedPlayback | null {
   if (!state) return null
 
-  const item = state.item
-  const isTrack = item && item.type === 'track'
+  const item = state.item?.type === 'track' ? state.item : undefined
 
-  const track = isTrack
+  const track = item
     ? {
-        id: item.id,
-        name: item.name,
-        album: item.album?.name,
-        artists: item.artists?.map((a: any) => a.name).join(', '),
+        id: item.id ?? undefined,
+        name: item.name ?? undefined,
+        album: item.album?.name ?? undefined,
+        artists: item.artists?.map(a => a.name).join(', '),
         albumArt:
-          item.album?.images?.[1]?.url || item.album?.images?.[0]?.url || item.album?.images?.[2]?.url,
-        externalUrl: item.external_urls?.spotify,
+          item.album?.images?.[1]?.url ||
+          item.album?.images?.[0]?.url ||
+          item.album?.images?.[2]?.url ||
+          undefined,
+        externalUrl: item.external_urls?.spotify ?? undefined,
       }
     : undefined
 
   return {
     isPlaying: Boolean(state.is_playing),
     progressMs: state.progress_ms ?? 0,
-    durationMs: isTrack ? item.duration_ms ?? 0 : 0,
+    durationMs: item ? (item.duration_ms ?? 0) : 0,
     track,
     device: state.device
       ? {

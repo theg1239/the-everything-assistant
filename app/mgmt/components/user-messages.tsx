@@ -5,8 +5,9 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
 import { readJson } from '@/lib/http'
+import type { MgmtUser } from '../types'
 
-type UserSummary = { id: string; name?: string | null; email?: string | null }
+type UserSummary = MgmtUser
 type UserMessage = { id: string; role: 'user' | 'assistant'; content: string; createdAt: string }
 
 interface UserMessagesProps {
@@ -65,7 +66,7 @@ export default function UserMessages({ user, onClose }: UserMessagesProps) {
       <div className="flex gap-2">
         <Input
           value={q}
-          onChange={(e: any) => setQ(e.target.value)}
+          onChange={e => setQ(e.target.value)}
           placeholder="search message text"
         />
         <Button onClick={() => fetchMessages(true)}>search</Button>
@@ -85,7 +86,7 @@ export default function UserMessages({ user, onClose }: UserMessagesProps) {
             if (!q) return true
             return (m.content || '').toLowerCase().includes(q.toLowerCase())
           })
-          .map((m: any) => (
+          .map(m => (
             <div key={m.id} className="rounded-md border border-border/30 p-3 bg-black/10">
               <div className="flex items-center justify-between mb-1">
                 <div className="text-xs text-muted-foreground">{m.role || 'message'}</div>

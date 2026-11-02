@@ -3,21 +3,22 @@
 import React, { useState, useEffect } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Search, Send } from 'lucide-react'
+import { RefreshCw, Search, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { readJson } from '@/lib/http'
-
-type MgmtUser = {
-  id: string
-  email?: string | null
-  name?: string | null
-}
+import { errorMessage, type MgmtUser } from '../types'
 
 interface UsersListProps {
   onSelectUser?: (user: MgmtUser) => void
+  onResetRateLimits?: (user: MgmtUser) => void
+  resettingUserId?: string | null
 }
 
-export default function UsersList({ onSelectUser }: UsersListProps) {
+export default function UsersList({
+  onSelectUser,
+  onResetRateLimits,
+  resettingUserId,
+}: UsersListProps) {
   const [query, setQuery] = useState('')
   const [users, setUsers] = useState<MgmtUser[]>([])
   const [loading, setLoading] = useState(false)
@@ -71,8 +72,8 @@ export default function UsersList({ onSelectUser }: UsersListProps) {
           ? `briefing scheduled for ${json.briefing.scheduledAt}`
           : 'briefing email sent'
       )
-    } catch (error: any) {
-      toast.error(error?.message || 'failed to send briefing')
+    } catch (error) {
+      toast.error(errorMessage(error, 'failed to send briefing'))
     } finally {
       setSendingId(null)
     }
@@ -83,7 +84,7 @@ export default function UsersList({ onSelectUser }: UsersListProps) {
       <div className="flex gap-2">
         <Input
           value={query}
-          onChange={(e: any) => setQuery(e.target.value)}
+          onChange={e => setQuery(e.target.value)}
           placeholder="search by email or name"
         />
         <Button
@@ -124,6 +125,18 @@ export default function UsersList({ onSelectUser }: UsersListProps) {
                 <Button variant="ghost" size="sm" onClick={() => onSelectUser?.(u)}>
                   view messages
                 </Button>
+                {onResetRateLimits && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onResetRateLimits(u)}
+                    disabled={resettingUserId === u.id}
+                    className="gap-1"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    {resettingUserId === u.id ? 'resetting…' : 'reset limits'}
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"

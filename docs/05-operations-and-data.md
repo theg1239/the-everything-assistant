@@ -63,7 +63,7 @@ Do not use `--fresh` as an automatic update: it drops the entire table, includin
 ### Misc CLIs
 
 - `scripts/query-knowledge.ts` queries the RAG DB from the CLI.
-- `scripts/test-key.ts`, `scripts/test-performance:advanced|stress` for targeted load tests.
+- `scripts/test-performance:advanced|stress` for targeted load tests.
 - `scripts/dump-db-to-csv.js` exports table data (see `scripts/dump/*.csv` for outputs).
 - `scripts/tools/` is reserved for future automation (currently empty).
 

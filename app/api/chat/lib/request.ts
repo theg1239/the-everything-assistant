@@ -1,8 +1,8 @@
-import * as z from 'zod/v3';
+import * as z from 'zod'
 
 import type { AppUIMessage } from '@/lib/ai-message-conversion'
 import type { JsonValue } from '@/types/tools'
-import type { MCPClientConfig } from '@/lib/mcp-config'
+import { parseMCPConfigList, type MCPClientConfig } from '@/lib/mcp-config'
 
 export type ToolCallPayload = {
   toolName: string
@@ -10,18 +10,22 @@ export type ToolCallPayload = {
   toolCallId?: string
 }
 
-export type MusicPlayerState = {
-  isPlaying: boolean
-  currentTrack: { id: string; title: string; artist: string } | null
-  progress: string
-  duration: string
-  progressPercent: number
-  trackPosition: string | null
-  loopMode: 'none' | 'all' | 'current'
-  shuffle: boolean
-  trackCount: number
-  tracks: Array<{ id: string; title: string; artist: string }>
-}
+const trackSchema = z.object({ id: z.string(), title: z.string(), artist: z.string() })
+
+const musicPlayerStateSchema = z.object({
+  isPlaying: z.boolean(),
+  currentTrack: trackSchema.nullable(),
+  progress: z.string(),
+  duration: z.string(),
+  progressPercent: z.number(),
+  trackPosition: z.string().nullable(),
+  loopMode: z.enum(['none', 'all', 'current']),
+  shuffle: z.boolean(),
+  trackCount: z.number(),
+  tracks: z.array(trackSchema),
+})
+
+export type MusicPlayerState = z.infer<typeof musicPlayerStateSchema>
 
 export type ChatRequestPayload = {
   id?: string
@@ -56,6 +60,19 @@ const isJsonValue = (value: unknown): value is JsonValue => {
 
   return false
 }
+
+/**
+ * Structural check for a UI message: id, role and a parts array. Part shapes
+ * are deliberately not validated here (`safeValidateUIMessages` would reject
+ * the legacy file-part shapes still present in stored chat history); every
+ * consumer reads parts defensively.
+ */
+const isUIMessageLike = (value: unknown): value is AppUIMessage =>
+  isRecord(value) &&
+  typeof value.id === 'string' &&
+  (value.role === 'user' || value.role === 'assistant' || value.role === 'system') &&
+  Array.isArray(value.parts) &&
+  value.parts.every(isRecord)
 
 const normalizeToolCall = (value: unknown): ToolCallPayload | undefined => {
   if (!isRecord(value) || typeof value.toolName !== 'string') {
@@ -105,8 +122,8 @@ export const stripSchemaPlaceholders = (value: unknown): void => {
     return
   }
 
-  if (value && typeof value === 'object') {
-    delete (value as Record<string, unknown>).__schema_placeholder
+  if (isRecord(value)) {
+    delete value.__schema_placeholder
     Object.values(value).forEach(stripSchemaPlaceholders)
   }
 }
@@ -126,41 +143,28 @@ export const parseChatRequestPayload = (value: unknown): ChatRequestPayload | nu
     payload.preferredTool = value.preferredTool
   }
 
-  const directToolCall = normalizeToolCall((value as { directToolCall?: unknown }).directToolCall)
+  const directToolCall = normalizeToolCall(value.directToolCall)
   if (directToolCall) {
     payload.directToolCall = directToolCall
   }
 
-  const rawMessages = (value as { messages?: unknown }).messages
-  if (Array.isArray(rawMessages)) {
-    payload.messages = rawMessages as AppUIMessage[]
+  if (Array.isArray(value.messages)) {
+    if (!value.messages.every(isUIMessageLike)) return null
+    payload.messages = value.messages
   }
 
-  // Parse music player state
-  const musicPlayerState = (value as { musicPlayerState?: unknown }).musicPlayerState
-  if (musicPlayerState && isRecord(musicPlayerState)) {
-    payload.musicPlayerState = musicPlayerState as unknown as MusicPlayerState
+  const musicPlayerState = musicPlayerStateSchema.safeParse(value.musicPlayerState)
+  if (musicPlayerState.success) {
+    payload.musicPlayerState = musicPlayerState.data
   }
 
-  const mcpConfigs = (value as { mcpConfigs?: unknown }).mcpConfigs
-  if (Array.isArray(mcpConfigs)) {
-    payload.mcpConfigs = mcpConfigs.filter((item): item is MCPClientConfig => {
-      return (
-        isRecord(item) &&
-        typeof item.id === 'string' &&
-        typeof item.name === 'string' &&
-        typeof item.url === 'string' &&
-        (item.transportType === 'http' || item.transportType === 'sse') &&
-        typeof item.enabled === 'boolean'
-      )
-    })
+  if (Array.isArray(value.mcpConfigs)) {
+    payload.mcpConfigs = parseMCPConfigList(value.mcpConfigs)
   }
 
-  const thinkHarder = (value as { thinkHarder?: unknown }).thinkHarder
-  if (typeof thinkHarder === 'boolean') {
-    payload.thinkHarder = thinkHarder
+  if (typeof value.thinkHarder === 'boolean') {
+    payload.thinkHarder = value.thinkHarder
   }
 
   return payload
 }
-

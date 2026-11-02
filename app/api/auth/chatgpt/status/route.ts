@@ -14,7 +14,7 @@ export async function GET() {
   try {
     const status = await getChatgptStatus(session.user.id)
     return NextResponse.json(status)
-  } catch (error: any) {
+  } catch (error) {
     console.error('[chatgpt-auth] status failed:', error)
     return NextResponse.json(
       {
@@ -27,7 +27,7 @@ export async function GET() {
         pendingLoginId: null,
         lastLoginError: null,
         requiresOpenaiAuth: null,
-        error: error?.message || 'Unable to reach Codex app-server',
+        error: (error instanceof Error && error.message) || 'Unable to reach Codex app-server',
       },
       { status: 503 }
     )

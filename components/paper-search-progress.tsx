@@ -4,11 +4,18 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Loader2, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { asRecord, readString, readText } from '@/components/narrow'
+
+interface ProgressEventDetail {
+  title?: string | number
+  selected?: string | number
+  questions?: string | number
+}
 
 interface ProgressEvent {
   runId: string
   step: string
-  detail?: any
+  detail?: ProgressEventDetail
   ts: number
 }
 
@@ -30,6 +37,25 @@ const LABELS: Record<string, string> = {
   indexBuilt: 'Index built',
 }
 
+/** Validates one SSE payload from `/api/paper-progress/[runId]`. */
+function parseProgressEvent(value: unknown): ProgressEvent | null {
+  const record = asRecord(value)
+  if (!record) return null
+  const detail = asRecord(record.detail)
+  return {
+    runId: readString(record.runId) ?? '',
+    step: readString(record.step) ?? '',
+    detail: detail
+      ? {
+          title: readText(detail.title),
+          selected: readText(detail.selected),
+          questions: readText(detail.questions),
+        }
+      : undefined,
+    ts: typeof record.ts === 'number' ? record.ts : Date.now(),
+  }
+}
+
 function formatTime(ts: number) {
   return new Date(ts).toLocaleTimeString([], {
     hour12: false,
@@ -45,8 +71,8 @@ export function PaperSearchProgress({ runId }: { runId: string }) {
     const ev = new EventSource(`/api/paper-progress/${runId}`)
     ev.onmessage = m => {
       try {
-        const data = JSON.parse(m.data)
-        setEvents(prev => [...prev, data])
+        const data = parseProgressEvent(JSON.parse(m.data))
+        if (data) setEvents(prev => [...prev, data])
       } catch {}
     }
     ev.onerror = () => {

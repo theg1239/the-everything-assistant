@@ -4,9 +4,6 @@ import GoogleProvider from 'next-auth/providers/google'
 import SpotifyProvider from 'next-auth/providers/spotify'
 import { PrismaAdapter } from '@next-auth/prisma-adapter'
 import { prisma } from '@/lib/prisma'
-import type { PrismaClient as NextAuthPrismaClient } from '@/prisma/generated/client'
-
-const prismaForAuth = prisma as unknown as NextAuthPrismaClient
 
 type GoogleAuthProvider = ReturnType<typeof GoogleProvider>
 type SpotifyAuthProvider = ReturnType<typeof SpotifyProvider>
@@ -55,7 +52,7 @@ if (hasSpotifyCreds) {
 }
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prismaForAuth),
+  adapter: PrismaAdapter(prisma),
   providers,
   session: {
     strategy: 'database',

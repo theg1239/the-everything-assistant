@@ -2,7 +2,9 @@ import NextAuth from 'next-auth'
 import { checkBotId } from 'botid/server'
 import { authOptions } from '@/lib/auth'
 
-const handler = async (request: Request, context: any) => {
+type NextAuthRouteContext = { params: Promise<{ nextauth: string[] }> }
+
+const handler = async (request: Request, context: NextAuthRouteContext) => {
   if (request.method === 'POST') {
     try {
       if (process.env.DISABLE_BOTID !== 'true' && process.env.NODE_ENV !== 'development') {

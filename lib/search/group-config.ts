@@ -75,9 +75,11 @@ export const GROUPS = {
 
 export type GroupId = keyof typeof GROUPS
 
+const isGroupId = (id: string): id is GroupId => Object.prototype.hasOwnProperty.call(GROUPS, id)
+
 export function getGroupConfig(id: string | null | undefined): GroupConfig {
-  if (!id) return GROUPS.general
-  return (GROUPS as Record<string, GroupConfig>)[id] ?? GROUPS.general
+  if (!id || !isGroupId(id)) return GROUPS.general
+  return GROUPS[id]
 }
 
 /**

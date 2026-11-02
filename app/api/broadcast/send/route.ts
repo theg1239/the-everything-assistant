@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { Prisma } from '@/prisma/generated/client'
 import { prisma } from '@/lib/prisma'
 import { broadcastPayloadSchema, type BroadcastPayload } from '@/types/api/broadcast'
 
@@ -30,7 +29,7 @@ export async function POST(req: NextRequest) {
 
     const newBroadcast = await prisma.broadcast.create({
       data: {
-        slides: payload.slides as Prisma.InputJsonValue,
+        slides: payload.slides,
       },
     })
 

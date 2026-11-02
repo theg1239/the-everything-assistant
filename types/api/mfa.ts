@@ -1,4 +1,4 @@
-import * as z from 'zod/v3';
+import * as z from 'zod'
 import type { JsonValue } from '@/types/tools'
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>

@@ -3,20 +3,26 @@ import {
   smoothStream,
   createUIMessageStreamResponse,
   generateId,
-  stepCountIs,
+  isStepCount,
   consumeStream,
+  streamText,
+  type ModelMessage,
+  type StepResult,
+  type StreamTextEndEvent,
+  type ToolSet,
+  type TypedToolResult,
 } from 'ai'
-import { rateLimitedAI } from '@/lib/rate-limited-ai'
+import type { OpenAILanguageModelResponsesOptions } from '@ai-sdk/openai'
+import { defaultProviderOptions, openai } from '@/lib/ai'
 import { getErrorText } from '@/lib/ai-stream-fallback'
 import { createVITTools } from '@/lib/tools'
-import type { ModelProvider } from '@/lib/model-registry'
-import type { ApiKeyEntry } from '@/lib/api-key-manager'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { getChat, createChat, saveMessage, updateChat } from '@/lib/db'
 import { extractTitleFromContent } from '@/lib/utils'
 import { sanitizeToolInvocations } from '@/lib/sanitize-tools'
 import { normalizeTokenUsage } from '@/lib/token-usage'
+import { enforceUserRateLimit, UserRateLimitError } from '@/lib/user-rate-limiter'
 import {
   uiMessagesToLegacyMessages,
   type AppUIMessage,
@@ -37,8 +43,20 @@ import { generateChatTitle } from './lib/chat-title'
 import { getGroupConfig, preferredToolToGroupId } from '@/lib/search/group-config'
 import { loadConfiguredTools } from '@/lib/search/tool-loader'
 import { parseVTOPData } from './lib/vtop-parser'
-import { getToolInputPayload, getToolOutputPayload, inferLegacyToolState } from './lib/tool-helpers'
-import { executeDirectToolCall } from './lib/direct-tool-call'
+import {
+  getToolInputPayload,
+  getToolOutput,
+  getToolOutputPayload,
+  inferLegacyToolState,
+  isRecord,
+  readString,
+  toToolSet,
+} from './lib/tool-helpers'
+import {
+  executeDirectToolCall,
+  recentUserContext,
+  type DirectToolCallResult,
+} from './lib/direct-tool-call'
 import { buildMemoryContext } from './lib/memory-context'
 import { enhanceMessagesWithToolContext, prepareFinalMessages } from './lib/message-prep'
 import { buildSystemPrompt } from './lib/prompt'
@@ -47,17 +65,16 @@ const getMessageText = (message: LegacyMessage | null | undefined): string => me
 
 const CLIENT_ERROR_MESSAGE = 'An error occurred.'
 
-const buildCodexPromptFromMessages = (messages: any[]): string => {
+const jsonResponse = (body: unknown, status: number) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+
+const buildCodexPromptFromMessages = (messages: ModelMessage[]): string => {
   const conversation = messages
-    .map(message => {
-      const role = typeof message?.role === 'string' ? message.role : 'user'
-      if (role === 'system') return ''
-      return {
-        role,
-        content: message?.content ?? '',
-      }
-    })
-    .filter(Boolean)
+    .filter(message => message.role !== 'system')
+    .map(message => ({ role: message.role, content: message.content }))
   const serialized = JSON.stringify(conversation)
 
   return [
@@ -69,61 +86,50 @@ const buildCodexPromptFromMessages = (messages: any[]): string => {
     .join('\n\n')
 }
 
-function extractAttachmentsFromParts(
-  parts: LegacyMessage['parts'] | AppUIMessage['parts']
-): Attachment[] {
-  if (!Array.isArray(parts)) return []
-  return (parts as unknown[])
-    .filter((part): part is Record<string, unknown> => typeof part === 'object' && part !== null)
-    .filter(part => part.type === 'file')
-    .map(part => {
-      const filePart = part as unknown as {
-        url?: string
-        filename?: string
-        name?: string
-        mediaType?: string
-        providerMetadata?: { attachmentName?: string }
-        providerOptions?: { attachmentName?: string }
-        file?: {
-          url?: string
-          filename?: string
-          name?: string
-          mediaType?: string
-          providerMetadata?: { attachmentName?: string }
-          providerOptions?: { attachmentName?: string }
-        }
-      }
-      const url =
-        typeof filePart.url === 'string'
-          ? filePart.url
-          : typeof filePart.file?.url === 'string'
-            ? filePart.file.url
-            : undefined
-      const mediaType =
-        typeof filePart.mediaType === 'string'
-          ? filePart.mediaType
-          : typeof filePart.file?.mediaType === 'string'
-            ? filePart.file.mediaType
-            : undefined
-      if (!url || !mediaType) return null
-      const name =
-        filePart.filename ||
-        filePart.providerMetadata?.attachmentName ||
-        filePart.providerOptions?.attachmentName ||
-        filePart.name ||
-        filePart.file?.filename ||
-        filePart.file?.providerMetadata?.attachmentName ||
-        filePart.file?.providerOptions?.attachmentName ||
-        filePart.file?.name ||
-        undefined
-      return {
-        url,
-        name,
-        contentType: mediaType,
-      } as Attachment
-    })
-    .filter((att): att is Attachment => Boolean(att))
+/** Reads `record.providerMetadata.attachmentName` / `record.providerOptions.attachmentName`. */
+const readAttachmentName = (record: Record<string, unknown>, key: string) => {
+  const container = record[key]
+  return isRecord(container) ? readString(container, 'attachmentName') : undefined
 }
+
+function extractAttachmentsFromParts(parts: LegacyMessage['parts']): Attachment[] {
+  if (!Array.isArray(parts)) return []
+  return parts.flatMap((part): Attachment[] => {
+    // Stored file parts may use legacy shapes (`name`, nested `file`, attachmentName metadata).
+    const filePart: unknown = part
+    if (!isRecord(filePart) || filePart.type !== 'file') return []
+    const nested = isRecord(filePart.file) ? filePart.file : undefined
+
+    const url = readString(filePart, 'url') ?? readString(nested, 'url')
+    const mediaType = readString(filePart, 'mediaType') ?? readString(nested, 'mediaType')
+    if (!url || !mediaType) return []
+
+    const name =
+      readString(filePart, 'filename') ||
+      readAttachmentName(filePart, 'providerMetadata') ||
+      readAttachmentName(filePart, 'providerOptions') ||
+      readString(filePart, 'name') ||
+      readString(nested, 'filename') ||
+      (nested && readAttachmentName(nested, 'providerMetadata')) ||
+      (nested && readAttachmentName(nested, 'providerOptions')) ||
+      readString(nested, 'name') ||
+      undefined
+
+    return [{ url, name, contentType: mediaType }]
+  })
+}
+
+type CodexToolInvocation = {
+  toolCallId: string
+  toolName: string
+  args?: Record<string, unknown>
+  result?: unknown
+  state: 'call' | 'result' | 'error'
+  error?: string
+}
+
+/** A tool result from the model run, or the request's direct tool call. */
+type FinishedToolResult = TypedToolResult<ToolSet> | DirectToolCallResult
 
 export async function POST(req: Request) {
   try {
@@ -131,7 +137,8 @@ export async function POST(req: Request) {
     if (!session?.user?.id) {
       return new Response('Unauthorized', { status: 401 })
     }
-    const rawPayload = await req.json().catch(() => null)
+    const userId = session.user.id
+    const rawPayload: unknown = await req.json().catch(() => null)
     const payload = parseChatRequestPayload(rawPayload)
     if (!payload) {
       return new Response('Invalid request body', { status: 400 })
@@ -139,10 +146,10 @@ export async function POST(req: Request) {
     const { id: requestedChatId, directToolCall, preferredTool, thinkHarder } = payload
     const uiMessages: AppUIMessage[] = payload.messages ?? []
     const messages = uiMessagesToLegacyMessages(uiMessages)
+    const lastMetadata: unknown = uiMessages.at(-1)?.metadata
     const metadataPreferredTool =
-      uiMessages.length > 0
-        ? ((uiMessages[uiMessages.length - 1]?.metadata || {}) as Record<string, any>)
-            ?.preferredTool
+      isRecord(lastMetadata) && typeof lastMetadata.preferredTool === 'string'
+        ? lastMetadata.preferredTool
         : undefined
     const effectivePreferredTool = preferredTool || metadataPreferredTool
 
@@ -151,21 +158,22 @@ export async function POST(req: Request) {
         ? requestedChatId
         : generateId()
 
-    let chat = normalizedChatId ? await getChat(normalizedChatId, session.user.id) : null
+    let chat = normalizedChatId ? await getChat(normalizedChatId, userId) : null
     const isExistingChat = !!chat
     if (!chat) {
       const initialContent = getMessageText(messages[0])
       const tempTitle = extractTitleFromContent(initialContent || 'New Chat')
       const path = `/chat/${normalizedChatId}`
-      chat = await createChat(session.user.id, tempTitle, path, normalizedChatId)
+      const createdChat = await createChat(userId, tempTitle, path, normalizedChatId)
+      chat = createdChat
 
       const userMessage = initialContent
       if (userMessage.trim()) {
         try {
-          const properTitle = await generateChatTitle(userMessage, session.user.id)
+          const properTitle = await generateChatTitle(userMessage, userId)
           if (properTitle !== tempTitle) {
-            await updateChat(chat!.id, properTitle)
-            chat.title = properTitle
+            await updateChat(createdChat.id, properTitle)
+            createdChat.title = properTitle
             console.debug('Chat title updated successfully')
           }
         } catch (error) {
@@ -174,14 +182,14 @@ export async function POST(req: Request) {
       }
     }
 
-    let directToolCallResult: any = null
+    let directToolCallResult: DirectToolCallResult | null = null
     let directToolCallExecuted = false
 
     if (directToolCall) {
       const { result, executed } = await executeDirectToolCall({
         directToolCall,
         messages,
-        userId: session.user.id,
+        userId,
       })
       directToolCallResult = result
       directToolCallExecuted = executed
@@ -189,19 +197,18 @@ export async function POST(req: Request) {
 
     let useCodexManagedUsage = false
     try {
-      const chatgptStatus = await getChatgptStatus(session.user.id)
+      const chatgptStatus = await getChatgptStatus(userId)
       useCodexManagedUsage = chatgptStatus.connected
     } catch (error) {
-      console.warn('[Chat] Unable to read codex ChatGPT status, falling back to API keys', error)
+      console.warn('[Chat] Unable to read codex ChatGPT status, falling back to API key', error)
     }
 
-    if (!useCodexManagedUsage && !process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEYS) {
-      return new Response(
-        JSON.stringify({
-          error:
-            'API key not configured. Please add OPENAI_API_KEY or OPENAI_API_KEYS to your environment variables.',
-        }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
+    if (!useCodexManagedUsage && !process.env.OPENAI_API_KEY) {
+      return jsonResponse(
+        {
+          error: 'API key not configured. Please add OPENAI_API_KEY to your environment variables.',
+        },
+        500
       )
     }
 
@@ -219,18 +226,18 @@ export async function POST(req: Request) {
       )
     }
 
-    const { context: memoryContext, isEnabled: isMemoryEnabled } = await buildMemoryContext(
-      session.user.id
+    const { context: memoryContext, isEnabled: isMemoryEnabled } = await buildMemoryContext(userId)
+
+    const baseTools = toToolSet(
+      createVITTools(userId, {
+        sessionUser: { name: session.user.name, email: session.user.email },
+        musicPlayerState: payload.musicPlayerState,
+      })
     )
-
-    const baseTools = createVITTools(session.user.id, {
-      sessionUser: { name: session.user.name, email: session.user.email },
-      musicPlayerState: payload.musicPlayerState,
-    })
     const prefersWebSearch = effectivePreferredTool === 'web-search'
-    let tools: Record<string, any> = baseTools
+    let tools: ToolSet = baseTools
 
-    let mcpClients: any[] = []
+    let mcpClients: Awaited<ReturnType<typeof fetchMCPTools>>['clients'] = []
     if (payload.mcpConfigs && payload.mcpConfigs.length > 0) {
       try {
         const mcpResult = await fetchMCPTools(payload.mcpConfigs)
@@ -255,18 +262,12 @@ export async function POST(req: Request) {
 
     if (prefersWebSearch) {
       try {
-        const webSearchTool = rateLimitedAI.openai.tools.web_search({
-          searchContextSize: 'medium',
-        })
-        if (webSearchTool) {
-          tools = {
-            ...tools,
-            web_search: webSearchTool,
-          }
+        tools = {
+          ...tools,
+          web_search: openai.tools.webSearch({ searchContextSize: 'medium' }),
         }
       } catch (error) {
         console.error('Failed to initialize OpenAI web search tool:', error)
-        tools = { ...tools }
       }
     }
 
@@ -278,9 +279,12 @@ export async function POST(req: Request) {
     const group = getGroupConfig(groupId)
     const groupSystemAddition = groupId ? (group.systemPrompt ?? '') : ''
     if (groupId) {
-      const filtered = loadConfiguredTools(tools, group)
-      if (filtered && Object.keys(filtered).length > 0) {
-        tools = filtered as Record<string, any>
+      const filtered: ToolSet = {}
+      for (const [name, tool] of Object.entries(loadConfiguredTools(tools, group))) {
+        if (tool) filtered[name] = tool
+      }
+      if (Object.keys(filtered).length > 0) {
+        tools = filtered
         console.log(`[Chat] Applied tool group "${group.id}" -> ${Object.keys(tools).join(', ')}`)
       }
     }
@@ -304,12 +308,9 @@ export async function POST(req: Request) {
 
     if (directToolCallResult && directToolCallExecuted) {
       const directResultPayload = getToolOutputPayload(directToolCallResult)
-      if (directResultPayload?.formatted_content) {
-        const responseText =
-          directResultPayload.formatted_content ||
-          directResultPayload.summary ||
-          `Here's your ${directToolCallResult.args?.command || 'data'} from VTOP.`
-
+      const formattedContent = readString(directResultPayload, 'formatted_content')
+      if (directResultPayload && formattedContent) {
+        const responseText = formattedContent
         const responseId = directToolCallResult.toolCallId || `direct-${Date.now()}`
         const { stream, safeInvocations } = createDirectToolCallStream(
           uiMessages,
@@ -344,7 +345,11 @@ export async function POST(req: Request) {
     const adminEmail = process.env.RATE_LIMIT_ADMIN_EMAIL
     const isAdmin = Boolean(adminEmail && session.user.email === adminEmail)
 
-    const { finalMessages, model, attachmentAware } = await prepareFinalMessages(
+    const {
+      instructions,
+      messages: finalMessages,
+      model,
+    } = await prepareFinalMessages(
       enhancedMessages,
       systemMessages,
       finalPrefersWebSearch,
@@ -355,9 +360,7 @@ export async function POST(req: Request) {
     const effectiveProvider = model.provider
     const effectiveModelId = model.modelId
 
-    const hasConversationContent = finalMessages.some(msg => msg.role !== 'system')
-
-    if (!hasConversationContent) {
+    if (finalMessages.length === 0) {
       const fallbackText = "i'm on standby — ask a question or run a tool so i know what to do."
       const encoder = new TextEncoder()
       const stream = new ReadableStream({
@@ -382,10 +385,13 @@ export async function POST(req: Request) {
       })
     }
 
+    // Narrowed `chat` for the callbacks below.
+    const activeChat = chat
+
     if (useCodexManagedUsage) {
       const codexPrompt = buildCodexPromptFromMessages(finalMessages)
       const codexBaseInstructions = systemMessages
-        .map(message => message?.content?.trim?.() ?? '')
+        .map(message => message.content.trim())
         .filter(Boolean)
         .join('\n\n')
       const codexDeveloperInstructions =
@@ -402,21 +408,12 @@ export async function POST(req: Request) {
           try {
             const textPartId = `codex-${generateId()}`
             let streamedText = ''
-            const codexToolInvocationsById = new Map<
-              string,
-              {
-                toolCallId: string
-                toolName: string
-                args?: Record<string, unknown>
-                result?: unknown
-                state: 'call' | 'result' | 'error'
-                error?: string
-              }
-            >()
+            const codexToolInvocationsById = new Map<string, CodexToolInvocation>()
+            const inputArgs = (input: unknown) => (isRecord(input) ? input : undefined)
 
             writer.write({ type: 'text-start', id: textPartId })
 
-            const codexResult: RunChatgptTurnResult = await runChatgptManagedTurn(session.user.id, {
+            const codexResult: RunChatgptTurnResult = await runChatgptManagedTurn(userId, {
               prompt: codexPrompt,
               baseInstructions: codexBaseInstructions || undefined,
               developerInstructions: codexDeveloperInstructions,
@@ -434,10 +431,7 @@ export async function POST(req: Request) {
                   codexToolInvocationsById.set(event.toolCallId, {
                     toolCallId: event.toolCallId,
                     toolName: event.toolName,
-                    args:
-                      event.input && typeof event.input === 'object'
-                        ? (event.input as Record<string, unknown>)
-                        : undefined,
+                    args: inputArgs(event.input),
                     state: 'call',
                   })
                   return
@@ -453,11 +447,7 @@ export async function POST(req: Request) {
                   codexToolInvocationsById.set(event.toolCallId, {
                     toolCallId: event.toolCallId,
                     toolName: event.toolName,
-                    args:
-                      existing?.args ??
-                      (event.input && typeof event.input === 'object'
-                        ? (event.input as Record<string, unknown>)
-                        : undefined),
+                    args: existing?.args ?? inputArgs(event.input),
                     result: event.output,
                     state: 'result',
                   })
@@ -473,11 +463,7 @@ export async function POST(req: Request) {
                 codexToolInvocationsById.set(event.toolCallId, {
                   toolCallId: event.toolCallId,
                   toolName: event.toolName,
-                  args:
-                    existing?.args ??
-                    (event.input && typeof event.input === 'object'
-                      ? (event.input as Record<string, unknown>)
-                      : undefined),
+                  args: existing?.args ?? inputArgs(event.input),
                   state: 'error',
                   error: event.errorText,
                 })
@@ -512,7 +498,13 @@ export async function POST(req: Request) {
             )
 
             try {
-              await saveMessage(chat.id, 'assistant', persistedText, safeInvocations, responseId)
+              await saveMessage(
+                activeChat.id,
+                'assistant',
+                persistedText,
+                safeInvocations,
+                responseId
+              )
             } catch (error) {
               console.error('Failed to save codex managed message:', error)
             }
@@ -521,8 +513,8 @@ export async function POST(req: Request) {
               try {
                 const { saveTokenUsage } = await import('@/lib/db')
                 await saveTokenUsage({
-                  userId: session.user.id,
-                  chatId: chat.id,
+                  userId,
+                  chatId: activeChat.id,
                   model: codexResult.model || 'codex/chatgpt-managed',
                   stepIndex: null,
                   inputTokens: codexResult.usage.inputTokens,
@@ -551,9 +543,9 @@ export async function POST(req: Request) {
 
       return createUIMessageStreamResponse({
         headers: {
-          'X-Chat-Id': chat.id,
-          'X-Chat-Path': `/chat/${chat.id}`,
-          'X-Chat-Title': chat.title,
+          'X-Chat-Id': activeChat.id,
+          'X-Chat-Path': `/chat/${activeChat.id}`,
+          'X-Chat-Title': activeChat.title,
           'X-Chat-Provider': 'codex-chatgpt',
         },
         stream,
@@ -570,31 +562,25 @@ export async function POST(req: Request) {
     const openaiMaxOutputTokens = Number.isFinite(parsedOpenAIMaxOutputTokens)
       ? parsedOpenAIMaxOutputTokens
       : 8000
-    const allowedProviders: ModelProvider[] = ['openai']
-    const preferredProviders: ModelProvider[] = ['openai']
 
     const supportsOpenAIPromptCacheRetention = (modelId: string) => modelId.startsWith('gpt-5.1')
 
-    const buildOpenAIProviderOptions = (modelId: string) => ({
+    const providerOptions = {
       openai: {
+        ...defaultProviderOptions.openai,
         parallelToolCalls: true,
         store: false,
         maxToolCalls: 4,
         reasoningEffort: thinkHarder ? 'high' : 'none',
         reasoningSummary: 'detailed',
         promptCacheKey: openaiPromptCacheKey,
-        ...(supportsOpenAIPromptCacheRetention(modelId) ? { promptCacheRetention: '24h' } : {}),
-      },
-    })
-
-    const providerClient = rateLimitedAI[model.provider as keyof typeof rateLimitedAI]
-    if (!providerClient) {
-      throw new Error(`Unsupported model provider: ${model.provider}`)
+        ...(supportsOpenAIPromptCacheRetention(effectiveModelId)
+          ? { promptCacheRetention: '24h' }
+          : {}),
+      } satisfies OpenAILanguageModelResponsesOptions,
     }
 
-    const providerOptions = buildOpenAIProviderOptions(effectiveModelId)
-
-    const persistStreamError = async (error: any) => {
+    const persistStreamError = async (error: unknown) => {
       console.error('Streaming error occurred:', error)
 
       if (mcpClients.length > 0) {
@@ -604,7 +590,13 @@ export async function POST(req: Request) {
 
       if (process.env.STREAM_ERRORS_TO_CHAT === 'true') {
         try {
-          await saveMessage(chat.id, 'assistant', CLIENT_ERROR_MESSAGE, [], `error-${Date.now()}`)
+          await saveMessage(
+            activeChat.id,
+            'assistant',
+            CLIENT_ERROR_MESSAGE,
+            [],
+            `error-${Date.now()}`
+          )
           console.debug('Streaming error saved to database')
         } catch (saveError) {
           console.error('Failed to save streaming error:', saveError)
@@ -612,37 +604,10 @@ export async function POST(req: Request) {
       }
     }
 
-    let activeStreamProvider = effectiveProvider
-    let activeStreamModelId = effectiveModelId
-
-    const handleStreamError = async (error: any) => {
-      const errorText = getErrorText(error)
-      clearNoChunkLog()
-      console.warn('[Chat] Stream error', {
-        provider: activeStreamProvider,
-        modelId: activeStreamModelId,
-        errorText,
-      })
-      await persistStreamError(error)
-    }
-
     const streamStartMs = Date.now()
     let chunkCount = 0
     let firstChunkAt: number | null = null
     let noChunkTimer: ReturnType<typeof setTimeout> | null = null
-
-    const scheduleNoChunkLog = () => {
-      if (noChunkTimer) return
-      noChunkTimer = setTimeout(() => {
-        if (chunkCount === 0) {
-          console.warn('[Chat] No chunks received after 15s', {
-            provider: activeStreamProvider,
-            modelId: activeStreamModelId,
-            elapsedMs: Date.now() - streamStartMs,
-          })
-        }
-      }, 15000)
-    }
 
     const clearNoChunkLog = () => {
       if (noChunkTimer) {
@@ -651,77 +616,81 @@ export async function POST(req: Request) {
       }
     }
 
-    const handleStreamChunk = ({ chunk }: { chunk: { type?: string } }) => {
+    const scheduleNoChunkLog = () => {
+      if (noChunkTimer) return
+      noChunkTimer = setTimeout(() => {
+        if (chunkCount === 0) {
+          console.warn('[Chat] No chunks received after 15s', {
+            provider: effectiveProvider,
+            modelId: effectiveModelId,
+            elapsedMs: Date.now() - streamStartMs,
+          })
+        }
+      }, 15000)
+    }
+
+    const handleStreamError = async ({ error }: { error: unknown }) => {
+      const errorText = getErrorText(error)
+      clearNoChunkLog()
+      console.warn('[Chat] Stream error', {
+        provider: effectiveProvider,
+        modelId: effectiveModelId,
+        errorText,
+      })
+      await persistStreamError(error)
+    }
+
+    const handleStreamChunk = ({ chunk }: { chunk: { type: string } }) => {
       chunkCount += 1
       if (firstChunkAt === null) {
         firstChunkAt = Date.now()
         clearNoChunkLog()
         console.warn('[Chat] First chunk received', {
-          provider: activeStreamProvider,
-          modelId: activeStreamModelId,
-          chunkType: chunk?.type,
+          provider: effectiveProvider,
+          modelId: effectiveModelId,
+          chunkType: chunk.type,
           elapsedMs: firstChunkAt - streamStartMs,
         })
       }
     }
 
-    const handleStepFinish = async ({
-      text,
-      toolCalls,
-      toolResults,
-      finishReason,
-      usage,
-      stepIndex,
-      reasoningText,
-    }: any) => {
+    const handleStepEnd = async ({ finishReason, usage, stepNumber }: StepResult<ToolSet>) => {
       try {
-        if (usage && typeof usage === 'object') {
-          const usageTotals = normalizeTokenUsage(usage)
-          const { saveTokenUsage } = await import('@/lib/db')
-          await saveTokenUsage({
-            userId: session.user.id,
-            chatId: chat.id,
-            model: model.modelId,
-            stepIndex: typeof stepIndex === 'number' ? stepIndex : null,
-            inputTokens: usageTotals.inputTokens,
-            outputTokens: usageTotals.outputTokens,
-            totalTokens: usageTotals.totalTokens,
-            meta: { finishReason },
-          })
-          if (finishReason === 'stop') {
-            savedFinalStepUsage = true
-          }
+        const usageTotals = normalizeTokenUsage(usage)
+        const { saveTokenUsage } = await import('@/lib/db')
+        await saveTokenUsage({
+          userId,
+          chatId: activeChat.id,
+          model: model.modelId,
+          stepIndex: stepNumber,
+          inputTokens: usageTotals.inputTokens,
+          outputTokens: usageTotals.outputTokens,
+          totalTokens: usageTotals.totalTokens,
+          meta: { finishReason },
+        })
+        if (finishReason === 'stop') {
+          savedFinalStepUsage = true
         }
       } catch (e) {
         console.warn('Failed to persist step usage:', e)
       }
-
-      const knowledgeBaseCalls =
-        toolCalls?.filter((tc: any) => tc.toolName === 'knowledgeBase') || []
     }
 
-    const handleFinish = async (result: any, { reasoningText }: any = {}) => {
+    const handleEnd = async (result: StreamTextEndEvent<ToolSet>) => {
       clearNoChunkLog()
-      const allToolResults: any[] = []
-
-      const finalToolResults = (result as any).toolResults ?? result.toolCalls ?? []
-      allToolResults.push(...finalToolResults)
-
-      if ((result as any).steps) {
-        for (const step of (result as any).steps) {
-          const stepToolResults = step.toolResults ?? step.toolCalls ?? []
-          allToolResults.push(...stepToolResults)
-        }
+      const allToolResults: FinishedToolResult[] = [...result.toolResults]
+      for (const step of result.steps) {
+        allToolResults.push(...step.toolResults)
       }
 
       const uniqueToolResults = allToolResults.filter(
-        (result, index, array) => index === array.findIndex(r => r.toolCallId === result.toolCallId)
+        (toolResult, index, array) =>
+          index === array.findIndex(r => r.toolCallId === toolResult.toolCallId)
       )
 
       if (directToolCallResult) {
-        const existingIndex = uniqueToolResults.findIndex(
-          r => r.toolCallId === directToolCallResult.toolCallId
-        )
+        const directCallId = directToolCallResult.toolCallId
+        const existingIndex = uniqueToolResults.findIndex(r => r.toolCallId === directCallId)
         if (existingIndex === -1) {
           uniqueToolResults.push(directToolCallResult)
         } else {
@@ -738,25 +707,17 @@ export async function POST(req: Request) {
           !toolOutput.parsedData
         ) {
           try {
-            const userContext =
-              messages && messages.length > 0
-                ? messages
-                    .filter((m: any) => m.role === 'user')
-                    .slice(-3)
-                    .map((m: any) => m.content)
-                    .join(' | ')
-                : ''
             const parsed = await parseVTOPData(
               toolOutput,
-              getToolInputPayload(tr)?.command || 'data',
-              userContext,
-              session.user.id
+              readString(getToolInputPayload(tr), 'command') || 'data',
+              recentUserContext(messages),
+              userId
             )
             Object.assign(toolOutput, {
               parsedData: parsed,
-              formatted_content: (parsed as any).formatted_content,
-              structured_data: (parsed as any).structured_data,
-              summary: (parsed as any).summary,
+              formatted_content: parsed.formatted_content,
+              structured_data: parsed.structured_data,
+              summary: parsed.summary,
             })
           } catch (e) {
             console.error('Failed to parse VTOP data in final result:', e)
@@ -764,13 +725,12 @@ export async function POST(req: Request) {
         }
       }
 
-      const allInvocations = uniqueToolResults.map((tr: any) => {
-        const toolOutput = getToolOutputPayload(tr)
-        const toolArgs = getToolInputPayload(tr) || {}
+      const allInvocations = uniqueToolResults.map(tr => {
+        const toolOutput = getToolOutput(tr)
         return {
           toolCallId: tr.toolCallId || `${tr.toolName}-${Date.now()}`,
           toolName: tr.toolName,
-          args: toolArgs,
+          args: getToolInputPayload(tr) || {},
           result: toolOutput || null,
           state: inferLegacyToolState(tr, toolOutput),
         }
@@ -779,12 +739,18 @@ export async function POST(req: Request) {
       const safeInvocations = sanitizeToolInvocations(allInvocations)
 
       try {
-        await saveMessage(chat.id, 'assistant', result.text, safeInvocations, result.response.id)
+        await saveMessage(
+          activeChat.id,
+          'assistant',
+          result.text,
+          safeInvocations,
+          result.response.id
+        )
         console.debug('Final message saved with tool invocations')
       } catch (error) {
         console.error('Failed to save final message:', error)
         try {
-          await saveMessage(chat.id, 'assistant', result.text, [], result.response.id)
+          await saveMessage(activeChat.id, 'assistant', result.text, [], result.response.id)
           console.debug('Final message saved without tool invocations (fallback)')
         } catch (fallbackError) {
           console.error(
@@ -795,13 +761,12 @@ export async function POST(req: Request) {
       }
 
       try {
-        const finalUsage = (result as any)?.usage
-        if (!savedFinalStepUsage && finalUsage && typeof finalUsage === 'object') {
-          const usageTotals = normalizeTokenUsage(finalUsage)
+        if (!savedFinalStepUsage) {
+          const usageTotals = normalizeTokenUsage(result.usage)
           const { saveTokenUsage } = await import('@/lib/db')
           await saveTokenUsage({
-            userId: session.user.id,
-            chatId: chat.id,
+            userId,
+            chatId: activeChat.id,
             model: model.modelId,
             stepIndex: null,
             inputTokens: usageTotals.inputTokens,
@@ -820,104 +785,75 @@ export async function POST(req: Request) {
       }
     }
 
-    const baseStreamOptions = {
+    await enforceUserRateLimit(userId)
+    scheduleNoChunkLog()
+
+    const result = streamText({
+      model: openai(effectiveModelId),
+      instructions,
       messages: finalMessages,
       tools,
       maxRetries: 0,
-      maxOutputTokens: 40000,
+      maxOutputTokens: openaiMaxOutputTokens,
       experimental_transform: smoothStream({ chunking: 'word' }),
-      stopWhen: stepCountIs(10),
+      stopWhen: isStepCount(10),
+      providerOptions,
       onChunk: handleStreamChunk,
-      onStepFinish: handleStepFinish,
-      onFinish: handleFinish,
-    }
-
-    const streamProviderOverrides: Record<string, Partial<any>> = {
-      openai: {
-        maxOutputTokens: openaiMaxOutputTokens,
-        middleware: [],
-      },
-    }
-
-    const streamOptions = {
-      ...baseStreamOptions,
-      model: { modelId: model.modelId },
-      ...(providerOptions ? { providerOptions } : {}),
-      providerOverrides: streamProviderOverrides,
+      onStepEnd: handleStepEnd,
+      onEnd: handleEnd,
       onError: handleStreamError,
-    }
+    })
 
-    const uiStreamOnError = (_error: unknown) => CLIENT_ERROR_MESSAGE
-
-    const uiStreamOptions = {
+    const stream = result.toUIMessageStream<AppUIMessage>({
       originalMessages: uiMessages,
       generateMessageId: generateId,
-      messageMetadata: ({ part }: { part: { type: string } }) => {
+      messageMetadata: ({ part }) => {
         if (part.type === 'finish') {
           return {
-            chatId: chat.id,
-            chatPath: `/chat/${chat.id}`,
-            chatTitle: chat.title,
+            chatId: activeChat.id,
+            chatPath: `/chat/${activeChat.id}`,
+            chatTitle: activeChat.title,
           }
         }
+        return undefined
       },
-      onError: uiStreamOnError,
-    }
-
-    const handleKeySelected = (_idx: number, entry?: ApiKeyEntry) => {
-      activeStreamProvider = entry?.provider === 'openai' ? 'openai' : effectiveProvider
-      activeStreamModelId = effectiveModelId
-    }
-
-    const startStream = async () => {
-      scheduleNoChunkLog()
-      const result = await providerClient.streamText(streamOptions, session.user.id, {
-        allowedProviders,
-        preferredProviders,
-        onKeySelected: handleKeySelected,
-      })
-      return result.toUIMessageStream(uiStreamOptions)
-    }
-
-    const stream = await startStream()
+      onError: () => CLIENT_ERROR_MESSAGE,
+    })
 
     return createUIMessageStreamResponse({
       headers: {
-        'X-Chat-Id': chat.id,
-        'X-Chat-Path': `/chat/${chat.id}`,
-        'X-Chat-Title': chat.title,
+        'X-Chat-Id': activeChat.id,
+        'X-Chat-Path': `/chat/${activeChat.id}`,
+        'X-Chat-Title': activeChat.title,
       },
       stream,
       consumeSseStream: consumeStream,
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Chat API error:', error)
 
-    if (error.message?.includes('User rate limit exceeded')) {
-      return new Response(
-        JSON.stringify({
+    if (error instanceof UserRateLimitError) {
+      return jsonResponse(
+        {
           error: 'RATE_LIMIT_EXCEEDED',
           message: CLIENT_ERROR_MESSAGE,
           type: 'user_rate_limit',
-        }),
-        { status: 429, headers: { 'Content-Type': 'application/json' } }
+        },
+        429
       )
     }
 
-    if (error.message?.toLowerCase().includes('rate limit')) {
-      return new Response(
-        JSON.stringify({
+    if (error instanceof Error && error.message.toLowerCase().includes('rate limit')) {
+      return jsonResponse(
+        {
           error: 'RATE_LIMIT_EXCEEDED',
           message: CLIENT_ERROR_MESSAGE,
           type: 'model_rate_limit',
-        }),
-        { status: 429, headers: { 'Content-Type': 'application/json' } }
+        },
+        429
       )
     }
 
-    return new Response(JSON.stringify({ error: CLIENT_ERROR_MESSAGE }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return jsonResponse({ error: CLIENT_ERROR_MESSAGE }, 500)
   }
 }

@@ -57,8 +57,11 @@ export async function POST(request: NextRequest) {
         hasClientDataJSON: !!credential.response?.clientDataJSON,
       })
 
-      const verification = await verifyRegistrationResponse({
-        response: credential,
+      const verificationOpts: VerifyRegistrationResponseOpts = {
+        response: {
+          ...credential,
+          clientExtensionResults: credential.clientExtensionResults ?? {},
+        },
         expectedChallenge: user.tempMfaSecret,
         expectedOrigin:
           process.env.NODE_ENV === 'production'
@@ -69,7 +72,8 @@ export async function POST(request: NextRequest) {
             ? process.env.WEBAUTHN_RP_ID || 'everything-assistant.com'
             : 'localhost',
         requireUserVerification: false,
-      } as VerifyRegistrationResponseOpts)
+      }
+      const verification = await verifyRegistrationResponse(verificationOpts)
 
       if (!verification.verified || !verification.registrationInfo) {
         await logSecurityEvent(

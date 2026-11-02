@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select'
 import type { HubVTOPCommand, PersonalHubSnapshot } from '@/types/hub'
 import { Card, CardContent } from '@/components/ui/card'
+import { errorMessage } from '@/components/narrow'
 
 const COMMANDS: { id: HubVTOPCommand; label: string; description: string }[] = [
   { id: 'profile', label: 'profile', description: 'student profile snapshot' },
@@ -33,7 +34,7 @@ interface VTOPPanelProps {
   linked: boolean
   runCommand: (
     command: HubVTOPCommand,
-    extras?: Record<string, any>
+    extras?: Record<string, unknown>
   ) => Promise<PersonalHubSnapshot>
   onRequireLink?: () => void
   onLink?: () => void
@@ -64,15 +65,15 @@ export default function VTOPPanel({
     setLoading(true)
     setError(null)
     try {
-      const extras: Record<string, any> = {}
+      const extras: Record<string, string> = {}
       if (semesterQuery) extras.semesterQuery = semesterQuery
       if (courseQuery) extras.courseQuery = courseQuery
       if (materialQuery) extras.materialQuery = materialQuery
       const result = await runCommand(command, extras)
       setSnapshot(result)
       onResult(result)
-    } catch (err: any) {
-      setError(err?.message || 'failed to fetch data from VTOP')
+    } catch (err) {
+      setError(errorMessage(err) || 'failed to fetch data from VTOP')
     } finally {
       setLoading(false)
     }

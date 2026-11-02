@@ -1,5 +1,10 @@
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@/prisma/generated/client'
+import * as z from 'zod'
+
+/** Raw SQL aggregates come back as number / bigint / Decimal / string depending on the driver. */
+const sqlNumber = z.unknown().transform(value => Number(value || 0))
+const sqlDate = z.union([z.date(), z.string()])
 
 export async function getTotalUsers() {
   return prisma.user.count()
@@ -43,8 +48,11 @@ function parseDateInput(input: unknown): Date | null {
     return Number.isNaN(d.getTime()) ? null : d
   }
 
-  const d = new Date(input as any)
-  return Number.isNaN(d.getTime()) ? null : d
+  if (input instanceof Date) {
+    return Number.isNaN(input.getTime()) ? null : new Date(input)
+  }
+
+  return null
 }
 
 function getRange(days: number) {
@@ -59,25 +67,20 @@ export async function getHourlyHeatmap(days = 14): Promise<HourlyHeat[]> {
   const { from, to } = getRange(days)
 
   try {
-    const rows: Array<{ bucket: Date | string; totalTokens: any }> = await prisma.$queryRaw`
+    const rawRows: unknown = await prisma.$queryRaw`
       SELECT date_trunc('hour', "createdAt") AS bucket, SUM("totalTokens") AS "totalTokens"
       FROM "TokenUsage"
       WHERE "createdAt" >= ${from.toISOString()} AND "createdAt" <= ${to.toISOString()}
       GROUP BY bucket
       ORDER BY bucket ASC
     `
+    const rows = z.array(z.object({ bucket: sqlDate, totalTokens: sqlNumber })).parse(rawRows)
 
-    return rows
-      .map(r => {
-        const d = parseDateInput(r.bucket)
-        if (!d) return null
-        return {
-          ts: d.getTime(),
-          date: d.toISOString(),
-          totalTokens: Number(r.totalTokens || 0),
-        }
-      })
-      .filter(Boolean) as HourlyHeat[]
+    return rows.flatMap((r): HourlyHeat[] => {
+      const d = parseDateInput(r.bucket)
+      if (!d) return []
+      return [{ ts: d.getTime(), date: d.toISOString(), totalTokens: r.totalTokens }]
+    })
   } catch {
     const all = await prisma.tokenUsage.findMany({
       where: { createdAt: { gte: from, lte: to } },
@@ -93,13 +96,12 @@ export async function getHourlyHeatmap(days = 14): Promise<HourlyHeat[]> {
     }
 
     return Object.entries(map)
-      .map(([k, v]) => {
+      .flatMap(([k, v]): HourlyHeat[] => {
         const d = parseDateInput(`${k}:00:00.000Z`)
-        if (!d) return null
-        return { ts: d.getTime(), date: d.toISOString(), totalTokens: v }
+        if (!d) return []
+        return [{ ts: d.getTime(), date: d.toISOString(), totalTokens: v }]
       })
-      .filter(Boolean)
-      .sort((a, b) => a!.ts - b!.ts) as HourlyHeat[]
+      .sort((a, b) => a.ts - b.ts)
   }
 }
 
@@ -112,13 +114,12 @@ export async function getDailyPeakHours(days = 30): Promise<DailyPeaks> {
     if (Number.isNaN(d.getTime())) continue
     const day = d.toISOString().slice(0, 10)
     const hour = d.getUTCHours()
-    byDay[day] = byDay[day] || []
-    byDay[day].push({ hour, totalTokens: h.totalTokens })
+    const hours = (byDay[day] ??= [])
+    hours.push({ hour, totalTokens: h.totalTokens })
   }
 
-  const perDay: DailyPeak[] = Object.keys(byDay)
-    .map(day => {
-      const arr = byDay[day]
+  const perDay: DailyPeak[] = Object.entries(byDay)
+    .map(([day, arr]) => {
       arr.sort((a, b) => b.totalTokens - a.totalTokens)
       return {
         day,
@@ -137,7 +138,7 @@ export async function getDailyPeakHours(days = 30): Promise<DailyPeaks> {
       ? 0
       : Number(
           Object.keys(hourAgg).reduce((best, cur) =>
-            hourAgg[Number(cur)] > hourAgg[Number(best)] ? cur : best
+            (hourAgg[Number(cur)] ?? 0) > (hourAgg[Number(best)] ?? 0) ? cur : best
           )
         )
 
@@ -146,18 +147,20 @@ export async function getDailyPeakHours(days = 30): Promise<DailyPeaks> {
 
 export async function getTopModels(limit = 10): Promise<ModelTotals[]> {
   try {
-    const rows: Array<{ model: string | null; totalTokens: any; count: any }> =
-      await prisma.$queryRaw`
+    const rawRows: unknown = await prisma.$queryRaw`
       SELECT "model", SUM("totalTokens") AS "totalTokens", COUNT(*) AS "count"
       FROM "TokenUsage"
       GROUP BY "model"
       ORDER BY "totalTokens" DESC
       LIMIT ${limit}
     `
+    const rows = z
+      .array(z.object({ model: z.string().nullable(), totalTokens: sqlNumber, count: sqlNumber }))
+      .parse(rawRows)
     return rows.map(r => ({
       model: r.model ?? 'unknown',
-      totalTokens: Number(r.totalTokens || 0),
-      count: Number(r.count || 0),
+      totalTokens: r.totalTokens,
+      count: r.count,
     }))
   } catch {
     const rows = await prisma.tokenUsage.groupBy({
@@ -177,8 +180,7 @@ export async function getTopModels(limit = 10): Promise<ModelTotals[]> {
 
 export async function getTokensPerUser(limit = 50): Promise<UserTotals[]> {
   try {
-    const rows: Array<{ userId: string | null; totalTokens: any; count: any }> =
-      await prisma.$queryRaw`
+    const rawRows: unknown = await prisma.$queryRaw`
       SELECT "userId", SUM("totalTokens") AS "totalTokens", COUNT(*) AS "count"
       FROM "TokenUsage"
       WHERE "userId" IS NOT NULL
@@ -186,11 +188,9 @@ export async function getTokensPerUser(limit = 50): Promise<UserTotals[]> {
       ORDER BY "totalTokens" DESC
       LIMIT ${limit}
     `
-    return rows.map(r => ({
-      userId: r.userId,
-      totalTokens: Number(r.totalTokens || 0),
-      count: Number(r.count || 0),
-    }))
+    return z
+      .array(z.object({ userId: z.string().nullable(), totalTokens: sqlNumber, count: sqlNumber }))
+      .parse(rawRows)
   } catch {
     const rows = await prisma.tokenUsage.groupBy({
       by: ['userId'],
@@ -215,28 +215,30 @@ export async function getMovingAverages(windowDays = 7): Promise<MovingAvg[]> {
 
   const computeMA = (buckets: { day: string; totalTokens: number }[]) => {
     const ma: MovingAvg[] = []
-    for (let i = 0; i < buckets.length; i++) {
+    for (const [i, bucket] of buckets.entries()) {
       const slice = buckets.slice(Math.max(0, i - windowDays + 1), i + 1)
       const avg = slice.length
         ? Math.round(slice.reduce((s, x) => s + x.totalTokens, 0) / slice.length)
         : 0
-      ma.push({ day: buckets[i].day, avg })
+      ma.push({ day: bucket.day, avg })
     }
     return ma
   }
 
   try {
-    const rows: Array<{ day: Date | string; totalTokens: any }> = await prisma.$queryRaw`
+    const rawRows: unknown = await prisma.$queryRaw`
       SELECT date_trunc('day', "createdAt") AS day, SUM("totalTokens") AS "totalTokens"
       FROM "TokenUsage"
       WHERE "createdAt" >= ${from.toISOString()} AND "createdAt" <= ${to.toISOString()}
       GROUP BY day
       ORDER BY day ASC
     `
-    const buckets = rows
+    const buckets = z
+      .array(z.object({ day: sqlDate, totalTokens: sqlNumber }))
+      .parse(rawRows)
       .map(r => ({
         day: (parseDateInput(r.day) ?? new Date(0)).toISOString().slice(0, 10),
-        totalTokens: Number(r.totalTokens || 0),
+        totalTokens: r.totalTokens,
       }))
       .sort((a, b) => a.day.localeCompare(b.day))
     return computeMA(buckets)
@@ -250,9 +252,9 @@ export async function getMovingAverages(windowDays = 7): Promise<MovingAvg[]> {
       const k = new Date(r.createdAt).toISOString().slice(0, 10)
       map[k] = (map[k] || 0) + Number(r.totalTokens || 0)
     }
-    const buckets = Object.keys(map)
-      .sort()
-      .map(k => ({ day: k, totalTokens: map[k] }))
+    const buckets = Object.entries(map)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([day, totalTokens]) => ({ day, totalTokens }))
     return computeMA(buckets)
   }
 }

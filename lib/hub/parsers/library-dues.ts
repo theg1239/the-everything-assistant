@@ -1,13 +1,13 @@
-import type { HubVTOPCommand } from '@/types/hub'
+import { getRawText } from '../guards'
+import type { ParsedHubResult } from './attendance'
 import { extractCliTables } from './utils'
 
-export function parseLibraryDues(raw: any) {
-  const text =
-    typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
+export function parseLibraryDues(raw: unknown): ParsedHubResult | null {
+  const text = getRawText(raw)
   if (!text.trim()) return null
   const tables = extractCliTables(text)
   const duesTable = tables.find(
-    table => table.headers.length >= 2 && table.headers[0].toLowerCase().includes('type')
+    table => table.headers.length >= 2 && table.headers[0]?.toLowerCase().includes('type')
   )
   if (!duesTable) return null
 
@@ -24,7 +24,7 @@ export function parseLibraryDues(raw: any) {
   const summary = total > 0 ? `₹${total.toFixed(2)} outstanding` : 'no dues'
 
   return {
-    command: 'library-dues' as HubVTOPCommand,
+    command: 'library-dues',
     title: 'library dues',
     summary,
     formatted_content: `<p>${summary}</p>`,

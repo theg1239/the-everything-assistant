@@ -3,7 +3,11 @@ import { authOptions } from '@/lib/auth'
 import { getChat, getMessages } from '@/lib/db'
 import { createUIMessageStream, JsonToSseTransformStream } from 'ai'
 import type { UIMessage } from 'ai'
-import { legacyMessageToUiMessage, type AppUIMessage, type LegacyMessage } from '@/lib/ai-message-conversion'
+import {
+  legacyMessageToUiMessage,
+  type AppUIMessage,
+  type LegacyMessage,
+} from '@/lib/ai-message-conversion'
 import type { Message as DbMessage } from '@/lib/db'
 
 interface StreamRouteParams {
@@ -44,7 +48,7 @@ export async function GET(_req: Request, { params }: { params: Promise<StreamRou
     return emptyStream()
   }
 
-  const dbMessages = (await getMessages(chatId).catch(() => [])) as DbMessage[]
+  const dbMessages = await getMessages(chatId).catch((): DbMessage[] => [])
   const mostRecent = dbMessages.at(-1)
 
   if (!mostRecent || mostRecent.role !== 'assistant') {

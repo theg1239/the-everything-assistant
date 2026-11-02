@@ -5,6 +5,7 @@ import { X, Maximize2, Minimize2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { createPortal } from 'react-dom'
 import { useSidebar } from '@/contexts/sidebar-context'
+import { isRecord } from '@/lib/json'
 
 interface PdfViewerProps {}
 
@@ -20,10 +21,11 @@ export default function PdfViewer(_: PdfViewerProps) {
   const dragRef = useRef<{ startY: number; startH: number } | null>(null)
 
   useEffect(() => {
-    const openHandler = (e: any) => {
-      const d = e?.detail || {}
+    const openHandler = (e: Event) => {
+      const detail: unknown = e instanceof CustomEvent ? e.detail : undefined
+      const d = isRecord(detail) ? detail : {}
       const theUrl = d.url
-      const theTitle = d.title
+      const theTitle = typeof d.title === 'string' ? d.title : undefined
       if (theUrl) {
         setEmbedUrl(
           String(theUrl).replace('/view?usp=sharing', '/preview').replace('/view', '/preview')

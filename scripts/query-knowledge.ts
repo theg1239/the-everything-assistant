@@ -3,18 +3,14 @@
 
 import 'dotenv/config'
 import readline from 'readline'
-import { createKnowledgeTools } from '../lib/knowledge-tools'
+import { searchKnowledgeBase } from '../lib/knowledge-tools'
 
 async function runQuery(query: string, maxChunks = 4) {
-  const { knowledgeBase } = createKnowledgeTools()
-  const result = (await (knowledgeBase as any).execute(
-    { query, max_chunks: maxChunks },
-    undefined
-  )) as any
+  const result = await searchKnowledgeBase({ query, max_chunks: maxChunks })
 
   if (!result.success) {
     console.error('Query failed:', result.error)
-    console.log('Fallback chunks:\n', result.chunks?.join('\n'))
+    console.log('Fallback chunks:\n', result.chunks.join('\n'))
     return
   }
 

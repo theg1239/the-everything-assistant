@@ -1,5 +1,5 @@
 import { tool } from 'ai'
-import * as z from 'zod/v3';
+import * as z from 'zod'
 import { memoryService } from './memory-service'
 
 export function createMemoryTool(userId: string) {
@@ -31,7 +31,7 @@ export function createMemoryTool(userId: string) {
                 : similarMemory.content
 
             const updatedImportance = importance
-              ? Math.max(importance as any, similarMemory.importance)
+              ? Math.max(importance, similarMemory.importance)
               : similarMemory.importance
 
             const updatedTags =
@@ -49,7 +49,7 @@ export function createMemoryTool(userId: string) {
           } else {
             memory = await memoryService.upsertMemory(userId, {
               content: memoryContent,
-              importance: importance as any,
+              importance,
               tags: tags || [],
             })
             message = 'New memory saved successfully.'
@@ -61,10 +61,10 @@ export function createMemoryTool(userId: string) {
             message,
             updated: !!similarMemory,
           }
-        } catch (error: any) {
+        } catch (error) {
           return {
             success: false,
-            error: error.message || 'Failed to save memory.',
+            error: (error instanceof Error && error.message) || 'Failed to save memory.',
           }
         }
       },

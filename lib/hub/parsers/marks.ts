@@ -1,9 +1,9 @@
-import type { HubVTOPCommand } from '@/types/hub'
+import { getRawText } from '../guards'
+import type { ParsedHubResult } from './attendance'
 import { extractCliTables } from './utils'
 
-export function parseMarks(raw: any) {
-  const text =
-    typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
+export function parseMarks(raw: unknown): ParsedHubResult | null {
+  const text = getRawText(raw)
   if (!text.trim()) return null
   const tables = extractCliTables(text)
   if (!tables.length) return null
@@ -35,7 +35,7 @@ export function parseMarks(raw: any) {
   const summary = `${courses.length} course${courses.length === 1 ? '' : 's'} refreshed`
 
   return {
-    command: 'marks' as HubVTOPCommand,
+    command: 'marks',
     title: 'marks ledger',
     summary,
     formatted_content: `<p>${summary}</p>`,

@@ -4,14 +4,23 @@ import type { JsonValue } from '@/types/tools'
 
 import { parseVTOPData } from './vtop-parser'
 import type { ToolCallPayload } from './request'
+import { getToolExecutor, isRecord, readString } from './tool-helpers'
 
 export type DirectToolCallResult = {
   toolCallId: string
   toolName: string
   args?: Record<string, JsonValue>
-  result: any
-  state: string
+  result: unknown
+  state: 'result' | 'error'
 }
+
+/** Joins the last three user messages, used as context for the VTOP parser. */
+export const recentUserContext = (messages: LegacyMessage[]) =>
+  messages
+    .filter(m => m.role === 'user')
+    .slice(-3)
+    .map(m => m.content)
+    .join(' | ')
 
 export async function executeDirectToolCall(params: {
   directToolCall: ToolCallPayload
@@ -20,25 +29,26 @@ export async function executeDirectToolCall(params: {
 }): Promise<{ result: DirectToolCallResult | null; executed: boolean }> {
   const { directToolCall, messages, userId } = params
 
-  const tools = createVITTools(userId)
-  const tool = tools[directToolCall.toolName as keyof typeof tools]
+  const toolCallId = directToolCall.toolCallId || Date.now().toString()
+  const toResult = (result: unknown, state: DirectToolCallResult['state']) => ({
+    executed: true,
+    result: {
+      toolCallId,
+      toolName: directToolCall.toolName,
+      args: directToolCall.args,
+      result,
+      state,
+    },
+  })
 
-  if (!tool || typeof tool.execute !== 'function') {
+  const execute = getToolExecutor(createVITTools(userId), directToolCall.toolName)
+
+  if (!execute) {
     console.error('Direct tool call - tool not found:', directToolCall.toolName)
-    return {
-      executed: true,
-      result: {
-        toolCallId: directToolCall.toolCallId || Date.now().toString(),
-        toolName: directToolCall.toolName,
-        args: directToolCall.args,
-        result: {
-          success: false,
-          error: 'Tool not found',
-          timestamp: new Date().toISOString(),
-        },
-        state: 'error',
-      },
-    }
+    return toResult(
+      { success: false, error: 'Tool not found', timestamp: new Date().toISOString() },
+      'error'
+    )
   }
 
   if (
@@ -51,36 +61,12 @@ export async function executeDirectToolCall(params: {
   }
 
   try {
-    type ToolExecutionOptions = {
-      toolCallId: string
-      messages: LegacyMessage[]
-    }
-    type ToolExecute = (
-      args: Record<string, JsonValue>,
-      options: ToolExecutionOptions
-    ) => Promise<Record<string, JsonValue> | JsonValue | null>
-
-    const execute = tool.execute as unknown as ToolExecute
     const toolArgs: Record<string, JsonValue> =
-      (directToolCall.args && Object.keys(directToolCall.args).length > 0
-        ? directToolCall.args
-        : {}) ?? {}
+      directToolCall.args && Object.keys(directToolCall.args).length > 0 ? directToolCall.args : {}
 
-    const executionOptions = {
-      toolCallId: directToolCall.toolCallId || Date.now().toString(),
-      messages,
-    }
-
-    const rawResult = (await execute(toolArgs, executionOptions)) ?? null
-    const resultObject =
-      rawResult && typeof rawResult === 'object' && !Array.isArray(rawResult)
-        ? (rawResult as Record<string, JsonValue>)
-        : null
-
+    const rawResult = (await execute(toolArgs, toolCallId)) ?? null
     const structuredResult =
-      resultObject && ('success' in resultObject || 'data' in resultObject)
-        ? (resultObject as Record<string, any>)
-        : null
+      isRecord(rawResult) && ('success' in rawResult || 'data' in rawResult) ? rawResult : null
 
     if (
       directToolCall.toolName === 'queryVTOP' &&
@@ -89,76 +75,39 @@ export async function executeDirectToolCall(params: {
       structuredResult.data
     ) {
       try {
-        const command = (structuredResult.command ?? directToolCall.args?.command) as string
+        const command =
+          readString(structuredResult, 'command') ??
+          (typeof directToolCall.args?.command === 'string' ? directToolCall.args.command : '')
 
-        const userContext =
-          messages && messages.length > 0
-            ? messages
-                .filter((m: any) => m.role === 'user')
-                .slice(-3)
-                .map((m: any) => m.content)
-                .join(' | ')
-            : ''
-
-        const parsedData = await parseVTOPData(structuredResult, command, userContext, userId)
+        const parsedData = await parseVTOPData(
+          structuredResult,
+          command,
+          recentUserContext(messages),
+          userId
+        )
 
         Object.assign(structuredResult, {
           parsedData,
-          formatted_content: (parsedData as any).formatted_content,
-          structured_data: (parsedData as any).structured_data,
-          summary: (parsedData as any).summary,
+          formatted_content: parsedData.formatted_content,
+          structured_data: parsedData.structured_data,
+          summary: parsedData.summary,
         })
-
-        return {
-          executed: true,
-          result: {
-            toolCallId: directToolCall.toolCallId || Date.now().toString(),
-            toolName: directToolCall.toolName,
-            args: directToolCall.args,
-            result: structuredResult,
-            state: 'result',
-          },
-        }
       } catch (parseError) {
         console.error('Failed to parse VTOP data:', parseError)
-        return {
-          executed: true,
-          result: {
-            toolCallId: directToolCall.toolCallId || Date.now().toString(),
-            toolName: directToolCall.toolName,
-            args: directToolCall.args,
-            result: structuredResult ?? rawResult,
-            state: 'result',
-          },
-        }
       }
+      return toResult(structuredResult, 'result')
     }
 
-    return {
-      executed: true,
-      result: {
-        toolCallId: directToolCall.toolCallId || Date.now().toString(),
-        toolName: directToolCall.toolName,
-        args: directToolCall.args,
-        result: structuredResult ?? rawResult,
-        state: 'result',
-      },
-    }
-  } catch (error: any) {
+    return toResult(structuredResult ?? rawResult, 'result')
+  } catch (error) {
     console.error('Direct tool call failed:', error)
-    return {
-      executed: true,
-      result: {
-        toolCallId: directToolCall.toolCallId || Date.now().toString(),
-        toolName: directToolCall.toolName,
-        args: directToolCall.args,
-        result: {
-          success: false,
-          error: error.message || 'Tool execution failed',
-          timestamp: new Date().toISOString(),
-        },
-        state: 'error',
+    return toResult(
+      {
+        success: false,
+        error: (error instanceof Error && error.message) || 'Tool execution failed',
+        timestamp: new Date().toISOString(),
       },
-    }
+      'error'
+    )
   }
 }

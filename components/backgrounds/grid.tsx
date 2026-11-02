@@ -336,6 +336,8 @@ export const GridScan: React.FC<GridScanProps> = ({
 
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
   const materialRef = useRef<THREE.ShaderMaterial | null>(null)
+  // Same object as materialRef.current.uniforms (ShaderMaterial keeps the reference), but typed.
+  const uniformsRef = useRef<GridUniforms | null>(null)
   const composerRef = useRef<EffectComposer | null>(null)
   const bloomRef = useRef<BloomEffect | null>(null)
   const chromaRef = useRef<ChromaticAberrationEffect | null>(null)
@@ -361,10 +363,9 @@ export const GridScan: React.FC<GridScanProps> = ({
     if (arr.length >= MAX_SCANS) arr.shift()
     arr.push(t)
     scanStartsRef.current = arr
-    if (materialRef.current) {
-      const u = materialRef.current.uniforms
-      const buf = new Array(MAX_SCANS).fill(0)
-      for (let i = 0; i < arr.length && i < MAX_SCANS; i++) buf[i] = arr[i]
+    const u = uniformsRef.current
+    if (u) {
+      const buf = Array.from({ length: MAX_SCANS }, (_, i) => arr[i] ?? 0)
       u.uScanStarts.value = buf
       u.uScanCount.value = arr.length
     }
@@ -396,14 +397,13 @@ export const GridScan: React.FC<GridScanProps> = ({
     const onClick = async () => {
       const nowSec = performance.now() / 1000
       if (scanOnClick) pushScan(nowSec)
-      if (
-        enableGyro &&
-        typeof window !== 'undefined' &&
-        (window as any).DeviceOrientationEvent &&
-        (DeviceOrientationEvent as any).requestPermission
-      ) {
+      const orientationEvent: DeviceOrientationEventStatic | undefined =
+        typeof window !== 'undefined' && 'DeviceOrientationEvent' in window
+          ? window.DeviceOrientationEvent
+          : undefined
+      if (enableGyro && orientationEvent?.requestPermission) {
         try {
-          await (DeviceOrientationEvent as any).requestPermission()
+          await orientationEvent.requestPermission()
         } catch {}
       }
     }
@@ -451,7 +451,7 @@ export const GridScan: React.FC<GridScanProps> = ({
     renderer.setClearColor(0x000000, 0)
     container.appendChild(renderer.domElement)
 
-    const uniforms = {
+    const uniforms: GridUniforms = {
       iResolution: {
         value: new THREE.Vector3(
           container.clientWidth,
@@ -493,6 +493,7 @@ export const GridScan: React.FC<GridScanProps> = ({
       depthTest: false,
     })
     materialRef.current = material
+    uniformsRef.current = uniforms
 
     const scene = new THREE.Scene()
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
@@ -528,7 +529,7 @@ export const GridScan: React.FC<GridScanProps> = ({
 
     const onResize = () => {
       renderer.setSize(container.clientWidth, container.clientHeight)
-      material.uniforms.iResolution.value.set(
+      uniforms.iResolution.value.set(
         container.clientWidth,
         container.clientHeight,
         renderer.getPixelRatio()
@@ -581,11 +582,11 @@ export const GridScan: React.FC<GridScanProps> = ({
         lookCurrent.current.x * skewScale,
         -lookCurrent.current.y * yBoost * skewScale
       )
-      material.uniforms.uSkew.value.set(skew.x, skew.y)
-      material.uniforms.uTilt.value = tiltCurrent.current * tiltScale
-      material.uniforms.uYaw.value = THREE.MathUtils.clamp(yawCurrent.current * yawScale, -0.6, 0.6)
+      uniforms.uSkew.value.set(skew.x, skew.y)
+      uniforms.uTilt.value = tiltCurrent.current * tiltScale
+      uniforms.uYaw.value = THREE.MathUtils.clamp(yawCurrent.current * yawScale, -0.6, 0.6)
 
-      material.uniforms.iTime.value = now / 1000
+      uniforms.iTime.value = now / 1000
       renderer.clear(true, true, true)
       if (composerRef.current) {
         composerRef.current.render(dt)
@@ -600,7 +601,7 @@ export const GridScan: React.FC<GridScanProps> = ({
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
       window.removeEventListener('resize', onResize)
       material.dispose()
-      ;(quad.geometry as THREE.BufferGeometry).dispose()
+      quad.geometry.dispose()
       if (composerRef.current) {
         composerRef.current.dispose()
         composerRef.current = null
@@ -622,12 +623,11 @@ export const GridScan: React.FC<GridScanProps> = ({
   ])
 
   useEffect(() => {
-    const m = materialRef.current
-    if (m) {
-      const u = m.uniforms
+    const u = uniformsRef.current
+    if (u) {
       u.uLineThickness.value = lineThickness
-      ;(u.uLinesColor.value as THREE.Color).copy(srgbColor(linesColor))
-      ;(u.uScanColor.value as THREE.Color).copy(srgbColor(scanColor))
+      u.uLinesColor.value.copy(srgbColor(linesColor))
+      u.uScanColor.value.copy(srgbColor(scanColor))
       u.uGridScale.value = gridScale
       u.uLineStyle.value = lineStyle === 'dashed' ? 1 : lineStyle === 'dotted' ? 2 : 0
       u.uLineJitter.value = Math.max(0, Math.min(1, lineJitter || 0))
@@ -644,8 +644,8 @@ export const GridScan: React.FC<GridScanProps> = ({
     }
     if (bloomRef.current) {
       bloomRef.current.blendMode.opacity.value = Math.max(0, bloomIntensity)
-      ;(bloomRef.current as any).luminanceMaterial.threshold = bloomThreshold
-      ;(bloomRef.current as any).luminanceMaterial.smoothing = bloomSmoothing
+      bloomRef.current.luminanceMaterial.threshold = bloomThreshold
+      bloomRef.current.luminanceMaterial.smoothing = bloomSmoothing
     }
     if (chromaRef.current) {
       chromaRef.current.offset.set(chromaticAberration, chromaticAberration)
@@ -696,6 +696,36 @@ export const GridScan: React.FC<GridScanProps> = ({
     >
     </div>
   )
+}
+
+type GridUniforms = {
+  iResolution: THREE.IUniform<THREE.Vector3>
+  iTime: THREE.IUniform<number>
+  uSkew: THREE.IUniform<THREE.Vector2>
+  uTilt: THREE.IUniform<number>
+  uYaw: THREE.IUniform<number>
+  uLineThickness: THREE.IUniform<number>
+  uLinesColor: THREE.IUniform<THREE.Color>
+  uScanColor: THREE.IUniform<THREE.Color>
+  uGridScale: THREE.IUniform<number>
+  uLineStyle: THREE.IUniform<number>
+  uLineJitter: THREE.IUniform<number>
+  uScanOpacity: THREE.IUniform<number>
+  uNoise: THREE.IUniform<number>
+  uBloomOpacity: THREE.IUniform<number>
+  uScanGlow: THREE.IUniform<number>
+  uScanSoftness: THREE.IUniform<number>
+  uPhaseTaper: THREE.IUniform<number>
+  uScanDuration: THREE.IUniform<number>
+  uScanDelay: THREE.IUniform<number>
+  uScanDirection: THREE.IUniform<number>
+  uScanStarts: THREE.IUniform<number[]>
+  uScanCount: THREE.IUniform<number>
+}
+
+/** iOS Safari exposes a static permission request that isn't in lib.dom. */
+type DeviceOrientationEventStatic = typeof DeviceOrientationEvent & {
+  requestPermission?: () => Promise<PermissionState>
 }
 
 function srgbColor(hex: string) {

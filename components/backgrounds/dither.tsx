@@ -132,44 +132,45 @@ void mainImage(in vec4 inputColor, in vec2 uv, out vec4 outputColor) {
 }
 `
 
+interface RetroEffectOptions {
+  colorNum?: number
+  pixelSize?: number
+}
+
 class RetroEffectImpl extends Effect {
-  public uniforms: Map<string, THREE.Uniform<any>>
-  constructor() {
-    const uniforms = new Map<string, THREE.Uniform<any>>([
-      ['colorNum', new THREE.Uniform(4.0)],
-      ['pixelSize', new THREE.Uniform(2.0)],
-    ])
-    super('RetroEffect', ditherFragmentShader, { uniforms })
-    this.uniforms = uniforms
+  private readonly colorNumUniform: THREE.Uniform<number>
+  private readonly pixelSizeUniform: THREE.Uniform<number>
+  constructor({ colorNum = 4.0, pixelSize = 2.0 }: RetroEffectOptions = {}) {
+    const colorNumUniform = new THREE.Uniform(colorNum)
+    const pixelSizeUniform = new THREE.Uniform(pixelSize)
+    super('RetroEffect', ditherFragmentShader, {
+      uniforms: new Map<string, THREE.Uniform<number>>([
+        ['colorNum', colorNumUniform],
+        ['pixelSize', pixelSizeUniform],
+      ]),
+    })
+    this.colorNumUniform = colorNumUniform
+    this.pixelSizeUniform = pixelSizeUniform
   }
   set colorNum(value: number) {
-    this.uniforms.get('colorNum')!.value = value
+    this.colorNumUniform.value = value
   }
   get colorNum(): number {
-    return this.uniforms.get('colorNum')!.value
+    return this.colorNumUniform.value
   }
   set pixelSize(value: number) {
-    this.uniforms.get('pixelSize')!.value = value
+    this.pixelSizeUniform.value = value
   }
   get pixelSize(): number {
-    return this.uniforms.get('pixelSize')!.value
+    return this.pixelSizeUniform.value
   }
 }
 
-import { forwardRef } from 'react'
+// Wrapped once at module scope: wrapping inside render created a new component
+// type every render, remounting the effect each frame.
+const RetroEffect = wrapEffect(RetroEffectImpl)
 
-const RetroEffect = forwardRef<RetroEffectImpl, { colorNum: number; pixelSize: number }>(
-  (props, ref) => {
-    const { colorNum, pixelSize } = props
-    const WrappedRetroEffect = wrapEffect(RetroEffectImpl)
-    return <WrappedRetroEffect ref={ref} colorNum={colorNum} pixelSize={pixelSize} />
-  }
-)
-
-RetroEffect.displayName = 'RetroEffect'
-
-interface WaveUniforms {
-  [key: string]: THREE.Uniform<any>
+type WaveUniforms = {
   time: THREE.Uniform<number>
   resolution: THREE.Uniform<THREE.Vector2>
   waveSpeed: THREE.Uniform<number>

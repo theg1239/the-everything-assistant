@@ -48,10 +48,13 @@ export async function GET(req: NextRequest, { params }: { params: ChatParams }) 
       user: chat?.user ? { id: chat.user.id, name: chat.user.name, email: chat.user.email } : null,
       messages,
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Mgmt messages fetch failed:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch messages', message: error?.message || 'Unknown error' },
+      {
+        error: 'Failed to fetch messages',
+        message: error instanceof Error && error.message ? error.message : 'Unknown error',
+      },
       { status: 500 }
     )
   }

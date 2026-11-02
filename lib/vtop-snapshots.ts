@@ -1,9 +1,10 @@
 import { prisma } from './prisma'
-import type { VTOPSnapshot } from '@/prisma/generated/client'
+import { Prisma, type VTOPSnapshot } from '@/prisma/generated/client'
+import { toJsonValue } from './json'
 
 export type VTOPSnapshotPayload = {
   command: string
-  data: any
+  data: Prisma.JsonValue
   fetchedAt: Date
 }
 
@@ -20,7 +21,14 @@ export async function listVTOPSnapshots(
   })
 }
 
-export async function upsertVTOPSnapshot(userId: string, command: string, data: any) {
+/** Snapshot payloads are formatter output; normalize to plain JSON before storing. */
+const toSnapshotJson = (data: unknown): Prisma.InputJsonValue | typeof Prisma.JsonNull => {
+  const json = toJsonValue(data)
+  return json === null || json === undefined ? Prisma.JsonNull : json
+}
+
+export async function upsertVTOPSnapshot(userId: string, command: string, payload: unknown) {
+  const data = toSnapshotJson(payload)
   return prisma.vTOPSnapshot.upsert({
     where: { userId_command: { userId, command } },
     update: {

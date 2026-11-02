@@ -1,3 +1,5 @@
+import * as z from 'zod'
+
 interface Paper {
   title: string
   url: string
@@ -7,32 +9,43 @@ interface Paper {
   year: string
 }
 
-interface ApiPaper {
-  _id: string
-  title?: string
-  name?: string
-  paperName?: string
-  url?: string
-  downloadUrl?: string
-  link?: string
-  paperUrl?: string
-  finalUrl?: string
-  metadata?: string
-  description?: string
-  examType?: string
-  exam?: string
-  year?: string
-  academicYear?: string
-  slot?: string
-  semester?: string
-  subject?: string
-  courseCode?: string
-  thumbnailUrl?: string
-  originalFilename?: string
-  fileSize?: number
-  mimeType?: string
-  createdAt?: string
-}
+/** Every API field is optional; a value of the wrong type is treated as absent. */
+const apiText = z.string().optional().catch(undefined)
+
+const apiPaperSchema = z.object({
+  _id: apiText,
+  title: apiText,
+  name: apiText,
+  paperName: apiText,
+  url: apiText,
+  downloadUrl: apiText,
+  link: apiText,
+  paperUrl: apiText,
+  finalUrl: apiText,
+  metadata: apiText,
+  description: apiText,
+  examType: apiText,
+  exam: apiText,
+  year: apiText,
+  academicYear: apiText,
+  slot: apiText,
+  semester: apiText,
+  subject: apiText,
+  courseCode: apiText,
+  thumbnailUrl: apiText,
+  originalFilename: apiText,
+  fileSize: z.number().optional().catch(undefined),
+  mimeType: apiText,
+  createdAt: apiText,
+})
+
+type ApiPaper = z.infer<typeof apiPaperSchema>
+
+const papersServiceResponseSchema = z.object({
+  success: z.boolean().catch(false),
+  papers: z.array(z.unknown()).optional().catch(undefined),
+  error: apiText,
+})
 
 interface ScraperResult {
   success: boolean
@@ -93,11 +106,7 @@ export async function scrapePapersService(
       throw new Error(`Papers service returned ${response.status}: ${response.statusText}`)
     }
 
-    const data = (await response.json()) as {
-      success: boolean
-      papers?: ApiPaper[]
-      error?: string
-    }
+    const data = papersServiceResponseSchema.parse(await response.json())
 
     if (!data.success) {
       return {
@@ -109,7 +118,10 @@ export async function scrapePapersService(
       }
     }
 
-    const papersArray = Array.isArray(data.papers) ? data.papers : []
+    const papersArray: ApiPaper[] = (data.papers ?? []).flatMap(item => {
+      const paper = apiPaperSchema.safeParse(item)
+      return paper.success ? [paper.data] : []
+    })
 
     if (papersArray.length === 0) {
       return {

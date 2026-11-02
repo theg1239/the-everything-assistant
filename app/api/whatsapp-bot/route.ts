@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
-import * as z from 'zod/v3';
-import { generateId, type UIMessage } from 'ai'
+import * as z from 'zod'
+import { generateId, type ModelMessage, type SystemModelMessage, type UIMessage } from 'ai'
+import type { Prisma } from '@/prisma/generated/client'
 import { getModelConfig } from '@/lib/model-registry'
 import { normalizeTokenUsage } from '@/lib/token-usage'
+import { enforceUserRateLimit, UserRateLimitError } from '@/lib/user-rate-limiter'
+import { isJsonObject } from '@/lib/json'
+import { toToolSet } from '@/app/api/chat/lib/tool-helpers'
 
 type ConversationMessage = {
   role: string
@@ -41,6 +45,10 @@ const botRequestSchema = z.object({
   conversationHistory: z.array(historyMessageSchema).optional(),
 })
 
+/** The object form of a Prisma JSON column value (`{}` for anything else). */
+const asJsonObject = (value: Prisma.JsonValue | undefined): Prisma.JsonObject =>
+  isJsonObject(value) ? value : {}
+
 function validateAPIKey(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization')
   const apiKey = process.env.WHATSAPP_BOT_API_KEY
@@ -55,7 +63,10 @@ function validateAPIKey(request: NextRequest): boolean {
 
 function timingSafeEqual(a: string, b: string): boolean {
   try {
-    return Buffer.from(a).length === Buffer.from(b).length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b))
+    return (
+      Buffer.from(a).length === Buffer.from(b).length &&
+      crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b))
+    )
   } catch {
     return false
   }
@@ -104,7 +115,7 @@ async function getOrCreateBotUser(source: string, userId: string, userName?: str
     const name =
       userName || `${source.charAt(0).toUpperCase() + source.slice(1)} User ${userId.slice(-4)}`
 
-    const preferences: any = {
+    const preferences: Prisma.InputJsonObject = {
       [source]: {
         ...(source === 'whatsapp' ? { phoneNumber: userId } : { userId }),
         joinedAt: new Date().toISOString(),
@@ -122,8 +133,8 @@ async function getOrCreateBotUser(source: string, userId: string, userName?: str
 
     console.log(`Created new ${source} user: ${name} (${userId})`)
   } else if (source === 'whatsapp') {
-    const prefs = (user.preferences as any) || {}
-    const whatsappPrefs = prefs.whatsapp || {}
+    const prefs = asJsonObject(user.preferences)
+    const whatsappPrefs = asJsonObject(prefs.whatsapp)
     if (whatsappPrefs.phoneNumber !== userId) {
       await prisma.user.update({
         where: { id: user.id },
@@ -152,7 +163,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
     }
 
-    const parsed = (() => {
+    const parsed = ((): unknown => {
       try {
         return JSON.parse(rawBody || '{}')
       } catch {
@@ -215,24 +226,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'userId/phoneNumber is required' }, { status: 400 })
     }
 
-    const resolvedUserId = userInfo.userId as string
+    const resolvedUserId = userInfo.userId
 
     const user = await getOrCreateBotUser(requestSource, resolvedUserId, userInfo.userName)
 
-    const fakeSession = {
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-      },
-    }
-
-    const { rateLimitedAI } = await import('@/lib/rate-limited-ai')
+    const { defaultProviderOptions, languageModel } = await import('@/lib/ai')
     const { createVITTools } = await import('@/lib/tools')
     const { getUserMcpToken, refreshUserMcpToken, isExpired } = await import('@/lib/mcp-tokens')
     const { VIT_SYSTEM_PROMPT } = await import('@/lib/prompts')
     const { memoryService } = await import('@/lib/memory/memory-service')
-    const { smoothStream, extractReasoningMiddleware, stepCountIs } = await import('ai')
+    const { smoothStream, isStepCount, streamText } = await import('ai')
 
     const memorySettings = await memoryService.getUserMemorySettings(user.id)
     const isMemoryEnabled = memorySettings?.isEnabled ?? true
@@ -278,17 +281,19 @@ ${memories
       ? process.env.WHATSAPP_VTOP_MCP_ACCESS_TOKEN || process.env.VTOP_MCP_ACCESS_TOKEN
       : undefined
 
-    const tools = createVITTools(user.id, {
-      channel: requestSource,
-      mcp:
-        requestSource === 'whatsapp'
-          ? {
-              endpoint: vtopMcpEndpoint,
-              accessToken: mcpToken?.accessToken || fallbackToken,
-              clientName: 'whatsapp-bot-client',
-            }
-          : undefined,
-    })
+    const tools = toToolSet(
+      createVITTools(user.id, {
+        channel: requestSource,
+        mcp:
+          requestSource === 'whatsapp'
+            ? {
+                endpoint: vtopMcpEndpoint,
+                accessToken: mcpToken?.accessToken || fallbackToken,
+                clientName: 'whatsapp-bot-client',
+              }
+            : undefined,
+      })
+    )
 
     if (requestSource === 'whatsapp') {
       console.log('WA MCP debug', {
@@ -319,7 +324,7 @@ This conversation is happening via Discord. The user is using slash commands.
 - user: ${userInfo.userName || 'Discord User'} (${userInfo.userId})
 </discord_context>`
 
-const systemPrompt = `${VIT_SYSTEM_PROMPT}
+    const systemPrompt = `${VIT_SYSTEM_PROMPT}
 
 ${contextPrompt}
 
@@ -336,24 +341,16 @@ CRITICAL TOOL CONTINUATION RULES:
 - When you call a tool, that's step 1 - step 2 is ALWAYS providing your answer using that information
 - The conversation flow is: [user question] → [tool call] → [YOUR RESPONSE USING TOOL RESULTS]`
 
-    const finalMessagesForAI = [
-      { role: 'system' as const, content: systemPrompt },
-      ...processedMessages.map(m => ({
-        role: (m.role as 'user' | 'assistant' | 'system'),
-        content: m.content,
-        id: m.id,
-      })),
-    ]
-
-    const reasoningMiddleware = extractReasoningMiddleware({
-      tagName: 'reasoning',
-    })
+    // v7 rejects system messages inside `messages`, so they go to `instructions`.
+    const instructions: SystemModelMessage[] = [{ role: 'system', content: systemPrompt }]
+    const messagesForAI: ModelMessage[] = []
+    for (const m of processedMessages) {
+      if (m.role === 'system') instructions.push({ role: 'system', content: m.content })
+      else if (m.role === 'assistant') messagesForAI.push({ role: 'assistant', content: m.content })
+      else messagesForAI.push({ role: 'user', content: m.content })
+    }
 
     const botModel = getModelConfig('whatsappBot')
-    const providerClient = rateLimitedAI[botModel.provider as keyof typeof rateLimitedAI]
-    if (!providerClient) {
-      throw new Error(`Unsupported model provider for bot: ${botModel.provider}`)
-    }
 
     const isCommand =
       typeof userMessage === 'string' && userMessage.trim().length > 0
@@ -367,41 +364,36 @@ CRITICAL TOOL CONTINUATION RULES:
           : undefined // normal messages shouldn't burn command rate limits
         : user.id
 
-    const resultStream = await providerClient.streamText(
-      {
-        model: { modelId: botModel.modelId },
-        messages: finalMessagesForAI,
-        tools,
-        temperature: 0.7,
-        maxOutputTokens: requestSource === 'whatsapp' ? 2048 : 4096,
-        experimental_transform: smoothStream({ chunking: 'word' }),
-        middleware: [reasoningMiddleware],
-        maxSteps: 5,
-        stopWhen: stepCountIs(5),
-        experimental_continueSteps: true,
-        onStepFinish: async ({ usage, stepIndex }: any) => {
-          try {
-            if (usage && typeof usage === 'object') {
-              const usageTotals = normalizeTokenUsage(usage)
-              const { saveTokenUsage } = await import('@/lib/db')
-              await saveTokenUsage({
-                userId: user.id,
-                chatId: null, // No specific chat for bot users
-                model: botModel.modelId,
-                stepIndex: typeof stepIndex === 'number' ? stepIndex : null,
-                inputTokens: usageTotals.inputTokens,
-                outputTokens: usageTotals.outputTokens,
-                totalTokens: usageTotals.totalTokens,
-                meta: { source: requestSource, userId: userInfo.userId },
-              })
-            }
-          } catch (e) {
-            console.warn(`Failed to persist ${requestSource} usage:`, e)
-          }
-        },
+    await enforceUserRateLimit(rateLimitKey)
+
+    const resultStream = streamText({
+      model: languageModel('whatsappBot'),
+      providerOptions: defaultProviderOptions,
+      instructions,
+      messages: messagesForAI,
+      tools,
+      maxOutputTokens: requestSource === 'whatsapp' ? 2048 : 4096,
+      experimental_transform: smoothStream({ chunking: 'word' }),
+      stopWhen: isStepCount(5),
+      onStepEnd: async ({ usage, stepNumber }) => {
+        try {
+          const usageTotals = normalizeTokenUsage(usage)
+          const { saveTokenUsage } = await import('@/lib/db')
+          await saveTokenUsage({
+            userId: user.id,
+            chatId: null, // No specific chat for bot users
+            model: botModel.modelId,
+            stepIndex: stepNumber,
+            inputTokens: usageTotals.inputTokens,
+            outputTokens: usageTotals.outputTokens,
+            totalTokens: usageTotals.totalTokens,
+            meta: { source: requestSource, userId: userInfo.userId },
+          })
+        } catch (e) {
+          console.warn(`Failed to persist ${requestSource} usage:`, e)
+        }
       },
-      rateLimitKey
-    )
+    })
 
     const forceTextStream =
       request.headers.get('x-text-stream') === '1' ||
@@ -413,18 +405,16 @@ CRITICAL TOOL CONTINUATION RULES:
           request.nextUrl.searchParams.get('uiStream') === '1')) ||
       (!forceTextStream && requestSource) // default to UI stream for bot clients unless explicitly forced to text
 
-    const uiMessagesForStream: UIMessage[] | undefined = Array.isArray(processedMessages)
-      ? processedMessages.map(msg => ({
-          id: msg.id || generateId(),
-          role: msg.role === 'assistant' ? 'assistant' : msg.role === 'system' ? 'system' : 'user',
-          parts: [
-            {
-              type: 'text',
-              text: msg.content ?? '',
-            },
-          ],
-        }))
-      : undefined
+    const uiMessagesForStream: UIMessage[] = processedMessages.map(msg => ({
+      id: msg.id || generateId(),
+      role: msg.role === 'assistant' ? 'assistant' : msg.role === 'system' ? 'system' : 'user',
+      parts: [
+        {
+          type: 'text',
+          text: msg.content ?? '',
+        },
+      ],
+    }))
 
     if (wantUIStream) {
       return resultStream.toUIMessageStreamResponse({
@@ -434,7 +424,7 @@ CRITICAL TOOL CONTINUATION RULES:
           'X-Source': requestSource,
           'X-User-Id': user.id,
           'X-Bot-User-Id': userInfo.userId ?? '',
-        } as HeadersInit,
+        },
         onError: () => 'An error occurred while processing your request.',
       })
     }
@@ -444,12 +434,24 @@ CRITICAL TOOL CONTINUATION RULES:
         'X-Source': requestSource,
         'X-User-Id': user.id,
         'X-Bot-User-Id': userInfo.userId ?? '',
-      } as HeadersInit,
+      },
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Bot API error:', error)
 
-    if (error.message?.includes('rate limit')) {
+    if (error instanceof UserRateLimitError) {
+      return NextResponse.json(
+        {
+          error: 'RATE_LIMIT_EXCEEDED',
+          message: 'Too many requests. Please try again later.',
+          type: 'user_rate_limit',
+        },
+        { status: 429 }
+      )
+    }
+
+    const errorMessage = error instanceof Error ? error.message : ''
+    if (errorMessage.includes('rate limit')) {
       return NextResponse.json(
         {
           error: 'RATE_LIMIT_EXCEEDED',
@@ -461,7 +463,7 @@ CRITICAL TOOL CONTINUATION RULES:
     }
 
     return NextResponse.json(
-      { error: error.message || 'An unexpected error occurred' },
+      { error: errorMessage || 'An unexpected error occurred' },
       { status: 500 }
     )
   }

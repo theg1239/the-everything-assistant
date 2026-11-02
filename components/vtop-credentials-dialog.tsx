@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import CryptoJS from 'crypto-js'
 import { saveVTOPCredentials, hasVTOPCredentials } from '@/lib/vtop-credentials'
 import { toast } from 'sonner'
+import { isRecord } from '@/lib/json'
 
 interface VTOPCredentialsDialogProps {
   isOpen: boolean
@@ -44,8 +45,9 @@ export function VTOPCredentialsDialog({
     try {
       const saved = localStorage.getItem('vtop_credentials')
       if (saved) {
-        const parsed = JSON.parse(saved)
-        setUsername(parsed.username || '')
+        const parsed: unknown = JSON.parse(saved)
+        const savedUsername = isRecord(parsed) ? parsed.username : undefined
+        setUsername(typeof savedUsername === 'string' ? savedUsername : '')
         setRememberCredentials(true)
       }
     } catch (error) {

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, memo } from 'react'
+import { readPaperSearchResponse } from './paper-search-response'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import { Drawer } from 'vaul'
@@ -57,11 +58,6 @@ interface PaperCount {
   count: number
   loading: boolean
   error: boolean
-}
-
-interface PaperSearchResponse {
-  success: boolean
-  totalFound?: number
 }
 
 interface CourseData {
@@ -240,7 +236,7 @@ export function PastPapersClient() {
         POPULAR_COURSES.map(async (course) => {
           try {
             const response = await fetch(`/api/public/papers/search?course=${course.code}`)
-            const data = await response.json() as PaperSearchResponse
+            const data = readPaperSearchResponse(await response.json())
             return {
               code: course.code,
               count: data.success ? (data.totalFound ?? 0) : 0,

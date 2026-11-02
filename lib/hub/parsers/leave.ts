@@ -1,9 +1,9 @@
-import type { HubVTOPCommand } from '@/types/hub'
+import { getRawText } from '../guards'
+import type { ParsedHubResult } from './attendance'
 import { extractCliTables } from './utils'
 
-export function parseLeave(raw: any) {
-  const text =
-    typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
+export function parseLeave(raw: unknown): ParsedHubResult | null {
+  const text = getRawText(raw)
   if (!text.trim()) return null
   const tables = extractCliTables(text)
   const leaveTable = tables.find(table =>
@@ -30,7 +30,7 @@ export function parseLeave(raw: any) {
     : `${requests.length} requests on file`
 
   return {
-    command: 'leave' as HubVTOPCommand,
+    command: 'leave',
     title: 'leave status',
     summary,
     formatted_content: `<p>${summary}</p>`,

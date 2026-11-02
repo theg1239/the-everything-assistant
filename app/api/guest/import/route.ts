@@ -2,12 +2,26 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createChat, getChat, saveMessage } from '@/lib/db'
 import { extractTitleFromContent, generateUUID } from '@/lib/utils'
-import { uiMessagesToLegacyMessages, type AppUIMessage } from '@/lib/ai-message-conversion'
+import {
+  uiMessagesToLegacyMessages,
+  type AppUIMessage,
+  type LegacyAttachment,
+} from '@/lib/ai-message-conversion'
+import type { Attachment } from '@/types/attachment'
+import { safeValidateUIMessages } from 'ai'
+import * as z from 'zod'
 
-type ImportPayload = {
-  chatId?: string
-  messages?: AppUIMessage[]
+/** Legacy attachments built from UI file parts always carry a contentType; drop any that don't. */
+function toStoredAttachments(attachments: LegacyAttachment[] | undefined): Attachment[] | undefined {
+  return attachments?.flatMap(({ url, name, contentType }) =>
+    contentType ? [{ url, name, contentType }] : []
+  )
 }
+
+const importPayloadSchema = z.object({
+  chatId: z.string().optional().catch(undefined),
+  messages: z.array(z.unknown()),
+})
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions)
@@ -17,21 +31,32 @@ export async function POST(req: Request) {
   }
 
   const raw = await req.json().catch(() => null)
-  const payload = raw as ImportPayload | null
+  const parsedPayload = importPayloadSchema.safeParse(raw)
 
-  if (!payload || !Array.isArray(payload.messages)) {
+  if (!parsedPayload.success) {
+    return new Response('Invalid payload', { status: 400 })
+  }
+  const payload = parsedPayload.data
+
+  if (payload.messages.length === 0) {
+    return new Response('No messages to import', { status: 400 })
+  }
+
+  const validatedMessages = await safeValidateUIMessages<AppUIMessage>({
+    messages: payload.messages,
+  })
+  if (!validatedMessages.success) {
     return new Response('Invalid payload', { status: 400 })
   }
 
-  const uiMessages = payload.messages as AppUIMessage[]
-  const legacyMessages = uiMessagesToLegacyMessages(uiMessages)
+  const legacyMessages = uiMessagesToLegacyMessages(validatedMessages.data)
 
   if (legacyMessages.length === 0) {
     return new Response('No messages to import', { status: 400 })
   }
 
   const preferredId =
-    typeof payload.chatId === 'string' && payload.chatId.trim().length > 0
+    payload.chatId && payload.chatId.trim().length > 0
       ? payload.chatId.trim()
       : generateUUID()
 
@@ -57,7 +82,7 @@ export async function POST(req: Request) {
     const content = message.content || ''
     if (!content.trim()) continue
     if (message.role !== 'user' && message.role !== 'assistant') continue
-    await saveMessage(chat.id, message.role, content, message.toolInvocations, message.id, (message as any).attachments)
+    await saveMessage(chat.id, message.role, content, message.toolInvocations, message.id, toStoredAttachments(message.attachments))
   }
 
   return new Response(

@@ -4,7 +4,6 @@ import {
   getRecentTokenUsage,
   getTokenUsageSummary,
   getTokenUsageAllTimeSummary,
-  getTokenUsageLifetimeBuckets,
 } from '@/lib/db'
 import { getDetailedUsageStats } from '@/lib/stats'
 
@@ -27,13 +26,14 @@ export async function GET(req: NextRequest) {
     const limit = limitParam ? Math.min(200, Math.max(1, parseInt(limitParam, 10))) : 50
     const days = daysParam ? Math.max(0, parseInt(daysParam, 10)) : 1
 
-    const [recent, summary, summaryAllTime, lifetimeBuckets, detailedStats] = await Promise.all([
+    // detailedStats already includes the daily lifetime buckets; reuse them.
+    const [recent, summary, summaryAllTime, detailedStats] = await Promise.all([
       getRecentTokenUsage(limit),
       getTokenUsageSummary(days),
       getTokenUsageAllTimeSummary(),
-      getTokenUsageLifetimeBuckets('day'),
       getDetailedUsageStats(),
     ])
+    const { lifetimeBuckets } = detailedStats
 
     return NextResponse.json({
       recent,

@@ -11,17 +11,11 @@ import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 import { readJson } from '@/lib/http'
 import { errorMessage } from '@/components/narrow'
-import type { JsonValue } from '@/types/tools'
-
-interface KnowledgeChunk {
-  id: number
-  chunk: string
-  metadata: Record<string, JsonValue> | null
-}
-
-interface FeedbackResponse {
-  issueUrl: string
-}
+import {
+  feedbackResponseSchema,
+  knowledgeChunksResponseSchema,
+  type KnowledgeChunk,
+} from '@/types/api/feedback'
 
 type View = 'menu' | 'contribute' | 'feedback'
 
@@ -29,7 +23,7 @@ export function FeedbackSection() {
   const { data: session } = useSession()
   const [view, setView] = useState<View>('menu')
   const [knowledgeChunks, setKnowledgeChunks] = useState<KnowledgeChunk[]>([])
-  const [editedChunks, setEditedChunks] = useState<Record<number, string>>({})
+  const [editedChunks, setEditedChunks] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -46,7 +40,7 @@ export function FeedbackSection() {
       if (!response.ok) {
         throw new Error('Failed to fetch knowledge base.')
       }
-      const data = await readJson<KnowledgeChunk[]>(response)
+      const data = await readJson(response, knowledgeChunksResponseSchema)
       setKnowledgeChunks(data)
       const combinedText = data
         .map((chunk: KnowledgeChunk) => chunk.chunk.trim())
@@ -72,7 +66,7 @@ export function FeedbackSection() {
         .map(chunk => chunk.trim())
         .filter(chunk => chunk.length > 0)
 
-      const newEditedChunks: Record<number, string> = {}
+      const newEditedChunks: Record<string, string> = {}
       knowledgeChunks.forEach((originalChunk, index) => {
         if (chunks[index] !== undefined && chunks[index] !== originalChunk.chunk.trim()) {
           newEditedChunks[originalChunk.id] = chunks[index]
@@ -115,7 +109,7 @@ export function FeedbackSection() {
   const handleSubmitContribution = async () => {
     setIsSubmitting(true)
     const changedChunks = Object.entries(editedChunks).map(([id, content]) => {
-      const originalChunk = knowledgeChunks.find(c => String(c.id) === id)
+      const originalChunk = knowledgeChunks.find(c => c.id === id)
       return {
         id,
         original: originalChunk?.chunk,
@@ -158,7 +152,7 @@ export function FeedbackSection() {
 
       if (!response.ok) throw new Error('Failed to submit contribution.')
 
-      const result = await readJson<FeedbackResponse>(response)
+      const result = await readJson(response, feedbackResponseSchema)
       toast.success('Contribution submitted!', {
         description: `Track your contribution on GitHub: ${result.issueUrl}`,
       })
@@ -191,7 +185,7 @@ export function FeedbackSection() {
 
       if (!response.ok) throw new Error('Failed to submit feedback.')
 
-      const result = await readJson<FeedbackResponse>(response)
+      const result = await readJson(response, feedbackResponseSchema)
       toast.success('Feedback submitted!', {
         description: `Track your feedback on GitHub: ${result.issueUrl}`,
       })

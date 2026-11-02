@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Loader2, Trash2, Edit, Save, X, Plus, Search, Star, Calendar, Tag } from 'lucide-react'
 import { toast } from 'sonner'
 import { readJson } from '@/lib/http'
+import { memoriesResponseSchema } from '@/types/api/memory'
 import { errorMessage } from '@/components/narrow'
 
 export interface Memory {
@@ -51,7 +52,7 @@ export function MemoryManagement() {
       if (!response.ok) {
         throw new Error('Failed to fetch memories')
       }
-      return readJson<Memory[]>(response)
+      return readJson(response, memoriesResponseSchema)
     },
     enabled: !!session?.user?.id,
     staleTime: 5 * 60 * 1000,

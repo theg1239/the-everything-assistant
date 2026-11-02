@@ -48,3 +48,8 @@ export const pastBroadcastSchema = broadcastPayloadSchema.extend({
 })
 
 export type PastBroadcast = z.infer<typeof pastBroadcastSchema>
+
+/** `GET /api/broadcast` */
+export const pastBroadcastsResponseSchema = z.object({
+  broadcasts: z.array(pastBroadcastSchema),
+})

@@ -9,27 +9,14 @@ import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { useMFA } from '@/contexts/mfa-context'
 import { LoginFloatingBackground } from '@/components/login-floating-background'
-import { readJson } from '@/lib/http'
+import { readApiMessage, readJson } from '@/lib/http'
 import { asRecord, errorMessage, readString } from '@/components/narrow'
-import type { AuthenticatorTransport, PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/server'
-
-interface MfaStatusResponse {
-  mfaEnabled: boolean
-  mfaMethod?: string
-  backupCodeCount: number
-}
-
-interface MfaVerificationResponse {
-  success?: boolean
-  message?: string
-  error?: string
-}
-
-interface WebAuthnVerificationResponse {
-  success?: boolean
-  message?: string
-  error?: string
-}
+import type { AuthenticatorTransport } from '@simplewebauthn/server'
+import {
+  mfaStatusResponseSchema,
+  webAuthnRequestOptionsSchema,
+  type MfaStatusResponse,
+} from '@/types/api/mfa'
 
 const SUPPORTED_AUTHENTICATOR_TRANSPORTS: AuthenticatorTransport[] = [
   'usb',
@@ -94,7 +81,7 @@ export function MFAChallenge() {
       if (!response.ok) {
         throw new Error('Failed to fetch MFA status')
       }
-      const data = await readJson<MfaStatusResponse>(response)
+      const data = await readJson(response, mfaStatusResponseSchema)
       setMFAStatus(data)
     } catch (error) {
       console.error('Failed to fetch MFA status:', error)
@@ -119,7 +106,7 @@ export function MFAChallenge() {
         throw new Error('Failed to get authentication options')
       }
 
-      const options = await readJson<PublicKeyCredentialRequestOptionsJSON>(optionsResponse)
+      const options = await readJson(optionsResponse, webAuthnRequestOptionsSchema)
 
       const allowCredentials: PublicKeyCredentialDescriptor[] | undefined =
         options.allowCredentials && options.allowCredentials.length
@@ -229,7 +216,7 @@ export function MFAChallenge() {
         }),
       })
 
-      const data = await readJson<WebAuthnVerificationResponse>(verifyResponse)
+      const data = await readApiMessage(verifyResponse)
 
       if (verifyResponse.ok) {
         toast.success('Authentication successful!')
@@ -270,7 +257,7 @@ export function MFAChallenge() {
     e.preventDefault()
     if (!code.trim()) return
 
-    if (isBackupMode && mfaStatus && mfaStatus.backupCodeCount === 0) {
+    if (isBackupMode && mfaStatus && mfaStatus.backupCodesCount === 0) {
       toast.error(
         'No backup codes available. Please use your authenticator app or contact support.'
       )
@@ -287,7 +274,7 @@ export function MFAChallenge() {
         body: JSON.stringify(isBackupMode ? { backupCode: code.trim() } : { code: code.trim() }),
       })
 
-      const data = await readJson<MfaVerificationResponse>(response)
+      const data = await readApiMessage(response)
 
       if (response.ok) {
         toast.success('MFA verification successful!')

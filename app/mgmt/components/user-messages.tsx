@@ -4,12 +4,14 @@ import React, { useEffect, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
+import type * as z from 'zod'
 import { readJson } from '@/lib/http'
+import { mgmtUserMessagesResponseSchema } from '@/types/api/mgmt'
 import type { MgmtUser } from '../types'
 import { useHydrationSafeField } from '@/lib/hydration-safe'
 
 type UserSummary = MgmtUser
-type UserMessage = { id: string; role: 'user' | 'assistant'; content: string; createdAt: string }
+type UserMessage = z.infer<typeof mgmtUserMessagesResponseSchema>['messages'][number]
 
 interface UserMessagesProps {
   user?: UserSummary | null
@@ -39,8 +41,7 @@ export default function UserMessages({ user, onClose }: UserMessagesProps) {
         `/api/user-messages?userId=${encodeURIComponent(user.id)}&limit=${limit}&offset=${off}`
       )
       if (!res.ok) throw new Error('failed')
-      const json = await readJson<{ messages?: UserMessage[] }>(res)
-      const items = json.messages || []
+      const { messages: items } = await readJson(res, mgmtUserMessagesResponseSchema)
       setMessages(reset ? items : [...messages, ...items])
       setHasMore(items.length === limit)
       setOffset(reset ? limit : off + items.length)

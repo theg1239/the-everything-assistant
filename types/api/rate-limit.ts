@@ -7,25 +7,28 @@ export const rateLimitActionRequestSchema = z.object({
 
 export type RateLimitActionRequest = z.infer<typeof rateLimitActionRequestSchema>
 
-export interface RateLimitStatusResponse {
-  status: 'ok'
-  timestamp: string
-  environment: {
-    validation: { isValid: boolean; errors: string[] }
-    summary: {
-      hasRedis: boolean
-      openaiApiKey: 'Set' | 'Not set'
-      admin: { email: 'Configured' | 'Not configured' }
-    }
-  }
-  userRateLimit: {
-    enabled: boolean
-    requestsPerMinute: number
-    requestsPerHour: number
-    requestsPerDay: number
-  }
-  healthCheck: {
-    redis: 'Connected' | 'Not configured'
-    openaiApiKey: 'Set' | 'Not set'
-  }
-}
+export const rateLimitStatusResponseSchema = z.object({
+  status: z.literal('ok'),
+  timestamp: z.string(),
+  environment: z.object({
+    validation: z.object({ isValid: z.boolean(), errors: z.array(z.string()) }),
+    summary: z.object({
+      hasRedis: z.boolean(),
+      openaiApiKey: z.enum(['Set', 'Not set']),
+      admin: z.object({ email: z.enum(['Configured', 'Not configured']) }),
+    }),
+  }),
+  userRateLimit: z.object({
+    enabled: z.boolean(),
+    requestsPerMinute: z.number(),
+    requestsPerHour: z.number(),
+    requestsPerDay: z.number(),
+  }),
+  healthCheck: z.object({
+    redis: z.enum(['Connected', 'Not configured']),
+    openaiApiKey: z.enum(['Set', 'Not set']),
+  }),
+})
+
+/** `GET /api/rate-limit-status` */
+export type RateLimitStatusResponse = z.infer<typeof rateLimitStatusResponseSchema>

@@ -1,20 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSession } from 'next-auth/react'
-import { Memory, MemoryImportance } from '@/lib/memory/memory-service'
+import type { MemoryImportance } from '@/lib/memory/memory-service'
+import { readJson } from '@/lib/http'
+import {
+  memoriesResponseSchema,
+  memoryResponseSchema,
+  memorySettingsResponseSchema,
+  type MemoryResponse,
+  type MemorySettingsResponse,
+} from '@/types/api/memory'
 
-export interface MemoryWithId extends Omit<Memory, 'id'> {
-  id: string
-}
-
-interface MemoriesResponse {
-  data: MemoryWithId[]
-  pagination: {
-    page: number
-    pageSize: number
-    total: number
-    totalPages: number
-  }
-}
+export type MemoryWithId = MemoryResponse
 
 const memoryKeys = {
   all: ['memories'] as const,
@@ -40,7 +36,7 @@ export function useMemories({
   const { data: session } = useSession()
   const hasSession = !!session?.user
 
-  return useQuery<MemoriesResponse, Error>({
+  return useQuery<MemoryWithId[], Error>({
     queryKey: memoryKeys.list({ page, pageSize }),
     queryFn: async () => {
       const params = new URLSearchParams({
@@ -52,7 +48,7 @@ export function useMemories({
       if (!response.ok) {
         throw new Error('Failed to fetch memories')
       }
-      return response.json()
+      return readJson(response, memoriesResponseSchema)
     },
     enabled: hasSession && enabled,
     staleTime: MEMORIES_STALE_TIME,
@@ -87,7 +83,7 @@ export function useCreateMemory() {
         throw new Error('Failed to create memory')
       }
 
-      return response.json()
+      return readJson(response, memoryResponseSchema)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: memoryKeys.lists() })
@@ -121,7 +117,7 @@ export function useUpdateMemory() {
         throw new Error('Failed to update memory')
       }
 
-      return response.json()
+      return readJson(response, memoryResponseSchema)
     },
     onSuccess: (_, { id }) => {
       queryClient.invalidateQueries({ queryKey: memoryKeys.lists() })
@@ -145,20 +141,14 @@ export function useDeleteMemory() {
       }
     },
     onSuccess: (_, id) => {
-      queryClient.setQueryData<{ data: MemoryWithId[] }>(memoryKeys.lists(), oldData => ({
-        ...oldData!,
-        data: oldData?.data?.filter(memory => memory.id !== id) || [],
-      }))
+      queryClient.setQueriesData<MemoryWithId[]>({ queryKey: memoryKeys.lists() }, oldData =>
+        oldData?.filter(memory => memory.id !== id)
+      )
     },
   })
 }
 
-export interface MemorySettings {
-  isEnabled: boolean
-  autoSave: boolean
-  autoSaveFilter: 'low' | 'medium' | 'high'
-  maxOutputTokens: number
-}
+export type MemorySettings = MemorySettingsResponse
 
 const MEMORY_SETTINGS_STALE_TIME = 1000 * 60 * 10 // 10 minutes
 const MEMORY_SETTINGS_GC_TIME = 1000 * 60 * 30 // 30 minutes
@@ -174,7 +164,7 @@ export function useMemorySettings() {
       if (!response.ok) {
         throw new Error('Failed to fetch memory settings')
       }
-      return response.json()
+      return readJson(response, memorySettingsResponseSchema)
     },
     enabled: hasSession,
     staleTime: MEMORY_SETTINGS_STALE_TIME,
@@ -210,7 +200,7 @@ export function useUpdateMemorySettings() {
         throw new Error('Failed to update memory settings')
       }
 
-      return response.json()
+      return readJson(response, memorySettingsResponseSchema)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: memoryKeys.settings() })

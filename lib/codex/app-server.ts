@@ -8,6 +8,14 @@ import type { Writable } from 'node:stream'
 import { asSchema, type FlexibleSchema } from 'ai'
 import * as z from 'zod'
 import {
+  chatgptLoginStartSchema,
+  chatgptStatusSchema,
+  type ChatgptLoginStartResult,
+  type ChatgptPlanUsage,
+  type ChatgptRateLimitWindow,
+  type ChatgptStatus,
+} from '@/types/api/chatgpt'
+import {
   invalidateChatgptStatus,
   isCodexConfigured,
   readCachedChatgptConnected,
@@ -52,23 +60,9 @@ type PendingRequest = {
   timer: NodeJS.Timeout
 }
 
-type AccountRateLimitWindow = {
-  usedPercent: number | null
-  remainingPercent: number | null
-  windowDurationMins: number | null
-  resetsAt: number | null
-}
+type AccountRateLimitWindow = ChatgptRateLimitWindow
 
-type AccountPlanUsage = {
-  limitId: string | null
-  limitName: string | null
-  planType: string | null
-  primary: AccountRateLimitWindow | null
-  secondary: AccountRateLimitWindow | null
-  hasCredits: boolean | null
-  unlimitedCredits: boolean | null
-  creditsBalance: string | null
-}
+type AccountPlanUsage = ChatgptPlanUsage
 
 type JsonRpcServerRequest = {
   id: number
@@ -389,26 +383,7 @@ type SessionConfig = {
   turnTimeoutMs: number
 }
 
-type ChatgptStatus = {
-  available: boolean
-  connected: boolean
-  authMode: 'apiKey' | 'chatgpt' | 'chatgptAuthTokens' | null
-  email: string | null
-  planType: string | null
-  planUsage: AccountPlanUsage | null
-  pendingLoginId: string | null
-  lastLoginError: string | null
-  requiresOpenaiAuth: boolean | null
-}
-
-export type ChatgptLoginStartResult = {
-  authUrl: string | null
-  loginId: string | null
-  status: ChatgptStatus
-  loginMethod?: 'browser' | 'device'
-  deviceCode?: string | null
-  verificationUrl?: string | null
-}
+export type { ChatgptLoginStartResult }
 
 export type CodexTurnUsage = {
   totalTokens: number
@@ -586,44 +561,6 @@ const toDynamicToolContentItems = (value: unknown): DynamicToolCallContentItem[]
 const nullableOf = <T extends z.ZodType>(schema: T) => schema.nullable().catch(null)
 const textOrEmpty = z.string().catch('')
 
-const rateLimitWindowSchema = z.object({
-  usedPercent: nullableOf(z.number()),
-  remainingPercent: nullableOf(z.number()),
-  windowDurationMins: nullableOf(z.number()),
-  resetsAt: nullableOf(z.number()),
-})
-
-const planUsageSchema = z.object({
-  limitId: nullableOf(z.string()),
-  limitName: nullableOf(z.string()),
-  planType: nullableOf(z.string()),
-  primary: nullableOf(rateLimitWindowSchema),
-  secondary: nullableOf(rateLimitWindowSchema),
-  hasCredits: nullableOf(z.boolean()),
-  unlimitedCredits: nullableOf(z.boolean()),
-  creditsBalance: nullableOf(z.string()),
-})
-
-const chatgptStatusSchema = z.object({
-  available: z.boolean().catch(false),
-  connected: z.boolean().catch(false),
-  authMode: nullableOf(z.enum(['apiKey', 'chatgpt', 'chatgptAuthTokens'])),
-  email: nullableOf(z.string()),
-  planType: nullableOf(z.string()),
-  planUsage: nullableOf(planUsageSchema),
-  pendingLoginId: nullableOf(z.string()),
-  lastLoginError: nullableOf(z.string()),
-  requiresOpenaiAuth: nullableOf(z.boolean()),
-})
-
-const chatgptLoginStartSchema = z.object({
-  authUrl: nullableOf(z.string()),
-  loginId: nullableOf(z.string()),
-  status: chatgptStatusSchema.catch(() => chatgptStatusSchema.parse({})),
-  loginMethod: z.enum(['browser', 'device']).optional().catch(undefined),
-  deviceCode: z.string().nullish().catch(undefined),
-  verificationUrl: z.string().nullish().catch(undefined),
-})
 
 const proxyTurnStartSchema = z.object({
   runId: z.string(),

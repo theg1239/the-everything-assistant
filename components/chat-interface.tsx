@@ -33,7 +33,8 @@ import { RateLimitErrorDisplay } from '@/components/rate-limit-error-display'
 import { useOnboarding } from '@/hooks/use-onboarding'
 import { toast } from 'sonner'
 import { readJson } from '@/lib/http'
-import type { UserPreferences, UserPreferencesResponse } from '@/types/preferences'
+import { userPreferencesResponseSchema, type UserPreferences } from '@/types/preferences'
+import { chatDetailResponseSchema, chatTitleResponseSchema } from '@/types/api/chats'
 import ScrollToTopButton from '@/components/scroll-to-top-button'
 import { cn } from '@/lib/utils'
 import { useThrottle } from '@/hooks/use-debounce'
@@ -135,11 +136,6 @@ const legacyToMutableMessage = (message: LegacyMessage): MutableAppMessage => ({
   ...message,
   parts: message.parts ?? [],
 })
-
-interface ChatSummaryResponse {
-  title?: string
-  messages?: LegacyMessage[]
-}
 
 const useViewportHeight = () => {
   const mainRef = useRef<HTMLDivElement>(null)
@@ -614,7 +610,7 @@ function PureChatInterfaceComponent({
       try {
         const response = await fetch('/api/user/preferences')
         if (response.ok) {
-          const data = await readJson<UserPreferencesResponse>(response)
+          const data = await readJson(response, userPreferencesResponseSchema)
           setUserPreferences(data.preferences)
         }
       } catch (error) {
@@ -781,8 +777,8 @@ function PureChatInterfaceComponent({
             try {
               const res = await fetch(`/api/chats/${targetChatId}/title`, { cache: 'no-store' })
               if (res.ok) {
-                const data = await readJson<{ id: string; title: string }>(res)
-                if (data?.title) {
+                const data = await readJson(res, chatTitleResponseSchema)
+                if (data.title) {
                   window.dispatchEvent(
                     new CustomEvent('chatTitleUpdated', {
                       detail: { chatId: targetChatId, title: data.title },
@@ -797,7 +793,7 @@ function PureChatInterfaceComponent({
             try {
               const response = await fetch(`/api/chats/${targetChatId}`)
               if (!response.ok) throw new Error('Failed to load chat metadata')
-              const chatData = await readJson<ChatSummaryResponse>(response)
+              const chatData = await readJson(response, chatDetailResponseSchema)
               if (chatData.title && chatData.title !== 'New Chat') {
                 window.dispatchEvent(
                   new CustomEvent('chatTitleUpdated', {
@@ -1970,10 +1966,8 @@ function PureChatInterfaceComponent({
                 if (!refreshResponse.ok) {
                   throw new Error('Failed to refresh conversation after VTOP data retrieval')
                 }
-                const chatData = await readJson<ChatSummaryResponse>(refreshResponse)
-                if (chatData.messages) {
-                  setUiMessages(legacyMessagesToUiMessages(chatData.messages))
-                }
+                const chatData = await readJson(refreshResponse, chatDetailResponseSchema)
+                setUiMessages(legacyMessagesToUiMessages(chatData.messages))
               } catch (error) {
                 console.warn('Failed to refresh conversation after VTOP data retrieval:', error)
               }

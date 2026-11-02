@@ -7,7 +7,8 @@
 // import { toast } from 'sonner'
 // import { Mail, CalendarClock, Send } from 'lucide-react'
 // import { triggerDailyBriefingWorkflowAction } from '@/app/actions/workflows'
-// import { readJson } from '@/lib/http'
+// import { readApiMessage, readJson } from '@/lib/http'
+// import { sendBriefingResponseSchema } from '@/types/api/mgmt'
 
 // export default function BriefingDispatch() {
 //   const [email, setEmail] = useState('')
@@ -42,35 +43,19 @@
 //       if (email.trim()) payload.email = email.trim()
 //       if (userId.trim()) payload.userId = userId.trim()
 //       if (scheduledAt.trim()) payload.scheduledAt = scheduledAt.trim()
-//       const res = await fetch('/api/(mgmt)/hub/send-briefing', {
+//       const res = await fetch('/api/hub/send-briefing', {
 //         method: 'POST',
 //         headers: { 'Content-Type': 'application/json' },
 //         body: JSON.stringify(payload),
 //       })
-//       const json = await readJson<{
-//         error?: string
-//         user?: { email: string }
-//         briefing?: {
-//           greeting?: string
-//           messages?: number
-//           actions?: number
-//           scheduledAt?: string | null
-//           referenceTime?: string
-//         }
-//       }>(res)
 //       if (!res.ok) {
-//         throw new Error(json.error || 'failed to send briefing')
+//         const { error } = await readApiMessage(res)
+//         throw new Error(error || 'failed to send briefing')
 //       }
-//       setLastResult({
-//         email: json.user?.email ?? '',
-//         greeting: json.briefing?.greeting ?? '',
-//         messages: json.briefing?.messages ?? 0,
-//         actions: json.briefing?.actions ?? 0,
-//         scheduledAt: json.briefing?.scheduledAt ?? null,
-//         referenceTime: json.briefing?.referenceTime ?? new Date().toISOString(),
-//       })
+//       const json = await readJson(res, sendBriefingResponseSchema)
+//       setLastResult({ email: json.user.email, ...json.briefing })
 //       toast.success(
-//         json.briefing?.scheduledAt
+//         json.briefing.scheduledAt
 //           ? `briefing scheduled for ${json.briefing.scheduledAt}`
 //           : 'briefing email dispatched'
 //       )

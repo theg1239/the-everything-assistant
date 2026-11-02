@@ -1,41 +1,28 @@
-import type { TokenUsage } from '@/prisma/generated/client'
+import type * as z from 'zod'
 import type {
-  getTokenUsageAllTimeSummary,
-  getTokenUsageLifetimeBuckets,
-  getTokenUsageSummary,
-} from '@/lib/db'
-import type {
-  getDetailedUsageStats,
-  getMessagesInLast30Minutes,
-  getToolCallStats,
-  getTotalUsers,
-} from '@/lib/stats'
+  chatViewerDataSchema,
+  detailedUsageStatsSchema,
+  lifetimeBucketSchema,
+  statsResponseSchema,
+  tokenUsageAllTimeSummarySchema,
+  tokenUsageSummarySchema,
+  usageLogSchema,
+  usageResponseSchema,
+} from '@/types/api/mgmt'
 
 /** A `TokenUsage` row as it arrives over JSON from `/api/usage` (dates serialized). */
-export type UsageLog = Omit<TokenUsage, 'createdAt' | 'meta'> & { createdAt: string }
+export type UsageLog = z.infer<typeof usageLogSchema>
 
-export type TokenUsageSummary = Awaited<ReturnType<typeof getTokenUsageSummary>>
-export type TokenUsageAllTimeSummary = Awaited<ReturnType<typeof getTokenUsageAllTimeSummary>>
-export type LifetimeBucket = Awaited<ReturnType<typeof getTokenUsageLifetimeBuckets>>[number]
-export type DetailedUsageStats = Awaited<ReturnType<typeof getDetailedUsageStats>>
+export type TokenUsageSummary = z.infer<typeof tokenUsageSummarySchema>
+export type TokenUsageAllTimeSummary = z.infer<typeof tokenUsageAllTimeSummarySchema>
+export type LifetimeBucket = z.infer<typeof lifetimeBucketSchema>
+export type DetailedUsageStats = z.infer<typeof detailedUsageStatsSchema>
 
 /** Response body of `GET /api/usage`. */
-export interface UsageResponse {
-  recent: UsageLog[]
-  summary: TokenUsageSummary
-  summaryAllTime: TokenUsageAllTimeSummary
-  lifetimeBuckets: LifetimeBucket[]
-  detailedStats: DetailedUsageStats
-}
+export type UsageResponse = z.infer<typeof usageResponseSchema>
 
 /** Response body of `GET /api/stats`. */
-export interface StatsResponse {
-  totalUsers: Awaited<ReturnType<typeof getTotalUsers>>
-  messagesInLast30Minutes: Awaited<ReturnType<typeof getMessagesInLast30Minutes>>
-  toolCallStats: Awaited<ReturnType<typeof getToolCallStats>>
-  /** Not returned by `/api/stats` today; the statistics panel renders it when present. */
-  detailedStats?: DetailedUsageStats
-}
+export type StatsResponse = z.infer<typeof statsResponseSchema>
 
 export type MgmtUser = {
   id: string
@@ -43,18 +30,7 @@ export type MgmtUser = {
   name?: string | null
 }
 
-export type ChatViewerMessage = {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  createdAt: string
-}
-
-export type ChatViewerData = {
-  chatId: string
-  user: { id: string; name: string | null; email: string | null } | null
-  messages: ChatViewerMessage[]
-}
+export type ChatViewerData = z.infer<typeof chatViewerDataSchema>
 
 export type BroadcastSlideField = 'title' | 'text' | 'image'
 

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, memo, useRef, useEffect } from 'react'
+import React, { useState, memo, useRef, useEffect, useSyncExternalStore } from 'react'
 import ReactDOM from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -121,6 +121,135 @@ interface ArtifactDisplayProps {
 
 type CliTable = UnknownRecord & { headers: unknown[]; rows: unknown[] }
 
+const subscribeNoop = () => () => {}
+
+/**
+ * False during SSR and hydration, true afterwards (and immediately for client-only mounts).
+ * Output that depends on the current time or the viewer's time zone is rendered from fixed
+ * inputs until then, so the hydration render matches the server HTML.
+ */
+const useIsHydrated = () =>
+  useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false
+  )
+
+let clientNow: number | undefined
+
+/** `Date.now()`, cached for up to a minute so repeated snapshot reads agree. */
+const getClientNow = () => {
+  const now = Date.now()
+  if (clientNow === undefined || now - clientNow > 60_000) clientNow = now
+  return clientNow
+}
+
+/** The current time for render output; `null` during SSR and hydration. */
+const useNow = (): number | null => useSyncExternalStore(subscribeNoop, getClientNow, () => null)
+
+/** Time zone used before hydration (the server's zone is unrelated to the viewer's). */
+const PRE_HYDRATION_TIME_ZONE = 'UTC'
+
+/**
+ * Relative age ("3 days ago") of a timestamp. `now` is `null` until hydration, when the
+ * absolute date is shown instead (server and client clocks differ).
+ */
+const formatTimeAgo = (dateString: unknown, now: number | null) => {
+  try {
+    const date = toDate(dateString)
+    if (now === null) {
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: PRE_HYDRATION_TIME_ZONE,
+      })
+    }
+    const diffMs = now - date.getTime()
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+    if (diffDays === 0) return 'Today'
+    if (diffDays === 1) return 'Yesterday'
+    if (diffDays < 30) return `${diffDays} days ago`
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`
+    return `${Math.floor(diffDays / 365)} years ago`
+  } catch {
+    return 'Unknown'
+  }
+}
+
+/** Small deterministic string hash (FNV-1a), for stable pseudo-random display values. */
+const hashString = (value: string) => {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return hash >>> 0
+}
+
+/** Profile key/value list; on mobile only the first five fields show until expanded. */
+const VTOPProfileFields = ({
+  profileData,
+  isMobile,
+}: {
+  profileData: UnknownRecord
+  isMobile: boolean
+}) => {
+  const [showAllKeys, setShowAllKeys] = useState(false)
+  const visibleKeys = isMobile ? Object.keys(profileData).slice(0, 5) : Object.keys(profileData)
+  const hiddenKeys = isMobile ? Object.keys(profileData).slice(5) : []
+
+  const keysToRender = showAllKeys ? Object.keys(profileData) : visibleKeys
+
+  return (
+    <div className="space-y-3">
+      {keysToRender.map(key => {
+        const value = profileData[key]
+        if (value === null || value === undefined || value === '') return null
+
+        const formattedKey = key
+          .replace(/([A-Z])/g, ' $1')
+          .replace(/^./, str => str.toUpperCase())
+          .replace(/Id$/, 'ID')
+          .replace(/Cgpa/, 'CGPA')
+          .replace(/Gpa/, 'GPA')
+
+        return (
+          <div key={key} className="flex items-start gap-3">
+            <User className="h-3 w-3 text-blue-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <span className="text-xs font-medium text-card-foreground block">{formattedKey}</span>
+              <span className="text-xs text-muted-foreground break-words">{String(value)}</span>
+            </div>
+          </div>
+        )
+      })}
+
+      {isMobile && hiddenKeys.length > 0 && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowAllKeys(!showAllKeys)}
+          className="w-full text-xs mt-2"
+        >
+          {showAllKeys ? (
+            <>
+              <ChevronUp className="h-3 w-3 mr-1" />
+              Show Less
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-3 w-3 mr-1" />
+              Show {hiddenKeys.length} More Fields
+            </>
+          )}
+        </Button>
+      )}
+    </div>
+  )
+}
+
 const VTOPDataCard = ({
   vtopData,
   onLoginClick,
@@ -145,6 +274,7 @@ const VTOPDataCard = ({
   const CUSTOM_RENDER_COMMANDS = ['attendance']
   const isMobile = useMediaQuery('(max-width: 640px)')
   const [expandedSubject, setExpandedSubject] = useState<number | null>(null)
+  const [showRawData, setShowRawData] = useState(false)
 
   const formatKeyLabel = (label?: string) =>
     (label || '')
@@ -843,64 +973,7 @@ const VTOPDataCard = ({
         }
 
         if (profileData && Object.keys(profileData).length > 0) {
-          const [showAllKeys, setShowAllKeys] = useState(false)
-          const visibleKeys = isMobile
-            ? Object.keys(profileData).slice(0, 5)
-            : Object.keys(profileData)
-          const hiddenKeys = isMobile ? Object.keys(profileData).slice(5) : []
-
-          const keysToRender = showAllKeys ? Object.keys(profileData) : visibleKeys
-
-          return (
-            <div className="space-y-3">
-              {keysToRender.map(key => {
-                const value = profileData[key]
-                if (value === null || value === undefined || value === '') return null
-
-                const formattedKey = key
-                  .replace(/([A-Z])/g, ' $1')
-                  .replace(/^./, str => str.toUpperCase())
-                  .replace(/Id$/, 'ID')
-                  .replace(/Cgpa/, 'CGPA')
-                  .replace(/Gpa/, 'GPA')
-
-                return (
-                  <div key={key} className="flex items-start gap-3">
-                    <User className="h-3 w-3 text-blue-400 shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <span className="text-xs font-medium text-card-foreground block">
-                        {formattedKey}
-                      </span>
-                      <span className="text-xs text-muted-foreground break-words">
-                        {String(value)}
-                      </span>
-                    </div>
-                  </div>
-                )
-              })}
-
-              {isMobile && hiddenKeys.length > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowAllKeys(!showAllKeys)}
-                  className="w-full text-xs mt-2"
-                >
-                  {showAllKeys ? (
-                    <>
-                      <ChevronUp className="h-3 w-3 mr-1" />
-                      Show Less
-                    </>
-                  ) : (
-                    <>
-                      <ChevronDown className="h-3 w-3 mr-1" />
-                      Show {hiddenKeys.length} More Fields
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
-          )
+          return <VTOPProfileFields profileData={profileData} isMobile={isMobile} />
         }
         break
       }
@@ -920,7 +993,6 @@ const VTOPDataCard = ({
   }
 
   const renderVTOPContent = () => {
-    const [showRawData, setShowRawData] = useState(false)
     if (success === false || error) {
       let errorMessage =
         asString(error) || asString(message) || 'An error occurred while retrieving VTOP data'
@@ -1784,6 +1856,7 @@ const ErrorCard = ({ errorData }: { errorData: unknown }) => {
   const message = asString(errorRecord.message)
   const availableDateRange = errorRecord.availableDateRange
   const isMobile = useMediaQuery('(max-width: 640px)')
+  const timeZone = useIsHydrated() ? undefined : PRE_HYDRATION_TIME_ZONE
 
   const getErrorMessage = () => {
     if (message && message.includes('mess menu')) {
@@ -1814,11 +1887,13 @@ const ErrorCard = ({ errorData }: { errorData: unknown }) => {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
+        timeZone,
       })
       const endFormatted = endDate.toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
+        timeZone,
       })
       return `${startFormatted} to ${endFormatted}`
     } catch {
@@ -1885,6 +1960,7 @@ const RedditKnowledgeCard = ({ data }: { data: unknown }) => {
   const [showAllSources, setShowAllSources] = useState(false)
   const [showAllTrending, setShowAllTrending] = useState(false)
   const isMobile = useMediaQuery('(max-width: 640px)')
+  const now = useNow()
 
   const record = asRecord(data)
   const response = asString(record.response) ?? ''
@@ -1895,8 +1971,12 @@ const RedditKnowledgeCard = ({ data }: { data: unknown }) => {
   const note = asText(record.note)
   const isBroadQuery = Boolean(record.isBroadQuery)
 
+  // No confidence reported but sources exist: show a 60-80% placeholder, derived from the
+  // response so it's stable across renders and identical on server and client.
   const displayConfidence =
-    confidence === 0 && sources.length > 0 ? Math.floor(Math.random() * 21) + 60 : confidence
+    confidence === 0 && sources.length > 0
+      ? (hashString(`${response}|${sources.length}`) % 21) + 60
+      : confidence
 
   const cleanResponse = (text: string) => {
     if (!text) return text
@@ -1921,23 +2001,6 @@ const RedditKnowledgeCard = ({ data }: { data: unknown }) => {
     if (conf >= 60) return 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800'
     if (conf >= 40) return 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800'
     return 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800'
-  }
-
-  const formatTimeAgo = (dateString: unknown) => {
-    try {
-      const date = toDate(dateString)
-      const now = new Date()
-      const diffMs = now.getTime() - date.getTime()
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-
-      if (diffDays === 0) return 'Today'
-      if (diffDays === 1) return 'Yesterday'
-      if (diffDays < 30) return `${diffDays} days ago`
-      if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`
-      return `${Math.floor(diffDays / 365)} years ago`
-    } catch {
-      return 'Unknown'
-    }
   }
 
   const displaySources = showAllSources ? sources : sources.slice(0, 6)
@@ -2048,7 +2111,7 @@ const RedditKnowledgeCard = ({ data }: { data: unknown }) => {
                             </div>
                           )}
                         <span className="text-xs text-muted-foreground">
-                          {formatTimeAgo(source.created)}
+                          {formatTimeAgo(source.created, now)}
                         </span>
                       </div>
 
@@ -2153,7 +2216,7 @@ const RedditKnowledgeCard = ({ data }: { data: unknown }) => {
                           r/{asText(post.subreddit)}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          {formatTimeAgo(post.created)}
+                          {formatTimeAgo(post.created, now)}
                         </span>
                       </div>
 
@@ -2220,28 +2283,12 @@ const formatStatCount = (value: unknown) =>
 const RedditOverviewCard = ({ data }: { data: unknown }) => {
   const [showAllTrending, setShowAllTrending] = useState(false)
   const isMobile = useMediaQuery('(max-width: 640px)')
+  const now = useNow()
 
   const record = asRecord(data)
   const trending = asArray(record.trending).map(asRecord)
   const stats = asRecord(record.stats)
   const summary = asText(record.summary) ?? ''
-
-  const formatTimeAgo = (dateString: unknown) => {
-    try {
-      const date = toDate(dateString)
-      const now = new Date()
-      const diffMs = now.getTime() - date.getTime()
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-
-      if (diffDays === 0) return 'Today'
-      if (diffDays === 1) return 'Yesterday'
-      if (diffDays < 30) return `${diffDays} days ago`
-      if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`
-      return `${Math.floor(diffDays / 365)} years ago`
-    } catch {
-      return 'Unknown'
-    }
-  }
 
   const displayTrending = showAllTrending ? trending : trending.slice(0, 5)
 
@@ -2289,7 +2336,7 @@ const RedditOverviewCard = ({ data }: { data: unknown }) => {
               {Boolean(stats.lastUpdated) && (
                 <div className="text-center p-2 sm:p-3 bg-muted/30 rounded-md">
                   <div className="text-xs sm:text-sm font-bold text-foreground">
-                    {formatTimeAgo(stats.lastUpdated)}
+                    {formatTimeAgo(stats.lastUpdated, now)}
                   </div>
                   <div className="text-xs text-muted-foreground">Updated</div>
                 </div>
@@ -2347,7 +2394,7 @@ const RedditOverviewCard = ({ data }: { data: unknown }) => {
                           r/{asText(post.subreddit)}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          {formatTimeAgo(post.created)}
+                          {formatTimeAgo(post.created, now)}
                         </span>
                       </div>
 
@@ -2520,6 +2567,7 @@ const CampusInfoCard = ({ info: rawInfo }: { info: unknown }) => {
 
 const PlacementInfoCard = ({ data: rawData }: { data: unknown }) => {
   const [showDetails, setShowDetails] = useState(false)
+  const now = useNow()
   const raw = asRecord(rawData)
   const placementData = raw.data
   const campus = asText(raw.campus)
@@ -2567,7 +2615,10 @@ const PlacementInfoCard = ({ data: rawData }: { data: unknown }) => {
     stats['Total Offers'] !== '0' &&
     (typeof source === 'string' || isUnknownArray(source)) &&
     source.includes('campus')
-  const academicYear = `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`
+  // The year comes from the viewer's clock, so it's left out of the server/hydration render.
+  const currentYear = now === null ? null : new Date(now).getFullYear()
+  const academicYearSuffix =
+    currentYear === null ? '' : ` for ${currentYear}-${currentYear + 1} Academic Year`
 
   return (
     <div className="space-y-6">
@@ -2596,8 +2647,8 @@ const PlacementInfoCard = ({ data: rawData }: { data: unknown }) => {
                   </div>
                   <p className="text-muted-foreground">
                     {hasCampusData
-                      ? `Campus-specific placement statistics for ${academicYear} Academic Year`
-                      : `Placement statistics for ${academicYear} Academic Year`}
+                      ? `Campus-specific placement statistics${academicYearSuffix}`
+                      : `Placement statistics${academicYearSuffix}`}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">

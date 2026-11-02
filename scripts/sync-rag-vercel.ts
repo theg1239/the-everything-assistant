@@ -8,7 +8,7 @@ import { ragEmbeddingDim, ragEmbeddingModelId } from '../lib/rag-config'
 import { createOpenAI } from '@ai-sdk/openai'
 import { embed } from 'ai'
 
-import { shouldSyncRag } from './rag-sync-policy'
+import { ragSyncSkipReasons } from './rag-sync-policy'
 
 async function assertCurrentHead(sha: string, branch: string) {
   const response = await fetch(
@@ -24,8 +24,9 @@ async function assertCurrentHead(sha: string, branch: string) {
 }
 
 async function main() {
-  if (!shouldSyncRag(process.env)) {
-    console.log('RAG sync skipped: not the designated Vercel production Git build')
+  const skipReasons = ragSyncSkipReasons(process.env)
+  if (skipReasons.length) {
+    console.log(`RAG sync skipped; identity checks not met: ${skipReasons.join(', ')}`)
     return
   }
   const sha = process.env.VERCEL_GIT_COMMIT_SHA

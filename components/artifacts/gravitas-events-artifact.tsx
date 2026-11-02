@@ -44,6 +44,7 @@ import {
   toDate,
   type TextValue,
 } from './artifact-data'
+import { useHydrationSafeField } from '@/lib/hydration-safe'
 
 interface EventSlot {
   id: string
@@ -524,7 +525,11 @@ const SeatsInfo: React.FC<{ seats: SeatsSummary | undefined }> = ({ seats }) => 
 
 const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data: rawData }) => {
   const data = useMemo(() => parseGravitasEventsData(rawData), [rawData])
-  const [searchQuery, setSearchQuery] = useState(data.filters?.searchQuery || '')
+  const {
+    id: searchInputId,
+    value: searchQuery,
+    setValue: setSearchQuery,
+  } = useHydrationSafeField(data.filters?.searchQuery || '')
   const [typeFilter, setTypeFilter] = useState(data.filters?.eventType || 'all')
   const [categoryFilter, setCategoryFilter] = useState(data.filters?.category || 'all')
   const [seatsByEvent, setSeatsByEvent] = useState<Record<string, SeatsSummary>>({})
@@ -820,6 +825,7 @@ const GravitasEventsArtifact: React.FC<GravitasEventsArtifactProps> = ({ data: r
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
+                    id={searchInputId}
                     placeholder="Search events..."
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}

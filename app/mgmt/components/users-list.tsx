@@ -7,6 +7,7 @@ import { RefreshCw, Search, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { readJson } from '@/lib/http'
 import { errorMessage, type MgmtUser } from '../types'
+import { useHydrationSafeField } from '@/lib/hydration-safe'
 
 interface UsersListProps {
   onSelectUser?: (user: MgmtUser) => void
@@ -19,7 +20,7 @@ export default function UsersList({
   onResetRateLimits,
   resettingUserId,
 }: UsersListProps) {
-  const [query, setQuery] = useState('')
+  const { id: queryInputId, value: query, setValue: setQuery } = useHydrationSafeField()
   const [users, setUsers] = useState<MgmtUser[]>([])
   const [loading, setLoading] = useState(false)
   const [page, setPage] = useState(0)
@@ -83,6 +84,7 @@ export default function UsersList({
     <div className="space-y-3">
       <div className="flex gap-2">
         <Input
+          id={queryInputId}
           value={query}
           onChange={e => setQuery(e.target.value)}
           placeholder="search by email or name"

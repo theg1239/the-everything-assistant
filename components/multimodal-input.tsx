@@ -23,7 +23,7 @@ import type { Attachment } from '@/types/attachment'
 import { AttachmentPreview } from '@/components/attachment-preview'
 import type { MCPClientConfig } from '@/lib/mcp-config'
 import { useStore } from 'zustand'
-import type { ChatInputStore } from '@/lib/stores/chat-input-store'
+import { CHAT_COMPOSER_INPUT_ID, type ChatInputStore } from '@/lib/stores/chat-input-store'
 
 type PdfLibModule = typeof import('pdf-lib')
 type Html2CanvasModule = typeof import('html2canvas')
@@ -883,6 +883,7 @@ const PureMultimodalInput = ({
               </div>
             )}
             <Textarea
+              id={CHAT_COMPOSER_INPUT_ID}
               ref={textareaRef}
               value={safeInput}
               onChange={handleInputChange}

@@ -22,6 +22,7 @@ import {
   ArrowRight,
   LucideIcon
 } from 'lucide-react'
+import { useHydrationSafeField } from '@/lib/hydration-safe'
 
 // Popular courses to show with paper counts
 const POPULAR_COURSES = [
@@ -206,7 +207,11 @@ const DrawerCourseCard = memo(function DrawerCourseCard({ course, paperData, onC
 export function PastPapersClient() {
   const router = useRouter()
   const [paperCounts, setPaperCounts] = useState<Record<string, PaperCount>>({})
-  const [searchQuery, setSearchQuery] = useState('')
+  const {
+    id: searchInputId,
+    value: searchQuery,
+    setValue: setSearchQuery,
+  } = useHydrationSafeField()
   const [isSearching, setIsSearching] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false)
@@ -332,6 +337,7 @@ export function PastPapersClient() {
           <div className="relative group">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30 group-focus-within:text-white/50 transition-colors" />
             <input
+              id={searchInputId}
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}

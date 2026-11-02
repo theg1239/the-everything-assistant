@@ -27,6 +27,7 @@ import { PaperSearchProgress } from './paper-search-progress'
 import { useVTOP } from '../contexts/vtop-context'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { asRecord, readString, readText, type UnknownRecord } from '@/components/narrow'
+import { useHydrationSafeField } from '@/lib/hydration-safe'
 
 /** Artifact renderers (~140 KB) load only when a tool result renders one; SSR stays on for history. */
 const ArtifactDisplay = dynamic(() => import('./artifact-display').then(mod => mod.ArtifactDisplay))
@@ -919,7 +920,11 @@ const ToolCallResultsSummary = ({
   maximizedItem,
   setMaximizedItem,
 }: ToolCallDisplayProps) => {
-  const [companySearch, setCompanySearch] = React.useState('')
+  const {
+    id: companySearchId,
+    value: companySearch,
+    setValue: setCompanySearch,
+  } = useHydrationSafeField()
 
   const handleSearch = () => {
     if (onPlacementSearch && companySearch.trim()) {
@@ -1371,6 +1376,7 @@ const ToolCallResultsSummary = ({
               {artifact.type === 'placements' && onPlacementSearch && (
                 <div className="mb-4 flex items-center gap-2 px-1">
                   <Input
+                    id={companySearchId}
                     type="search"
                     placeholder="Search by company name..."
                     value={companySearch}

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
 import { readJson } from '@/lib/http'
 import type { MgmtUser } from '../types'
+import { useHydrationSafeField } from '@/lib/hydration-safe'
 
 type UserSummary = MgmtUser
 type UserMessage = { id: string; role: 'user' | 'assistant'; content: string; createdAt: string }
@@ -16,7 +17,7 @@ interface UserMessagesProps {
 }
 
 export default function UserMessages({ user, onClose }: UserMessagesProps) {
-  const [q, setQ] = useState('')
+  const { id: queryInputId, value: q, setValue: setQ } = useHydrationSafeField()
   const [messages, setMessages] = useState<UserMessage[]>([])
   const [loading, setLoading] = useState(false)
   const [offset, setOffset] = useState(0)
@@ -65,6 +66,7 @@ export default function UserMessages({ user, onClose }: UserMessagesProps) {
 
       <div className="flex gap-2">
         <Input
+          id={queryInputId}
           value={q}
           onChange={e => setQ(e.target.value)}
           placeholder="search message text"

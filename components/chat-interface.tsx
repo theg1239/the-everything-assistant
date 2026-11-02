@@ -54,7 +54,8 @@ import { useChatStore } from '@/hooks/use-chat-store'
 import { useMiniPlayerStore, formatTime } from '@/lib/stores/useMiniPlayerStore'
 import type { Attachment } from '@/types/attachment'
 import { getEnabledMCPConfigs } from '@/lib/mcp-config'
-import { createChatInputStore } from '@/lib/stores/chat-input-store'
+import { CHAT_COMPOSER_INPUT_ID, createChatInputStore } from '@/lib/stores/chat-input-store'
+import { readPreHydrationValue } from '@/lib/hydration-safe'
 
 // Rarely-opened, client-only overlays: loaded on first open instead of with the chat route.
 const loadHub = () => import('@/components/hub/hub')
@@ -287,7 +288,10 @@ function PureChatInterfaceComponent({
 }: ChatInterfaceProps) {
   // Composer text lives in a per-instance store (subscribed by MultimodalInput) so typing doesn't
   // re-render this whole tree; read it imperatively via `inputStore.getState().input`.
-  const [inputStore] = useState(createChatInputStore)
+  // Seed from the server-rendered composer so text typed before hydration survives.
+  const [inputStore] = useState(() =>
+    createChatInputStore(readPreHydrationValue(CHAT_COMPOSER_INPUT_ID))
+  )
   const setInput = useStore(inputStore, state => state.setInput)
   const showFullChat = useChatStore(state => state.showFullChat)
   const setShowFullChat = useChatStore(state => state.setShowFullChat)

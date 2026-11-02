@@ -11,6 +11,9 @@ export interface ChatInputState {
 
 export type ChatInputStore = StoreApi<ChatInputState>
 
+/** DOM id of the composer textarea; used to recover text typed before hydration. */
+export const CHAT_COMPOSER_INPUT_ID = 'chat-composer-input'
+
 export const createChatInputStore = (initialInput = ''): ChatInputStore =>
   createStore<ChatInputState>()(set => ({
     input: initialInput,

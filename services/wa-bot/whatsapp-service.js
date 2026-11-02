@@ -2,6 +2,24 @@ const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js')
 const qrcode = require('qrcode-terminal')
 const EventEmitter = require('events')
 
+// Max concurrent WhatsApp Web (puppeteer) lookups when resolving contacts for chat history.
+const CONTACT_LOOKUP_CONCURRENCY = 5
+
+/** Maps items with at most `limit` calls of `fn` in flight; results keep input order. */
+async function mapWithConcurrency(items, limit, fn) {
+  const results = new Array(items.length)
+  let nextIndex = 0
+  const worker = async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex++
+      results[index] = await fn(items[index], index)
+    }
+  }
+  const workerCount = Math.min(Math.max(1, limit), items.length)
+  await Promise.all(Array.from({ length: workerCount }, worker))
+  return results
+}
+
 class WhatsAppService extends EventEmitter {
   constructor(options = {}) {
     super()
@@ -535,8 +553,10 @@ class WhatsAppService extends EventEmitter {
 
     try {
       const normalizedContactId = this.getNormalizedContactId(message)
-      const contact = await this.resolveContact(message, normalizedContactId)
-      const chat = await message.getChat()
+      const [contact, chat] = await Promise.all([
+        this.resolveContact(message, normalizedContactId),
+        message.getChat(),
+      ])
       const messageBody = (message.body || '').trim()
 
       const selfNumber = this.client?.info?.wid?.user
@@ -621,7 +641,7 @@ class WhatsAppService extends EventEmitter {
 
         if (!isBotResponse) {
           console.log(`🎯 Processing command from ${messageType}: ${messageBody}`)
-          await this.handleCommand(messageData, message)
+          await this.handleCommand(messageData, message, chat)
         } else {
           console.log(`🚫 Skipping bot's own response: ${messageBody.substring(0, 50)}...`)
         }
@@ -631,7 +651,7 @@ class WhatsAppService extends EventEmitter {
     }
   }
 
-  async handleCommand(messageData, originalMessage) {
+  async handleCommand(messageData, originalMessage, resolvedChat = null) {
     const { body, from, fromName, chatId, isGroup } = messageData
     const command = body.toLowerCase().split(' ')[0]
     const args = body.slice(command.length).trim()
@@ -640,8 +660,11 @@ class WhatsAppService extends EventEmitter {
 
     console.log(`🤖 Processing command: ${command} from ${fromName}`)
 
-    const originalChat = await originalMessage.getChat()
-    const userChat = await this.getUserPersonalChat(from)
+    // Reuse the chat already fetched by handleIncomingMessage; the personal-chat lookup is independent.
+    const [originalChat, userChat] = await Promise.all([
+      resolvedChat ?? originalMessage.getChat(),
+      this.getUserPersonalChat(from),
+    ])
 
     if (!userChat) {
       console.error(`❌ Could not get personal chat for ${from}`)
@@ -675,10 +698,13 @@ class WhatsAppService extends EventEmitter {
         break
 
       case '!help':
-        if (isGroup) {
-          await this.sendMessageToChat(originalChat, `sent help info to ${fromName} in dm`)
-        }
-        await this.sendHelpMessage(userChat)
+        // Different chats, and sendMessageToChat never throws, so send both at once.
+        await Promise.all([
+          isGroup
+            ? this.sendMessageToChat(originalChat, `sent help info to ${fromName} in dm`)
+            : null,
+          this.sendHelpMessage(userChat),
+        ])
         break
 
       case '!status':
@@ -733,7 +759,8 @@ class WhatsAppService extends EventEmitter {
         `📚 Found ${conversationHistory.length} messages in conversation history for ${userName}`
       )
 
-      await this.sendTypingToChat(originalChat)
+      // Typing indicator is cosmetic and sendTypingToChat swallows errors: don't block the AI request on it.
+      void this.sendTypingToChat(originalChat)
 
       const startTime = Date.now()
 
@@ -784,11 +811,13 @@ class WhatsAppService extends EventEmitter {
       const json = await res.json()
       const linkMsg = `🔗 VTOP secure link\n\nTap: ${json.link}\n\nExpires in ~10 minutes. After approving, come back here and run your VTOP command (e.g., attendance).`
 
-      if (messageData.isGroup) {
-        await this.sendMessageToChat(originalChat, `sent a secure VTOP link to ${userName} in dm`)
-      }
-
-      await this.sendMessageToChat(userChat, linkMsg)
+      // Different chats, and sendMessageToChat never throws, so send both at once.
+      await Promise.all([
+        messageData.isGroup
+          ? this.sendMessageToChat(originalChat, `sent a secure VTOP link to ${userName} in dm`)
+          : null,
+        this.sendMessageToChat(userChat, linkMsg),
+      ])
     } catch (err) {
       console.error('handleLinkVtopCommand error', err)
       await this.sendMessageToChat(
@@ -856,7 +885,8 @@ class WhatsAppService extends EventEmitter {
         limitOverride: sanitizedLimit,
       })
 
-      await this.sendTypingToChat(originalChat)
+      // Typing indicator is cosmetic and sendTypingToChat swallows errors: run it alongside the history fetch.
+      void this.sendTypingToChat(originalChat)
 
       const defaultLimit = 150
       const maxAutoLimit = 800
@@ -966,8 +996,8 @@ Keep the response concise but informative.`
 
       const chronologicalMessages = messages.slice().reverse()
 
-      const processedMessages = []
-      const contactCache = new Map()
+      // Pass 1 (sync): filter and format, keeping the first maxCount usable messages in order.
+      const candidates = []
       for (const message of chronologicalMessages) {
         if (message.isStatus || message.type === 'notification') {
           continue
@@ -996,34 +1026,66 @@ Keep the response concise but informative.`
         }
 
         const normalizedId = this.getNormalizedContactId(message)
-        const contact = await this.resolveContact(message, normalizedId)
-        const senderNumber =
-          contact?.id?.user ||
-          contact?.userid ||
-          this.extractUserFromId(normalizedId) ||
-          message.from ||
-          'unknown'
-        const senderName =
-          contact?.pushname ||
-          contact?.name ||
-          (message.fromMe ? this.client?.info?.pushname || 'Bot' : senderNumber)
-
-        processedMessages.push({
-          sender: senderName,
-          senderNumber,
-          text: messageText,
-          timestamp: timestamp.toLocaleString(),
-          isFromMe: message.fromMe,
+        candidates.push({
+          message,
+          normalizedId,
+          messageText,
+          timestamp,
+          // resolveContact depends only on the sender id and fromMe, so one lookup per sender suffices.
+          contactKey: normalizedId
+            ? `${message.fromMe ? 'me' : 'other'}:${normalizedId}`
+            : `message:${candidates.length}`,
         })
 
-        if (processedMessages.length >= maxCount) {
+        if (candidates.length >= maxCount) {
           break
         }
       }
 
-      if (processedMessages.length === 0) {
+      if (candidates.length === 0) {
         return []
       }
+
+      // Pass 2: resolve each distinct sender once, a few at a time (was one sequential lookup per message).
+      const firstCandidateByKey = new Map()
+      for (const candidate of candidates) {
+        if (!firstCandidateByKey.has(candidate.contactKey)) {
+          firstCandidateByKey.set(candidate.contactKey, candidate)
+        }
+      }
+      const uniqueCandidates = [...firstCandidateByKey.values()]
+      const resolvedContacts = await mapWithConcurrency(
+        uniqueCandidates,
+        CONTACT_LOOKUP_CONCURRENCY,
+        ({ message, normalizedId }) => this.resolveContact(message, normalizedId)
+      )
+      const contactCache = new Map(
+        uniqueCandidates.map((candidate, index) => [candidate.contactKey, resolvedContacts[index]])
+      )
+
+      const processedMessages = candidates.map(
+        ({ message, normalizedId, messageText, timestamp, contactKey }) => {
+          const contact = contactCache.get(contactKey)
+          const senderNumber =
+            contact?.id?.user ||
+            contact?.userid ||
+            this.extractUserFromId(normalizedId) ||
+            message.from ||
+            'unknown'
+          const senderName =
+            contact?.pushname ||
+            contact?.name ||
+            (message.fromMe ? this.client?.info?.pushname || 'Bot' : senderNumber)
+
+          return {
+            sender: senderName,
+            senderNumber,
+            text: messageText,
+            timestamp: timestamp.toLocaleString(),
+            isFromMe: message.fromMe,
+          }
+        }
+      )
 
       console.log(`📊 Retrieved ${processedMessages.length} messages for context analysis`)
       return processedMessages
@@ -1097,8 +1159,11 @@ Keep the response concise but informative.`
       if (reasoningText.trim()) {
         await this.sendMessageToChat(originalChat, formattedResponse)
       } else if (isLongResponse && messageData.isGroup && !isBotOwner) {
-        await this.sendMessageToChat(originalChat, `sent a detailed response in dm`)
-        await this.sendMessageToChat(userChat, formattedResponse)
+        // Different chats, and sendMessageToChat never throws, so send both at once.
+        await Promise.all([
+          this.sendMessageToChat(originalChat, `sent a detailed response in dm`),
+          this.sendMessageToChat(userChat, formattedResponse),
+        ])
       } else {
         await this.sendMessageToChat(originalChat, formattedResponse)
       }

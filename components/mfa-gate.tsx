@@ -2,7 +2,8 @@
 
 import dynamic from 'next/dynamic'
 import { useSession } from 'next-auth/react'
-import { MFAProvider, useMFA } from '@/contexts/mfa-context'
+import { useEffect } from 'react'
+import { MFAProvider, preloadMfaStatus, useMFA } from '@/contexts/mfa-context'
 
 /** Static splash shown while the session or the challenge bundle is loading. */
 function MFASplash() {
@@ -32,6 +33,12 @@ const MFAChallenge = dynamic(
 function MFAGateInner({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession()
   const { requiresMFA, isMFAVerified } = useMFA()
+  const needsChallenge = Boolean(session?.user) && requiresMFA && !isMFAVerified
+
+  // Fetch the MFA method while the challenge bundle downloads, rather than after it mounts.
+  useEffect(() => {
+    if (needsChallenge) preloadMfaStatus()
+  }, [needsChallenge])
 
   // With the server session seeded into SessionProvider this is resolved during SSR.
   if (status === 'loading') {

@@ -4,7 +4,12 @@ import React, { createContext, useContext, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { useSession } from 'next-auth/react'
 import { usePathname, useRouter } from 'next/navigation'
-import { isMfaStepUpRequired } from '@/types/api/mfa'
+import { readJson } from '@/lib/http'
+import {
+  isMfaStepUpRequired,
+  mfaStatusResponseSchema,
+  type MfaStatusResponse,
+} from '@/types/api/mfa'
 
 interface MFAContextType {
   /** The signed-in user has MFA enabled. */
@@ -26,6 +31,41 @@ interface MFAContextType {
    * once. If the user cancels, the original 403 response is returned.
    */
   fetchWithStepUp: (input: string | URL, init?: RequestInit) => Promise<Response>
+}
+
+async function fetchMfaStatus(): Promise<MfaStatusResponse> {
+  const response = await fetch('/api/user/mfa')
+  if (!response.ok) throw new Error('Failed to fetch MFA status')
+  return readJson(response, mfaStatusResponseSchema)
+}
+
+/** How long a preloaded status may wait for the challenge to mount and take it. */
+const MFA_STATUS_PRELOAD_TTL_MS = 10_000
+
+let preloadedMfaStatus: { request: Promise<MfaStatusResponse>; startedAt: number } | null = null
+
+/**
+ * Starts `GET /api/user/mfa` ahead of the (lazily loaded) challenge, so the request runs while its
+ * bundle downloads instead of after it mounts. The challenge takes it via {@link loadMfaStatus}.
+ */
+export function preloadMfaStatus(): void {
+  if (preloadedMfaStatus && Date.now() - preloadedMfaStatus.startedAt < MFA_STATUS_PRELOAD_TTL_MS) {
+    return
+  }
+  const request = fetchMfaStatus()
+  // Failures surface in whoever takes the request.
+  request.catch(() => undefined)
+  preloadedMfaStatus = { request, startedAt: Date.now() }
+}
+
+/** The MFA status: the recent preload if there is one (consumed once), otherwise a fresh read. */
+export function loadMfaStatus(): Promise<MfaStatusResponse> {
+  const preloaded = preloadedMfaStatus
+  preloadedMfaStatus = null
+  if (preloaded && Date.now() - preloaded.startedAt < MFA_STATUS_PRELOAD_TTL_MS) {
+    return preloaded.request
+  }
+  return fetchMfaStatus()
 }
 
 const MFAContext = createContext<MFAContextType | undefined>(undefined)
@@ -72,6 +112,7 @@ export function MFAProvider({ children }: { children: React.ReactNode }) {
     if (!requiresMFA) return Promise.resolve(true)
     return new Promise<boolean>(resolve => {
       pendingStepUps.current.push(resolve)
+      if (!stepUpOpen) preloadMfaStatus()
       setStepUpOpen(true)
     })
   }

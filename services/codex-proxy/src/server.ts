@@ -658,6 +658,8 @@ class JsonRpcConnection {
   private readonly pending = new Map<number, PendingRequest>()
   private readonly stdinSink: {
     write: (chunk: string) => unknown
+    /** Bun's FileSink buffers writes; flush so JSON-RPC lines reach codex immediately. */
+    flush?: () => unknown
   }
 
   private readonly notificationListeners = new Set<(notification: JsonRpcNotification) => void>()
@@ -667,7 +669,7 @@ class JsonRpcConnection {
   private readonly stderrListeners = new Set<(line: string) => void>()
 
   constructor(
-    stdin: { write: (chunk: string) => unknown },
+    stdin: { write: (chunk: string) => unknown; flush?: () => unknown },
     stdout: ReadableStream<Uint8Array>,
     stderr?: ReadableStream<Uint8Array>
   ) {
@@ -879,6 +881,7 @@ class JsonRpcConnection {
 
   private async writeMessage(message: JsonRpcRequest | JsonRpcResponse | JsonRpcNotification): Promise<void> {
     await Promise.resolve(this.stdinSink.write(`${JSON.stringify(message)}\n`))
+    await Promise.resolve(this.stdinSink.flush?.())
   }
 
   private emitClose(): void {

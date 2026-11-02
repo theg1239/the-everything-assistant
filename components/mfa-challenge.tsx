@@ -8,14 +8,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
-import { useMFA } from '@/contexts/mfa-context'
+import { loadMfaStatus, useMFA } from '@/contexts/mfa-context'
 import { LoginFloatingBackground } from '@/components/login-floating-background'
 import { readApiMessage, readJson } from '@/lib/http'
 import { asRecord, errorMessage, readString } from '@/components/narrow'
 import type { AuthenticatorTransport } from '@simplewebauthn/server'
 import {
   mfaEmailCodeResponseSchema,
-  mfaStatusResponseSchema,
   webAuthnRequestOptionsSchema,
   type MfaStatusResponse,
 } from '@/types/api/mfa'
@@ -427,20 +426,15 @@ function useMfaStatus(): MfaStatusResponse | null {
   useEffect(() => {
     if (!userId) return
     let cancelled = false
-    const load = async () => {
-      try {
-        const response = await fetch('/api/user/mfa')
-        if (!response.ok) {
-          throw new Error('Failed to fetch MFA status')
-        }
-        const data = await readJson(response, mfaStatusResponseSchema)
+    loadMfaStatus().then(
+      data => {
         if (!cancelled) setMFAStatus(data)
-      } catch (error) {
+      },
+      (error: unknown) => {
         console.error('Failed to fetch MFA status:', error)
         toast.error('Failed to load MFA information')
       }
-    }
-    void load()
+    )
     return () => {
       cancelled = true
     }

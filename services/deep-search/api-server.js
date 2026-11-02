@@ -171,34 +171,34 @@ app.post('/api/ask', async (req, res) => {
 
 app.get('/api/stats', async (req, res) => {
   try {
-    const postCountResult = await knowledgeBase.pool.query('SELECT COUNT(*) FROM reddit_posts')
-    const commentCountResult = await knowledgeBase.pool.query(
-      'SELECT COUNT(*) FROM reddit_comments'
-    )
-    const embeddingCountResult = await knowledgeBase.pool.query(
-      'SELECT COUNT(*) FROM reddit_posts WHERE embedding IS NOT NULL'
-    )
-    const videoCountResult = await knowledgeBase.pool.query(
-      'SELECT COUNT(*) FROM reddit_posts WHERE is_video = true'
-    )
-    const videoWithAnalysisResult = await knowledgeBase.pool.query(
-      'SELECT COUNT(*) FROM reddit_posts WHERE is_video = true AND video IS NOT NULL'
-    )
-    const subredditStats = await knowledgeBase.pool.query(`
-      SELECT subreddit, COUNT(*) AS post_count
-      FROM reddit_posts
-      GROUP BY subreddit
-      ORDER BY post_count DESC
-    `)
+    // Independent reads: run them together, and count the four post figures in one table scan.
+    const [postCountsResult, commentCountResult, subredditStats] = await Promise.all([
+      knowledgeBase.pool.query(`
+        SELECT
+          COUNT(*) AS total_posts,
+          COUNT(*) FILTER (WHERE embedding IS NOT NULL) AS posts_with_embeddings,
+          COUNT(*) FILTER (WHERE is_video = true) AS total_videos,
+          COUNT(*) FILTER (WHERE is_video = true AND video IS NOT NULL) AS videos_with_analysis
+        FROM reddit_posts
+      `),
+      knowledgeBase.pool.query('SELECT COUNT(*) FROM reddit_comments'),
+      knowledgeBase.pool.query(`
+        SELECT subreddit, COUNT(*) AS post_count
+        FROM reddit_posts
+        GROUP BY subreddit
+        ORDER BY post_count DESC
+      `),
+    ])
+    const postCounts = postCountsResult.rows[0]
 
     res.json({
       success: true,
       stats: {
-        totalPosts: parseInt(postCountResult.rows[0].count, 10),
+        totalPosts: parseInt(postCounts.total_posts, 10),
         totalComments: parseInt(commentCountResult.rows[0].count, 10),
-        postsWithEmbeddings: parseInt(embeddingCountResult.rows[0].count, 10),
-        totalVideos: parseInt(videoCountResult.rows[0].count, 10),
-        videosWithAnalysis: parseInt(videoWithAnalysisResult.rows[0].count, 10),
+        postsWithEmbeddings: parseInt(postCounts.posts_with_embeddings, 10),
+        totalVideos: parseInt(postCounts.total_videos, 10),
+        videosWithAnalysis: parseInt(postCounts.videos_with_analysis, 10),
         subreddits: subredditStats.rows,
       },
     })

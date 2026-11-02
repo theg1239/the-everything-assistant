@@ -1,7 +1,7 @@
 require('dotenv').config({ quiet: true })
 
 const { Pool } = require('pg')
-const { embed } = require('ai')
+const { embed, embedMany } = require('ai')
 const { createOpenAI } = require('@ai-sdk/openai')
 const logger = require('../utils/logger')
 
@@ -447,11 +447,15 @@ class KnowledgeBase {
   }
 
   async storePost(postData) {
+    const textContent = `${postData.title} ${postData.content} ${postData.extracted_text}`.trim()
+    // Embed the post and its chunks in one batch, before taking a connection: no transaction
+    // (or pooled client) is held open across the provider round trips.
+    const chunks = this.knowledgeChunksFor(textContent)
+    const [embedding, ...chunkEmbeddings] = await this.generateEmbeddings([textContent, ...chunks])
+
     const client = await this.pool.connect()
     try {
       await client.query('BEGIN')
-      const textContent = `${postData.title} ${postData.content} ${postData.extracted_text}`.trim()
-      const embedding = await this.generateEmbedding(textContent, 'RETRIEVAL_DOCUMENT')
 
       if (!embedding) {
         logger.warn(`Skipping embedding for post ${postData.reddit_id}; text search fallback only`)
@@ -515,7 +519,14 @@ class KnowledgeBase {
       ])
 
       const postId = result.rows[0].id
-      await this.createKnowledgeChunks(client, textContent, 'post', postId, postData.subreddit)
+      await this.insertKnowledgeChunks(
+        client,
+        chunks,
+        chunkEmbeddings,
+        'post',
+        postId,
+        postData.subreddit
+      )
       await this.updateSubredditStats(client, postData.subreddit)
 
       await client.query('COMMIT')
@@ -531,18 +542,29 @@ class KnowledgeBase {
     }
   }
   async storeComment(commentData) {
+    if (!commentData.reddit_id) {
+      const error = new Error('Comment reddit_id is required')
+      logger.error(`Error storing comment unknown:`, error)
+      throw error
+    }
+    if (!commentData.content || !commentData.content.trim()) {
+      const error = new Error('Comment content is required')
+      logger.error(`Error storing comment ${commentData.reddit_id}:`, error)
+      throw error
+    }
+
+    // As in storePost: embed the comment and its chunks in one batch before taking a connection.
+    const chunks =
+      commentData.content.length > 200 ? this.knowledgeChunksFor(commentData.content) : []
+    const [embedding, ...chunkEmbeddings] = await this.generateEmbeddings([
+      commentData.content,
+      ...chunks,
+    ])
+
     const client = await this.pool.connect()
     try {
       await client.query('BEGIN')
 
-      if (!commentData.reddit_id) {
-        throw new Error('Comment reddit_id is required')
-      }
-      if (!commentData.content || !commentData.content.trim()) {
-        throw new Error('Comment content is required')
-      }
-
-      const embedding = await this.generateEmbedding(commentData.content, 'RETRIEVAL_DOCUMENT')
       if (!embedding) {
         logger.warn(
           `Skipping embedding for comment ${commentData.reddit_id}; text search fallback only`
@@ -589,15 +611,14 @@ class KnowledgeBase {
       ])
 
       const commentId = result.rows[0].id
-      if (commentData.content.length > 200) {
-        await this.createKnowledgeChunks(
-          client,
-          commentData.content,
-          'comment',
-          commentId,
-          commentData.subreddit
-        )
-      }
+      await this.insertKnowledgeChunks(
+        client,
+        chunks,
+        chunkEmbeddings,
+        'comment',
+        commentId,
+        commentData.subreddit
+      )
       await client.query('COMMIT')
       return commentId
     } catch (error) {
@@ -617,19 +638,24 @@ class KnowledgeBase {
     }
   }
 
-  async createKnowledgeChunks(client, text, sourceType, sourceId, subreddit) {
-    if (!text || text.length < 100) return
-    const chunks = this.splitTextIntoChunks(text)
+  /** The chunks stored alongside `text` in knowledge_chunks ([] when it's too short to chunk). */
+  knowledgeChunksFor(text) {
+    if (!text || text.length < 100) return []
+    return this.splitTextIntoChunks(text)
+  }
+
+  /** Inserts `chunks` (with their precomputed embeddings; null ones are skipped) on `client`. */
+  async insertKnowledgeChunks(client, chunks, embeddings, sourceType, sourceId, subreddit) {
+    const insertChunkSQL = `
+      INSERT INTO knowledge_chunks (
+        source_type, source_id, chunk_text, chunk_index, subreddit, embedding, metadata
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i]
-      const embedding = await this.generateEmbedding(chunk, 'RETRIEVAL_DOCUMENT')
+      const embedding = embeddings[i]
       if (!embedding) continue
 
-      const insertChunkSQL = `
-        INSERT INTO knowledge_chunks (
-          source_type, source_id, chunk_text, chunk_index, subreddit, embedding, metadata
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-      `
       await client.query(insertChunkSQL, [
         sourceType,
         sourceId,
@@ -655,6 +681,21 @@ class KnowledgeBase {
     return chunks
   }
 
+  /** The embedding if it's usable for storage/search, otherwise null (with a log line). */
+  checkEmbedding(embedding) {
+    if (!Array.isArray(embedding) || embedding.length !== this.embeddingDim) {
+      logger.error(
+        `Embedding dimension mismatch: got ${embedding?.length}, expected ${this.embeddingDim} (provider=${this.embeddingProvider}, model=${this.embeddingModelId})`
+      )
+      return null
+    }
+    if (this.isZeroEmbedding(embedding)) {
+      logger.warn('Generated a zero embedding; skipping vector storage/search')
+      return null
+    }
+    return embedding
+  }
+
   async generateEmbedding(text) {
     if (!text || !text.trim()) {
       return null
@@ -666,30 +707,62 @@ class KnowledgeBase {
         value,
         dimensions: this.embeddingDim,
       })
-
-      if (!Array.isArray(embedding) || embedding.length !== this.embeddingDim) {
-        logger.error(
-          `Embedding dimension mismatch: got ${embedding?.length}, expected ${this.embeddingDim} (provider=${this.embeddingProvider}, model=${this.embeddingModelId})`
-        )
-        return null
-      }
-      if (this.isZeroEmbedding(embedding)) {
-        logger.warn('Generated a zero embedding; skipping vector storage/search')
-        return null
-      }
-      return embedding
+      return this.checkEmbedding(embedding)
     } catch (error) {
       logger.error('Error generating embedding:', error)
       return null
     }
   }
+
+  /**
+   * Embeds several texts with one provider request (embedMany splits it if the model caps the batch
+   * size) instead of one request per text. Resolves to one embedding per text, null for blank or
+   * unusable ones. If the batch request fails, each text is embedded on its own so one bad input
+   * doesn't lose the others.
+   */
+  async generateEmbeddings(texts) {
+    const results = texts.map(() => null)
+    const pending = []
+    texts.forEach((text, index) => {
+      if (text && text.trim()) pending.push({ index, text })
+    })
+    if (pending.length === 0) return results
+    if (pending.length === 1) {
+      results[pending[0].index] = await this.generateEmbedding(pending[0].text)
+      return results
+    }
+
+    try {
+      const { embeddings } = await embedMany({
+        model: this.embeddingModel,
+        values: pending.map(({ text }) => text.substring(0, this.maxContextLength)),
+        dimensions: this.embeddingDim,
+        maxParallelCalls: 2,
+      })
+      pending.forEach(({ index }, position) => {
+        results[index] = this.checkEmbedding(embeddings[position])
+      })
+      return results
+    } catch (error) {
+      logger.warn(
+        `Batch embedding of ${pending.length} texts failed, embedding individually: ${this.formatErrorForLog(error)}`
+      )
+      const individual = await Promise.all(pending.map(({ text }) => this.generateEmbedding(text)))
+      pending.forEach(({ index }, position) => {
+        results[index] = individual[position]
+      })
+      return results
+    }
+  }
+
   async search(query, limit = 10) {
     const startTime = Date.now()
 
     try {
       const vectorOnlyResults = await this.diverseSearch(query, limit)
       const responseTime = Date.now() - startTime
-      await this.logSearchQuery(query, vectorOnlyResults.length, responseTime)
+      // Analytics only (logSearchQuery never throws): don't hold the results on the insert.
+      void this.logSearchQuery(query, vectorOnlyResults.length, responseTime)
       return vectorOnlyResults.slice(0, limit)
     } catch (error) {
       logger.error('Error in search:', error)
@@ -710,9 +783,11 @@ class KnowledgeBase {
     const merged = new Map()
     const rrfK = 50
 
+    // One embedding request for every variant, then the per-variant searches in parallel.
+    const variantEmbeddings = await this.generateEmbeddings(queryVariants)
     const variantResponses = await Promise.all(
-      queryVariants.map(async variant => {
-        const queryEmbedding = await this.generateEmbedding(variant, 'RETRIEVAL_QUERY')
+      queryVariants.map(async (variant, variantIndex) => {
+        const queryEmbedding = variantEmbeddings[variantIndex]
         if (!queryEmbedding) {
           logger.warn(`Skipping vector variant "${variant}" because embedding is unavailable`)
           return { variant, rows: [] }

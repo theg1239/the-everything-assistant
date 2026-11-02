@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useRef } from 'react'
+import type * as z from 'zod'
 import { useSession, signOut } from 'next-auth/react'
 import { clearLegacyVTOPClientState } from '@/lib/vtop-credentials'
 import { motion } from 'framer-motion'
@@ -201,6 +202,16 @@ const arrayBufferToBase64url = (buffer: ArrayBuffer | ArrayBufferView): string =
   })
   const base64 = btoa(binary)
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+}
+
+/** GETs `url` and validates the body against `schema`; `null` for a non-2xx response. */
+async function fetchJsonIfOk<S extends z.ZodType>(
+  url: string,
+  schema: S,
+  signal: AbortSignal
+): Promise<z.infer<S> | null> {
+  const response = await fetch(url, { signal })
+  return response.ok ? readJson(response, schema) : null
 }
 
 const EMPTY_CHATGPT_STATUS: ChatgptStatusResponse = {
@@ -552,112 +563,114 @@ export function SettingsDialog({
     if (!(open && session?.user?.id)) return
 
     const controller = new AbortController()
-
-    const loadPreferences = async () => {
-      let loadedMfaMethod: 'email' | 'authenticator' | 'security_key' = 'email'
-      setLoadingPreferences(true)
-      try {
-        const memorySettingsResponse = await fetch('/api/memories/settings', {
-          signal: controller.signal,
-        })
-        if (memorySettingsResponse.ok) {
-          const memorySettings = await readJson(memorySettingsResponse, memorySettingsResponseSchema)
-          setMemoryEnabled(memorySettings.isEnabled)
-        } else {
-          setMemoryEnabled(true)
-        }
-
-        const response = await fetch('/api/user/preferences', { signal: controller.signal })
-        if (response.ok) {
-          const data = await readJson(response, userPreferencesResponseSchema)
-          const prefs = data.preferences
-          setCurrentPreferences(prefs)
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('userPreferencesUpdated', { detail: prefs }))
-          }
-          setFollowUpSuggestions(prefs.followUpSuggestions ?? true)
-
-          if (prefs.backgroundConfig) {
-            const bgType = isSelectableBackgroundType(prefs.backgroundConfig.type)
-              ? prefs.backgroundConfig.type
-              : 'aurora'
-            setBackgroundConfig({
-              type: bgType,
-              enabled: prefs.backgroundConfig.enabled ?? true,
-            })
-          } else if (prefs.auroraBackground !== undefined) {
-            setBackgroundConfig({
-              type: 'aurora',
-              enabled: prefs.auroraBackground,
-            })
-          }
-
-          if (prefs.dailyBriefing) {
-            setDailyBriefingSettings({
-              dismissTime: prefs.dailyBriefing.dismissTime || '07:30',
-              emailEnabled: prefs.dailyBriefing.emailEnabled ?? false,
-              emailTime:
-                prefs.dailyBriefing.emailTime || prefs.dailyBriefing.dismissTime || '07:30',
-            })
-          }
-        }
-
-        const mfaResponse = await fetch('/api/user/mfa', { signal: controller.signal })
-        if (mfaResponse.ok) {
-          const mfaData = await readJson(mfaResponse, mfaStatusResponseSchema)
-          setMfaEnabled(mfaData.mfaEnabled ?? false)
-          loadedMfaMethod =
-            mfaData.mfaMethod === 'security_key'
-              ? 'security_key'
-              : mfaData.mfaMethod === 'authenticator'
-                ? 'authenticator'
-                : 'email'
-          setMfaMethod(loadedMfaMethod)
-          setBackupCodes(new Array(mfaData.backupCodesCount || 0).fill('••••••••'))
-        }
-
-        const availabilityResponse = await fetch('/api/user/mfa/availability', {
-          signal: controller.signal,
-        })
-        if (availabilityResponse.ok) {
-          const availabilityData = await readJson(
-            availabilityResponse,
-            mfaAvailabilityResponseSchema
-          )
-
-          const hasWebAuthnSupport = !!(
-            window.navigator.credentials &&
-            typeof window.navigator.credentials.create === 'function' &&
-            window.PublicKeyCredential
-          )
-
-          const updatedAvailability = {
-            ...availabilityData.availability,
-            security_key: availabilityData.availability.security_key && hasWebAuthnSupport,
-          }
-
-          setMfaAvailability(updatedAvailability)
-
-          if (!updatedAvailability.email && loadedMfaMethod === 'email') {
-            if (updatedAvailability.security_key) {
-              setMfaMethod('security_key')
-            } else {
-              setMfaMethod('authenticator')
-            }
-          }
-        }
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          console.error('Error loading preferences:', error)
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setLoadingPreferences(false)
-        }
-      }
+    const { signal } = controller
+    const logLoadError = (error: unknown) => {
+      if (!signal.aborted) console.error('Error loading preferences:', error)
     }
 
-    void loadPreferences()
+    setLoadingPreferences(true)
+
+    // The four reads are independent, so they run in parallel and each section is applied as
+    // soon as it lands (one failing no longer hides the others). MFA status and availability
+    // are applied together because the availability fallback depends on the loaded method.
+    const memorySection = fetchJsonIfOk(
+      '/api/memories/settings',
+      memorySettingsResponseSchema,
+      signal
+    ).then(memorySettings => {
+      if (signal.aborted) return
+      setMemoryEnabled(memorySettings?.isEnabled ?? true)
+    }, logLoadError)
+
+    const preferencesSection = fetchJsonIfOk(
+      '/api/user/preferences',
+      userPreferencesResponseSchema,
+      signal
+    ).then(data => {
+      if (signal.aborted || !data) return
+      const prefs = data.preferences
+      setCurrentPreferences(prefs)
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('userPreferencesUpdated', { detail: prefs }))
+      }
+      setFollowUpSuggestions(prefs.followUpSuggestions ?? true)
+
+      if (prefs.backgroundConfig) {
+        const bgType = isSelectableBackgroundType(prefs.backgroundConfig.type)
+          ? prefs.backgroundConfig.type
+          : 'aurora'
+        setBackgroundConfig({
+          type: bgType,
+          enabled: prefs.backgroundConfig.enabled ?? true,
+        })
+      } else if (prefs.auroraBackground !== undefined) {
+        setBackgroundConfig({
+          type: 'aurora',
+          enabled: prefs.auroraBackground,
+        })
+      }
+
+      if (prefs.dailyBriefing) {
+        setDailyBriefingSettings({
+          dismissTime: prefs.dailyBriefing.dismissTime || '07:30',
+          emailEnabled: prefs.dailyBriefing.emailEnabled ?? false,
+          emailTime:
+            prefs.dailyBriefing.emailTime || prefs.dailyBriefing.dismissTime || '07:30',
+        })
+      }
+    }, logLoadError)
+
+    const mfaSection = Promise.allSettled([
+      fetchJsonIfOk('/api/user/mfa', mfaStatusResponseSchema, signal),
+      fetchJsonIfOk('/api/user/mfa/availability', mfaAvailabilityResponseSchema, signal),
+    ]).then(([statusResult, availabilityResult]) => {
+      if (signal.aborted) return
+      let loadedMfaMethod: MfaMethod = 'email'
+
+      if (statusResult.status === 'rejected') {
+        logLoadError(statusResult.reason)
+      } else if (statusResult.value) {
+        const mfaData = statusResult.value
+        setMfaEnabled(mfaData.mfaEnabled ?? false)
+        loadedMfaMethod =
+          mfaData.mfaMethod === 'security_key'
+            ? 'security_key'
+            : mfaData.mfaMethod === 'authenticator'
+              ? 'authenticator'
+              : 'email'
+        setMfaMethod(loadedMfaMethod)
+        setBackupCodes(new Array(mfaData.backupCodesCount || 0).fill('••••••••'))
+      }
+
+      if (availabilityResult.status === 'rejected') {
+        logLoadError(availabilityResult.reason)
+      } else if (availabilityResult.value) {
+        const hasWebAuthnSupport = !!(
+          window.navigator.credentials &&
+          typeof window.navigator.credentials.create === 'function' &&
+          window.PublicKeyCredential
+        )
+
+        const updatedAvailability = {
+          ...availabilityResult.value.availability,
+          security_key: availabilityResult.value.availability.security_key && hasWebAuthnSupport,
+        }
+
+        setMfaAvailability(updatedAvailability)
+
+        if (!updatedAvailability.email && loadedMfaMethod === 'email') {
+          if (updatedAvailability.security_key) {
+            setMfaMethod('security_key')
+          } else {
+            setMfaMethod('authenticator')
+          }
+        }
+      }
+    }, logLoadError)
+
+    void Promise.allSettled([memorySection, preferencesSection, mfaSection]).then(() => {
+      if (!signal.aborted) setLoadingPreferences(false)
+    })
 
     return () => controller.abort()
   }, [open, session?.user?.id])

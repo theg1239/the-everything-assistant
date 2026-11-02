@@ -58,6 +58,7 @@ import { getEnabledMCPConfigs } from '@/lib/mcp-config'
 import { CHAT_COMPOSER_INPUT_ID, createChatInputStore } from '@/lib/stores/chat-input-store'
 import { readPreHydrationValue } from '@/lib/hydration-safe'
 import { CHAT_HISTORY_PAGE_SIZE, chatHistoryPageResponseSchema } from '@/lib/chat-history'
+import { mapWithConcurrency } from '@/components/concurrency'
 
 // Rarely-opened, client-only overlays: loaded on first open instead of with the chat route.
 const loadHub = () => import('@/components/hub/hub')
@@ -401,37 +402,33 @@ const dispatchChatTitle = (chatId: string, title: string) => {
   window.dispatchEvent(new CustomEvent('chatTitleUpdated', { detail: { chatId, title } }))
 }
 
-/** Reads the chat's current title and broadcasts it (best effort). */
-const fetchAndDispatchChatTitle = async (chatId: string): Promise<void> => {
+/** Reads the chat's current title from the lightweight title endpoint; null on any failure. */
+const fetchChatTitle = async (chatId: string): Promise<string | null> => {
   try {
     const res = await fetch(`/api/chats/${chatId}/title`, { cache: 'no-store' })
-    if (res.ok) {
-      const data = await readJson(res, chatTitleResponseSchema)
-      if (data.title) dispatchChatTitle(chatId, data.title)
-    }
-  } catch {}
+    if (!res.ok) return null
+    const data = await readJson(res, chatTitleResponseSchema)
+    return data.title || null
+  } catch {
+    return null
+  }
 }
 
-/** Polls until the generated title replaces "New Chat" (up to `maxAttempts`, 2s apart). */
-const pollChatTitle = async (chatId: string, attempt = 1, maxAttempts = 3): Promise<void> => {
-  const retry = () => {
-    if (attempt < maxAttempts) setTimeout(() => void pollChatTitle(chatId, attempt + 1, maxAttempts), 2000)
-  }
-  try {
-    const response = await fetch(`/api/chats/${chatId}`)
-    if (!response.ok) {
-      retry()
-      return
-    }
-    const chatData = await readJson(response, chatDetailResponseSchema)
-    if (chatData.title && chatData.title !== 'New Chat') {
-      dispatchChatTitle(chatId, chatData.title)
-      return
-    }
-    retry()
-  } catch {
-    retry()
-  }
+/** Delays before each re-poll while the generated title is still "New Chat". */
+const CHAT_TITLE_POLL_DELAYS_MS = [1500, 2000, 2000]
+
+/**
+ * Broadcasts the chat's current title, then re-polls (per {@link CHAT_TITLE_POLL_DELAYS_MS}) until
+ * the generated title replaces "New Chat". Polls the title endpoint rather than `/api/chats/:id`,
+ * which would load every message just to read the title, and stops as soon as a real title lands.
+ */
+const pollChatTitle = async (chatId: string, attempt = 0): Promise<void> => {
+  const title = await fetchChatTitle(chatId)
+  const isGenerated = Boolean(title) && title !== 'New Chat'
+  if (title && (attempt === 0 || isGenerated)) dispatchChatTitle(chatId, title)
+  if (isGenerated) return
+  const delay = CHAT_TITLE_POLL_DELAYS_MS[attempt]
+  if (delay !== undefined) setTimeout(() => void pollChatTitle(chatId, attempt + 1), delay)
 }
 
 /** Reloads a chat's persisted messages. Rejects on HTTP or schema errors. */
@@ -559,49 +556,55 @@ const importGuestChat = async (chatId: unknown, messages: unknown[]): Promise<st
 
 type UploadingAttachment = { id: string; name: string; contentType: string }
 
+/** Files uploaded at once: overlaps the round trips without saturating a mobile uplink. */
+const UPLOAD_CONCURRENCY = 3
+
+/** Uploads one file; resolves to null (after a toast) when it's over 25MB or the upload fails. */
+const uploadAttachmentFile = async (file: File): Promise<Attachment | null> => {
+  const sizeMb = file.size / (1024 * 1024)
+  if (sizeMb > 25) {
+    toast.error(`${file.name} is too large (max 25MB)`, { position: 'top-center' })
+    return null
+  }
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch('/api/files/upload', { method: 'POST', body: formData })
+    if (!res.ok) {
+      const errJson: unknown = await res.json().catch(() => ({ error: undefined }))
+      const errText = isRecord(errJson) ? readString(errJson.error) : undefined
+      toast.error(errText || `Failed to upload ${file.name}`)
+      return null
+    }
+    const dataJson: unknown = await res.json()
+    const data = isRecord(dataJson) ? dataJson : {}
+    return {
+      url: readString(data.url) ?? '',
+      name: readString(data.name) || file.name,
+      contentType: readString(data.contentType) ?? '',
+    }
+  } catch (err) {
+    console.error('attachment upload failed', err)
+    // One toast however many files hit the same (likely network) failure.
+    toast.error('upload failed — please try again', { id: 'attachment-upload-failed' })
+    return null
+  }
+}
+
 /**
- * Uploads files one at a time (files over 25MB are skipped with a toast); `onFileSettled` fires as
- * each file finishes or is skipped. Resolves to the uploaded attachments, or [] if the batch failed.
+ * Uploads files {@link UPLOAD_CONCURRENCY} at a time; `onFileSettled` fires as each file finishes
+ * or is skipped. Resolves to the uploaded attachments in selection order (failed files left out).
  */
 const uploadAttachmentFiles = async (
   uploads: Array<{ file: File; placeholder: UploadingAttachment }>,
   onFileSettled: (uploadId: string) => void
 ): Promise<Attachment[]> => {
-  try {
-    const uploaded: Attachment[] = []
-    for (const { file, placeholder } of uploads) {
-      const uploadId = placeholder.id
-      const sizeMb = file.size / (1024 * 1024)
-      if (sizeMb > 25) {
-        toast.error(`${file.name} is too large (max 25MB)`, { position: 'top-center' })
-        onFileSettled(uploadId)
-        continue
-      }
-      const formData = new FormData()
-      formData.append('file', file)
-      const res = await fetch('/api/files/upload', { method: 'POST', body: formData })
-      if (!res.ok) {
-        const errJson: unknown = await res.json().catch(() => ({ error: undefined }))
-        const errText = isRecord(errJson) ? readString(errJson.error) : undefined
-        toast.error(errText || `Failed to upload ${file.name}`)
-        onFileSettled(uploadId)
-        continue
-      }
-      const dataJson: unknown = await res.json()
-      const data = isRecord(dataJson) ? dataJson : {}
-      uploaded.push({
-        url: readString(data.url) ?? '',
-        name: readString(data.name) || file.name,
-        contentType: readString(data.contentType) ?? '',
-      })
-      onFileSettled(uploadId)
-    }
-    return uploaded
-  } catch (err) {
-    console.error('attachment upload failed', err)
-    toast.error('upload failed — please try again')
-    return []
-  }
+  const results = await mapWithConcurrency(uploads, UPLOAD_CONCURRENCY, async ({ file, placeholder }) => {
+    const attachment = await uploadAttachmentFile(file)
+    onFileSettled(placeholder.id)
+    return attachment
+  })
+  return results.filter((attachment): attachment is Attachment => attachment !== null)
 }
 
 /** Extracts the tool result from a direct VTOP tool-call response (JSON or data-stream frames). */
@@ -1518,8 +1521,7 @@ function PureChatInterfaceComponent({
               detail: { chatId: targetChatId, title: newTitle },
             })
           )
-          void fetchAndDispatchChatTitle(targetChatId)
-          setTimeout(() => void pollChatTitle(targetChatId), 1500)
+          void pollChatTitle(targetChatId)
         }
       }
     },

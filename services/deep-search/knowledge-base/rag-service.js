@@ -2,6 +2,10 @@ const KnowledgeBase = require('./knowledge-base')
 const { generateText } = require('ai')
 const { openai } = require('@ai-sdk/openai')
 const logger = require('../utils/logger')
+const { mapWithConcurrency } = require('../utils/concurrency')
+
+/** Fallback keyword searches run at once (each embeds + hits the knowledge DB several times). */
+const FALLBACK_SEARCH_CONCURRENCY = 3
 
 class RAGService {
   constructor() {
@@ -41,18 +45,17 @@ class RAGService {
           .toLowerCase()
           .split(/\s+/)
           .filter(word => word.length > 3)
-        let fallbackResults = []
-
-        for (const keyword of keywords.slice(0, 5)) {
-          const keywordResults = await this.knowledgeBase.search(keyword, 20)
-          fallbackResults = fallbackResults.concat(keywordResults)
-        }
-
-        const topicKeywords = this.extractTopicKeywords(query)
-        for (const topic of topicKeywords) {
-          const topicResults = await this.knowledgeBase.search(topic, 10)
-          fallbackResults = fallbackResults.concat(topicResults)
-        }
+        // The keyword and topic searches are independent (search() never throws), so run them
+        // concurrently; results are concatenated in the original keyword-then-topic order.
+        const fallbackSearches = [
+          ...keywords.slice(0, 5).map(keyword => ({ term: keyword, limit: 20 })),
+          ...this.extractTopicKeywords(query).map(topic => ({ term: topic, limit: 10 })),
+        ]
+        const fallbackResults = (
+          await mapWithConcurrency(fallbackSearches, FALLBACK_SEARCH_CONCURRENCY, ({ term, limit }) =>
+            this.knowledgeBase.search(term, limit)
+          )
+        ).flat()
 
         const diverseResults = this.diversifyResults(fallbackResults)
 
@@ -86,12 +89,12 @@ class RAGService {
           .toLowerCase()
           .split(/\s+/)
           .filter(word => word.length > 3)
-        let expandedResults = [...searchResults]
-
-        for (const keyword of keywords.slice(0, 3)) {
-          const keywordResults = await this.knowledgeBase.search(keyword, 15)
-          expandedResults = expandedResults.concat(keywordResults)
-        }
+        const keywordResults = await mapWithConcurrency(
+          keywords.slice(0, 3),
+          FALLBACK_SEARCH_CONCURRENCY,
+          keyword => this.knowledgeBase.search(keyword, 15)
+        )
+        const expandedResults = [...searchResults, ...keywordResults.flat()]
 
         const expandedDiverse = this.diversifyResults(expandedResults)
         if (expandedDiverse.length > diverseResults.length) {

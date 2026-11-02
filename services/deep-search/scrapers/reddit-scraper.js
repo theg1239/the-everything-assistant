@@ -3,6 +3,7 @@ require('dotenv').config({ quiet: true })
 const axios = require('axios')
 const cheerio = require('cheerio')
 const logger = require('../utils/logger')
+const { mapWithConcurrency } = require('../utils/concurrency')
 const { generateText, Output, embed } = require('ai')
 const { openai } = require('@ai-sdk/openai')
 const { z } = require('zod')
@@ -11,6 +12,9 @@ const fs = require('fs').promises
 const path = require('path')
 const { spawn } = require('child_process')
 const sharp = require('sharp')
+
+/** Comments stored at once per post (embedding requests + DB transactions in flight). */
+const COMMENT_STORE_CONCURRENCY = 4
 
 class RedditScraper {
   constructor() {
@@ -985,16 +989,21 @@ Please provide:
 
         if (post.comments && post.comments.length > 0) {
           logger.info(`Processing ${post.comments.length} comments for post ${postData.reddit_id}`)
-          for (const comment of post.comments) {
+          const storableComments = post.comments.filter(comment => {
             if (!comment.content || !comment.content.trim()) {
               logger.debug(`Skipping comment without content for post ${postData.reddit_id}`)
-              continue
+              return false
             }
             if (!comment.id) {
               logger.warn(`Skipping comment without ID for post ${postData.reddit_id}`)
-              continue
+              return false
             }
+            return true
+          })
 
+          // Comments are independent rows (no FK between them), so store a few at a time: each
+          // one waits on an embedding request and its own transaction.
+          await mapWithConcurrency(storableComments, COMMENT_STORE_CONCURRENCY, async comment => {
             const commentData = {
               reddit_id: comment.id,
               post_reddit_id: postData.reddit_id,
@@ -1020,7 +1029,7 @@ Please provide:
                 error
               )
             }
-          }
+          })
         } else {
           logger.info(`No comments to process for post ${postData.reddit_id}`)
         }

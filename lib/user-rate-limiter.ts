@@ -342,8 +342,9 @@ export class UserRateLimitError extends Error {
 
 /** Throws `UserRateLimitError` when `userId` is over quota. No-op when disabled or anonymous. */
 export async function enforceUserRateLimit(userId: string | null | undefined): Promise<void> {
-  const limiter = getUserRateLimiter()
-  if (!userId || !limiter.getConfig().enabled) return
-  const result = await limiter.checkRateLimit(userId)
+  // Check the env config before constructing the limiter: it requires Redis,
+  // and deployments with limiting disabled shouldn't need Redis at all.
+  if (!userId || !(sharedLimiter?.getConfig() ?? loadUserRateLimitConfig()).enabled) return
+  const result = await getUserRateLimiter().checkRateLimit(userId)
   if (!result.allowed) throw new UserRateLimitError(result.error)
 }

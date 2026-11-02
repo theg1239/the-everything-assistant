@@ -39,8 +39,11 @@ export default function MobileViewportFix() {
     }
 
     const handleFocusIn = (e: Event) => {
-      const target = e.target as HTMLElement
-      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') {
+      const target = e.target
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
+      ) {
         handleKeyboardVisibility(true)
         requestAnimationFrame(() => {
           const pageScrollable = document.documentElement.scrollHeight > window.innerHeight
@@ -56,11 +59,18 @@ export default function MobileViewportFix() {
     }
 
     const preventOverscroll = (e: TouchEvent) => {
-      const target = e.target as HTMLElement
-      const allowWithin = target?.closest('.chat-content, [data-allow-touch-scroll]')
+      const target = e.target
+      const allowWithin =
+        target instanceof Element ? target.closest('.chat-content, [data-allow-touch-scroll]') : null
       if (!allowWithin) {
         e.preventDefault()
       }
+    }
+
+    let orientationTimeoutId: ReturnType<typeof setTimeout> | undefined
+    const handleOrientationChange = () => {
+      clearTimeout(orientationTimeoutId)
+      orientationTimeoutId = setTimeout(setAppHeight, 100)
     }
 
     setAppHeight()
@@ -73,7 +83,7 @@ export default function MobileViewportFix() {
     }
     window.addEventListener('focusin', handleFocusIn)
     window.addEventListener('focusout', handleFocusOut)
-    window.addEventListener('orientationchange', () => setTimeout(setAppHeight, 100))
+    window.addEventListener('orientationchange', handleOrientationChange)
     document.addEventListener('touchmove', preventOverscroll, { passive: false })
 
     return () => {
@@ -84,6 +94,8 @@ export default function MobileViewportFix() {
       }
       window.removeEventListener('focusin', handleFocusIn)
       window.removeEventListener('focusout', handleFocusOut)
+      window.removeEventListener('orientationchange', handleOrientationChange)
+      clearTimeout(orientationTimeoutId)
       document.removeEventListener('touchmove', preventOverscroll)
     }
   }, [])

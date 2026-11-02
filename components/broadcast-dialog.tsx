@@ -64,11 +64,13 @@ export function BroadcastDialog({ isOpen, onClose, payload }: BroadcastDialogPro
 
   const onTouchStart = (e: React.TouchEvent) => {
     setTouchEnd(null)
-    setTouchStart(e.targetTouches[0].clientX)
+    const touch = e.targetTouches[0]
+    if (touch) setTouchStart(touch.clientX)
   }
 
   const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX)
+    const touch = e.targetTouches[0]
+    if (touch) setTouchEnd(touch.clientX)
   }
 
   const onTouchEnd = () => {
@@ -144,8 +146,8 @@ export function BroadcastDialog({ isOpen, onClose, payload }: BroadcastDialogPro
         <DialogContent
           className="max-w-md w-[95vw] bg-white dark:bg-slate-900 flex flex-col p-0 rounded-2xl shadow-2xl overflow-hidden h-auto max-h-[90vh] sm:max-h-[80vh] border-0"
           onPointerDownOutside={e => {
-            const target = e.target as Element
-            if (target.closest('button[data-chevron]')) {
+            const target = e.target
+            if (target instanceof Element && target.closest('button[data-chevron]')) {
               e.preventDefault()
             }
           }}

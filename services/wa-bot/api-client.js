@@ -1,4 +1,3 @@
-const fetch = require('node-fetch')
 const crypto = require('crypto')
 
 class APIClient {
@@ -56,7 +55,7 @@ class APIClient {
           'User-Agent': 'WhatsApp-Bot-Service/1.0.0',
         },
         body,
-        timeout: 30000, // 30 second timeout
+        signal: AbortSignal.timeout(30000), // 30 second timeout
       }
 
       if (signature) {
@@ -352,7 +351,7 @@ class APIClient {
           Authorization: `Bearer ${this.apiKey}`,
           'User-Agent': 'WhatsApp-Bot-Service/1.0.0',
         },
-        timeout: 5000,
+        signal: AbortSignal.timeout(5000),
       })
 
       return response.ok
@@ -376,7 +375,7 @@ class APIClient {
           feedback,
           source: 'whatsapp',
         }),
-        timeout: 10000,
+        signal: AbortSignal.timeout(10000),
       })
 
       return response.ok

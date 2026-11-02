@@ -11,7 +11,17 @@ import {
   CartesianGrid,
 } from 'recharts'
 
-export default function TokenUsageChart({ data }: any) {
+export type TokenUsageChartPoint = {
+  time: string
+  tokens: number
+  prompt?: number
+  completion?: number
+}
+
+const formatTokenValue = (value: unknown) =>
+  typeof value === 'number' ? value.toLocaleString() : String(value ?? '')
+
+export default function TokenUsageChart({ data }: { data: TokenUsageChartPoint[] }) {
   if (!data || data.length === 0)
     return <div className="text-sm text-muted-foreground">no chart data</div>
 
@@ -21,8 +31,8 @@ export default function TokenUsageChart({ data }: any) {
         <LineChart data={data} margin={{ top: 6, right: 12, left: 6, bottom: 6 }}>
           <CartesianGrid strokeDasharray="3 3" opacity={0.06} />
           <XAxis dataKey="time" tick={{ fontSize: 11 }} />
-          <YAxis tickFormatter={v => v.toLocaleString()} />
-          <Tooltip formatter={(value: any) => value?.toLocaleString?.() ?? value} />
+          <YAxis tickFormatter={(v: number) => v.toLocaleString()} />
+          <Tooltip formatter={value => formatTokenValue(value)} />
           <Line type="monotone" dataKey="prompt" stroke="#60A5FA" strokeWidth={2} dot={false} />
           <Line type="monotone" dataKey="completion" stroke="#34D399" strokeWidth={2} dot={false} />
           <Line type="monotone" dataKey="tokens" stroke="#A78BFA" strokeWidth={2} dot={false} />

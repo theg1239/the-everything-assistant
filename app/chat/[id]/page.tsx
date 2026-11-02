@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { getChat, getMessages } from '@/lib/db'
 import { ChatInterface } from '@/components/chat-interface'
 import {
@@ -18,24 +17,24 @@ interface ChatPageProps {
 }
 
 export default async function ChatPage({ params }: ChatPageProps) {
-  const session = await getServerSession(authOptions)
+  const [session, { id }] = await Promise.all([auth(), params])
 
   if (!session?.user) {
     redirect('/login')
   }
 
-  const { id } = await params
-  const chat = await getChat(id, session.user.id)
+  const fallbackHubState: PersonalHubState = { isLinked: false, snapshots: [], lastSyncedAt: null }
+  // Ownership check, messages and hub state are independent reads: run them together.
+  // Messages are only rendered once `getChat` has confirmed the chat belongs to the user.
+  const [chat, messages, initialHubState] = await Promise.all([
+    getChat(id, session.user.id),
+    getMessages(id),
+    loadPersonalHubState().catch(() => fallbackHubState),
+  ])
 
   if (!chat) {
     redirect('/')
   }
-
-  const fallbackHubState: PersonalHubState = { isLinked: false, snapshots: [], lastSyncedAt: null }
-  const [messages, initialHubState] = await Promise.all([
-    getMessages(id),
-    loadPersonalHubState().catch(() => fallbackHubState),
-  ])
   return (
     <main id="main-content" className="flex min-h-screen flex-col bg-transparent">
       <div className="flex flex-1 overflow-hidden">

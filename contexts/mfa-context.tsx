@@ -1,8 +1,9 @@
 'use client'
 
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useSyncExternalStore } from 'react'
 import { useSession } from 'next-auth/react'
-import { useRouter, usePathname } from 'next/navigation'
+import { usePathname } from 'next/navigation'
+import { isRecord } from '@/lib/json'
 
 interface MFAContextType {
   isMFAVerified: boolean
@@ -13,60 +14,75 @@ interface MFAContextType {
 
 const MFAContext = createContext<MFAContextType | undefined>(undefined)
 
+/*
+ * Per-tab MFA verification lives in sessionStorage, which the server cannot see.
+ * It is read through `useSyncExternalStore` so SSR/hydration use the server
+ * snapshot (`null` = unknown) and the client re-renders with the real value
+ * right after hydration. Only users with MFA enabled ever hit the unknown state;
+ * everyone else is resolved from the (server-seeded) session on the first render.
+ */
+const storageListeners = new Set<() => void>()
+
+const subscribeToStorage = (listener: () => void) => {
+  storageListeners.add(listener)
+  return () => {
+    storageListeners.delete(listener)
+  }
+}
+
+const notifyStorageListeners = () => {
+  for (const listener of storageListeners) listener()
+}
+
+const storageKey = (userId: string) => `mfa_verified_${userId}`
+
+const readStoredVerification = (userId: string): boolean => {
+  try {
+    const raw = sessionStorage.getItem(storageKey(userId))
+    if (!raw) return false
+    const data: unknown = JSON.parse(raw)
+    return isRecord(data) && Boolean(data.verified)
+  } catch {
+    return false
+  }
+}
+
+const getServerVerificationSnapshot = (): boolean | null => null
+
 export function MFAProvider({ children }: { children: React.ReactNode }) {
-  const [isMFAVerified, setIsMFAVerified] = useState(false)
-  const [isCheckingMFA, setIsCheckingMFA] = useState(true)
   const { data: session, status } = useSession()
-  const router = useRouter()
   const pathname = usePathname()
 
+  const userId = session?.user?.id
   const requiresMFA = session?.requiresMFA || false
+  const onLoginPage = pathname === '/login'
 
-  useEffect(() => {
-    if (status === 'loading') return
+  const storedVerification = useSyncExternalStore<boolean | null>(
+    subscribeToStorage,
+    () => (userId && requiresMFA ? readStoredVerification(userId) : false),
+    getServerVerificationSnapshot
+  )
 
-    if (!session?.user) {
-      setIsCheckingMFA(false)
-      setIsMFAVerified(false)
-      return
-    }
-
-    if (pathname === '/login' || !requiresMFA) {
-      setIsCheckingMFA(false)
-      setIsMFAVerified(true)
-      return
-    }
-    const storedMFAVerification = sessionStorage.getItem(`mfa_verified_${session.user.id}`)
-    if (storedMFAVerification) {
-      const verificationData = JSON.parse(storedMFAVerification)
-      if (verificationData.verified) {
-        setIsMFAVerified(true)
-        setIsCheckingMFA(false)
-        return
-      }
-    }
-
-    if (requiresMFA && !isMFAVerified) {
-      setIsCheckingMFA(false)
-    } else {
-      setIsCheckingMFA(false)
-    }
-  }, [session, status, pathname, requiresMFA, isMFAVerified])
+  const needsVerificationLookup = Boolean(userId) && requiresMFA && !onLoginPage
+  const isCheckingMFA =
+    status === 'loading' || (needsVerificationLookup && storedVerification === null)
+  const isMFAVerified =
+    Boolean(userId) && (!requiresMFA || onLoginPage || storedVerification === true)
 
   const setMFAVerified = (verified: boolean) => {
-    setIsMFAVerified(verified)
-
-    if (verified && session?.user?.id) {
+    if (!userId) return
+    if (verified) {
       sessionStorage.setItem(
-        `mfa_verified_${session.user.id}`,
+        storageKey(userId),
         JSON.stringify({
           verified: true,
-          sessionId: session.user.id,
+          sessionId: userId,
         })
       )
-    } else if (session?.user?.id) {
-      sessionStorage.removeItem(`mfa_verified_${session.user.id}`)
+    } else {
+      sessionStorage.removeItem(storageKey(userId))
     }
+    notifyStorageListeners()
   }
 
   return (

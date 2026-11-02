@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { nanoid } from 'nanoid'
+import * as z from 'zod'
 
 export interface Track {
   id: string
@@ -20,7 +21,7 @@ export interface Playlist {
 
 type LibraryState = 'uninitialized' | 'loaded' | 'cleared'
 
-interface MiniPlayerState {
+export interface MiniPlayerState {
   enabled: boolean
   tracks: Track[]
   playlists: Playlist[]
@@ -63,13 +64,6 @@ interface MiniPlayerState {
   removeTrackFromPlaylist: (trackId: string, playlistId: string) => void
 }
 
-const storeLog = (...args: unknown[]) => {
-  if (typeof console !== 'undefined') {
-    // eslint-disable-next-line no-console
-    console.debug('[MiniStore]', ...args)
-  }
-}
-
 const extractVideoId = (input: string): string | null => {
   if (/^[a-zA-Z0-9_-]{11}$/.test(input)) return input
   try {
@@ -82,7 +76,7 @@ const extractVideoId = (input: string): string | null => {
       if (vParam) return vParam
       if (url.hostname === 'youtu.be') return url.pathname.slice(1) || null
       const pathMatch = url.pathname.match(/\/(?:embed\/|v\/)?([a-zA-Z0-9_-]{11})/)
-      if (pathMatch) return pathMatch[1]
+      if (pathMatch?.[1]) return pathMatch[1]
     }
     return null
   } catch {
@@ -90,33 +84,38 @@ const extractVideoId = (input: string): string | null => {
   }
 }
 
-async function fetchDefaultTracks() {
+/** `songs.json` is either a bare array or `{ videos }`; invalid entries are skipped. */
+const songsFileSchema = z.union([
+  z.array(z.unknown()),
+  z.object({ videos: z.array(z.unknown()).optional().catch(undefined) }),
+])
+
+const defaultTrackSchema = z.object({
+  id: z.string().min(1),
+  url: z.string().min(1),
+  title: z.string().min(1),
+  artist: z.string().optional().catch(undefined),
+  album: z.string().catch(''),
+})
+
+const oembedSchema = z.object({
+  title: z.string().optional().catch(undefined),
+  author_name: z.string().optional().catch(undefined),
+})
+
+async function fetchDefaultTracks(): Promise<Track[]> {
   try {
     const res = await fetch('/data/songs.json')
-    const data = (await res.json()) as { videos?: unknown[] } | unknown[]
-    const videos: unknown[] = Array.isArray(data) ? data : data?.videos ?? []
+    const data = songsFileSchema.parse(await res.json())
+    const videos = Array.isArray(data) ? data : (data.videos ?? [])
 
-    const tracks: Track[] = []
-    for (const video of videos) {
-      if (!video || typeof video !== 'object') continue
-      const v = video as Record<string, unknown>
-      const id = typeof v.id === 'string' ? v.id : undefined
-      const url = typeof v.url === 'string' ? v.url : undefined
-      const title = typeof v.title === 'string' ? v.title : undefined
-      if (!id || !url || !title) continue
-      tracks.push({
-        id,
-        url,
-        title,
-        artist: typeof v.artist === 'string' ? v.artist : undefined,
-        album: typeof v.album === 'string' ? v.album : '',
-      })
-    }
-
-    return tracks
+    return videos.flatMap(video => {
+      const track = defaultTrackSchema.safeParse(video)
+      return track.success ? [track.data] : []
+    })
   } catch (e) {
     console.error('Failed to load default ipod videos', e)
-    return [] as Track[]
+    return []
   }
 }
 
@@ -128,7 +127,7 @@ async function fetchTrackMetadata(videoId: string) {
     const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(youtubeUrl)}&format=json`
     const resp = await fetch(oembedUrl)
     if (resp.ok) {
-      const data = (await resp.json()) as { title?: string; author_name?: string }
+      const data = oembedSchema.parse(await resp.json())
       title = data.title || title
       artist = data.author_name || artist
     }
@@ -139,6 +138,39 @@ async function fetchTrackMetadata(videoId: string) {
 }
 
 const CURRENT_VERSION = 0
+
+const persistedMiniPlayerSchema = z
+  .object({
+    tracks: z.array(
+      z.object({
+        id: z.string(),
+        url: z.string(),
+        title: z.string(),
+        artist: z.string().optional(),
+        album: z.string().optional(),
+        duration: z.number().optional(),
+        lyricOffset: z.number().optional(),
+      })
+    ),
+    playlists: z.array(z.object({ id: z.string(), name: z.string(), trackIds: z.array(z.string()) })),
+    activePlaylistId: z.string().nullable(),
+    currentIndex: z.number(),
+    loopAll: z.boolean(),
+    loopCurrent: z.boolean(),
+    isShuffled: z.boolean(),
+    libraryState: z.enum(['uninitialized', 'loaded', 'cleared']),
+    showVideo: z.boolean(),
+    showLyrics: z.boolean(),
+  })
+  .partial()
+
+type PersistedMiniPlayerState = z.infer<typeof persistedMiniPlayerSchema>
+
+/** State persisted under another version: keep it if it still has the current shape, else start fresh. */
+const migratePersistedMiniPlayerState = (persisted: unknown): PersistedMiniPlayerState => {
+  const parsed = persistedMiniPlayerSchema.safeParse(persisted)
+  return parsed.success ? parsed.data : {}
+}
 
 export const useMiniPlayerStore = create<MiniPlayerState>()(
   persist(
@@ -188,10 +220,8 @@ export const useMiniPlayerStore = create<MiniPlayerState>()(
         const state = get()
         if (state.initializing) return
         if (state.tracks.length === 0) {
-          storeLog('initializeLibrary -> fetching defaults')
           set({ initializing: true })
           const tracks = await fetchDefaultTracks()
-          storeLog('initializeLibrary defaults loaded', tracks.length)
           set({
             tracks,
             currentIndex: tracks.length ? 0 : -1,
@@ -216,7 +246,6 @@ export const useMiniPlayerStore = create<MiniPlayerState>()(
         set((state) => {
           if (!state.tracks.length) return state
           if (state.loopCurrent) return { isPlaying: true }
-          storeLog('nextTrack', { currentIndex: state.currentIndex })
           const activeTrackIds = state.activePlaylistId
             ? state.playlists.find((p) => p.id === state.activePlaylistId)?.trackIds || []
             : null
@@ -235,19 +264,16 @@ export const useMiniPlayerStore = create<MiniPlayerState>()(
           let nextIndex: number
           if (state.isShuffled) {
             const choices = availableIndices.filter((i) => i !== state.currentIndex)
-            nextIndex = choices.length
-              ? choices[Math.floor(Math.random() * choices.length)]
-              : state.currentIndex
+            nextIndex = choices[Math.floor(Math.random() * choices.length)] ?? state.currentIndex
           } else {
             const nextPos = (currentPos + 1) % total
-            nextIndex = availableIndices[nextPos]
+            nextIndex = availableIndices[nextPos] ?? state.currentIndex
           }
           return { currentIndex: nextIndex, isPlaying: true, progressMs: 0 }
         }),
       previousTrack: () =>
         set((state) => {
           if (!state.tracks.length) return state
-          storeLog('previousTrack', { currentIndex: state.currentIndex })
           const activeTrackIds = state.activePlaylistId
             ? state.playlists.find((p) => p.id === state.activePlaylistId)?.trackIds || []
             : null
@@ -277,7 +303,6 @@ export const useMiniPlayerStore = create<MiniPlayerState>()(
       addTrackFromUrl: async (urlOrId: string) => {
         const videoId = extractVideoId(urlOrId.trim())
         if (!videoId) throw new Error('Enter a valid YouTube link or video ID')
-        storeLog('addTrackFromUrl', urlOrId, '->', videoId)
         const meta = await fetchTrackMetadata(videoId)
         const track: Track = {
           id: meta.id,
@@ -292,14 +317,12 @@ export const useMiniPlayerStore = create<MiniPlayerState>()(
           return track
         }
         set({ tracks: [track, ...existing], currentIndex: 0, isPlaying: true, progressMs: 0 })
-        storeLog('added new track', track)
         return track
       },
       playTrack: (trackId: string) => {
         set((state) => {
           const idx = state.tracks.findIndex((t) => t.id === trackId)
           if (idx === -1) return state
-          storeLog('playTrack', trackId)
           return { currentIndex: idx, isPlaying: true, progressMs: 0 }
         })
       },
@@ -341,7 +364,7 @@ export const useMiniPlayerStore = create<MiniPlayerState>()(
     {
       name: 'mini-player-store',
       version: CURRENT_VERSION,
-      partialize: (state) => ({
+      partialize: (state): PersistedMiniPlayerState => ({
         tracks: state.tracks,
         playlists: state.playlists,
         activePlaylistId: state.activePlaylistId,
@@ -353,7 +376,7 @@ export const useMiniPlayerStore = create<MiniPlayerState>()(
         showVideo: state.showVideo,
         showLyrics: state.showLyrics,
       }),
-      migrate: (state) => state as any,
+      migrate: migratePersistedMiniPlayerState,
     }
   )
 )

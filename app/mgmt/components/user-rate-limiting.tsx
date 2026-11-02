@@ -2,8 +2,9 @@
 
 import React from 'react'
 import { Clock, Users } from 'lucide-react'
+import type { RateLimitStatusResponse } from '@/types/api/rate-limit'
 
-export default function UserRateLimiting({ data }: any) {
+export default function UserRateLimiting({ data }: { data: RateLimitStatusResponse }) {
   return (
     <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
       <div className="flex flex-col space-y-1.5 mb-6">
@@ -12,6 +13,7 @@ export default function UserRateLimiting({ data }: any) {
         </div>
         <div className="text-sm text-muted-foreground lowercase">
           per-user request rate limiting configuration
+          {data.userRateLimit.enabled ? '' : ' (disabled)'}
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -20,7 +22,7 @@ export default function UserRateLimiting({ data }: any) {
           <div>
             <p className="font-medium text-sm md:text-base">Per Minute</p>
             <p className="text-xs md:text-sm text-muted-foreground">
-              {data.configuration.userRateLimit.requestsPerMinute} requests
+              {data.userRateLimit.requestsPerMinute} requests
             </p>
           </div>
         </div>
@@ -29,7 +31,7 @@ export default function UserRateLimiting({ data }: any) {
           <div>
             <p className="font-medium text-sm md:text-base">Per Hour</p>
             <p className="text-xs md:text-sm text-muted-foreground">
-              {data.configuration.userRateLimit.requestsPerHour} requests
+              {data.userRateLimit.requestsPerHour} requests
             </p>
           </div>
         </div>
@@ -38,7 +40,7 @@ export default function UserRateLimiting({ data }: any) {
           <div>
             <p className="font-medium text-sm md:text-base">Per Day</p>
             <p className="text-xs md:text-sm text-muted-foreground">
-              {data.configuration.userRateLimit.requestsPerDay} requests
+              {data.userRateLimit.requestsPerDay} requests
             </p>
           </div>
         </div>

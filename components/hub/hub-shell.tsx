@@ -69,6 +69,11 @@ import {
 import { toast } from 'sonner'
 import { HUB_BRIEFING_ACTION_EVENT } from '@/lib/hub/constants'
 import { readJson } from '@/lib/http'
+import type { HubToolArgs } from './types'
+import { asRecord, readRecords, readString, readText } from '@/components/narrow'
+
+const isHubCommand = (value: unknown): value is HubVTOPCommand =>
+  HUB_COMMANDS.some(command => command === value)
 
 const PINNED_COMMANDS: HubVTOPCommand[] = ['timetable', 'attendance', 'marks', 'cgpa', 'profile']
 const SNAPSHOT_ICONS: Partial<Record<HubVTOPCommand, ReactNode>> = {
@@ -121,7 +126,7 @@ type HubShellProps = {
   actions: HubActionHandlers
   syncing?: boolean
   onLink?: () => void
-  preferences?: Record<string, any>
+  preferences?: Record<string, unknown>
   visible?: boolean
 }
 
@@ -171,10 +176,9 @@ export default function HubShell({
   const capabilities = useMemo(() => listHubCapabilities(), [])
   const nowTick = useNow(60000)
   const snapshotMap = useMemo(() => {
-    const map = new Map<HubVTOPCommand, PersonalHubSnapshot>()
+    const map = new Map<string, PersonalHubSnapshot>()
     hubState.snapshots.forEach(snapshot => {
-      const cmd = snapshot.command as HubVTOPCommand
-      map.set(cmd, snapshot)
+      map.set(snapshot.command, snapshot)
     })
     return map
   }, [hubState.snapshots])
@@ -184,11 +188,12 @@ export default function HubShell({
     [snapshotMap]
   )
   const briefingPrefs = useMemo(() => {
-    const base = preferences?.dailyBriefing || {}
+    const base = asRecord(preferences?.dailyBriefing) ?? {}
+    const dismissTime = readString(base.dismissTime)
     return {
-      dismissTime: base.dismissTime || '07:30',
-      emailEnabled: base.emailEnabled ?? false,
-      emailTime: base.emailTime || base.dismissTime || '07:30',
+      dismissTime: dismissTime || '07:30',
+      emailEnabled: typeof base.emailEnabled === 'boolean' ? base.emailEnabled : false,
+      emailTime: readString(base.emailTime) || dismissTime || '07:30',
     }
   }, [preferences])
 
@@ -207,8 +212,12 @@ export default function HubShell({
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.altKey || e.metaKey || e.ctrlKey) return
-      const target = e.target as HTMLElement | null
-      if (target && target.closest('input, textarea, [contenteditable="true"], select')) return
+      const target = e.target
+      if (
+        target instanceof Element &&
+        target.closest('input, textarea, [contenteditable="true"], select')
+      )
+        return
       const map: Record<string, Page> = {
         '1': 'briefing',
         '2': 'vtop',
@@ -248,7 +257,7 @@ export default function HubShell({
   }, [hubState.isLinked, setHubState])
 
   const runVtopCommand = useCallback(
-    async (command: HubVTOPCommand, extras?: Record<string, any>) => {
+    async (command: HubVTOPCommand, extras?: Record<string, unknown>) => {
       let credentials: VTOPCredentialPayload | undefined
       try {
         const formatted = clientGetFormattedVTOPCredentials()
@@ -266,7 +275,7 @@ export default function HubShell({
   )
 
   const toolExecutor = useCallback(
-    (toolName: string, args?: Record<string, any>) => {
+    (toolName: string, args?: HubToolArgs) => {
       return actions.runTool(toolName, args || {})
     },
     [actions]
@@ -391,21 +400,13 @@ export default function HubShell({
 
   useEffect(() => {
     const handleExternalBriefingAction = (event: Event) => {
-      const detail = (event as CustomEvent<{ command?: string }>).detail
-      if (!detail?.command) return
-      const inbound = detail.command as HubVTOPCommand
-      if (!HUB_COMMANDS.includes(inbound)) return
+      const detail: unknown = event instanceof CustomEvent ? event.detail : undefined
+      const inbound = asRecord(detail)?.command
+      if (!inbound || !isHubCommand(inbound)) return
       handleBriefingAction(inbound)
     }
-    window.addEventListener(
-      HUB_BRIEFING_ACTION_EVENT,
-      handleExternalBriefingAction as EventListener
-    )
-    return () =>
-      window.removeEventListener(
-        HUB_BRIEFING_ACTION_EVENT,
-        handleExternalBriefingAction as EventListener
-      )
+    window.addEventListener(HUB_BRIEFING_ACTION_EVENT, handleExternalBriefingAction)
+    return () => window.removeEventListener(HUB_BRIEFING_ACTION_EVENT, handleExternalBriefingAction)
   }, [handleBriefingAction])
 
   const latestSnapshots = useMemo(() => {
@@ -628,8 +629,8 @@ export default function HubShell({
       }
       forceDailyBriefing()
     }
-    window.addEventListener('ea.dailyBriefingReset', handleReset as EventListener)
-    return () => window.removeEventListener('ea.dailyBriefingReset', handleReset as EventListener)
+    window.addEventListener('ea.dailyBriefingReset', handleReset)
+    return () => window.removeEventListener('ea.dailyBriefingReset', handleReset)
   }, [forceDailyBriefing, visible, setState])
 
   useEffect(() => {
@@ -690,8 +691,8 @@ export default function HubShell({
       }
       handleRefreshState()
     }
-    window.addEventListener('vtopCredentialsLinked', handleLinked as EventListener)
-    return () => window.removeEventListener('vtopCredentialsLinked', handleLinked as EventListener)
+    window.addEventListener('vtopCredentialsLinked', handleLinked)
+    return () => window.removeEventListener('vtopCredentialsLinked', handleLinked)
   }, [handleRefreshState, launchDailyBriefing, setState, visible])
 
   useEffect(() => {
@@ -704,9 +705,8 @@ export default function HubShell({
     setState({ dailyHydration: { running: true, completed: 0, total: hydrationQueue.length } })
     setState({ hydrationCurrentCommand: null })
     ;(async () => {
-      for (let idx = 0; idx < hydrationQueue.length; idx++) {
+      for (const [idx, command] of hydrationQueue.entries()) {
         if (cancelled) break
-        const command = hydrationQueue[idx]
         setState({ hydrationCurrentCommand: command })
         try {
           await runVtopCommand(command)
@@ -946,12 +946,17 @@ export default function HubShell({
     [examsSnapshot, nowTick]
   )
   const attendanceRisks = useMemo(() => {
-    const rows = ((attendanceSnapshot?.structured_data as any)?.rows || []) as any[]
+    const rows = readRecords(asRecord(attendanceSnapshot?.structured_data)?.rows)
     return rows
       .map(row => {
         const numeric =
           typeof row.percentage === 'string' ? parseFloat(row.percentage) : Number(row.percentage)
-        return { ...row, numeric: Number.isFinite(numeric) ? numeric : null }
+        return {
+          subject: readString(row.subject),
+          percentage: readText(row.percentage),
+          alert: readString(row.alert),
+          numeric: Number.isFinite(numeric) ? numeric : null,
+        }
       })
       .filter(row => row.numeric !== null)
       .sort((a, b) => (a.numeric ?? 0) - (b.numeric ?? 0))
@@ -1084,7 +1089,7 @@ export default function HubShell({
                     label="attendance"
                     items={attendanceRisks.map(item => ({
                       title: item.subject,
-                      meta: item.percentage,
+                      meta: item.percentage === undefined ? undefined : String(item.percentage),
                       supporting: item.alert?.toLowerCase().includes('attend')
                         ? item.alert
                         : undefined,
@@ -1380,15 +1385,21 @@ function TimetablePeek({
   onOpen?: () => void
   now?: number
 }) {
-  const data: any = snapshot.structured_data
-  const classes: any[] = Array.isArray(data?.classes) ? data.classes : []
+  const data = asRecord(snapshot.structured_data)
+  const classes = readRecords(data?.classes).map(toTimetableClass)
   if (!classes.length) return null
   const reference = now ? new Date(now) : new Date()
-  const rolling: NextClassComputation = computeDynamicNextClass(data, reference)
-  const highlight = rolling?.classInfo || data?.nextClass || classes[0]
+  const rolling: NextClassComputation = computeDynamicNextClass(snapshot.structured_data, reference)
+  const rollingClass = asRecord(rolling?.classInfo)
+  const nextClass = asRecord(data?.nextClass)
+  const highlight = rollingClass
+    ? toTimetableClass(rollingClass)
+    : nextClass
+      ? toTimetableClass(nextClass)
+      : classes[0]
   const rows = classes.slice(0, 4)
 
-  const formatTime = (cls: any) => {
+  const formatTime = (cls: TimetableClass) => {
     if (cls?.startTime && cls?.endTime) return `${cls.startTime} – ${cls.endTime}`
     if (cls?.startTime) return cls.startTime
     if (cls?.slot) return cls.slot
@@ -1519,7 +1530,7 @@ function SnapshotGlance({
   onOpen: (snapshot: PersonalHubSnapshot) => void
   minimal?: boolean
 }) {
-  const icon = SNAPSHOT_ICONS[snapshot.command as HubVTOPCommand]
+  const icon = isHubCommand(snapshot.command) ? SNAPSHOT_ICONS[snapshot.command] : undefined
   const summary =
     snapshot.summary?.split('\n').filter(Boolean).slice(0, 2).join(' ') || 'view details'
   const updatedLabel = formatDistanceToNow(new Date(snapshot.fetchedAt), { addSuffix: true })
@@ -1575,12 +1586,31 @@ type HubNotification = {
   command?: HubVTOPCommand
 }
 
-function isCredentialError(error: any) {
+type TimetableClass = {
+  day?: string | number
+  slot?: string | number
+  subject?: string | number
+  startTime?: string | number
+  endTime?: string | number
+  venue?: string | number
+}
+
+function toTimetableClass(value: Record<string, unknown>): TimetableClass {
+  return {
+    day: readText(value.day),
+    slot: readText(value.slot),
+    subject: readText(value.subject),
+    startTime: readText(value.startTime),
+    endTime: readText(value.endTime),
+    venue: readText(value.venue),
+  }
+}
+
+function isCredentialError(error: unknown) {
   if (!error) return false
+  const record = asRecord(error)
   const message =
-    (typeof error === 'string' && error) ||
-    (typeof error?.message === 'string' && error.message) ||
-    (typeof error?.cause === 'string' && error.cause)
+    (typeof error === 'string' && error) || readString(record?.message) || readString(record?.cause)
   if (!message) return false
   const lower = message.toLowerCase()
   return lower.includes('credential') || lower.includes('login')

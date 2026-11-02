@@ -2,35 +2,54 @@
 
 import type React from 'react'
 
-import { useState } from 'react'
+import { isValidElement, useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-interface Column {
+type TableRow = Record<string, unknown>
+
+interface Column<Row extends TableRow> {
   key: string
   header: string
   className?: string
-  render?: (value: any, row: any) => React.ReactNode
+  render?: (value: unknown, row: Row) => React.ReactNode
 }
 
-interface ResponsiveTableProps {
-  data: any[]
-  columns: Column[]
+interface ResponsiveTableProps<Row extends TableRow> {
+  data: Row[]
+  columns: Column<Row>[]
   className?: string
   rowClassName?: string
   emptyMessage?: string
   maxMobileColumns?: number
 }
 
-export function ResponsiveTable({
+/** Renders a raw cell value; values React can't render (plain objects) are shown as JSON. */
+function renderCellValue(value: unknown): React.ReactNode {
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'bigint' ||
+    typeof value === 'boolean' ||
+    isValidElement(value)
+  ) {
+    return value
+  }
+  if (Array.isArray(value)) return value.map(renderCellValue)
+  return JSON.stringify(value)
+}
+
+export function ResponsiveTable<Row extends TableRow>({
   data,
   columns,
   className,
   rowClassName,
   emptyMessage = 'No data available',
   maxMobileColumns = 3,
-}: ResponsiveTableProps) {
+}: ResponsiveTableProps<Row>) {
   const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>({})
 
   const toggleRow = (index: number) => {
@@ -82,7 +101,9 @@ export function ResponsiveTable({
                     key={`${rowIndex}-${column.key}`}
                     className={cn('px-4 py-3 text-sm align-top', column.className)}
                   >
-                    {column.render ? column.render(row[column.key], row) : row[column.key]}
+                    {column.render
+                      ? column.render(row[column.key], row)
+                      : renderCellValue(row[column.key])}
                   </td>
                 ))}
               </tr>
@@ -112,7 +133,9 @@ export function ResponsiveTable({
                       {column.header}
                     </span>
                     <div className="text-sm">
-                      {column.render ? column.render(row[column.key], row) : row[column.key]}
+                      {column.render
+                        ? column.render(row[column.key], row)
+                        : renderCellValue(row[column.key])}
                     </div>
                   </div>
                 ))}

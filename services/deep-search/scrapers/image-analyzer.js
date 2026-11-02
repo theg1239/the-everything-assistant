@@ -1,4 +1,4 @@
-const { generateObject, generateText } = require('ai')
+const { generateText, Output } = require('ai')
 const { openai } = require('@ai-sdk/openai')
 const { z } = require('zod')
 const logger = require('../utils/logger')
@@ -22,9 +22,9 @@ class ImageAnalyzer {
         subject_areas: z.array(z.string()).describe('Relevant academic subjects'),
       })
 
-      const result = await generateObject({
+      const result = await generateText({
         model: this.visionModel,
-        schema: analysisSchema,
+        output: Output.object({ schema: analysisSchema }),
         messages: [
           {
             role: 'user',
@@ -40,9 +40,9 @@ class ImageAnalyzer {
                 6. Relevant academic subjects`,
               },
               {
-                type: 'image',
-                image: base64Image,
-                mimeType: mimeType,
+                type: 'file',
+                mediaType: mimeType,
+                data: { type: 'data', data: base64Image },
               },
             ],
           },
@@ -54,7 +54,7 @@ class ImageAnalyzer {
         },
       })
 
-      return result.object
+      return result.output
     } catch (error) {
       logger.error('Error analyzing image with AI SDK:', error)
       return {
@@ -96,9 +96,9 @@ class ImageAnalyzer {
                 text: 'Provide a detailed alt-text description for this image that would be helpful for visually impaired users. Focus on educational content, diagrams, charts, or any academic material shown.',
               },
               {
-                type: 'image',
-                image: base64Image,
-                mimeType: mimeType,
+                type: 'file',
+                mediaType: mimeType,
+                data: { type: 'data', data: base64Image },
               },
             ],
           },

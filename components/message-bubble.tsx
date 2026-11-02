@@ -8,25 +8,35 @@ import { SourceUrlPart } from './message-parts/source-url-part'
 import { MusicPlayerToolHandler } from './music-player-tool-handler'
 import { MessageActions } from './message-actions'
 import { SelectionMenu } from './selection-menu'
-import { memo, useMemo, useState, useEffect, useId, useRef } from 'react'
+import { memo, useMemo, useState, useEffect, useId, useRef, type ComponentProps } from 'react'
 import type { LegacyMessage } from '@/lib/ai-message-conversion'
 import { ChevronDown, FileIcon, Loader2 } from 'lucide-react'
-import { generateId } from 'ai'
+import { generateId, isToolUIPart } from 'ai'
 import type { Attachment } from '@/types/attachment'
 
-type NormalizedToolInvocation = {
+export type NormalizedToolInvocation = {
   toolCallId: string
   toolName: string
-  args?: Record<string, any>
-  result?: any
+  args?: Record<string, unknown>
+  result?: unknown
   state?: 'partial-call' | 'call' | 'result' | 'error'
   error?: string
   providerExecuted?: boolean
 }
 
-const mapUiStateToLegacyState = (
-  state?: 'input-streaming' | 'input-available' | 'output-available' | 'output-error'
-): NormalizedToolInvocation['state'] => {
+/** Item currently maximized inside an artifact; owned by ToolCallDisplay/ArtifactDisplay. */
+export type MaximizedItem = NonNullable<ComponentProps<typeof ToolCallDisplay>['maximizedItem']>
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
+const readString = (value: unknown): string | undefined =>
+  typeof value === 'string' ? value : undefined
+
+const readAttachmentName = (metadata: unknown): string | undefined =>
+  isRecord(metadata) ? readString(metadata.attachmentName) : undefined
+
+const mapUiStateToLegacyState = (state?: string): NormalizedToolInvocation['state'] => {
   switch (state) {
     case 'input-streaming':
       return 'partial-call'
@@ -51,24 +61,24 @@ const normalizeToolInvocations = (message: LegacyMessage): NormalizedToolInvocat
   const seen = new Set<string>()
 
   if (Array.isArray(message.parts)) {
-    message.parts.forEach((part: any, index: number) => {
-      if (!part || typeof part !== 'object') return
-      const isToolPart =
-        typeof part.type === 'string' &&
-        (part.type === 'dynamic-tool' || part.type.startsWith('tool-'))
-      if (!isToolPart) return
+    message.parts.forEach((part, index) => {
+      if (!part || typeof part !== 'object' || typeof part.type !== 'string') return
+      if (!isToolUIPart(part)) return
+      // Persisted parts may still carry legacy `toolName` / `args` / `result` fields.
+      const raw: Record<string, unknown> = part
 
       const toolName =
-        typeof part.toolName === 'string'
-          ? part.toolName
+        typeof raw.toolName === 'string'
+          ? raw.toolName
           : deriveToolNameFromType(part.type, `tool-${index}`)
       const toolCallId = part.toolCallId || `${toolName}-${message.id || 'message'}-${index}`
+      const input = part.input ?? raw.args
 
       const invocation: NormalizedToolInvocation = {
         toolCallId,
         toolName,
-        args: (part.input as Record<string, any>) ?? part.args,
-        result: part.output ?? part.result,
+        args: isRecord(input) ? input : undefined,
+        result: part.output ?? raw.result,
         state: mapUiStateToLegacyState(part.state),
         error: part.errorText,
         providerExecuted: part.providerExecuted,
@@ -79,8 +89,8 @@ const normalizeToolInvocations = (message: LegacyMessage): NormalizedToolInvocat
     })
   }
 
-  if (Array.isArray((message as any).toolInvocations)) {
-    ;(message as any).toolInvocations.forEach((tool: any, index: number) => {
+  if (Array.isArray(message.toolInvocations)) {
+    message.toolInvocations.forEach((tool, index) => {
       const toolCallId = tool.toolCallId || generateId()
       if (seen.has(toolCallId)) return
       normalized.push({
@@ -90,7 +100,10 @@ const normalizeToolInvocations = (message: LegacyMessage): NormalizedToolInvocat
         result: tool.result,
         state: tool.state,
         error: tool.error,
-        providerExecuted: tool.providerExecuted,
+        providerExecuted:
+          'providerExecuted' in tool && typeof tool.providerExecuted === 'boolean'
+            ? tool.providerExecuted
+            : undefined,
       })
       seen.add(toolCallId)
     })
@@ -106,8 +119,8 @@ interface MessageBubbleProps {
   onCreateCanvas?: (content: string) => void
   onLoginClick?: () => void
   onPlacementSearch?: (company: string) => void
-  maximizedItem?: any
-  setMaximizedItem?: (item: any) => void
+  maximizedItem?: MaximizedItem | null
+  setMaximizedItem?: (item: MaximizedItem | null) => void
   onQuote?: (text: string) => void
 }
 
@@ -143,6 +156,7 @@ const ReasoningPanel = memo(function ReasoningPanel({
       const timer = setTimeout(() => setIsOpen(false), 1000)
       return () => clearTimeout(timer)
     }
+    return undefined
   }, [isStreaming, isOpen, duration, manuallyToggled])
 
   if (!text) return null
@@ -222,13 +236,13 @@ const PureMessageBubble = ({
 
   const toolInvocations = useMemo(
     () => normalizeToolInvocations(message),
-    [message, message.parts, (message as any).toolInvocations]
+    [message, message.parts, message.toolInvocations]
   )
 
   const visibleToolCalls = useMemo(() => {
     const filtered =
       toolInvocations?.filter(
-        (t: any) => t.toolName !== 'knowledgeBase' && t.toolName !== 'saveMemory'
+        t => t.toolName !== 'knowledgeBase' && t.toolName !== 'saveMemory'
       ) || []
 
     return filtered
@@ -236,8 +250,8 @@ const PureMessageBubble = ({
 
   const reasoningParts = useMemo(
     () =>
-      (message.parts || []).filter(
-        part => part?.type === 'reasoning' && typeof (part as any).text === 'string'
+      (message.parts || []).flatMap(part =>
+        part?.type === 'reasoning' && typeof part.text === 'string' ? [part] : []
       ),
     [message.parts]
   )
@@ -245,73 +259,44 @@ const PureMessageBubble = ({
   const reasoningText = useMemo(() => {
     if (!reasoningParts.length) return ''
     return reasoningParts
-      .map(part => ((part as any).text as string).trim())
+      .map(part => part.text.trim())
       .filter(Boolean)
       .join('\n\n')
   }, [reasoningParts])
 
   const attachments = useMemo(() => {
-    const partFiles: Attachment[] =
-      Array.isArray(message.parts) && message.parts.length > 0
-        ? (message.parts
-            .filter(part => typeof part === 'object' && part !== null && (part as { type?: string }).type === 'file')
-            .map(part => {
-              const filePart = part as {
-                url?: string
-                filename?: string
-                name?: string
-                mediaType?: string
-                providerMetadata?: { attachmentName?: string }
-                providerOptions?: { attachmentName?: string }
-                file?: {
-                  url?: string
-                  filename?: string
-                  name?: string
-                  mediaType?: string
-                  providerMetadata?: { attachmentName?: string }
-                  providerOptions?: { attachmentName?: string }
-                }
-              }
-              const url =
-                typeof filePart.url === 'string'
-                  ? filePart.url
-                  : typeof filePart.file?.url === 'string'
-                    ? filePart.file.url
-                    : undefined
-              const mediaType =
-                typeof filePart.mediaType === 'string'
-                  ? filePart.mediaType
-                  : typeof filePart.file?.mediaType === 'string'
-                    ? filePart.file.mediaType
-                    : undefined
-              if (!url || !mediaType) return null
-              const attachmentName =
-                filePart.filename ||
-                filePart.providerMetadata?.attachmentName ||
-                filePart.providerOptions?.attachmentName ||
-                filePart.name ||
-                filePart.file?.filename ||
-                filePart.file?.providerMetadata?.attachmentName ||
-                filePart.file?.providerOptions?.attachmentName ||
-                filePart.file?.name ||
-                null
-              return {
-                url,
-                name: attachmentName,
-                contentType: mediaType,
-              };
-            })
-            .filter(att => att !== null) as Attachment[])
-        : []
+    const partFiles: Attachment[] = (message.parts ?? []).flatMap((part): Attachment[] => {
+      if (typeof part !== 'object' || part === null || part.type !== 'file') return []
+      // Stored file parts may use legacy shapes (`name`, nested `file`, attachmentName metadata).
+      const filePart: Record<string, unknown> = part
+      const nested = isRecord(filePart.file) ? filePart.file : undefined
+      const url = readString(filePart.url) ?? readString(nested?.url)
+      const mediaType = readString(filePart.mediaType) ?? readString(nested?.mediaType)
+      if (!url || !mediaType) return []
+      const attachmentName =
+        readString(filePart.filename) ||
+        readAttachmentName(filePart.providerMetadata) ||
+        readAttachmentName(filePart.providerOptions) ||
+        readString(filePart.name) ||
+        readString(nested?.filename) ||
+        readAttachmentName(nested?.providerMetadata) ||
+        readAttachmentName(nested?.providerOptions) ||
+        readString(nested?.name) ||
+        null
+      return [
+        {
+          url,
+          name: attachmentName,
+          contentType: mediaType,
+        },
+      ]
+    })
 
-    const legacyAttachments: Attachment[] =
-      Array.isArray((message as LegacyMessage).attachments) && (message as LegacyMessage).attachments!.length > 0
-        ? (message as LegacyMessage).attachments!.map(att => ({
-            url: (att as { url?: string }).url ?? '',
-            name: (att as { name?: string | null }).name ?? undefined,
-            contentType: (att as { contentType?: string }).contentType ?? '',
-          }))
-        : []
+    const legacyAttachments: Attachment[] = (message.attachments ?? []).map(att => ({
+      url: att.url,
+      name: att.name ?? undefined,
+      contentType: att.contentType ?? '',
+    }))
 
     const mapped = [...partFiles, ...legacyAttachments].filter(att => att.url && att.contentType)
     const seen = new Set<string>()
@@ -323,7 +308,7 @@ const PureMessageBubble = ({
   }, [message.parts, message.attachments])
 
   const hasContent = useMemo(() => {
-    return message.content && (message.content as string).trim() !== ''
+    return message.content && message.content.trim() !== ''
   }, [message.content])
 
   const hasVisibleToolCalls = useMemo(() => {
@@ -331,7 +316,7 @@ const PureMessageBubble = ({
   }, [visibleToolCalls.length])
 
   const hasKnowledgeBaseInProgress = useMemo(() => {
-    return toolInvocations?.some((t: any) => t.toolName === 'knowledgeBase' && t.state !== 'result')
+    return toolInvocations?.some(t => t.toolName === 'knowledgeBase' && t.state !== 'result')
   }, [toolInvocations])
 
   // Build ordered render segments from message.parts
@@ -354,7 +339,7 @@ const PureMessageBubble = ({
         segments.push({ type: 'tools', toolCalls: visibleToolCalls })
       }
       if (hasContent) {
-        segments.push({ type: 'text', content: message.content as string })
+        segments.push({ type: 'text', content: message.content })
       }
       return segments
     }
@@ -402,11 +387,11 @@ const PureMessageBubble = ({
     for (const part of message.parts) {
       if (!part || typeof part !== 'object') continue
 
-      const partType = (part as any).type
+      const partType = part.type
 
       // Handle reasoning - inline where it appears
-      if (partType === 'reasoning' && typeof (part as any).text === 'string') {
-        const reasoningPartText = ((part as any).text as string).trim()
+      if (part.type === 'reasoning' && typeof part.text === 'string') {
+        const reasoningPartText = part.text.trim()
         if (reasoningPartText) {
           // Flush text/tools before reasoning to maintain order
           flushText()
@@ -418,34 +403,36 @@ const PureMessageBubble = ({
       }
 
       // Handle text parts
-      if (partType === 'text' && typeof (part as any).text === 'string') {
+      if (part.type === 'text' && typeof part.text === 'string') {
         // Flush reasoning and tools before text
         flushReasoning()
         flushTools()
-        currentTextContent += (currentTextContent ? '\n\n' : '') + (part as any).text
+        currentTextContent += (currentTextContent ? '\n\n' : '') + part.text
         continue
       }
 
       // Handle source-url citation parts — collect them to render as chips
       // after the surrounding text via the shared SourceUrlPart component.
-      if (partType === 'source-url') {
-        const url = (part as { url?: string }).url
+      if (part.type === 'source-url') {
+        const url = part.url
         if (url) {
           flushReasoning()
           flushTools()
-          const title = (part as { title?: string }).title
+          const title = part.title
           currentSources.push({ url, title })
         }
         continue
       }
 
       // Handle tool invocations
-      const isToolPart = partType === 'dynamic-tool' || (partType && partType.startsWith?.('tool-'))
-      if (isToolPart) {
-        const toolCallId = (part as any).toolCallId || (part as any).toolName
+      if (typeof partType === 'string' && isToolUIPart(part)) {
+        // Persisted parts may still carry a legacy `toolName` field on static tool parts.
+        const raw: Record<string, unknown> = part
+        const legacyToolName = typeof raw.toolName === 'string' ? raw.toolName : undefined
+        const toolCallId = part.toolCallId || legacyToolName
         
         // Skip hidden tools
-        const toolName = (part as any).toolName || deriveToolNameFromType(partType, 'tool')
+        const toolName = legacyToolName || deriveToolNameFromType(partType, 'tool')
         if (toolName === 'knowledgeBase' || toolName === 'saveMemory' || toolName === 'musicPlayer') {
           continue
         }
@@ -517,13 +504,13 @@ const PureMessageBubble = ({
 
           {/* Render ordered segments for assistant messages */}
           {!isUser && (() => {
-            let reasoningStepIndex = 0
+            // Only show step number if there are multiple reasoning segments
+            const totalReasoningSegments = orderedSegments.filter(s => s.type === 'reasoning').length
             return orderedSegments.map((segment, idx) => {
               if (segment.type === 'reasoning' && segment.reasoningText) {
-                const currentStepIndex = reasoningStepIndex
-                reasoningStepIndex++
-                // Only show step number if there are multiple reasoning segments
-                const totalReasoningSegments = orderedSegments.filter(s => s.type === 'reasoning').length
+                const currentStepIndex = orderedSegments
+                  .slice(0, idx)
+                  .filter(s => s.type === 'reasoning' && s.reasoningText).length
                 return (
                   <ReasoningPanel 
                     key={`reasoning-${idx}`}

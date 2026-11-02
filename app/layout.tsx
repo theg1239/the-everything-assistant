@@ -1,18 +1,17 @@
 import type React from 'react'
 import type { Metadata } from 'next'
-import localFont from 'next/font/local'
-import { Geist, Instrument_Serif, Baumans } from 'next/font/google'
+import { Geist } from 'next/font/google'
 import '@/styles/globals.css'
 import '@/styles/sidebar-styles.css'
 import '@/styles/hamburger-styles.css'
 import '@/styles/sidebar-loading.css'
 import '@/styles/mobile-fixes.css'
 import '@/styles/reddit-mobile.css'
-import 'katex/dist/katex.min.css'
 import { ThemeProvider } from '@/providers/theme-provider'
 import { SessionProvider } from '@/providers/session-provider'
 import { MemoryProvider } from '@/providers/memory-provider'
 import { SidebarProvider } from '@/contexts/sidebar-context'
+import { SIDEBAR_OPEN_COOKIE } from '@/contexts/sidebar-cookie'
 import QueryProvider from '@/providers/query-provider'
 import { MFAGate } from '@/components/mfa-gate'
 import { Toaster } from 'sonner'
@@ -20,45 +19,26 @@ import MobileViewportFix from '@/components/mobile-viewport-fix'
 import ScrollToTop from '@/components/scroll-to-top'
 import { PdfDockProvider } from '@/contexts/pdf-dock-context'
 import PdfDock from '@/components/pdf-dock'
-import SpotifyBubble from '@/components/spotify-bubble'
 import { PerformanceMonitor } from '@/components/performance-monitor'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { GlobalBroadcastDialog } from '@/components/global-broadcast-dialog'
-import { PWAInstallDialog } from '@/components/pwa-install-dialog'
+import { cookies } from 'next/headers'
+import { auth } from '@/lib/auth'
+import {
+  GlobalBroadcastDialog,
+  PWAInstallDialog,
+  SpotifyBubble,
+} from '@/app/_components/deferred-widgets'
 import { SidebarWrapper } from '@/components/sidebar-wrapper'
 import { NewChatHotkey } from '@/components/new-chat-hotkey'
 import { DataStreamProvider } from '@/components/data-stream-provider'
 import { ChatHistoryDialog } from '@/components/chat-history-dialog'
 import { BotIdClient } from 'botid/client'
+import { getLatestBroadcast } from '@/lib/broadcast'
 import type { LatestBroadcastResponse } from '@/types/api/broadcast'
-
-const googleSansFlex = localFont({
-  src: '../public/GoogleSansFlex.ttf',
-  weight: '100 900',
-  style: 'normal',
-  display: 'swap',
-  variable: '--font-google-sans',
-})
 
 const geistSans = Geist({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-sans',
-})
-
-const instrumentSerif = Instrument_Serif({
-  subsets: ['latin'],
-  weight: '400',
-  display: 'swap',
-  variable: '--font-serif',
-})
-
-const baumans = Baumans({
-  subsets: ['latin'],
-  weight: '400',
-  display: 'swap',
-  variable: '--font-display',
 })
 
 const protectedRoutes = [
@@ -94,7 +74,7 @@ export const metadata: Metadata = {
   },
   description:
     'your personal AI agent for vit vellore. access vtop, download past papers, check mess menu, timetables, attendance, grades, and more. the ultimate student companion for vellore institute of technology.',
-  manifest: '/manifest.json',
+  manifest: '/manifest.webmanifest',
   keywords: [
     'VIT Vellore',
     'VIT Vellore assistant',
@@ -213,8 +193,12 @@ export const metadata: Metadata = {
   category: 'Education',
   classification: 'Educational Assistant',
   icons: {
-    icon: '/assets/tea-icon.png',
-    apple: '/assets/tea-icon.png',
+    icon: [
+      { url: '/icons/icon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    shortcut: '/icons/icon-32.png',
+    apple: { url: '/icons/apple-icon-180.png', sizes: '180x180', type: 'image/png' },
   },
   openGraph: {
     title: 'the everything assistant',
@@ -224,7 +208,7 @@ export const metadata: Metadata = {
     siteName: 'the everything assistant',
     images: [
       {
-        url: '/og-image.png',
+        url: '/og-image.jpg',
         width: 1200,
         height: 630,
         alt: 'the everything assistant',
@@ -238,7 +222,7 @@ export const metadata: Metadata = {
     title: 'the everything assistant',
     description:
       'your personal AI agent for VIT Vellore. access VTOP, past papers, mess menu, timetables, attendance, grades and more.',
-    images: ['/og-image.png'],
+    images: ['/og-image.jpg'],
     creator: '@everythingasst',
   },
   verification: {
@@ -256,16 +240,9 @@ export const viewport = {
   themeColor: '#000000',
 }
 
-async function getLatestBroadcast(): Promise<LatestBroadcastResponse | null> {
+async function loadLatestBroadcast(): Promise<LatestBroadcastResponse | null> {
   try {
-    const res = await fetch(
-      process.env.NEXT_PUBLIC_BASE_URL
-        ? `${process.env.NEXT_PUBLIC_BASE_URL}/api/broadcast/latest`
-        : 'http://localhost:3000/api/broadcast/latest',
-      { cache: 'no-store' }
-    )
-    if (!res.ok) return null
-    return (await res.json()) as LatestBroadcastResponse | null
+    return await getLatestBroadcast()
   } catch (error) {
     console.error('failed to load latest broadcast', error)
     return null
@@ -277,8 +254,10 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const session = await getServerSession(authOptions)
-  const latestBroadcast = session?.user ? await getLatestBroadcast() : null
+  const [session, cookieStore] = await Promise.all([auth(), cookies()])
+  const sidebarCookie = cookieStore.get(SIDEBAR_OPEN_COOKIE)?.value
+  const initialSidebarOpen = sidebarCookie === undefined ? undefined : sidebarCookie === 'true'
+  const latestBroadcast = session?.user ? await loadLatestBroadcast() : null
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -321,8 +300,8 @@ export default async function RootLayout({
                     '@type': 'ImageObject',
                     '@id': 'https://everything-assistant.com/#logo',
                     inLanguage: 'en-US',
-                    url: 'https://everything-assistant.com/assets/tea-icon.png',
-                    contentUrl: 'https://everything-assistant.com/assets/tea-icon.png',
+                    url: 'https://everything-assistant.com/icons/icon-512.png',
+                    contentUrl: 'https://everything-assistant.com/icons/icon-512.png',
                     width: 512,
                     height: 512,
                     caption: 'The Everything Assistant',
@@ -431,8 +410,6 @@ export default async function RootLayout({
             }),
           }}
         />
-        <link rel="icon" href="/assets/tea-icon.png" type="image/png" />
-        <link rel="shortcut icon" href="/assets/tea-icon.png" type="image/png" />
         <meta name="theme-color" content="#000000" />
         <meta name="application-name" content="The Everything Assistant" />
         <meta name="apple-mobile-web-app-title" content="Everything Assistant" />
@@ -464,7 +441,7 @@ export default async function RootLayout({
         `}</style>
       </head>
       <body
-        className={`${geistSans.variable} ${instrumentSerif.variable} ${baumans.variable} ${googleSansFlex.variable} font-sans bg-background text-foreground`}
+        className={`${geistSans.variable} font-sans bg-background text-foreground`}
       >
         <a
           href="#main-content"
@@ -472,7 +449,7 @@ export default async function RootLayout({
         >
           Skip to main content
         </a>
-        <SessionProvider>
+        <SessionProvider session={session}>
           <ThemeProvider
             attribute="class"
             defaultTheme="dark"
@@ -492,7 +469,7 @@ export default async function RootLayout({
             <QueryProvider>
               <MemoryProvider>
                 <DataStreamProvider>
-                  <SidebarProvider>
+                  <SidebarProvider initialOpen={initialSidebarOpen}>
                     <MFAGate>
                       <PdfDockProvider>
                         <SidebarWrapper />

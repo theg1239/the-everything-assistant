@@ -17,6 +17,7 @@ import {
   Zap,
   Star,
   Heart,
+  type LucideIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
@@ -31,21 +32,21 @@ interface OnboardingStep {
   id: string
   title: string
   description: string
-  icon: any
+  icon: LucideIcon
   gradient: string
   artworkImage: string
   examples: string[] | null
   isLastStep?: boolean
 }
 
-const onboardingSteps: OnboardingStep[] = [
+const onboardingSteps: [OnboardingStep, ...OnboardingStep[]] = [
   {
     id: 'welcome',
     title: 'welcome to the everything assistant',
     description: 'your ai-powered agentic companion for everything vit-related.',
     icon: Sparkles,
     gradient: 'from-purple-500 to-pink-500',
-    artworkImage: '/onboarding-artwork/artwork.png',
+    artworkImage: '/onboarding-artwork/artwork.webp',
     examples: ['what can you do?', 'tell me some things about VIT', 'can I ask you anything?'],
   },
   {
@@ -55,7 +56,7 @@ const onboardingSteps: OnboardingStep[] = [
       'check marks, attendance, timetable, and download course materials - all through natural conversation.',
     icon: GraduationCap,
     gradient: 'from-blue-500 to-cyan-500',
-    artworkImage: '/onboarding-artwork/artwork2.png',
+    artworkImage: '/onboarding-artwork/artwork2.webp',
     examples: [
       'check my attendance for physics',
       'download course materials for DSA',
@@ -69,7 +70,7 @@ const onboardingSteps: OnboardingStep[] = [
       'search across all vit paper repositories instantly. no more hunting through multiple websites. search by exam type, year.',
     icon: FileSearch,
     gradient: 'from-green-500 to-teal-500',
-    artworkImage: '/onboarding-artwork/artwork3.png',
+    artworkImage: '/onboarding-artwork/artwork3.webp',
     examples: [
       'find cat1 papers for database systems',
       'calculus fat papers',
@@ -83,7 +84,7 @@ const onboardingSteps: OnboardingStep[] = [
       'get mess menus, search the r/Vit subreddit and more subreddits, academic calendar & holidays, exam dates - everything.',
     icon: UtensilsCrossed,
     gradient: 'from-orange-500 to-red-500',
-    artworkImage: '/onboarding-artwork/artwork4.png',
+    artworkImage: '/onboarding-artwork/artwork4.webp',
     examples: [
       'what does reddit think about placements?',
       'is there a holiday next week?',
@@ -97,7 +98,7 @@ const onboardingSteps: OnboardingStep[] = [
       'your credentials are never stored. all sessions are encrypted and temporary - just like logging in yourself.',
     icon: Shield,
     gradient: 'from-indigo-500 to-purple-500',
-    artworkImage: '/onboarding-artwork/artwork5.png',
+    artworkImage: '/onboarding-artwork/artwork5.webp',
     examples: [
       'how secure are you?',
       'what are your security measures?',
@@ -111,7 +112,7 @@ const onboardingSteps: OnboardingStep[] = [
       'search for faculty members, ask about when holidays or events are happening, and more.',
     icon: Zap,
     gradient: 'from-yellow-500 to-amber-500',
-    artworkImage: '/onboarding-artwork/artwork2.png',
+    artworkImage: '/onboarding-artwork/artwork2.webp',
     examples: [
       'show me the faculty members in cse',
       'when is the winter vacation?',
@@ -125,7 +126,7 @@ const onboardingSteps: OnboardingStep[] = [
       'your smart assistant is ready to help with all your vit needs. start chatting to experience the magic.',
     icon: Star,
     gradient: 'from-emerald-500 to-blue-500',
-    artworkImage: '/onboarding-artwork/artwork6.png',
+    artworkImage: '/onboarding-artwork/artwork6.webp',
     examples: null,
     isLastStep: true,
   },
@@ -175,11 +176,13 @@ export function OnboardingDialog({ isOpen, onClose }: OnboardingDialogProps) {
 
   const onTouchStart = (e: React.TouchEvent) => {
     setTouchEnd(null)
-    setTouchStart(e.targetTouches[0].clientX)
+    const touch = e.targetTouches[0]
+    if (touch) setTouchStart(touch.clientX)
   }
 
   const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX)
+    const touch = e.targetTouches[0]
+    if (touch) setTouchEnd(touch.clientX)
   }
 
   const onTouchEnd = () => {
@@ -197,7 +200,7 @@ export function OnboardingDialog({ isOpen, onClose }: OnboardingDialogProps) {
     }
   }
 
-  const currentStepData = onboardingSteps[currentStep]
+  const currentStepData = onboardingSteps[currentStep] ?? onboardingSteps[0]
   const IconComponent = currentStepData.icon // Portal chevrons to body to avoid dialog positioning issues
   const ChevronNavigation = () => {
     if (!isOpen) return null
@@ -255,8 +258,8 @@ export function OnboardingDialog({ isOpen, onClose }: OnboardingDialogProps) {
         <DialogContent
           className="max-w-2xl w-[95vw] sm:w-full h-[55vh] sm:h-[60vh] md:h-[65vh] max-h-[600px] min-h-[400px] p-0 bg-white dark:bg-slate-900 rounded-2xl overflow-hidden shadow-2xl border-0"
           onPointerDownOutside={e => {
-            const target = e.target as Element
-            if (target.closest('button[data-chevron]')) {
+            const target = e.target
+            if (target instanceof Element && target.closest('button[data-chevron]')) {
               e.preventDefault()
             }
           }}

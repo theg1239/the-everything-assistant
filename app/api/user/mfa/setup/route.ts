@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { isSMTPConfigured } from '@/lib/env-config'
-import speakeasy from 'speakeasy'
+import { generateTOTPSecret, generateTOTPUri } from '@/lib/mfa'
 import QRCode from 'qrcode'
 import crypto from 'crypto'
 import nodemailer from 'nodemailer'
@@ -31,7 +30,7 @@ const createEmailTransporter = () => {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -147,30 +146,32 @@ export async function POST(request: NextRequest) {
         )
       }
     } else if (method === 'authenticator') {
-      const secret = speakeasy.generateSecret({
-        name: `everything assistant (${user.email})`,
-        issuer: 'the everything assistant',
-        length: 32,
-      })
+      const base32Secret = generateTOTPSecret()
+      const otpauthUrl = generateTOTPUri(
+        base32Secret,
+        `everything assistant (${user.email})`,
+        'the everything assistant'
+      )
 
       await prisma.user.update({
         where: { id: user.id },
         data: {
-          tempMfaSecret: secret.base32,
+          tempMfaSecret: base32Secret,
           tempMfaMethod: method,
           tempMfaExpires: new Date(Date.now() + 15 * 60 * 1000),
         },
       })
 
-      const qrCodeUrl = await QRCode.toDataURL(secret.otpauth_url!)
+      const qrCodeUrl = await QRCode.toDataURL(otpauthUrl)
 
       return NextResponse.json({
         success: true,
         qrCode: qrCodeUrl,
-        secret: secret.base32,
-        manualEntryKey: secret.base32,
+        secret: base32Secret,
+        manualEntryKey: base32Secret,
       })
-    } else if (method === 'security_key') {
+    } else {
+      // method is 'security_key' (the schema enum is exhausted above)
       await prisma.user.update({
         where: { id: user.id },
         data: {

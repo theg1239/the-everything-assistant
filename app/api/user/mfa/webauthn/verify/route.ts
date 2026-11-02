@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { generateBackupCodes, hashBackupCodes, logSecurityEvent } from '@/lib/mfa'
 import { verifyRegistrationResponse } from '@simplewebauthn/server'
@@ -9,7 +8,7 @@ import { webAuthnRegistrationSchema } from '@/types/api/mfa'
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -57,8 +56,11 @@ export async function POST(request: NextRequest) {
         hasClientDataJSON: !!credential.response?.clientDataJSON,
       })
 
-      const verification = await verifyRegistrationResponse({
-        response: credential,
+      const verificationOpts: VerifyRegistrationResponseOpts = {
+        response: {
+          ...credential,
+          clientExtensionResults: credential.clientExtensionResults ?? {},
+        },
         expectedChallenge: user.tempMfaSecret,
         expectedOrigin:
           process.env.NODE_ENV === 'production'
@@ -69,7 +71,8 @@ export async function POST(request: NextRequest) {
             ? process.env.WEBAUTHN_RP_ID || 'everything-assistant.com'
             : 'localhost',
         requireUserVerification: false,
-      } as VerifyRegistrationResponseOpts)
+      }
+      const verification = await verifyRegistrationResponse(verificationOpts)
 
       if (!verification.verified || !verification.registrationInfo) {
         await logSecurityEvent(

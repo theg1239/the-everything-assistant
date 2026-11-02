@@ -1,4 +1,6 @@
-import { Redis } from '@upstash/redis'
+import type { Redis } from '@upstash/redis'
+import * as z from 'zod'
+import { getRedis } from './redis'
 
 export interface UserRateLimitConfig {
   requestsPerMinute: number
@@ -12,6 +14,106 @@ export const DEFAULT_USER_RATE_LIMITS: UserRateLimitConfig = {
   requestsPerHour: 100,
   requestsPerDay: 1000,
   enabled: true,
+}
+
+type BucketWindow = 'minute' | 'hour' | 'day'
+
+const WINDOW_SECONDS: Record<BucketWindow, number> = { minute: 60, hour: 3600, day: 86400 }
+
+const bucketKey = (userId: string, timeWindow: string) => `user_rate_limit:${userId}:${timeWindow}`
+
+/**
+ * Token-bucket consume for any number of buckets in ONE atomic round-trip.
+ *
+ * KEYS[i]           bucket hash (`tokens`, `lastRefill` fields, same layout as before)
+ * ARGV[1]           now (ms, caller clock — same as the previous implementation)
+ * ARGV[2]           tokens to consume
+ * ARGV[3 + 2(i-1)]  capacity of bucket i
+ * ARGV[4 + 2(i-1)]  refill rate of bucket i (tokens / second)
+ *
+ * Each bucket refills, then consumes independently (a denied bucket does not stop the
+ * others from consuming), exactly like the previous per-bucket hgetall/hset/expire calls.
+ * Returns `{allowed(0|1), floor(remaining), floor(resetTimeMs)}` per bucket.
+ */
+const CONSUME_SCRIPT = `
+local now = tonumber(ARGV[1])
+local requested = tonumber(ARGV[2])
+local out = {}
+for i, key in ipairs(KEYS) do
+  local capacity = tonumber(ARGV[1 + i * 2])
+  local rate = tonumber(ARGV[2 + i * 2])
+  local state = redis.call('HMGET', key, 'tokens', 'lastRefill')
+  local tokens = tonumber(state[1])
+  local last = tonumber(state[2])
+  if tokens == nil then tokens = capacity end
+  if last == nil then last = now end
+  local elapsed = (now - last) / 1000
+  if elapsed < 0 then elapsed = 0 end
+  tokens = math.min(tokens + math.min(elapsed * rate, capacity - tokens), capacity)
+  local allowed = 0
+  if tokens >= requested then
+    tokens = tokens - requested
+    allowed = 1
+  end
+  local resetTime = now + ((capacity - tokens) / rate) * 1000
+  redis.call('HSET', key, 'tokens', string.format('%.17g', tokens), 'lastRefill', string.format('%.0f', math.max(now, last)))
+  redis.call('EXPIRE', key, math.ceil((capacity / rate) * 2))
+  out[i] = { allowed, math.floor(tokens), math.floor(resetTime) }
+end
+return out
+`
+
+type BucketSpec = { key: string; capacity: number; refillRate: number }
+type BucketResult = { allowed: boolean; remainingTokens: number; resetTime: number }
+
+const scriptResultSchema = z.array(
+  z.tuple([z.coerce.number(), z.coerce.number(), z.coerce.number()])
+)
+
+async function consumeBuckets(
+  redis: Redis,
+  buckets: BucketSpec[],
+  tokens: number
+): Promise<BucketResult[]> {
+  const args = [String(Date.now()), String(tokens)]
+  for (const bucket of buckets) args.push(String(bucket.capacity), String(bucket.refillRate))
+  const raw: unknown = await getConsumeScript(redis).exec(
+    buckets.map(bucket => bucket.key),
+    args
+  )
+  return scriptResultSchema.parse(raw).map(([allowed, remainingTokens, resetTime]) => ({
+    allowed: allowed === 1,
+    remainingTokens,
+    resetTime,
+  }))
+}
+
+const consumeScripts = new WeakMap<Redis, ReturnType<Redis['createScript']>>()
+/** EVALSHA with automatic EVAL fallback; the script body is only sent once per Redis instance. */
+function getConsumeScript(redis: Redis) {
+  let script = consumeScripts.get(redis)
+  if (!script) {
+    script = redis.createScript(CONSUME_SCRIPT)
+    consumeScripts.set(redis, script)
+  }
+  return script
+}
+
+/** Reads a bucket's refilled token count without consuming (no write). */
+function remainingFromState(
+  state: Record<string, unknown> | null,
+  capacity: number,
+  refillRate: number,
+  now: number
+): number {
+  if (!state || Object.keys(state).length === 0) return capacity
+  const storedTokens = Number.parseFloat(String(state.tokens))
+  const storedRefill = Number.parseInt(String(state.lastRefill), 10)
+  const currentTokens = Number.isFinite(storedTokens) ? storedTokens : capacity
+  const lastRefill = Number.isFinite(storedRefill) ? storedRefill : now
+  const timePassed = Math.max(0, (now - lastRefill) / 1000)
+  const tokensToAdd = Math.min(timePassed * refillRate, capacity - currentTokens)
+  return Math.floor(Math.min(currentTokens + tokensToAdd, capacity))
 }
 
 export class UserTokenBucket {
@@ -30,65 +132,24 @@ export class UserTokenBucket {
     this.capacity = capacity
     this.refillRate = refillRate
     this.redis = redisClient
-    this.key = `user_rate_limit:${userId}:${timeWindow}`
+    this.key = bucketKey(userId, timeWindow)
   }
 
   async consume(
     tokens: number = 1
   ): Promise<{ allowed: boolean; remainingTokens: number; resetTime: number }> {
-    const now = Date.now()
-
-    const state = await this.redis.hgetall(this.key)
-
-    let currentTokens = this.capacity
-    let lastRefill = now
-
-    if (state && Object.keys(state).length > 0) {
-      currentTokens = parseFloat(state.tokens as string) || this.capacity
-      lastRefill = parseInt(state.lastRefill as string) || now
-    }
-
-    const timePassed = (now - lastRefill) / 1000
-    const tokensToAdd = Math.min(timePassed * this.refillRate, this.capacity - currentTokens)
-    currentTokens = Math.min(currentTokens + tokensToAdd, this.capacity)
-
-    const allowed = currentTokens >= tokens
-
-    if (allowed) {
-      currentTokens -= tokens
-    }
-
-    const resetTime = now + ((this.capacity - currentTokens) / this.refillRate) * 1000
-
-    const expirationSeconds = Math.ceil((this.capacity / this.refillRate) * 2)
-    await this.redis.hset(this.key, {
-      tokens: currentTokens.toString(),
-      lastRefill: now.toString(),
-    })
-    await this.redis.expire(this.key, expirationSeconds)
-
-    return {
-      allowed,
-      remainingTokens: Math.floor(currentTokens),
-      resetTime: Math.floor(resetTime),
-    }
+    const [result] = await consumeBuckets(
+      this.redis,
+      [{ key: this.key, capacity: this.capacity, refillRate: this.refillRate }],
+      tokens
+    )
+    if (!result) throw new Error('Rate limit script returned no result')
+    return result
   }
 
   async getRemainingTokens(): Promise<number> {
-    const now = Date.now()
     const state = await this.redis.hgetall(this.key)
-
-    if (!state || Object.keys(state).length === 0) {
-      return this.capacity
-    }
-
-    const currentTokens = parseFloat(state.tokens as string) || this.capacity
-    const lastRefill = parseInt(state.lastRefill as string) || now
-
-    const timePassed = (now - lastRefill) / 1000
-    const tokensToAdd = Math.min(timePassed * this.refillRate, this.capacity - currentTokens)
-
-    return Math.floor(Math.min(currentTokens + tokensToAdd, this.capacity))
+    return remainingFromState(state, this.capacity, this.refillRate, Date.now())
   }
 
   async reset(): Promise<void> {
@@ -103,14 +164,25 @@ export class UserRateLimiter {
   constructor(config: UserRateLimitConfig) {
     this.config = config
 
-    if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    const redis = getRedis()
+    if (!redis) {
       throw new Error('Redis configuration required for user rate limiting')
     }
 
-    this.redis = new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    this.redis = redis
+  }
+
+  private bucketSpecs(userId: string): Record<BucketWindow, BucketSpec> {
+    const spec = (window: BucketWindow, capacity: number): BucketSpec => ({
+      key: bucketKey(userId, window),
+      capacity,
+      refillRate: capacity / WINDOW_SECONDS[window],
     })
+    return {
+      minute: spec('minute', this.config.requestsPerMinute),
+      hour: spec('hour', this.config.requestsPerHour),
+      day: spec('day', this.config.requestsPerDay),
+    }
   }
 
   async checkRateLimit(userId: string): Promise<{
@@ -133,44 +205,36 @@ export class UserRateLimiter {
       }
     }
 
-    const minuteBucket = new UserTokenBucket(
-      this.config.requestsPerMinute,
-      this.config.requestsPerMinute / 60,
+    const specs = this.bucketSpecs(userId)
+    // One EVALSHA for all three windows (previously 9 sequential-per-bucket REST calls).
+    const [minuteResult, hourResult, dayResult] = await consumeBuckets(
       this.redis,
-      userId,
-      'minute'
+      [specs.minute, specs.hour, specs.day],
+      1
     )
+    if (!minuteResult || !hourResult || !dayResult) {
+      throw new Error('Rate limit script returned an incomplete result')
+    }
 
-    const hourBucket = new UserTokenBucket(
-      this.config.requestsPerHour,
-      this.config.requestsPerHour / 3600,
-      this.redis,
-      userId,
-      'hour'
-    )
-
-    const dayBucket = new UserTokenBucket(
-      this.config.requestsPerDay,
-      this.config.requestsPerDay / 86400,
-      this.redis,
-      userId,
-      'day'
-    )
-
-    const [minuteResult, hourResult, dayResult] = await Promise.all([
-      minuteBucket.consume(1),
-      hourBucket.consume(1),
-      dayBucket.consume(1),
-    ])
+    // Non-failing windows report their post-consume balance with `resetTime: 0`,
+    // matching the previous getRemainingTokens() follow-up reads.
+    const remainingOnly = (result: BucketResult) => ({
+      remaining: result.remainingTokens,
+      resetTime: 0,
+    })
+    const full = (result: BucketResult) => ({
+      remaining: result.remainingTokens,
+      resetTime: result.resetTime,
+    })
 
     if (!minuteResult.allowed) {
       return {
         allowed: false,
         error: `Rate limit exceeded: ${this.config.requestsPerMinute} requests per minute`,
         limits: {
-          minute: { remaining: minuteResult.remainingTokens, resetTime: minuteResult.resetTime },
-          hour: { remaining: await hourBucket.getRemainingTokens(), resetTime: 0 },
-          day: { remaining: await dayBucket.getRemainingTokens(), resetTime: 0 },
+          minute: full(minuteResult),
+          hour: remainingOnly(hourResult),
+          day: remainingOnly(dayResult),
         },
       }
     }
@@ -180,9 +244,9 @@ export class UserRateLimiter {
         allowed: false,
         error: `Rate limit exceeded: ${this.config.requestsPerHour} requests per hour`,
         limits: {
-          minute: { remaining: await minuteBucket.getRemainingTokens(), resetTime: 0 },
-          hour: { remaining: hourResult.remainingTokens, resetTime: hourResult.resetTime },
-          day: { remaining: await dayBucket.getRemainingTokens(), resetTime: 0 },
+          minute: remainingOnly(minuteResult),
+          hour: full(hourResult),
+          day: remainingOnly(dayResult),
         },
       }
     }
@@ -192,9 +256,9 @@ export class UserRateLimiter {
         allowed: false,
         error: `Rate limit exceeded: ${this.config.requestsPerDay} requests per day`,
         limits: {
-          minute: { remaining: await minuteBucket.getRemainingTokens(), resetTime: 0 },
-          hour: { remaining: await hourBucket.getRemainingTokens(), resetTime: 0 },
-          day: { remaining: dayResult.remainingTokens, resetTime: dayResult.resetTime },
+          minute: remainingOnly(minuteResult),
+          hour: remainingOnly(hourResult),
+          day: full(dayResult),
         },
       }
     }
@@ -202,9 +266,9 @@ export class UserRateLimiter {
     return {
       allowed: true,
       limits: {
-        minute: { remaining: minuteResult.remainingTokens, resetTime: minuteResult.resetTime },
-        hour: { remaining: hourResult.remainingTokens, resetTime: hourResult.resetTime },
-        day: { remaining: dayResult.remainingTokens, resetTime: dayResult.resetTime },
+        minute: full(minuteResult),
+        hour: full(hourResult),
+        day: full(dayResult),
       },
     }
   }
@@ -214,48 +278,33 @@ export class UserRateLimiter {
     hour: { remaining: number; limit: number }
     day: { remaining: number; limit: number }
   }> {
-    const minuteBucket = new UserTokenBucket(
-      this.config.requestsPerMinute,
-      this.config.requestsPerMinute / 60,
-      this.redis,
-      userId,
-      'minute'
-    )
-
-    const hourBucket = new UserTokenBucket(
-      this.config.requestsPerHour,
-      this.config.requestsPerHour / 3600,
-      this.redis,
-      userId,
-      'hour'
-    )
-
-    const dayBucket = new UserTokenBucket(
-      this.config.requestsPerDay,
-      this.config.requestsPerDay / 86400,
-      this.redis,
-      userId,
-      'day'
-    )
-
-    const [minuteRemaining, hourRemaining, dayRemaining] = await Promise.all([
-      minuteBucket.getRemainingTokens(),
-      hourBucket.getRemainingTokens(),
-      dayBucket.getRemainingTokens(),
-    ])
+    const specs = this.bucketSpecs(userId)
+    const pipeline = this.redis.pipeline()
+    pipeline.hgetall(specs.minute.key)
+    pipeline.hgetall(specs.hour.key)
+    pipeline.hgetall(specs.day.key)
+    const states: unknown[] = await pipeline.exec()
+    const now = Date.now()
+    const remaining = (index: number, spec: BucketSpec) => {
+      const state = states[index]
+      return remainingFromState(
+        typeof state === 'object' && state !== null ? { ...state } : null,
+        spec.capacity,
+        spec.refillRate,
+        now
+      )
+    }
 
     return {
-      minute: { remaining: minuteRemaining, limit: this.config.requestsPerMinute },
-      hour: { remaining: hourRemaining, limit: this.config.requestsPerHour },
-      day: { remaining: dayRemaining, limit: this.config.requestsPerDay },
+      minute: { remaining: remaining(0, specs.minute), limit: this.config.requestsPerMinute },
+      hour: { remaining: remaining(1, specs.hour), limit: this.config.requestsPerHour },
+      day: { remaining: remaining(2, specs.day), limit: this.config.requestsPerDay },
     }
   }
 
   async resetUserLimits(userId: string): Promise<void> {
-    const buckets = ['minute', 'hour', 'day']
-    await Promise.all(
-      buckets.map(timeWindow => this.redis.del(`user_rate_limit:${userId}:${timeWindow}`))
-    )
+    const specs = this.bucketSpecs(userId)
+    await this.redis.del(specs.minute.key, specs.hour.key, specs.day.key)
   }
 
   getConfig(): UserRateLimitConfig {
@@ -274,4 +323,28 @@ export function loadUserRateLimitConfig(): UserRateLimitConfig {
     requestsPerDay: parseInt(process.env.USER_RATE_LIMIT_REQUESTS_PER_DAY || '1000'),
     enabled: process.env.USER_RATE_LIMITING_ENABLED !== 'false',
   }
+}
+
+let sharedLimiter: UserRateLimiter | null = null
+
+/** Process-wide per-user limiter, configured from `USER_RATE_LIMIT_*` env vars. */
+export function getUserRateLimiter(): UserRateLimiter {
+  sharedLimiter ??= new UserRateLimiter(loadUserRateLimitConfig())
+  return sharedLimiter
+}
+
+export class UserRateLimitError extends Error {
+  constructor(reason: string | undefined) {
+    super(`Rate limit: ${reason ?? 'too many requests'}`)
+    this.name = 'UserRateLimitError'
+  }
+}
+
+/** Throws `UserRateLimitError` when `userId` is over quota. No-op when disabled or anonymous. */
+export async function enforceUserRateLimit(userId: string | null | undefined): Promise<void> {
+  // Check the env config before constructing the limiter: it requires Redis,
+  // and deployments with limiting disabled shouldn't need Redis at all.
+  if (!userId || !(sharedLimiter?.getConfig() ?? loadUserRateLimitConfig()).enabled) return
+  const result = await getUserRateLimiter().checkRateLimit(userId)
+  if (!result.allowed) throw new UserRateLimitError(result.error)
 }

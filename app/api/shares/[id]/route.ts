@@ -23,7 +23,7 @@ export async function GET(
       role: msg.role,
       content: msg.content,
       toolInvocations: msg.toolInvocations,
-      createdAt: (msg as any).created_at || (msg as any).createdAt,
+      createdAt: msg.created_at,
     })),
   })
 }

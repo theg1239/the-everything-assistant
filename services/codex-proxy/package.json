@@ -5,6 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "bun run --watch src/server.ts",
-    "start": "bun run src/server.ts"
+    "start": "bun run src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.4",
+    "typescript": "^7.0.2"
   }
 }

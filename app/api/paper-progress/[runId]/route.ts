@@ -1,14 +1,13 @@
 import { NextRequest } from 'next/server'
 import { paperProgress, type PaperProgressEvent } from '@/lib/progress/paper-progress'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 
 export const runtime = 'nodejs'
 
 type Params = { runId: string }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<Params> }) {
-  const session = (await getServerSession(authOptions as any)) as { user?: { id?: string } } | null
+  const session = await auth()
   if (!session?.user?.id) {
     return new Response('Unauthorized', { status: 401 })
   }
@@ -40,8 +39,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<Params
         } else {
           console.log('[paper-progress SSE] no buffered events to flush', runId)
         }
-      } catch (e: any) {
-        console.log('[paper-progress SSE] buffer flush error', e?.message)
+      } catch (e) {
+        console.log('[paper-progress SSE] buffer flush error', e instanceof Error ? e.message : e)
       }
 
       const heartbeat = setInterval(() => {

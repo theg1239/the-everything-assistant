@@ -1,26 +1,43 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useId } from 'react'
 import { Course, FFCSToolData, getCourseData } from '@/lib/ffcs-tool'
 import TimetableGrid, { TimetableEntry, TimetableSchema } from '../timetable-grid'
 import { v4 as uuidv4 } from 'uuid'
 import { Calendar, X } from 'lucide-react'
-import { readJson } from '@/lib/http'
+import { isRecord } from './artifact-data'
+import { readPreHydrationValue, useHydrationSafeField } from '@/lib/hydration-safe'
+
+const isTimetableEntry = (value: unknown): value is TimetableEntry =>
+  isRecord(value) && typeof value.id === 'string' && isRecord(value.course)
+
+const isTimetableSchema = (value: unknown): value is TimetableSchema =>
+  isRecord(value) && Array.isArray(value.theory) && Array.isArray(value.lab)
+
+const SCHOOLS = ['smec', 'score', 'scope', 'sbst', 'sce', 'scheme', 'select', 'sense'] as const
+type School = (typeof SCHOOLS)[number]
+
+const DEFAULT_SCHOOL: School = 'smec'
+
+const isSchool = (value: string | null): value is School => SCHOOLS.some(school => school === value)
 
 const FFCSArtifact: React.FC = () => {
-  const [school, setSchool] = useState<
-    'smec' | 'score' | 'scope' | 'sbst' | 'sce' | 'scheme' | 'select' | 'sense'
-  >(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('ffcs_school')
-      const valid = ['smec', 'score', 'scope', 'sbst', 'sce', 'scheme', 'select', 'sense']
-      if (saved && valid.includes(saved)) return saved as any
-    }
-    return 'smec'
+  const schoolSelectId = useId()
+  const [school, setSchool] = useState<School>(() => {
+    if (typeof window === 'undefined') return DEFAULT_SCHOOL
+    // A change made before hydration wins, then the saved choice, then the default.
+    const preHydration = readPreHydrationValue(schoolSelectId) ?? null
+    if (isSchool(preHydration) && preHydration !== DEFAULT_SCHOOL) return preHydration
+    const saved = localStorage.getItem('ffcs_school')
+    return isSchool(saved) ? saved : DEFAULT_SCHOOL
   })
   const campus = 'vellore'
   const [courseData, setCourseData] = useState<FFCSToolData>({ allCourses: [], uniqueCourses: [] })
   const [timetableSchema, setTimetableSchema] = useState<TimetableSchema | null>(null)
   const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState('')
+  const {
+    id: searchInputId,
+    value: searchQuery,
+    setValue: setSearchQuery,
+  } = useHydrationSafeField()
   const [searchResults, setSearchResults] = useState<Course[]>([])
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null)
   const [timetable, setTimetable] = useState<TimetableEntry[]>([])
@@ -40,7 +57,8 @@ const FFCSArtifact: React.FC = () => {
 
       const savedTimetable = localStorage.getItem(`ffcs_timetable_${school}`)
       if (savedTimetable) {
-        setTimetable(JSON.parse(savedTimetable))
+        const parsed: unknown = JSON.parse(savedTimetable)
+        setTimetable(Array.isArray(parsed) ? parsed.filter(isTimetableEntry) : [])
       } else {
         setTimetable([])
       }
@@ -53,7 +71,10 @@ const FFCSArtifact: React.FC = () => {
         if (!schemaResponse.ok) {
           throw new Error('Failed to load timetable schema')
         }
-        const schemaData = await readJson<TimetableSchema>(schemaResponse)
+        const schemaData: unknown = await schemaResponse.json()
+        if (!isTimetableSchema(schemaData)) {
+          throw new Error('Invalid timetable schema')
+        }
         setTimetableSchema(schemaData)
       } catch (error) {
         console.error(`Failed to load courses or schema for ${campus}:`, error)
@@ -137,8 +158,12 @@ const FFCSArtifact: React.FC = () => {
         <div className="bg-gray-800 p-4 rounded-lg space-y-4">
           <h3 className="text-xl font-semibold">Course Selection</h3>
           <select
+            id={schoolSelectId}
             value={school}
-            onChange={e => setSchool(e.target.value as any)}
+            onChange={e => {
+              const next = e.target.value
+              if (isSchool(next)) setSchool(next)
+            }}
             className="w-full bg-gray-700 border border-gray-600 rounded-md p-2"
           >
             <option value="smec">SMEC</option>
@@ -153,6 +178,7 @@ const FFCSArtifact: React.FC = () => {
 
           <div className="relative">
             <input
+              id={searchInputId}
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
@@ -251,7 +277,7 @@ const FFCSArtifact: React.FC = () => {
             </div>
             <div className="p-4 overflow-auto">
               {timetableSchema ? (
-                <TimetableGrid timetable={timetable} schema={timetableSchema as TimetableSchema} />
+                <TimetableGrid timetable={timetable} schema={timetableSchema} />
               ) : (
                 <p className="text-center text-gray-400">Loading timetable view...</p>
               )}

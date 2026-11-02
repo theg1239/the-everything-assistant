@@ -61,8 +61,8 @@ export function extractCliTables(text: string): ParsedTable[] {
 
 function parseTableBlock(lines: string[]): { headers: string[]; rows: string[][] } | null {
   const cleaned = lines.filter(line => !TABLE_SEPARATOR.test(line))
-  if (!cleaned.length) return null
   const headerLine = cleaned[0]
+  if (headerLine === undefined) return null
   const headers = splitColumns(headerLine).map(normalizeWhitespace)
   const rows: string[][] = []
   for (const line of cleaned.slice(1)) {

@@ -1,15 +1,14 @@
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { createVITTools } from '@/lib/tools'
 import { getFormattedVTOPCredentials as getServerFormatted } from '@/lib/server-vtop-credentials'
-import { streamObject, type LanguageModel } from 'ai'
+import { Output, streamText } from 'ai'
 import { vtopResultSchema } from './schema'
 import { saveTokenUsage } from '@/lib/db'
-import { rateLimitedAI } from '@/lib/rate-limited-ai'
+import { defaultProviderOptions, languageModel } from '@/lib/ai'
 import { getModelConfig } from '@/lib/model-registry'
 import { normalizeTokenUsage } from '@/lib/token-usage'
-import * as z from 'zod/v3'
-import type { VtopCommandFlags } from '@/types/tools'
+import { getToolExecutor } from '@/app/api/chat/lib/tool-helpers'
+import * as z from 'zod'
 
 const vtopRequestSchema = z.object({
   command: z.string().min(1).optional(),
@@ -19,7 +18,7 @@ const vtopRequestSchema = z.object({
 export const maxDuration = 30
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions)
+  const session = await auth()
   if (!session?.user?.id) {
     return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 })
   }
@@ -36,8 +35,8 @@ export async function POST(req: Request) {
     const tools = createVITTools(session.user.id, {
       sessionUser: { name: session.user.name, email: session.user.email },
     })
-    const vtop = (tools as any)['queryVTOP']
-    if (!vtop || typeof vtop.execute !== 'function') {
+    const executeVtop = getToolExecutor(tools, 'queryVTOP')
+    if (!executeVtop) {
       return new Response(JSON.stringify({ error: 'vtop tool not available' }), { status: 500 })
     }
 
@@ -50,17 +49,13 @@ export async function POST(req: Request) {
       ...extras,
     }
 
-    const raw = await vtop.execute(args, { toolCallId: `vtop-${Date.now()}`, messages: [] })
+    const raw = await executeVtop(args, `vtop-${Date.now()}`)
 
     const modelConfig = getModelConfig('hubVtopFormatter')
-    const providerClient = rateLimitedAI[modelConfig.provider as keyof typeof rateLimitedAI]
-    if (!providerClient) {
-      throw new Error(`Unsupported model provider for hub vtop: ${modelConfig.provider}`)
-    }
-    const model = (await providerClient.model(modelConfig.modelId)) as LanguageModel
-    const result = streamObject({
-      model,
-      schema: vtopResultSchema,
+    const result = streamText({
+      model: languageModel('hubVtopFormatter'),
+      providerOptions: defaultProviderOptions,
+      output: Output.object({ schema: vtopResultSchema }),
       prompt: [
         'You are a formatter for VTOP portal data (VIT University).',
         `Command: ${command}`,
@@ -77,27 +72,19 @@ export async function POST(req: Request) {
         JSON.stringify(raw || {}, null, 2),
         '```',
       ].join('\n'),
-      providerOptions: {
-        openai: {
-          reasoningEffort: 'none',
-        },
-      },
-      onFinish: async (final: any) => {
+      onEnd: async ({ totalUsage: usage }) => {
         try {
-          const usage = (final && final.usage) || final?.response?.usage || null
-          if (usage && typeof usage === 'object') {
-            const usageTotals = normalizeTokenUsage(usage)
-            await saveTokenUsage({
-              userId: session.user.id,
-              chatId: null,
-              model: modelConfig.modelId,
-              stepIndex: null,
-              inputTokens: usageTotals.inputTokens,
-              outputTokens: usageTotals.outputTokens,
-              totalTokens: usageTotals.totalTokens,
-              meta: { type: 'hub-vtop', command },
-            })
-          }
+          const usageTotals = normalizeTokenUsage(usage)
+          await saveTokenUsage({
+            userId: session.user.id,
+            chatId: null,
+            model: modelConfig.modelId,
+            stepIndex: null,
+            inputTokens: usageTotals.inputTokens,
+            outputTokens: usageTotals.outputTokens,
+            totalTokens: usageTotals.totalTokens,
+            meta: { type: 'hub-vtop', command },
+          })
         } catch (err) {
           console.warn('[hub/vtop] failed to save token usage:', err)
         }
@@ -105,8 +92,9 @@ export async function POST(req: Request) {
     })
 
     return result.toTextStreamResponse()
-  } catch (e: any) {
-    return new Response(JSON.stringify({ error: e?.message || 'failed to stream vtop result' }), {
+  } catch (e) {
+    const message = e instanceof Error ? e.message : ''
+    return new Response(JSON.stringify({ error: message || 'failed to stream vtop result' }), {
       status: 500,
     })
   }

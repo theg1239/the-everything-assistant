@@ -1,25 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { saveUserMcpToken } from '@/lib/mcp-tokens'
+import * as z from 'zod'
 
-type RawTokenResponse = {
-  access_token: string
-  refresh_token?: string
-  expires_in?: number
-  scope?: string
-  token_type?: string
-}
+const tokenResponseSchema = z.object({
+  access_token: z.string().optional().catch(undefined),
+  refresh_token: z.string().optional().catch(undefined),
+  expires_in: z.number().optional().catch(undefined),
+  scope: z.string().optional().catch(undefined),
+  token_type: z.string().optional().catch(undefined),
+})
 
-function decodeState(state: string): any | null {
+const statePayloadSchema = z.looseObject({
+  uid: z.unknown(),
+  userId: z.unknown(),
+  user_id: z.unknown(),
+  sub: z.unknown(),
+  v: z.unknown(),
+  code_verifier: z.unknown(),
+})
+
+type StatePayload = z.infer<typeof statePayloadSchema>
+
+function decodeState(state: string): StatePayload | null {
   try {
-    const parts = state.split('.')
-    if (parts.length < 2) return null
-    const payload = Buffer.from(parts[1], 'base64url').toString('utf8')
-    return JSON.parse(payload)
+    const encodedPayload = state.split('.')[1]
+    if (encodedPayload === undefined) return null
+    const payload = Buffer.from(encodedPayload, 'base64url').toString('utf8')
+    const parsed = statePayloadSchema.safeParse(JSON.parse(payload))
+    return parsed.success ? parsed.data : null
   } catch (err) {
     console.error('Failed to decode state JWT:', err)
     return null
   }
+}
+
+/** First truthy string among the candidates (mirrors a `a || b || c` chain over string claims). */
+function firstString(...candidates: unknown[]): string | undefined {
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate) return candidate
+  }
+  return undefined
 }
 
 export async function GET(req: NextRequest) {
@@ -33,12 +54,9 @@ export async function GET(req: NextRequest) {
 
   const statePayload = decodeState(state)
   const userId =
-    statePayload?.uid ||
-    statePayload?.userId ||
-    statePayload?.user_id ||
-    statePayload?.sub ||
+    firstString(statePayload?.uid, statePayload?.userId, statePayload?.user_id, statePayload?.sub) ??
     null
-  const codeVerifier = statePayload?.v || statePayload?.code_verifier
+  const codeVerifier = firstString(statePayload?.v, statePayload?.code_verifier)
 
   if (!userId) {
     return NextResponse.json({ error: 'Invalid state: user not found' }, { status: 400 })
@@ -89,8 +107,10 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  const json = (await tokenRes.json().catch(() => null)) as RawTokenResponse | null
-  if (!json?.access_token) {
+  const parsedToken = tokenResponseSchema.safeParse(await tokenRes.json().catch(() => null))
+  const json = parsedToken.success ? parsedToken.data : null
+  const accessToken = json?.access_token
+  if (!json || !accessToken) {
     return NextResponse.json({ error: 'Missing access_token in response' }, { status: 502 })
   }
 
@@ -100,7 +120,7 @@ export async function GET(req: NextRequest) {
       : null
 
   await saveUserMcpToken(userId, {
-    accessToken: json.access_token,
+    accessToken,
     refreshToken: json.refresh_token,
     expiresAt,
     scope: json.scope,

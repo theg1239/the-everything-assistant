@@ -19,43 +19,37 @@ import {
 import {
   searchPapers,
   getFilterOptions,
+  type FilterOptions,
+  type PaperSummary,
   type SearchFilters,
   type PaginationOptions,
 } from '../actions/searchPapers'
-import { formatFileSize, formatDate } from '../lib/utils'
 import { Button } from './ui/button'
 import { Card, CardContent } from './ui/card'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
 import { Badge } from './ui/badge'
 
-interface Paper {
-  id: string
-  title: string
-  courseCode?: string
-  year?: number
-  slot?: string
-  semester?: string
-  examType?: string
-  fileUrl: string
-  thumbnailUrl: string
-  createdAt: Date
-  originalFilename?: string
-  fileSize?: number
-  mimeType?: string
+type FilterKey = 'courseCode' | 'year' | 'slot' | 'examType'
+
+interface FilterField {
+  key: FilterKey
+  label: string
+  options: ReadonlyArray<string | number> | undefined
+  placeholder: string
 }
 
 export interface PapersListRef {
   refreshPapers: () => void
 }
 
-const PapersList = forwardRef<PapersListRef>((props, ref) => {
-  const [papers, setPapers] = useState<Paper[]>([])
+const PapersList = forwardRef<PapersListRef>((_props, ref) => {
+  const [papers, setPapers] = useState<PaperSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState<SearchFilters>({})
   const [pagination, setPagination] = useState<PaginationOptions>({ page: 1, limit: 12 })
   const [totalPages, setTotalPages] = useState(0)
-  const [filterOptions, setFilterOptions] = useState<any>({})
+  const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null)
   const [showFilters, setShowFilters] = useState(false)
 
   const loadPapers = async () => {
@@ -99,12 +93,17 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
   }, [])
 
   const handleFilterChange = (key: keyof SearchFilters, value: string) => {
-    setFilters(prev => ({
-      ...prev,
-      [key]: value || undefined,
-    }))
+    setFilters(prev => {
+      if (key === 'year') {
+        const year = Number.parseInt(value, 10)
+        return { ...prev, year: Number.isNaN(year) ? undefined : year }
+      }
+      return { ...prev, [key]: value || undefined }
+    })
     setPagination(prev => ({ ...prev, page: 1 }))
   }
+
+  const currentPage = pagination.page ?? 1
 
   const handlePageChange = (page: number) => {
     setPagination(prev => ({ ...prev, page }))
@@ -152,7 +151,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
               placeholder="search papers by title, content, or course code..."
               value={filters.query || ''}
               onChange={e => handleFilterChange('query', e.target.value)}
-              className="border-0 bg-transparent pl-16 pr-6 py-6 text-lg placeholder:text-gray-500 focus:outline-none focus:ring-0"
+              className="border-0 bg-transparent pl-16 pr-6 py-6 text-lg placeholder:text-gray-500 focus:outline-hidden focus:ring-0"
             />
           </div>
         </div>
@@ -163,7 +162,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
             <Button
               variant="outline"
               onClick={() => setShowFilters(!showFilters)}
-              className="rounded-2xl border-gray-200/60 bg-white/90 px-6 py-3 backdrop-blur-sm hover:bg-gray-50 dark:border-gray-800/60 dark:bg-gray-900/90 dark:hover:bg-gray-800/90"
+              className="rounded-2xl border-gray-200/60 bg-white/90 px-6 py-3 backdrop-blur-xs hover:bg-gray-50 dark:border-gray-800/60 dark:bg-gray-900/90 dark:hover:bg-gray-800/90"
             >
               <SlidersHorizontal className="h-5 w-5" />
               filters
@@ -225,32 +224,34 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
               <Card className="border border-border bg-card">
                 <CardContent className="p-8">
                   <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-                    {[
-                      {
-                        key: 'courseCode',
-                        label: 'course code',
-                        options: filterOptions.courseCodes,
-                        placeholder: 'all courses',
-                      },
-                      {
-                        key: 'year',
-                        label: 'year',
-                        options: filterOptions.years,
-                        placeholder: 'all years',
-                      },
-                      {
-                        key: 'slot',
-                        label: 'slot',
-                        options: filterOptions.slots,
-                        placeholder: 'all slots',
-                      },
-                      {
-                        key: 'examType',
-                        label: 'exam type',
-                        options: filterOptions.examTypes,
-                        placeholder: 'all types',
-                      },
-                    ].map((filter, index) => (
+                    {(
+                      [
+                        {
+                          key: 'courseCode',
+                          label: 'course code',
+                          options: filterOptions?.courseCodes,
+                          placeholder: 'all courses',
+                        },
+                        {
+                          key: 'year',
+                          label: 'year',
+                          options: filterOptions?.years,
+                          placeholder: 'all years',
+                        },
+                        {
+                          key: 'slot',
+                          label: 'slot',
+                          options: filterOptions?.slots,
+                          placeholder: 'all slots',
+                        },
+                        {
+                          key: 'examType',
+                          label: 'exam type',
+                          options: filterOptions?.examTypes,
+                          placeholder: 'all types',
+                        },
+                      ] satisfies FilterField[]
+                    ).map((filter, index) => (
                       <motion.div
                         key={filter.key}
                         initial={{ opacity: 0, y: 20 }}
@@ -262,14 +263,12 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
                           {filter.label}
                         </Label>
                         <select
-                          value={filters[filter.key as keyof SearchFilters] || ''}
-                          onChange={e =>
-                            handleFilterChange(filter.key as keyof SearchFilters, e.target.value)
-                          }
-                          className="w-full rounded-xl border border-gray-200/60 bg-white/90 px-4 py-3 text-sm backdrop-blur-sm transition-all focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100/50 dark:border-gray-800/60 dark:bg-gray-900/90 dark:focus:border-blue-500 dark:focus:ring-blue-900/30"
+                          value={filters[filter.key] ?? ''}
+                          onChange={e => handleFilterChange(filter.key, e.target.value)}
+                          className="w-full rounded-xl border border-gray-200/60 bg-white/90 px-4 py-3 text-sm backdrop-blur-xs transition-all focus:border-blue-400 focus:outline-hidden focus:ring-2 focus:ring-blue-100/50 dark:border-gray-800/60 dark:bg-gray-900/90 dark:focus:border-blue-500 dark:focus:ring-blue-900/30"
                         >
                           <option value="">{filter.placeholder}</option>
-                          {filter.options?.map((option: string | number) => (
+                          {filter.options?.map(option => (
                             <option key={option} value={option}>
                               {option}
                             </option>
@@ -324,7 +323,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
             {hasActiveFilters && (
               <Button
                 onClick={clearFilters}
-                className="mt-6 rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 px-8 py-3 font-semibold"
+                className="mt-6 rounded-2xl bg-linear-to-r from-blue-600 to-purple-600 px-8 py-3 font-semibold"
               >
                 clear all filters
               </Button>
@@ -359,7 +358,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
                     <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
                       <Button
                         size="sm"
-                        className="rounded-full bg-white/95 text-gray-900 shadow-lg backdrop-blur-sm hover:bg-white"
+                        className="rounded-full bg-white/95 text-gray-900 shadow-lg backdrop-blur-xs hover:bg-white"
                         asChild
                       >
                         <a href={paper.fileUrl} target="_blank" rel="noopener noreferrer">
@@ -370,7 +369,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
                     <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
                       <Button
                         size="sm"
-                        className="rounded-full bg-white/95 text-gray-900 shadow-lg backdrop-blur-sm hover:bg-white"
+                        className="rounded-full bg-white/95 text-gray-900 shadow-lg backdrop-blur-xs hover:bg-white"
                         asChild
                       >
                         <a href={paper.fileUrl} download={paper.originalFilename}>
@@ -385,7 +384,7 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
                     <Button
                       size="sm"
                       variant="ghost"
-                      className="rounded-full bg-white/90 p-2 opacity-0 backdrop-blur-sm transition-all duration-300 hover:bg-white group-hover:opacity-100"
+                      className="rounded-full bg-white/90 p-2 opacity-0 backdrop-blur-xs transition-all duration-300 hover:bg-white group-hover:opacity-100"
                     >
                       <Star className="h-4 w-4 text-gray-600" />
                     </Button>
@@ -465,13 +464,13 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
           transition={{ duration: 0.6 }}
           className="flex justify-center pt-8"
         >
-          <Card className="border border-border bg-card shadow-sm">
+          <Card className="border border-border bg-card shadow-xs">
             <CardContent className="flex items-center gap-2 p-4">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handlePageChange(pagination.page! - 1)}
-                disabled={pagination.page === 1}
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
                 className="rounded-xl px-4 py-2"
               >
                 previous
@@ -479,11 +478,11 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
 
               <div className="flex items-center gap-1">
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  const page = Math.max(1, Math.min(totalPages - 4, pagination.page! - 2)) + i
+                  const page = Math.max(1, Math.min(totalPages - 4, currentPage - 2)) + i
                   return (
                     <Button
                       key={page}
-                      variant={page === pagination.page ? 'default' : 'outline'}
+                      variant={page === currentPage ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => handlePageChange(page)}
                       className="rounded-xl w-10 h-10"
@@ -497,8 +496,8 @@ const PapersList = forwardRef<PapersListRef>((props, ref) => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handlePageChange(pagination.page! + 1)}
-                disabled={pagination.page === totalPages}
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
                 className="rounded-xl px-4 py-2"
               >
                 next

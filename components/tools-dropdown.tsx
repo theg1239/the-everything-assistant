@@ -112,7 +112,7 @@ export function ToolsDropdown({ onToolSelect, selectedTool, onMCPConfigsChange }
   const triggerChildren = selectedTool ? (
     <>
       <span className="text-muted-foreground">
-        {renderIcon(activeEntry.icon)}
+        {renderIcon(activeEntry?.icon)}
       </span>
       <span className="ml-1 text-xs font-medium hidden sm:inline">{selectedName}</span>
     </>

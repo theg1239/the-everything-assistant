@@ -6,7 +6,7 @@ export type ParsedHubResult = {
   title: string
   summary: string
   formatted_content: string
-  structured_data: any
+  structured_data: Record<string, unknown>
   meta?: {
     fetchedAt: string
     notes?: string
@@ -16,12 +16,12 @@ export type ParsedHubResult = {
 export type RawVTOPResult = {
   success?: boolean
   command?: string
-  data?: any
+  data?: unknown
   output?: string
   raw?: boolean
   message?: string
-  structured_data?: any
-  meta?: any
+  structured_data?: unknown
+  meta?: unknown
 }
 
 const HEADER_KEYWORDS = ['SUBJECT', 'TYPE', 'FACULTY', 'CLASSES', 'PERCENTAGE']
@@ -50,6 +50,9 @@ export function parseAttendance(result: RawVTOPResult): ParsedHubResult | null {
   }
 
   const headerLine = lines[headerIndex]
+  if (headerLine === undefined) {
+    return null
+  }
   const headers = splitColumns(headerLine)
   if (headers.length < 5) {
     return null
@@ -58,8 +61,7 @@ export function parseAttendance(result: RawVTOPResult): ParsedHubResult | null {
   const rows: string[][] = []
   let currentRow: string[] | null = null
 
-  for (let i = headerIndex + 1; i < lines.length; i++) {
-    const line = lines[i]
+  for (const line of lines.slice(headerIndex + 1)) {
     if (!line.includes('│')) continue
     if (/^[\s\u00a0]*[─┼]+/.test(line)) continue
 
@@ -75,7 +77,7 @@ export function parseAttendance(result: RawVTOPResult): ParsedHubResult | null {
       continue
     }
 
-    const firstCell = normalizeWhitespace(cells[0])
+    const firstCell = normalizeWhitespace(cells[0] ?? '')
     if (/^\d+$/.test(firstCell)) {
       if (currentRow) {
         rows.push(currentRow)
@@ -101,7 +103,7 @@ export function parseAttendance(result: RawVTOPResult): ParsedHubResult | null {
   const mappedRows = rows.map(row => {
     const [index, subject, type, faculty, classes, percentage, alert = ''] = row
     return {
-      index: Number.parseInt(index, 10) || rows.indexOf(row) + 1,
+      index: Number.parseInt(index ?? '', 10) || rows.indexOf(row) + 1,
       subject,
       type,
       faculty,

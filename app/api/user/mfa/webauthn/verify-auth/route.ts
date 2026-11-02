@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { logSecurityEvent } from '@/lib/mfa'
 import {
@@ -11,9 +10,14 @@ import {
 import { webAuthnVerifyAuthSchema } from '@/types/api/mfa'
 
 const VALID_TRANSPORTS: AuthenticatorTransport[] = ['usb', 'nfc', 'ble', 'hybrid', 'internal']
+const VALID_TRANSPORT_SET: ReadonlySet<string> = new Set(VALID_TRANSPORTS)
+
+function isAuthenticatorTransport(transport: string): transport is AuthenticatorTransport {
+  return VALID_TRANSPORT_SET.has(transport)
+}
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions)
+  const session = await auth()
   if (!session?.user?.email) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -92,9 +96,7 @@ export async function POST(request: NextRequest) {
     clientExtensionResults: credential.clientExtensionResults || {},
   }
 
-  const filteredTransports: AuthenticatorTransport[] = stored.transports.filter(
-    (t): t is AuthenticatorTransport => VALID_TRANSPORTS.includes(t as AuthenticatorTransport)
-  )
+  const filteredTransports: AuthenticatorTransport[] = stored.transports.filter(isAuthenticatorTransport)
   const transportsToUse = filteredTransports.length ? filteredTransports : VALID_TRANSPORTS
 
   const verificationOpts: VerifyAuthenticationResponseOpts = {
@@ -102,9 +104,9 @@ export async function POST(request: NextRequest) {
     expectedChallenge: user.tempMfaSecret,
     expectedOrigin:
       process.env.NODE_ENV === 'production'
-        ? process.env.WEBAUTHN_ORIGIN!
+        ? (process.env.WEBAUTHN_ORIGIN ?? '')
         : 'http://localhost:3000',
-    expectedRPID: process.env.NODE_ENV === 'production' ? process.env.WEBAUTHN_RP_ID! : 'localhost',
+    expectedRPID: process.env.NODE_ENV === 'production' ? (process.env.WEBAUTHN_RP_ID ?? '') : 'localhost',
     credential: {
       id: stored.credentialId, // base64url string
       publicKey: credentialPublicKey,
@@ -153,7 +155,7 @@ export async function POST(request: NextRequest) {
       request
     )
     return NextResponse.json({ success: true, message: 'WebAuthn authentication successful' })
-  } catch (err: any) {
+  } catch (err) {
     console.error('🔐 WebAuthn authentication error:', err)
     await logSecurityEvent(
       user.id,

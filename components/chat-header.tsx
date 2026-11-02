@@ -4,13 +4,18 @@ import { motion } from 'framer-motion'
 import { memo, useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 
-const getTimeOfDayGreeting = () => {
+type NonEmptyList = [string, ...string[]]
+
+const pickRandom = (options: NonEmptyList): string =>
+  options[Math.floor(Math.random() * options.length)] ?? options[0]
+
+const getTimeOfDayGreeting = (): string => {
   const hour = new Date().getHours()
   const now = new Date()
   const dayOfWeek = now.getDay()
 
   if (hour >= 5 && hour < 12) {
-    const morningGreetings = [
+    const morningGreetings: NonEmptyList = [
       'hey',
       'rise and grind',
       'wakey wakey',
@@ -30,9 +35,9 @@ const getTimeOfDayGreeting = () => {
       hour < 7 ? 'wow, early riser' : 'perfect timing',
       dayOfWeek === 1 ? 'monday warrior' : 'morning superstar',
     ]
-    return morningGreetings[Math.floor(Math.random() * morningGreetings.length)]
+    return pickRandom(morningGreetings)
   } else if (hour >= 12 && hour < 17) {
-    const afternoonGreetings = [
+    const afternoonGreetings: NonEmptyList = [
       'hey',
       'good afternoon',
       'midday magic',
@@ -52,9 +57,9 @@ const getTimeOfDayGreeting = () => {
       hour === 12 ? "lunch o'clock" : 'afternoon momentum',
       dayOfWeek >= 1 && dayOfWeek <= 5 ? 'weekday warrior' : 'weekend bliss',
     ]
-    return afternoonGreetings[Math.floor(Math.random() * afternoonGreetings.length)]
+    return pickRandom(afternoonGreetings)
   } else if (hour >= 17 && hour < 22) {
-    const eveningGreetings = [
+    const eveningGreetings: NonEmptyList = [
       'hey',
       'golden hour',
       'winding down',
@@ -74,10 +79,10 @@ const getTimeOfDayGreeting = () => {
       hour >= 19 ? 'late evening' : 'early evening',
       dayOfWeek === 5 ? 'friday freedom' : 'evening momentum',
     ]
-    return eveningGreetings[Math.floor(Math.random() * eveningGreetings.length)]
+    return pickRandom(eveningGreetings)
   } else {
     if (dayOfWeek === 5 || dayOfWeek === 6) {
-      const weekendNightGreetings = [
+      const weekendNightGreetings: NonEmptyList = [
         'hey',
         'weekend warrior',
         'party mode',
@@ -92,10 +97,10 @@ const getTimeOfDayGreeting = () => {
         'weekend mode',
         'night owl hours',
       ]
-      return weekendNightGreetings[Math.floor(Math.random() * weekendNightGreetings.length)]
+      return pickRandom(weekendNightGreetings)
     }
 
-    const nightGreetings = [
+    const nightGreetings: NonEmptyList = [
       'hey',
       'night owl',
       'midnight warrior',
@@ -115,7 +120,7 @@ const getTimeOfDayGreeting = () => {
       hour >= 2 && hour < 5 ? 'seriously, sleep maybe' : 'night excellence',
       hour >= 3 ? 'dedication level: max' : 'night owl extraordinaire',
     ]
-    return nightGreetings[Math.floor(Math.random() * nightGreetings.length)]
+    return pickRandom(nightGreetings)
   }
 }
 

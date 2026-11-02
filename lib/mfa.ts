@@ -1,15 +1,21 @@
-import { authenticator } from 'otplib'
+import { createGuardrails, generateSecret, generateURI, verifySync } from 'otplib'
 import { createHash, randomBytes } from 'crypto'
 import qrcode from 'qrcode'
 import nodemailer from 'nodemailer'
 
-authenticator.options = {
-  window: 1,
-  step: 30,
-}
+const TOTP_PERIOD_SECONDS = 30
+
+// otplib v12 generated 10-byte secrets by default; v13 rejects anything under
+// 16 bytes. Relax the floor for verification so already-enrolled users keep
+// working. New secrets are always generated at the RFC-recommended 20 bytes.
+const LEGACY_SECRET_GUARDRAILS = createGuardrails({ MIN_SECRET_BYTES: 10 })
 
 export function generateTOTPSecret(): string {
-  return authenticator.generateSecret()
+  return generateSecret({ length: 20 })
+}
+
+export function generateTOTPUri(secret: string, label: string, issuer: string): string {
+  return generateURI({ issuer, label, secret, period: TOTP_PERIOD_SECONDS })
 }
 
 export async function generateQRCode(
@@ -17,12 +23,24 @@ export async function generateQRCode(
   userEmail: string,
   serviceName: string = 'The Everything Assistant'
 ): Promise<string> {
-  const otpauth = authenticator.keyuri(userEmail, serviceName, secret)
-  return await qrcode.toDataURL(otpauth)
+  return await qrcode.toDataURL(generateTOTPUri(secret, userEmail, serviceName))
 }
 
 export function verifyTOTP(token: string, secret: string): boolean {
-  return authenticator.verify({ token, secret })
+  try {
+    const result = verifySync({
+      token,
+      secret,
+      period: TOTP_PERIOD_SECONDS,
+      // ±1 step, matching the previous `window: 1` behaviour.
+      epochTolerance: TOTP_PERIOD_SECONDS,
+      guardrails: LEGACY_SECRET_GUARDRAILS,
+    })
+    return result.valid
+  } catch {
+    // Malformed tokens/secrets throw in v13; treat them as a failed check.
+    return false
+  }
 }
 
 export function generateBackupCodes(count: number = 10): string[] {
@@ -135,7 +153,7 @@ export function checkRateLimit(
 export async function logSecurityEvent(
   userId: string,
   action: string,
-  details: any = {},
+  details: Record<string, unknown> = {},
   request?: Request
 ) {
   try {

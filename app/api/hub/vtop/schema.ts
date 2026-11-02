@@ -1,4 +1,4 @@
-import * as z from 'zod/v3';
+import * as z from 'zod'
 
 export const vtopResultSchema = z.object({
   command: z.string().describe('vtop command executed'),
@@ -9,9 +9,9 @@ export const vtopResultSchema = z.object({
     .describe('well-structured HTML for rich rendering, valid and sanitized'),
   structured_data: z
     .object({
-      data: z.any().optional(),
+      data: z.unknown().optional(),
     })
-    .passthrough()
+    .loose()
     .optional()
     .describe('structured JSON form of the result'),
   meta: z
@@ -21,3 +21,5 @@ export const vtopResultSchema = z.object({
     })
     .optional(),
 })
+
+export type VTOPFormattedResult = z.infer<typeof vtopResultSchema>

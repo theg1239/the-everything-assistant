@@ -20,10 +20,21 @@ import {
   ChevronRight,
   Zap,
   MessageSquare,
+  type LucideIcon,
 } from 'lucide-react'
 import { Drawer } from 'vaul'
 
-const features = [
+interface Feature {
+  icon: LucideIcon
+  title: string
+  description: string
+  href: string
+  query: string
+  color: FeatureColor
+  badge?: 'popular' | 'updated'
+}
+
+const features: Feature[] = [
   {
     icon: GraduationCap,
     title: 'vtop integration',
@@ -92,7 +103,9 @@ const features = [
   },
 ]
 
-const colorMap: Record<string, { bg: string; border: string; text: string; glow: string }> = {
+type FeatureColor = 'cyan' | 'green' | 'orange' | 'purple' | 'amber' | 'indigo' | 'rose' | 'teal'
+
+const colorMap: Record<FeatureColor, { bg: string; border: string; text: string; glow: string }> = {
   cyan: { bg: 'bg-cyan-500/10', border: 'border-cyan-500/20', text: 'text-cyan-400', glow: 'group-hover:shadow-cyan-500/20' },
   green: { bg: 'bg-green-500/10', border: 'border-green-500/20', text: 'text-green-400', glow: 'group-hover:shadow-green-500/20' },
   orange: { bg: 'bg-orange-500/10', border: 'border-orange-500/20', text: 'text-orange-400', glow: 'group-hover:shadow-orange-500/20' },
@@ -113,7 +126,7 @@ const quickQueries = [
 
 export default function FeaturesClient() {
   const router = useRouter()
-  const [selectedFeature, setSelectedFeature] = useState<typeof features[0] | null>(null)
+  const [selectedFeature, setSelectedFeature] = useState<Feature | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   const handleFeatureClick = (feature: typeof features[0]) => {

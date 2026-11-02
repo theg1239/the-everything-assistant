@@ -69,11 +69,18 @@ class WhatsAppService extends EventEmitter {
           handleSIGTERM: false,
           handleSIGHUP: false,
         },
-        webVersionCache: {
-          type: 'remote',
-          remotePath:
-            'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
-        },
+        // whatsapp-web.js >=1.26 ships a known-good default WA Web version with a local
+        // cache. Only pin a specific version when WHATSAPP_WEB_VERSION is set.
+        ...(process.env.WHATSAPP_WEB_VERSION
+          ? {
+              webVersion: process.env.WHATSAPP_WEB_VERSION,
+              webVersionCache: {
+                type: 'remote',
+                remotePath:
+                  'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/{version}.html',
+              },
+            }
+          : {}),
       })
 
       this.setupEventHandlers()

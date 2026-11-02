@@ -1,5 +1,15 @@
 import { formatDistanceToNow, differenceInCalendarDays } from 'date-fns'
 import type { PersonalHubSnapshot, HubVTOPCommand } from '@/types/hub'
+import {
+  asArray,
+  asNumber,
+  asRecord,
+  asString,
+  asText,
+  firstTruthy,
+  isRecord,
+  type UnknownRecord,
+} from './guards'
 
 export type DailyBriefingMessage = {
   id: string
@@ -36,8 +46,11 @@ export type Persona = {
   mess?: string
 }
 
+/** A timetable entry from snapshot JSON; its fields are unvalidated. */
+export type TimetableClassInfo = UnknownRecord
+
 export type NextClassComputation = {
-  classInfo: any
+  classInfo: TimetableClassInfo
   startsAt?: Date
 } | null
 
@@ -53,28 +66,31 @@ export function buildGreeting(reference: Date, name?: string) {
 
 export function deriveTerseName(profileSnapshot?: PersonalHubSnapshot | null) {
   if (!profileSnapshot) return 'there'
-  const structured: any = profileSnapshot.structured_data || {}
-  const persona = structured?.persona || {}
-  const student = structured?.student || {}
+  const structured = asRecord(profileSnapshot.structured_data) ?? {}
+  const persona = asRecord(structured.persona) ?? {}
+  const student = asRecord(structured.student) ?? {}
   const candidates: Array<string | undefined | null> = [
-    student?.name,
-    student?.full_name,
-    student?.fullName,
-    persona?.name,
-    persona?.studentName,
-    structured?.name,
+    asString(student.name),
+    asString(student.full_name),
+    asString(student.fullName),
+    asString(persona.name),
+    asString(persona.studentName),
+    asString(structured.name),
     profileSnapshot.title,
   ]
 
-  const emailCandidate =
-    persona?.email ||
-    persona?.vitEmail ||
-    student?.email ||
-    student?.email_id ||
-    student?.emailId ||
-    student?.vitEmail ||
-    structured?.vitEmail ||
-    structured?.email
+  const emailCandidate = asString(
+    firstTruthy(
+      persona.email,
+      persona.vitEmail,
+      student.email,
+      student.email_id,
+      student.emailId,
+      student.vitEmail,
+      structured.vitEmail,
+      structured.email
+    )
+  )
 
   if (emailCandidate) {
     candidates.unshift(extractNameFromEmail(emailCandidate))
@@ -123,8 +139,8 @@ export function buildDailyBriefingContext(
 
   const normalizedAssignments = normalizeAssignments(assignments, referenceDate)
   const upcomingAssignments = normalizedAssignments
-    .filter(item => item.dueDate)
-    .sort((a, b) => (a.dueDate!.getTime() || 0) - (b.dueDate!.getTime() || 0))
+    .filter(hasDueDate)
+    .sort((a, b) => (a.dueDate.getTime() || 0) - (b.dueDate.getTime() || 0))
 
   const assignmentsDueSoon = upcomingAssignments.filter(item => {
     if (!item.dueDate) return false
@@ -138,8 +154,8 @@ export function buildDailyBriefingContext(
     : null
 
   const examSchedule = normalizeExamSchedule(exams, referenceDate)
-    .filter(entry => entry.examDateObj)
-    .sort((a, b) => (a.examDateObj!.getTime() || 0) - (b.examDateObj!.getTime() || 0))
+    .filter(hasExamDate)
+    .sort((a, b) => (a.examDateObj.getTime() || 0) - (b.examDateObj.getTime() || 0))
   const upcomingExam = examSchedule.find(
     entry => entry.examDateObj && entry.examDateObj >= referenceDate
   )
@@ -212,11 +228,11 @@ export function buildDailyBriefingContext(
   }
 
   if (typeof examDaysAway === 'number' && examDaysAway <= 0 && todaysClasses.length > 0) {
-    const earliestClass = todaysClasses.find(cls => cls.startMinutes != null)
-    const lastClassWithTime = [...todaysClasses].reverse().find(cls => cls.startMinutes != null)
+    const earliestClass = todaysClasses.find(hasStartMinutes)
+    const lastClassWithTime = [...todaysClasses].reverse().find(hasStartMinutes)
     const windowLabel =
       earliestClass && lastClassWithTime
-        ? `${formatMinutesLabel(earliestClass.startMinutes!)} → ${formatMinutesLabel(lastClassWithTime.startMinutes!)}`
+        ? `${formatMinutesLabel(earliestClass.startMinutes)} → ${formatMinutesLabel(lastClassWithTime.startMinutes)}`
         : null
     messages.push({
       id: 'exam-class-balance',
@@ -296,8 +312,8 @@ export function buildDailyBriefingContext(
     pushAction('focus-attendance', 'open attendance watch', 'attendance')
   }
 
-  const attendanceStats = (attendanceSnapshot?.structured_data as any)?.stats
-  if (attendanceStats?.needsAttention > 0) {
+  const attendanceStats = readAttendanceStats(attendanceSnapshot)
+  if (attendanceStats.needsAttention > 0) {
     messages.push({
       id: 'attendance-status',
       primary: `${attendanceStats.needsAttention} course${attendanceStats.needsAttention === 1 ? '' : 's'} have low attendance`,
@@ -306,25 +322,25 @@ export function buildDailyBriefingContext(
         : undefined,
       tone: 'alert',
     })
-  } else if (attendanceStats?.healthy > 0) {
+  } else if (attendanceStats.healthy > 0) {
     messages.push({
       id: 'attendance-ok',
       primary: `${attendanceStats.healthy} course${attendanceStats.healthy === 1 ? '' : 's'} steady at or above target`,
     })
   }
 
-  const pendingLeave = (leaveSnapshot?.structured_data as any)?.pending
-  if (pendingLeave?.status && pendingLeave.status.toLowerCase().includes('pending')) {
+  const pendingLeave = readPendingLeave(leaveSnapshot)
+  if (pendingLeave) {
     messages.push({
       id: 'leave-pending',
       primary: 'leave request still pending approval.',
-      supporting: pendingLeave.reason || undefined,
+      supporting: pendingLeave.reason,
       tone: 'neutral',
     })
     pushAction('focus-leave', 'check leave status', 'leave')
   }
 
-  const libraryTotal = (librarySnapshot?.structured_data as any)?.total
+  const libraryTotal = readLibraryTotal(librarySnapshot)
   if (libraryTotal && libraryTotal > 0) {
     messages.push({
       id: 'library-dues',
@@ -335,7 +351,7 @@ export function buildDailyBriefingContext(
     pushAction('focus-library', 'pay library dues', 'library-dues')
   }
 
-  const gradeRisk = ((gradesSnapshot?.structured_data as any)?.risk || []) as any[]
+  const gradeRisk = readGradeRisk(gradesSnapshot)
   if (gradeRisk.length > 0) {
     messages.push({
       id: 'grade-risk',
@@ -348,42 +364,73 @@ export function buildDailyBriefingContext(
   return { messages, examPrompt, actions: actions.slice(0, 3) }
 }
 
+/** `structured_data.stats` as written by the attendance parser. */
+function readAttendanceStats(snapshot?: PersonalHubSnapshot | null) {
+  const stats = asRecord(asRecord(snapshot?.structured_data)?.stats)
+  return {
+    needsAttention: asNumber(stats?.needsAttention) ?? 0,
+    healthy: asNumber(stats?.healthy) ?? 0,
+    worstSubject: asText(stats?.worstSubject),
+    worstPercentage: asText(stats?.worstPercentage),
+  }
+}
+
+/** `structured_data.pending` when it is still awaiting approval. */
+function readPendingLeave(snapshot?: PersonalHubSnapshot | null) {
+  const pending = asRecord(asRecord(snapshot?.structured_data)?.pending)
+  const status = asString(pending?.status)
+  if (!status || !status.toLowerCase().includes('pending')) return null
+  return { status, reason: asString(pending?.reason) }
+}
+
+function readLibraryTotal(snapshot?: PersonalHubSnapshot | null) {
+  return asNumber(asRecord(snapshot?.structured_data)?.total)
+}
+
+function readGradeRisk(snapshot?: PersonalHubSnapshot | null) {
+  return asArray(asRecord(snapshot?.structured_data)?.risk) ?? []
+}
+
 export function deriveNextClassInsight(snapshot?: PersonalHubSnapshot | null, nowTick?: number) {
   if (!snapshot?.structured_data) return null
   const reference = nowTick ? new Date(nowTick) : new Date()
   const rolling = computeDynamicNextClass(snapshot.structured_data, reference)
-  const data: any = snapshot.structured_data
-  const fallback =
-    rolling?.classInfo ||
-    data?.upcomingClass ||
-    data?.upcoming ||
-    data?.nextClass ||
-    data?.next_session ||
-    data?.next ||
-    (Array.isArray(data?.classes) ? data.classes[0] : null)
+  const data = asRecord(snapshot.structured_data)
+  const fallbackValue = firstTruthy(
+    rolling?.classInfo,
+    data?.upcomingClass,
+    data?.upcoming,
+    data?.nextClass,
+    data?.next_session,
+    data?.next,
+    asArray(data?.classes)?.[0]
+  )
 
-  if (!fallback) return null
+  if (!fallbackValue) return null
+  const fallback = asRecord(fallbackValue) ?? {}
 
-  const course = fallback.course || fallback.subject || fallback.title || snapshot.title
-  const room = fallback.location || fallback.room || fallback.venue
+  const course =
+    asText(firstTruthy(fallback.course, fallback.subject, fallback.title)) || snapshot.title
+  const room = asText(firstTruthy(fallback.location, fallback.room, fallback.venue))
   const timeStamp = rolling?.startsAt
     ? new Intl.DateTimeFormat(undefined, {
         weekday: 'short',
         hour: 'numeric',
         minute: '2-digit',
       }).format(rolling.startsAt)
-    : fallback.startTime || fallback.start || fallback.slot || fallback.time
+    : asText(firstTruthy(fallback.startTime, fallback.start, fallback.slot, fallback.time))
 
   const supportingParts = [
-    fallback.day,
+    asText(fallback.day),
     rolling?.startsAt ? formatDistanceToNow(rolling.startsAt, { addSuffix: true }) : null,
     room ? `room ${room}` : null,
-  ].filter(Boolean)
+  ].filter((part): part is string => Boolean(part))
 
+  const faculty = asText(fallback.faculty)
   return {
     headline: `${course || 'class'} @ ${timeStamp || 'unknown'}`.trim(),
     supporting: supportingParts.length ? supportingParts.join(' · ') : undefined,
-    meta: fallback.faculty ? `with ${fallback.faculty}` : undefined,
+    meta: faculty ? `with ${faculty}` : undefined,
   }
 }
 
@@ -408,10 +455,10 @@ export function deriveAssignmentInsight(snapshot?: PersonalHubSnapshot | null, n
 
 export function deriveAttendanceInsight(snapshot?: PersonalHubSnapshot | null) {
   if (!snapshot?.structured_data) return null
-  const stats = (snapshot.structured_data as any)?.stats
-  if (stats?.healthy !== undefined) {
+  const stats = asRecord(asRecord(snapshot.structured_data)?.stats)
+  if (stats && stats.healthy !== undefined) {
     return {
-      headline: `${stats.healthy} steady / ${stats.needsAttention} at risk`,
+      headline: `${String(stats.healthy)} steady / ${String(stats.needsAttention)} at risk`,
       supporting: snapshot.summary,
       meta: 'auto synced',
     }
@@ -425,15 +472,20 @@ export function deriveAttendanceInsight(snapshot?: PersonalHubSnapshot | null) {
 
 export function deriveLeaveInsight(snapshot?: PersonalHubSnapshot | null) {
   if (!snapshot?.structured_data) return null
-  const data: any = snapshot.structured_data
-  const pending = (data.requests || data.leaves || []).find((req: any) =>
-    (req.status || req.state || '').toLowerCase().includes('pending')
-  )
+  const data = asRecord(snapshot.structured_data)
+  const requests = asArray(data?.requests) ?? asArray(data?.leaves) ?? []
+  const pending = requests
+    .filter(isRecord)
+    .find(req =>
+      (asString(firstTruthy(req.status, req.state)) ?? '').toLowerCase().includes('pending')
+    )
   if (pending) {
+    const from = asText(pending.from)
+    const to = asText(pending.to)
     return {
-      headline: pending.title || pending.purpose || 'pending request',
-      supporting: pending.status,
-      meta: pending.from && pending.to ? `${pending.from} → ${pending.to}` : undefined,
+      headline: asText(firstTruthy(pending.title, pending.purpose)) || 'pending request',
+      supporting: asText(pending.status),
+      meta: from && to ? `${from} → ${to}` : undefined,
     }
   }
   return {
@@ -474,18 +526,18 @@ export function derivePersona(
   hostelSnapshot?: PersonalHubSnapshot | null
 ): Persona | null {
   const persona: Persona = {}
-  const profileData = (profileSnapshot?.structured_data as any)?.persona
+  const profileData = asRecord(asRecord(profileSnapshot?.structured_data)?.persona)
   if (profileData) {
-    persona.registerNumber = profileData.registerNumber
-    persona.program = profileData.program
-    persona.email = profileData.email
-    persona.school = profileData.school
+    persona.registerNumber = asText(profileData.registerNumber)
+    persona.program = asText(profileData.program)
+    persona.email = asText(profileData.email)
+    persona.school = asText(profileData.school)
   }
-  const hostelInfo = (hostelSnapshot?.structured_data as any)?.info
+  const hostelInfo = asRecord(asRecord(hostelSnapshot?.structured_data)?.info)
   if (hostelInfo) {
-    persona.hostelBlock = hostelInfo['hostel name'] || hostelInfo['hostel block']
-    persona.room = hostelInfo['room no'] || hostelInfo['room number']
-    persona.mess = hostelInfo['mess type'] || hostelInfo['mess']
+    persona.hostelBlock = asText(firstTruthy(hostelInfo['hostel name'], hostelInfo['hostel block']))
+    persona.room = asText(firstTruthy(hostelInfo['room no'], hostelInfo['room number']))
+    persona.mess = asText(firstTruthy(hostelInfo['mess type'], hostelInfo['mess']))
   }
   if (Object.values(persona).every(value => !value)) {
     return null
@@ -507,8 +559,8 @@ export function deriveNotifications(
   const notifications: { id: string; text: string; command?: HubVTOPCommand }[] = []
   const now = nowTick ? new Date(nowTick) : new Date()
 
-  const attendanceStats = (snapshots.attendanceSnapshot?.structured_data as any)?.stats
-  if (attendanceStats?.needsAttention > 0) {
+  const attendanceStats = readAttendanceStats(snapshots.attendanceSnapshot)
+  if (attendanceStats.needsAttention > 0) {
     notifications.push({
       id: 'attendance-risk',
       text: `${attendanceStats.needsAttention} course${attendanceStats.needsAttention === 1 ? '' : 's'} below 75%`,
@@ -529,8 +581,8 @@ export function deriveNotifications(
     })
   }
 
-  const pendingLeave = (snapshots.leaveSnapshot?.structured_data as any)?.pending
-  if (pendingLeave?.status && pendingLeave.status.toLowerCase().includes('pending')) {
+  const pendingLeave = readPendingLeave(snapshots.leaveSnapshot)
+  if (pendingLeave) {
     notifications.push({
       id: 'leave-pending',
       text: `Leave pending: ${pendingLeave.reason || pendingLeave.status}`,
@@ -549,7 +601,7 @@ export function deriveNotifications(
     })
   }
 
-  const libraryTotal = (snapshots.librarySnapshot?.structured_data as any)?.total
+  const libraryTotal = readLibraryTotal(snapshots.librarySnapshot)
   if (libraryTotal && libraryTotal > 0) {
     notifications.push({
       id: 'library-dues',
@@ -558,7 +610,7 @@ export function deriveNotifications(
     })
   }
 
-  const gradeRisk = ((snapshots.gradesSnapshot?.structured_data as any)?.risk || []) as any[]
+  const gradeRisk = readGradeRisk(snapshots.gradesSnapshot)
   if (gradeRisk.length > 0) {
     notifications.push({
       id: 'grade-risk',
@@ -575,7 +627,7 @@ export type NormalizedAssignment = {
   status?: string
   nextDue?: string
   dueDate?: Date | null
-  [key: string]: any
+  [key: string]: unknown
 }
 
 export function normalizeAssignments(
@@ -583,25 +635,25 @@ export function normalizeAssignments(
   reference: Date
 ): NormalizedAssignment[] {
   if (!snapshot?.structured_data) return []
-  const payload: any = snapshot.structured_data
+  const payload = asRecord(snapshot.structured_data)
   const subjects =
-    (Array.isArray(payload?.subjects) && payload.subjects) ||
-    (Array.isArray(payload?.assignments) && payload.assignments) ||
-    (Array.isArray(payload?.items) && payload.items) ||
-    []
+    asArray(payload?.subjects) ?? asArray(payload?.assignments) ?? asArray(payload?.items) ?? []
 
-  return subjects.map((item: any) => {
-    const subject = item.subject || item.title || item.course || item.assignment
-    const status = item.status || item.state
-    const dueLabel = item.nextDue || item.next_due || item.dueDate || item.deadline || item.due
+  return subjects.map(entry => {
+    const item = asRecord(entry) ?? {}
+    const dueLabel = firstTruthy(item.nextDue, item.next_due, item.dueDate, item.deadline, item.due)
     return {
       ...item,
-      subject,
-      status,
-      nextDue: dueLabel,
-      dueDate: parseDateString(dueLabel, reference),
+      subject: asText(firstTruthy(item.subject, item.title, item.course, item.assignment)),
+      status: asText(firstTruthy(item.status, item.state)),
+      nextDue: asText(dueLabel),
+      dueDate: parseDateString(asString(dueLabel), reference),
     }
   })
+}
+
+function hasDueDate(item: NormalizedAssignment): item is NormalizedAssignment & { dueDate: Date } {
+  return item.dueDate instanceof Date
 }
 
 function pickUpcomingAssignment(
@@ -609,8 +661,11 @@ function pickUpcomingAssignment(
   now: Date
 ): NormalizedAssignment | null {
   const dated = list
-    .filter(item => item.dueDate && item.subject)
-    .sort((a, b) => (a.dueDate!.getTime() || 0) - (b.dueDate!.getTime() || 0))
+    .filter(
+      (item): item is NormalizedAssignment & { dueDate: Date } =>
+        hasDueDate(item) && Boolean(item.subject)
+    )
+    .sort((a, b) => (a.dueDate.getTime() || 0) - (b.dueDate.getTime() || 0))
 
   const future = dated.find(item => item.dueDate && item.dueDate >= now)
   return future || dated[0] || null
@@ -626,7 +681,8 @@ export type NormalizedExamEntry = {
   course?: string
   venue?: string
   hall?: string
-  [key: string]: any
+  slot?: string
+  [key: string]: unknown
 }
 
 export function normalizeExamSchedule(
@@ -634,31 +690,46 @@ export function normalizeExamSchedule(
   reference: Date
 ): NormalizedExamEntry[] {
   if (!snapshot?.structured_data) return []
-  const payload: any = snapshot.structured_data
-  const schedule: any[] =
-    (Array.isArray(payload?.schedule) && payload.schedule) ||
-    (Array.isArray(payload?.exams) && payload.exams) ||
-    []
+  const payload = asRecord(snapshot.structured_data)
+  const schedule = asArray(payload?.schedule) ?? asArray(payload?.exams) ?? []
 
-  return schedule.map(entry => {
-    const date = parseDateString(entry.examDate || entry.date, reference)
+  return schedule.map(raw => {
+    const entry = asRecord(raw) ?? {}
+    const date = parseDateString(asString(firstTruthy(entry.examDate, entry.date)), reference)
     if (date) {
-      const timeParts = parseStartTime(entry.examTime || entry.time || entry.session)
+      const timeParts = parseStartTime(
+        asString(firstTruthy(entry.examTime, entry.time, entry.session))
+      )
       if (timeParts) {
         date.setHours(timeParts.hour, timeParts.minute ?? 0, 0, 0)
       }
     }
     return {
       ...entry,
+      examDate: asText(entry.examDate),
+      examTime: asText(entry.examTime),
+      session: asText(entry.session),
+      title: asText(entry.title),
+      code: asText(entry.code),
+      course: asText(entry.course),
+      venue: asText(entry.venue),
+      hall: asText(entry.hall),
+      slot: asText(entry.slot),
       examDateObj: date,
     }
   })
 }
 
+function hasExamDate(
+  entry: NormalizedExamEntry
+): entry is NormalizedExamEntry & { examDateObj: Date } {
+  return entry.examDateObj instanceof Date
+}
+
 function pickUpcomingExam(list: NormalizedExamEntry[], now: Date): NormalizedExamEntry | null {
   const dated = list
-    .filter(entry => entry.examDateObj)
-    .sort((a, b) => (a.examDateObj!.getTime() || 0) - (b.examDateObj!.getTime() || 0))
+    .filter(hasExamDate)
+    .sort((a, b) => (a.examDateObj.getTime() || 0) - (b.examDateObj.getTime() || 0))
 
   const future = dated.find(entry => entry.examDateObj && entry.examDateObj >= now)
   return future || dated[0] || null
@@ -729,26 +800,28 @@ function parseDateString(value?: string, referenceDate: Date = new Date()): Date
     return new Date(parsed)
   }
 
-  let match = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/)
-  if (match) {
-    const day = parseInt(match[1], 10)
-    const month = parseInt(match[2], 10) - 1
-    const year = parseInt(match[3], 10)
+  const numeric = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/)
+  const [, dayPart, monthPart, yearPart] = numeric ?? []
+  if (dayPart && monthPart && yearPart) {
+    const day = parseInt(dayPart, 10)
+    const month = parseInt(monthPart, 10) - 1
+    const year = parseInt(yearPart, 10)
     if (month >= 0 && month < 12) {
       return new Date(year < 100 ? 2000 + year : year, month, day)
     }
   }
 
-  match = trimmed.match(/^(\d{1,2})\s+([A-Za-z]+)(?:\s+(\d{2,4}))?$/)
-  if (match) {
-    const day = parseInt(match[1], 10)
-    const monthKey = match[2].toLowerCase()
+  const named = trimmed.match(/^(\d{1,2})\s+([A-Za-z]+)(?:\s+(\d{2,4}))?$/)
+  const [, namedDay, monthName, namedYear] = named ?? []
+  if (namedDay && monthName) {
+    const day = parseInt(namedDay, 10)
+    const monthKey = monthName.toLowerCase()
     const month = MONTH_INDEX_MAP[monthKey]
     if (month !== undefined) {
-      let year = match[3] ? parseInt(match[3], 10) : referenceDate.getFullYear()
+      let year = namedYear ? parseInt(namedYear, 10) : referenceDate.getFullYear()
       if (year < 100) year += 2000
       const date = new Date(year, month, day)
-      if (!match[3] && date < referenceDate) {
+      if (!namedYear && date < referenceDate) {
         date.setFullYear(date.getFullYear() + 1)
       }
       return date
@@ -786,7 +859,7 @@ const DAY_ALIAS_MAP: Record<string, string> = {
 }
 
 export function computeDynamicNextClass(
-  structuredData: any,
+  structuredData: unknown,
   referenceDate: Date = new Date()
 ): NextClassComputation {
   const candidates = extractTimetableCandidates(structuredData)
@@ -794,22 +867,23 @@ export function computeDynamicNextClass(
 
   const now = referenceDate
   const currentDayIndex = (now.getDay() + 6) % 7
-  let winner: { classInfo: any; startsAt?: Date } | null = null
+  let winner: NextClassComputation = null
   let bestDelta = Infinity
 
   candidates.forEach(candidate => {
-    const dayValue = candidate.day || candidate.dayName || candidate.weekday || candidate.Day
-    const dayIndex = resolveDayIndex(dayValue)
+    const dayValue = firstTruthy(candidate.day, candidate.dayName, candidate.weekday, candidate.Day)
+    const dayIndex = resolveDayIndex(asString(dayValue))
     if (dayIndex === null) return
 
-    const timeSource =
-      candidate.startTime ||
-      candidate.start ||
-      candidate.start_time ||
-      candidate.time ||
-      candidate.slotTime ||
+    const timeSource = firstTruthy(
+      candidate.startTime,
+      candidate.start,
+      candidate.start_time,
+      candidate.time,
+      candidate.slotTime,
       candidate.slot
-    const timeParts = parseStartTime(timeSource)
+    )
+    const timeParts = parseStartTime(asString(timeSource))
     if (!timeParts) return
 
     const start = new Date(now)
@@ -840,39 +914,48 @@ type DayClassSummary = {
   startMinutes?: number | null
 }
 
-function deriveClassesForDay(structuredData: any, referenceDate: Date): DayClassSummary[] {
+type TimedClassSummary = DayClassSummary & { startMinutes: number }
+
+function hasStartMinutes(cls: DayClassSummary): cls is TimedClassSummary {
+  return typeof cls.startMinutes === 'number'
+}
+
+function deriveClassesForDay(structuredData: unknown, referenceDate: Date): DayClassSummary[] {
   const candidates = extractTimetableCandidates(structuredData)
   if (!candidates.length) return []
   const targetIndex = (referenceDate.getDay() + 6) % 7
   const results: DayClassSummary[] = []
 
   candidates.forEach(candidate => {
-    const dayValue =
-      candidate.day ||
-      candidate.Day ||
-      candidate.dayName ||
-      candidate.dayname ||
-      candidate.weekday ||
+    const dayValue = firstTruthy(
+      candidate.day,
+      candidate.Day,
+      candidate.dayName,
+      candidate.dayname,
+      candidate.weekday,
       candidate.DayName
+    )
     const dayIndex = resolveDayIndex(typeof dayValue === 'string' ? dayValue : undefined)
     if (dayIndex === null || dayIndex !== targetIndex) return
 
-    const subject =
-      candidate.subject ||
-      candidate.course ||
-      candidate.title ||
-      candidate.code ||
-      candidate.slot ||
+    const subject = firstTruthy(
+      candidate.subject,
+      candidate.course,
+      candidate.title,
+      candidate.code,
+      candidate.slot,
       candidate.className
+    )
     if (!subject || typeof subject !== 'string') return
 
-    const timeSource =
-      candidate.startTime ||
-      candidate.time ||
-      candidate.slotTime ||
-      candidate.start ||
-      candidate.slot ||
+    const timeSource = firstTruthy(
+      candidate.startTime,
+      candidate.time,
+      candidate.slotTime,
+      candidate.start,
+      candidate.slot,
       candidate.timeRange
+    )
     const timeLabel =
       typeof timeSource === 'string'
         ? timeSource
@@ -886,7 +969,9 @@ function deriveClassesForDay(structuredData: any, referenceDate: Date): DayClass
     results.push({
       subject: subject.trim(),
       timeLabel,
-      venue: candidate.venue || candidate.room || candidate.location || candidate.hall,
+      venue: asText(
+        firstTruthy(candidate.venue, candidate.room, candidate.location, candidate.hall)
+      ),
       sortValue,
       startMinutes: parsed ? sortValue : null,
     })
@@ -901,7 +986,7 @@ function buildClassScheduleNarrative(
 ): DailyBriefingMessage | null {
   if (!classes.length) return null
   const sorted = [...classes].sort((a, b) => a.sortValue - b.sortValue)
-  const withTime = sorted.filter(cls => typeof cls.startMinutes === 'number')
+  const withTime = sorted.filter(hasStartMinutes)
   const totalCount = sorted.length
 
   const fallbackPreview = sorted
@@ -912,7 +997,9 @@ function buildClassScheduleNarrative(
     })
     .join(' · ')
 
-  if (!withTime.length) {
+  const first = withTime[0]
+  const last = withTime[withTime.length - 1]
+  if (!first || !last) {
     return {
       id: 'classes-today',
       primary: `${totalCount} class${totalCount === 1 ? '' : 'es'} on the calendar today`,
@@ -920,12 +1007,10 @@ function buildClassScheduleNarrative(
     }
   }
 
-  const first = withTime[0]
-  const last = withTime[withTime.length - 1]
   const nowMinutes = referenceDate.getHours() * 60 + referenceDate.getMinutes()
-  const upcoming = withTime.find(cls => (cls.startMinutes as number) >= nowMinutes) || first
-  const windowLabel = `${formatMinutesLabel(first.startMinutes!)} → ${formatMinutesLabel(last.startMinutes!)}`
-  const spanMinutes = Math.max(0, (last.startMinutes ?? 0) - (first.startMinutes ?? 0))
+  const upcoming = withTime.find(cls => cls.startMinutes >= nowMinutes) || first
+  const windowLabel = `${formatMinutesLabel(first.startMinutes)} → ${formatMinutesLabel(last.startMinutes)}`
+  const spanMinutes = Math.max(0, last.startMinutes - first.startMinutes)
   const longestGap = computeLongestGap(withTime)
 
   const supportingBits = [windowLabel]
@@ -943,7 +1028,7 @@ function buildClassScheduleNarrative(
 
   return {
     id: 'classes-today',
-    primary: `${upcoming.subject} at ${formatMinutesLabel(upcoming.startMinutes!)} is next of ${totalCount} class${
+    primary: `${upcoming.subject} at ${formatMinutesLabel(upcoming.startMinutes)} is next of ${totalCount} class${
       totalCount === 1 ? '' : 'es'
     } today`,
     supporting: supportingBits.filter(Boolean).join(' · ') || undefined,
@@ -955,7 +1040,7 @@ function computeLongestGap(classes: DayClassSummary[]) {
   for (let i = 0; i < classes.length - 1; i += 1) {
     const current = classes[i]
     const next = classes[i + 1]
-    if (current.startMinutes == null || next.startMinutes == null) continue
+    if (!current || !next || current.startMinutes == null || next.startMinutes == null) continue
     const diff = next.startMinutes - current.startMinutes
     if (!longest || diff > longest.minutes) {
       longest = { minutes: diff, from: current, to: next }
@@ -980,20 +1065,15 @@ function formatDurationLabel(minutes: number) {
   return parts.length ? parts.join(' ') : '0m'
 }
 
-function extractTimetableCandidates(structuredData: any): any[] {
-  if (!structuredData) return []
+function extractTimetableCandidates(structuredData: unknown): TimetableClassInfo[] {
+  const data = asRecord(structuredData)
+  if (!data) return []
   const pools = ['classes', 'schedule', 'sessions']
-  const result: any[] = []
-  const push = (entry: any) => {
-    if (entry && typeof entry === 'object') {
-      result.push(entry)
-    }
-  }
+  const result: TimetableClassInfo[] = []
   pools.forEach(key => {
-    const collection = structuredData[key]
-    if (Array.isArray(collection)) {
-      collection.forEach(push)
-    }
+    asArray(data[key])?.forEach(entry => {
+      if (isRecord(entry)) result.push(entry)
+    })
   })
   return result
 }
@@ -1019,8 +1099,9 @@ function parseStartTime(value?: string) {
   if (!primary) return null
   const sanitized = primary.replace(/(hrs|hours)/gi, '').trim()
   const match = sanitized.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i)
-  if (match) {
-    let hour = parseInt(match[1], 10)
+  const hourPart = match?.[1]
+  if (match && hourPart) {
+    let hour = parseInt(hourPart, 10)
     const minute = match[2] ? parseInt(match[2], 10) : 0
     const suffix = match[3]?.toLowerCase()
     if (suffix === 'pm' && hour < 12) hour += 12

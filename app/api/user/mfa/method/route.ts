@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import {
@@ -16,7 +15,7 @@ import { mfaMethodChangeSchema } from '@/types/api/mfa'
 
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -144,7 +143,7 @@ export async function PATCH(request: NextRequest) {
         },
       })
 
-      const emailSent = await sendEmailCode(user.email!, verificationCode, 'setup')
+      const emailSent = await sendEmailCode(session.user.email, verificationCode, 'setup')
 
       if (!emailSent) {
         return NextResponse.json({ error: 'Failed to send verification email' }, { status: 500 })
@@ -167,7 +166,7 @@ export async function PATCH(request: NextRequest) {
         },
       })
 
-      const qrCodeUrl = await generateQRCode(secret, user.email!, 'the everything assistant')
+      const qrCodeUrl = await generateQRCode(secret, session.user.email, 'the everything assistant')
 
       return NextResponse.json({
         success: true,
@@ -175,7 +174,8 @@ export async function PATCH(request: NextRequest) {
         secret: secret,
         manualEntryKey: secret,
       })
-    } else if (newMethod === 'security_key') {
+    } else {
+      // newMethod is 'security_key' (the schema enum is exhausted above)
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
 
       await prisma.user.update({

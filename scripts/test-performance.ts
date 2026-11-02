@@ -92,12 +92,12 @@ async function seedTestData(userId: string, numChats: number = 5): Promise<void>
 
   for (let i = 0; i < numChats; i++) {
     try {
-      const topic = chatTopics[i % chatTopics.length]
+      const topic = chatTopics[i % chatTopics.length] ?? 'Performance test chat'
       const chatPath = `/chat/${nanoid()}`
-      const userMessage = userMessages[i % userMessages.length]
+      const userMessage = userMessages[i % userMessages.length] ?? 'Hello'
       const { chat } = await createChatWithFirstMessage(userId, topic, chatPath, userMessage)
 
-      const assistantResponse = assistantResponses[i % assistantResponses.length]
+      const assistantResponse = assistantResponses[i % assistantResponses.length] ?? 'Hello!'
       await saveMessage(chat.id, 'assistant', assistantResponse)
 
       if (i % 3 === 0) {
@@ -186,7 +186,7 @@ async function runAdvancedPerformanceTest(userId: string): Promise<void> {
 async function runBenchmarkTests(userId: string): Promise<void> {
   console.log('\n Running Benchmark Tests...\n')
 
-  const benchmarks: Array<{ name: string; operation: () => Promise<any> }> = [
+  const benchmarks: Array<{ name: string; operation: () => Promise<unknown> }> = [
     {
       name: 'Chat Loading (Basic)',
       operation: () => getChats(userId, 10),

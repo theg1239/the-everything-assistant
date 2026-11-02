@@ -3,8 +3,9 @@
 import React from 'react'
 import { Database, Key, Server, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import type { RateLimitStatusResponse } from '@/types/api/rate-limit'
 
-export default function SystemHealth({ data }: any) {
+export default function SystemHealth({ data }: { data: RateLimitStatusResponse }) {
   return (
     <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
       <div className="flex flex-col space-y-1.5 mb-6">
@@ -32,14 +33,13 @@ export default function SystemHealth({ data }: any) {
           <Key
             className={cn(
               'w-5 h-5 flex-shrink-0',
-              data.healthCheck.apiKeys === 'Available' ? 'text-green-500' : 'text-red-500'
+              data.healthCheck.openaiApiKey === 'Set' ? 'text-green-500' : 'text-red-500'
             )}
           />
           <div className="min-w-0">
-            <p className="font-medium text-sm md:text-base">API Keys</p>
+            <p className="font-medium text-sm md:text-base">OpenAI API Key</p>
             <p className="text-xs md:text-sm text-muted-foreground">
-              {data.environment.summary.apiKeys.totalAvailable}/
-              {data.configuration.apiKeys.keyCount} available
+              {data.healthCheck.openaiApiKey}
             </p>
           </div>
         </div>

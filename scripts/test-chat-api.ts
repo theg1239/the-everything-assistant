@@ -14,6 +14,8 @@
  *   after logging in, then export it as SESSION_COOKIE before running this script.
  */
 
+export {}
+
 type Args = {
   message: string
   preferredTool?: string
@@ -27,7 +29,7 @@ const parseArgs = (): Args => {
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
-    if (arg.startsWith('--')) {
+    if (arg?.startsWith('--')) {
       const key = arg.slice(2)
       const value = argv[i + 1]
       if (value && !value.startsWith('--')) {

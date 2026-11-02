@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken'
 import { prisma } from '@/lib/prisma'
 import { generatePkcePair } from '@/lib/pkce'
 import { getOrCreateUserForPhone } from '@/lib/whatsapp-user'
+import * as z from 'zod'
 
 const apiKeyEnv = process.env.WHATSAPP_BOT_API_KEY
 
@@ -14,15 +15,20 @@ function validateAPIKey(request: NextRequest): boolean {
   return token === apiKeyEnv
 }
 
+const linkRequestSchema = z
+  .object({
+    phoneNumber: z.string().optional().catch(undefined),
+    userName: z.string().optional().catch(undefined),
+  })
+  .nullable()
+  .catch(null)
+
 export async function POST(request: NextRequest) {
   if (!validateAPIKey(request)) {
     return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
   }
 
-  const body = (await request.json().catch(() => null)) as {
-    phoneNumber?: string
-    userName?: string
-  } | null
+  const body = linkRequestSchema.parse(await request.json().catch(() => null))
   const phoneNumber = body?.phoneNumber
   const userName = body?.userName
 

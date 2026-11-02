@@ -1,8 +1,14 @@
 import { memoryService } from '@/lib/memory/memory-service'
 
+/**
+ * Memory block for the system prompt. Settings and memories are read in parallel
+ * (one round-trip instead of two); the memories are discarded when memory is off.
+ */
 export async function buildMemoryContext(userId: string) {
-  const memorySettings = await memoryService.getUserMemorySettings(userId)
-  const isEnabled = memorySettings?.isEnabled ?? true
+  const [isEnabled, memories] = await Promise.all([
+    memoryService.isMemoryEnabled(userId),
+    memoryService.getMemoriesForPrompt(userId, 100),
+  ])
 
   if (!isEnabled) {
     return { context: '', isEnabled }
@@ -10,7 +16,6 @@ export async function buildMemoryContext(userId: string) {
 
   let memoryContext = ''
 
-  const memories = await memoryService.getUserMemories(userId, { pageSize: 100 })
   if (memories.length > 0) {
     memoryContext = `
 <memories>
@@ -18,7 +23,7 @@ export async function buildMemoryContext(userId: string) {
   <memory_list>
 ${memories
   .map(
-    (m: { content: string; updatedAt: string | number | Date }) =>
+    m =>
       `    <memory>
       <content>${m.content}</content>
       <last_updated>${new Date(m.updatedAt).toLocaleDateString()}</last_updated>
@@ -31,4 +36,3 @@ ${memories
 
   return { context: memoryContext, isEnabled }
 }
-

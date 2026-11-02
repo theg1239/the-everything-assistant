@@ -1,29 +1,22 @@
+import type { JsonValue } from '@/types/tools'
+import { academicCalendar } from './academic-calendar'
+import { currentStatus } from './current-status'
+import { examSchedule } from './exam-schedule'
+import { holidays } from './holidays'
+import { latestEvents } from './latest-events'
+import { workingSaturdays } from './working-saturdays'
+
 export interface ContextData {
   section: string
   title: string
   lastUpdated: string
   priority: 'high' | 'medium' | 'low'
   content: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, JsonValue>
 }
 
 export function getAllContextData(): ContextData[] {
-  const { academicCalendar } = require('./academic-calendar')
-  const { workingSaturdays } = require('./working-saturdays')
-  const { examSchedule } = require('./exam-schedule')
-  const { holidays } = require('./holidays')
-  const { currentStatus } = require('./current-status')
-  const { latestEvents } = require('./latest-events')
-
-  const allData = [
-    currentStatus,
-    academicCalendar,
-    examSchedule,
-    workingSaturdays,
-    latestEvents,
-    holidays,
-  ].filter(Boolean)
-  return allData
+  return [currentStatus, academicCalendar, examSchedule, workingSaturdays, latestEvents, holidays]
 }
 
 export function getContextDataBySection(section: string): ContextData | null {
@@ -96,5 +89,5 @@ export function checkForOutdatedData(maxDaysOld: number = 30): {
   }
 }
 
-export // Individual exports for direct access
- {}
+// Individual exports for direct access
+export { academicCalendar, currentStatus, examSchedule, holidays, latestEvents, workingSaturdays }

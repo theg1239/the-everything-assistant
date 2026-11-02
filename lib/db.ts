@@ -1,17 +1,74 @@
+import * as z from 'zod'
 import { prisma } from './prisma'
 import { sanitizeToolInvocations } from './sanitize-tools'
 import { generateChatPath } from './utils'
 import type { Attachment } from '@/types/attachment'
+import type { Prisma, TokenUsage } from '@/prisma/generated/client'
 
 export interface User {
   id: string
   email: string
   name: string | null
   image: string | null
-  preferences?: any
+  preferences?: Prisma.JsonValue
   created_at: Date
   updated_at: Date
 }
+
+/**
+ * Tool invocations persisted in `messages.tool_invocations` (legacy AI SDK shape).
+ * Entries without a tool name are dropped; unknown keys are kept.
+ */
+const storedToolInvocationSchema = z.looseObject({
+  toolCallId: z.string().catch(''),
+  toolName: z.string(),
+  args: z.record(z.string(), z.unknown()).optional().catch(undefined),
+  result: z.unknown().optional(),
+  state: z.enum(['partial-call', 'call', 'result', 'error']).optional().catch(undefined),
+  error: z.string().optional().catch(undefined),
+})
+
+export type StoredToolInvocation = z.infer<typeof storedToolInvocationSchema>
+
+const attachmentSchema = z.object({
+  url: z.string(),
+  name: z.string().nullish(),
+  contentType: z.string(),
+})
+
+/** Sanitizes DB tool-invocation JSON (strips VTOP credentials) and keeps well-formed entries. */
+function readToolInvocations(value: Prisma.JsonValue): StoredToolInvocation[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  return sanitizeToolInvocations(value).flatMap(item => {
+    const parsed = storedToolInvocationSchema.safeParse(item)
+    return parsed.success ? [parsed.data] : []
+  })
+}
+
+function readAttachments(value: Prisma.JsonValue): Attachment[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  return value.flatMap(item => {
+    const parsed = attachmentSchema.safeParse(item)
+    return parsed.success ? [parsed.data] : []
+  })
+}
+
+/** Sanitized, JSON-only copy of tool invocations for a DB write. */
+function toToolInvocationsJson(toolInvocations: unknown): Prisma.InputJsonValue | undefined {
+  if (!toolInvocations) return undefined
+  try {
+    return sanitizeToolInvocations(Array.isArray(toolInvocations) ? toolInvocations : [toolInvocations])
+  } catch (error) {
+    console.error('Failed to serialize toolInvocations for DB:', error)
+    return undefined
+  }
+}
+
+const isMessageRole = (role: string): role is Message['role'] =>
+  role === 'user' || role === 'assistant' || role === 'system'
+
+/** DB roles are free-form strings; anything unexpected is treated as an assistant message. */
+const toMessageRole = (role: string): Message['role'] => (isMessageRole(role) ? role : 'assistant')
 
 export interface Chat {
   id: string
@@ -36,7 +93,7 @@ export interface Message {
   chatId: string
   role: 'user' | 'assistant' | 'system'
   content: string
-  toolInvocations?: any
+  toolInvocations?: StoredToolInvocation[]
   attachments?: Attachment[]
   created_at: Date
 }
@@ -57,25 +114,14 @@ export interface Vote {
   is_upvoted: boolean
 }
 
-export interface TokenUsageLog {
-  id: string
-  userId?: string | null
-  chatId?: string | null
-  model?: string | null
-  stepIndex?: number | null
-  promptTokens: number
-  completionTokens: number
-  totalTokens: number
-  meta?: any
-  createdAt: Date
-}
+export type TokenUsageLog = TokenUsage
 
 export async function getUser(email: string): Promise<User | null> {
   try {
     const user = await prisma.user.findUnique({
       where: { email },
     })
-    return user as User
+    return user ? { ...user, email: user.email ?? email } : null
   } catch (error) {
     console.error('Error getting user:', error)
     return null
@@ -90,7 +136,7 @@ export async function createUser(email: string, name: string, image?: string): P
       image,
     },
   })
-  return user as User
+  return { ...user, email: user.email ?? email }
 }
 
 export async function getChats(
@@ -116,7 +162,7 @@ export async function getChats(
         path: true,
       },
     })
-    return chats as Chat[]
+    return chats
   } catch (error) {
     console.error('Error getting chats:', error)
     return []
@@ -139,7 +185,7 @@ export async function getChat(id: string, userId: string): Promise<Chat | null> 
         path: true,
       },
     })
-    return chat as Chat | null
+    return chat
   } catch (error) {
     console.error('Error getting chat:', error)
     return null
@@ -156,12 +202,12 @@ export async function createChatShare(
       where: { chatId, userId, revoked: false },
       orderBy: { createdAt: 'desc' },
     })
-    if (existing) return existing as unknown as ChatShare
+    if (existing) return existing
 
     const share = await prisma.chatShare.create({
       data: { chatId, userId, title },
     })
-    return share as unknown as ChatShare
+    return share
   } catch (error) {
     console.error('Error creating chat share:', error)
     return null
@@ -190,8 +236,8 @@ export async function getChatShareWithMessages(
     if (!share || !share.chat) return null
     const messages = await getMessages(share.chatId)
     return {
-      share: share as unknown as ChatShare,
-      chat: share.chat as unknown as Chat,
+      share,
+      chat: share.chat,
       messages,
     }
   } catch (error) {
@@ -224,7 +270,7 @@ export async function createChat(
     },
   })
 
-  return { ...chat, path: resolvedPath } as Chat
+  return { ...chat, path: resolvedPath }
 }
 
 export async function createChatWithFirstMessage(
@@ -271,8 +317,12 @@ export async function createChatWithFirstMessage(
       })
 
       return {
-        chat: chat as Chat,
-        message: { ...message, toolInvocations: message.tool_invocations } as Message,
+        chat,
+        message: {
+          ...message,
+          role: toMessageRole(message.role),
+          toolInvocations: readToolInvocations(message.tool_invocations),
+        },
       }
     },
     {
@@ -315,18 +365,6 @@ export async function deleteAllChats(userId: string): Promise<number> {
   return result.count
 }
 
-export async function archiveChat(id: string, userId: string): Promise<void> {
-  await prisma.chat.updateMany({
-    where: {
-      id,
-      userId,
-    },
-    data: {
-      archived: true,
-    },
-  })
-}
-
 export async function archiveAllChats(userId: string): Promise<number> {
   const result = await prisma.chat.updateMany({
     where: {
@@ -348,9 +386,11 @@ export async function saveTokenUsage(params: {
   inputTokens: number
   outputTokens: number
   totalTokens: number
-  meta?: any
-}): Promise<TokenUsageLog> {
-  const rec = await prisma.tokenUsage.create({
+  meta?: Prisma.InputJsonValue
+}): Promise<void> {
+  // Insert-only (several per chat turn): don't read the row back.
+  await prisma.tokenUsage.create({
+    select: { id: true },
     data: {
       userId: params.userId || null,
       chatId: params.chatId || null,
@@ -359,10 +399,9 @@ export async function saveTokenUsage(params: {
       inputTokens: params.inputTokens,
       outputTokens: params.outputTokens,
       totalTokens: params.totalTokens,
-      meta: params.meta as any,
+      meta: params.meta,
     },
   })
-  return rec as unknown as TokenUsageLog
 }
 
 export async function getRecentTokenUsage(limit: number = 50): Promise<TokenUsageLog[]> {
@@ -370,7 +409,7 @@ export async function getRecentTokenUsage(limit: number = 50): Promise<TokenUsag
     orderBy: { createdAt: 'desc' },
     take: Math.max(1, Math.min(200, limit)),
   })
-  return rows as unknown as TokenUsageLog[]
+  return rows
 }
 
 export async function getTokenUsageSummary(days: number = 1): Promise<{
@@ -412,7 +451,7 @@ export async function getTokenUsageAllTimeSummary(): Promise<{
   count: number
 }> {
   try {
-    const agg = await (prisma as any).tokenUsage.aggregate({
+    const agg = await prisma.tokenUsage.aggregate({
       _sum: { inputTokens: true, outputTokens: true, totalTokens: true },
       _count: { _all: true },
     })
@@ -443,7 +482,7 @@ export async function getTokenUsageAllTimeSummary(): Promise<{
 export async function getTokenUsageLifetimeBuckets(granularity: 'day' | 'month' | 'hour' = 'day') {
   const unit = granularity === 'month' ? 'month' : granularity === 'hour' ? 'hour' : 'day'
   try {
-    const rows: any[] = await prisma.$queryRaw`
+    const rawRows: unknown = await prisma.$queryRaw`
       SELECT date_trunc(${unit}, "createdAt") AS bucket,
              sum("totalTokens") AS "totalTokens",
              sum("promptTokens") AS "promptTokens",
@@ -454,14 +493,27 @@ export async function getTokenUsageLifetimeBuckets(granularity: 'day' | 'month' 
       ORDER BY bucket ASC
     `
 
+    const sqlNumber = z.unknown().transform(value => Number(value || 0))
+    const rows = z
+      .array(
+        z.object({
+          bucket: z.union([z.date(), z.string()]),
+          totalTokens: sqlNumber,
+          promptTokens: sqlNumber,
+          completionTokens: sqlNumber,
+          count: sqlNumber,
+        })
+      )
+      .parse(rawRows)
+
     return rows.map(r => ({
       ts: new Date(r.bucket).getTime(),
       date: new Date(r.bucket).toISOString(),
-      totalTokens: Number(r.totalTokens || 0),
-      inputTokens: Number(r.inputTokens || 0),
-      outputTokens: Number(r.outputTokens || 0),
-      count: Number(r.count || 0),
-    }));
+      totalTokens: r.totalTokens,
+      inputTokens: r.promptTokens,
+      outputTokens: r.completionTokens,
+      count: r.count,
+    }))
   } catch (err) {
     try {
       const all = await prisma.tokenUsage.findMany({
@@ -484,19 +536,18 @@ export async function getTokenUsageLifetimeBuckets(granularity: 'day' | 'month' 
         if (unit === 'hour')
           key = d.toISOString().slice(0, 13) // YYYY-MM-DDTHH
         else key = d.toISOString().slice(0, 10) // YYYY-MM-DD
-        if (!buckets[key])
-          buckets[key] = {
-            ts: new Date(key).getTime(),
-            date: key,
-            totalTokens: 0,
-            inputTokens: 0,
-            outputTokens: 0,
-            count: 0,
-          }
-        buckets[key].totalTokens += Number(r.totalTokens || 0)
-        buckets[key].inputTokens += Number(r.inputTokens || 0)
-        buckets[key].outputTokens += Number(r.outputTokens || 0)
-        buckets[key].count += 1
+        const bucket = (buckets[key] ??= {
+          ts: new Date(key).getTime(),
+          date: key,
+          totalTokens: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          count: 0,
+        })
+        bucket.totalTokens += Number(r.totalTokens || 0)
+        bucket.inputTokens += Number(r.inputTokens || 0)
+        bucket.outputTokens += Number(r.outputTokens || 0)
+        bucket.count += 1
       }
       return Object.values(buckets).sort((a, b) => a.ts - b.ts)
     } catch (err2) {
@@ -529,7 +580,7 @@ export async function getArchivedChats(
         path: true,
       },
     })
-    return chats as Chat[]
+    return chats
   } catch (error) {
     console.error('Error getting archived chats:', error)
     return []
@@ -549,32 +600,51 @@ export async function restoreChat(id: string, userId: string): Promise<void> {
   })
 }
 
-export async function getMessages(chatId: string): Promise<Message[]> {
+const messageSelect = {
+  id: true,
+  chatId: true,
+  role: true,
+  content: true,
+  tool_invocations: true,
+  attachments: true,
+  created_at: true,
+} as const
+
+export type GetMessagesOptions = {
+  /**
+   * Only the most recent `limit` messages (still returned oldest-first). Uses the
+   * `(chatId, created_at)` index; omit for the full history.
+   */
+  limit?: number
+}
+
+export async function getMessages(
+  chatId: string,
+  options: GetMessagesOptions = {}
+): Promise<Message[]> {
   try {
-    const messages = await prisma.message.findMany({
-      where: { chatId },
-      orderBy: { created_at: 'asc' },
-      select: {
-        id: true,
-        chatId: true,
-        role: true,
-        content: true,
-        tool_invocations: true,
-        attachments: true,
-        created_at: true,
-      },
-    })
-    return messages.map(msg => {
-      let toolInvocations = msg.tool_invocations ?? undefined
-      if (toolInvocations && Array.isArray(toolInvocations)) {
-        toolInvocations = sanitizeToolInvocations(toolInvocations)
-      }
-      return {
-        ...msg,
-        toolInvocations,
-        attachments: (msg.attachments as Attachment[] | null) ?? undefined,
-      }
-    }) as Message[]
+    const { limit } = options
+    const messages =
+      limit !== undefined && limit > 0
+        ? (
+            await prisma.message.findMany({
+              where: { chatId },
+              orderBy: { created_at: 'desc' },
+              take: limit,
+              select: messageSelect,
+            })
+          ).reverse()
+        : await prisma.message.findMany({
+            where: { chatId },
+            orderBy: { created_at: 'asc' },
+            select: messageSelect,
+          })
+    return messages.map(msg => ({
+      ...msg,
+      role: toMessageRole(msg.role),
+      toolInvocations: readToolInvocations(msg.tool_invocations),
+      attachments: readAttachments(msg.attachments),
+    }))
   } catch (error) {
     console.error('Error getting messages:', error)
     return []
@@ -585,46 +655,52 @@ export async function saveMessage(
   chatId: string,
   role: 'user' | 'assistant' | 'system',
   content: string,
-  toolInvocations?: any,
+  toolInvocations?: unknown,
   messageId?: string,
   attachments?: Attachment[]
-): Promise<Message> {
-  let safeToolInvocations = undefined
-  if (toolInvocations) {
-    try {
-      const sanitized = sanitizeToolInvocations(
-        Array.isArray(toolInvocations) ? toolInvocations : [toolInvocations]
-      )
-      safeToolInvocations = JSON.parse(JSON.stringify(sanitized))
-    } catch (e) {
-      console.error('Failed to serialize toolInvocations for DB:', e)
-      safeToolInvocations = undefined
-    }
-  }
-  const message = await prisma.message.create({
+): Promise<Pick<Message, 'id' | 'created_at'>> {
+  const safeToolInvocations = toToolInvocationsJson(toolInvocations)
+  // Callers already hold the content/tool invocations; don't ship them back from the DB.
+  return prisma.message.create({
     data: {
       id: messageId,
       chatId,
       role,
       content,
       tool_invocations: safeToolInvocations,
-      attachments: attachments ? (attachments as unknown as object) : undefined,
+      attachments,
     },
-    select: {
-      id: true,
-      chatId: true,
-      role: true,
-      content: true,
-      tool_invocations: true,
-      attachments: true,
-      created_at: true,
-    },
+    select: { id: true, created_at: true },
   })
-  return {
-    ...message,
-    toolInvocations: message.tool_invocations,
-    attachments: (message.attachments as Attachment[] | null) ?? undefined,
-  } as Message
+}
+
+/** Replaces a saved message's tool invocations (used to attach post-processed tool output). */
+export async function updateMessageToolInvocations(
+  messageId: string,
+  toolInvocations: unknown
+): Promise<void> {
+  await prisma.message.update({
+    where: { id: messageId },
+    data: { tool_invocations: toToolInvocationsJson(toolInvocations) },
+    select: { id: true },
+  })
+}
+
+/** The newest message of a chat (any role), or null. Single indexed row read. */
+export async function getLatestMessage(chatId: string): Promise<Message | null> {
+  const message = await prisma.message.findFirst({
+    where: { chatId },
+    orderBy: { created_at: 'desc' },
+    select: messageSelect,
+  })
+  return message
+    ? {
+        ...message,
+        role: toMessageRole(message.role),
+        toolInvocations: readToolInvocations(message.tool_invocations),
+        attachments: readAttachments(message.attachments),
+      }
+    : null
 }
 
 export async function createChatFromMessages(
@@ -650,27 +726,13 @@ export async function createChatFromMessages(
 
       if (messages.length > 0) {
         const preparedMessages = messages.map(msg => {
-          let safeToolInvocations = undefined
-          if (msg.toolInvocations) {
-            try {
-              const sanitized = sanitizeToolInvocations(
-                Array.isArray(msg.toolInvocations) ? msg.toolInvocations : [msg.toolInvocations]
-              )
-              safeToolInvocations = JSON.parse(JSON.stringify(sanitized))
-            } catch (error) {
-              console.warn('Failed to sanitize shared tool invocations', error)
-            }
-          }
-          const createdAt =
-            (msg as Partial<Message & { createdAt?: Date }>).created_at ||
-            (msg as Partial<{ createdAt?: Date }>).createdAt ||
-            new Date()
+          const createdAt = msg.created_at || new Date()
           return {
             chatId: createdChat.id,
             role: msg.role,
             content: msg.content,
-            tool_invocations: safeToolInvocations,
-            attachments: (msg as Partial<Message>).attachments || undefined,
+            tool_invocations: toToolInvocationsJson(msg.toolInvocations),
+            attachments: msg.attachments || undefined,
             created_at: createdAt instanceof Date ? createdAt : new Date(createdAt),
           }
         })
@@ -689,7 +751,7 @@ export async function createChatFromMessages(
     }
   )
 
-  return { ...chat, path } as Chat
+  return { ...chat, path }
 }
 
 export async function forkSharedChatToUser(shareId: string, userId: string): Promise<Chat | null> {
@@ -714,7 +776,7 @@ export async function getCanvasDocuments(chatId: string): Promise<CanvasDocument
         updated_at: true,
       },
     })
-    return documents as CanvasDocument[]
+    return documents
   } catch (error) {
     console.error('Error getting canvas documents:', error)
     return []
@@ -744,7 +806,7 @@ export async function createCanvasDocument(
       updated_at: true,
     },
   })
-  return document as CanvasDocument
+  return document
 }
 
 export async function updateCanvasDocument(
@@ -761,35 +823,6 @@ export async function updateCanvasDocument(
     },
     select: { id: true },
   })
-}
-
-export async function deleteCanvasDocument(id: string): Promise<void> {
-  await prisma.canvasDocument.delete({
-    where: { id },
-    select: { id: true },
-  })
-}
-
-export async function getVote(chatId: string, messageId: string): Promise<Vote | null> {
-  try {
-    const vote = await prisma.vote.findUnique({
-      where: {
-        chatId_messageId: {
-          chatId,
-          messageId,
-        },
-      },
-      select: {
-        chatId: true,
-        messageId: true,
-        is_upvoted: true,
-      },
-    })
-    return vote as Vote
-  } catch (error) {
-    console.error('Error getting vote:', error)
-    return null
-  }
 }
 
 type VoteMessageMetadata = {
@@ -854,86 +887,6 @@ export async function deleteAllArchivedChats(userId: string): Promise<number> {
   return result.count
 }
 
-export async function createStreamId(streamId: string, chatId: string): Promise<void> {
-  await prisma.streamId.create({
-    data: {
-      streamId,
-      chatId,
-    },
-    select: { id: true },
-  })
-}
-
-export async function getStreamIdsByChatId(chatId: string): Promise<string[]> {
-  const streamIds = await prisma.streamId.findMany({
-    where: { chatId },
-    orderBy: { createdAt: 'asc' },
-    select: { streamId: true },
-  })
-
-  return streamIds.map((s: { streamId: string }) => s.streamId)
-}
-
-export async function getMostRecentStreamId(chatId: string): Promise<string | null> {
-  const streamId = await prisma.streamId.findFirst({
-    where: { chatId },
-    orderBy: { createdAt: 'desc' },
-    select: { streamId: true },
-  })
-  return streamId?.streamId || null
-}
-
-export async function getLastAssistantMessage(chatId: string): Promise<any | null> {
-  const message = await prisma.message.findFirst({
-    where: {
-      chatId,
-      role: 'assistant',
-    },
-    orderBy: { created_at: 'desc' },
-    select: {
-      id: true,
-      chatId: true,
-      role: true,
-      content: true,
-      tool_invocations: true,
-      created_at: true,
-    },
-  })
-
-  return message
-    ? {
-        ...message,
-        toolInvocations: message.tool_invocations,
-      }
-    : null
-}
-
-export async function deleteStreamIdsByChatId(chatId: string): Promise<void> {
-  await prisma.streamId.deleteMany({
-    where: { chatId },
-  })
-}
-
-export async function getMessageCountByUserId(
-  userId: string,
-  differenceInHours: number = 24
-): Promise<number> {
-  const timeThreshold = new Date(Date.now() - differenceInHours * 60 * 60 * 1000)
-
-  const count = await prisma.message.count({
-    where: {
-      chat: {
-        userId,
-      },
-      created_at: {
-        gte: timeThreshold,
-      },
-    },
-  })
-
-  return count
-}
-
 export async function getChatsWithMessageCounts(
   userId: string,
   limit: number = 15,
@@ -971,52 +924,4 @@ export async function getChatsWithMessageCounts(
     path: chat.path,
     messageCount: chat._count.messages,
   }))
-}
-
-export async function batchUpdateChatTimestamps(chatIds: string[]): Promise<void> {
-  await prisma.chat.updateMany({
-    where: {
-      id: {
-        in: chatIds,
-      },
-    },
-    data: {
-      updated_at: new Date(),
-    },
-  })
-}
-
-export async function getRecentMessagesForUser(
-  userId: string,
-  limit: number = 50
-): Promise<Message[]> {
-  const messages = await prisma.message.findMany({
-    where: {
-      chat: {
-        userId,
-        archived: false,
-      },
-    },
-    orderBy: { created_at: 'desc' },
-    take: limit,
-    select: {
-      id: true,
-      chatId: true,
-      role: true,
-      content: true,
-      tool_invocations: true,
-      created_at: true,
-    },
-  })
-
-  return messages.map(msg => {
-    let toolInvocations = msg.tool_invocations ?? undefined
-    if (toolInvocations && Array.isArray(toolInvocations)) {
-      toolInvocations = sanitizeToolInvocations(toolInvocations)
-    }
-    return {
-      ...msg,
-      toolInvocations,
-    }
-  }) as Message[]
 }

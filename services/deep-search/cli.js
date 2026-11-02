@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-require('dotenv').config()
+require('dotenv').config({ quiet: true })
 
 const { program } = require('commander')
 const KnowledgeBase = require('./knowledge-base/knowledge-base')

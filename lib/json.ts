@@ -1,5 +1,22 @@
 import type { JsonValue } from '@/types/tools'
 
+export type JsonObject = { [key: string]: JsonValue }
+
+/** Plain object (not null, not an array). */
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * Narrows a JSON union (`JsonValue`, Prisma `JsonValue`, ...) to its object member,
+ * keeping the precise object type instead of widening to `Record<string, unknown>`.
+ */
+export function isJsonObject<T>(
+  value: T
+): value is Exclude<Extract<T, object>, readonly unknown[]> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 export function toJsonValue(value: unknown): JsonValue | undefined {
   if (value === null) return null
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {

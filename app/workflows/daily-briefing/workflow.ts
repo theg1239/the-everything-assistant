@@ -1,3 +1,4 @@
+import * as z from 'zod'
 import type { Prisma } from '@/prisma/generated/client'
 import { prisma } from '@/lib/prisma'
 import { listVTOPSnapshots } from '@/lib/vtop-snapshots'
@@ -9,15 +10,20 @@ import {
   type DailyBriefingAction,
 } from '@/lib/hub/daily-briefing'
 import type { PersonalHubSnapshot } from '@/types/hub'
+import type { JsonValue } from '@/types/tools'
 import { sendDailyBriefingEmail } from '@/lib/email/resend'
 
-type StoredPreferences = {
-  dailyBriefing?: {
-    emailEnabled?: boolean
-    dismissTime?: string
-    emailTime?: string
-  }
-}
+const storedPreferencesSchema = z.object({
+  dailyBriefing: z
+    .object({
+      emailEnabled: z.boolean().optional(),
+      dismissTime: z.string().optional(),
+      emailTime: z.string().optional(),
+    })
+    .optional(),
+})
+
+type StoredPreferences = z.infer<typeof storedPreferencesSchema>
 
 type RecipientRecord = {
   id: string
@@ -83,11 +89,11 @@ export async function dailyBriefingWorkflow(
       }
 
       stats.delivered += 1
-    } catch (error: any) {
+    } catch (error) {
       stats.failures.push({
         userId: recipient.id,
         email: recipient.email,
-        reason: error?.message || 'unknown error',
+        reason: errorMessage(error) || 'unknown error',
       })
     }
   }
@@ -120,21 +126,67 @@ async function fetchBriefingAudienceStep({
     },
   })
 
-  return rows
-    .filter(row => {
-      const prefs = (row.preferences as StoredPreferences | null)?.dailyBriefing
-      return Boolean(row.email && prefs?.emailEnabled)
-    })
-    .map(row => {
-      const prefs = ((row.preferences as StoredPreferences | null)?.dailyBriefing ||
-        {}) as NonNullable<StoredPreferences['dailyBriefing']>
-      return {
+  return rows.flatMap(row => {
+    const prefs = readDailyBriefingPreferences(row.preferences)
+    if (!row.email || !prefs?.emailEnabled) return []
+    return [
+      {
         id: row.id,
-        email: row.email as string,
+        email: row.email,
         name: row.name,
         preferences: prefs,
-      }
-    })
+      },
+    ]
+  })
+}
+
+function readDailyBriefingPreferences(
+  preferences: Prisma.JsonValue
+): StoredPreferences['dailyBriefing'] {
+  const parsed = storedPreferencesSchema.safeParse(preferences)
+  return parsed.success ? parsed.data.dailyBriefing : undefined
+}
+
+function errorMessage(error: unknown): string | undefined {
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const { message } = error
+    if (typeof message === 'string') return message
+  }
+  return undefined
+}
+
+function isJsonObject(value: Prisma.JsonValue | undefined): value is Prisma.JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Prisma's JSON objects allow `undefined` members; DB values never contain them, so drop any. */
+function toJsonValue(value: Prisma.JsonValue): JsonValue {
+  if (Array.isArray(value)) return value.map(toJsonValue)
+  if (isJsonObject(value)) return toJsonRecord(value)
+  return value
+}
+
+function toJsonRecord(value: Prisma.JsonObject): Record<string, JsonValue> {
+  const record: Record<string, JsonValue> = {}
+  for (const [key, member] of Object.entries(value)) {
+    if (member !== undefined) record[key] = toJsonValue(member)
+  }
+  return record
+}
+
+/** Normalises a snapshot's JSON `data` column into the hub snapshot shape. */
+function toHubSnapshot(row: { command: string; data: Prisma.JsonValue; fetchedAt: Date }): PersonalHubSnapshot {
+  const data = isJsonObject(row.data) ? row.data : {}
+  const { title, summary, formatted_content, structured_data, meta } = data
+  return {
+    command: row.command,
+    title: typeof title === 'string' && title ? title : row.command,
+    summary: typeof summary === 'string' && summary ? summary : 'no summary available',
+    formatted_content: typeof formatted_content === 'string' ? formatted_content : undefined,
+    structured_data: structured_data === undefined ? undefined : toJsonValue(structured_data),
+    meta: isJsonObject(meta) ? toJsonRecord(meta) : null,
+    fetchedAt: row.fetchedAt.toISOString(),
+  }
 }
 
 async function buildBriefingPacketStep({
@@ -149,18 +201,7 @@ async function buildBriefingPacketStep({
   const snapshots = await listVTOPSnapshots(userId)
   if (!snapshots.length) return null
 
-  const normalized: PersonalHubSnapshot[] = snapshots.map(row => {
-    const data = (row.data as any) || {}
-    return {
-      command: row.command,
-      title: data.title || row.command,
-      summary: data.summary || 'no summary available',
-      formatted_content: data.formatted_content,
-      structured_data: data.structured_data,
-      meta: data.meta || null,
-      fetchedAt: row.fetchedAt.toISOString(),
-    }
-  })
+  const normalized: PersonalHubSnapshot[] = snapshots.map(toHubSnapshot)
 
   const reference = new Date(referenceTime)
   if (Number.isNaN(reference.getTime())) {

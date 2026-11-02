@@ -125,7 +125,7 @@ export function HubStoreProvider({
   children: ReactNode
   initialState: PersonalHubState
 }) {
-  const storeRef = useRef<StoreApi<HubStore>>()
+  const storeRef = useRef<StoreApi<HubStore> | null>(null)
   if (!storeRef.current) {
     storeRef.current = createHubStore(initialState)
   }

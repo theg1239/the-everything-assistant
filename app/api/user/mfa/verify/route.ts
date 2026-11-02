@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import type { Prisma } from '@/prisma/generated/client'
@@ -15,7 +14,7 @@ import { mfaVerificationSchema } from '@/types/api/mfa'
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -82,9 +81,9 @@ export async function POST(request: NextRequest) {
 
     const tempSecret = user.tempMfaSecret
     if (user.tempMfaMethod === 'email') {
-      isValidCode = await bcrypt.compare(code as string, tempSecret)
+      isValidCode = code !== undefined && (await bcrypt.compare(code, tempSecret))
     } else if (user.tempMfaMethod === 'authenticator') {
-      isValidCode = verifyTOTP(code as string, tempSecret)
+      isValidCode = code !== undefined && verifyTOTP(code, tempSecret)
     } else if (user.tempMfaMethod === 'security_key') {
       return NextResponse.json(
         { error: 'Please use the WebAuthn verification endpoint for security keys' },

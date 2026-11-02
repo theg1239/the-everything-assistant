@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { disconnectChatgpt } from '@/lib/codex/app-server'
 
 export const runtime = 'nodejs'
 
 export async function POST() {
-  const session = await getServerSession(authOptions)
+  const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -14,10 +13,10 @@ export async function POST() {
   try {
     const status = await disconnectChatgpt(session.user.id)
     return NextResponse.json(status)
-  } catch (error: any) {
+  } catch (error) {
     console.error('[chatgpt-auth] disconnect failed:', error)
     return NextResponse.json(
-      { error: error?.message || 'Unable to disconnect ChatGPT' },
+      { error: (error instanceof Error && error.message) || 'Unable to disconnect ChatGPT' },
       { status: 500 }
     )
   }

@@ -1,9 +1,9 @@
 import { NextRequest } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { createVITTools } from '@/lib/tools'
-import * as z from 'zod/v3';
+import * as z from 'zod'
 import type { JsonValue } from '@/types/tools'
+import { getToolExecutor } from '@/app/api/chat/lib/tool-helpers'
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -23,7 +23,7 @@ const hubToolRequestSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
@@ -59,27 +59,26 @@ export async function POST(request: NextRequest) {
     const tools = createVITTools(session.user.id, {
       sessionUser: { name: session.user.name, email: session.user.email },
     })
-    const tool = (tools as Record<string, unknown>)[toolName] as
-      | { execute: (toolArgs: Record<string, JsonValue>) => Promise<unknown> }
-      | undefined
+    const execute = getToolExecutor(tools, toolName)
 
-    if (!tool || typeof tool.execute !== 'function') {
+    if (!execute) {
       return new Response(
         JSON.stringify({ error: `Tool not found or not executable: ${toolName}` }),
         { status: 404, headers: { 'Content-Type': 'application/json' } }
       )
     }
 
-    const result = await tool.execute(args)
+    const result = await execute(args)
     return new Response(JSON.stringify({ success: true, toolName, args, result }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('[HUB] Tool execution failed:', error)
-    return new Response(
-      JSON.stringify({ success: false, error: error?.message || 'Execution failed' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    )
+    const message = error instanceof Error ? error.message : ''
+    return new Response(JSON.stringify({ success: false, error: message || 'Execution failed' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 }

@@ -9,6 +9,15 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import type { ChatViewerData } from '../types'
+
+interface MessagesViewerDialogProps {
+  viewerOpen: boolean
+  setViewerOpen: (open: boolean) => void
+  viewerLoading: boolean
+  viewerError: string | null
+  viewerData: ChatViewerData | null
+}
 
 export default function MessagesViewerDialog({
   viewerOpen,
@@ -16,7 +25,7 @@ export default function MessagesViewerDialog({
   viewerLoading,
   viewerError,
   viewerData,
-}: any) {
+}: MessagesViewerDialogProps) {
   return (
     <Dialog open={viewerOpen} onOpenChange={setViewerOpen}>
       <DialogContent className="max-w-2xl">
@@ -39,7 +48,7 @@ export default function MessagesViewerDialog({
           )}
           {!viewerLoading &&
             !viewerError &&
-            viewerData?.messages?.map((m: any) => (
+            viewerData?.messages?.map(m => (
               <div key={m.id} className="rounded-md border border-border/30 p-3 bg-black/20">
                 <div className="flex items-center justify-between mb-1">
                   <span

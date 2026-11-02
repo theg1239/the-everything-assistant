@@ -2,9 +2,8 @@
 
 
 
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../lib/prisma'
 
-const prisma = new PrismaClient()
 
 async function migratePasskeyToSecurityKey() {
   console.log('🔄 Starting passkey to security_key migration...')

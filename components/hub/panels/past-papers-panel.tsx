@@ -14,12 +14,13 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useHubTool } from '../use-hub-tool'
+import { asRecord, readRecords, readString, readText } from '@/components/narrow'
 import { useSidebar } from '@/contexts/sidebar-context'
 import { FileText, Search, X } from 'lucide-react'
 import PdfViewer from '@/components/pdf-viewer'
 
 export default function PastPapersPanel() {
-  const { run, loading, error, result, reset } = useHubTool<any>('findPastPapers')
+  const { run, loading, error, result, reset } = useHubTool('findPastPapers')
   const { setIsOpen: setSidebarOpen } = useSidebar()
   const [courseCode, setCourseCode] = useState('')
   const [examType, setExamType] = useState('')
@@ -29,7 +30,16 @@ export default function PastPapersPanel() {
     await run({ courseCode, examType: examType || undefined, year: year || undefined })
   }
 
-  const papers = Array.isArray(result?.papers) ? result.papers : []
+  const data = asRecord(result)
+  const papers = readRecords(data?.papers).map(p => ({
+    title: readText(p.title),
+    fileName: readText(p.fileName),
+    url: readString(p.url),
+    examType: readString(p.examType),
+    year: readText(p.year),
+    slot: readText(p.slot),
+    source: readText(p.source),
+  }))
 
   return (
     <Card className="border-0 shadow-none bg-transparent">
@@ -79,7 +89,7 @@ export default function PastPapersPanel() {
             <Search className="mr-2 h-4 w-4" />
             {loading ? 'searching...' : 'search'}
           </Button>
-          {(error || result) && (
+          {(error || Boolean(result)) && (
             <Button variant="ghost" onClick={reset} className="sm:w-auto w-full">
               <X className="mr-2 h-4 w-4" />
               clear
@@ -93,7 +103,7 @@ export default function PastPapersPanel() {
 
         {papers.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 pt-4">
-            {papers.map((p: any, i: number) => (
+            {papers.map((p, i) => (
               <Card
                 key={i}
                 className="bg-muted/20 border-border/30 hover:bg-muted/40 transition-colors flex flex-col"
@@ -132,9 +142,9 @@ export default function PastPapersPanel() {
         )}
         <PdfViewer />
 
-        {result && papers.length === 0 && (
+        {Boolean(result) && papers.length === 0 && (
           <div className="text-sm text-muted-foreground text-center py-8">
-            {result?.message || 'no papers found for the given criteria.'}
+            {readText(data?.message) || 'no papers found for the given criteria.'}
           </div>
         )}
       </CardContent>

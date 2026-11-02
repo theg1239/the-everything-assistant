@@ -2,6 +2,7 @@ import {
   Client,
   GatewayIntentBits,
   Message,
+  MessageFlags,
   TextChannel,
   DMChannel,
   User,
@@ -10,14 +11,13 @@ import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
   EmbedBuilder,
-  AttachmentBuilder,
   REST,
   Routes,
-  BaseChannel,
 } from 'discord.js'
-import { EventEmitter } from 'events'
+import type { SlashCommandOptionsOnlyBuilder, TextBasedChannel } from 'discord.js'
+import { EventEmitter } from 'node:events'
 
-interface ConversationContext {
+export interface ConversationContext {
   content: string
   timestamp: number
   isBot: boolean
@@ -34,13 +34,53 @@ interface MessageData {
   isBot: boolean
 }
 
+/** Message data attached to an `ask` event (slash commands may not have a cached channel). */
+export interface AskMessageData extends Omit<MessageData, 'channel'> {
+  channel: TextBasedChannel | null
+  isContextAnalysis?: boolean
+}
+
+export type AIResponse = string | { text?: string; reasoning?: string }
+
+export interface AskRequest {
+  messageData: AskMessageData
+  question: string
+  conversationHistory: ConversationContext[]
+  startTime: number
+  respondCallback: (response: AIResponse) => Promise<void>
+}
+
+export interface DiscordClientInfo {
+  tag: string | undefined
+  id: string | undefined
+  guilds: number
+  users: number
+}
+
+interface ChannelHistoryMessage {
+  sender: string
+  senderId: string
+  content: string
+  timestamp: string
+  isFromBot: boolean
+}
+
+type DiscordServiceEvents = {
+  ready: []
+  error: [error: Error]
+  disconnected: []
+  ask: [request: AskRequest]
+}
+
+type SlashCommand = SlashCommandBuilder | SlashCommandOptionsOnlyBuilder
+
 interface ContextConfig {
   maxMessages: number
   maxAge: number
   cleanupInterval: number
 }
 
-class DiscordService extends EventEmitter {
+class DiscordService extends EventEmitter<DiscordServiceEvents> {
   private client: Client
   private isReady: boolean = false
   private botToken: string
@@ -52,7 +92,7 @@ class DiscordService extends EventEmitter {
   private rateLimits: Map<string, { count: number; resetTime: number }>
   private recentBotMessages: Set<string>
 
-  private slashCommands: Collection<string, any>
+  private slashCommands: Collection<string, SlashCommand>
 
   constructor(token: string, ownerId: string) {
     super()
@@ -99,7 +139,7 @@ class DiscordService extends EventEmitter {
         .setDescription('show available commands and help information'),
     ]
 
-    commands.forEach(command => {
+    commands.forEach((command: SlashCommand) => {
       this.slashCommands.set(command.name, command)
     })
   }
@@ -110,13 +150,18 @@ class DiscordService extends EventEmitter {
 
       const commands = this.slashCommands.map(command => command.toJSON())
 
+      const applicationId = this.client.user?.id
+      if (!applicationId) {
+        throw new Error('discord client user is not available')
+      }
+
       if (guildId) {
-        await this.rest.put(Routes.applicationGuildCommands(this.client.user!.id, guildId), {
+        await this.rest.put(Routes.applicationGuildCommands(applicationId, guildId), {
           body: commands,
         })
         console.log(`registered ${commands.length} slash commands for guild ${guildId}`)
       } else {
-        await this.rest.put(Routes.applicationCommands(this.client.user!.id), { body: commands })
+        await this.rest.put(Routes.applicationCommands(applicationId), { body: commands })
         console.log(`registered ${commands.length} slash commands globally`)
       }
     } catch (error) {
@@ -152,9 +197,9 @@ class DiscordService extends EventEmitter {
         const errorMessage = 'sorry, there was an error processing your command.'
 
         if (interaction.replied || interaction.deferred) {
-          await interaction.followUp({ content: errorMessage, ephemeral: true })
+          await interaction.followUp({ content: errorMessage, flags: MessageFlags.Ephemeral })
         } else {
-          await interaction.reply({ content: errorMessage, ephemeral: true })
+          await interaction.reply({ content: errorMessage, flags: MessageFlags.Ephemeral })
         }
       }
     })
@@ -189,7 +234,7 @@ class DiscordService extends EventEmitter {
     if (!this.isOwner(user.id) && this.isRateLimited(user.id)) {
       await interaction.reply({
         content: 'you are being rate limited. please wait before using another command.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       })
       return
     }
@@ -204,7 +249,7 @@ class DiscordService extends EventEmitter {
         if (!question) {
           await interaction.reply({
             content: 'please provide a question.',
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           })
           return
         }
@@ -222,7 +267,7 @@ class DiscordService extends EventEmitter {
       default:
         await interaction.reply({
           content: `unknown command: \`/${commandName}\``,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         })
         break
     }
@@ -273,11 +318,11 @@ class DiscordService extends EventEmitter {
 
       const startTime = Date.now()
 
-      const messageData: MessageData = {
+      const messageData: AskMessageData = {
         id: interaction.id,
         content: `/ask ${question}`,
         author: interaction.user,
-        channel: interaction.channel as TextChannel | DMChannel,
+        channel: interaction.channel,
         guild: interaction.guild || null,
         timestamp: Date.now(),
         isBot: false,
@@ -288,7 +333,7 @@ class DiscordService extends EventEmitter {
         question,
         conversationHistory,
         startTime,
-        respondCallback: (response: any) =>
+        respondCallback: (response: AIResponse) =>
           this.handleSlashAIResponse(interaction, response, startTime),
       })
     } catch (error) {
@@ -301,7 +346,7 @@ class DiscordService extends EventEmitter {
       } else {
         await interaction.reply({
           content: 'sorry, i encountered an error processing your request. please try again.',
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         })
       }
     }
@@ -367,7 +412,7 @@ class DiscordService extends EventEmitter {
 
   private async handleSlashAIResponse(
     interaction: ChatInputCommandInteraction,
-    response: string | { text?: string; reasoning?: string },
+    response: AIResponse,
     startTime: number
   ): Promise<void> {
     try {
@@ -555,7 +600,7 @@ class DiscordService extends EventEmitter {
         question,
         conversationHistory,
         startTime,
-        respondCallback: (response: any) =>
+        respondCallback: (response: AIResponse) =>
           this.handleAIResponse(messageData, response, startTime),
       })
     } catch (error) {
@@ -603,7 +648,7 @@ Keep the response concise but informative.`
         question: analysisPrompt,
         conversationHistory: [],
         startTime,
-        respondCallback: (response: any) =>
+        respondCallback: (response: AIResponse) =>
           this.handleAIResponse(messageData, response, startTime),
       })
     } catch (error) {
@@ -691,7 +736,7 @@ Keep the response concise but informative.`
 
   private async handleAIResponse(
     messageData: MessageData,
-    response: any,
+    response: AIResponse,
     startTime: number
   ): Promise<void> {
     try {
@@ -754,11 +799,12 @@ Keep the response concise but informative.`
   }
 
   private addToContext(userId: string, content: string, isBot: boolean): void {
-    if (!this.conversationContext.has(userId)) {
-      this.conversationContext.set(userId, [])
+    let context = this.conversationContext.get(userId)
+    if (!context) {
+      context = []
+      this.conversationContext.set(userId, context)
     }
 
-    const context = this.conversationContext.get(userId)!
     const timestamp = Date.now()
 
     context.push({
@@ -774,11 +820,11 @@ Keep the response concise but informative.`
   }
 
   private getContext(userId: string): ConversationContext[] {
-    if (!this.conversationContext.has(userId)) {
+    const context = this.conversationContext.get(userId)
+    if (!context) {
       return []
     }
 
-    const context = this.conversationContext.get(userId)!
     const now = Date.now()
 
     const validContext = context.filter(msg => now - msg.timestamp < this.contextConfig.maxAge)
@@ -857,8 +903,7 @@ Keep the response concise but informative.`
   private async sendLongMessage(channel: TextChannel | DMChannel, text: string): Promise<void> {
     const chunks = this.chunkMessage(text, 1900) // Leave some buffer
 
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i]
+    for (const [i, chunk] of chunks.entries()) {
       const prefix = chunks.length > 1 ? `**part ${i + 1}/${chunks.length}**\\n\\n` : ''
       await channel.send(prefix + chunk)
     }
@@ -913,13 +958,16 @@ Keep the response concise but informative.`
     return chunks
   }
 
-  private async getChannelHistory(channel: TextChannel | DMChannel, limit: number): Promise<any[]> {
+  private async getChannelHistory(
+    channel: TextChannel | DMChannel,
+    limit: number
+  ): Promise<ChannelHistoryMessage[]> {
     try {
-      const channelName = (channel as TextChannel).name || 'DM'
+      const channelName = ('name' in channel ? channel.name : undefined) || 'DM'
       console.log(`fetching last ${limit} messages from channel ${channelName}`)
 
       const messages = await channel.messages.fetch({ limit })
-      const processedMessages: any[] = []
+      const processedMessages: ChannelHistoryMessage[] = []
 
       for (const [, message] of messages) {
         if (message.author.bot || message.system) continue
@@ -946,7 +994,7 @@ Keep the response concise but informative.`
     }
   }
 
-  private formatChatHistoryForAI(messages: any[]): string {
+  private formatChatHistoryForAI(messages: ChannelHistoryMessage[]): string {
     if (!messages || messages.length === 0) {
       return 'No messages found.'
     }
@@ -960,7 +1008,7 @@ Keep the response concise but informative.`
     await this.client.destroy()
   }
 
-  getClientInfo(): any {
+  getClientInfo(): DiscordClientInfo {
     return {
       tag: this.client.user?.tag,
       id: this.client.user?.id,

@@ -8,6 +8,22 @@ import { getAllCourseMatches } from '@/lib/course-map'
 
 export const runtime = 'nodejs'
 
+type ScrapeOutcome =
+  | Awaited<ReturnType<typeof scrapePapersService>>
+  | Awaited<ReturnType<typeof scrapePapersCodeChef>>
+  | Awaited<ReturnType<typeof scrapeVITPaperVault>>
+  | Awaited<ReturnType<typeof scrapeExamCooker>>
+type PapersOf<T> = T extends { papers: ReadonlyArray<infer P> } ? P : never
+type ScrapedPaper = PapersOf<ScrapeOutcome>
+
+function rejectionMessage(reason: unknown): string {
+  if (typeof reason === 'object' && reason !== null && 'message' in reason) {
+    const { message } = reason
+    if (typeof message === 'string' && message) return message
+  }
+  return 'rejected'
+}
+
 export async function GET(req: NextRequest) {
   const started = Date.now()
   try {
@@ -38,8 +54,9 @@ export async function GET(req: NextRequest) {
         resolvedCourseCode = mapped
       } else {
         const matches = getAllCourseMatches(courseInput)
-        if (matches.length > 0) {
-          resolvedCourseCode = matches[0].code
+        const [firstMatch] = matches
+        if (firstMatch) {
+          resolvedCourseCode = firstMatch.code
         }
       }
     }
@@ -68,7 +85,7 @@ export async function GET(req: NextRequest) {
       scrapeExamCooker(resolvedCourseCode, examType, year),
     ])
 
-    const papers: any[] = []
+    const papers: ScrapedPaper[] = []
     const sources: string[] = []
     const sourceErrors: Array<{ source: string; error: string }> = []
 
@@ -79,13 +96,13 @@ export async function GET(req: NextRequest) {
       if (r.status === 'fulfilled' && r.value) {
         if (r.value.success) {
           papers.push(...(r.value.papers || []))
-          sources.push((r.value as any)?.source || name)
+          sources.push(('source' in r.value && r.value.source) || name)
         } else {
-          const errMsg = (r.value as any)?.error || 'unknown_error'
+          const errMsg = ('error' in r.value && r.value.error) || 'unknown_error'
           sourceErrors.push({ source: name, error: errMsg })
         }
       } else if (r.status === 'rejected') {
-        sourceErrors.push({ source: name, error: (r as PromiseRejectedResult).reason?.message || 'rejected' })
+        sourceErrors.push({ source: name, error: rejectionMessage(r.reason) })
       }
     })
 

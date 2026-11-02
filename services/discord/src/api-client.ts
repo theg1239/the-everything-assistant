@@ -1,4 +1,4 @@
-import fetch from 'node-fetch'
+import { z } from 'zod'
 
 interface ConversationHistory {
   role: 'user' | 'assistant'
@@ -9,9 +9,35 @@ interface ConversationHistory {
 interface APIResponse {
   text: string
   reasoning?: string
-  toolResults: any[]
+  toolResults: unknown[]
   error?: string
 }
+
+export interface UserContext {
+  source?: string
+  userId?: string
+  username?: string
+  channelId?: string
+  guildId?: string
+}
+
+// One `data:` payload of the AI SDK UI message stream. Only the fields we read are validated;
+// fields with an unexpected type are treated as absent.
+const uiStreamChunkSchema = z.looseObject({
+  type: z.string().optional().catch(undefined),
+  delta: z.string().optional().catch(undefined),
+  error: z.string().optional().catch(undefined),
+  errorText: z.string().optional().catch(undefined),
+})
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
+/** Reads `value[key]` when `value` is an object, otherwise `undefined`. */
+const getProp = (value: unknown, key: string): unknown => (isRecord(value) ? value[key] : undefined)
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error)
 
 class APIClient {
   private baseUrl: string
@@ -24,7 +50,7 @@ class APIClient {
 
   async sendChatRequest(
     userQuestion: string,
-    userContext: any = {},
+    userContext: UserContext = {},
     conversationHistory: ConversationHistory[] = []
   ): Promise<APIResponse> {
     try {
@@ -58,8 +84,6 @@ class APIClient {
           'User-Agent': 'the-everything-assistant-bot/1.0.0',
         },
         body: JSON.stringify(requestBody),
-        // @ts-ignore - node-fetch types issue
-        timeout: 30000,
       })
 
       if (!response.ok) {
@@ -82,7 +106,7 @@ class APIClient {
     }
   }
 
-  private async parseStreamingResponse(response: any): Promise<APIResponse> {
+  private async parseStreamingResponse(response: Response): Promise<APIResponse> {
     try {
       const rawText = await this.readTextStream(response)
       console.log('raw api response:', rawText.substring(0, 400) + '...')
@@ -125,7 +149,7 @@ class APIClient {
     console.log('total lines:', lines.length)
 
     let finalText = ''
-    let toolResults: any[] = []
+    const toolResults: unknown[] = []
       let error: string | null = null
 
       for (const line of lines) {
@@ -151,24 +175,27 @@ class APIClient {
             content = content.replace(/\\"/g, '"').replace(/\\n/g, '\n')
             finalText += content
           } else if (trimmedLine.startsWith('f:')) {
-            const metadata = JSON.parse(trimmedLine.slice(2))
+            const metadata: unknown = JSON.parse(trimmedLine.slice(2))
             console.log('Received metadata:', metadata)
           } else if (trimmedLine.startsWith('9:')) {
-            const toolCall = JSON.parse(trimmedLine.slice(2))
-            console.log('Tool call detected:', toolCall.toolName)
+            const toolCall: unknown = JSON.parse(trimmedLine.slice(2))
+            console.log('Tool call detected:', getProp(toolCall, 'toolName'))
           } else if (trimmedLine.startsWith('a:')) {
-            const toolResult = JSON.parse(trimmedLine.slice(2))
+            const toolResult: unknown = JSON.parse(trimmedLine.slice(2))
             toolResults.push(toolResult)
           } else if (trimmedLine.startsWith('e:')) {
-            const endData = JSON.parse(trimmedLine.slice(2))
-            if (endData.finishReason !== 'stop') {
-              console.warn('Stream ended unexpectedly:', endData.finishReason)
+            const endData: unknown = JSON.parse(trimmedLine.slice(2))
+            const finishReason = getProp(endData, 'finishReason')
+            if (finishReason !== 'stop') {
+              console.warn('Stream ended unexpectedly:', finishReason)
             }
           } else if (trimmedLine.startsWith('data:')) {
             const payload = trimmedLine.slice(5).trim()
             if (payload && payload !== '[DONE]') {
               try {
-                const chunk = JSON.parse(payload)
+                const parsedChunk = uiStreamChunkSchema.safeParse(JSON.parse(payload))
+                if (!parsedChunk.success) continue
+                const chunk = parsedChunk.data
                 switch (chunk.type) {
                   case 'text-delta':
                     finalText += chunk.delta || ''
@@ -189,15 +216,17 @@ class APIClient {
             }
           } else if (trimmedLine.startsWith('d:')) {
             try {
-              const data = JSON.parse(trimmedLine.slice(2))
-              if (data.text) {
-                finalText += data.text
-              } else if (data.content) {
-                finalText += data.content
+              const data: unknown = JSON.parse(trimmedLine.slice(2))
+              const dataText = getProp(data, 'text')
+              const dataContent = getProp(data, 'content')
+              if (dataText) {
+                finalText += String(dataText)
+              } else if (dataContent) {
+                finalText += String(dataContent)
               } else if (typeof data === 'string') {
                 finalText += data
               }
-            } catch (e) {
+            } catch {
               const rawContent = trimmedLine.slice(2)
               if (rawContent && rawContent !== '{}') {
                 finalText += rawContent
@@ -221,7 +250,7 @@ class APIClient {
           console.warn(
             'Failed to parse line:',
             line.substring(0, 100),
-            (parseError as Error).message
+            errorMessage(parseError)
           )
         }
       }
@@ -239,10 +268,13 @@ class APIClient {
       if (!finalText.trim()) {
         console.log('No text content found, checking tool results...')
         for (const result of toolResults) {
-          if (result.result && result.result.formatted_content) {
-            finalText += result.result.formatted_content + '\n'
-          } else if (result.result && result.result.summary) {
-            finalText += result.result.summary + '\n'
+          const inner = getProp(result, 'result')
+          const formattedContent = getProp(inner, 'formatted_content')
+          const summary = getProp(inner, 'summary')
+          if (formattedContent) {
+            finalText += String(formattedContent) + '\n'
+          } else if (summary) {
+            finalText += String(summary) + '\n'
           }
         }
       }
@@ -273,35 +305,23 @@ class APIClient {
         text: 'Sorry, I encountered an error processing your request. Please try again later.',
         reasoning: '',
         toolResults: [],
-        error: (error as Error).message,
+        error: errorMessage(error),
       }
     }
   }
 
   /**
-   * Read response body as UTF-8 text, supporting both web streams and Node readable streams.
+   * Read the (web stream) response body as UTF-8 text.
    */
-  private async readTextStream(response: any): Promise<string> {
-    if (!response?.body) return ''
+  private async readTextStream(response: Response): Promise<string> {
+    if (!response.body) return ''
 
-    const decoder = new TextDecoder()
     let result = ''
-
-    const hasTDS = typeof (globalThis as any).TextDecoderStream === 'function'
-    if (typeof (response.body as any).getReader === 'function' && hasTDS) {
-      const reader = (response.body as any)
-        .pipeThrough(new (globalThis as any).TextDecoderStream())
-        .getReader()
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
-        result += value
-      }
-    } else {
-      for await (const chunk of response.body as any) {
-        result += decoder.decode(chunk, { stream: true })
-      }
-      result += decoder.decode()
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      result += value
     }
 
     return result
@@ -315,7 +335,7 @@ class APIClient {
     const lines = rawText.split(/\r?\n/)
     let reasoning = ''
     let text = ''
-    const toolResults: any[] = []
+    const toolResults: unknown[] = []
 
     for (const line of lines) {
       const trimmed = line.trim()
@@ -323,12 +343,15 @@ class APIClient {
       const payload = trimmed.slice(5).trim()
       if (!payload || payload === '[DONE]') continue
 
-      let chunk: any
+      let parsedJson: unknown
       try {
-        chunk = JSON.parse(payload)
+        parsedJson = JSON.parse(payload)
       } catch {
         continue
       }
+      const parsedChunk = uiStreamChunkSchema.safeParse(parsedJson)
+      if (!parsedChunk.success) continue
+      const chunk = parsedChunk.data
 
       switch (chunk.type) {
         case 'reasoning-delta':
@@ -351,9 +374,12 @@ class APIClient {
     let finalText = text.trim()
     if (!finalText && toolResults.length > 0) {
       for (const tr of toolResults) {
-        const result = tr.result || tr.data || tr
+        const result = getProp(tr, 'result') || getProp(tr, 'data') || tr
         const candidate =
-          result?.formatted_content || result?.summary || result?.content || result?.text
+          getProp(result, 'formatted_content') ||
+          getProp(result, 'summary') ||
+          getProp(result, 'content') ||
+          getProp(result, 'text')
         if (candidate && typeof candidate === 'string') {
           finalText = candidate.trim()
           if (finalText) break
@@ -387,8 +413,6 @@ class APIClient {
           Authorization: `Bearer ${this.apiKey}`,
           'User-Agent': 'the-everything-assistant-bot/1.0.0',
         },
-        // @ts-ignore
-        timeout: 5000,
       })
 
       return response.ok
@@ -398,7 +422,7 @@ class APIClient {
     }
   }
 
-  async sendFeedback(interactionId: string, feedback: any): Promise<boolean> {
+  async sendFeedback(interactionId: string, feedback: unknown): Promise<boolean> {
     try {
       const response = await fetch(`${this.baseUrl}/api/feedback`, {
         method: 'POST',
@@ -412,8 +436,6 @@ class APIClient {
           feedback,
           source: 'discord',
         }),
-        // @ts-ignore
-        timeout: 10000,
       })
 
       return response.ok

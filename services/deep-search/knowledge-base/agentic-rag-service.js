@@ -622,15 +622,14 @@ Rules:
 - If evidence is weak, say so clearly.
 - ${searchInfo}`
 
-    const messages = [
-      {
-        role: 'system',
-        content: systemPrompt,
-      },
-    ]
+    // AI SDK v7 rejects `role: 'system'` entries in `messages`; the system prompt goes in
+    // `instructions`, and client-supplied history is limited to user/assistant turns.
+    const messages = []
 
     conversationHistory.forEach(msg => {
-      messages.push(msg)
+      if (msg && (msg.role === 'user' || msg.role === 'assistant')) {
+        messages.push(msg)
+      }
     })
 
     messages.push({
@@ -649,6 +648,7 @@ Do not use markdown.`
     try {
       const primaryResult = await generateText({
         model: this.chatModel,
+        instructions: systemPrompt,
         messages: messages,
         maxOutputTokens: this.responseMaxOutputTokens,
         maxRetries: 0,
@@ -674,10 +674,8 @@ Do not use markdown.`
       const compactContext = this.buildCompactContext(agenticResult.relevantResults, 4)
       const retryResult = await generateText({
         model: this.chatModel,
-        messages: [
-          { role: 'system', content: `${compactSystemPrompt}\n\nContext:\n${compactContext}` },
-          { role: 'user', content: query },
-        ],
+        instructions: `${compactSystemPrompt}\n\nContext:\n${compactContext}`,
+        messages: [{ role: 'user', content: query }],
         maxOutputTokens: this.responseRetryMaxOutputTokens,
         maxRetries: 0,
         abortSignal: createAbortSignal(this.responseRetryTimeoutMs),

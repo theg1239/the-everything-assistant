@@ -6,25 +6,28 @@ import { Button } from '@/components/ui/button'
 import { ChevronDown, ChevronUp, ListChecks, Copy, ExternalLink } from 'lucide-react'
 import React from 'react'
 import { OptimizedMarkdown } from '@/components/optimized-markdown'
+import { asArray, asRecord, asString, asText, type UnknownRecord } from './artifact-data'
 
-export default function QuestionPatternsArtifact({ data }: { data: any }) {
+export default function QuestionPatternsArtifact({ data }: { data: unknown }) {
   const [expanded, setExpanded] = React.useState<Record<number, boolean>>({})
   const [showAllKeywords, setShowAllKeywords] = React.useState(false)
   const [copiedStates, setCopiedStates] = React.useState<Record<string, boolean>>({})
 
   const toggle = (i: number) => setExpanded(s => ({ ...s, [i]: !s[i] }))
 
-  const totals = data?.totals || {}
-  const patterns = Array.isArray(data?.topPatterns) ? data.topPatterns : []
-  const keywords = Array.isArray(data?.topKeywords) ? data.topKeywords : []
+  const record = asRecord(data)
+  const message = asText(record.message)
+  const totals = asRecord(record.totals)
+  const patterns = asArray(record.topPatterns)
+  const keywords = asArray(record.topKeywords)
 
-  const normalizeText = (s: any) =>
+  const normalizeText = (s: unknown) =>
     String(s ?? '')
       .toLowerCase()
       .replace(/\s+/g, ' ')
       .trim()
 
-  const copy = async (text?: string, key?: string) => {
+  const copy = async (text?: unknown, key?: string) => {
     if (!text) return
     try {
       await navigator.clipboard.writeText(String(text))
@@ -40,38 +43,38 @@ export default function QuestionPatternsArtifact({ data }: { data: any }) {
   return (
     <Card className="hover:shadow-md transition-shadow border border-border/30">
       <CardContent className="p-4 sm:p-6 space-y-5 border-0">
-        {data?.message && (
+        {message && (
           <div className="text-[13px] sm:text-[15px] text-foreground/90 whitespace-pre-wrap break-words flex items-start sm:items-center gap-3">
             <ListChecks className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-500 shrink-0 mt-0.5 sm:mt-0" />
-            <span>{data.message}</span>
+            <span>{message}</span>
           </div>
         )}
 
-        {(totals?.papers || totals?.questions || totals?.distinctPatterns) && (
+        {(asText(totals.papers) || asText(totals.questions) || asText(totals.distinctPatterns)) && (
           <div className="flex flex-wrap gap-2.5 text-xs sm:text-[13px] rounded-lg border border-border/30 bg-card/40 p-2.5">
             {typeof totals.papers !== 'undefined' && (
               <Badge variant="outline" className="rounded-full px-3 py-1">
-                papers: {totals.papers}
+                papers: {asText(totals.papers)}
               </Badge>
             )}
             {typeof totals.questions !== 'undefined' && (
               <Badge variant="outline" className="rounded-full px-3 py-1">
-                questions: {totals.questions}
+                questions: {asText(totals.questions)}
               </Badge>
             )}
             {typeof totals.distinctPatterns !== 'undefined' && (
               <Badge variant="outline" className="rounded-full px-3 py-1">
-                patterns: {totals.distinctPatterns}
+                patterns: {asText(totals.distinctPatterns)}
               </Badge>
             )}
-            {data?.examType && (
+            {Boolean(record.examType) && (
               <Badge variant="secondary" className="rounded-full px-3 py-1">
-                exam: {String(data.examType)}
+                exam: {String(record.examType)}
               </Badge>
             )}
-            {data?.courseCode && (
+            {Boolean(record.courseCode) && (
               <Badge variant="secondary" className="rounded-full px-3 py-1">
-                course: {String(data.courseCode)}
+                course: {String(record.courseCode)}
               </Badge>
             )}
           </div>
@@ -83,12 +86,17 @@ export default function QuestionPatternsArtifact({ data }: { data: any }) {
               top keywords
             </div>
             <div className="flex flex-wrap gap-2 items-center">
-              {(showAllKeywords ? keywords : keywords.slice(0, 16)).map((k: any, i: number) => (
-                <Badge key={i} variant="outline" className="text-xs px-2.5 py-1">
-                  {k.token}
-                  <span className="ml-1.5 text-muted-foreground font-medium">{k.count}</span>
-                </Badge>
-              ))}
+              {(showAllKeywords ? keywords : keywords.slice(0, 16)).map((rawKeyword, i) => {
+                const keyword = asRecord(rawKeyword)
+                return (
+                  <Badge key={i} variant="outline" className="text-xs px-2.5 py-1">
+                    {asText(keyword.token)}
+                    <span className="ml-1.5 text-muted-foreground font-medium">
+                      {asText(keyword.count)}
+                    </span>
+                  </Badge>
+                )
+              })}
               {keywords.length > 16 && (
                 <Button
                   variant="ghost"
@@ -104,10 +112,11 @@ export default function QuestionPatternsArtifact({ data }: { data: any }) {
         )}
 
         <div className="space-y-4">
-          {patterns.map((p: any, i: number) => {
+          {patterns.map((rawPattern, i) => {
+            const p = asRecord(rawPattern)
             const isOpen = !!expanded[i]
-            const sampleQs = Array.isArray(p.sampleQuestions) ? p.sampleQuestions : []
-            const samplePapers = Array.isArray(p.samplePapers) ? p.samplePapers : []
+            const sampleQs = asArray(p.sampleQuestions)
+            const samplePapers = asArray(p.samplePapers).map(asRecord)
             const copyKey = `pattern-${i}`
             const isCopied = copiedStates[copyKey]
 
@@ -118,15 +127,15 @@ export default function QuestionPatternsArtifact({ data }: { data: any }) {
               if (!key) continue
               if (!seenQ.has(key)) {
                 seenQ.add(key)
-                uniqueSampleQs.push(q)
+                uniqueSampleQs.push(String(q))
               }
             }
 
             const seenP = new Set<string>()
-            const uniqueSamplePapers: any[] = []
+            const uniqueSamplePapers: UnknownRecord[] = []
             for (const sp of samplePapers) {
-              const meta = [sp?.title, sp?.year, sp?.examType].filter(Boolean).join(' ')
-              const key = sp?.url ? `url:${sp.url}` : `meta:${normalizeText(meta)}`
+              const meta = [sp.title, sp.year, sp.examType].filter(Boolean).join(' ')
+              const key = sp.url ? `url:${String(sp.url)}` : `meta:${normalizeText(meta)}`
               if (!key) continue
               if (!seenP.has(key)) {
                 seenP.add(key)
@@ -143,7 +152,7 @@ export default function QuestionPatternsArtifact({ data }: { data: any }) {
                   <div className="min-w-0 flex-1 space-y-3">
                     <div className="flex flex-wrap items-center gap-2.5">
                       <Badge variant="secondary" className="rounded-full px-3 py-1 font-medium">
-                        {p.count}×
+                        {asText(p.count)}×
                       </Badge>
                       <div className="flex-1 min-w-0">
                         <code className="text-xs sm:text-sm bg-muted px-3 py-2 rounded-md break-words overflow-x-auto inline-block max-w-full border border-border/30">
@@ -204,30 +213,30 @@ export default function QuestionPatternsArtifact({ data }: { data: any }) {
                       sample papers
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {uniqueSamplePapers.map((sp: any, sidx: number) => (
+                      {uniqueSamplePapers.map((sp, sidx) => (
                         <div
                           key={sidx}
                           className="text-xs sm:text-sm text-muted-foreground p-2.5 rounded-md bg-card/40 border border-border/30 hover:border-border/50 transition-colors"
                         >
                           {sp.url ? (
                             <a
-                              href={sp.url}
+                              href={asString(sp.url)}
                               target="_blank"
                               rel="noreferrer"
                               className="inline-flex items-center justify-between w-full gap-2 hover:text-foreground transition-colors group"
                             >
                               <span className="break-words">
-                                {sp.title || 'paper'}
-                                {sp.year ? ` • ${sp.year}` : ''}
-                                {sp.examType ? ` • ${sp.examType}` : ''}
+                                {asText(sp.title) || 'paper'}
+                                {sp.year ? ` • ${String(sp.year)}` : ''}
+                                {sp.examType ? ` • ${String(sp.examType)}` : ''}
                               </span>
                               <ExternalLink className="h-3 w-3 opacity-50 group-hover:opacity-100 transition-opacity shrink-0" />
                             </a>
                           ) : (
                             <span className="break-words">
-                              {sp.title || 'paper'}
-                              {sp.year ? ` • ${sp.year}` : ''}
-                              {sp.examType ? ` • ${sp.examType}` : ''}
+                              {asText(sp.title) || 'paper'}
+                              {sp.year ? ` • ${String(sp.year)}` : ''}
+                              {sp.examType ? ` • ${String(sp.examType)}` : ''}
                             </span>
                           )}
                         </div>

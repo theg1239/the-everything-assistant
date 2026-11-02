@@ -5,13 +5,13 @@ import React, { createContext, useContext, useState, useCallback } from 'react'
 interface VTOPToolResult {
   toolCallId: string
   command: string
-  result: any
+  result: unknown
   timestamp: number
 }
 
 interface VTOPContextType {
   toolResults: Map<string, VTOPToolResult>
-  updateToolResult: (toolCallId: string, command: string, result: any) => void
+  updateToolResult: (toolCallId: string, command: string, result: unknown) => void
   getToolResult: (toolCallId: string) => VTOPToolResult | undefined
   clearToolResult: (toolCallId: string) => void
   version: number
@@ -23,7 +23,7 @@ export function VTOPProvider({ children }: { children: React.ReactNode }) {
   const [toolResults, setToolResults] = useState<Map<string, VTOPToolResult>>(new Map())
   const [version, setVersion] = useState(0)
 
-  const updateToolResult = useCallback((toolCallId: string, command: string, result: any) => {
+  const updateToolResult = useCallback((toolCallId: string, command: string, result: unknown) => {
     setToolResults(prev => {
       const newMap = new Map(prev)
       newMap.set(toolCallId, {

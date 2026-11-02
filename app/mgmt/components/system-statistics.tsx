@@ -3,9 +3,10 @@
 import React from 'react'
 import { Database, Users, Clock } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts'
+import type { StatsResponse } from '../types'
 
 
-export default function SystemStatistics({ stats }: any) {
+export default function SystemStatistics({ stats }: { stats: StatsResponse }) {
   return (
     <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
       <div className="flex flex-col space-y-1.5 mb-6">
@@ -36,7 +37,7 @@ export default function SystemStatistics({ stats }: any) {
         <h4 className="font-semibold mb-2">Tool Call Stats</h4>
         <div className="space-y-2">
           {Array.isArray(stats.toolCallStats) && stats.toolCallStats.length > 0 ? (
-            stats.toolCallStats.map((tool: any) => (
+            stats.toolCallStats.map(tool => (
               <div
                 key={tool.toolName}
                 className="flex justify-between items-center text-sm p-2 rounded-md bg-black/20"
@@ -77,9 +78,9 @@ export default function SystemStatistics({ stats }: any) {
             <div className="space-y-2">
               {Array.isArray(stats.detailedStats.tokensPerUser) &&
               stats.detailedStats.tokensPerUser.length ? (
-                stats.detailedStats.tokensPerUser.slice(0, 8).map((u: any) => (
+                stats.detailedStats.tokensPerUser.slice(0, 8).map((u, index) => (
                   <div
-                    key={u.userId || Math.random()}
+                    key={u.userId ?? `anonymous-${index}`}
                     className="flex justify-between items-center text-sm p-2 rounded-md bg-black/20"
                   >
                     <span className="truncate">{u.userId ?? 'anonymous'}</span>
@@ -99,7 +100,7 @@ export default function SystemStatistics({ stats }: any) {
               <div style={{ width: '100%', height: 160 }}>
                 <ResponsiveContainer>
                   <BarChart
-                    data={stats.detailedStats.topModels.map((m: any) => ({
+                    data={stats.detailedStats.topModels.map(m => ({
                       model: m.model,
                       totalTokens: m.totalTokens,
                     }))}
@@ -107,7 +108,7 @@ export default function SystemStatistics({ stats }: any) {
                   >
                     <XAxis type="number" hide />
                     <YAxis type="category" dataKey="model" width={120} tick={{ fontSize: 12 }} />
-                    <Tooltip formatter={(v: any) => [v, 'tokens']} />
+                    <Tooltip formatter={v => [v, 'tokens']} />
                     <Bar dataKey="totalTokens" fill="#7C3AED" />
                   </BarChart>
                 </ResponsiveContainer>

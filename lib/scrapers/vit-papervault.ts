@@ -1,13 +1,22 @@
+import * as z from 'zod'
 import { findFullCourseName } from '../course-map'
 import { BROWSER_TOOLS_ENABLED } from '../browser-flags'
 
-interface PaperVaultEntry {
-  subjectName: string
-  paperType: string
-  paperDate: string
-  paperLink: string
-  paperSlot: string
-}
+const paperVaultEntrySchema = z.object({
+  subjectName: z.string(),
+  paperType: z.string(),
+  paperDate: z.string(),
+  paperLink: z.string(),
+  paperSlot: z.string(),
+})
+
+/** A non-array `data` means "no papers"; a malformed entry fails the whole list. */
+const paperVaultListSchema = z.object({
+  data: z
+    .unknown()
+    .transform(data => (Array.isArray(data) ? data : []))
+    .pipe(z.array(paperVaultEntrySchema)),
+})
 
 export async function scrapeVITPaperVault(courseCode: string, examType?: string, year?: string) {
   try {
@@ -28,12 +37,14 @@ export async function scrapeVITPaperVault(courseCode: string, examType?: string,
 
     console.log('[vitpapervault] API failed, falling back to browser scraping')
     // return await tryBrowserScraping(courseCode, examType, year)
-  } catch (error: any) {
+    // Browser fallback is disabled; callers treat `undefined` as "no result from this source".
+    return undefined
+  } catch (error) {
     console.error('Error scraping vitpapervault.in:', error)
     return {
       success: false,
       papers: [],
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
       source: 'vitpapervault.in',
     }
   }
@@ -46,8 +57,7 @@ async function tryVITVaultListAPI(courseCode: string, examType?: string, year?: 
     })
     if (!resp.ok) throw new Error(`status ${resp.status}`)
 
-    const body = (await resp.json()) as { data?: PaperVaultEntry[] }
-    const all: PaperVaultEntry[] = Array.isArray(body.data) ? body.data : []
+    const all = paperVaultListSchema.parse(await resp.json()).data
 
     const full = findFullCourseName(courseCode)
     const plainName = full.replace(/\s*\[.*\]$/, '')

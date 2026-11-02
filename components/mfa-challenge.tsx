@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { useMFA } from '@/contexts/mfa-context'
 import { LoginFloatingBackground } from '@/components/login-floating-background'
 import { readJson } from '@/lib/http'
+import { asRecord, errorMessage, readString } from '@/components/narrow'
 import type { AuthenticatorTransport, PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/server'
 
 interface MfaStatusResponse {
@@ -38,7 +39,7 @@ const SUPPORTED_AUTHENTICATOR_TRANSPORTS: AuthenticatorTransport[] = [
 ]
 
 const isAuthenticatorTransport = (value: string): value is AuthenticatorTransport =>
-  SUPPORTED_AUTHENTICATOR_TRANSPORTS.includes(value as AuthenticatorTransport)
+  SUPPORTED_AUTHENTICATOR_TRANSPORTS.some(transport => transport === value)
 
 const normalizeTransports = (
   transports?: readonly string[]
@@ -123,7 +124,7 @@ export function MFAChallenge() {
       const allowCredentials: PublicKeyCredentialDescriptor[] | undefined =
         options.allowCredentials && options.allowCredentials.length
           ? options.allowCredentials.map(cred => ({
-              type: cred.type,
+              type: 'public-key' as const,
               id: base64urlToArrayBuffer(cred.id),
               transports: normalizeTransports(cred.transports),
             }))
@@ -136,7 +137,8 @@ export function MFAChallenge() {
         rpId: options.rpId,
         allowCredentials,
         userVerification: options.userVerification,
-        extensions: options.extensions,
+        // Server never requests extensions; JSON-form extensions (e.g. PRF)
+        // would need BufferSource conversion before reaching the DOM API.
       }
 
       console.log('WebAuthn authentication options:', {
@@ -167,20 +169,22 @@ export function MFAChallenge() {
         },
       })
 
-      let credential
+      let credential: PublicKeyCredential | null
       try {
-        credential = (await navigator.credentials.get({
+        const assertion = await navigator.credentials.get({
           publicKey: authenticationOptions,
-        })) as PublicKeyCredential
-      } catch (getError: any) {
+        })
+        credential = assertion instanceof PublicKeyCredential ? assertion : null
+      } catch (getError) {
         console.error('navigator.credentials.get failed:', getError)
+        const getErrorMessage = errorMessage(getError)
 
-        if (getError.name === 'NotAllowedError') {
-          if (getError.message?.includes('cross-origin')) {
+        if (readString(asRecord(getError)?.name) === 'NotAllowedError') {
+          if (getErrorMessage?.includes('cross-origin')) {
             throw new Error(
               "Cross-origin authentication not allowed. Please ensure you're on the correct domain."
             )
-          } else if (getError.message?.includes('timeout')) {
+          } else if (getErrorMessage?.includes('timeout')) {
             throw new Error(
               'Authentication timed out. Please try again and respond more quickly to the prompt.'
             )
@@ -197,7 +201,10 @@ export function MFAChallenge() {
         throw new Error('No credential received')
       }
 
-      const response = credential.response as AuthenticatorAssertionResponse
+      const response = credential.response
+      if (!(response instanceof AuthenticatorAssertionResponse)) {
+        throw new Error('Unexpected credential response')
+      }
 
       const verifyResponse = await fetch('/api/user/mfa/webauthn/verify-auth', {
         method: 'POST',
@@ -230,28 +237,29 @@ export function MFAChallenge() {
       } else {
         toast.error(data.error || 'Authentication failed')
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('WebAuthn authentication error:', error)
-      if (error.name === 'NotAllowedError') {
+      const errorName = readString(asRecord(error)?.name)
+      if (errorName === 'NotAllowedError') {
         toast.error(
           'Authentication was cancelled, timed out, or blocked. Please try again and ensure you approve any browser prompts.'
         )
-      } else if (error.name === 'InvalidStateError') {
+      } else if (errorName === 'InvalidStateError') {
         toast.error(
           'No registered authenticator found. Please check your device settings or try registering again.'
         )
-      } else if (error.name === 'SecurityError') {
+      } else if (errorName === 'SecurityError') {
         toast.error(
           'Security error - this may be due to an insecure connection or invalid configuration.'
         )
-      } else if (error.name === 'AbortError') {
+      } else if (errorName === 'AbortError') {
         toast.error('Authentication was aborted. Please try again.')
-      } else if (error.name === 'ConstraintError') {
+      } else if (errorName === 'ConstraintError') {
         toast.error(
           'Authentication constraints not satisfied. Please check your authenticator settings.'
         )
       } else {
-        toast.error(error.message || 'Authentication failed')
+        toast.error(errorMessage(error) || 'Authentication failed')
       }
     } finally {
       setIsLoading(false)

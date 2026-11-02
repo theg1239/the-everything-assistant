@@ -43,6 +43,8 @@ MAIN_APP_API_KEY=your-api-key-here
 # WhatsApp Configuration
 WHATSAPP_SESSION_PATH=./whatsapp-session
 WHATSAPP_PUPPETEER_ARGS=--no-sandbox,--disable-setuid-sandbox
+# Optional: pin a WhatsApp Web version (defaults to the one bundled with whatsapp-web.js)
+# WHATSAPP_WEB_VERSION=2.3000.1017054665
 
 # Security
 WEBHOOK_SECRET=your-webhook-secret-here

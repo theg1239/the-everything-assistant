@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import type { Prisma } from '@/prisma/generated/client'
 
 export async function GET(request: NextRequest) {
   try {
-    const session = (await getServerSession(authOptions as any)) as any
+    const session = await auth()
 
     const adminEmail = process.env.RATE_LIMIT_ADMIN_EMAIL
     if (!adminEmail) {
@@ -21,13 +21,14 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(100, parseInt(url.searchParams.get('limit') || '25', 10))
     const offset = parseInt(url.searchParams.get('offset') || '0', 10)
 
-    const where: any = {}
-    if (q) {
-      where.OR = [
-        { email: { contains: q, mode: 'insensitive' } },
-        { name: { contains: q, mode: 'insensitive' } },
-      ]
-    }
+    const where: Prisma.UserWhereInput = q
+      ? {
+          OR: [
+            { email: { contains: q, mode: 'insensitive' } },
+            { name: { contains: q, mode: 'insensitive' } },
+          ],
+        }
+      : {}
 
     const users = await prisma.user.findMany({
       where,
@@ -45,10 +46,13 @@ export async function GET(request: NextRequest) {
     }))
 
     return NextResponse.json({ users: mapped })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Mgmt users fetch failed:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch users', message: error?.message || 'Unknown error' },
+      {
+        error: 'Failed to fetch users',
+        message: error instanceof Error && error.message ? error.message : 'Unknown error',
+      },
       { status: 500 }
     )
   }

@@ -123,8 +123,8 @@ const UpsellBanner: React.FC = () => {
             <Image
               src={
                 showFeedback
-                  ? '/onboarding-artwork/artwork2.png'
-                  : '/onboarding-artwork/artwork.png'
+                  ? '/onboarding-artwork/artwork2.webp'
+                  : '/onboarding-artwork/artwork.webp'
               }
               alt={showFeedback ? 'Feedback artwork' : 'Research Preview artwork'}
               fill
@@ -183,7 +183,7 @@ const UpsellBanner: React.FC = () => {
         <div className="relative h-24 sm:h-32 overflow-hidden">
           <Image
             src={
-              showFeedback ? '/onboarding-artwork/artwork2.png' : '/onboarding-artwork/artwork3.png'
+              showFeedback ? '/onboarding-artwork/artwork2.webp' : '/onboarding-artwork/artwork3.webp'
             }
             alt={showFeedback ? 'Feedback artwork' : 'Research Preview artwork'}
             fill

@@ -1,7 +1,7 @@
 const fs = require('fs')
 const path = require('path')
 
-require('dotenv').config()
+require('dotenv').config({ quiet: true })
 
 function findUpwards(filename, startDir) {
   const parsed = path.parse(startDir)

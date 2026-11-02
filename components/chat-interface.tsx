@@ -2,12 +2,14 @@
 
 import { useState, useRef, useEffect, memo, useCallback, useMemo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import dynamic from 'next/dynamic'
+import { useStore } from 'zustand'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useSession, signIn } from 'next-auth/react'
-import { useMemory } from '@/contexts/memory-context'
 import { VirtualizedMessages } from '@/components/virtualized-messages'
+import type { MaximizedItem } from '@/components/message-bubble'
 import { motion } from 'framer-motion'
 import { Download, Plus, ChevronDown, GraduationCap, Share, LogIn } from 'lucide-react'
 import { HamburgerButton } from '@/components/hamburger-button'
@@ -17,7 +19,7 @@ import { FollowUpSuggestions } from '@/components/follow-up-suggestions'
 import { ChatHeader } from '@/components/chat-header'
 import { MobilePdfDockButton, DesktopPdfDockButton } from '@/components/pdf-dock'
 import { MultimodalInput } from '@/components/multimodal-input'
-import Hub, { type HubActionHandlers } from '@/components/hub/hub'
+import type { HubActionHandlers } from '@/components/hub/hub'
 import { HubStoreProvider } from '@/components/hub/hub-store'
 import { ShareModal } from '@/components/share-modal'
 import { HUB_COMMANDS } from '@/types/hub'
@@ -28,11 +30,10 @@ import { VTOPToolHandler } from '@/components/vtop-tool-handler'
 import { VTOPProvider, useVTOP } from '@/contexts/vtop-context'
 import { RateLimitProvider, useRateLimit } from '@/contexts/rate-limit-context'
 import { RateLimitErrorDisplay } from '@/components/rate-limit-error-display'
-import { OnboardingDialog } from '@/components/onboarding-dialog'
 import { useOnboarding } from '@/hooks/use-onboarding'
 import { toast } from 'sonner'
 import { readJson } from '@/lib/http'
-import type { UserPreferencesResponse } from '@/types/preferences'
+import type { UserPreferences, UserPreferencesResponse } from '@/types/preferences'
 import ScrollToTopButton from '@/components/scroll-to-top-button'
 import { cn } from '@/lib/utils'
 import { useThrottle } from '@/hooks/use-debounce'
@@ -42,7 +43,7 @@ import { useSidebar } from '@/contexts/sidebar-context'
 import { StreamingErrorDisplay } from '@/components/streaming-error-display'
 import { DynamicLoadingIndicator } from '@/components/dynamic-loading-indicator'
 import { GuestLimitDialog } from '@/components/guest-limit-dialog'
-import { ChatgptConnectAnnouncementModal } from '@/components/chatgpt-connect-announcement-modal'
+import { CHATGPT_CONNECT_ANNOUNCEMENT_SEEN_KEY } from '@/components/chatgpt-connect-announcement-storage'
 import {
   HUB_BRIEFING_ACTION_EVENT,
   HUB_BRIEFING_ACTION_PARAM,
@@ -53,13 +54,87 @@ import { useChatStore } from '@/hooks/use-chat-store'
 import { useMiniPlayerStore, formatTime } from '@/lib/stores/useMiniPlayerStore'
 import type { Attachment } from '@/types/attachment'
 import { getEnabledMCPConfigs } from '@/lib/mcp-config'
+import { CHAT_COMPOSER_INPUT_ID, createChatInputStore } from '@/lib/stores/chat-input-store'
+import { readPreHydrationValue } from '@/lib/hydration-safe'
+
+// Rarely-opened, client-only overlays: loaded on first open instead of with the chat route.
+const loadHub = () => import('@/components/hub/hub')
+const Hub = dynamic(loadHub, { ssr: false })
+const OnboardingDialog = dynamic(
+  () => import('@/components/onboarding-dialog').then(mod => mod.OnboardingDialog),
+  { ssr: false }
+)
+const ChatgptConnectAnnouncementModal = dynamic(
+  () =>
+    import('@/components/chatgpt-connect-announcement-modal').then(
+      mod => mod.ChatgptConnectAnnouncementModal
+    ),
+  { ssr: false }
+)
 
 type Message = LegacyMessage
 
+/**
+ * Message shape held in `useChat` state. Some flows (VTOP credential retry) inject legacy
+ * `content` / `toolInvocations` fields alongside the AI SDK `parts`.
+ */
 type MutableAppMessage = AppUIMessage & {
   content?: string
-  toolInvocations?: any[]
+  toolInvocations?: LegacyToolInvocation[]
 }
+
+/** `beforeinstallprompt` event (not in lib.dom). */
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
+}
+
+/** The tool call that triggered a VTOP credentials prompt. */
+interface VtopOriginalToolCall {
+  toolCallId?: string
+  args?: Record<string, unknown>
+  result?: unknown
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
+const readString = (value: unknown): string | undefined =>
+  typeof value === 'string' ? value : undefined
+
+const isBeforeInstallPromptEvent = (event: Event): event is BeforeInstallPromptEvent =>
+  'prompt' in event && typeof event.prompt === 'function'
+
+/** `detail` of a CustomEvent as an untyped record, or null for other events. */
+const customEventDetail = (event: Event): Record<string, unknown> | null => {
+  const detail: unknown = event instanceof CustomEvent ? event.detail : undefined
+  return isRecord(detail) ? detail : null
+}
+
+const MESSAGE_ROLES: ReadonlySet<string> = new Set(['system', 'user', 'assistant'])
+
+/** Shallow check for a UI message persisted to localStorage by this component. */
+const isStoredUiMessage = (value: unknown): value is MutableAppMessage =>
+  isRecord(value) &&
+  typeof value.id === 'string' &&
+  typeof value.role === 'string' &&
+  MESSAGE_ROLES.has(value.role) &&
+  Array.isArray(value.parts)
+
+/** Legacy (AI SDK v4) `tool-invocation` part, which may still exist on stored messages. */
+interface LegacyToolInvocationPart {
+  type: 'tool-invocation'
+  toolInvocation: { toolCallId?: string; [key: string]: unknown }
+}
+
+const isLegacyToolInvocationPart = (part: unknown): part is LegacyToolInvocationPart =>
+  isRecord(part) && part.type === 'tool-invocation' && isRecord(part.toolInvocation)
+
+/** Converts a legacy message to the mutable UI shape kept in `useChat` state (legacy fields included). */
+const legacyToMutableMessage = (message: LegacyMessage): MutableAppMessage => ({
+  ...message,
+  parts: message.parts ?? [],
+})
 
 interface ChatSummaryResponse {
   title?: string
@@ -95,18 +170,24 @@ const useViewportHeight = () => {
     }
 
     const handleVisualViewportChange = () => setVh()
+    let orientationTimeoutId: ReturnType<typeof setTimeout> | undefined
+    const handleOrientationChange = () => {
+      clearTimeout(orientationTimeoutId)
+      orientationTimeoutId = setTimeout(setVh, 50)
+    }
 
     setVh()
     window.addEventListener('resize', setVh, { passive: true })
-    window.addEventListener('orientationchange', () => setTimeout(setVh, 50), { passive: true }) // Reduced from 100ms to 50ms
+    window.addEventListener('orientationchange', handleOrientationChange, { passive: true })
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', handleVisualViewportChange)
     }
 
     return () => {
       clearTimeout(timeoutId)
+      clearTimeout(orientationTimeoutId)
       window.removeEventListener('resize', setVh)
-      window.removeEventListener('orientationchange', () => setTimeout(setVh, 50)) // Updated to match the above
+      window.removeEventListener('orientationchange', handleOrientationChange)
       if (window.visualViewport) {
         window.visualViewport.removeEventListener('resize', handleVisualViewportChange)
       }
@@ -116,31 +197,52 @@ const useViewportHeight = () => {
   return mainRef
 }
 
-import { MemoryWithId } from '@/hooks/use-memories'
 import {
-  legacyMessageToUiMessage,
+  cachedUiMessagesToLegacyMessages,
   legacyMessagesToUiMessages,
   uiMessageToLegacyMessage,
-  uiMessagesToLegacyMessages,
   type LegacyMessage,
+  type LegacyToolInvocation,
   type AppUIMessage,
 } from '@/lib/ai-message-conversion'
 
 const getLegacyMessageText = (message: LegacyMessage | null | undefined): string =>
   message?.content ?? ''
 
-function memoryToMessage(memory: MemoryWithId): Message {
-  return {
-    id: memory.id,
-    content: memory.content,
-    role: 'system',
-    createdAt: memory.createdAt,
-    metadata: {
-      memory: true,
-      importance: memory.importance,
-      tags: memory.tags,
-    },
+type ConversationTurn = { role: 'user' | 'assistant'; content: string }
+
+const toConversationHistory = (messages: LegacyMessage[]): ConversationTurn[] =>
+  messages.flatMap(m =>
+    m.role === 'user' || m.role === 'assistant'
+      ? [{ role: m.role, content: typeof m.content === 'string' ? m.content : '' }]
+      : []
+  )
+
+/** Whether a message is shown in the transcript (assistant messages with only hidden tools are not). */
+const isTranscriptMessage = (msg: LegacyMessage): boolean => {
+  if (msg.role === 'assistant') {
+    const toolInvocations = msg.toolInvocations ?? []
+    if (
+      (!msg.content || msg.content.trim() === '') &&
+      toolInvocations.some(t => t.toolName === 'knowledgeBase')
+    ) {
+      return toolInvocations.some(
+        t =>
+          t.toolName === 'knowledgeBase' &&
+          t.state === 'result' &&
+          isRecord(t.result) &&
+          Boolean(t.result.chunks)
+      )
+    }
+
+    if ((!msg.content || msg.content.trim() === '') && toolInvocations.length > 0) {
+      const hasVisibleToolCalls = toolInvocations.some(
+        t => t.toolName !== 'knowledgeBase' && t.toolName !== 'saveMemory'
+      )
+      return hasVisibleToolCalls
+    }
   }
+  return true
 }
 
 const EMPTY_HUB_STATE: PersonalHubState = {
@@ -149,7 +251,8 @@ const EMPTY_HUB_STATE: PersonalHubState = {
   lastSyncedAt: null,
 }
 
-const HUB_COMMAND_LOOKUP = new Set<HubVTOPCommand>(HUB_COMMANDS)
+const HUB_COMMAND_LOOKUP: ReadonlySet<string> = new Set<HubVTOPCommand>(HUB_COMMANDS)
+const isHubCommand = (value: string): value is HubVTOPCommand => HUB_COMMAND_LOOKUP.has(value)
 
 const areHubActionsEqual = (a?: HubActionHandlers, b?: HubActionHandlers) => {
   if (a === b) return true
@@ -183,7 +286,13 @@ function PureChatInterfaceComponent({
   hubActions,
   chatTitle,
 }: ChatInterfaceProps) {
-  const [input, setInput] = useState('')
+  // Composer text lives in a per-instance store (subscribed by MultimodalInput) so typing doesn't
+  // re-render this whole tree; read it imperatively via `inputStore.getState().input`.
+  // Seed from the server-rendered composer so text typed before hydration survives.
+  const [inputStore] = useState(() =>
+    createChatInputStore(readPreHydrationValue(CHAT_COMPOSER_INPUT_ID))
+  )
+  const setInput = useStore(inputStore, state => state.setInput)
   const showFullChat = useChatStore(state => state.showFullChat)
   const setShowFullChat = useChatStore(state => state.setShowFullChat)
   const selectedTool = useChatStore(state => state.selectedTool)
@@ -220,11 +329,11 @@ function PureChatInterfaceComponent({
   const [isZoomed, setIsZoomed] = useState(false)
   const [showFollowUpSuggestions, setShowFollowUpSuggestions] = useState(false)
   const [lastAssistantMessage, setLastAssistantMessage] = useState<string>('')
-  const [userPreferences, setUserPreferences] = useState<any>({ followUpSuggestions: true })
+  const [userPreferences, setUserPreferences] = useState<UserPreferences>({ followUpSuggestions: true })
   const [chatCreatedEventDispatched, setChatCreatedEventDispatched] = useState(false)
-  const [maximizedArtifact, setMaximizedArtifact] = useState<any>(null)
+  const [maximizedArtifact, setMaximizedArtifact] = useState<MaximizedItem | null>(null)
   const [isAtBottom, setIsAtBottom] = useState(true)
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [canInstall, setCanInstall] = useState(false)
   const [isInstalled, setIsInstalled] = useState(false)
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
@@ -262,7 +371,6 @@ function PureChatInterfaceComponent({
   const { data: session } = useSession()
   const isGuest = !session?.user
   const shareableChatId = !isGuest ? currentChatIdRef.current || persistedChatId : undefined
-  const memory = useMemory()
   const { showOnboarding, closeOnboarding } = useOnboarding()
   const fallbackTitle = useMemo(
     () => chatTitle || extractTitleFromContent(initialMessages[0]?.content || 'shared chat'),
@@ -282,11 +390,11 @@ function PureChatInterfaceComponent({
   } | null>(null)
 
   useEffect(() => {
-    const onBeforeInstallPrompt = (e: any) => {
+    const onBeforeInstallPrompt = (e: Event) => {
       try {
         e.preventDefault()
       } catch {}
-      setDeferredPrompt(e)
+      setDeferredPrompt(isBeforeInstallPromptEvent(e) ? e : null)
       setCanInstall(true)
     }
 
@@ -296,24 +404,24 @@ function PureChatInterfaceComponent({
       setDeferredPrompt(null)
     }
 
-    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener)
-    window.addEventListener('appinstalled', onAppInstalled as EventListener)
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt)
+    window.addEventListener('appinstalled', onAppInstalled)
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt as EventListener)
-      window.removeEventListener('appinstalled', onAppInstalled as EventListener)
+      window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt)
+      window.removeEventListener('appinstalled', onAppInstalled)
     }
   }, [])
 
   useEffect(() => {
     const handleShare = (event: Event) => {
-      const detail = (event as CustomEvent<{ text?: string }>).detail
-      if (!detail?.text) return
+      const text = readString(customEventDetail(event)?.text)
+      if (!text) return
       setShowFullChat(true)
-      setInput(detail.text)
+      setInput(text)
     }
-    window.addEventListener('hubShareToChat', handleShare as EventListener)
-    return () => window.removeEventListener('hubShareToChat', handleShare as EventListener)
+    window.addEventListener('hubShareToChat', handleShare)
+    return () => window.removeEventListener('hubShareToChat', handleShare)
   }, [])
 
   useEffect(() => {
@@ -342,15 +450,17 @@ function PureChatInterfaceComponent({
   useEffect(() => {
     if (typeof window === 'undefined') return
     const handleTitleUpdate = (event: Event) => {
-      const detail = (event as CustomEvent<{ chatId?: string; title?: string }>).detail
-      if (!detail?.title) return
-      const targetChatId = detail.chatId || currentChatIdRef.current || resolvedChatId
+      const detail = customEventDetail(event)
+      const title = readString(detail?.title)
+      if (!title) return
+      const detailChatId = readString(detail?.chatId)
+      const targetChatId = detailChatId || currentChatIdRef.current || resolvedChatId
       if (!targetChatId) return
-      if (detail.chatId && detail.chatId !== currentChatIdRef.current) return
-      setCurrentChatTitle(detail.title)
+      if (detailChatId && detailChatId !== currentChatIdRef.current) return
+      setCurrentChatTitle(title)
     }
-    window.addEventListener('chatTitleUpdated', handleTitleUpdate as EventListener)
-    return () => window.removeEventListener('chatTitleUpdated', handleTitleUpdate as EventListener)
+    window.addEventListener('chatTitleUpdated', handleTitleUpdate)
+    return () => window.removeEventListener('chatTitleUpdated', handleTitleUpdate)
   }, [resolvedChatId])
 
   useEffect(() => {
@@ -382,8 +492,8 @@ function PureChatInterfaceComponent({
     const shouldOpen = trigger === HUB_BRIEFING_TRIGGER_VALUE || Boolean(actionValue)
     if (!shouldOpen) return
     setHubOpen(true)
-    if (actionValue && HUB_COMMAND_LOOKUP.has(actionValue as HubVTOPCommand)) {
-      setPendingBriefingAction(actionValue as HubVTOPCommand)
+    if (actionValue && isHubCommand(actionValue)) {
+      setPendingBriefingAction(actionValue)
     }
     const params = new URLSearchParams(searchParams.toString())
     params.delete(HUB_BRIEFING_TRIGGER_PARAM)
@@ -395,15 +505,26 @@ function PureChatInterfaceComponent({
 
   useEffect(() => {
     if (!pendingBriefingAction || !hubOpen) return
-    const timeout = window.setTimeout(() => {
-      window.dispatchEvent(
-        new CustomEvent(HUB_BRIEFING_ACTION_EVENT, {
-          detail: { command: pendingBriefingAction },
-        })
-      )
-      setPendingBriefingAction(null)
-    }, 400)
-    return () => window.clearTimeout(timeout)
+    let cancelled = false
+    let timeout: number | undefined
+    // The hub is lazy-loaded: start the delay once its chunk is in, as when it was bundled here.
+    loadHub()
+      .catch(() => undefined)
+      .then(() => {
+        if (cancelled) return
+        timeout = window.setTimeout(() => {
+          window.dispatchEvent(
+            new CustomEvent(HUB_BRIEFING_ACTION_EVENT, {
+              detail: { command: pendingBriefingAction },
+            })
+          )
+          setPendingBriefingAction(null)
+        }, 400)
+      })
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeout)
+    }
   }, [pendingBriefingAction, hubOpen])
 
   const handleInstallClick = async () => {
@@ -426,14 +547,18 @@ function PureChatInterfaceComponent({
   }
 
   useEffect(() => {
-    const onDisclaimer = (e: any) => {
-      const d = e?.detail
+    const onDisclaimer = (e: Event) => {
+      const d = customEventDetail(e)
       if (!d) return
-      setVtopDisclaimer({ toolCallId: d.toolCallId, command: d.command, message: d.message })
+      setVtopDisclaimer({
+        toolCallId: readString(d.toolCallId) ?? '',
+        command: readString(d.command) ?? '',
+        message: readString(d.message) ?? '',
+      })
     }
-    window.addEventListener('vtopCredentialsDisclaimer', onDisclaimer as EventListener)
+    window.addEventListener('vtopCredentialsDisclaimer', onDisclaimer)
     return () =>
-      window.removeEventListener('vtopCredentialsDisclaimer', onDisclaimer as EventListener)
+      window.removeEventListener('vtopCredentialsDisclaimer', onDisclaimer)
   }, [])
 
   useEffect(() => {
@@ -517,7 +642,7 @@ function PureChatInterfaceComponent({
   }
 
   const chatTransport = useMemo(() => {
-    return new DefaultChatTransport<AppUIMessage>({
+    return new DefaultChatTransport<MutableAppMessage>({
       api: isGuest ? '/api/guest-chat' : '/api/chat',
       credentials: 'same-origin',
       prepareSendMessagesRequest: ({ messages: outgoingMessages, body, ...rest }) => {
@@ -583,7 +708,7 @@ function PureChatInterfaceComponent({
     status,
     resumeStream,
     clearError,
-  } = useChat<AppUIMessage>({
+  } = useChat<MutableAppMessage>({
     id: resolvedChatId,
     messages: initialUiMessages,
     experimental_throttle: 100,
@@ -592,9 +717,11 @@ function PureChatInterfaceComponent({
     onFinish: ({ message }) => {
       autoRetryRef.current = 0
       const currentChatId = currentChatIdRef.current
-      const metadata = (message.metadata || {}) as Record<string, any>
+      const metadata: Record<string, unknown> = message.metadata || {}
+      const metadataChatIdRaw = readString(metadata.chatId)
+      const metadataChatTitle = readString(metadata.chatTitle)
 
-      const metadataChatId = (metadata.chatId as string) || resolvedChatId
+      const metadataChatId = metadataChatIdRaw || resolvedChatId
       const metadataChatPath =
         typeof metadata.chatPath === 'string' && metadata.chatPath.length > 0
           ? metadata.chatPath
@@ -605,19 +732,19 @@ function PureChatInterfaceComponent({
       const shouldNavigate =
         Boolean(metadataChatPath) && metadataChatPath !== pathname && !chatCreatedEventDispatched
 
-      if (metadataChatId && shouldNavigate) {
+      if (metadataChatId && metadataChatPath && shouldNavigate) {
         setOptimisticChatId(metadataChatId)
         fallbackChatIdRef.current = metadataChatId
         currentChatIdRef.current = metadataChatId
         setChatCreatedEventDispatched(true)
-        const targetPath = metadataChatPath!
+        const targetPath = metadataChatPath
         router.push(targetPath)
         window.history.replaceState({}, '', targetPath)
         window.dispatchEvent(
           new CustomEvent('newChatCreated', {
             detail: {
               id: metadataChatId,
-              title: (metadata as any).chatTitle || extractTitleFromContent(messages[0]?.content || 'New Chat'),
+              title: metadataChatTitle || extractTitleFromContent(messages[0]?.content || 'New Chat'),
               path: targetPath,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
@@ -640,11 +767,11 @@ function PureChatInterfaceComponent({
           }
         }
       }
-      if ((currentChatId || metadata.chatId) && isFirstMessageInNewChat) {
+      if ((currentChatId || metadataChatIdRaw) && isFirstMessageInNewChat) {
         setIsFirstMessageInNewChat(false)
-        const targetChatId = currentChatId || metadata.chatId
+        const targetChatId = currentChatId || metadataChatIdRaw
         if (targetChatId) {
-          const newTitle = metadata.chatTitle || 'New Chat'
+          const newTitle = metadataChatTitle || 'New Chat'
           window.dispatchEvent(
             new CustomEvent('chatTitleUpdated', {
               detail: { chatId: targetChatId, title: newTitle },
@@ -690,8 +817,8 @@ function PureChatInterfaceComponent({
     },
   onError: err => {
       const errorMessage = err.message || err.toString()
-      const hasResponseBody = typeof err === 'object' && err !== null && 'responseBody' in err
-      const responseBody = hasResponseBody ? (err as any).responseBody : ''
+      const responseBody: unknown =
+        typeof err === 'object' && err !== null && 'responseBody' in err ? err.responseBody : ''
       const bodyString = typeof responseBody === 'string' ? responseBody : ''
 
       if (shouldAutoRetryStreamError(errorMessage, bodyString)) {
@@ -760,7 +887,9 @@ function PureChatInterfaceComponent({
     },
   })
 
-  const messages = useMemo(() => uiMessagesToLegacyMessages(uiMessages), [uiMessages])
+  // Per-message cached conversion: unchanged UI messages keep their legacy object, so only the
+  // streaming message gets a new object each throttled tick and memoized bubbles skip the rest.
+  const messages = useMemo(() => cachedUiMessagesToLegacyMessages(uiMessages), [uiMessages])
 
   useEffect(() => {
     const lastUser = [...uiMessages].reverse().find(m => m.role === 'user')
@@ -771,14 +900,13 @@ function PureChatInterfaceComponent({
     }
   }, [uiMessages])
 
-  const recentMessages = useMemo(
-    () =>
-      messages
-        .filter(m => m.role === 'user' || m.role === 'assistant')
-        .slice(-6)
-        .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content ?? '' })),
-    [messages]
-  )
+  // The composer only needs recent messages when an autocomplete request fires; read them lazily
+  // through a stable getter so streaming ticks don't re-render the input.
+  const messagesRef = useRef(messages)
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
+  const getRecentMessages = useCallback(() => toConversationHistory(messagesRef.current).slice(-6), [])
 
   const guestMessagesRemaining = Math.max(0, GUEST_MESSAGE_LIMIT - guestTotalUserMessages)
 
@@ -807,14 +935,21 @@ function PureChatInterfaceComponent({
     try {
       const stored = window.localStorage.getItem(GUEST_STORAGE_KEY)
       if (stored) {
-        const parsed = JSON.parse(stored)
-        if (parsed?.chatId) {
-          setOptimisticChatId(parsed.chatId)
-          fallbackChatIdRef.current = parsed.chatId
-          currentChatIdRef.current = parsed.chatId
+        const parsedJson: unknown = JSON.parse(stored)
+        const parsed = isRecord(parsedJson) ? parsedJson : null
+        const storedChatId = readString(parsed?.chatId)
+        if (storedChatId) {
+          setOptimisticChatId(storedChatId)
+          fallbackChatIdRef.current = storedChatId
+          currentChatIdRef.current = storedChatId
         }
-        if (Array.isArray(parsed?.messages) && parsed.messages.length > 0) {
-          setUiMessages(parsed.messages)
+        const storedMessages = parsed?.messages
+        if (
+          Array.isArray(storedMessages) &&
+          storedMessages.length > 0 &&
+          storedMessages.every(isStoredUiMessage)
+        ) {
+          setUiMessages(storedMessages)
           setShowFullChat(true)
         }
         if (typeof parsed?.userMessageCount === 'number') {
@@ -864,8 +999,9 @@ function PureChatInterfaceComponent({
     const stored = window.localStorage.getItem(GUEST_STORAGE_KEY)
     if (!stored || guestImportingRef.current) return
     try {
-      const parsed = JSON.parse(stored)
-      if (!Array.isArray(parsed?.messages) || parsed.messages.length === 0) {
+      const parsedJson: unknown = JSON.parse(stored)
+      const parsed = isRecord(parsedJson) ? parsedJson : null
+      if (!parsed || !Array.isArray(parsed.messages) || parsed.messages.length === 0) {
         window.localStorage.removeItem(GUEST_STORAGE_KEY)
         return
       }
@@ -878,10 +1014,11 @@ function PureChatInterfaceComponent({
             body: JSON.stringify({ chatId: parsed.chatId, messages: parsed.messages }),
           })
           if (res.ok) {
-            const data = await res.json() as { chatId: string; path?: string }
+            const dataJson: unknown = await res.json()
+            const data = isRecord(dataJson) ? dataJson : {}
             window.localStorage.removeItem(GUEST_STORAGE_KEY)
             toast.success('moved your guest chat into your account')
-            router.push(data.path || `/chat/${data.chatId}`)
+            router.push(readString(data.path) || `/chat/${readString(data.chatId)}`)
           } else {
             const msg = await res.text()
             console.warn('Guest import skipped', res.status, msg)
@@ -901,22 +1038,11 @@ function PureChatInterfaceComponent({
     }
   }, [session?.user?.id, router, isGuest])
 
-  const setMessages = useCallback(
-    (next: Message[] | ((prev: Message[]) => Message[])) => {
-      setUiMessages(prevUi => {
-        const prevLegacy = uiMessagesToLegacyMessages(prevUi)
-        const resolved = typeof next === 'function' ? next(prevLegacy) : next
-        return legacyMessagesToUiMessages(resolved)
-      })
-    },
-    [setUiMessages]
-  )
-
   const isLoading = status === 'submitted' || status === 'streaming'
 
   useAutoResume({
     autoResume: autoResume ?? true,
-    initialMessages,
+    initialMessages: initialUiMessages,
     resumeStream,
     setMessages: setUiMessages,
   })
@@ -927,7 +1053,7 @@ function PureChatInterfaceComponent({
     scrollContainerRef.current = contentRef.current?.parentElement ?? null
   })
   const { scrollToBottom: optimizedScrollToBottom } = useOptimizedScroll(
-    scrollContainerRef as React.RefObject<HTMLElement | null>
+    scrollContainerRef
   )
 
   const scrollToBottom = useCallback(() => {
@@ -1038,7 +1164,7 @@ function PureChatInterfaceComponent({
 
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null
+      const target = e.target instanceof HTMLElement ? e.target : null
       const isTypingField =
         target &&
         (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
@@ -1054,9 +1180,9 @@ function PureChatInterfaceComponent({
       }
 
       if (e.key === 'Escape') {
-        const active = document.activeElement as HTMLElement | null
-        if (active && active.tagName === 'TEXTAREA') {
-          ;(active as HTMLTextAreaElement).blur()
+        const active = document.activeElement
+        if (active instanceof HTMLTextAreaElement) {
+          active.blur()
         }
       }
     }
@@ -1078,7 +1204,7 @@ function PureChatInterfaceComponent({
   }, [isInitialRender, isMobile])
 
   useEffect(() => {
-    if (!isInitialRender && messages.length > 0 && messages[messages.length - 1].role === 'user') {
+    if (!isInitialRender && messages.length > 0 && messages.at(-1)?.role === 'user') {
       throttledScrollToBottom()
     }
   }, [messages, isLoading, isInitialRender, throttledScrollToBottom])
@@ -1107,6 +1233,7 @@ function PureChatInterfaceComponent({
         observer.disconnect()
       }
     }
+    return undefined
   }, [isLoading, isInitialRender, throttledScrollToBottom, autoScrollEnabled])
 
   useEffect(() => {
@@ -1117,13 +1244,14 @@ function PureChatInterfaceComponent({
 
       return () => clearTimeout(timeoutId)
     }
+    return undefined
   }, [messages.length, isMobile, isInitialRender, throttledScrollToBottom, autoScrollEnabled])
 
   useEffect(() => {
     if (error) {
       const errorMessage = error.message || error.toString()
-      const hasResponseBody = typeof error === 'object' && error !== null && 'responseBody' in error
-      const responseBody = hasResponseBody ? (error as any).responseBody : ''
+      const responseBody: unknown =
+        typeof error === 'object' && error !== null && 'responseBody' in error ? error.responseBody : ''
       const bodyString = typeof responseBody === 'string' ? responseBody : ''
 
       if (shouldAutoRetryStreamError(errorMessage, bodyString)) {
@@ -1150,10 +1278,6 @@ function PureChatInterfaceComponent({
       }
 
       const isRateLimit = checkForRateLimitError(error)
-      try {
-        // eslint-disable-next-line no-console
-        console.debug('[Chat] error effect - isRateLimit:', isRateLimit, 'error:', error)
-      } catch {}
       if (isRateLimit) return
     }
   }, [error, checkForRateLimitError])
@@ -1171,18 +1295,20 @@ function PureChatInterfaceComponent({
       const limited = incoming.slice(0, remaining)
 
       // Create uploading placeholders for each file
-      const uploadingFiles = limited.map((file, i) => ({
-        id: `uploading-${Date.now()}-${i}`,
-        name: file.name,
-        contentType: file.type || 'application/octet-stream',
+      const uploads = limited.map((file, i) => ({
+        file,
+        placeholder: {
+          id: `uploading-${Date.now()}-${i}`,
+          name: file.name,
+          contentType: file.type || 'application/octet-stream',
+        },
       }))
-      setUploadingAttachments(uploadingFiles)
+      setUploadingAttachments(uploads.map(upload => upload.placeholder))
 
       try {
         const uploaded: Attachment[] = []
-        for (let i = 0; i < limited.length; i++) {
-          const file = limited[i]
-          const uploadId = uploadingFiles[i].id
+        for (const { file, placeholder } of uploads) {
+          const uploadId = placeholder.id
           const sizeMb = file.size / (1024 * 1024)
           if (sizeMb > 25) {
             toast.error(`${file.name} is too large (max 25MB)`, { position: 'top-center' })
@@ -1193,13 +1319,19 @@ function PureChatInterfaceComponent({
           formData.append('file', file)
           const res = await fetch('/api/files/upload', { method: 'POST', body: formData })
           if (!res.ok) {
-            const err = await res.json().catch(() => ({ error: undefined })) as { error?: string }
-            toast.error(err.error || `Failed to upload ${file.name}`)
+            const errJson: unknown = await res.json().catch(() => ({ error: undefined }))
+            const errText = isRecord(errJson) ? readString(errJson.error) : undefined
+            toast.error(errText || `Failed to upload ${file.name}`)
             setUploadingAttachments(prev => prev.filter(u => u.id !== uploadId))
             continue
           }
-          const data = (await res.json()) as { url: string; name?: string; contentType: string }
-          uploaded.push({ url: data.url, name: data.name || file.name, contentType: data.contentType })
+          const dataJson: unknown = await res.json()
+          const data = isRecord(dataJson) ? dataJson : {}
+          uploaded.push({
+            url: readString(data.url) ?? '',
+            name: readString(data.name) || file.name,
+            contentType: readString(data.contentType) ?? '',
+          })
           // Remove this file from uploading state
           setUploadingAttachments(prev => prev.filter(u => u.id !== uploadId))
         }
@@ -1224,7 +1356,7 @@ function PureChatInterfaceComponent({
     const urlRegex = /https?:[^\s)]+/gi
     const matches = text.match(urlRegex) || []
     return matches
-      .map(rawUrl => {
+      .flatMap((rawUrl): Attachment[] => {
         const url = rawUrl.replace(/[\]\)]$/, '') // trim trailing bracket/paren
         const lower = url.toLowerCase()
         const isPdf = lower.endsWith('.pdf')
@@ -1233,7 +1365,7 @@ function PureChatInterfaceComponent({
         const isWebp = lower.endsWith('.webp')
         const isGif = lower.endsWith('.gif')
         const isImage = isPng || isJpg || isWebp || isGif
-        if (!isPdf && !isImage) return null
+        if (!isPdf && !isImage) return []
         const contentType = isPdf
           ? 'application/pdf'
           : isPng
@@ -1244,15 +1376,14 @@ function PureChatInterfaceComponent({
                 ? 'image/webp'
                 : 'image/gif'
         const name = url.split('/').pop() || (isPdf ? 'document.pdf' : 'image')
-        return { url, name, contentType }
+        return [{ url, name, contentType }]
       })
-      .filter(Boolean) as Attachment[]
   }, [])
 
   const handleFormSubmit = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault()
-      const trimmed = input.trim()
+      const trimmed = inputStore.getState().input.trim()
       if (!trimmed && !quotedText) return
       if (uploadingAttachments.length > 0) {
         toast.info('hold on — files are still uploading')
@@ -1279,14 +1410,14 @@ function PureChatInterfaceComponent({
       setHasUserInitiatedConversation(true)
 
       try {
-        const parts: any[] = []
+        const parts: MutableAppMessage['parts'] = []
         const linkAttachments = extractLinkAttachments(trimmed)
         const allAttachments = [...attachments, ...linkAttachments]
 
         if (allAttachments.length) {
           parts.push(
             ...allAttachments.map(att => ({
-              type: 'file',
+              type: 'file' as const,
               url: att.url,
               mediaType: att.contentType,
               ...(att.name ? { filename: att.name } : {}),
@@ -1309,7 +1440,7 @@ function PureChatInterfaceComponent({
         await sendMessage({
           role: 'user',
           parts,
-        } as any)
+        })
         if (isGuest) {
           setGuestTotalUserMessages(prev => prev + 1)
         }
@@ -1319,7 +1450,11 @@ function PureChatInterfaceComponent({
       }
     },
     [
-      input,
+      inputStore,
+      setInput,
+      quotedText,
+      extractLinkAttachments,
+      setShowFullChat,
       showFullChat,
       clearRateLimitError,
       setShowFollowUpSuggestions,
@@ -1383,9 +1518,12 @@ function PureChatInterfaceComponent({
     ]
   )
 
-  const handleToolSelection = (toolId: string) => {
-    setSelectedTool(toolId)
-  }
+  const handleToolSelection = useCallback(
+    (toolId: string) => {
+      setSelectedTool(toolId)
+    },
+    [setSelectedTool]
+  )
 
   const resetToHome = () => {
     if (window.location.pathname !== '/') {
@@ -1410,11 +1548,11 @@ function PureChatInterfaceComponent({
     }
   }
 
-  const createCanvasFromMessage = (content: string) => {
+  const createCanvasFromMessage = useCallback((_content: string) => {
     setHubOpen(true)
-  }
+  }, [])
 
-  const handleLoginClick = () => {
+  const handleLoginClick = useCallback(() => {
     if (isGuest) {
       signIn('google', { callbackUrl: '/' })
       return
@@ -1432,14 +1570,40 @@ function PureChatInterfaceComponent({
         })
       )
     }, 30)
-  }
+  }, [isGuest])
 
-  const handlePlacementSearch = (company: string) => {
-    sendMessage({ text: `Get placement information for ${company}` }).catch(error => {
-      console.error('Error sending placement search request:', error)
-      setErrorMessage('Failed to send message. Please try again.')
-    })
-  }
+  const handlePlacementSearch = useCallback(
+    (company: string) => {
+      sendMessage({ text: `Get placement information for ${company}` }).catch(error => {
+        console.error('Error sending placement search request:', error)
+        setErrorMessage('Failed to send message. Please try again.')
+      })
+    },
+    [sendMessage]
+  )
+
+  const handleClearQuote = useCallback(() => setQuotedText(null), [])
+  const handleDismissFollowUps = useCallback(() => setShowFollowUpSuggestions(false), [])
+  const handleCloseHub = useCallback(() => setHubOpen(false), [])
+
+  // Messages rendered in the transcript: hide assistant messages that only carry hidden tools.
+  const transcriptMessages = useMemo(() => messages.filter(isTranscriptMessage), [messages])
+  const conversationHistory = useMemo(() => toConversationHistory(messages), [messages])
+
+  // Lazy overlays mount on first use and stay mounted so their close animations still play.
+  const [hubMounted, setHubMounted] = useState(false)
+  if (hubOpen && !hubMounted) setHubMounted(true)
+  const [onboardingMounted, setOnboardingMounted] = useState(false)
+  if (showOnboarding && !onboardingMounted) setOnboardingMounted(true)
+  const [chatgptAnnouncementEligible, setChatgptAnnouncementEligible] = useState(false)
+  useEffect(() => {
+    if (isGuest) return
+    try {
+      if (window.localStorage.getItem(CHATGPT_CONNECT_ANNOUNCEMENT_SEEN_KEY) !== 'true') {
+        setChatgptAnnouncementEligible(true)
+      }
+    } catch {}
+  }, [isGuest])
 
   const handleQuote = useCallback((text: string) => {
     setQuotedText(text)
@@ -1449,32 +1613,35 @@ function PureChatInterfaceComponent({
 
   const handleVTOPCredentials = async (
     credentials: { username: string; encryptedPassword: string },
-    originalToolCall: any
+    originalToolCall: VtopOriginalToolCall | null | undefined
   ) => {
     try {
       setVtopLoading(true)
-      const command = originalToolCall?.args?.command || originalToolCall?.result?.command
+      const originalResult = isRecord(originalToolCall?.result) ? originalToolCall.result : undefined
+      const command = readString(originalToolCall?.args?.command) || readString(originalResult?.command)
       if (!command) {
         console.error('No command found in original tool call')
         setVtopLoading(false)
         return
       }
-      const toolCallId = originalToolCall.toolCallId || Date.now().toString()
+      const toolCallId = originalToolCall?.toolCallId || Date.now().toString()
       clearToolResult(toolCallId)
 
-      const updatedMessagesForLoading = messages.map((message: any) => {
+      const updatedMessagesForLoading = messages.map(message => {
         if (message.toolInvocations) {
-          const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
-            if (toolInvocation.toolCallId && toolCallId) {
-              return {
-                ...toolInvocation,
-                toolCallId: toolCallId,
-                state: 'call',
-                result: undefined,
+          const updatedToolInvocations = message.toolInvocations.map(
+            (toolInvocation): LegacyToolInvocation => {
+              if (toolInvocation.toolCallId && toolCallId) {
+                return {
+                  ...toolInvocation,
+                  toolCallId: toolCallId,
+                  state: 'call',
+                  result: undefined,
+                }
               }
+              return toolInvocation
             }
-            return toolInvocation
-          })
+          )
           return {
             ...message,
             toolInvocations: updatedToolInvocations,
@@ -1484,10 +1651,10 @@ function PureChatInterfaceComponent({
       })
 
       setUiMessages(prev => {
-        const base = [...updatedMessagesForLoading]
-        if (base.length === 0) return base
-        const last = base[base.length - 1]
-        const toolInvocationPayload = {
+        const base = updatedMessagesForLoading.map(legacyToMutableMessage)
+        const last = base.at(-1)
+        if (!last) return base
+        const toolInvocationPayload: LegacyToolInvocation = {
           toolCallId: toolCallId,
           toolName: 'queryVTOP',
           args: { command, username: credentials.username },
@@ -1495,7 +1662,7 @@ function PureChatInterfaceComponent({
           result: undefined,
         }
         if (last.role === 'assistant') {
-          const exists = last.toolInvocations?.some((t: any) => t.toolCallId === toolCallId)
+          const exists = last.toolInvocations?.some(t => t.toolCallId === toolCallId)
           if (!exists) {
             base[base.length - 1] = {
               ...last,
@@ -1504,7 +1671,7 @@ function PureChatInterfaceComponent({
           } else {
             base[base.length - 1] = {
               ...last,
-              toolInvocations: last.toolInvocations.map((t: any) =>
+              toolInvocations: (last.toolInvocations ?? []).map(t =>
                 t.toolCallId === toolCallId ? { ...t, state: 'call', result: undefined } : t
               ),
             }
@@ -1514,6 +1681,7 @@ function PureChatInterfaceComponent({
             id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
             role: 'assistant',
             content: '',
+            parts: [],
             toolInvocations: [toolInvocationPayload],
           })
         }
@@ -1533,7 +1701,7 @@ function PureChatInterfaceComponent({
               command,
               username: credentials.username,
               password: credentials.encryptedPassword,
-              ...originalToolCall.args,
+              ...originalToolCall?.args,
             },
             toolCallId: toolCallId,
           },
@@ -1544,7 +1712,7 @@ function PureChatInterfaceComponent({
       if (response.ok) {
         const responseText = await response.text()
 
-        function parseVTOPResponse(raw: string) {
+        function parseVTOPResponse(raw: string): unknown {
           if (!raw || typeof raw !== 'string') {
             throw new Error('Empty response')
           }
@@ -1553,8 +1721,9 @@ function PureChatInterfaceComponent({
 
           if (/^[\[{]/.test(trimmed)) {
             try {
-              return JSON.parse(trimmed)
-            } catch (e: any) {
+              const parsedJson: unknown = JSON.parse(trimmed)
+              return parsedJson
+            } catch {
             }
           }
 
@@ -1574,29 +1743,30 @@ function PureChatInterfaceComponent({
             }
           }
 
-          for (let i = 0; i < lines.length; i++) {
-            const rawLine = lines[i]
-            const line = rawLine // keep exact spacing; payload might be HTML
+          lines.forEach((line, i) => {
+            // keep exact spacing; payload might be HTML
             const m = line.match(frameHeader)
 
             if (m) {
               flush()
-              current = { prefix: m[1], payload: m[2] ?? '' }
-              if (i < lines.length - 1) current.payload += '\n' // preserve newline after first line
+              const frame: Frame = { prefix: m[1] ?? '', payload: m[2] ?? '' }
+              if (i < lines.length - 1) frame.payload += '\n' // preserve newline after first line
+              current = frame
             } else {
               if (current) {
                 current.payload += line + (i < lines.length - 1 ? '\n' : '')
               } else {
               }
             }
-          }
+          })
           flush()
 
-          const safeParseJSON = (s: string) => {
+          const safeParseJSON = (s: string): unknown => {
             const t = s.trim()
             if (!/^[\[{]/.test(t)) throw new Error('Not JSON')
             try {
-              return JSON.parse(t)
+              const parsedJson: unknown = JSON.parse(t)
+              return parsedJson
             } catch (_) {
               const firstBrace = t.indexOf('{')
               const lastBrace = t.lastIndexOf('}')
@@ -1612,15 +1782,17 @@ function PureChatInterfaceComponent({
                   : null
               const candidate = sliceObject ?? sliceArray
               if (!candidate) throw new Error('JSON extract failed')
-              return JSON.parse(candidate)
+              const parsedCandidate: unknown = JSON.parse(candidate)
+              return parsedCandidate
             }
           }
 
-          const decodePossibleJSONString = (s: string) => {
+          const decodePossibleJSONString = (s: string): string => {
             const t = s.trim()
             if (t.startsWith('"') && t.endsWith('"') && !t.includes('\n')) {
               try {
-                return JSON.parse(t) // unescapes \n, \", etc.
+                const decoded: unknown = JSON.parse(t) // unescapes \n, \", etc.
+                if (typeof decoded === 'string') return decoded
               } catch {
               }
             }
@@ -1630,7 +1802,7 @@ function PureChatInterfaceComponent({
             return s
           }
 
-          const toolFrames: any[] = []
+          const toolFrames: unknown[] = []
           const textChunks: string[] = []
 
           for (const f of frames) {
@@ -1650,10 +1822,10 @@ function PureChatInterfaceComponent({
           }
 
           const chosen =
-            [...toolFrames].reverse().find(x => x && typeof x === 'object' && 'result' in x) ??
+            [...toolFrames].reverse().find(x => isRecord(x) && 'result' in x) ??
             [...toolFrames].reverse().find(x => x) // fallback to any 'a' frame
 
-          if (chosen && chosen.result !== undefined) {
+          if (isRecord(chosen) && chosen.result !== undefined) {
             return { result: chosen.result }
           }
           if (chosen) {
@@ -1666,9 +1838,9 @@ function PureChatInterfaceComponent({
           throw new Error('No parsable tool frames found in streaming response')
         }
 
-        let result: any
+        let parsedResponse: unknown
         try {
-          result = parseVTOPResponse(responseText)
+          parsedResponse = parseVTOPResponse(responseText)
         } catch (err) {
           console.error('VTOP parse error. Raw response begins with:', responseText.slice(0, 180))
           console.error(err)
@@ -1676,34 +1848,38 @@ function PureChatInterfaceComponent({
           setVtopLoading(false)
           return
         }
+        const toolResult: unknown = isRecord(parsedResponse) ? parsedResponse.result : undefined
+        const toolResultRecord = isRecord(toolResult) ? toolResult : undefined
 
         if (toolCallId) {
-          updateToolResult(toolCallId, command, result.result)
+          updateToolResult(toolCallId, command, toolResult)
         }
-        const updatedMessages = (uiMessages as MutableAppMessage[]).map(message => {
+        const updatedMessages = uiMessages.map(message => {
           if (message.toolInvocations) {
-            const updatedToolInvocations = message.toolInvocations.map((toolInvocation: any) => {
-              if (toolInvocation.toolCallId && toolInvocation.toolCallId === toolCallId) {
-                return {
-                  ...toolInvocation,
-                  result: result.result,
-                  state: 'result',
+            const updatedToolInvocations = message.toolInvocations.map(
+              (toolInvocation): LegacyToolInvocation => {
+                if (toolInvocation.toolCallId && toolInvocation.toolCallId === toolCallId) {
+                  return {
+                    ...toolInvocation,
+                    result: toolResult,
+                    state: 'result',
+                  }
                 }
+                return toolInvocation
               }
-              return toolInvocation
-            })
+            )
 
             const updatedParts = message.parts
-              ? message.parts.map((part: any) => {
+              ? message.parts.map(part => {
                   if (
-                    part.type === 'tool-invocation' &&
-                    part.toolInvocation?.toolCallId === toolCallId
+                    isLegacyToolInvocationPart(part) &&
+                    part.toolInvocation.toolCallId === toolCallId
                   ) {
                     return {
                       ...part,
                       toolInvocation: {
                         ...part.toolInvocation,
-                        result: result.result,
+                        result: toolResult,
                         state: 'result',
                       },
                     }
@@ -1720,22 +1896,23 @@ function PureChatInterfaceComponent({
           }
           return message
         })
-        setUiMessages([...updatedMessages] as AppUIMessage[])
+        setUiMessages([...updatedMessages])
 
         try {
           const formattedContent =
-            (result.result && (result.result.formatted_content || result.result.summary)) || ''
+            (toolResultRecord &&
+              (readString(toolResultRecord.formatted_content) || readString(toolResultRecord.summary))) ||
+            ''
           if (formattedContent) {
             setUiMessages(prev => {
-              const mutablePrev = prev as MutableAppMessage[]
-              const idx = mutablePrev.findIndex(
+              const idx = prev.findIndex(
                 m =>
                   m.role === 'assistant' &&
-                  m.toolInvocations?.some((t: any) => t.toolCallId === toolCallId)
+                  m.toolInvocations?.some(t => t.toolCallId === toolCallId)
               )
-              if (idx !== -1) {
-                const clone = mutablePrev.map(message => ({ ...message })) as MutableAppMessage[]
-                const target = clone[idx]
+              const target = prev[idx]
+              if (idx !== -1 && target) {
+                const clone = prev.map(message => ({ ...message }))
                 const existingContent = target.content || ''
                 if (existingContent.trim() === '') {
                   clone[idx] = { ...target, content: formattedContent }
@@ -1745,23 +1922,24 @@ function PureChatInterfaceComponent({
                     content: `${existingContent}\n\n${formattedContent}`.trim(),
                   }
                 }
-                return clone as AppUIMessage[]
+                return clone
               }
-              const newAssistantMsg = {
+              const newAssistantMsg: MutableAppMessage = {
                 id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
                 role: 'assistant',
                 content: formattedContent,
+                parts: [],
                 toolInvocations: [
                   {
                     toolCallId: toolCallId,
                     toolName: 'queryVTOP',
                     args: { command },
-                    result: result.result,
+                    result: toolResult,
                     state: 'result',
                   },
                 ],
-              } as MutableAppMessage
-              return [...mutablePrev, newAssistantMsg] as AppUIMessage[]
+              }
+              return [...prev, newAssistantMsg]
             })
             try {
               setLastAssistantMessage(
@@ -1781,9 +1959,9 @@ function PureChatInterfaceComponent({
         }
 
         if (
-          result.result &&
-          result.result.success !== false &&
-          (result.result.data || result.result.output)
+          toolResultRecord &&
+          toolResultRecord.success !== false &&
+          (toolResultRecord.data || toolResultRecord.output)
         ) {
           if (chatId) {
             setTimeout(async () => {
@@ -1801,9 +1979,11 @@ function PureChatInterfaceComponent({
               }
             }, 500)
           }
-        } else if (result.result && result.result.success === false) {
+        } else if (toolResultRecord && toolResultRecord.success === false) {
           const errorMessage =
-            result.result.error || result.result.message || 'Unknown error occurred'
+            readString(toolResultRecord.error) ||
+            readString(toolResultRecord.message) ||
+            'Unknown error occurred'
           if (
             errorMessage.includes('Invalid LoginId/Password') ||
             errorMessage.includes('Login failed')
@@ -1849,6 +2029,7 @@ function PureChatInterfaceComponent({
         clearTimeout(timeoutId)
       }
     }
+    return undefined
   }, [persistedChatId])
 
   useEffect(() => {
@@ -1871,9 +2052,12 @@ function PureChatInterfaceComponent({
       if (lastMessage && lastMessage.toolInvocations) {
         for (const tool of lastMessage.toolInvocations) {
           if (tool.toolName === 'queryVTOP' && tool.state === 'result' && tool.toolCallId) {
-            const toolResult = (tool as any).result
+            const toolResult: unknown = tool.result
             if (toolResult) {
-              const command = toolResult.command || tool.args?.command || 'unknown'
+              const command =
+                readString(isRecord(toolResult) ? toolResult.command : undefined) ||
+                readString(tool.args?.command) ||
+                'unknown'
               updateToolResult(tool.toolCallId, command, toolResult)
             }
           }
@@ -1891,15 +2075,13 @@ function PureChatInterfaceComponent({
         onCredentialsSubmit={handleVTOPCredentials}
       >
         {/*<UpsellBanner /> */}
-        <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
-        {!isGuest && (
+        {onboardingMounted && <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />}
+        {!isGuest && hubMounted && (
           <Hub
             isOpen={hubOpen}
             actions={hubActionHandlers}
             onLink={handleLoginClick}
-            onClose={() => {
-              setHubOpen(false)
-            }}
+            onClose={handleCloseHub}
           />
         )}
         <div
@@ -1939,8 +2121,7 @@ function PureChatInterfaceComponent({
                 className="w-full max-w-3xl"
               >
                 <MultimodalInput
-                  input={input}
-                  setInput={setInput}
+                  inputStore={inputStore}
                   handleSubmit={handleFormSubmit}
                   isLoading={isLoading}
                   lastPrompt={lastUserMessage}
@@ -1949,7 +2130,7 @@ function PureChatInterfaceComponent({
                   selectedTool={selectedTool || 'general'}
                   placeholder={isGuest ? 'ask anything...' : 'ask anything...'}
                   disabled={isGuest && showGuestLimitModal}
-                  recentMessages={recentMessages}
+                  getRecentMessages={getRecentMessages}
                   attachments={attachments}
                   onSelectFiles={!isGuest ? handleAttachmentsSelected : undefined}
                   onRemoveAttachment={handleRemoveAttachment}
@@ -1959,7 +2140,7 @@ function PureChatInterfaceComponent({
                   onThinkHarderChange={setThinkHarder}
                   isSignedIn={!isGuest}
                   quotedText={quotedText}
-                  onClearQuote={() => setQuotedText(null)}
+                  onClearQuote={handleClearQuote}
                 />
                 {isGuest && (
                   <p className="mt-2 text-center text-xs text-amber-200/80">
@@ -2126,15 +2307,13 @@ function PureChatInterfaceComponent({
         onCredentialsSubmit={handleVTOPCredentials}
       >
         {/* <UpsellBanner /> */}
-        <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />
-        {!isGuest && (
+        {onboardingMounted && <OnboardingDialog isOpen={showOnboarding} onClose={closeOnboarding} />}
+        {!isGuest && hubMounted && (
           <Hub
             isOpen={hubOpen}
             actions={hubActionHandlers}
             onLink={handleLoginClick}
-            onClose={() => {
-              setHubOpen(false)
-            }}
+            onClose={handleCloseHub}
           />
         )}
         <div
@@ -2277,32 +2456,7 @@ function PureChatInterfaceComponent({
                 <RateLimitErrorDisplay />{' '}
 
                 <VirtualizedMessages
-                  messages={messages.filter((msg: any) => {
-                    if (msg.role === 'assistant') {
-                      if (
-                        (!msg.content || (msg.content as string).trim() === '') &&
-                        msg.toolInvocations?.some((t: any) => t.toolName === 'knowledgeBase')
-                      ) {
-                        return msg.toolInvocations.some(
-                          (t: any) =>
-                            t.toolName === 'knowledgeBase' &&
-                            t.state === 'result' &&
-                            t.result?.chunks
-                        )
-                      }
-
-                      if (
-                        (!msg.content || (msg.content as string).trim() === '') &&
-                        msg.toolInvocations?.length > 0
-                      ) {
-                        const hasVisibleToolCalls = msg.toolInvocations.some(
-                          (t: any) => t.toolName !== 'knowledgeBase' && t.toolName !== 'saveMemory'
-                        )
-                        return hasVisibleToolCalls
-                      }
-                    }
-                    return true
-                  })}
+                  messages={transcriptMessages}
                   chatId={persistedChatId ?? resolvedChatId}
                   isLoading={isLoading}
                   onCreateCanvas={createCanvasFromMessage}
@@ -2314,14 +2468,9 @@ function PureChatInterfaceComponent({
                   showFollowUpSuggestions={showFollowUpSuggestions && userPreferences.followUpSuggestions !== false}
                   lastAssistantMessage={lastAssistantMessage}
                   lastUserMessage={lastUserMessage}
-                  conversationHistory={messages
-                    .filter((m) => m.role === 'user' || m.role === 'assistant')
-                    .map((m) => ({
-                      role: m.role as 'user' | 'assistant',
-                      content: typeof m.content === 'string' ? m.content : '',
-                    }))}
+                  conversationHistory={conversationHistory}
                   onSuggestionClick={handleSuggestedQuestion}
-                  onDismissSuggestions={() => setShowFollowUpSuggestions(false)}
+                  onDismissSuggestions={handleDismissFollowUps}
                   isMobile={isMobile}
                   onQuote={handleQuote}
                 />
@@ -2363,21 +2512,15 @@ function PureChatInterfaceComponent({
                   <FollowUpSuggestions
                     lastAssistantMessage={lastAssistantMessage}
                     lastUserMessage={lastUserMessage}
-                    conversationHistory={messages
-                      .filter((m) => m.role === 'user' || m.role === 'assistant')
-                      .map((m) => ({
-                        role: m.role as 'user' | 'assistant',
-                        content: typeof m.content === 'string' ? m.content : '',
-                      }))}
+                    conversationHistory={conversationHistory}
                     isVisible={showFollowUpSuggestions && !isLoading}
                     onSuggestionClick={handleSuggestedQuestion}
-                    onDismiss={() => setShowFollowUpSuggestions(false)}
+                    onDismiss={handleDismissFollowUps}
                     isMobile={true}
                   />
                 )}
                 <MultimodalInput
-                  input={input}
-                  setInput={setInput}
+                  inputStore={inputStore}
                   handleSubmit={handleFormSubmit}
                   isLoading={isLoading}
                   lastPrompt={lastUserMessage}
@@ -2386,7 +2529,7 @@ function PureChatInterfaceComponent({
                   stop={stop}
                   onToolSelect={handleToolSelection}
                   selectedTool={selectedTool || 'general'}
-                  recentMessages={recentMessages}
+                  getRecentMessages={getRecentMessages}
                   disabled={isGuest && showGuestLimitModal}
                   attachments={attachments}
                   onSelectFiles={!isGuest ? handleAttachmentsSelected : undefined}
@@ -2397,7 +2540,7 @@ function PureChatInterfaceComponent({
                   onThinkHarderChange={setThinkHarder}
                   isSignedIn={!isGuest}
                   quotedText={quotedText}
-                  onClearQuote={() => setQuotedText(null)}
+                  onClearQuote={handleClearQuote}
                 />
                 {isGuest && (
                   <p className="px-2 sm:px-4 pt-2 text-center text-[11px] text-amber-200/80">
@@ -2444,7 +2587,7 @@ function PureChatInterfaceComponent({
   return (
     <HubStoreProvider initialState={hubSeed}>
       {hubLayout}
-      <ChatgptConnectAnnouncementModal enabled={!isGuest} />
+      {chatgptAnnouncementEligible && <ChatgptConnectAnnouncementModal enabled={!isGuest} />}
       <GuestLimitDialog
         open={showGuestLimitModal}
         onClose={() => setShowGuestLimitModal(false)}

@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { memoryService, memorySettingsSchema } from '@/lib/memory/memory-service'
-import * as z from 'zod/v3';
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return new NextResponse('Unauthorized', { status: 401 })
     }
@@ -21,20 +19,21 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return new NextResponse('Unauthorized', { status: 401 })
     }
 
     const body = await request.json()
-    const data = memorySettingsSchema.parse(body)
+    const parsed = memorySettingsSchema.safeParse(body)
+    if (!parsed.success) {
+      return new NextResponse(JSON.stringify(parsed.error.issues), { status: 400 })
+    }
+    const data = parsed.data
 
     const settings = await memoryService.updateMemorySettings(session.user.id, data)
     return NextResponse.json(settings)
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify(error.issues), { status: 400 })
-    }
     console.error('Failed to update memory settings:', error)
     return new NextResponse('Internal server error', { status: 500 })
   }

@@ -3,11 +3,21 @@
 import type { UseChatHelpers } from '@ai-sdk/react'
 import { useEffect, useRef } from 'react'
 import { useDataStream } from '@/components/data-stream-provider'
-import type { AppUIMessage, LegacyMessage } from '@/lib/ai-message-conversion'
+import type { AppUIMessage } from '@/lib/ai-message-conversion'
+import { isRecord } from '@/lib/json'
+
+const MESSAGE_ROLES: ReadonlySet<unknown> = new Set(['system', 'user', 'assistant'])
+
+/** Shallow structural check for a UI message replayed by the stream-resume endpoint. */
+const isAppUIMessage = (value: unknown): value is AppUIMessage =>
+  isRecord(value) &&
+  typeof value.id === 'string' &&
+  MESSAGE_ROLES.has(value.role) &&
+  Array.isArray(value.parts)
 
 export type UseAutoResumeParams = {
   autoResume: boolean
-  initialMessages: Array<AppUIMessage | LegacyMessage>
+  initialMessages: AppUIMessage[]
   resumeStream: UseChatHelpers<AppUIMessage>['resumeStream']
   setMessages?: UseChatHelpers<AppUIMessage>['setMessages']
 }
@@ -49,15 +59,11 @@ export function useAutoResume({
 
     const dataPart = dataStream[0]
 
-    if ((dataPart as { type?: string })?.type === 'data-appendMessage') {
+    if (dataPart?.type === 'data-appendMessage') {
       try {
-        const message = JSON.parse(
-          (dataPart as { data: string }).data
-        ) as AppUIMessage
-        setMessages([
-          ...(initialMessages as AppUIMessage[]),
-          message,
-        ])
+        const message: unknown = JSON.parse(String(dataPart.data))
+        if (!isAppUIMessage(message)) throw new Error('appended message has an unexpected shape')
+        setMessages([...initialMessages, message])
       } catch (err) {
         console.warn('useAutoResume: failed to parse appended message', err)
       }

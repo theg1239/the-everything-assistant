@@ -10,10 +10,31 @@
  *   ts-node scripts/sanitize-existing-tool-invocations.ts --dry-run  # Preview changes without applying
  */
 
-import { PrismaClient } from '@prisma/client'
-import { sanitizeToolInvocations } from '../lib/sanitize-tools'
+import { prisma } from '../lib/prisma'
+import { isRecord } from '../lib/json'
+import { isQueryVtopInvocation, sanitizeToolInvocations } from '../lib/sanitize-tools'
 
-const prisma = new PrismaClient()
+const hasCredentials = (args: unknown): boolean =>
+  isRecord(args) && Boolean(args.password || args.username)
+
+// Check if this tool invocation is a queryVTOP call that still carries credentials
+function containsVtopCredentials(tool: unknown): boolean {
+  if (!isRecord(tool) || !isQueryVtopInvocation(tool)) return false
+  // Check args
+  if (hasCredentials(tool.args)) return true
+  // Check function.arguments
+  const fnArgs = isRecord(tool.function) ? tool.function.arguments : undefined
+  if (fnArgs) {
+    try {
+      const args: unknown = typeof fnArgs === 'string' ? JSON.parse(fnArgs) : fnArgs
+      if (hasCredentials(args)) return true
+    } catch {
+      // Ignore parsing errors
+    }
+  }
+  // Check result.args
+  return isRecord(tool.result) && hasCredentials(tool.result.args)
+}
 
 async function sanitizeExistingData() {
   const isDryRun = process.argv.includes('--dry-run')
@@ -48,33 +69,7 @@ async function sanitizeExistingData() {
       }
 
       // Check if this message contains queryVTOP calls with credentials
-      const containsCredentials = message.tool_invocations.some((tool: any) => {
-        if (tool.toolName === 'queryVTOP' || tool.function?.name === 'queryVTOP') {
-          // Check args
-          if (tool.args && (tool.args.password || tool.args.username)) {
-            return true
-          }
-          // Check function.arguments
-          if (tool.function?.arguments) {
-            try {
-              const args =
-                typeof tool.function.arguments === 'string'
-                  ? JSON.parse(tool.function.arguments)
-                  : tool.function.arguments
-              if (args.password || args.username) {
-                return true
-              }
-            } catch (e) {
-              // Ignore parsing errors
-            }
-          }
-          // Check result.args
-          if (tool.result?.args && (tool.result.args.password || tool.result.args.username)) {
-            return true
-          }
-        }
-        return false
-      })
+      const containsCredentials = message.tool_invocations.some(containsVtopCredentials)
 
       if (containsCredentials) {
         needsSanitizationCount++

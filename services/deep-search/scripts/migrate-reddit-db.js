@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') })
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env'), quiet: true })
 
 const { Pool } = require('pg')
 

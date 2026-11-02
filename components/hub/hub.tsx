@@ -59,8 +59,8 @@ export default function Hub({
     const handleLinked = () => {
       setForceClose(false)
     }
-    window.addEventListener('vtopCredentialsLinked', handleLinked as EventListener)
-    return () => window.removeEventListener('vtopCredentialsLinked', handleLinked as EventListener)
+    window.addEventListener('vtopCredentialsLinked', handleLinked)
+    return () => window.removeEventListener('vtopCredentialsLinked', handleLinked)
   }, [])
   useEffect(() => {
     setMounted(true)

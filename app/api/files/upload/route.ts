@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { nanoid } from 'nanoid'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 
 const MAX_FILE_MB = 25
 const ALLOWED_PREFIXES = ['image/', 'application/pdf']
@@ -40,7 +39,7 @@ const buildPublicUrl = (bucket: string, key: string) => {
 }
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions)
+  const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -56,9 +55,9 @@ export async function POST(request: Request) {
 
   try {
     const formData = await request.formData()
-    const file = formData.get('file') as File | null
+    const file = formData.get('file')
 
-    if (!file) {
+    if (!(file instanceof File)) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
     }
 
@@ -75,7 +74,7 @@ export async function POST(request: Request) {
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
 
-    const safeName = (file as File).name?.replace(/[^a-zA-Z0-9._-]/g, '_') || 'upload'
+    const safeName = file.name?.replace(/[^a-zA-Z0-9._-]/g, '_') || 'upload'
     const key = `${session.user.id}/${Date.now()}-${nanoid(8)}-${safeName}`
 
     const client = getS3Client()

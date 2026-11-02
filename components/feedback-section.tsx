@@ -10,6 +10,7 @@ import { Loader2, MessageSquarePlus, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { motion } from 'framer-motion'
 import { readJson } from '@/lib/http'
+import { errorMessage } from '@/components/narrow'
 import type { JsonValue } from '@/types/tools'
 
 interface KnowledgeChunk {
@@ -52,9 +53,9 @@ export function FeedbackSection() {
         .join('\n\n---\n\n')
       setAllChunksText(combinedText)
       setView('contribute')
-    } catch (err: any) {
-      setError(err.message)
-      toast.error(err.message)
+    } catch (err) {
+      setError(errorMessage(err) ?? null)
+      toast.error(errorMessage(err))
     } finally {
       setIsLoading(false)
     }
@@ -163,8 +164,8 @@ export function FeedbackSection() {
       })
       setEditedChunks({})
       setView('menu')
-    } catch (err: any) {
-      toast.error(err.message)
+    } catch (err) {
+      toast.error(errorMessage(err))
     } finally {
       setIsSubmitting(false)
     }
@@ -197,8 +198,8 @@ export function FeedbackSection() {
       setFeedbackTitle('')
       setFeedbackBody('')
       setView('menu')
-    } catch (err: any) {
-      toast.error(err.message)
+    } catch (err) {
+      toast.error(errorMessage(err))
     } finally {
       setIsSubmitting(false)
     }

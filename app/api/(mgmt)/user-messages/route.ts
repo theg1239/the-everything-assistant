@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import type { Prisma } from '@/prisma/generated/client'
 
 export async function GET(request: NextRequest) {
   try {
-    const session = (await getServerSession(authOptions as any)) as any
+    const session = await auth()
 
     const adminEmail = process.env.RATE_LIMIT_ADMIN_EMAIL
     if (!adminEmail) {
@@ -27,8 +27,10 @@ export async function GET(request: NextRequest) {
     const chats = await prisma.chat.findMany({ where: { userId }, select: { id: true } })
     const chatIds = chats.map(c => c.id)
 
-    const where: any = { chatId: { in: chatIds } }
-    if (q) where.content = { contains: q, mode: 'insensitive' }
+    const where: Prisma.MessageWhereInput = {
+      chatId: { in: chatIds },
+      ...(q ? { content: { contains: q, mode: 'insensitive' } } : {}),
+    }
 
     const messages = await prisma.message.findMany({
       where,
@@ -47,10 +49,13 @@ export async function GET(request: NextRequest) {
     }))
 
     return NextResponse.json({ messages: mapped })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Mgmt user-messages fetch failed:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch user messages', message: error?.message || 'Unknown error' },
+      {
+        error: 'Failed to fetch user messages',
+        message: error instanceof Error && error.message ? error.message : 'Unknown error',
+      },
       { status: 500 }
     )
   }

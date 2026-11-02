@@ -1,4 +1,4 @@
-require('dotenv').config()
+require('dotenv').config({ quiet: true })
 
 const { Pool } = require('pg')
 const { embed } = require('ai')
@@ -663,11 +663,7 @@ class KnowledgeBase {
       const { embedding } = await embed({
         model: this.embeddingModel,
         value,
-        providerOptions: {
-          openai: {
-            dimensions: this.embeddingDim,
-          },
-        },
+        dimensions: this.embeddingDim,
       })
 
       if (!Array.isArray(embedding) || embedding.length !== this.embeddingDim) {

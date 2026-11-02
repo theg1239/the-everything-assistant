@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { pickPaperFields, readPaperSearchResponse } from '../../paper-search-response'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -37,6 +38,22 @@ interface RawPaper extends Partial<Paper> {
   name?: string
   paperName?: string
 }
+
+const RAW_PAPER_FIELDS = [
+  'title',
+  'link',
+  'source',
+  'snippet',
+  'examType',
+  'year',
+  'url',
+  'downloadUrl',
+  'paperUrl',
+  'description',
+  'metadata',
+  'name',
+  'paperName',
+] as const satisfies readonly (keyof RawPaper)[]
 
 interface CourseClientProps {
   courseCode: string
@@ -102,10 +119,10 @@ export default function CourseClient({ courseCode, courseName }: CourseClientPro
         `/api/public/papers/search?q=${encodeURIComponent(courseCode)}&limit=20`
       )
       if (!response.ok) throw new Error('Failed to fetch papers')
-      const data = (await response.json()) as { papers?: RawPaper[] }
+      const data = readPaperSearchResponse(await response.json())
 
       const enrichedPapers = (data.papers || [])
-        .map(normalizePaper)
+        .map(paper => normalizePaper(pickPaperFields(paper, RAW_PAPER_FIELDS)))
         .filter(p => p.link && p.title)
 
       setPapers(enrichedPapers)
@@ -129,19 +146,17 @@ export default function CourseClient({ courseCode, courseName }: CourseClientPro
   }
 
   // Group papers by exam type
-  const groupedPapers = papers.reduce(
-    (acc, paper) => {
-      const type = paper.examType || 'Other'
-      if (!acc[type]) acc[type] = []
-      acc[type].push(paper)
-      return acc
-    },
-    {} as Record<string, Paper[]>
-  )
+  const groupedPapers = new Map<string, Paper[]>()
+  for (const paper of papers) {
+    const type = paper.examType || 'Other'
+    const group = groupedPapers.get(type)
+    if (group) group.push(paper)
+    else groupedPapers.set(type, [paper])
+  }
 
   const examTypeOrder = ['FAT', 'CAT 2', 'CAT 1', 'CAT', 'Quiz', 'Mid-term', 'Exam', 'Other']
-  const sortedTypes = Object.keys(groupedPapers).sort(
-    (a, b) => examTypeOrder.indexOf(a) - examTypeOrder.indexOf(b)
+  const sortedGroups = Array.from(groupedPapers.entries()).sort(
+    ([a], [b]) => examTypeOrder.indexOf(a) - examTypeOrder.indexOf(b)
   )
 
   return (
@@ -208,7 +223,7 @@ export default function CourseClient({ courseCode, courseName }: CourseClientPro
               </div>
               <div className="flex items-center gap-2 rounded-full bg-zinc-800/50 px-4 py-2 text-sm ring-1 ring-white/5">
                 <Calendar className="h-4 w-4 text-amber-400" />
-                <span className="text-zinc-300">{sortedTypes.length} exam types</span>
+                <span className="text-zinc-300">{sortedGroups.length} exam types</span>
               </div>
             </div>
           )}
@@ -310,7 +325,7 @@ export default function CourseClient({ courseCode, courseName }: CourseClientPro
             transition={{ delay: 0.3 }}
             className="space-y-6"
           >
-            {sortedTypes.map((examType, typeIndex) => (
+            {sortedGroups.map(([examType, typePapers], typeIndex) => (
               <motion.div
                 key={examType}
                 initial={{ opacity: 0, y: 20 }}
@@ -334,14 +349,14 @@ export default function CourseClient({ courseCode, courseName }: CourseClientPro
                     {examType}
                   </span>
                   <span className="text-sm text-zinc-500">
-                    {groupedPapers[examType].length} paper
-                    {groupedPapers[examType].length !== 1 ? 's' : ''}
+                    {typePapers.length} paper
+                    {typePapers.length !== 1 ? 's' : ''}
                   </span>
                 </div>
 
                 {/* Papers */}
                 <div className="divide-y divide-white/5">
-                  {groupedPapers[examType].map((paper, idx) => (
+                  {typePapers.map((paper, idx) => (
                     <a
                       key={idx}
                       href={paper.link}

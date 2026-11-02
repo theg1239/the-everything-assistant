@@ -1,9 +1,8 @@
 'use client'
 
-import React, { memo, useEffect, useState } from 'react'
+import React, { memo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Loader2,
   Sparkles,
   AlertCircle,
   FileSearch,
@@ -22,22 +21,65 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ArtifactDisplay, type ArtifactDisplayProps } from './artifact-display'
+import dynamic from 'next/dynamic'
+import type { ArtifactDisplayProps } from './artifact-display'
 import { PaperSearchProgress } from './paper-search-progress'
 import { useVTOP } from '../contexts/vtop-context'
 import { useMediaQuery } from '@/hooks/use-media-query'
+import { asRecord, readString, readText, type UnknownRecord } from '@/components/narrow'
+import { useHydrationSafeField } from '@/lib/hydration-safe'
+
+/** Artifact renderers (~140 KB) load only when a tool result renders one; SSR stays on for history. */
+const ArtifactDisplay = dynamic(() => import('./artifact-display').then(mod => mod.ArtifactDisplay))
+
+/**
+ * A tool invocation as rendered by this component. `result` is the raw, unvalidated tool output;
+ * `function` / `id` / `type` are legacy fields some persisted invocations may still carry.
+ */
+export type ToolCallInput = {
+  toolName?: string
+  toolCallId?: string
+  id?: string
+  type?: string
+  args?: Record<string, unknown>
+  result?: unknown
+  state?: string
+  function?: unknown
+}
 
 interface ToolCallDisplayProps {
-  toolCalls: any[]
+  toolCalls: ToolCallInput[]
   onLoginClick?: () => void
   onPlacementSearch?: (company: string) => void
-  maximizedItem?: any
-  setMaximizedItem?: (item: any) => void
+  maximizedItem?: ArtifactDisplayProps['maximizedItem']
+  setMaximizedItem?: ArtifactDisplayProps['setMaximizedItem']
 }
 
 const VTOP_ARTIFACT_BLACKLIST = new Set(['exams', 'exam-schedule'])
 
-const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) => {
+/** Reads `command` from a legacy `function.arguments` payload (object or JSON string). */
+const commandFromFunctionArgs = (fn: unknown): unknown => {
+  const args = asRecord(fn)?.arguments
+  if (typeof args === 'string') {
+    try {
+      return asRecord(JSON.parse(args || '{}'))?.command
+    } catch {
+      return null
+    }
+  }
+  return asRecord(args)?.command
+}
+
+const resolveToolCommand = (tool: ToolCallInput, fallback: string): string =>
+  readString(asRecord(tool.result)?.command) ||
+  readString(tool.args?.command) ||
+  readString(commandFromFunctionArgs(tool.function)) ||
+  fallback
+
+const getArtifactConfig = (rawResult: unknown, toolName?: string, toolCallId?: string) => {
+  // Non-object results have no readable fields; they still flow through as `data` below.
+  const result: UnknownRecord = asRecord(rawResult) ?? {}
+
   if (toolName === 'resolveCourseCode') {
     return null
   }
@@ -49,19 +91,20 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
   if (toolName === 'queryVTOP') {
     if (result.data || result.output) {
       const vtopData = result.data || result.output
-      const command = result.command || 'unknown'
+      const command = readString(result.command) || 'unknown'
 
       if (VTOP_ARTIFACT_BLACKLIST.has(command)) {
         return null
       }
 
-      let parsedData = vtopData
+      let parsedData: unknown = vtopData
       if (typeof vtopData === 'string') {
         if (vtopData.includes('│') && vtopData.includes('──')) {
           const lines = vtopData.split('\n').filter(line => line.trim() && !line.includes('──'))
+          const headerLine = lines[0]
 
-          if (lines.length > 1) {
-            const firstLine = lines[0]
+          if (lines.length > 1 && headerLine !== undefined) {
+            const firstLine = headerLine
               .split('│')
               .map(h => h.trim())
               .filter(h => h)
@@ -70,17 +113,17 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
               firstLine[0] === 'FIELD' &&
               firstLine[1] === 'INFORMATION'
             ) {
-              const profileData: any = {}
+              const profileData: Record<string, string> = {}
               const dataLines = lines.slice(1)
 
               dataLines.forEach(line => {
-                const cells = line
+                const [nameCell, valueCell] = line
                   .split('│')
                   .map(c => c.trim())
                   .filter(c => c)
-                if (cells.length >= 2) {
-                  const fieldName = cells[0].replace(/\[32m|\[0m/g, '')
-                  const fieldValue = cells[1].replace(/\[32m|\[0m/g, '')
+                if (nameCell !== undefined && valueCell !== undefined) {
+                  const fieldName = nameCell.replace(/\[32m|\[0m/g, '')
+                  const fieldValue = valueCell.replace(/\[32m|\[0m/g, '')
                   profileData[fieldName] = fieldValue
                 }
               })
@@ -92,13 +135,12 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
                   .split('│')
                   .map(c => c.trim())
                   .filter(c => c)
-                const row: any = {}
+                const row: Record<string, string> = {}
                 const indexOffset = cells.length - headers.length
                 headers.forEach((header, index) => {
                   const cell = cells[index + (indexOffset > 0 ? 1 : 0)]
                   if (cell !== undefined) {
-                    let cellValue = cells[index + (indexOffset > 0 ? 1 : 0)]
-                    cellValue = cellValue
+                    const cellValue = cell
                       .replace(/\[32m|\[0m|\[31m|\[33m|\[34m|\[35m|\[36m|\[37m/g, '')
                       .replace(/[^\x20-\x7E]/g, ' ')
                       .replace(/\s+/g, ' ')
@@ -110,8 +152,8 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
               })
               let processedRows = rows
               if (command === 'attendance' && Array.isArray(processedRows)) {
-                processedRows = processedRows.map((row: any) => {
-                  const clean = (val: any) => (typeof val === 'string' ? val.trim() : val)
+                processedRows = processedRows.map(row => {
+                  const clean = (val: string | undefined) => val?.trim()
                   return {
                     SUBJECT:
                       clean(row.SUBJECT) ||
@@ -206,7 +248,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     }
 
     if (result.success === false || result.error) {
-      let errorMessage = result.error || result.message || ''
+      let errorMessage = readString(result.error) || readString(result.message) || ''
 
       if (
         !errorMessage ||
@@ -283,12 +325,13 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
         return commandMap[cmd] || cmd.charAt(0).toUpperCase() + cmd.slice(1).replace(/-/g, ' ')
       }
 
+      const errorCommand = readString(result.command) || 'data'
       return {
         type: 'vtop-data' as const,
-        title: `VTOP ${formatCommandName(result.command || 'data')} Data`,
+        title: `VTOP ${formatCommandName(errorCommand)} Data`,
         icon: <GraduationCap className="h-5 w-5 text-blue-500" />,
         data: {
-          command: result.command || 'data',
+          command: errorCommand,
           requiresCredentials: false,
           success: false,
           error: errorMessage,
@@ -302,12 +345,13 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     return null
   }
 
-  if (result.papers && result.papers.length > 0) {
+  if (Array.isArray(result.papers) && result.papers.length > 0) {
     return {
       type: 'papers' as const,
-      title: `${result.papers.length} Past Papers${result.courseCode ? ` (${result.courseCode})` : ''}`,
+      title: `${result.papers.length} Past Papers${result.courseCode ? ` (${String(result.courseCode)})` : ''}`,
       icon: <GraduationCap className="h-5 w-5 text-blue-400" />,
-      data: result.papers.map((paper: any) => {
+      data: result.papers.map((item: unknown) => {
+        const paper = asRecord(item) ?? {}
         const link = paper.link || paper.url || paper.pdfUrl || paper.downloadUrl || paper.final_url
         const examType = paper.examType || paper.exam || paper.paperType
         const year = paper.year || paper.academicYear
@@ -333,7 +377,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     result.url ||
     (result.success && result.filename)
   ) {
-    const normalizeFilename = (fn: string | null) => {
+    const normalizeFilename = (fn: unknown) => {
       if (!fn || typeof fn !== 'string') return { code: null, title: null }
       const base = fn.split('/').pop() || fn
       const withoutExt = base.replace(/\.[^.]+$/, '')
@@ -344,7 +388,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
       return { code: codePart || null, title }
     }
 
-    const makeEntryFrom = (entry: any) => {
+    const makeEntryFrom = (entry: UnknownRecord) => {
       const filename = entry.filename || entry.file || null
       const url =
         entry.url ||
@@ -355,25 +399,24 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
       return { filename, url, code, title, raw: entry }
     }
 
-    let entries: any[] = []
-    if (result) {
-      if (result.ambiguous && Array.isArray(result.matches)) {
-        entries = result.matches.map((m: any) => makeEntryFrom(m))
-      } else if (Array.isArray(result.syllabi)) {
-        entries = result.syllabi.map((s: any) => makeEntryFrom(s))
-      } else if (result.filename || result.url || result.code || result.title) {
-        entries = [makeEntryFrom(result)]
-      } else if (result.data && result.data.filename) {
-        entries = [makeEntryFrom(result.data)]
-      }
+    const resultData = asRecord(result.data)
+    let entries: ReturnType<typeof makeEntryFrom>[] = []
+    if (result.ambiguous && Array.isArray(result.matches)) {
+      entries = result.matches.map((m: unknown) => makeEntryFrom(asRecord(m) ?? {}))
+    } else if (Array.isArray(result.syllabi)) {
+      entries = result.syllabi.map((s: unknown) => makeEntryFrom(asRecord(s) ?? {}))
+    } else if (result.filename || result.url || result.code || result.title) {
+      entries = [makeEntryFrom(result)]
+    } else if (resultData && resultData.filename) {
+      entries = [makeEntryFrom(resultData)]
     }
 
-    const title =
-      entries.length === 1
-        ? entries[0].code && entries[0].title
-          ? `${entries[0].code} — ${entries[0].title}`
-          : `Syllabus: ${entries[0].title || entries[0].filename}`
-        : `${entries.length} Syllabi`
+    const single = entries.length === 1 ? entries[0] : undefined
+    const title = single
+      ? single.code && single.title
+        ? `${String(single.code)} — ${String(single.title)}`
+        : `Syllabus: ${String(single.title || single.filename)}`
+      : `${entries.length} Syllabi`
 
     return {
       type: 'syllabi' as const,
@@ -389,18 +432,21 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
       type: 'papers' as const,
       title:
         `${result.rankedPapers.length} Ranked Past Papers` +
-        (result.courseCode ? ` (${result.courseCode})` : ''),
+        (result.courseCode ? ` (${String(result.courseCode)})` : ''),
       icon: <GraduationCap className="h-5 w-5 text-indigo-400" />,
-      data: result.rankedPapers.map((p: any, i: number) => ({
-        ...p,
-        rank: i + 1,
-        link: p.url,
-        matchedQuestions: p.matchedQuestions || [],
-        score: p.score,
-        indexId: result.indexId,
-        courseCode: result.courseCode,
-        runId: result.runId || result.run_id,
-      })),
+      data: result.rankedPapers.map((item: unknown, i: number) => {
+        const p = asRecord(item) ?? {}
+        return {
+          ...p,
+          rank: i + 1,
+          link: p.url,
+          matchedQuestions: p.matchedQuestions || [],
+          score: p.score,
+          indexId: result.indexId,
+          courseCode: result.courseCode,
+          runId: result.runId || result.run_id,
+        }
+      }),
       source: 'Smart Agent',
     }
   }
@@ -440,7 +486,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     if (result && result.success) {
       return {
         type: 'question-patterns' as const,
-        title: `Most Repeated Question Patterns${result.courseCode ? ` (${result.courseCode}${result.examType ? ` • ${result.examType}` : ''})` : ''}`,
+        title: `Most Repeated Question Patterns${result.courseCode ? ` (${String(result.courseCode)}${result.examType ? ` • ${String(result.examType)}` : ''})` : ''}`,
         icon: <TrendingUp className="h-5 w-5 text-indigo-500" />,
         data: result,
         source: 'Analysis Agent',
@@ -469,7 +515,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
           answer: result.answer || result.response || result.summary || result.message,
           sources: result.sources || result.citations || [],
           indexMeta: result.indexMeta || undefined,
-          indexId: result.indexId || (result.indexMeta && result.indexMeta.id) || undefined,
+          indexId: result.indexId || asRecord(result.indexMeta)?.id || undefined,
           question: result.question || undefined,
           debug: result.debug || undefined,
         },
@@ -519,34 +565,36 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     }
   }
 
-  if (result.data && result.data.todayMenu && result.data.messType) {
+  const menuData = asRecord(result.data)
+  if (menuData && menuData.todayMenu && menuData.messType) {
     return {
       type: 'mess-menu' as const,
-      title: `${result.data.messType} - ${result.data.hostelType}`,
+      title: `${String(menuData.messType)} - ${String(menuData.hostelType)}`,
       icon: <UtensilsCrossed className="h-5 w-5 text-orange-400" />,
       data: {
-        hostelType: result.data.hostelType,
-        messType: result.data.messType,
-        todayMenu: result.data.todayMenu,
-        weekMenu: result.data.weekMenu,
-        requestedDate: result.data.requestedDate,
-        actualDate: result.data.actualDate,
-        isExactMatch: result.data.isExactMatch,
-        formattedMenu: result.formattedMenu || result.data.formattedMenu,
+        hostelType: menuData.hostelType,
+        messType: menuData.messType,
+        todayMenu: menuData.todayMenu,
+        weekMenu: menuData.weekMenu,
+        requestedDate: menuData.requestedDate,
+        actualDate: menuData.actualDate,
+        isExactMatch: menuData.isExactMatch,
+        formattedMenu: result.formattedMenu || menuData.formattedMenu,
         message: result.message,
       },
       source: 'MessIt',
     }
   }
 
+  const resultError = readString(result.error)
   if (
     result.success === false &&
     result.error &&
-    (result.error.includes('Menu not available') ||
-      result.error.includes('mess menu') ||
+    (resultError?.includes('Menu not available') ||
+      resultError?.includes('mess menu') ||
       toolName === 'getMensMealPlan' ||
       toolName === 'getWomensMealPlan' ||
-      result.message?.includes('mess menu'))
+      readString(result.message)?.includes('mess menu'))
   ) {
     return {
       type: 'error' as const,
@@ -562,7 +610,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     }
   }
 
-  if (result.faculty && result.faculty.length > 0) {
+  if (Array.isArray(result.faculty) && result.faculty.length > 0) {
     return {
       type: 'faculty' as const,
       title: `${result.faculty.length} Faculty Members`,
@@ -586,7 +634,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     }
   }
 
-  if (result.companies && result.companies.length > 0) {
+  if (Array.isArray(result.companies) && result.companies.length > 0) {
     return {
       type: 'companies' as const,
       title: `${result.companies.length} Companies`,
@@ -620,7 +668,7 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     if (result.success) {
       return {
         type: 'placements' as const,
-        title: `Placement Overview ${result.year ? `(${result.year})` : ''}`,
+        title: `Placement Overview ${result.year ? `(${String(result.year)})` : ''}`,
         icon: <TrendingUp className="h-5 w-5 text-green-500" />,
         data: result,
         source: 'VIT Placements',
@@ -662,9 +710,8 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
       result.options ||
       result.interactiveState)
   ) {
-    const stepName = result.step
-      ? result.step.charAt(0).toUpperCase() + result.step.slice(1)
-      : 'Interactive Workflow'
+    const step = readString(result.step)
+    const stepName = step ? step.charAt(0).toUpperCase() + step.slice(1) : 'Interactive Workflow'
     return {
       type: 'interactive-course-page' as const,
       title: `Course Page - ${stepName}`,
@@ -706,13 +753,13 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
   if (toolName === 'searchRedditKnowledge') {
     if (result.success && result.response) {
       const displayConfidence =
-        result.confidence === 0 && result.sources?.length > 0
+        result.confidence === 0 && Array.isArray(result.sources) && result.sources.length > 0
           ? Math.floor(Math.random() * 21) + 60
           : result.confidence || 0
 
       return {
         type: 'reddit-knowledge' as const,
-        title: `Reddit Knowledge - ${result.totalResults || 0} sources`,
+        title: `Reddit Knowledge - ${String(result.totalResults || 0)} sources`,
         icon: <FileSearch className="h-5 w-5 text-orange-400" />,
         data: {
           response: result.response,
@@ -744,15 +791,15 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
   if (toolName === 'searchRedditWithContext') {
     if (result.success && result.response) {
       const displayConfidence =
-        result.confidence === 0 && result.sources?.length > 0
+        result.confidence === 0 && Array.isArray(result.sources) && result.sources.length > 0
           ? Math.floor(Math.random() * 21) + 60
           : result.confidence || 0
 
       return {
         type: 'reddit-knowledge' as const,
         title: result.isBroadQuery
-          ? `Reddit Trends & Discussions - ${result.totalResults || 0} sources`
-          : `Reddit Knowledge - ${result.totalResults || 0} sources`,
+          ? `Reddit Trends & Discussions - ${String(result.totalResults || 0)} sources`
+          : `Reddit Knowledge - ${String(result.totalResults || 0)} sources`,
         icon: result.isBroadQuery ? (
           <TrendingUp className="h-5 w-5 text-orange-400" />
         ) : (
@@ -824,7 +871,9 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
 
   if (toolName === 'getCampusInfo') {
     if (result.success && result.name) {
-      const description = result.description ? `${result.name}: ${result.description}` : result.name
+      const description = result.description
+        ? `${String(result.name)}: ${String(result.description)}`
+        : result.name
 
       return {
         type: 'campus-info' as const,
@@ -859,39 +908,9 @@ const getArtifactConfig = (result: any, toolName?: string, toolCallId?: string) 
     type: 'general' as const,
     title: 'Search Results',
     icon: <FileSearch className="h-5 w-5 text-slate-400" />,
-    data: result,
+    data: rawResult,
     source: result.source || toolName || 'Search',
   }
-}
-
-const ToolCallLoadingState = ({ toolCalls }: { toolCalls: any[] }) => {
-  const isMobile = useMediaQuery('(max-width: 640px)')
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      className="mt-3"
-    >
-      <Card className="w-full overflow-hidden border-border/50 bg-muted/30">
-        <CardContent className="p-3 sm:p-4">
-          <div className="flex items-center space-x-3">
-            <div className="relative">
-              <Loader2 className="h-5 w-5 text-primary animate-spin" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-foreground break-words">
-                Searching for data...
-              </div>
-
-            </div>
-            <Sparkles className="h-4 w-4 text-muted-foreground" />
-          </div>
-        </CardContent>
-      </Card>
-    </motion.div>
-  )
 }
 
 const ToolCallResultsSummary = ({
@@ -900,14 +919,12 @@ const ToolCallResultsSummary = ({
   onPlacementSearch,
   maximizedItem,
   setMaximizedItem,
-}: {
-  toolCalls: any[]
-  onLoginClick?: () => void
-  onPlacementSearch?: (company: string) => void
-  maximizedItem?: any
-  setMaximizedItem?: (item: any) => void
-}) => {
-  const [companySearch, setCompanySearch] = React.useState('')
+}: ToolCallDisplayProps) => {
+  const {
+    id: companySearchId,
+    value: companySearch,
+    setValue: setCompanySearch,
+  } = useHydrationSafeField()
 
   const handleSearch = () => {
     if (onPlacementSearch && companySearch.trim()) {
@@ -944,22 +961,21 @@ const ToolCallResultsSummary = ({
           config.type === 'interactive-course-page' ||
           config.type === 'reddit-overview' ||
           config.type === 'generated-image' ||
-          ('data' in config &&
-            (config as { data?: unknown }).data !== undefined &&
-            (config as { data?: unknown }).data !== null))
+          ('data' in config && config.data !== undefined && config.data !== null))
     )
 
   const failedTools = enrichedToolCalls.filter(tool => {
-    if (tool.result && tool.result.success === false) {
+    const result = asRecord(tool.result)
+    if (result && result.success === false) {
       if (tool.toolName === 'queryVTOP') {
-        let errorMessage = tool.result.error || tool.result.message || ''
+        let errorMessage = readString(result.error) || readString(result.message) || ''
 
         if (
           !errorMessage ||
           errorMessage === '500' ||
           errorMessage.includes('VTOP request failed: 500')
         ) {
-          const rawData = tool.result.output || tool.result.data || tool.result.message
+          const rawData = result.output || result.data || result.message
           if (typeof rawData === 'string') {
             if (
               rawData.includes('Login failed') ||
@@ -984,7 +1000,7 @@ const ToolCallResultsSummary = ({
           errorMessage = 'Login failed - incorrect username/password'
         }
 
-        const messageField = tool.result.message || ''
+        const messageField = readString(result.message) || ''
         if (
           messageField.includes('Invalid LoginId/Password') ||
           messageField.includes('Login failed or session could not be established')
@@ -1004,7 +1020,7 @@ const ToolCallResultsSummary = ({
           errorMessage.includes('Invalid credentials')
 
         if (isAuthError || isCredentialError) {
-          tool.result.error = errorMessage
+          result.error = errorMessage
           return isAuthError
         }
         return true
@@ -1014,20 +1030,22 @@ const ToolCallResultsSummary = ({
     return false
   })
 
-  const vtopCredentialTools = enrichedToolCalls.filter(
-    tool =>
+  const vtopCredentialTools = enrichedToolCalls.filter(tool => {
+    const result = asRecord(tool.result)
+    return (
       tool.toolName === 'queryVTOP' &&
-      tool.result &&
-      (tool.result.requiresCredentials === true ||
-        (typeof tool.result.error === 'string' &&
-          tool.result.error.includes('VTOP credentials required')))
-  )
+      result &&
+      (result.requiresCredentials === true ||
+        (typeof result.error === 'string' && result.error.includes('VTOP credentials required')))
+    )
+  })
 
   if (artifacts.length === 0 && completedTools.length > 0) {
-    if (failedTools.length > 0) {
-      const firstFailedTool = failedTools[0]
+    const firstFailedTool = failedTools[0]
+    if (firstFailedTool) {
+      const failedResult = asRecord(firstFailedTool.result) ?? {}
       const errorMessage =
-        firstFailedTool.result.error || firstFailedTool.result.message || 'An error occurred'
+        readString(failedResult.error) || readString(failedResult.message) || 'An error occurred'
 
       const isAuthError =
         firstFailedTool.toolName === 'queryVTOP' &&
@@ -1040,10 +1058,7 @@ const ToolCallResultsSummary = ({
           errorMessage.includes('Login failed or session could not be established') ||
           (() => {
             const rawData =
-              firstFailedTool.result.output ||
-              firstFailedTool.result.data ||
-              firstFailedTool.result.message ||
-              ''
+              failedResult.output || failedResult.data || failedResult.message || ''
             return (
               typeof rawData === 'string' &&
               (rawData.includes('Login failed') ||
@@ -1072,19 +1087,18 @@ const ToolCallResultsSummary = ({
                       ? 'Invalid VTOP credentials. Please try logging in again.'
                       : errorMessage}
                   </div>
-                  {firstFailedTool.result.suggestions &&
-                    Array.isArray(firstFailedTool.result.suggestions) &&
-                    firstFailedTool.result.suggestions.length > 0 && (
+                  {Array.isArray(failedResult.suggestions) &&
+                    failedResult.suggestions.length > 0 && (
                       <div className="mt-2 space-y-1">
                         <div className="text-xs font-medium text-muted-foreground">
                           Suggestions:
                         </div>
                         <ul className="text-xs text-muted-foreground space-y-0.5">
-                          {firstFailedTool.result.suggestions.map(
-                            (suggestion: string, index: number) => (
+                          {failedResult.suggestions.map(
+                            (suggestion: unknown, index: number) => (
                               <li key={index} className="flex items-start">
                                 <span className="text-muted-foreground mr-1">•</span>
-                                <span>{suggestion}</span>
+                                <span>{readText(suggestion)}</span>
                               </li>
                             )
                           )}
@@ -1098,7 +1112,7 @@ const ToolCallResultsSummary = ({
                     size="sm"
                     onClick={() => {
                       const command =
-                        firstFailedTool.result.command || firstFailedTool.args?.command || 'data'
+                        failedResult.command || firstFailedTool.args?.command || 'data'
                       const triggerEvent = new CustomEvent('vtopLoginTrigger', {
                         detail: {
                           command,
@@ -1119,16 +1133,10 @@ const ToolCallResultsSummary = ({
       )
     }
 
-    if (vtopCredentialTools.length > 0) {
-      const tool = vtopCredentialTools[0]
-      const command =
-        tool.result.command ||
-        tool.args?.command ||
-        tool.function?.arguments?.command ||
-        (typeof tool.function?.arguments === 'string'
-          ? JSON.parse(tool.function.arguments)?.command
-          : null) ||
-        'data'
+    const credentialTool = vtopCredentialTools[0]
+    if (credentialTool) {
+      const tool = credentialTool
+      const command = resolveToolCommand(tool, 'data')
       const formatCommandName = (cmd: string) => {
         const commandMap: { [key: string]: string } = {
           'class-message': 'Class Message',
@@ -1186,21 +1194,9 @@ const ToolCallResultsSummary = ({
     }
     const hasSuppressedVtopSuccess = completedTools.some(tool => {
       if (tool.toolName !== 'queryVTOP') return false
-      const command =
-        tool.result?.command ||
-        tool.args?.command ||
-        tool.function?.arguments?.command ||
-        (typeof tool.function?.arguments === 'string'
-          ? (() => {
-              try {
-                return JSON.parse(tool.function.arguments || '{}')?.command
-              } catch (error) {
-                return null
-              }
-            })()
-          : null) ||
-        'unknown'
-      return tool.result && tool.result.success !== false && VTOP_ARTIFACT_BLACKLIST.has(command)
+      const command = resolveToolCommand(tool, 'unknown')
+      const result = asRecord(tool.result)
+      return Boolean(tool.result) && result?.success !== false && VTOP_ARTIFACT_BLACKLIST.has(command)
     })
 
     if (hasSuppressedVtopSuccess) {
@@ -1211,13 +1207,13 @@ const ToolCallResultsSummary = ({
       return null
     }
 
-    const statusFor = (tool: any) => {
-      if (tool.state === 'error' || tool.result?.success === false) return { label: 'error', color: 'text-red-500 bg-red-500/10' }
+    const statusFor = (tool: ToolCallInput) => {
+      if (tool.state === 'error' || asRecord(tool.result)?.success === false) return { label: 'error', color: 'text-red-500 bg-red-500/10' }
       if (tool.result) return { label: 'done', color: 'text-green-600 bg-green-600/10' }
       return { label: 'running', color: 'text-amber-500 bg-amber-500/10' }
     }
 
-    const labelFor = (tool: any) => {
+    const labelFor = (tool: ToolCallInput) => {
       const map: Record<string, string> = {
         queryVTOP: 'vtop',
         searchRedditKnowledge: 'reddit search',
@@ -1228,7 +1224,7 @@ const ToolCallResultsSummary = ({
         getCourseInfo: 'course info',
         getFacultyInfo: 'faculty',
       }
-      return map[tool.toolName] || tool.toolName || 'tool'
+      return (tool.toolName && map[tool.toolName]) || tool.toolName || 'tool'
     }
 
     const visible = enrichedToolCalls.filter(
@@ -1245,11 +1241,12 @@ const ToolCallResultsSummary = ({
             <div className="space-y-2">
               {visible.map(tool => {
                 const status = statusFor(tool)
+                const result = asRecord(tool.result)
                 const message =
-                  tool.result?.message ||
-                  tool.result?.summary ||
-                  tool.result?.note ||
-                  tool.result?.error ||
+                  readText(result?.message) ||
+                  readText(result?.summary) ||
+                  readText(result?.note) ||
+                  readText(result?.error) ||
                   ''
                 return (
                   <div
@@ -1296,14 +1293,8 @@ const ToolCallResultsSummary = ({
       {vtopCredentialTools.length > 0 &&
         (() => {
           const tool = vtopCredentialTools[0]
-          const command =
-            tool.result.command ||
-            tool.args?.command ||
-            tool.function?.arguments?.command ||
-            (typeof tool.function?.arguments === 'string'
-              ? JSON.parse(tool.function.arguments || '{}')?.command
-              : null) ||
-            'data'
+          if (!tool) return null
+          const command = resolveToolCommand(tool, 'data')
           const formatCommandName = (cmd: string) => {
             const commandMap: { [key: string]: string } = {
               'class-message': 'Class Message',
@@ -1365,178 +1356,57 @@ const ToolCallResultsSummary = ({
           )
         })()}
       <AnimatePresence>
-        {artifacts.map((artifact, index) => (
-          <motion.div
-            key={`${artifact.type}-${index}`}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-          >
-            {artifact.type === 'papers' &&
-              Array.isArray(artifact.data) &&
-              artifact.data[0]?.runId && (
+        {artifacts.map((artifact, index) => {
+          const paperRunId =
+            artifact.type === 'papers' && Array.isArray(artifact.data)
+              ? readText(asRecord(artifact.data[0])?.runId)
+              : undefined
+          return (
+            <motion.div
+              key={`${artifact.type}-${index}`}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+            >
+              {paperRunId && (
                 <div className="mb-3">
-                  <PaperSearchProgress runId={artifact.data[0].runId} />
+                  <PaperSearchProgress runId={String(paperRunId)} />
                 </div>
               )}
-            {artifact.type === 'placements' && onPlacementSearch && (
-              <div className="mb-4 flex items-center gap-2 px-1">
-                <Input
-                  type="search"
-                  placeholder="Search by company name..."
-                  value={companySearch}
-                  onChange={e => setCompanySearch(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') handleSearch()
-                  }}
-                  className="h-9"
-                />
-                <Button onClick={handleSearch} size="sm">
-                  <Search className="h-4 w-4 sm:mr-2" />
-                  <span className="hidden sm:inline">Search</span>
-                </Button>
-              </div>
-            )}
-            <ArtifactDisplay
-              title={artifact.title}
-              icon={artifact.icon}
-              data={artifact.data}
-              type={artifact.type}
-              className="relative"
-              onLoginClick={onLoginClick}
-              maximizedItem={maximizedItem}
-              setMaximizedItem={setMaximizedItem}
-            />
-          </motion.div>
-        ))}
+              {artifact.type === 'placements' && onPlacementSearch && (
+                <div className="mb-4 flex items-center gap-2 px-1">
+                  <Input
+                    id={companySearchId}
+                    type="search"
+                    placeholder="Search by company name..."
+                    value={companySearch}
+                    onChange={e => setCompanySearch(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleSearch()
+                    }}
+                    className="h-9"
+                  />
+                  <Button onClick={handleSearch} size="sm">
+                    <Search className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Search</span>
+                  </Button>
+                </div>
+              )}
+              <ArtifactDisplay
+                title={artifact.title}
+                icon={artifact.icon}
+                data={artifact.data}
+                type={artifact.type}
+                className="relative"
+                onLoginClick={onLoginClick}
+                maximizedItem={maximizedItem}
+                setMaximizedItem={setMaximizedItem}
+              />
+            </motion.div>
+          )
+        })}
       </AnimatePresence>
     </div>
-  )
-}
-
-const PureToolCallDisplay = ({
-  toolCalls,
-  onLoginClick,
-  onPlacementSearch,
-  maximizedItem,
-  setMaximizedItem,
-}: ToolCallDisplayProps) => {
-  const { getToolResult, version } = useVTOP()
-
-  const filteredToolCalls = (() => {
-    const map = new Map<string, any>()
-    for (const tc of toolCalls) {
-      if (
-        tc.toolName === 'knowledgeBase' ||
-        tc.toolName === 'saveMemory' ||
-        tc.toolName === 'resolveCourseCode' ||
-        tc.toolName === 'musicPlayer' ||
-        (tc.toolName && tc.toolName.startsWith('mcp_')) ||
-        (tc.result && tc.result.hidden)
-      ) {
-        continue
-      }
-      const key = `${tc.toolName}-${tc.toolCallId || tc.id || ''}`
-      const existing = map.get(key)
-      if (!existing || (tc.result && !existing.result)) {
-        map.set(key, tc)
-      }
-    }
-    return Array.from(map.values())
-  })()
-
-  const [retryToolCallId, setRetryToolCallId] = useState<string | null>(null)
-  useEffect(() => {
-    const handler = (e: any) => {
-      if (e.detail && e.detail.toolCallId) {
-        setRetryToolCallId(e.detail.toolCallId)
-      }
-    }
-    window.addEventListener('vtopCredentialsSubmitted', handler)
-    return () => window.removeEventListener('vtopCredentialsSubmitted', handler)
-  }, [])
-
-  const enrichedToolCalls = filteredToolCalls.map(tool => {
-    if (retryToolCallId && tool.toolCallId === retryToolCallId && tool.toolName === 'queryVTOP') {
-      setTimeout(() => setRetryToolCallId(null), 100)
-      return { ...tool, result: undefined, state: 'call' }
-    }
-    if (tool.toolName === 'queryVTOP' && tool.toolCallId) {
-      if (
-        tool.result &&
-        (tool.result.data || tool.result.output || tool.result.success !== undefined)
-      ) {
-        return {
-          ...tool,
-          state: tool.result.success !== false ? 'result' : 'error',
-        }
-      }
-      const contextResult = getToolResult(tool.toolCallId)
-      if (contextResult && contextResult.result) {
-        return {
-          ...tool,
-          result: contextResult.result,
-          state: 'result',
-        }
-      }
-    }
-    return tool
-  })
-
-  const allCompleted = enrichedToolCalls.every(toolCall => {
-    if (!toolCall.result) {
-      return false
-    }
-
-    if (toolCall.state === 'error') {
-      return true
-    }
-
-    if (toolCall.toolName === 'queryVTOP') {
-      const isCredentialRequired =
-        toolCall.result.requiresCredentials === true ||
-        (toolCall.result.error &&
-          (toolCall.result.error.includes('VTOP credentials required') ||
-            toolCall.result.error.includes('credentials') ||
-            toolCall.result.error.includes('Invalid LoginId/Password') ||
-            toolCall.result.error.includes('Login failed')))
-
-      if (isCredentialRequired) {
-        return true
-      }
-
-      return (
-        toolCall.result &&
-        toolCall.state === 'result' &&
-        (toolCall.result.data || toolCall.result.output || toolCall.result.error)
-      )
-    }
-
-    if (
-      toolCall.toolName === 'searchRedditKnowledge' ||
-      toolCall.toolName === 'searchRedditWithContext'
-    ) {
-      return toolCall.result && (toolCall.result.success || toolCall.result.error)
-    }
-
-    const hasValidResult =
-      toolCall.result &&
-      !toolCall.result.requiresCredentials &&
-      (toolCall.state === 'result' || toolCall.state === 'error' || toolCall.type === 'tool-result')
-
-    return hasValidResult
-  })
-
-  if (enrichedToolCalls.length === 0) return null
-
-  return (
-    <ToolCallResultsSummary
-      toolCalls={enrichedToolCalls}
-      onLoginClick={onLoginClick}
-      onPlacementSearch={onPlacementSearch}
-      maximizedItem={maximizedItem}
-      setMaximizedItem={setMaximizedItem}
-    />
   )
 }
 
@@ -1551,7 +1421,7 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
   const { getToolResult, version } = useVTOP()
 
   const filteredToolCalls = (() => {
-    const map = new Map<string, any>()
+    const map = new Map<string, ToolCallInput>()
     for (const tc of toolCalls) {
       // Filter out internal tools and MCP tools (prefixed with mcp_)
       if (
@@ -1560,7 +1430,7 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
         tc.toolName === 'resolveCourseCode' ||
         tc.toolName === 'musicPlayer' ||
         (tc.toolName && tc.toolName.startsWith('mcp_')) ||
-        (tc.result && tc.result.hidden)
+        asRecord(tc.result)?.hidden
       ) {
         continue
       }
@@ -1573,15 +1443,13 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
     return Array.from(map.values())
   })()
 
-  const enrichedToolCalls = filteredToolCalls.map(tool => {
+  const enrichedToolCalls = filteredToolCalls.map((tool): ToolCallInput => {
     if (tool.toolName === 'queryVTOP' && tool.toolCallId) {
-      if (
-        tool.result &&
-        (tool.result.data || tool.result.output || tool.result.success !== undefined)
-      ) {
+      const result = asRecord(tool.result)
+      if (result && (result.data || result.output || result.success !== undefined)) {
         return {
           ...tool,
-          state: tool.result.success !== false ? 'result' : 'error',
+          state: result.success !== false ? 'result' : 'error',
         }
       }
 
@@ -1602,54 +1470,6 @@ export const ToolCallDisplay = memo(function ToolCallDisplay({
       }
     }
     return tool
-  })
-
-  const allCompleted = enrichedToolCalls.every(toolCall => {
-    if (toolCall.state === 'call') {
-      return false
-    }
-
-    if (!toolCall.result) {
-      return false
-    }
-
-    if (toolCall.state === 'error') {
-      return true
-    }
-
-    if (toolCall.toolName === 'queryVTOP') {
-      const isCredentialRequired =
-        toolCall.result.requiresCredentials === true ||
-        (toolCall.result.error &&
-          (toolCall.result.error.includes('VTOP credentials required') ||
-            toolCall.result.error.includes('credentials') ||
-            toolCall.result.error.includes('Invalid LoginId/Password') ||
-            toolCall.result.error.includes('Login failed')))
-
-      if (isCredentialRequired) {
-        return true
-      }
-
-      return (
-        toolCall.result &&
-        toolCall.state === 'result' &&
-        (toolCall.result.data || toolCall.result.output || toolCall.result.error)
-      )
-    }
-
-    if (
-      toolCall.toolName === 'searchRedditKnowledge' ||
-      toolCall.toolName === 'searchRedditWithContext'
-    ) {
-      return toolCall.result && (toolCall.result.success || toolCall.result.error)
-    }
-
-    const hasValidResult =
-      toolCall.result &&
-      !toolCall.result.requiresCredentials &&
-      (toolCall.state === 'result' || toolCall.state === 'error' || toolCall.type === 'tool-result')
-
-    return hasValidResult
   })
 
   if (enrichedToolCalls.length === 0) return null

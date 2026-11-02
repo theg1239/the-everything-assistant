@@ -27,7 +27,7 @@ const {
   getNextStep,
   tempFiles,
 } = require('./src/workflows/course-page')
-require('dotenv').config()
+require('dotenv').config({ quiet: true })
 
 const VERBOSE_LOG =
   process.env.PROXY_VERBOSE_LOGS === '1' ||
@@ -150,7 +150,7 @@ app.get('/health', (req, res) => {
 app.post('/vtop', vtopLimiter, async (req, res) => {
   const requestId = randomUUID().slice(0, 8)
   const startedAt = Date.now()
-  const { command, username, password, encryptedPassword, sessionKey, flags } = req.body
+  const { command, username, password, encryptedPassword, sessionKey, flags } = req.body || {}
 
   if (!command || !username) {
     return res.status(400).json({
@@ -275,7 +275,7 @@ app.post('/vtop-interactive', vtopLimiter, async (req, res) => {
   const requestId = randomUUID().slice(0, 8)
   const startedAt = Date.now()
   const { command, step, username, password, encryptedPassword, sessionKey, flags, sessionData } =
-    req.body
+    req.body || {}
 
   if (!command || !step || !username) {
     return res.status(400).json({
@@ -330,7 +330,7 @@ app.post('/vtop-interactive', vtopLimiter, async (req, res) => {
 app.post('/vtop-interactive-continue', vtopLimiter, async (req, res) => {
   const requestId = randomUUID().slice(0, 8)
   const startedAt = Date.now()
-  const { sessionData, selection, step } = req.body
+  const { sessionData, selection, step } = req.body || {}
 
   if (!sessionData || !selection || !step) {
     return res.status(400).json({
@@ -367,7 +367,7 @@ app.post('/vtop-interactive-continue', vtopLimiter, async (req, res) => {
     nextStep = 'download'
   }
 
-  const password = req.body.password || req.body.encryptedPassword
+  const password = req.body?.password || req.body?.encryptedPassword
   if (!password) {
     return res.status(400).json({
       error: 'Password required to continue workflow',
@@ -494,7 +494,7 @@ app.post('/mcp/messages', ...protectMcp, async (req, res) => {
 })
 
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'))
+  res.sendFile('index.html', { root: path.join(__dirname, 'public') })
 })
 
 app.use((err, req, res, next) => {
@@ -537,7 +537,11 @@ function performStartupChecks() {
 
 performStartupChecks()
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, error => {
+  if (error) {
+    console.error(`Failed to start Proxy Service on port ${PORT}:`, error)
+    process.exit(1)
+  }
   console.log(`Proxy Service running on port ${PORT}`)
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`)
 })

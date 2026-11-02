@@ -27,12 +27,14 @@ function extendMaterial<T extends THREE.Material = THREE.Material>(
   BaseMaterial: new (params?: THREE.MaterialParameters) => T,
   cfg: ExtendMaterialConfig
 ): THREE.ShaderMaterial {
+  // ShaderLib's typings omit the `defines` that the physical shader actually carries.
   const physical = THREE.ShaderLib.physical as ShaderWithDefines
   const { vertexShader: baseVert, fragmentShader: baseFrag, uniforms: baseUniforms } = physical
   const baseDefines = physical.defines ?? {}
 
   const uniforms: Record<string, THREE.IUniform> = THREE.UniformsUtils.clone(baseUniforms)
 
+  // Optional PBR fields read below aren't declared on the generic Material base type.
   const defaults = new BaseMaterial(cfg.material || {}) as T & {
     color?: THREE.Color
     roughness?: number
@@ -41,17 +43,22 @@ function extendMaterial<T extends THREE.Material = THREE.Material>(
     envMapIntensity?: number
   }
 
-  if (defaults.color) uniforms.diffuse.value = defaults.color
-  if ('roughness' in defaults) uniforms.roughness.value = defaults.roughness
-  if ('metalness' in defaults) uniforms.metalness.value = defaults.metalness
-  if ('envMap' in defaults) uniforms.envMap.value = defaults.envMap
-  if ('envMapIntensity' in defaults) uniforms.envMapIntensity.value = defaults.envMapIntensity
+  const setBaseUniform = (key: string, value: unknown) => {
+    const uniform = uniforms[key]
+    if (uniform) uniform.value = value
+  }
+
+  if (defaults.color) setBaseUniform('diffuse', defaults.color)
+  if ('roughness' in defaults) setBaseUniform('roughness', defaults.roughness)
+  if ('metalness' in defaults) setBaseUniform('metalness', defaults.metalness)
+  if ('envMap' in defaults) setBaseUniform('envMap', defaults.envMap)
+  if ('envMapIntensity' in defaults) setBaseUniform('envMapIntensity', defaults.envMapIntensity)
 
   Object.entries(cfg.uniforms ?? {}).forEach(([key, u]) => {
     uniforms[key] =
       u !== null && typeof u === 'object' && 'value' in u
-        ? (u as THREE.IUniform<unknown>)
-        : ({ value: u } as THREE.IUniform<unknown>)
+        ? u
+        : { value: u }
   })
 
   let vert = `${cfg.header}\n${cfg.vertexHeader ?? ''}\n${baseVert}`
@@ -188,7 +195,7 @@ const Beams: FC<BeamsProps> = ({
   scale = 0.2,
   rotation = 0,
 }) => {
-  const meshRef = useRef<THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>>(null!)
+  const meshRef = useRef<THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>>(null)
 
   const beamMaterial = useMemo(
     () =>
@@ -336,9 +343,10 @@ const MergedPlanes = forwardRef<
     [count, width, height]
   )
   useFrame((_, delta) => {
-    mesh.current.material.uniforms.time.value += 0.1 * delta
+    const time = mesh.current.material.uniforms.time
+    if (time) time.value += 0.1 * delta
   })
-  return <mesh ref={mesh as unknown as any} geometry={geometry as any} material={material as any} />
+  return <mesh ref={mesh} geometry={geometry} material={material} />
 })
 MergedPlanes.displayName = 'MergedPlanes'
 
@@ -365,16 +373,10 @@ const DirLight: FC<{ position: [number, number, number]; color: string }> = ({
   position,
   color,
 }) => {
-  const dir = useRef<THREE.DirectionalLight>(null!)
+  const dir = useRef<THREE.DirectionalLight>(null)
   useEffect(() => {
     if (!dir.current) return
-    const cam = dir.current.shadow.camera as THREE.Camera & {
-      top: number
-      bottom: number
-      left: number
-      right: number
-      far: number
-    }
+    const cam = dir.current.shadow.camera
     cam.top = 24
     cam.bottom = -24
     cam.left = -24

@@ -1,6 +1,6 @@
 import { tool } from 'ai'
 import { searchTool, extractTool } from '@parallel-web/ai-sdk-tools'
-import * as z from 'zod/v3'
+import * as z from 'zod'
 import { scrapePapersCodeChef } from './scrapers/papers-codechef'
 import { scrapePapersService } from './scrapers/papers-scraper'
 import { scrapeVITPaperVault } from './scrapers/vit-papervault'
@@ -21,6 +21,7 @@ import { createFeedbackIssue } from './feedback'
 import { hasVTOPCredentials, getFormattedVTOPCredentials } from './server-vtop-credentials'
 import { getUserMcpToken, refreshUserMcpToken, isExpired as isMcpExpired } from './mcp-tokens'
 import { createMusicPlayerTool, type MusicPlayerToolState } from './music-player-tool'
+import { memoizeAsync, publicAssetUrl } from './static-data'
 // import {
 //   indexPastPapers,
 //   askIndexedPaperQuestion,
@@ -44,6 +45,16 @@ type ParsedPlacementData = {
   summary: string
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const readString = (value: unknown): string | undefined =>
+  typeof value === 'string' ? value : undefined
+
+/** `message` of a thrown value (Error or error-like object), if it has one. */
+const getErrorMessage = (error: unknown): string | undefined =>
+  isRecord(error) ? readString(error.message) : undefined
+
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
     z.string(),
@@ -62,7 +73,7 @@ const redditAskResponseSchema = z.object({
   confidence: z.number().optional(),
   totalResults: z.number().optional(),
   searchResults: z.number().optional(),
-  searchAttempts: z.union([z.number(), z.array(z.any())]).optional(),
+  searchAttempts: z.union([z.number(), z.array(z.unknown())]).optional(),
   refinedQueries: z.array(z.string()).optional(),
   serviceUsed: z.string().optional(),
   error: z.string().optional(),
@@ -141,6 +152,38 @@ const syllabusListSchema = z.array(syllabusEntrySchema)
 
 type FacultyData = z.infer<typeof facultyDataSchema>
 
+/** Per-call tool tracing; off unless CHAT_DEBUG=true (these run on the chat hot path). */
+const debugLog = (...args: unknown[]) => {
+  if (process.env.CHAT_DEBUG === 'true') console.debug(...args)
+}
+
+/** `public/faculty.json` (~520 KB), fetched and validated once per instance. */
+const loadFacultyData = memoizeAsync(async (): Promise<FacultyData> => {
+  const res = await fetch(publicAssetUrl('/faculty.json'))
+  if (!res.ok) throw new Error('Could not load faculty.json')
+  return facultyDataSchema.parse(await res.json())
+})
+
+class SyllabiLoadError extends Error {
+  constructor(readonly status: number) {
+    super(`Could not load syllabi.json (${status})`)
+  }
+}
+
+/** `public/syllabi.json`, fetched and filtered to well-formed entries once per instance. */
+const loadSyllabusEntries = memoizeAsync(async (): Promise<SyllabusEntry[]> => {
+  const res = await fetch(publicAssetUrl('/syllabi.json'))
+  if (!res.ok) throw new SyllabiLoadError(res.status)
+  const data: unknown = await res.json()
+  // Keep only entries that are a filename or a `{ code, title, file }` record.
+  return Array.isArray(data)
+    ? data.flatMap(entry => {
+        const parsedEntry = syllabusEntrySchema.safeParse(entry)
+        return parsedEntry.success ? [parsedEntry.data] : []
+      })
+    : []
+})
+
 const vtopErrorResponseSchema = z
   .object({
     error: z.string().optional(),
@@ -181,15 +224,33 @@ type VITToolsOptions = {
   musicPlayerState?: MusicPlayerToolState | null
 }
 
+type VtopProxyResponse = z.infer<typeof vtopProxyResponseSchema>
+
+/**
+ * `callVtopViaMcp` result: the proxy payload when it matches the expected
+ * shape, otherwise the server's raw object (when it at least reports `success`)
+ * or a local failure.
+ */
+type VtopMcpResult =
+  | (VtopProxyResponse & { via: 'mcp' })
+  | {
+      success: false
+      error: string
+      message?: string
+      details?: unknown
+      via: 'mcp'
+    }
+  | (Record<string, unknown> & { via: 'mcp' })
+
 async function callVtopViaMcp(options: {
   command: string
-  flags?: Record<string, any>
+  flags?: VtopCommandFlags
   username?: string
   password?: string
   encryptedPassword?: string
   sessionKey?: string
   mcp: McpClientConfig
-}) {
+}): Promise<VtopMcpResult | null> {
   const { command, flags, username, password, encryptedPassword, sessionKey, mcp } = options
 
   if (!mcp?.endpoint || !mcp?.accessToken) return null
@@ -230,7 +291,13 @@ async function callVtopViaMcp(options: {
   const sessionId =
     initRes.headers.get('Mcp-Session-Id') || initRes.headers.get('mcp-session-id') || undefined
 
-  const args: Record<string, any> = {}
+  const args: {
+    flags?: VtopCommandFlags
+    username?: string
+    password?: string
+    encryptedPassword?: string
+    sessionKey?: string
+  } = {}
   if (flags && Object.keys(flags).length) args.flags = flags
   if (username) args.username = username
   if (password) args.password = password
@@ -258,12 +325,13 @@ async function callVtopViaMcp(options: {
     body: JSON.stringify(toolCallBody),
   })
 
-  let parsed: any = null
+  let parsed: unknown = null
   try {
     parsed = await callRes.json()
-  } catch (error) {
+  } catch {
     parsed = null
   }
+  const rpc = isRecord(parsed) ? parsed : {}
 
   if (sessionId) {
     fetch(endpoint, {
@@ -273,8 +341,11 @@ async function callVtopViaMcp(options: {
   }
 
   if (!callRes.ok) {
+    const rpcError = isRecord(rpc.error) ? rpc.error : {}
     const message =
-      parsed?.error?.message || parsed?.message || `MCP call failed: ${callRes.status}`
+      readString(rpcError.message) ||
+      readString(rpc.message) ||
+      `MCP call failed: ${callRes.status}`
     console.error('MCP call failed', { status: callRes.status, message, parsed })
     return {
       success: false,
@@ -284,8 +355,12 @@ async function callVtopViaMcp(options: {
     }
   }
 
-  const structured =
-    parsed?.result?.structuredContent || parsed?.result || parsed?.content || parsed?.data || null
+  const structured: unknown =
+    (isRecord(rpc.result) && rpc.result.structuredContent) ||
+    rpc.result ||
+    rpc.content ||
+    rpc.data ||
+    null
 
   if (!structured) {
     return {
@@ -302,8 +377,8 @@ async function callVtopViaMcp(options: {
     return { ...safeStructured.data, via: 'mcp' }
   }
 
-  if (typeof structured === 'object' && 'success' in (structured as any)) {
-    return { ...(structured as any), via: 'mcp' }
+  if (isRecord(structured) && 'success' in structured) {
+    return { ...structured, via: 'mcp' }
   }
 
   return {
@@ -326,8 +401,8 @@ const SCHOOL_VALUES: School[] = [
 ]
 
 const toSchool = (value: string): School | null => {
-  const normalized = value.toLowerCase() as School
-  return SCHOOL_VALUES.includes(normalized) ? normalized : null
+  const normalized = value.toLowerCase()
+  return SCHOOL_VALUES.find(school => school === normalized) ?? null
 }
 
 async function searchRedditKnowledge(query: string, limit: number = 10) {
@@ -459,7 +534,23 @@ async function getRedditOverview() {
   }
 }
 
-export async function searchRedditWithContext(query: string) {
+/** Shared shape of the Reddit search helpers' results (fields vary by path). */
+type RedditSearchResult = {
+  success: boolean
+  response?: string
+  sources?: JsonValue[]
+  trending?: string[]
+  confidence?: number
+  totalResults?: number
+  isBroadQuery?: boolean
+  searchAttempts?: number
+  refinedQueries?: string[]
+  serviceUsed?: string
+  message?: string
+  error?: string
+}
+
+export async function searchRedditWithContext(query: string): Promise<RedditSearchResult> {
   try {
     const broadQueryKeywords = [
       "what's happening",
@@ -522,11 +613,11 @@ export async function searchRedditWithContext(query: string) {
     } else {
       return await searchRedditKnowledge(query)
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in contextual Reddit search:', error)
     return {
       success: false,
-      error: error?.message || 'Failed to search Reddit',
+      error: getErrorMessage(error) || 'Failed to search Reddit',
       message: 'Unable to access Reddit knowledge base',
     }
   }
@@ -549,19 +640,20 @@ function organizeMenuByMealType(menuItems: Array<{ type: number; menu: string }>
 
   menuItems.forEach(item => {
     const mealType = typeToMeal[item.type]
-    if (mealType) {
+    const mealItems = mealType ? mealTypes[mealType] : undefined
+    if (mealItems) {
       const cleanedItems = item.menu
         .split(',')
         .map(menuItem => menuItem.trim())
         .filter(menuItem => menuItem.length > 0 && !menuItem.match(/^[B,J\s]*$/))
         .map(menuItem => menuItem.charAt(0).toUpperCase() + menuItem.slice(1).toLowerCase())
 
-      mealTypes[mealType].push(...cleanedItems)
+      mealItems.push(...cleanedItems)
     }
   })
 
   Object.keys(mealTypes).forEach(key => {
-    if (mealTypes[key].length === 0) {
+    if (mealTypes[key]?.length === 0) {
       delete mealTypes[key]
     }
   })
@@ -581,7 +673,11 @@ async function handleIntelligentCoursePage(params: {
   course?: number
   faculty?: number
   fuzzyIndex?: number
-  messages?: any[]
+  /**
+   * Conversation so far. Usually AI SDK `ModelMessage`s, but direct tool calls
+   * pass legacy messages (string `content` + `toolInvocations`), so read defensively.
+   */
+  messages?: readonly unknown[]
 }) {
   const {
     username,
@@ -602,51 +698,58 @@ async function handleIntelligentCoursePage(params: {
   let contextualCourseQuery = courseQuery
   let contextualFacultyQuery = facultyQuery
   let contextualMaterialQuery = materialQuery
-  let previousOptions = null
-  let previousStepType = null
+  let previousOptions: unknown[] | null = null
+  let previousStepType: string | null = null
+
+  /** Plain-text content of a message (legacy messages carry a string `content`). */
+  const messageText = (message: unknown): string | undefined =>
+    isRecord(message) ? readString(message.content) : undefined
+  const lastMessageText = messages && messages.length > 0 ? messageText(messages.at(-1)) : undefined
 
   if (messages && messages.length > 0) {
     const recentMessages = messages.slice(-10)
 
     for (const message of recentMessages.reverse()) {
-      if (message.toolInvocations) {
+      if (isRecord(message) && Array.isArray(message.toolInvocations)) {
         for (const toolCall of message.toolInvocations) {
-          if (toolCall.toolName === 'queryVTOP' && toolCall.result && toolCall.result.success) {
+          if (
+            isRecord(toolCall) &&
+            toolCall.toolName === 'queryVTOP' &&
+            isRecord(toolCall.result) &&
+            toolCall.result.success
+          ) {
             const result = toolCall.result
+            const resultStep = readString(result.step)
+            const formattedContent = readString(result.formatted_content)
 
-            if (result.step && result.data) {
-              previousStepType = result.step
+            if (resultStep && result.data) {
+              previousStepType = resultStep
 
               if (typeof result.data === 'string') {
                 try {
-                  const parsedData = JSON.parse(result.data)
-                  if (parsedData.options && Array.isArray(parsedData.options)) {
+                  const parsedData: unknown = JSON.parse(result.data)
+                  if (isRecord(parsedData) && Array.isArray(parsedData.options)) {
                     previousOptions = parsedData.options
                   }
-                } catch (e) {
-                  if (result.formatted_content) {
-                    previousOptions = extractOptionsFromContent(
-                      result.formatted_content,
-                      result.step
-                    )
+                } catch {
+                  if (formattedContent) {
+                    previousOptions = extractOptionsFromContent(formattedContent, resultStep)
                   }
                 }
-              } else if (result.data.options && Array.isArray(result.data.options)) {
+              } else if (isRecord(result.data) && Array.isArray(result.data.options)) {
                 previousOptions = result.data.options
               }
 
-              if (!contextualSemesterQuery && result.formatted_content) {
-                const semesterMatch = result.formatted_content.match(
-                  /(summer|fall|winter)\s*semester/i
-                )
+              if (!contextualSemesterQuery && formattedContent) {
+                const semesterMatch = formattedContent.match(/(summer|fall|winter)\s*semester/i)
                 if (semesterMatch) {
                   contextualSemesterQuery = semesterMatch[0].toLowerCase()
                 }
               }
               if (previousOptions && previousStepType) {
                 const userMessage = messages[messages.length - 1]
-                if (userMessage && userMessage.role === 'user' && userMessage.content) {
-                  const userContent = userMessage.content.toLowerCase().trim()
+                if (isRecord(userMessage) && userMessage.role === 'user' && lastMessageText) {
+                  const userContent = lastMessageText.toLowerCase().trim()
 
                   if (previousStepType === 'course' && !contextualCourseQuery) {
                     const cleanedContent = userContent
@@ -711,16 +814,19 @@ async function handleIntelligentCoursePage(params: {
     return null
   }
 
-  function extractOptionsFromContent(content: string, stepType: string): any[] | null {
+  function extractOptionsFromContent(
+    content: string,
+    stepType: string
+  ): Array<{ number: number; description: string }> | null {
     if (!content || typeof content !== 'string') return null
 
     const lines = content.split('\n')
-    const options = []
+    const options: Array<{ number: number; description: string }> = []
 
     for (const line of lines) {
       const match = line.match(/^\s*(\d+)\s*[│|]\s*(.+)/)
-      if (match) {
-        const [, number, description] = match
+      const [, number, description] = match ?? []
+      if (number && description) {
         options.push({
           number: parseInt(number),
           description: description.trim(),
@@ -753,17 +859,13 @@ async function handleIntelligentCoursePage(params: {
         const semesterAutoResolved =
           contextualSemesterQuery &&
           semester &&
-          messages &&
-          messages.length > 0 &&
-          messages[messages.length - 1]?.content
-            ?.toLowerCase()
-            .includes(contextualSemesterQuery.toLowerCase())
+          lastMessageText?.toLowerCase().includes(contextualSemesterQuery.toLowerCase())
 
         const userJustSelectedSemester =
           messages &&
           messages.length > 0 &&
           previousStepType === 'semester' &&
-          /^\s*\d+\s*$/.test(messages[messages.length - 1]?.content || '')
+          /^\s*\d+\s*$/.test(lastMessageText || '')
 
         if (shouldCompleteSemesterSelection || userJustSelectedSemester) {
           step = 'semester'
@@ -804,13 +906,12 @@ async function handleIntelligentCoursePage(params: {
   }
   if (contextualFacultyQuery || facultyQuery) {
     requestBody.flags.facultyQuery = contextualFacultyQuery || facultyQuery
-    if (contextualFacultyQuery)
-      console.log('Using contextual faculty query:', contextualFacultyQuery)
+    if (contextualFacultyQuery) debugLog('Using contextual faculty query:', contextualFacultyQuery)
   }
   if (contextualMaterialQuery || materialQuery) {
     requestBody.flags.materialQuery = contextualMaterialQuery || materialQuery
     if (contextualMaterialQuery)
-      console.log('Using contextual material query:', contextualMaterialQuery)
+      debugLog('Using contextual material query:', contextualMaterialQuery)
   }
 
   if (semester !== undefined) requestBody.flags.semester = semester
@@ -855,10 +956,10 @@ async function handleIntelligentCoursePage(params: {
       raw: result.raw || false,
       type: 'interactive-course-page',
     }
-  } catch (error: any) {
+  } catch (error) {
     return {
       success: false,
-      error: error.message || 'Network error',
+      error: getErrorMessage(error) || 'Network error',
       message: 'Unable to connect to VTOP proxy service for course materials.',
       suggestion: 'The VTOP proxy service may be offline. Please try again later.',
     }
@@ -1035,6 +1136,8 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
     ...createKnowledgeTools(),
     ...createMemoryTool(userId),
     ...createMusicPlayerTool(options.musicPlayerState),
+    // Disabled. To re-enable, import `generateImage` from 'ai', `imageModel` from './ai'
+    // and `enforceUserRateLimit` from './user-rate-limiter'.
     // generateImage: tool({
     //   description:
     //     'Generate an image based on a text prompt using OpenAI GPT Image 2. Use this when users ask you to create, generate, draw, or make an image, picture, illustration, artwork, or visual content. The generated image will be returned as base64 data.',
@@ -1052,10 +1155,12 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
     //     try {
     //       const startTime = Date.now()
 
-    //       const result = await rateLimitedAI.openai.generateImage({
+    //       await enforceUserRateLimit(userId)
+    //       const result = await generateImage({
+    //         model: imageModel(),
     //         prompt,
-    //         aspectRatio: aspectRatio,
-    //       }, userId)
+    //         aspectRatio,
+    //       })
 
     //       const duration = Date.now() - startTime
     //       console.log(`[generateImage] API call completed in ${duration}ms`)
@@ -1071,24 +1176,24 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
 
     //       console.log('[generateImage] Image generated successfully')
     //       console.log('[generateImage] Image count:', result.images?.length || 1)
-    //       console.log('[generateImage] Primary image MIME type:', result.image.mimeType || 'image/png')
+    //       console.log('[generateImage] Primary image MIME type:', result.image.mediaType || 'image/png')
 
     //       return {
     //         success: true,
     //         image: {
     //           base64: result.image.base64,
-    //           mimeType: result.image.mimeType || 'image/png',
+    //           mimeType: result.image.mediaType || 'image/png',
     //         },
     //         images: result.images?.map(img => ({
     //           base64: img.base64,
-    //           mimeType: img.mimeType || 'image/png',
-    //         })) || [{ base64: result.image.base64, mimeType: result.image.mimeType || 'image/png' }],
+    //           mimeType: img.mediaType || 'image/png',
+    //         })) || [{ base64: result.image.base64, mimeType: result.image.mediaType || 'image/png' }],
     //         prompt,
     //         aspectRatio: aspectRatio || '1:1',
     //         message: `Successfully generated image for: "${prompt}"`,
     //       }
-    //     } catch (error: any) {
-    //       const errorMessage = error?.message || 'Unknown error occurred'
+    //     } catch (error) {
+    //       const errorMessage = getErrorMessage(error) || 'Unknown error occurred'
     //       console.error('[generateImage] Error occurred:', errorMessage)
     //       console.error('[generateImage] Full error:', error)
 
@@ -1196,9 +1301,9 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
             if (mappedCode) {
               resolvedCourseCode = mappedCode
             } else {
-              const courseMatches = getAllCourseMatches(courseCode)
-              if (courseMatches.length > 0) {
-                resolvedCourseCode = courseMatches[0].code
+              const [firstCourseMatch] = getAllCourseMatches(courseCode)
+              if (firstCourseMatch) {
+                resolvedCourseCode = firstCourseMatch.code
               } else {
                 return {
                   success: false,
@@ -1222,15 +1327,11 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
             scrapeExamCooker(resolvedCourseCode, examType, year),
           ])
 
-          const papers: any[] = []
-          const sources: any[] = []
-
-          results.forEach(r => {
-            if (r.status === 'fulfilled' && r.value?.success) {
-              papers.push(...(r.value.papers || []))
-              sources.push(r.value.source)
-            }
-          })
+          const succeeded = results.flatMap(r =>
+            r.status === 'fulfilled' && r.value?.success ? [r.value] : []
+          )
+          const papers = succeeded.flatMap(result => result.papers || [])
+          const sources = succeeded.map(result => result.source)
 
           if (papers.length === 0) {
             return {
@@ -1265,11 +1366,9 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
             }${year ? ` from ${year}` : ''}`,
             sources,
           }
-        } catch (err: any) {
+        } catch (err) {
           const errorMessage =
-            typeof err === 'object' && err?.message
-              ? err.message
-              : 'unable to scrape papers at the moment. please try again later.'
+            getErrorMessage(err) || 'unable to scrape papers at the moment. please try again later.'
           return {
             success: false,
             error: errorMessage,
@@ -1319,11 +1418,10 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
 
         const recognizedCourses = recognizeCourseInText(cleanedQuery)
         const limitedMatches = matches.slice(0, limitValue)
-        const normalizedName = findFullCourseName(
-          limitedMatches[0]?.code || cleanedQuery.toUpperCase()
-        )
+        const [primaryMatch] = limitedMatches
+        const normalizedName = findFullCourseName(primaryMatch?.code || cleanedQuery.toUpperCase())
 
-        if (limitedMatches.length === 0) {
+        if (!primaryMatch) {
           return {
             success: false,
             query: cleanedQuery,
@@ -1344,11 +1442,11 @@ export function createVITTools(userId: string, options: VITToolsOptions = {}) {
           totalMatches: matches.length,
           normalizedName,
           recognizedCourses,
-          primary: limitedMatches[0],
+          primary: primaryMatch,
           limitUsed: limitValue,
           message:
             limitedMatches.length === 1
-              ? `Resolved "${cleanedQuery}" to ${limitedMatches[0].code} (${limitedMatches[0].name}).`
+              ? `Resolved "${cleanedQuery}" to ${primaryMatch.code} (${primaryMatch.name}).`
               : `Found ${limitedMatches.length} candidate course codes for "${cleanedQuery}".`,
         }
       },
@@ -1456,20 +1554,13 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       }),
       execute: async ({ department, facultyName, includeCourses = false, school, courseQuery }) => {
         try {
-          const res = await fetch(
-            typeof window === 'undefined'
-              ? `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/faculty.json`
-              : '/faculty.json'
-          )
-          if (!res.ok) throw new Error('Could not load faculty.json')
-          const schools = facultyDataSchema.parse(await res.json())
+          const schools = await loadFacultyData()
 
-          let results = []
+          const results: FacultyResultEntry[] = []
           const deptFilter = department ? department.toLowerCase() : null
           const facultyFilter = facultyName ? facultyName.toLowerCase() : null
           const courseFilter = courseQuery ? courseQuery.toLowerCase() : null
-          for (let i = 0; i < schools.length; ++i) {
-            const school = schools[i]
+          for (const school of schools) {
             const schoolName = school.school
             if (!schoolName) continue
             const departments = school.departments || []
@@ -1477,12 +1568,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             if (deptFilter && matchesDepartment(schoolName, deptFilter)) {
               schoolMatches = true
             }
-            for (let j = 0; j < departments.length; ++j) {
-              const dept = departments[j]
+            for (const dept of departments) {
               if (schoolMatches) {
                 const facultyArr = dept.faculty || []
-                for (let k = 0; k < facultyArr.length; ++k) {
-                  const faculty = facultyArr[k]
+                for (const faculty of facultyArr) {
                   const facultyNameValue = faculty.name
                   if (!facultyNameValue) continue
                   if (facultyFilter) {
@@ -1515,7 +1604,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                     if (!allTokensMatch) continue
                   }
 
-                  let facultyEntry: FacultyResultEntry = {
+                  const facultyEntry: FacultyResultEntry = {
                     name: facultyNameValue,
                     department: faculty.department || dept.department || dept.name || schoolName,
                     school: schoolName,
@@ -1608,8 +1697,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 continue
               }
               const facultyArr = dept.faculty || []
-              for (let k = 0; k < facultyArr.length; ++k) {
-                const faculty = facultyArr[k]
+              for (const faculty of facultyArr) {
                 const facultyNameValue = faculty.name
                 if (!facultyNameValue) continue
                 if (facultyFilter) {
@@ -1642,7 +1730,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                   if (!allTokensMatch) continue
                 }
 
-                let facultyEntry: FacultyResultEntry = {
+                const facultyEntry: FacultyResultEntry = {
                   name: facultyNameValue,
                   department: faculty.department || departmentName || schoolName,
                   school: schoolName,
@@ -1731,8 +1819,9 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             }
           }
 
-          if (results.length === 1 && !courseQuery && !includeCourses) {
-            const faculty = results[0]
+          const [singleFaculty] = results
+          if (results.length === 1 && singleFaculty && !courseQuery && !includeCourses) {
+            const faculty = singleFaculty
             const schoolAsEnum = faculty.school
               ? toSchool(deriveSchoolAcronym(faculty.school))
               : null
@@ -1754,13 +1843,14 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                   )
                 })
 
-                faculty.courses = facultyCourses.map(course => ({
+                const courses: FacultyCourseRecord[] = facultyCourses.map(course => ({
                   code: course.CODE,
                   title: course.TITLE,
                   slot: course.SLOT,
                   type: course.TYPE,
                   venue: course.VENUE,
                 }))
+                faculty.courses = courses
 
                 return {
                   success: true,
@@ -1768,11 +1858,9 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                   faculty: [faculty],
                   message:
                     `Found faculty member ${faculty.name} in ${faculty.department || faculty.school}.` +
-                    `\n\nCourses taught (${faculty.courses.length}):` +
-                    `\n${faculty.courses
-                      .map(
-                        (c: FacultyCourseRecord) => `- ${c.code ?? 'N/A'}: ${c.title ?? 'Unknown'}`
-                      )
+                    `\n\nCourses taught (${courses.length}):` +
+                    `\n${courses
+                      .map(c => `- ${c.code ?? 'N/A'}: ${c.title ?? 'Unknown'}`)
                       .join('\n')}`,
                 }
               } catch (error) {
@@ -1789,11 +1877,11 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               ? `Found ${results.length} faculty${department ? ' in ' + department : ''}${facultyName ? ' matching ' + facultyName : ''}${courseQuery ? ' teaching ' + courseQuery : ''}.`
               : 'No faculty found. Please check the spelling or try a different department, name, or course.',
           }
-        } catch (error: any) {
+        } catch (error) {
           return {
             success: false,
-            error: error.message || 'Failed to search faculty.json',
-            message: error.message,
+            error: getErrorMessage(error) || 'Failed to search faculty.json',
+            message: getErrorMessage(error),
           }
         }
       },
@@ -1824,11 +1912,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
         const raw = await scrapePlacementInfo(year, companyFilter, combineWitch, campus)
         try {
           const { parsePlacementData } = await import('../lib/scrapers/placement-scraper')
-          const parsed = (await parsePlacementData(
-            raw,
-            '',
-            undefined
-          )) as unknown as ParsedPlacementData
+          const parsed: ParsedPlacementData = await parsePlacementData(raw, '', undefined)
           return {
             ...raw,
             campus,
@@ -1855,7 +1939,6 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
       }),
       execute: async ({ query }) => {
         try {
-          console.debug('[getSyllabus] query:', query)
           if (!query || query.trim().length === 0) {
             return {
               success: false,
@@ -1864,24 +1947,17 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             }
           }
 
-          const base =
-            typeof window === 'undefined'
-              ? process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
-              : ''
-          const res = await fetch(`${base}/syllabi.json`)
-          if (!res.ok) {
-            console.error('[getSyllabus] could not load syllabi.json', res.status)
+          let entries: SyllabusEntry[]
+          try {
+            entries = await loadSyllabusEntries()
+          } catch (loadError) {
+            if (!(loadError instanceof SyllabiLoadError)) throw loadError
+            console.error('[getSyllabus] could not load syllabi.json', loadError.status)
             return {
               success: false,
-              error: `Could not load syllabi.json (${res.status})`,
+              error: loadError.message,
             }
           }
-
-          const data: any = await res.json()
-          console.debug(
-            '[getSyllabus] loaded items:',
-            Array.isArray(data) ? data.length : 'unknown'
-          )
 
           const qRaw = query.trim()
           const q = qRaw.toLowerCase()
@@ -1905,17 +1981,17 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             return { code: codePart, title: title || null }
           }
 
-          const scoreCandidate = (cand: any) => {
+          const scoreCandidate = (cand: SyllabusEntry) => {
             let code = ''
             let title = ''
             let filename = ''
             if (typeof cand === 'string') {
               filename = cand
               code = cand.split('_')[0] || ''
-            } else if (cand && typeof cand === 'object') {
-              code = (cand.code || '').toString()
-              title = (cand.title || '').toString()
-              filename = (cand.file || cand.filename || '').toString()
+            } else {
+              code = cand.code || ''
+              title = cand.title || ''
+              filename = cand.file || cand.filename || ''
             }
             const hay = (code + ' ' + title + ' ' + filename).toLowerCase()
             let score = 0
@@ -1929,11 +2005,12 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             return score
           }
 
-          if (Array.isArray(data) && data.length > 0) {
-            if (typeof data[0] === 'string') {
-              const exact = data.find((fn: string) => fn.split('_')[0].toLowerCase() === q)
+          if (entries.length > 0) {
+            if (typeof entries[0] === 'string') {
+              const fileNames = entries.filter(entry => typeof entry === 'string')
+              const exact = fileNames.find(fn => (fn.split('_')[0] ?? '').toLowerCase() === q)
               if (exact) {
-                console.debug('[getSyllabus] exact code match:', exact)
+                debugLog('[getSyllabus] exact code match:', exact)
                 const norm = normalizeFilename(exact)
                 return {
                   success: true,
@@ -1945,17 +2022,18 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 }
               }
 
-              const scored = data
-                .map((fn: string) => ({ fn, score: scoreCandidate(fn) }))
-                .sort((a: any, b: any) => b.score - a.score)
-              console.debug('[getSyllabus] top candidates (string):', scored.slice(0, 5))
-              if (scored.length > 0 && scored[0].score > 0) {
-                const topScore = scored[0].score
+              const scored = fileNames
+                .map(fn => ({ fn, score: scoreCandidate(fn) }))
+                .sort((a, b) => b.score - a.score)
+              debugLog('[getSyllabus] top candidates (string):', scored.slice(0, 5))
+              const [top] = scored
+              if (top && top.score > 0) {
+                const topScore = top.score
                 const topMatches = scored
-                  .filter((s: any) => s.score > 0 && s.score >= Math.max(1, topScore - 5))
+                  .filter(s => s.score > 0 && s.score >= Math.max(1, topScore - 5))
                   .slice(0, 8)
                 if (topMatches.length > 1) {
-                  const matches = topMatches.map((s: any) => {
+                  const matches = topMatches.map(s => {
                     const norm = normalizeFilename(s.fn)
                     return {
                       filename: s.fn,
@@ -1974,7 +2052,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                   }
                 }
 
-                const matched = scored[0].fn
+                const matched = top.fn
                 const norm = normalizeFilename(matched)
                 return {
                   success: true,
@@ -1986,25 +2064,28 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 }
               }
             } else {
-              const scored = data
-                .map((item: any) => ({ item, score: scoreCandidate(item) }))
-                .sort((a: any, b: any) => b.score - a.score)
-              console.debug(
+              // Mirrors the object-shaped entry fields; a bare filename has none of them.
+              const fieldsOf = (item: SyllabusEntry) => (typeof item === 'string' ? {} : item)
+              const scored = entries
+                .map(item => ({ item: fieldsOf(item), score: scoreCandidate(item) }))
+                .sort((a, b) => b.score - a.score)
+              debugLog(
                 '[getSyllabus] top candidates (objects):',
-                scored.slice(0, 6).map((s: any) => ({
+                scored.slice(0, 6).map(s => ({
                   code: s.item.code,
                   title: s.item.title,
                   filename: s.item.file || s.item.filename,
                   score: s.score,
                 }))
               )
-              if (scored.length > 0 && scored[0].score > 0) {
-                const topScore = scored[0].score
+              const [top] = scored
+              if (top && top.score > 0) {
+                const topScore = top.score
                 const topMatches = scored
-                  .filter((s: any) => s.score > 0 && s.score >= Math.max(1, topScore - 5))
+                  .filter(s => s.score > 0 && s.score >= Math.max(1, topScore - 5))
                   .slice(0, 8)
                 if (topMatches.length > 1) {
-                  const matches = topMatches.map((s: any) => {
+                  const matches = topMatches.map(s => {
                     const best = s.item
                     const filename = best.file || best.filename || `${best.code || 'syllabus'}.pdf`
                     const norm = normalizeFilename(filename)
@@ -2025,7 +2106,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                   }
                 }
 
-                const best = scored[0].item
+                const best = top.item
                 const filename = best.file || best.filename || `${best.code || 'syllabus'}.pdf`
                 let codeOut = best.code || null
                 let titleOut = best.title || null
@@ -2047,49 +2128,43 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           }
 
           try {
-            const lowered = Array.isArray(data)
-              ? data.map((d: any) =>
-                  typeof d === 'string' ? d.toLowerCase() : JSON.stringify(d).toLowerCase()
-                )
-              : []
-            let bestIndex = -1
-            for (let i = 0; i < lowered.length; i++) {
-              if (lowered[i].includes(q)) {
-                bestIndex = i
-                break
+            const lowered = entries.map(d =>
+              typeof d === 'string' ? d.toLowerCase() : JSON.stringify(d).toLowerCase()
+            )
+            const matchesFound: Array<{
+              filename: string | null
+              code: string | null
+              title: string | null
+              url: string | null
+            }> = []
+            lowered.forEach((text, i) => {
+              const orig = entries[i]
+              if (orig === undefined || !text.includes(q)) return
+              const filename = typeof orig === 'string' ? orig : orig.file || orig.filename || null
+              const norm =
+                typeof filename === 'string'
+                  ? normalizeFilename(filename)
+                  : { code: null, title: null }
+              matchesFound.push({
+                filename,
+                code: norm.code,
+                title: norm.title,
+                url: filename
+                  ? `https://storage.googleapis.com/examcooker/syllabi/${filename}`
+                  : null,
+              })
+            })
+            if (matchesFound.length > 1) {
+              return {
+                success: true,
+                ambiguous: true,
+                query,
+                matches: matchesFound,
+                message: `Multiple syllabus files match "${query}". Please pick one.`,
               }
             }
-            if (bestIndex >= 0) {
-              const matchesFound: any[] = []
-              for (let i = 0; i < lowered.length; i++) {
-                if (lowered[i].includes(q)) {
-                  const orig = data[i]
-                  const filename =
-                    typeof orig === 'string' ? orig : orig.file || orig.filename || null
-                  const norm =
-                    typeof filename === 'string'
-                      ? normalizeFilename(filename)
-                      : { code: null, title: null }
-                  matchesFound.push({
-                    filename,
-                    code: norm.code,
-                    title: norm.title,
-                    url: filename
-                      ? `https://storage.googleapis.com/examcooker/syllabi/${filename}`
-                      : null,
-                  })
-                }
-              }
-              if (matchesFound.length > 1) {
-                return {
-                  success: true,
-                  ambiguous: true,
-                  query,
-                  matches: matchesFound,
-                  message: `Multiple syllabus files match "${query}". Please pick one.`,
-                }
-              }
-              const m = matchesFound[0]
+            const [m] = matchesFound
+            if (m) {
               return {
                 success: true,
                 filename: m.filename,
@@ -2099,9 +2174,9 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 message: `Found syllabus matching query: ${query}`,
               }
             }
-          } catch (e) {}
+          } catch {}
 
-          console.debug('[getSyllabus] no match for query:', query)
+          debugLog('[getSyllabus] no match for query:', query)
           return {
             success: false,
             query,
@@ -2111,11 +2186,11 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               'Try a shorter distinctive phrase from the course title (e.g., include a module name or code)',
             ],
           }
-        } catch (error: any) {
+        } catch (error) {
           console.error('[getSyllabus] error', error)
           return {
             success: false,
-            error: error?.message || String(error),
+            error: getErrorMessage(error) || String(error),
             message: 'Failed to lookup syllabi.json',
           }
         }
@@ -2319,11 +2394,11 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           interactiveStep,
           debug,
         },
-        context
+        executionOptions
       ) => {
         const MAX_RETRIES = 3
         let attempt = 0
-        let lastError: any = null
+        let lastError: VtopMcpResult | Record<string, unknown> | null = null
         let triedMcp = false
         while (attempt < MAX_RETRIES) {
           try {
@@ -2405,7 +2480,11 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               if (mcpResult) {
                 lastError = mcpResult
 
-                const msg = (mcpResult.message || mcpResult.error || '').toLowerCase()
+                const msg = (
+                  readString(mcpResult.message) ||
+                  readString(mcpResult.error) ||
+                  ''
+                ).toLowerCase()
                 const tokenIssues =
                   msg.includes('unauthorized') ||
                   msg.includes('invalid token') ||
@@ -2418,7 +2497,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                     requiresMcpLink: true,
                     command,
                     message:
-                      mcpResult.message ||
+                      readString(mcpResult.message) ||
                       'Your VTOP session token expired. Send !linkvtop again to refresh access.',
                     details: mcpResult,
                   }
@@ -2426,7 +2505,7 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
 
                 // For non-token errors, surface the MCP error instead of forcing relink
                 if (isBotChannel) {
-                  return mcpResult as any
+                  return mcpResult
                 }
               }
             }
@@ -2472,7 +2551,8 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
                 course,
                 faculty,
                 fuzzyIndex,
-                messages: context?.messages || [],
+                // Optional-chained: app/api/hub/route.ts calls `execute(args)` without options.
+                messages: executionOptions?.messages ?? [],
               })
             }
 
@@ -2568,10 +2648,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               attempt++
               continue
             }
-          } catch (error: any) {
+          } catch (error) {
             lastError = {
               success: false,
-              error: error.message || 'Network error',
+              error: getErrorMessage(error) || 'Network error',
               message:
                 'Unable to connect to VTOP proxy service. Please ensure the service is running.',
               suggestion: 'The VTOP proxy service may be offline. Please try again later.',
@@ -2620,10 +2700,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               ? 'Response based on Reddit discussions. Might be inaccurate.'
               : 'Unable to find relevant information in the Reddit knowledge base.',
           }
-        } catch (error: any) {
+        } catch (error) {
           return {
             success: false,
-            error: error.message || 'Failed to search Reddit knowledge base',
+            error: getErrorMessage(error) || 'Failed to search Reddit knowledge base',
             message:
               'Unable to access the Reddit knowledge base. The service may be temporarily unavailable.',
             suggestion: 'Please try again later or check if the Reddit scraper service is running.',
@@ -2650,21 +2730,21 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
             success: results.success,
             response: results.response,
             sources: results.sources || [],
-            trending: (results as any).trending || [],
+            trending: results.trending || [],
             confidence: results.confidence || 0,
             totalResults: results.totalResults || 0,
-            isBroadQuery: (results as any).isBroadQuery || false,
+            isBroadQuery: results.isBroadQuery || false,
             message: results.success
-              ? `Found ${results.totalResults} relevant discussions${(results as any).trending?.length ? ` and ${(results as any).trending.length} trending topics` : ''}`
+              ? `Found ${results.totalResults} relevant discussions${results.trending?.length ? ` and ${results.trending.length} trending topics` : ''}`
               : results.message,
             note: results.success
               ? 'Response includes trending topics and recent discussions. Higher confidence indicates more relevant source material.'
               : 'Unable to find relevant information in the Reddit knowledge base.',
           }
-        } catch (error: any) {
+        } catch (error) {
           return {
             success: false,
-            error: error.message || 'Failed to search Reddit',
+            error: getErrorMessage(error) || 'Failed to search Reddit',
             message: 'Unable to access Reddit. The service may be temporarily unavailable.',
             suggestion: 'Please try again later or check if the Reddit scraper service is running.',
           }
@@ -2689,10 +2769,10 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
               ? 'Successfully retrieved Reddit overview data'
               : overview.error,
           }
-        } catch (error: any) {
+        } catch (error) {
           return {
             success: false,
-            error: error.message || 'Failed to get Reddit overview',
+            error: getErrorMessage(error) || 'Failed to get Reddit overview',
             message:
               'Unable to access Reddit overview. The service may be temporarily unavailable.',
             suggestion: 'Please try again later or check if the Reddit scraper service is running.',
@@ -2825,9 +2905,9 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
           },
         } as const
 
-        const key = block.trim().toLowerCase() as keyof typeof info
-        if (key in info) {
-          const blockInfo = info[key]
+        const key = block.trim().toLowerCase()
+        const blockInfo = Object.entries(info).find(([blockKey]) => blockKey === key)?.[1]
+        if (blockInfo) {
           return {
             success: true,
             ...blockInfo,
@@ -2847,23 +2927,24 @@ For best results, try both department acronyms (e.g., 'CSE', 'SMEC', 'SCORE', 'C
 }
 
 function getLevenshteinDistance(a: string, b: string): number {
-  const matrix = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0))
-  for (let i = 0; i <= a.length; i++) matrix[i][0] = i
-  for (let j = 0; j <= b.length; j++) matrix[0][j] = j
+  // Two-row dynamic programme: `prev` is row i-1, `curr` is row i of the edit matrix.
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j)
   for (let i = 1; i <= a.length; i++) {
+    const curr = [i]
     for (let j = 1; j <= b.length; j++) {
-      if (a[i - 1] === b[j - 1]) {
-        matrix[i][j] = matrix[i - 1][j - 1]
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j] + 1, // deletion
-          matrix[i][j - 1] + 1, // insertion
-          matrix[i - 1][j - 1] + 1 // substitution
-        )
-      }
+      const diagonal = prev[j - 1] ?? 0
+      curr[j] =
+        a[i - 1] === b[j - 1]
+          ? diagonal
+          : Math.min(
+              (prev[j] ?? 0) + 1, // deletion
+              (curr[j - 1] ?? 0) + 1, // insertion
+              diagonal + 1 // substitution
+            )
     }
+    prev = curr
   }
-  return matrix[a.length][b.length]
+  return prev[b.length] ?? 0
 }
 
 function normalizeString(str?: string): string {

@@ -65,13 +65,13 @@ export async function createFeedbackIssue(raw: unknown, sessionUser?: SessionUse
     })
 
     return { success: true, issueUrl: response.data.html_url }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Failed to create GitHub issue:', error)
     return {
       success: false,
       status: 500,
       error: 'Failed to create GitHub issue.',
-      details: error?.message,
+      details: error instanceof Error ? error.message : undefined,
     }
   }
 }

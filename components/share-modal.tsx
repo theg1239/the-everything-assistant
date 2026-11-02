@@ -1,13 +1,14 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type SVGProps } from 'react'
 import { Drawer } from 'vaul'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { SharePreviewCard, deriveSharePreview } from '@/components/share-preview-card'
 import { useMediaQuery } from '@/hooks/use-media-query'
-import { Link2, Loader2, Share2, Linkedin, Send } from 'lucide-react'
+import { Link2, Loader2, Share2, Send } from 'lucide-react'
 import { toast } from 'sonner'
+import { isRecord } from '@/lib/json'
 import type { LegacyMessage } from '@/lib/ai-message-conversion'
 
 interface ShareModalProps {
@@ -74,7 +75,7 @@ function ShareContent({
           onClick={onLinkedIn}
           disabled={!shareUrl || isLoading}
         >
-          <Linkedin className="h-4 w-4" />
+          <LinkedInIcon className="h-4 w-4" />
           linkedin
         </Button>
         <Button
@@ -138,8 +139,8 @@ export function ShareModal({
           const text = await res.text()
           throw new Error(text || 'failed to create share link')
         }
-        const data = (await res.json()) as { shareUrl?: string }
-        if (data.shareUrl) {
+        const data: unknown = await res.json()
+        if (isRecord(data) && typeof data.shareUrl === 'string' && data.shareUrl) {
           setShareUrl(data.shareUrl)
           setLastFetchedChatId(chatId)
         }
@@ -166,9 +167,9 @@ export function ShareModal({
 
   const handleNativeShare = async () => {
     if (!shareUrl) return
-    if (typeof navigator !== 'undefined' && (navigator as any).share) {
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
       try {
-        await (navigator as any).share({
+        await navigator.share({
           title: title || 'shared chat',
           text: preview.question || 'Check out this conversation',
           url: shareUrl,
@@ -234,5 +235,14 @@ export function ShareModal({
         {content}
       </DialogContent>
     </Dialog>
+  )
+}
+
+// lucide-react 1.0 dropped brand icons; inline the LinkedIn mark instead.
+function LinkedInIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
+      <path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28ZM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13ZM7.12 20.45H3.56V9h3.56v11.45ZM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0Z" />
+    </svg>
   )
 }

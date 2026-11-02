@@ -74,9 +74,9 @@
 //           ? `briefing scheduled for ${json.briefing.scheduledAt}`
 //           : 'briefing email dispatched'
 //       )
-//     } catch (error: any) {
+//     } catch (error) {
 //       console.error('[mgmt] briefing dispatch failed', error)
-//       toast.error(error?.message || 'failed to send briefing')
+//       toast.error(error instanceof Error ? error.message : 'failed to send briefing')
 //     } finally {
 //       setLoading(false)
 //     }
@@ -95,9 +95,9 @@
 //         toast.success(
 //           workflowDryRun ? 'daily briefing dry run queued' : 'daily briefing workflow started'
 //         )
-//       } catch (error: any) {
+//       } catch (error) {
 //         console.error('[mgmt] workflow trigger failed', error)
-//         toast.error(error?.message || 'failed to trigger workflow')
+//         toast.error(error instanceof Error ? error.message : 'failed to trigger workflow')
 //       }
 //     })
 //   }

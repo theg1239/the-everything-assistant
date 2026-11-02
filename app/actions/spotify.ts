@@ -1,7 +1,6 @@
 'use server'
 
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import {
   SpotifyApiError,
   SpotifyNotLinkedError,
@@ -15,10 +14,23 @@ import {
   sendSpotifyCommand,
 } from '@/lib/spotify'
 import { prisma } from '@/lib/prisma'
-import type { SpotifyPlaybackResponse, SpotifyStatusResponse } from '@/types/spotify'
+import type {
+  SpotifyPlaybackResponse,
+  SpotifyProfile,
+  SpotifyStatusResponse,
+} from '@/types/spotify'
+import * as z from 'zod'
+
+/** Subset of Spotify's `GET /me` response we surface; unexpected field types are dropped. */
+const spotifyProfileSchema = z.object({
+  id: z.string().optional().catch(undefined),
+  display_name: z.string().nullish().catch(undefined),
+  email: z.string().optional().catch(undefined),
+  product: z.string().optional().catch(undefined),
+})
 
 async function requireSession() {
-  const session = await getServerSession(authOptions)
+  const session = await auth()
   if (!session?.user?.id) {
     throw new Error('unauthorized')
   }
@@ -28,7 +40,7 @@ async function requireSession() {
 export async function getSpotifyStatusAction(): Promise<SpotifyStatusResponse> {
   const enabled = isSpotifyEnabled()
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return { enabled, connected: false }
     }
@@ -46,14 +58,14 @@ export async function getSpotifyStatusAction(): Promise<SpotifyStatusResponse> {
       return { enabled: true, connected: false }
     }
 
-    let profile: any = null
+    let profile: SpotifyProfile | null = null
     try {
-      const rawProfile: any = await fetchSpotifyProfile(session.user.id)
+      const rawProfile = spotifyProfileSchema.parse(await fetchSpotifyProfile(session.user.id))
       profile = {
-        id: rawProfile?.id,
-        displayName: rawProfile?.display_name ?? rawProfile?.id,
-        email: rawProfile?.email,
-        product: rawProfile?.product,
+        id: rawProfile.id,
+        displayName: rawProfile.display_name ?? rawProfile.id,
+        email: rawProfile.email,
+        product: rawProfile.product,
       }
     } catch (error) {
       profile = null
@@ -75,7 +87,7 @@ export async function getSpotifyStatusAction(): Promise<SpotifyStatusResponse> {
 
 export async function getSpotifyPlaybackAction(): Promise<SpotifyPlaybackResponse> {
   const enabled = isSpotifyEnabled()
-  const session = await getServerSession(authOptions)
+  const session = await auth()
 
   if (!session?.user?.id) {
     return { enabled, connected: false }
@@ -86,7 +98,7 @@ export async function getSpotifyPlaybackAction(): Promise<SpotifyPlaybackRespons
   }
 
   try {
-    const state: any = await getCurrentPlayback(session.user.id)
+    const state = await getCurrentPlayback(session.user.id)
     const playback = mapPlaybackToSimplified(state)
     return { enabled: true, connected: true, playback, timestamp: Date.now() }
   } catch (error) {

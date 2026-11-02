@@ -1,3 +1,6 @@
+import * as z from 'zod'
+import { memoizeAsyncByKey, publicAssetUrl } from './static-data'
+
 export interface Course {
   CODE: string
   TITLE: string
@@ -15,37 +18,41 @@ export interface FFCSToolData {
 
 export type School = 'smec' | 'score' | 'scope' | 'sbst' | 'sce' | 'scheme' | 'select' | 'sense'
 
-type RawCourseSession = {
-  type?: string
-  venue?: string
-  slot?: string
-  faculty?: string
-}
+const rawCourseSessionSchema = z.object({
+  type: z.string().optional(),
+  venue: z.string().optional(),
+  slot: z.string().optional(),
+  faculty: z.string().optional(),
+})
 
-type RawCourseCategory = Record<string, RawCourseSession[]>
-type RawCourseData = Record<string, RawCourseCategory>
+const rawCourseDataSchema = z.record(
+  z.string(),
+  z.record(z.string(), z.array(rawCourseSessionSchema))
+)
 
-export async function getCourseData(school: School = 'smec'): Promise<FFCSToolData> {
-  const baseUrl =
-    typeof window === 'undefined' ? process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000' : ''
-  const response = await fetch(`${baseUrl}/ffcs/${school}.json`)
+/**
+ * Fetched, validated and flattened once per school per instance. The returned arrays
+ * are shared across requests — callers only filter/map them, never mutate.
+ */
+const loadCourseData = memoizeAsyncByKey(async (school: School): Promise<FFCSToolData> => {
+  const response = await fetch(publicAssetUrl(`/ffcs/${school}.json`))
   if (!response.ok) {
     throw new Error(`Failed to fetch course data for ${school}`)
   }
-  const data = (await response.json()) as RawCourseData
+  const data = rawCourseDataSchema.parse(await response.json())
 
   const allCourses: Course[] = []
 
   Object.values(data).forEach(category => {
     Object.entries(category).forEach(([courseKey, sessions]) => {
       const [codePart, ...titleRest] = courseKey.split(' - ')
-      const code = codePart.trim()
+      const code = (codePart ?? '').trim()
       const title = titleRest.join(' - ').trim()
       sessions.forEach(session => {
         allCourses.push({
           CODE: code,
           TITLE: title,
-          TYPE: (session.type ?? '') as string,
+          TYPE: session.type ?? '',
           CREDITS: '',
           VENUE: session.venue ?? '',
           SLOT: session.slot ?? '',
@@ -55,10 +62,18 @@ export async function getCourseData(school: School = 'smec'): Promise<FFCSToolDa
     })
   })
 
-  const uniqueCourses = allCourses.filter(
-    (element, index, self) =>
-      self.findIndex(t => t.CODE === element.CODE && t.TITLE === element.TITLE) === index
-  )
+  // First occurrence of each (CODE, TITLE), in order — O(n) instead of findIndex's O(n²).
+  const seen = new Set<string>()
+  const uniqueCourses = allCourses.filter(course => {
+    const key = `${course.CODE}\u0000${course.TITLE}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 
   return { allCourses, uniqueCourses }
+})
+
+export async function getCourseData(school: School = 'smec'): Promise<FFCSToolData> {
+  return loadCourseData(school)
 }

@@ -3,7 +3,7 @@ import type { UIMessageChunk } from 'ai'
 export const getErrorText = (error: unknown): string => {
   if (typeof error === 'string') return error
   if (error && typeof error === 'object' && 'message' in error) {
-    const msg = (error as { message?: unknown }).message
+    const msg = error.message
     if (typeof msg === 'string') return msg
   }
   try {
@@ -130,8 +130,8 @@ export const ensureUiStreamHasContent = (
 
         if (!hasContent && isContentChunk(chunk)) {
           hasContent = true
-          while (buffer.length > 0) {
-            controller.enqueue(buffer.shift()!)
+          for (const buffered of buffer.splice(0)) {
+            controller.enqueue(buffered)
           }
         }
 
@@ -156,8 +156,8 @@ export const ensureUiStreamHasContent = (
         } else if (sawErrorChunk && errorChunk) {
           controller.enqueue(errorChunk)
         } else if (sawChunk) {
-          while (buffer.length > 0) {
-            controller.enqueue(buffer.shift()!)
+          for (const buffered of buffer.splice(0)) {
+            controller.enqueue(buffered)
           }
         } else {
           controller.enqueue({ type: 'error', errorText: 'something went wrong' })
@@ -203,8 +203,8 @@ export const createFallbackUIStream = (
       }
 
       const flushBuffer = () => {
-        while (buffer.length > 0) {
-          controller.enqueue(buffer.shift()!)
+        for (const buffered of buffer.splice(0)) {
+          controller.enqueue(buffered)
         }
       }
 

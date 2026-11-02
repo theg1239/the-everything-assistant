@@ -149,6 +149,7 @@ export function FollowUpSuggestions(props: FollowUpSuggestionsProps) {
         resizeObserver.disconnect()
       }
     }
+    return undefined
   }, [suggestions, isMobile])
   const nextSlide = () => {
     if (scrollContainerRef.current) {

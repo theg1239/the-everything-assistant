@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth/next'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { memoryService, memorySchema } from '@/lib/memory/memory-service'
-import * as z from 'zod/v3';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return new NextResponse('Unauthorized', { status: 401 })
     }
@@ -27,13 +25,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return new NextResponse('Unauthorized', { status: 401 })
     }
 
     const body = await request.json()
-    const data = memorySchema.partial().parse(body)
+    const parsed = memorySchema.partial().safeParse(body)
+    if (!parsed.success) {
+      return new NextResponse(JSON.stringify(parsed.error.issues), { status: 400 })
+    }
+    const data = parsed.data
 
     const existing = await memoryService.getMemory(id, session.user.id)
     if (!existing) {
@@ -48,9 +50,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     return NextResponse.json(memory)
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify(error.issues), { status: 400 })
-    }
     console.error('Failed to update memory:', error)
     return new NextResponse('Internal server error', { status: 500 })
   }
@@ -59,7 +58,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.id) {
       return new NextResponse('Unauthorized', { status: 401 })
     }

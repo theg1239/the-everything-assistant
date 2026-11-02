@@ -161,7 +161,8 @@ export interface BackgroundConfig {
   }
 }
 
-const defaultBackgroundConfig: BackgroundConfig = {
+// `satisfies` keeps the literal's (fully populated) shape, so defaults below need no `!`.
+const defaultBackgroundConfig = {
   type: 'aurora',
   enabled: false,
   aurora: {
@@ -253,14 +254,15 @@ const defaultBackgroundConfig: BackgroundConfig = {
   solid: {
     color: '#121212',
   },
-}
+} satisfies BackgroundConfig
 
 type StoredBackgroundConfig = Partial<Omit<BackgroundConfig, 'type'>> & { type?: string }
 
+const isBackgroundType = (value: unknown): value is BackgroundType =>
+  BACKGROUND_TYPES.some(type => type === value)
+
 const ensureBackgroundType = (value?: string): BackgroundType => {
-  return value && (BACKGROUND_TYPES as readonly string[]).includes(value)
-    ? (value as BackgroundType)
-    : defaultBackgroundConfig.type
+  return value && isBackgroundType(value) ? value : defaultBackgroundConfig.type
 }
 
 const normalizeBackgroundConfig = (config?: StoredBackgroundConfig): BackgroundConfig => ({
@@ -335,6 +337,7 @@ export default function CustomBackground() {
       }))
     }
 
+    // Window events are untyped; these details are produced by hooks/use-custom-background.
     window.addEventListener('backgroundToggle', handleBackgroundToggle as EventListener)
     window.addEventListener('auroraToggle', handleAuroraToggle as EventListener)
 
@@ -390,13 +393,13 @@ export default function CustomBackground() {
         return (
           <Aurora
             colorStops={
-              backgroundConfig.aurora?.colorStops || defaultBackgroundConfig.aurora!.colorStops!
+              backgroundConfig.aurora?.colorStops || defaultBackgroundConfig.aurora.colorStops
             }
             amplitude={
-              backgroundConfig.aurora?.amplitude || defaultBackgroundConfig.aurora!.amplitude!
+              backgroundConfig.aurora?.amplitude || defaultBackgroundConfig.aurora.amplitude
             }
-            blend={backgroundConfig.aurora?.blend || defaultBackgroundConfig.aurora!.blend!}
-            speed={backgroundConfig.aurora?.speed || defaultBackgroundConfig.aurora!.speed!}
+            blend={backgroundConfig.aurora?.blend || defaultBackgroundConfig.aurora.blend}
+            speed={backgroundConfig.aurora?.speed || defaultBackgroundConfig.aurora.speed}
           />
         )
 
@@ -404,24 +407,24 @@ export default function CustomBackground() {
         return (
           <Beams
             beamWidth={
-              backgroundConfig.beams?.beamWidth || defaultBackgroundConfig.beams!.beamWidth!
+              backgroundConfig.beams?.beamWidth || defaultBackgroundConfig.beams.beamWidth
             }
             beamHeight={
-              backgroundConfig.beams?.beamHeight || defaultBackgroundConfig.beams!.beamHeight!
+              backgroundConfig.beams?.beamHeight || defaultBackgroundConfig.beams.beamHeight
             }
             beamNumber={
-              backgroundConfig.beams?.beamNumber || defaultBackgroundConfig.beams!.beamNumber!
+              backgroundConfig.beams?.beamNumber || defaultBackgroundConfig.beams.beamNumber
             }
             lightColor={
-              backgroundConfig.beams?.lightColor || defaultBackgroundConfig.beams!.lightColor!
+              backgroundConfig.beams?.lightColor || defaultBackgroundConfig.beams.lightColor
             }
-            speed={backgroundConfig.beams?.speed || defaultBackgroundConfig.beams!.speed!}
+            speed={backgroundConfig.beams?.speed || defaultBackgroundConfig.beams.speed}
             noiseIntensity={
               backgroundConfig.beams?.noiseIntensity ||
-              defaultBackgroundConfig.beams!.noiseIntensity!
+              defaultBackgroundConfig.beams.noiseIntensity
             }
-            scale={backgroundConfig.beams?.scale || defaultBackgroundConfig.beams!.scale!}
-            rotation={backgroundConfig.beams?.rotation || defaultBackgroundConfig.beams!.rotation!}
+            scale={backgroundConfig.beams?.scale || defaultBackgroundConfig.beams.scale}
+            rotation={backgroundConfig.beams?.rotation || defaultBackgroundConfig.beams.rotation}
           />
         )
 
@@ -429,35 +432,35 @@ export default function CustomBackground() {
         return (
           <Dither
             waveSpeed={
-              backgroundConfig.dither?.waveSpeed || defaultBackgroundConfig.dither!.waveSpeed!
+              backgroundConfig.dither?.waveSpeed || defaultBackgroundConfig.dither.waveSpeed
             }
             waveFrequency={
               backgroundConfig.dither?.waveFrequency ||
-              defaultBackgroundConfig.dither!.waveFrequency!
+              defaultBackgroundConfig.dither.waveFrequency
             }
             waveAmplitude={
               backgroundConfig.dither?.waveAmplitude ||
-              defaultBackgroundConfig.dither!.waveAmplitude!
+              defaultBackgroundConfig.dither.waveAmplitude
             }
             waveColor={
-              backgroundConfig.dither?.waveColor || defaultBackgroundConfig.dither!.waveColor!
+              backgroundConfig.dither?.waveColor || defaultBackgroundConfig.dither.waveColor
             }
             colorNum={
-              backgroundConfig.dither?.colorNum || defaultBackgroundConfig.dither!.colorNum!
+              backgroundConfig.dither?.colorNum || defaultBackgroundConfig.dither.colorNum
             }
             pixelSize={
-              backgroundConfig.dither?.pixelSize || defaultBackgroundConfig.dither!.pixelSize!
+              backgroundConfig.dither?.pixelSize || defaultBackgroundConfig.dither.pixelSize
             }
             disableAnimation={
               backgroundConfig.dither?.disableAnimation ||
-              defaultBackgroundConfig.dither!.disableAnimation!
+              defaultBackgroundConfig.dither.disableAnimation
             }
             enableMouseInteraction={
               backgroundConfig.dither?.enableMouseInteraction ||
-              defaultBackgroundConfig.dither!.enableMouseInteraction!
+              defaultBackgroundConfig.dither.enableMouseInteraction
             }
             mouseRadius={
-              backgroundConfig.dither?.mouseRadius || defaultBackgroundConfig.dither!.mouseRadius!
+              backgroundConfig.dither?.mouseRadius || defaultBackgroundConfig.dither.mouseRadius
             }
           />
         )
@@ -467,76 +470,76 @@ export default function CustomBackground() {
           <FloatingLines
             linesGradient={
               backgroundConfig.floatingLines?.linesGradient ||
-              defaultBackgroundConfig.floatingLines!.linesGradient!
+              defaultBackgroundConfig.floatingLines.linesGradient
             }
             enabledWaves={
               backgroundConfig.floatingLines?.enabledWaves ||
-              defaultBackgroundConfig.floatingLines!.enabledWaves!
+              defaultBackgroundConfig.floatingLines.enabledWaves
             }
             animationSpeed={
               backgroundConfig.floatingLines?.animationSpeed ||
-              defaultBackgroundConfig.floatingLines!.animationSpeed!
+              defaultBackgroundConfig.floatingLines.animationSpeed
             }
             parallaxStrength={
               backgroundConfig.floatingLines?.parallaxStrength ||
-              defaultBackgroundConfig.floatingLines!.parallaxStrength!
+              defaultBackgroundConfig.floatingLines.parallaxStrength
             }
           />
         )
       case 'terminal':
         return (
           <TerminalBackground
-            scale={backgroundConfig.terminal?.scale ?? defaultBackgroundConfig.terminal!.scale}
+            scale={backgroundConfig.terminal?.scale ?? defaultBackgroundConfig.terminal.scale}
             gridMul={
-              backgroundConfig.terminal?.gridMul ?? defaultBackgroundConfig.terminal!.gridMul
+              backgroundConfig.terminal?.gridMul ?? defaultBackgroundConfig.terminal.gridMul
             }
             digitSize={
-              backgroundConfig.terminal?.digitSize ?? defaultBackgroundConfig.terminal!.digitSize
+              backgroundConfig.terminal?.digitSize ?? defaultBackgroundConfig.terminal.digitSize
             }
             timeScale={
-              backgroundConfig.terminal?.timeScale ?? defaultBackgroundConfig.terminal!.timeScale
+              backgroundConfig.terminal?.timeScale ?? defaultBackgroundConfig.terminal.timeScale
             }
             scanlineIntensity={
               backgroundConfig.terminal?.scanlineIntensity ??
-              defaultBackgroundConfig.terminal!.scanlineIntensity
+              defaultBackgroundConfig.terminal.scanlineIntensity
             }
             glitchAmount={
               backgroundConfig.terminal?.glitchAmount ??
-              defaultBackgroundConfig.terminal!.glitchAmount
+              defaultBackgroundConfig.terminal.glitchAmount
             }
             flickerAmount={
               backgroundConfig.terminal?.flickerAmount ??
-              defaultBackgroundConfig.terminal!.flickerAmount
+              defaultBackgroundConfig.terminal.flickerAmount
             }
             noiseAmp={
-              backgroundConfig.terminal?.noiseAmp ?? defaultBackgroundConfig.terminal!.noiseAmp
+              backgroundConfig.terminal?.noiseAmp ?? defaultBackgroundConfig.terminal.noiseAmp
             }
             chromaticAberration={
               backgroundConfig.terminal?.chromaticAberration ??
-              defaultBackgroundConfig.terminal!.chromaticAberration
+              defaultBackgroundConfig.terminal.chromaticAberration
             }
-            dither={backgroundConfig.terminal?.dither ?? defaultBackgroundConfig.terminal!.dither}
+            dither={backgroundConfig.terminal?.dither ?? defaultBackgroundConfig.terminal.dither}
             curvature={
-              backgroundConfig.terminal?.curvature ?? defaultBackgroundConfig.terminal!.curvature
+              backgroundConfig.terminal?.curvature ?? defaultBackgroundConfig.terminal.curvature
             }
-            tint={backgroundConfig.terminal?.tint ?? defaultBackgroundConfig.terminal!.tint}
+            tint={backgroundConfig.terminal?.tint ?? defaultBackgroundConfig.terminal.tint}
             mouseReact={
-              backgroundConfig.terminal?.mouseReact ?? defaultBackgroundConfig.terminal!.mouseReact
+              backgroundConfig.terminal?.mouseReact ?? defaultBackgroundConfig.terminal.mouseReact
             }
             mouseStrength={
               backgroundConfig.terminal?.mouseStrength ??
-              defaultBackgroundConfig.terminal!.mouseStrength
+              defaultBackgroundConfig.terminal.mouseStrength
             }
             brightness={
-              backgroundConfig.terminal?.brightness ?? defaultBackgroundConfig.terminal!.brightness
+              backgroundConfig.terminal?.brightness ?? defaultBackgroundConfig.terminal.brightness
             }
             backgroundColor={
               backgroundConfig.terminal?.backgroundColor ??
-              defaultBackgroundConfig.terminal!.backgroundColor
+              defaultBackgroundConfig.terminal.backgroundColor
             }
             overlayOpacity={
               backgroundConfig.terminal?.overlayOpacity ??
-              defaultBackgroundConfig.terminal!.overlayOpacity
+              defaultBackgroundConfig.terminal.overlayOpacity
             }
           />
         )
@@ -545,37 +548,37 @@ export default function CustomBackground() {
         return (
           <ColorBands
             colors={
-              backgroundConfig.colorBands?.colors || defaultBackgroundConfig.colorBands!.colors
+              backgroundConfig.colorBands?.colors || defaultBackgroundConfig.colorBands.colors
             }
             transparent={
               backgroundConfig.colorBands?.transparent ??
-              defaultBackgroundConfig.colorBands!.transparent!
+              defaultBackgroundConfig.colorBands.transparent
             }
             rotation={
-              backgroundConfig.colorBands?.rotation ?? defaultBackgroundConfig.colorBands!.rotation
+              backgroundConfig.colorBands?.rotation ?? defaultBackgroundConfig.colorBands.rotation
             }
-            speed={backgroundConfig.colorBands?.speed ?? defaultBackgroundConfig.colorBands!.speed}
+            speed={backgroundConfig.colorBands?.speed ?? defaultBackgroundConfig.colorBands.speed}
             autoRotate={
               backgroundConfig.colorBands?.autoRotate ??
-              defaultBackgroundConfig.colorBands!.autoRotate
+              defaultBackgroundConfig.colorBands.autoRotate
             }
-            scale={backgroundConfig.colorBands?.scale ?? defaultBackgroundConfig.colorBands!.scale}
+            scale={backgroundConfig.colorBands?.scale ?? defaultBackgroundConfig.colorBands.scale}
             frequency={
               backgroundConfig.colorBands?.frequency ??
-              defaultBackgroundConfig.colorBands!.frequency
+              defaultBackgroundConfig.colorBands.frequency
             }
             warpStrength={
               backgroundConfig.colorBands?.warpStrength ??
-              defaultBackgroundConfig.colorBands!.warpStrength
+              defaultBackgroundConfig.colorBands.warpStrength
             }
             mouseInfluence={
               backgroundConfig.colorBands?.mouseInfluence ??
-              defaultBackgroundConfig.colorBands!.mouseInfluence
+              defaultBackgroundConfig.colorBands.mouseInfluence
             }
             parallax={
-              backgroundConfig.colorBands?.parallax ?? defaultBackgroundConfig.colorBands!.parallax
+              backgroundConfig.colorBands?.parallax ?? defaultBackgroundConfig.colorBands.parallax
             }
-            noise={backgroundConfig.colorBands?.noise ?? defaultBackgroundConfig.colorBands!.noise}
+            noise={backgroundConfig.colorBands?.noise ?? defaultBackgroundConfig.colorBands.noise}
           />
         )
 
@@ -584,48 +587,48 @@ export default function CustomBackground() {
           <GridBackground
             className="absolute inset-0"
             lineThickness={
-              backgroundConfig.grid?.lineThickness ?? defaultBackgroundConfig.grid!.lineThickness
+              backgroundConfig.grid?.lineThickness ?? defaultBackgroundConfig.grid.lineThickness
             }
             linesColor={
-              backgroundConfig.grid?.linesColor ?? defaultBackgroundConfig.grid!.linesColor
+              backgroundConfig.grid?.linesColor ?? defaultBackgroundConfig.grid.linesColor
             }
-            scanColor={backgroundConfig.grid?.scanColor ?? defaultBackgroundConfig.grid!.scanColor}
+            scanColor={backgroundConfig.grid?.scanColor ?? defaultBackgroundConfig.grid.scanColor}
             scanOpacity={
-              backgroundConfig.grid?.scanOpacity ?? defaultBackgroundConfig.grid!.scanOpacity
+              backgroundConfig.grid?.scanOpacity ?? defaultBackgroundConfig.grid.scanOpacity
             }
-            gridScale={backgroundConfig.grid?.gridScale ?? defaultBackgroundConfig.grid!.gridScale}
-            lineStyle={backgroundConfig.grid?.lineStyle ?? defaultBackgroundConfig.grid!.lineStyle}
+            gridScale={backgroundConfig.grid?.gridScale ?? defaultBackgroundConfig.grid.gridScale}
+            lineStyle={backgroundConfig.grid?.lineStyle ?? defaultBackgroundConfig.grid.lineStyle}
             lineJitter={
-              backgroundConfig.grid?.lineJitter ?? defaultBackgroundConfig.grid!.lineJitter
+              backgroundConfig.grid?.lineJitter ?? defaultBackgroundConfig.grid.lineJitter
             }
             noiseIntensity={
-              backgroundConfig.grid?.noiseIntensity ?? defaultBackgroundConfig.grid!.noiseIntensity
+              backgroundConfig.grid?.noiseIntensity ?? defaultBackgroundConfig.grid.noiseIntensity
             }
             scanDirection={
-              backgroundConfig.grid?.scanDirection ?? defaultBackgroundConfig.grid!.scanDirection
+              backgroundConfig.grid?.scanDirection ?? defaultBackgroundConfig.grid.scanDirection
             }
-            scanGlow={backgroundConfig.grid?.scanGlow ?? defaultBackgroundConfig.grid!.scanGlow}
+            scanGlow={backgroundConfig.grid?.scanGlow ?? defaultBackgroundConfig.grid.scanGlow}
             scanSoftness={
-              backgroundConfig.grid?.scanSoftness ?? defaultBackgroundConfig.grid!.scanSoftness
+              backgroundConfig.grid?.scanSoftness ?? defaultBackgroundConfig.grid.scanSoftness
             }
             scanPhaseTaper={
-              backgroundConfig.grid?.scanPhaseTaper ?? defaultBackgroundConfig.grid!.scanPhaseTaper
+              backgroundConfig.grid?.scanPhaseTaper ?? defaultBackgroundConfig.grid.scanPhaseTaper
             }
             scanDuration={
-              backgroundConfig.grid?.scanDuration ?? defaultBackgroundConfig.grid!.scanDuration
+              backgroundConfig.grid?.scanDuration ?? defaultBackgroundConfig.grid.scanDuration
             }
-            scanDelay={backgroundConfig.grid?.scanDelay ?? defaultBackgroundConfig.grid!.scanDelay}
+            scanDelay={backgroundConfig.grid?.scanDelay ?? defaultBackgroundConfig.grid.scanDelay}
             enablePost={
-              backgroundConfig.grid?.enablePost ?? defaultBackgroundConfig.grid!.enablePost
+              backgroundConfig.grid?.enablePost ?? defaultBackgroundConfig.grid.enablePost
             }
           />
         )
 
       case 'gradient':
         const gradientColors =
-          backgroundConfig.gradient?.colors || defaultBackgroundConfig.gradient!.colors
+          backgroundConfig.gradient?.colors || defaultBackgroundConfig.gradient.colors
         const direction =
-          backgroundConfig.gradient?.direction || defaultBackgroundConfig.gradient!.direction
+          backgroundConfig.gradient?.direction || defaultBackgroundConfig.gradient.direction
         const gradientClasses = `bg-gradient-${direction} from-[${gradientColors[0]}] via-[${gradientColors[1]}] to-[${gradientColors[2] || gradientColors[1]}]`
 
         return (
@@ -635,7 +638,7 @@ export default function CustomBackground() {
         )
 
       case 'solid':
-        const solidColor = backgroundConfig.solid?.color || defaultBackgroundConfig.solid!.color
+        const solidColor = backgroundConfig.solid?.color || defaultBackgroundConfig.solid.color
         return <div className="absolute inset-0" style={{ backgroundColor: solidColor }} />
 
       default:

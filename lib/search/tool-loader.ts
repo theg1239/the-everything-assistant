@@ -7,6 +7,11 @@ import type { GroupConfig } from './group-config'
  * loaded yet. An empty `group.tools` means "return all tools", matching
  * Scira's behavior for the default group.
  */
+const isRegistryKey = <Tools extends Record<string, unknown>>(
+  registry: Tools,
+  name: string
+): name is Extract<keyof Tools, string> => name in registry
+
 export function loadConfiguredTools<Tools extends Record<string, unknown>>(
   registry: Tools,
   group: GroupConfig
@@ -16,8 +21,8 @@ export function loadConfiguredTools<Tools extends Record<string, unknown>>(
   }
   const result: Partial<Tools> = {}
   for (const name of group.tools) {
-    if (name in registry) {
-      ;(result as Record<string, unknown>)[name] = (registry as Record<string, unknown>)[name]
+    if (isRegistryKey(registry, name)) {
+      result[name] = registry[name]
     }
   }
   return result
@@ -38,14 +43,13 @@ export function resolveActiveTools<Tools extends Record<string, unknown>>(
   registry: Tools,
   { group, activeToolNames }: ActiveToolsOptions
 ): (keyof Tools)[] {
-  const registryNames = Object.keys(registry) as (keyof Tools)[]
-  const groupAllowlist =
-    group.tools.length === 0 ? registryNames : (group.tools as (keyof Tools)[])
+  const registryNames = Object.keys(registry).filter(name => isRegistryKey(registry, name))
+  const groupAllowlist: readonly string[] = group.tools.length === 0 ? registryNames : group.tools
 
-  const allowedSet = new Set(groupAllowlist.map(String))
-  const pool = registryNames.filter(name => allowedSet.has(String(name)))
+  const allowedSet = new Set(groupAllowlist)
+  const pool = registryNames.filter(name => allowedSet.has(name))
   if (!activeToolNames?.length) return pool
 
   const userSet = new Set(activeToolNames)
-  return pool.filter(name => userSet.has(String(name)))
+  return pool.filter(name => userSet.has(name))
 }

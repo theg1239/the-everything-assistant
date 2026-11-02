@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import * as z from 'zod'
+import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { listVTOPSnapshots } from '@/lib/vtop-snapshots'
 import { buildDailyBriefingContext, buildGreeting, deriveTerseName } from '@/lib/hub/daily-briefing'
@@ -10,13 +10,27 @@ import type { PersonalHubSnapshot } from '@/types/hub'
 
 export const runtime = 'nodejs'
 
+/** Shape of `VTOPSnapshot.data` (a JSON column); fields with unexpected types are dropped. */
+const snapshotDataSchema = z.object({
+  title: z.string().optional().catch(undefined),
+  summary: z.string().optional().catch(undefined),
+  formatted_content: z.string().optional().catch(undefined),
+  structured_data: z.json().optional().catch(undefined),
+  meta: z.record(z.string(), z.json()).nullable().optional().catch(undefined),
+})
+
+function parseSnapshotData(value: unknown): z.infer<typeof snapshotDataSchema> {
+  const parsed = snapshotDataSchema.safeParse(value)
+  return parsed.success ? parsed.data : {}
+}
+
 function unauthorized(message: string) {
   return NextResponse.json({ error: message }, { status: 403 })
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     const adminEmail = process.env.RATE_LIMIT_ADMIN_EMAIL
     if (!adminEmail) {
       return NextResponse.json({ error: 'RATE_LIMIT_ADMIN_EMAIL not configured' }, { status: 503 })
@@ -25,7 +39,7 @@ export async function POST(request: NextRequest) {
       return unauthorized('admin access required')
     }
 
-    const rawBody = await request.json().catch(() => null)
+    const rawBody: unknown = await request.json().catch(() => null)
     if (!rawBody) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
     }
@@ -62,7 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     const normalized: PersonalHubSnapshot[] = snapshots.map(row => {
-      const data = (row.data as any) || {}
+      const data = parseSnapshotData(row.data)
       return {
         command: row.command,
         title: data.title || row.command,
@@ -108,10 +122,12 @@ export async function POST(request: NextRequest) {
         referenceTime: reference.toISOString(),
       },
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('[mgmt] failed to send briefing email', error)
     return NextResponse.json(
-      { error: error?.message || 'Failed to send briefing' },
+      {
+        error: error instanceof Error && error.message ? error.message : 'Failed to send briefing',
+      },
       { status: 500 }
     )
   }

@@ -1,18 +1,10 @@
-import { generateId } from 'ai'
+import { createUIMessageStream, generateId } from 'ai'
 
 import { sanitizeToolInvocations } from '@/lib/sanitize-tools'
-import { createUIMessageStream } from 'ai'
-import { getToolInputPayload, getToolOutputPayload } from './tool-helpers'
-import type { AppUIMessage, LegacyMessage } from '@/lib/ai-message-conversion'
-import type { JsonValue } from '@/types/tools'
+import type { AppUIMessage } from '@/lib/ai-message-conversion'
 
-type DirectToolCallResult = {
-  toolCallId: string
-  toolName: string
-  args?: Record<string, JsonValue>
-  result: any
-  state: string
-}
+import type { DirectToolCallResult } from './direct-tool-call'
+import { getToolOutput } from './tool-helpers'
 
 export function createDirectToolCallStream(
   uiMessages: AppUIMessage[],
@@ -25,7 +17,7 @@ export function createDirectToolCallStream(
       toolCallId: directToolCallResult.toolCallId,
       toolName: directToolCallResult.toolName,
       args: directToolCallResult.args,
-      result: getToolOutputPayload(directToolCallResult),
+      result: getToolOutput(directToolCallResult),
       state: directToolCallResult.state,
     },
   ])
@@ -65,47 +57,3 @@ export function createDirectToolCallStream(
 
   return { stream, safeInvocations }
 }
-
-export function appendToolContextToMessages(
-  enhancedMessages: LegacyMessage[],
-  directToolCallResult: DirectToolCallResult | null
-) {
-  if (!directToolCallResult) return
-
-  const lastUserMessage = enhancedMessages[enhancedMessages.length - 1]
-  if (!lastUserMessage || lastUserMessage.role !== 'user') return
-
-  if (directToolCallResult.toolName !== 'queryVTOP') return
-
-  const directResultPayload = getToolOutputPayload(directToolCallResult)
-  if (!directResultPayload?.success) return
-
-  const command =
-    directResultPayload.command || getToolInputPayload(directToolCallResult)?.command || 'data'
-
-  let dataContext = ''
-  if (directResultPayload.formatted_content) {
-    dataContext = directResultPayload.formatted_content
-  } else if (directResultPayload.summary) {
-    dataContext = directResultPayload.summary
-  } else if (directResultPayload.data || directResultPayload.output) {
-    const rawData = directResultPayload.data || directResultPayload.output
-    if (typeof rawData === 'string') {
-      dataContext = rawData.substring(0, 500) + (rawData.length > 500 ? '...' : '')
-    } else if (Array.isArray(rawData)) {
-      dataContext = `Retrieved ${rawData.length} items for ${command}`
-    } else {
-      dataContext = `Retrieved ${command} data from VTOP`
-    }
-  }
-
-  if (!dataContext) return
-
-  enhancedMessages[enhancedMessages.length - 1] = {
-    ...lastUserMessage,
-    content:
-      (lastUserMessage.content || '') +
-      `\n\n[VTOP ${command.toUpperCase()} DATA CONTEXT]:\n${dataContext}\n\n[IMPORTANT]: VTOP ${command} data was successfully retrieved above. Use this data to answer the user's question about ${command}.`,
-  }
-}
-

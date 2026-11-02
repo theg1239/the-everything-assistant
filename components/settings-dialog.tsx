@@ -38,6 +38,7 @@ import {
   Brain,
   Fingerprint,
   Music,
+  type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -49,6 +50,8 @@ import { MemoryManagement } from '@/components/memory-management'
 import { VTOPSettings } from '@/components/vtop-settings'
 import { deleteAccountAction } from '@/app/actions/account'
 import { readJson } from '@/lib/http'
+import { isRecord } from '@/lib/json'
+import { asRecord, errorMessage, readString } from '@/components/narrow'
 import { useMiniPlayerStore } from '@/lib/stores/useMiniPlayerStore'
 import type { UserPreferences, UserPreferencesResponse } from '@/types/preferences'
 import type { MemorySettings } from '@/hooks/use-memories'
@@ -209,7 +212,7 @@ const base64urlToArrayBuffer = (base64url: string): ArrayBuffer => {
 }
 
 const cloneBufferSource = (value: ArrayBufferLike | ArrayBuffer | Uint8Array): ArrayBuffer => {
-  const source = value instanceof Uint8Array ? value : new Uint8Array(value as ArrayBufferLike)
+  const source = value instanceof Uint8Array ? value : new Uint8Array(value)
   const copy = new Uint8Array(source.length)
   copy.set(source)
   return copy.buffer
@@ -266,12 +269,32 @@ const formatRateLimitReset = (resetsAt: number | null): string | null => {
   })
 }
 
-export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any) {
+interface SettingsDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onTriggerOnboarding?: () => void
+  /** Section shown when the dialog first mounts (it is mounted lazily, on first open). */
+  initialSection?: string
+}
+
+interface SettingsMenuItem {
+  id: string
+  label: string
+  icon: LucideIcon
+}
+
+export function SettingsDialog({
+  open,
+  onOpenChange,
+  onTriggerOnboarding,
+  initialSection,
+}: SettingsDialogProps) {
   const { data: session } = useSession()
   const { setBackgroundType, toggleBackground } = useCustomBackground()
   const { setIsOpen: setSidebarOpen } = useSidebar()
-  const { enabled: miniPlayerEnabled, setEnabled: setMiniPlayerEnabled } = useMiniPlayerStore()
-  const [activeSection, setActiveSection] = useState('general')
+  const miniPlayerEnabled = useMiniPlayerStore(state => state.enabled)
+  const setMiniPlayerEnabled = useMiniPlayerStore(state => state.setEnabled)
+  const [activeSection, setActiveSection] = useState(initialSection ?? 'general')
   const [pendingSection, setPendingSection] = useState<string | null>(null)
   const [followUpSuggestions, setFollowUpSuggestions] = useState(true)
   const [backgroundConfig, setBackgroundConfig] = useState<{
@@ -686,11 +709,11 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         return current
       })
       return data
-    } catch (error: any) {
+    } catch (error) {
       const fallback: ChatgptStatusResponse = {
         ...EMPTY_CHATGPT_STATUS,
         available: false,
-        error: error?.message || 'Unable to reach Codex app-server',
+        error: errorMessage(error) || 'Unable to reach Codex app-server',
       }
       setChatgptStatus(fallback)
       setChatgptDeviceFlow(null)
@@ -742,9 +765,9 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       }
 
       toast.success('Complete ChatGPT sign-in in the opened browser tab.')
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error starting ChatGPT login:', error)
-      toast.error(error?.message || 'Unable to start ChatGPT login')
+      toast.error(errorMessage(error) || 'Unable to start ChatGPT login')
     } finally {
       setStartingChatgptLogin(false)
     }
@@ -791,9 +814,9 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       setChatgptStatus(data)
       setChatgptDeviceFlow(null)
       toast.success('ChatGPT login canceled')
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error canceling ChatGPT login:', error)
-      toast.error(error?.message || 'Unable to cancel ChatGPT login')
+      toast.error(errorMessage(error) || 'Unable to cancel ChatGPT login')
     } finally {
       setCancelingChatgptLogin(false)
     }
@@ -812,9 +835,9 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       setChatgptStatus(data)
       setChatgptDeviceFlow(null)
       toast.success('ChatGPT disconnected')
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error disconnecting ChatGPT:', error)
-      toast.error(error?.message || 'Unable to disconnect ChatGPT')
+      toast.error(errorMessage(error) || 'Unable to disconnect ChatGPT')
     } finally {
       setDisconnectingChatgpt(false)
     }
@@ -943,9 +966,9 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         throw new Error(payload?.error || 'Failed to send test briefing')
       }
       toast.success('daily briefing sent to your inbox')
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error sending test briefing:', error)
-      toast.error(error?.message || 'failed to send daily briefing email')
+      toast.error(errorMessage(error) || 'failed to send daily briefing email')
     } finally {
       setSendingTestBriefing(false)
     }
@@ -1112,11 +1135,11 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         const userIdBuffer: BufferSource =
           typeof options.user.id === 'string'
             ? base64urlToArrayBuffer(options.user.id)
-            : cloneBufferSource(options.user.id as ArrayBufferLike | Uint8Array)
+            : cloneBufferSource(options.user.id)
         const challengeBuffer: BufferSource =
           typeof options.challenge === 'string'
             ? base64urlToArrayBuffer(options.challenge)
-            : cloneBufferSource(options.challenge as ArrayBufferLike | Uint8Array)
+            : cloneBufferSource(options.challenge)
 
         const credentialCreationOptions: PublicKeyCredentialCreationOptions = {
           rp: options.rp,
@@ -1147,27 +1170,29 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
         try {
           console.log('Attempting WebAuthn credential creation...')
-          credential = (await navigator.credentials.create({
+          const created = await navigator.credentials.create({
             publicKey: credentialCreationOptions,
-          })) as PublicKeyCredential
+          })
+          credential = created instanceof PublicKeyCredential ? created : null
 
           console.log('WebAuthn credential created successfully:', credential?.id)
-        } catch (webauthnError: any) {
+        } catch (webauthnError) {
           console.error('WebAuthn credential creation failed:', webauthnError)
+          const webauthnErrorName = readString(asRecord(webauthnError)?.name)
 
-          if (webauthnError.name === 'NotAllowedError') {
+          if (webauthnErrorName === 'NotAllowedError') {
             throw new Error(
               'Security key registration was cancelled, timed out, or blocked. This could be due to Windows Hello setup issues, an unconnected security key, or browser restrictions. Please ensure your authenticator is ready and try again.'
             )
-          } else if (webauthnError.name === 'InvalidStateError') {
+          } else if (webauthnErrorName === 'InvalidStateError') {
             throw new Error(`This ${methodName} is already registered for your account.`)
-          } else if (webauthnError.name === 'NotSupportedError') {
+          } else if (webauthnErrorName === 'NotSupportedError') {
             throw new Error(`Your ${methodName} is not supported by this browser.`)
-          } else if (webauthnError.name === 'ConstraintError') {
+          } else if (webauthnErrorName === 'ConstraintError') {
             throw new Error(`The ${methodName} does not meet the security requirements.`)
           } else {
             throw new Error(
-              `Failed to create ${methodName}: ${webauthnError.message || 'Unknown error occurred'}`
+              `Failed to create ${methodName}: ${errorMessage(webauthnError) || 'Unknown error occurred'}`
             )
           }
         }
@@ -1176,7 +1201,10 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
           throw new Error('Failed to create credential - no credential returned')
         }
 
-        const response = credential.response as AuthenticatorAttestationResponse
+        const response = credential.response
+        if (!(response instanceof AuthenticatorAttestationResponse)) {
+          throw new Error('Failed to create credential - unexpected credential response')
+        }
 
         console.log('Sending credential to server for verification...')
         const verifyResponse = await fetch('/api/user/mfa/webauthn/verify', {
@@ -1234,10 +1262,10 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
           throw new Error(errorData.error || 'Invalid verification code')
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error verifying MFA setup:', error)
 
-      toast.error(error.message || 'Failed to verify setup')
+      toast.error(errorMessage(error) || 'Failed to verify setup')
     } finally {
       setLoadingMfa(false)
     }
@@ -1346,15 +1374,15 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
         const errorData = await readJson<BasicApiResponse>(response)
         throw new Error(errorData.error || 'Failed to update MFA method')
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error updating MFA method:', error)
-      toast.error(error.message || 'Failed to update MFA method')
+      toast.error(errorMessage(error) || 'Failed to update MFA method')
     } finally {
       setLoadingMfa(false)
     }
   }
 
-  const menuItems = [
+  const menuItems: SettingsMenuItem[] = [
     { id: 'general', label: 'general', icon: Settings },
     { id: 'integrations', label: 'integrations', icon: Globe },
     { id: 'personalization', label: 'personalization', icon: User },
@@ -1513,9 +1541,9 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
       await deleteAccountAction()
       toast.success('account deleted ΓÇö signing you out')
       await signOut({ callbackUrl: '/login' })
-    } catch (error: any) {
+    } catch (error) {
       console.error('failed to delete account', error)
-      toast.error(error?.message || 'failed to delete account')
+      toast.error(errorMessage(error) || 'failed to delete account')
     } finally {
       setDeletingAccount(false)
     }
@@ -2976,6 +3004,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
 
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     const touch = e.touches[0]
+    if (!touch) return
     const scrollContainer = e.currentTarget
     setTouchStartY(touch.clientY)
     setTouchStartScrollTop(scrollContainer.scrollTop)
@@ -2994,18 +3023,20 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
     setConfirmArchive(false)
   }, [activeSection])
   useEffect(() => {
-    const handleOpenSettings = (event: CustomEvent) => {
-      const { section } = event.detail || {}
+    const handleOpenSettings = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return
+      const detail: unknown = event.detail
+      const section = isRecord(detail) ? detail.section : undefined
       if (section === 'feedback') {
         onOpenChange(true)
         setTimeout(() => setActiveSection('feedback'), 50)
       }
     }
 
-    window.addEventListener('openSettings', handleOpenSettings as EventListener)
+    window.addEventListener('openSettings', handleOpenSettings)
 
     return () => {
-      window.removeEventListener('openSettings', handleOpenSettings as EventListener)
+      window.removeEventListener('openSettings', handleOpenSettings)
     }
   }, [onOpenChange])
 
@@ -3040,7 +3071,7 @@ export function SettingsDialog({ open, onOpenChange, onTriggerOnboarding }: any)
           variant === 'desktop' ? 'gap-1 md:grid-cols-1 md:gap-1' : 'gap-2'
         )}
       >
-        {menuItems.map((item: { id: string; label: string; icon: any }) => {
+        {menuItems.map(item => {
           const Icon = item.icon
           return (
             <button

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import {
   userPreferencesSchema,
@@ -10,9 +9,15 @@ import {
 
 export const runtime = 'nodejs'
 
+/** Reads the `User.preferences` JSON column; keeps unknown keys so PATCH writes them back untouched. */
+function readStoredPreferences(value: unknown): UserPreferences {
+  const parsed = userPreferencesSchema.passthrough().safeParse(value)
+  return parsed.success ? parsed.data : {}
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -20,7 +25,7 @@ export async function GET(request: NextRequest) {
       where: { email: session.user.email },
     })
 
-    const storedPreferences = (user?.preferences as UserPreferences | null) || {}
+    const storedPreferences = readStoredPreferences(user?.preferences)
     const basePreferences: UserPreferences = {
       followUpSuggestions:
         typeof storedPreferences.followUpSuggestions === 'boolean'
@@ -57,7 +62,7 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await auth()
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -79,7 +84,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const currentPrefs = (existingUser.preferences as UserPreferences | null) || {}
+    const currentPrefs = readStoredPreferences(existingUser.preferences)
     let preferencesToUpdate: UserPreferences = { ...currentPrefs }
 
     if (body.preferences) {
@@ -119,7 +124,7 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    const updatedUser = await prisma.user.update({
+    await prisma.user.update({
       where: { email: session.user.email },
       data: {
         preferences: preferencesToUpdate,
@@ -128,7 +133,7 @@ export async function PATCH(request: NextRequest) {
     })
 
     return NextResponse.json({
-      preferences: updatedUser.preferences as UserPreferences,
+      preferences: preferencesToUpdate,
       message: 'Preferences updated successfully',
     })
   } catch (error) {

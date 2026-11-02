@@ -1,4 +1,17 @@
-type UsageCandidate = Record<string, any> | null | undefined
+import { isRecord } from './json'
+
+/** Token usage from any SDK/provider shape; only numeric fields are read. */
+type UsageCandidate = unknown
+
+/** Reads a nested property path from an untrusted value. */
+const at = (value: unknown, ...path: string[]): unknown => {
+  let current = value
+  for (const key of path) {
+    if (!isRecord(current)) return undefined
+    current = current[key]
+  }
+  return current
+}
 
 const toNumber = (value: unknown): number | undefined => {
   if (typeof value !== 'number' || Number.isNaN(value)) return undefined
@@ -15,40 +28,36 @@ const firstNumber = (...values: unknown[]): number | undefined => {
 
 export function normalizeTokenUsage(usage: UsageCandidate) {
   const promptTokens = firstNumber(
-    usage?.inputTokens,
-    usage?.inputTokens,
-    usage?.inputTokens?.total,
-    usage?.prompt_tokens,
-    usage?.input_tokens,
-    usage?.input_tokens?.total,
-    usage?.raw?.inputTokens,
-    usage?.raw?.inputTokens,
-    usage?.raw?.inputTokens?.total,
-    usage?.raw?.prompt_tokens,
-    usage?.raw?.input_tokens,
-    usage?.raw?.input_tokens?.total
+    at(usage, 'inputTokens'),
+    at(usage, 'inputTokens', 'total'),
+    at(usage, 'prompt_tokens'),
+    at(usage, 'input_tokens'),
+    at(usage, 'input_tokens', 'total'),
+    at(usage, 'raw', 'inputTokens'),
+    at(usage, 'raw', 'inputTokens', 'total'),
+    at(usage, 'raw', 'prompt_tokens'),
+    at(usage, 'raw', 'input_tokens'),
+    at(usage, 'raw', 'input_tokens', 'total')
   )
 
   const completionTokens = firstNumber(
-    usage?.outputTokens,
-    usage?.outputTokens,
-    usage?.outputTokens?.total,
-    usage?.completion_tokens,
-    usage?.output_tokens,
-    usage?.output_tokens?.total,
-    usage?.raw?.outputTokens,
-    usage?.raw?.outputTokens,
-    usage?.raw?.outputTokens?.total,
-    usage?.raw?.completion_tokens,
-    usage?.raw?.output_tokens,
-    usage?.raw?.output_tokens?.total
+    at(usage, 'outputTokens'),
+    at(usage, 'outputTokens', 'total'),
+    at(usage, 'completion_tokens'),
+    at(usage, 'output_tokens'),
+    at(usage, 'output_tokens', 'total'),
+    at(usage, 'raw', 'outputTokens'),
+    at(usage, 'raw', 'outputTokens', 'total'),
+    at(usage, 'raw', 'completion_tokens'),
+    at(usage, 'raw', 'output_tokens'),
+    at(usage, 'raw', 'output_tokens', 'total')
   )
 
   let totalTokens = firstNumber(
-    usage?.totalTokens,
-    usage?.total_tokens,
-    usage?.raw?.totalTokens,
-    usage?.raw?.total_tokens
+    at(usage, 'totalTokens'),
+    at(usage, 'total_tokens'),
+    at(usage, 'raw', 'totalTokens'),
+    at(usage, 'raw', 'total_tokens')
   )
 
   if (totalTokens === undefined && (promptTokens !== undefined || completionTokens !== undefined)) {

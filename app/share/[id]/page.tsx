@@ -18,11 +18,11 @@ export default async function SharePage({ params }: SharePageProps) {
   const title = shared.share.title || shared.chat.title || 'Shared chat'
   const messages: LegacyMessage[] = shared.messages.map(msg => ({
     id: msg.id,
-    role: msg.role as LegacyMessage['role'],
+    role: msg.role,
     content: msg.content,
-    toolInvocations: (msg as any).toolInvocations,
+    toolInvocations: msg.toolInvocations,
     metadata: { sharedHistory: true, shareId: id, sourceChatId: shared.chat.id },
-    createdAt: (msg as any).created_at || (msg as any).createdAt,
+    createdAt: msg.created_at,
   }))
 
   return (

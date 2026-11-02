@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') })
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env'), quiet: true })
 
 const endpoint = process.env.MCP_URL || 'http://localhost:3001/mcp'
 const username = process.env.VTOP_USERNAME || process.argv[2]

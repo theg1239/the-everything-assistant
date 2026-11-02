@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { pickPaperFields, readPaperSearchResponse } from '../../paper-search-response'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Drawer } from 'vaul'
@@ -37,11 +38,15 @@ interface Paper {
   source?: string
 }
 
-interface PaperSearchResponse {
-  success: boolean
-  papers?: Paper[]
-  totalFound?: number
-  courseCode?: string
+function toPaper(raw: Record<string, unknown>): Paper[] {
+  const { title, url, exam_type, year, source } = pickPaperFields(raw, [
+    'title',
+    'url',
+    'exam_type',
+    'year',
+    'source',
+  ])
+  return title !== undefined && url !== undefined ? [{ title, url, exam_type, year, source }] : []
 }
 
 const SUBJECT_COURSE_MAP: Record<string, string> = {
@@ -125,10 +130,10 @@ export default function SubjectPageClient({ subject, data }: SubjectPageClientPr
 
       try {
         const response = await fetch(`/api/public/papers/search?course=${courseCode}`)
-        const result = await response.json() as PaperSearchResponse
-        
+        const result = readPaperSearchResponse(await response.json())
+
         if (result.success && result.papers) {
-          setPapers(result.papers.slice(0, 15))
+          setPapers(result.papers.flatMap(toPaper).slice(0, 15))
           setTotalFound(result.totalFound ?? 0)
         } else {
           setError(true)

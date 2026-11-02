@@ -1,9 +1,11 @@
+import { generateText, Output } from 'ai'
 import fs from 'fs/promises'
 import path from 'path'
 import Papa from 'papaparse'
-import { rateLimitedAI } from '@/lib/rate-limited-ai'
-import * as z from 'zod/v3';
-import { getModelConfig } from '@/lib/model-registry'
+import * as z from 'zod'
+import { defaultProviderOptions, languageModel } from '@/lib/ai'
+import { enforceUserRateLimit } from '@/lib/user-rate-limiter'
+import { memoizeAsyncByKey, publicAssetUrl } from '@/lib/static-data'
 
 interface Company {
   name: string
@@ -32,14 +34,16 @@ export interface PlacementResponse {
   error?: string
 }
 
-interface PlacementRecord {
-  Reg_No: string
-  Branch: string
-  Company: string
-  CTC: string
-  Month?: string
-  Campus?: string
-}
+const placementRecordSchema = z.object({
+  Reg_No: z.string(),
+  Branch: z.string(),
+  Company: z.string(),
+  CTC: z.string(),
+  Month: z.string().optional(),
+  Campus: z.string().optional(),
+})
+
+type PlacementRecord = z.infer<typeof placementRecordSchema>
 
 function convertCtcToNumeric(ctc: string): number | null {
   if (!ctc) return null
@@ -52,40 +56,70 @@ function convertCtcToNumeric(ctc: string): number | null {
   }
 }
 
-async function readCsvFile(filePath: string): Promise<PlacementRecord[]> {
+/** CSV text from `public/placements/<fileName>`: the filesystem on Node, the public URL elsewhere. */
+async function readPlacementCsv(fileName: string): Promise<string> {
   try {
-    console.log(`Attempting to read CSV file from: ${filePath}`)
-    const fileContent = await fs.readFile(filePath, 'utf-8')
-    const result = Papa.parse<PlacementRecord>(fileContent, {
-      header: true,
-      skipEmptyLines: true,
-    })
-    console.log(`Successfully read ${result.data.length} records from ${filePath}`)
-    if (result.data.length > 0) {
-      console.log('Sample record:', JSON.stringify(result.data[0], null, 2))
+    return await fs.readFile(path.join(process.cwd(), 'public', 'placements', fileName), 'utf-8')
+  } catch (fsError) {
+    // No `public/` on the filesystem (Cloudflare Workers, trimmed serverless bundles).
+    const response = await fetch(publicAssetUrl(`/placements/${fileName}`))
+    if (!response.ok) {
+      throw new Error(
+        `Could not read placements/${fileName} from disk (${String(fsError)}) or URL (${response.status})`
+      )
     }
-    return result.data
+    return response.text()
+  }
+}
+
+async function readCsvFile(fileName: string): Promise<PlacementRecord[]> {
+  const fileContent = await readPlacementCsv(fileName)
+  const result = Papa.parse<unknown>(fileContent, {
+    header: true,
+    skipEmptyLines: true,
+  })
+  const records = result.data.flatMap(row => {
+    const parsed = placementRecordSchema.safeParse(row)
+    return parsed.success ? [parsed.data] : []
+  })
+  const skipped = result.data.length - records.length
+  if (skipped > 0) {
+    console.warn(`Skipped ${skipped} malformed placement rows in ${fileName}`)
+  }
+  return records
+}
+
+/**
+ * Parsed + de-duplicated offers per CSV, once per instance (the CSVs are static assets).
+ * A read failure yields `[]` like before but is not memoised, so the next call retries.
+ */
+const loadProcessedOffers = memoizeAsyncByKey(async (fileName: string) => {
+  const records = await readCsvFile(fileName)
+  return preprocessAndFilterData(records)
+})
+
+async function getProcessedOffers(fileName: string): Promise<readonly PlacementRecord[]> {
+  try {
+    return await loadProcessedOffers(fileName)
   } catch (error) {
-    console.error(`Error reading or parsing CSV file at ${filePath}:`, error)
+    console.error(`Error reading or parsing placement CSV ${fileName}:`, error)
     return []
   }
 }
 
 function preprocessAndFilterData(records: PlacementRecord[]): PlacementRecord[] {
-  const recordsWithNumericCtc = records.map(
-    record =>
-      (({
-        ...record,
-        numericCTC: convertCtcToNumeric(record.CTC)
-      }) as PlacementRecord & { numericCTC: number | null })
-  )
+  const recordsWithNumericCtc: Array<PlacementRecord & { numericCTC: number | null }> =
+    records.map(record => ({
+      ...record,
+      numericCTC: convertCtcToNumeric(record.CTC),
+    }))
 
   const sorted = recordsWithNumericCtc.sort((a, b) => {
     if (a.Reg_No !== b.Reg_No) {
       return a.Reg_No.localeCompare(b.Reg_No)
     }
-    if ((b as any).numericCTC !== (a as any).numericCTC) {
-      return ((b as any).numericCTC ?? 0) - ((a as any).numericCTC ?? 0)
+    if (b.numericCTC !== a.numericCTC) {
+      return (b.numericCTC ?? 0) - (a.numericCTC ?? 0)
     }
     return a.Company.localeCompare(b.Company)
   })
@@ -107,15 +141,10 @@ export async function scrapePlacementInfo(
   campus?: 'Vellore' | 'Chennai' | 'Amaravati' | 'Bhopal'
 ): Promise<PlacementResponse> {
   try {
-    const basePath = path.join(process.cwd(), 'public', 'placements')
-    const normalOffersPath = path.join(basePath, 'google_sheet_data.csv')
-    const witchOffersPath = path.join(basePath, 'WITCH-P.csv')
-
-    let normalOffers = await readCsvFile(normalOffersPath)
-    const witchOffers = await readCsvFile(witchOffersPath)
-
-    const processedNormalOffers = preprocessAndFilterData(normalOffers)
-    const processedWitchOffers = preprocessAndFilterData(witchOffers)
+    const [processedNormalOffers, processedWitchOffers] = await Promise.all([
+      getProcessedOffers('google_sheet_data.csv'),
+      getProcessedOffers('WITCH-P.csv'),
+    ])
 
     const shouldIncludeWitch = combineWitch || !!campus
 
@@ -134,29 +163,18 @@ export async function scrapePlacementInfo(
     }
 
     if (campus) {
-      console.log(`Filtering for campus: ${campus}`)
       const campusLower = campus.toLowerCase()
-      console.log(`Total offers before campus filter: ${processedOffers.length}`)
-
-      const allCampuses = [...new Set(processedOffers.map(o => o.Campus).filter(Boolean))]
-      console.log('All Campus values in data:', allCampuses)
-
       processedOffers = processedOffers.filter(offer => {
         if (!offer.Campus) return true
-        const offerCampus = offer.Campus.toLowerCase()
-        const matches = offerCampus.includes(campusLower)
-        if (matches) {
-          console.log(`Match found: ${offerCampus} includes ${campusLower}`)
-        }
-        return matches
+        return offer.Campus.toLowerCase().includes(campusLower)
       })
-
-      console.log(`Total offers after campus filter: ${processedOffers.length}`)
     }
 
     const totalOffers = processedOffers.length
-    const offersWithCtc = processedOffers.filter(o => convertCtcToNumeric(o.CTC) !== null)
-    const ctcValues = offersWithCtc.map(o => convertCtcToNumeric(o.CTC)!)
+    const ctcValues = processedOffers.flatMap(o => {
+      const value = convertCtcToNumeric(o.CTC)
+      return value === null ? [] : [value]
+    })
 
     const highestCTC = ctcValues.length > 0 ? Math.max(...ctcValues) : 0
     const lowestCTC = ctcValues.length > 0 ? Math.min(...ctcValues) : 0
@@ -164,11 +182,12 @@ export async function scrapePlacementInfo(
       ctcValues.length > 0 ? ctcValues.reduce((a, b) => a + b, 0) / ctcValues.length : 0
 
     const sortedCtc = [...ctcValues].sort((a, b) => a - b)
+    const mid = Math.floor(sortedCtc.length / 2)
     const medianCTC =
       sortedCtc.length > 0
         ? sortedCtc.length % 2 === 0
-          ? (sortedCtc[sortedCtc.length / 2 - 1] + sortedCtc[sortedCtc.length / 2]) / 2
-          : sortedCtc[Math.floor(sortedCtc.length / 2)]
+          ? ((sortedCtc[mid - 1] ?? 0) + (sortedCtc[mid] ?? 0)) / 2
+          : (sortedCtc[mid] ?? 0)
         : 0
 
     const companyStats = new Map<string, { count: number; ctcSum: number; ctcCount: number }>()
@@ -217,35 +236,36 @@ export async function scrapePlacementInfo(
       message: `Retrieved placement information for ${year}`,
       lastUpdated: new Date().toISOString(),
     }
-  } catch (err: any) {
+  } catch (err) {
     console.error('Placement scraper error:', err)
     return {
       success: false,
-      error: err?.message ?? String(err),
+      error: err instanceof Error ? err.message : String(err),
       message: 'Unable to fetch placement information. Please try again later.',
     }
   }
 }
 
-export async function parsePlacementData(rawData: any, userContext: string = '', userId?: string) {
+const placementParseSchema = z.object({
+  success: z.boolean(),
+  formatted_content: z.string(),
+  summary: z.string(),
+})
+
+export type ParsedPlacementData = z.infer<typeof placementParseSchema> & { error?: string }
+
+export async function parsePlacementData(
+  rawData: Pick<PlacementResponse, 'data' | 'year'>,
+  userContext: string = '',
+  userId?: string
+): Promise<ParsedPlacementData> {
   try {
-    const placementParseSchema = z.object({
-      success: z.boolean(),
-      formatted_content: z.string(),
-      summary: z.string(),
-    })
-
-    const placementModel = getModelConfig('placementFormatter')
-    const providerClient = rateLimitedAI[placementModel.provider as keyof typeof rateLimitedAI]
-    if (!providerClient) {
-      throw new Error(`Unsupported model provider for placements: ${placementModel.provider}`)
-    }
-
-    const result = await providerClient.generateObject(
-      {
-        model: { modelId: placementModel.modelId },
-        schema: placementParseSchema,
-        prompt: `You are a friendly and insightful university career advisor. Your goal is to summarize placement data in a clear, engaging, and easy-to-understand way for students.
+    await enforceUserRateLimit(userId)
+    const result = await generateText({
+      model: languageModel('placementFormatter'),
+      providerOptions: defaultProviderOptions,
+      output: Output.object({ schema: placementParseSchema }),
+      prompt: `You are a friendly and insightful university career advisor. Your goal is to summarize placement data in a clear, engaging, and easy-to-understand way for students.
 
 USER'S ORIGINAL REQUEST: ${userContext}
 Raw Placement Data: ${JSON.stringify(rawData.data)}
@@ -306,11 +326,9 @@ Please analyze this data and generate a response in HTML format. Follow these in
 You can also use HTML formatted tables to display the data in a more structured way.
 Your response should be a single block of HTML content for the 'formatted_content' field.
 `,
-      },
-      userId
-    )
+    })
 
-    return result.object
+    return result.output
   } catch (error) {
     console.error('Error parsing Placement data with AI SDK:', error)
     return {

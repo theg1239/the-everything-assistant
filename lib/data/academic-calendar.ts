@@ -1,4 +1,4 @@
-import { ContextData } from './index'
+import type { ContextData } from './index'
 
 export const academicCalendar: ContextData = {
   section: 'academic-calendar',

@@ -4,21 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import {
-  RefreshCw,
-  AlertTriangle,
-  CheckCircle,
-  XCircle,
-  Play,
-  Pause,
-  Eye,
-  EyeOff,
-  Loader2,
-  X,
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { AlertTriangle, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
 import TokenUsage from './components/token-usage'
 import MessagesViewerDialog from './components/messages-viewer'
 import UsersList from './components/users-list'
@@ -27,144 +14,61 @@ import SystemHealth from './components/system-health'
 import BroadcastForm from './components/broadcast-form'
 import PastBroadcasts from './components/past-broadcasts'
 import SystemStatistics from './components/system-statistics'
-import APIKeyManagement from './components/api-key-mgmt'
 import UserRateLimiting from './components/user-rate-limiting'
-import ManagementActions from './components/mgmt-actions'
 // import BriefingDispatch from './components/briefing-dispatch'
 import MgmtLayout from './components/mgmt-layout'
 import MgmtTabBar from './components/mgmt-tabbar'
 import Overview from './components/overview'
 
-type UsageLog = {
-  id: string
-  userId?: string | null
-  chatId?: string | null
-  model?: string | null
-  stepIndex?: number | null
-  promptTokens: number
-  completionTokens: number
-  totalTokens: number
-  createdAt: string
-}
 import { BroadcastDialog } from '@/components/broadcast-dialog'
 import { readJson } from '@/lib/http'
+import type { RateLimitStatusResponse } from '@/types/api/rate-limit'
+import type { BroadcastSlide, PastBroadcast } from '@/types/api/broadcast'
+import {
+  errorMessage,
+  type BroadcastSlideField,
+  type ChatViewerData,
+  type MgmtTab,
+  type MgmtUser,
+  type StatsResponse,
+  type UsageResponse,
+} from './types'
 
-interface RateLimitStatus {
-  status: string
-  timestamp: string
-  environment: {
-    validation: {
-      isValid: boolean
-      errors: string[]
-      warnings: string[]
-    }
-    summary: {
-      hasRedis: boolean
-      apiKeys: {
-        totalAvailable: number
-      }
-      adminAccess: {
-        email: string
-      }
-    }
-  }
-  configuration: {
-    apiKeys: {
-      enableRotation: boolean
-      rotateOnRateLimit: boolean
-      keyCount: number
-      rateLimit: {
-        requestsPerMinute: number
-        requestsPerHour: number
-      }
-      retryConfig: {
-        maxRetries: number
-        baseDelay: number
-        maxDelay: number
-      }
-      keyHealthCheckInterval: number
-    }
-    userRateLimit: {
-      enabled: boolean
-      requestsPerMinute: number
-      requestsPerHour: number
-      requestsPerDay: number
-    }
-  }
-  keyUsage: {
-    [keyIndex: string]: {
-      requests: number
-      failures: number
-      lastUsed: number | null
-      lastFailed: number | null
-      availableTokens: {
-        minute: number
-        hour: number
-        day: number
-      }
-      isRateLimited: boolean
-      isCurrent: boolean
-    }
-  }
-  healthCheck: {
-    redis: string
-    apiKeys: string
-  }
-}
+const emptySlide = (): BroadcastSlide => ({ title: '', text: '', image: '' })
 
-interface Stats {
-  totalUsers: number
-  messagesInLast30Minutes: number
-  toolCallStats: {
-    toolName: string
-    count: number
-  }[]
-}
-
-interface BroadcastSlide {
-  title: string
-  text: string
-  image: string
-}
-
-interface PastBroadcast {
-  id: string
-  slides: BroadcastSlide[]
-  timestamp: string
-  sentBy: string
+async function readErrorMessage(res: Response, fallback: string): Promise<string> {
+  try {
+    const json = await readJson<{ error?: string }>(res)
+    return json.error || fallback
+  } catch {
+    return fallback
+  }
 }
 
 export default function ManagementClient() {
-  const { data: session, status } = useSession()
+  const { status } = useSession()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const [autoRefresh, setAutoRefresh] = useState(false)
-  const [data, setData] = useState<RateLimitStatus | null>(null)
-  const [stats, setStats] = useState<Stats | null>(null)
+  const [autoRefresh] = useState(false)
+  const [data, setData] = useState<RateLimitStatusResponse | null>(null)
+  const [stats, setStats] = useState<StatsResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
-  const [showSensitiveData, setShowSensitiveData] = useState(true)
-  const [broadcastSlides, setBroadcastSlides] = useState([{ title: '', text: '', image: '' }])
+  const [, setLastUpdate] = useState<Date | null>(null)
+  const [broadcastSlides, setBroadcastSlides] = useState<BroadcastSlide[]>([emptySlide()])
   const [pastBroadcasts, setPastBroadcasts] = useState<PastBroadcast[]>([])
   const [editingBroadcast, setEditingBroadcast] = useState<string | null>(null)
   const [editSlides, setEditSlides] = useState<BroadcastSlide[]>([])
   const [loadingBroadcasts, setLoadingBroadcasts] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [showEditPreview, setShowEditPreview] = useState(false)
-  const [usage, setUsage] = useState<{
-    recent: UsageLog[]
-    summary: any
-    summaryAllTime?: any
-  } | null>(null)
+  const [usage, setUsage] = useState<UsageResponse | null>(null)
   const [usageOpen, setUsageOpen] = useState(true)
   const [viewerOpen, setViewerOpen] = useState(false)
   const [viewerLoading, setViewerLoading] = useState(false)
   const [viewerError, setViewerError] = useState<string | null>(null)
-  const [viewerData, setViewerData] = useState<{
-    chatId: string
-    user: { id: string; name: string | null; email: string | null } | null
-    messages: { id: string; role: 'user' | 'assistant'; content: string; createdAt: string }[]
-  } | null>(null)
+  const [viewerData, setViewerData] = useState<ChatViewerData | null>(null)
+  const [activeTab, setActiveTab] = useState<MgmtTab>('overview')
+  const [resettingUserId, setResettingUserId] = useState<string | null>(null)
 
   const openMessagesViewer = useCallback(async (chatId: string) => {
     if (!chatId) return
@@ -174,28 +78,17 @@ export default function ManagementClient() {
       setViewerOpen(true)
       const res = await fetch(`/api/chat-messages/${chatId}`)
       if (!res.ok) {
-        let errorPayload: { error?: string } = {}
-        try {
-          errorPayload = await readJson<{ error?: string }>(res)
-        } catch {
-          errorPayload = {}
-        }
-        throw new Error(errorPayload.error || 'Failed to fetch messages')
+        throw new Error(await readErrorMessage(res, 'Failed to fetch messages'))
       }
-      const data = await readJson<{
-        chatId: string
-        user: { id: string; name: string | null; email: string | null } | null
-        messages: { id: string; role: 'user' | 'assistant'; content: string; createdAt: string }[]
-      }>(res)
-      setViewerData(data)
-    } catch (e: any) {
-      setViewerError(e?.message || 'Failed to fetch messages')
+      setViewerData(await readJson<ChatViewerData>(res))
+    } catch (e) {
+      setViewerError(errorMessage(e, 'Failed to fetch messages'))
     } finally {
       setViewerLoading(false)
     }
   }, [])
 
-  const [selectedUser, setSelectedUser] = useState<any | null>(null)
+  const [selectedUser, setSelectedUser] = useState<MgmtUser | null>(null)
   const [usersOpen, setUsersOpen] = useState(false)
 
   const fetchData = useCallback(async () => {
@@ -209,47 +102,25 @@ export default function ManagementClient() {
       ])
 
       if (!rateLimitRes.ok) {
-        let json: { error?: string } = {}
-        try {
-          json = await readJson<{ error?: string }>(rateLimitRes)
-        } catch {
-          json = {}
-        }
-        throw new Error(json.error || 'Failed to fetch rate limit status')
+        throw new Error(await readErrorMessage(rateLimitRes, 'Failed to fetch rate limit status'))
       }
       if (!statsRes.ok) {
-        let json: { error?: string } = {}
-        try {
-          json = await readJson<{ error?: string }>(statsRes)
-        } catch {
-          json = {}
-        }
-        throw new Error(json.error || 'Failed to fetch stats')
+        throw new Error(await readErrorMessage(statsRes, 'Failed to fetch stats'))
       }
       if (!usageRes.ok) {
-        let json: { error?: string } = {}
-        try {
-          json = await readJson<{ error?: string }>(usageRes)
-        } catch {
-          json = {}
-        }
-        throw new Error(json.error || 'Failed to fetch usage')
+        throw new Error(await readErrorMessage(usageRes, 'Failed to fetch usage'))
       }
 
-      const rateLimitData = await readJson<RateLimitStatus>(rateLimitRes)
-      const statsData = await readJson<Stats>(statsRes)
-      const usageData = await readJson<{
-        recent: UsageLog[]
-        summary: any
-        summaryAllTime?: any
-      }>(usageRes)
+      const rateLimitData = await readJson<RateLimitStatusResponse>(rateLimitRes)
+      const statsData = await readJson<StatsResponse>(statsRes)
+      const usageData = await readJson<UsageResponse>(usageRes)
 
       setData(rateLimitData)
       setStats(statsData)
       setUsage(usageData)
       setLastUpdate(new Date())
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch data')
+    } catch (err) {
+      setError(errorMessage(err, 'Failed to fetch data'))
     } finally {
       setLoading(false)
     }
@@ -260,18 +131,12 @@ export default function ManagementClient() {
     try {
       const res = await fetch('/api/broadcast')
       if (!res.ok) {
-        let json: { error?: string } = {}
-        try {
-          json = await readJson<{ error?: string }>(res)
-        } catch {
-          json = {}
-        }
-        throw new Error(json.error || 'Failed to fetch past broadcasts')
+        throw new Error(await readErrorMessage(res, 'Failed to fetch past broadcasts'))
       }
       const data = await readJson<{ broadcasts?: PastBroadcast[] }>(res)
       setPastBroadcasts(data.broadcasts || [])
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to fetch past broadcasts')
+    } catch (err) {
+      toast.error(errorMessage(err, 'Failed to fetch past broadcasts'))
     } finally {
       setLoadingBroadcasts(false)
     }
@@ -301,14 +166,20 @@ export default function ManagementClient() {
     return () => clearInterval(iv)
   }, [autoRefresh, fetchData])
 
-  const handleSlideChange = (index: number, field: string, value: string) => {
-    const newSlides = [...broadcastSlides]
-    newSlides[index] = { ...newSlides[index], [field]: value }
-    setBroadcastSlides(newSlides)
+  const updateSlide = (
+    slides: BroadcastSlide[],
+    index: number,
+    field: BroadcastSlideField,
+    value: string
+  ): BroadcastSlide[] =>
+    slides.map((slide, i) => (i === index ? { ...slide, [field]: value } : slide))
+
+  const handleSlideChange = (index: number, field: BroadcastSlideField, value: string) => {
+    setBroadcastSlides(updateSlide(broadcastSlides, index, field, value))
   }
 
   const addSlide = () => {
-    setBroadcastSlides([...broadcastSlides, { title: '', text: '', image: '' }])
+    setBroadcastSlides([...broadcastSlides, emptySlide()])
   }
 
   const removeSlide = (index: number) => {
@@ -329,10 +200,10 @@ export default function ManagementClient() {
       const json = await readJson<{ error?: string; message?: string }>(res)
       if (!res.ok) throw new Error(json.error || 'Broadcast failed')
       toast.success(json.message || 'Broadcast sent')
-      setBroadcastSlides([{ title: '', text: '', image: '' }])
+      setBroadcastSlides([emptySlide()])
       fetchPastBroadcasts()
-    } catch (err: any) {
-      toast.error(err.message || 'Broadcast failed')
+    } catch (err) {
+      toast.error(errorMessage(err, 'Broadcast failed'))
     } finally {
       setLoading(false)
     }
@@ -358,8 +229,8 @@ export default function ManagementClient() {
       setEditingBroadcast(null)
       setEditSlides([])
       fetchPastBroadcasts()
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to update broadcast')
+    } catch (err) {
+      toast.error(errorMessage(err, 'Failed to update broadcast'))
     } finally {
       setLoading(false)
     }
@@ -380,21 +251,19 @@ export default function ManagementClient() {
       if (!res.ok) throw new Error(json.error || 'Failed to delete broadcast')
       toast.success('Broadcast deleted successfully')
       fetchPastBroadcasts()
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to delete broadcast')
+    } catch (err) {
+      toast.error(errorMessage(err, 'Failed to delete broadcast'))
     } finally {
       setLoading(false)
     }
   }
 
-  const handleEditSlideChange = (index: number, field: string, value: string) => {
-    const newSlides = [...editSlides]
-    newSlides[index] = { ...newSlides[index], [field]: value }
-    setEditSlides(newSlides)
+  const handleEditSlideChange = (index: number, field: BroadcastSlideField, value: string) => {
+    setEditSlides(updateSlide(editSlides, index, field, value))
   }
 
   const addEditSlide = () => {
-    setEditSlides([...editSlides, { title: '', text: '', image: '' }])
+    setEditSlides([...editSlides, emptySlide()])
   }
 
   const removeEditSlide = (index: number) => {
@@ -404,31 +273,25 @@ export default function ManagementClient() {
     }
   }
 
-  const handleAction = async (action: string, config?: any) => {
-    setLoading(true)
+  const handleResetUserRateLimits = async (user: MgmtUser) => {
+    const label = user.email || user.name || user.id
+    if (!confirm(`Reset rate limits for ${label}?`)) return
+    setResettingUserId(user.id)
     try {
       const res = await fetch('/api/rate-limit-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, config }),
+        body: JSON.stringify({ action: 'reset_user_limits', userId: user.id }),
       })
       const json = await readJson<{ error?: string; message?: string }>(res)
-      if (!res.ok) throw new Error(json.error || 'Action failed')
-      toast.success(json.message || 'Action completed')
-      await fetchData()
-    } catch (err: any) {
-      toast.error(err.message || 'Action failed')
+      if (!res.ok) throw new Error(json.error || 'Failed to reset rate limits')
+      toast.success(json.message || 'User rate limits reset')
+    } catch (err) {
+      toast.error(errorMessage(err, 'Failed to reset rate limits'))
     } finally {
-      setLoading(false)
+      setResettingUserId(null)
     }
   }
-
-  const formatTimestamp = (ts: number | null) => {
-    return ts ? new Date(ts).toLocaleString() : 'Never'
-  }
-
-  const getStatusColor = (isHealthy: boolean) => (isHealthy ? 'text-green-500' : 'text-red-500')
-  const getStatusIcon = (isHealthy: boolean) => (isHealthy ? CheckCircle : XCircle)
 
   if (status === 'loading') {
     return (
@@ -442,15 +305,11 @@ export default function ManagementClient() {
     )
   }
 
-  const [activeTab, setActiveTab] = useState<
-    'overview' | 'tokens' | 'broadcasts' | 'keys' | 'stats' | 'users'
-  >('overview')
-
   return (
     <MgmtLayout
       title="mgmt"
-      subtitle="monitor system health, tokens, broadcasts, and keys"
-      nav={<MgmtTabBar active={activeTab} onChange={(t: any) => setActiveTab(t)} />}
+      subtitle="monitor system health, tokens, broadcasts, and users"
+      nav={<MgmtTabBar active={activeTab} onChange={setActiveTab} />}
     >
 
       {error && (
@@ -486,7 +345,12 @@ export default function ManagementClient() {
             viewerData={viewerData}
           />
 
-          {activeTab === 'overview' && <Overview stats={stats} usage={usage} />}
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              <SystemHealth data={data} />
+              <Overview stats={stats} usage={usage} />
+            </div>
+          )}
 
           {activeTab === 'tokens' && (
             <motion.div
@@ -546,20 +410,6 @@ export default function ManagementClient() {
             </div>
           )}
 
-          {activeTab === 'keys' && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 }}
-            >
-              <APIKeyManagement
-                data={data}
-                showSensitiveData={showSensitiveData}
-                formatTimestamp={formatTimestamp}
-              />
-            </motion.div>
-          )}
-
           {activeTab === 'stats' && stats && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -582,14 +432,6 @@ export default function ManagementClient() {
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-              >
-                <ManagementActions handleAction={handleAction} loading={loading} />
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.12 }}
               >
                 {/* <BriefingDispatch /> */}
@@ -603,10 +445,12 @@ export default function ManagementClient() {
                 <div className="rounded-lg border border-border/20 p-4 bg-black/10">
                   <h3 className="lowercase font-medium mb-2">users</h3>
                   <UsersList
-                    onSelectUser={(u: any) => {
+                    onSelectUser={u => {
                       setSelectedUser(u)
                       setUsersOpen(true)
                     }}
+                    onResetRateLimits={handleResetUserRateLimits}
+                    resettingUserId={resettingUserId}
                   />
                 </div>
               </motion.div>

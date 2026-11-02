@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { Drawer } from 'vaul'
 import { Button } from '@/components/ui/button'
 import { Share2 } from 'lucide-react'
+import type { PersonalHubSnapshot } from '@/types/hub'
 
 interface ResultBottomSheetProps {
   open: boolean
   title?: string
   onClose: () => void
-  result?: any | null
+  result?: PersonalHubSnapshot | null
   loading?: boolean
   mode?: 'static' | 'stream'
 }
@@ -114,7 +115,7 @@ export function ResultBottomSheet({
   )
 }
 
-function safeStringify(obj: any) {
+function safeStringify(obj: unknown) {
   try {
     return JSON.stringify(obj, null, 2)
   } catch {

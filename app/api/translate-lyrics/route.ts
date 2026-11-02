@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
+import * as z from 'zod'
+
+const translateLyricsRequestSchema = z
+  .object({
+    lines: z
+      .array(z.object({ startTimeMs: z.union([z.string(), z.number()]), words: z.string() }))
+      .optional(),
+  })
+  .catch({})
 
 export async function POST(req: NextRequest) {
-  const { lines } = (await req.json().catch(() => ({}))) as {
-    lines?: { startTimeMs: string | number; words: string }[]
-  }
+  const { lines } = translateLyricsRequestSchema.parse(await req.json().catch(() => ({})))
   if (!lines?.length) return NextResponse.json('', { status: 200 })
   const lrc = lines
     .map((line) => {

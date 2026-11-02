@@ -4,7 +4,8 @@
 // import { scrapeExamCooker } from '../scrapers/examcooker'
 // import { getCourseCode } from '../question-generator'
 // import { getAllCourseMatches } from '../course-map'
-// import rateLimitedAI from '../rate-limited-ai'
+// import { embed, embedMany, generateText } from 'ai'
+// import { defaultProviderOptions, embeddingModel, openai } from '../ai'
 // import {
 //   ensurePaperSchema,
 //   insertPaper,
@@ -927,10 +928,11 @@
 //         },
 //       ]
 //       for (const img of limited) {
-//         contentParts.push({ type: 'image', image: img.toString('base64'), mimeType: 'image/png' })
+//         contentParts.push({ type: 'file', data: img.toString('base64'), mediaType: 'image/png' })
 //       }
-//       const ocrRes: any = await rateLimitedAI.openai.generateText({
-//         model: { modelId },
+//       const ocrRes: any = await generateText({
+//         model: openai(modelId),
+//         providerOptions: defaultProviderOptions,
 //         messages: [{ role: 'user', content: contentParts }],
 //       })
 //       const txt = (ocrRes && (ocrRes.text || (ocrRes as any).outputText)) || ''
@@ -1195,14 +1197,14 @@
 //             chunks: chunksRaw.length,
 //           })
 
-//         const embeddingResult: any = await rateLimitedAI.openai.embed({ values: chunksRaw })
+//         const embeddingResult: any = await embedMany({ model: embeddingModel(), values: chunksRaw })
 //         log('Embedding complete', { embeddings: embeddingResult.embeddings?.length })
 //         if (options.runId) logEmit(options.runId, 'Processing content with AI', { title: p.title })
 
 //         let questionEmbeddings: number[][] | undefined
 //         if (questions.length) {
 //           try {
-//             const qeRes: any = await rateLimitedAI.openai.embed({ values: questions })
+//             const qeRes: any = await embedMany({ model: embeddingModel(), values: questions })
 //             questionEmbeddings = qeRes.embeddings || []
 //             log('Question embeddings complete', { count: (questionEmbeddings || []).length })
 //             if (options.runId)
@@ -1454,14 +1456,14 @@
 //         chunks: chunksRaw.length,
 //       })
 
-//     const embeddingResult: any = await rateLimitedAI.openai.embed({ values: chunksRaw })
+//     const embeddingResult: any = await embedMany({ model: embeddingModel(), values: chunksRaw })
 //     log('Embedding complete', { embeddings: embeddingResult.embeddings?.length })
 //     if (options.runId) logEmit(options.runId, 'Processing content with AI', { title: p.title })
 
 //     let questionEmbeddings: number[][] | undefined
 //     if (questions.length) {
 //       try {
-//         const qeRes: any = await rateLimitedAI.openai.embed({ values: questions })
+//         const qeRes: any = await embedMany({ model: embeddingModel(), values: questions })
 //         questionEmbeddings = qeRes.embeddings || []
 //         log('Question embeddings complete', { count: (questionEmbeddings || []).length })
 //         if (options.runId)
@@ -1670,7 +1672,7 @@
 //   }
 //   if (!index) return { success: false, error: 'Index not found or expired', logs: log.getLogs() }
 //   log('Starting Q&A', { indexId, questionLen: question.length })
-//   const embedRes: any = await rateLimitedAI.openai.embed({ value: question })
+//   const embedRes: any = await embed({ model: embeddingModel(), value: question })
 //   const qEmb = embedRes.embedding || embedRes.embeddings?.[0]
 //   if (!qEmb) return { success: false, error: 'Failed to embed question', logs: log.getLogs() }
 //   const scored: { chunk: PaperChunk; score: number; paper: IndexedPaper }[] = []
@@ -1691,8 +1693,9 @@
 //     )
 //     .join('\n\n---\n\n')
 //   const prompt = `You are a precise assistant answering questions about VIT past exam papers.\nQuestion: ${question}\nUse ONLY the provided context. Quote specific question numbers or lines if relevant. If unknown, say you cannot find it.\nContext:\n${context}`
-//   const answer = await rateLimitedAI.openai.generateText({
-//     model: { modelId: pickGeminiModel({ fast: true }) },
+//   const answer = await generateText({
+//     model: openai(pickGeminiModel({ fast: true })),
+//     providerOptions: defaultProviderOptions,
 //     prompt,
 //   })
 //   log('Answer generated')
@@ -1759,7 +1762,7 @@
 //   }
 //   const useDB = !!process.env.DATABASE_URL2
 //   let index = paperIndexes.get(indexResult.indexId!)!
-//   const embedRes: any = await rateLimitedAI.openai.embed({ value: opts.question })
+//   const embedRes: any = await embed({ model: embeddingModel(), value: opts.question })
 //   const qEmb = embedRes.embedding || embedRes.embeddings?.[0]
 //   log('User question embedded')
 //   if (opts.runId) logEmit(opts.runId, 'Understanding your question with AI', {})

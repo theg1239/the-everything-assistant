@@ -1,5 +1,59 @@
 #!/usr/bin/env tsx
 
+import { scrapePapersCodeChef } from '../lib/scrapers/papers-codechef'
+import { scrapeVITPaperVault } from '../lib/scrapers/vit-papervault'
+import { scrapeExamCooker } from '../lib/scrapers/examcooker'
+
+type ScraperOutcome = {
+  success: boolean
+  papers: ReadonlyArray<{ title: string; examType: string; year: string }>
+  source?: string
+  searchUrl?: string
+  error?: string
+}
+
+async function testScraper(
+  label: string,
+  slowHint: string,
+  run: () => Promise<ScraperOutcome | undefined>
+) {
+  console.log(`\n📚 Testing ${label}...`)
+  const started = Date.now()
+  try {
+    const result = await run()
+    const duration = Date.now() - started
+
+    if (!result) {
+      console.log(`   ⚠️  No result returned`)
+      return
+    }
+
+    console.log(`   ✅ Success: ${result.success}`)
+    console.log(`   📄 Papers: ${result.papers.length}`)
+    console.log(`   🌐 Source: ${result.source}`)
+    console.log(`   🔗 URL: ${result.searchUrl || 'N/A'}`)
+    console.log(`   ⏱️  Duration: ${duration}ms`)
+
+    if (result.error) {
+      console.log(`   ⚠️  Error: ${result.error}`)
+    }
+
+    if (result.papers.length > 0) {
+      console.log(`\n   Top 3 papers:`)
+      result.papers.slice(0, 3).forEach((p, i) => {
+        console.log(`   ${i + 1}. ${p.title} (${p.examType}, ${p.year})`)
+      })
+    }
+
+    if (duration < 5000) {
+      console.log(`   ✓ Fast response → API approach used ✓`)
+    } else {
+      console.log(`   ⚠️  Slow response (${duration}ms) → ${slowHint}`)
+    }
+  } catch (error) {
+    console.error(`   ❌ Failed: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
 
 async function testPapersAPIs() {
   console.log('='.repeat(80))
@@ -9,10 +63,6 @@ async function testPapersAPIs() {
   console.log('1. API approach is used first (fast < 5s)')
   console.log('2. Browser scraping only triggers on API failure')
   console.log('3. All scrapers return success: true even with 0 papers\n')
-
-  const { scrapePapersCodeChef } = await import('../lib/scrapers/papers-codechef.js')
-  const { scrapeVITPaperVault } = await import('../lib/scrapers/vit-papervault.js')
-  const { scrapeExamCooker } = await import('../lib/scrapers/examcooker.js')
 
   const testCourses = [
     { code: 'BMAT201L', name: 'Complex Variables and Linear Algebra' },
@@ -24,69 +74,15 @@ async function testPapersAPIs() {
     console.log(`Testing: ${testCourse.code} (${testCourse.name})`)
     console.log('-'.repeat(80))
 
-    console.log('\n📚 Testing papers.codechefvit.com API...')
-    const startCodeChef = Date.now()
-    try {
-      const result = await scrapePapersCodeChef(testCourse.code)
-      const duration = Date.now() - startCodeChef
-
-      console.log(`   ✅ Success: ${result.success}`)
-      console.log(`   📄 Papers: ${result.papers.length}`)
-      console.log(`   🌐 Source: ${result.source}`)
-      console.log(`   🔗 URL: ${result.searchUrl || 'N/A'}`)
-      console.log(`   ⏱️  Duration: ${duration}ms`)
-
-      if (result.error) {
-        console.log(`   ⚠️  Error: ${result.error}`)
-      }
-
-      if (result.papers.length > 0) {
-        console.log(`\n   Top 3 papers:`)
-        result.papers.slice(0, 3).forEach((p: any, i: number) => {
-          console.log(`   ${i + 1}. ${p.title} (${p.examType}, ${p.year})`)
-        })
-      }
-
-      if (duration < 5000) {
-        console.log(`   ✓ Fast response → API approach used ✓`)
-      } else {
-        console.log(`   ⚠️  Slow response (${duration}ms) → Possible browser fallback`)
-      }
-    } catch (error: any) {
-      console.error(`   ❌ Failed: ${error.message}`)
-    }
-
-    console.log('\n📚 Testing vitpapervault.in API...')
-    const startVault = Date.now()
-    try {
-      const result = await scrapeVITPaperVault(testCourse.code)
-      const duration = Date.now() - startVault
-
-      console.log(`   ✅ Success: ${result.success}`)
-      console.log(`   📄 Papers: ${result.papers.length}`)
-      console.log(`   🌐 Source: ${result.source}`)
-      console.log(`   🔗 URL: ${(result as any).searchUrl || 'N/A'}`)
-      console.log(`   ⏱️  Duration: ${duration}ms`)
-
-      if ((result as any).error) {
-        console.log(`   ⚠️  Error: ${(result as any).error}`)
-      }
-
-      if (result.papers.length > 0) {
-        console.log(`\n   Top 3 papers:`)
-        result.papers.slice(0, 3).forEach((p: any, i: number) => {
-          console.log(`   ${i + 1}. ${p.title} (${p.examType}, ${p.year})`)
-        })
-      }
-
-      if (duration < 5000) {
-        console.log(`   ✓ Fast response → API approach used ✓`)
-      } else {
-        console.log(`   ⚠️  Slow response (${duration}ms) → Possible browser fallback`)
-      }
-    } catch (error: any) {
-      console.error(`   ❌ Failed: ${error.message}`)
-    }
+    await testScraper('papers.codechefvit.com API', 'Possible browser fallback', () =>
+      scrapePapersCodeChef(testCourse.code)
+    )
+    await testScraper('vitpapervault.in API', 'Possible browser fallback', () =>
+      scrapeVITPaperVault(testCourse.code)
+    )
+    await testScraper('examcooker.acmvit.in API', 'Possible timeout or fallback', () =>
+      scrapeExamCooker(testCourse.code)
+    )
   }
 
   console.log('\n' + '='.repeat(80))
@@ -105,34 +101,3 @@ async function testPapersAPIs() {
 }
 
 testPapersAPIs().catch(console.error)
-console.log('\n📚 Testing examcooker.acmvit.in API...')
-const startExamCooker = Date.now()
-try {
-  const result = await scrapeExamCooker(testCourse.code)
-  const duration = Date.now() - startExamCooker
-
-  console.log(`   ✅ Success: ${result.success}`)
-  console.log(`   📄 Papers: ${result.papers.length}`)
-  console.log(`   🌐 Source: ${result.source}`)
-  console.log(`   🔗 URL: ${result.searchUrl || 'N/A'}`)
-  console.log(`   ⏱️  Duration: ${duration}ms`)
-
-  if ((result as any).error) {
-    console.log(`   ⚠️  Error: ${(result as any).error}`)
-  }
-
-  if (result.papers.length > 0) {
-    console.log(`\n   Top 3 papers:`)
-    result.papers.slice(0, 3).forEach((p: any, i: number) => {
-      console.log(`   ${i + 1}. ${p.title} (${p.examType}, ${p.year})`)
-    })
-  }
-
-  if (duration < 5000) {
-    console.log(`   ✓ Fast response → API approach used ✓`)
-  } else {
-    console.log(`   ⚠️  Slow response (${duration}ms) → Possible timeout or fallback`)
-  }
-} catch (error: any) {
-  console.error(`   ❌ Failed: ${error.message}`)
-}

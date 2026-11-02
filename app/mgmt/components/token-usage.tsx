@@ -3,11 +3,18 @@
 import React, { useMemo, useState } from 'react'
 import { Activity, Eye } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import TokenUsageChart from './token-usage-chart'
+import TokenUsageChart, { type TokenUsageChartPoint } from './token-usage-chart'
 import { ResponsiveContainer, LineChart, Line, Tooltip, XAxis, YAxis } from 'recharts'
 import Heatmap from './heatmap'
+import type { UsageResponse } from '../types'
 
-function StatCard({ label, value, accent }: any) {
+interface StatCardProps {
+  label: string
+  value: React.ReactNode
+  accent?: string
+}
+
+function StatCard({ label, value, accent }: StatCardProps) {
   return (
     <div className="p-3 rounded-lg bg-black/20 border border-border/20">
       <div className="text-xs text-muted-foreground lowercase">{label}</div>
@@ -16,16 +23,26 @@ function StatCard({ label, value, accent }: any) {
   )
 }
 
-export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessagesViewer }: any) {
+interface TokenUsageProps {
+  usage: UsageResponse | null
+  usageOpen: boolean
+  setUsageOpen: React.Dispatch<React.SetStateAction<boolean>>
+  openMessagesViewer: (chatId: string) => void
+}
+
+type HeatmapData = { rows: { day: string; values: number[] }[]; max: number }
+
+export default function TokenUsage({
+  usage,
+  usageOpen,
+  setUsageOpen,
+  openMessagesViewer,
+}: TokenUsageProps) {
   const [showHeatmap, setShowHeatmap] = useState(false)
   const [showPeakHour, setShowPeakHour] = useState(false)
-  const chartData = useMemo(() => {
-    if (
-      usage?.lifetimeBuckets &&
-      Array.isArray(usage.lifetimeBuckets) &&
-      usage.lifetimeBuckets.length
-    ) {
-      return usage.lifetimeBuckets.map((b: any) => ({
+  const chartData = useMemo((): TokenUsageChartPoint[] => {
+    if (usage?.lifetimeBuckets && usage.lifetimeBuckets.length) {
+      return usage.lifetimeBuckets.map(b => ({
         time: new Date(b.ts).toLocaleDateString(),
         tokens: b.totalTokens,
       }))
@@ -34,7 +51,7 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
     return usage.recent
       .slice()
       .reverse()
-      .map((u: any) => ({
+      .map(u => ({
         time: new Date(u.createdAt).toLocaleTimeString(),
         prompt: u.inputTokens,
         completion: u.outputTokens,
@@ -42,30 +59,35 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
       }));
   }, [usage])
 
-  const heatmap: any = useMemo(() => {
-    const rows: any[] = []
+  const heatmap = useMemo((): HeatmapData => {
+    const rows: HeatmapData['rows'] = []
     const hh = usage?.detailedStats?.hourlyHeatmap || []
-    if (!Array.isArray(hh) || hh.length === 0) return { rows, max: 0 }
+    if (hh.length === 0) return { rows, max: 0 }
 
-    const map: Record<string, number[]> = {}
+    const map = new Map<string, number[]>()
     let max = 0
     for (const h of hh) {
-      const ts = Number(h.ts || h)
-      const d = new Date(ts)
+      const d = new Date(Number(h.ts))
       if (Number.isNaN(d.getTime())) continue
       const day = d.toISOString().slice(0, 10)
       const hour = d.getUTCHours()
-      map[day] = map[day] || new Array(24).fill(0)
-      map[day][hour] = (map[day][hour] || 0) + Number(h.totalTokens || 0)
-      max = Math.max(max, map[day][hour])
+      const values = map.get(day) ?? new Array<number>(24).fill(0)
+      map.set(day, values)
+      const next = (values[hour] ?? 0) + Number(h.totalTokens || 0)
+      values[hour] = next
+      max = Math.max(max, next)
     }
 
-    const days = Object.keys(map).sort()
-    for (const day of days) {
-      rows.push({ day, values: map[day], max })
+    for (const day of [...map.keys()].sort()) {
+      rows.push({ day, values: map.get(day) ?? [] })
     }
     return { rows, max }
   }, [usage])
+
+  const summaryAverage =
+    usage?.summary && usage.summary.count > 0
+      ? (usage.summary.totalTokens / usage.summary.count).toFixed(1)
+      : '-'
 
   return (
     <div className="rounded-lg bg-black/20 backdrop-blur-sm border border-border/30 p-6">
@@ -78,13 +100,13 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
             <div className="flex flex-col items-end gap-0.5">
               {usage?.summary && (
                 <div className="text-xs md:text-sm text-muted-foreground lowercase">
-                  24h: {usage.summary.totalTokens?.toLocaleString?.() || 0} tokens ·{' '}
+                  24h: {usage.summary.totalTokens.toLocaleString()} tokens ·{' '}
                   {usage.summary.count || 0} events
                 </div>
               )}
               {usage?.summaryAllTime && (
                 <div className="text-[11px] md:text-xs text-muted-foreground/80 lowercase">
-                  all time: {usage.summaryAllTime.totalTokens?.toLocaleString?.() || 0} tokens ·{' '}
+                  all time: {usage.summaryAllTime.totalTokens.toLocaleString()} tokens ·{' '}
                   {usage.summaryAllTime.count || 0} events
                 </div>
               )}
@@ -93,7 +115,7 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
               variant="outline"
               size="sm"
               className="h-7 px-2 text-xs"
-              onClick={() => setUsageOpen((v: boolean) => !v)}
+              onClick={() => setUsageOpen(v => !v)}
               aria-expanded={usageOpen}
               aria-controls="usage-table"
             >
@@ -127,17 +149,14 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
         <StatCard label="24h events" value={usage?.summary?.count ?? '0'} accent="text-blue-200" />
         <StatCard
           label="avg tokens / event"
-          value={usage?.summary?.average?.toFixed?.(1) ?? '-'}
+          value={summaryAverage}
           accent="text-green-200"
         />
       </div>
       <TokenUsageChart data={chartData} />
       {showHeatmap && Array.isArray(usage?.detailedStats?.hourlyHeatmap) && (
         <div className="mt-4 p-3 rounded-md bg-black/10">
-          <Heatmap
-            rows={(heatmap.rows || []).map((r: any) => ({ day: r.day, values: r.values }))}
-            max={heatmap.max || 0}
-          />
+          <Heatmap rows={heatmap.rows} max={heatmap.max} />
         </div>
       )}
       {showPeakHour && (
@@ -148,10 +167,7 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
           </div>
           <div className="mt-2 text-sm">
 
-            {(Array.isArray(usage?.detailedStats?.dailyPeaks?.perDay)
-              ? usage.detailedStats.dailyPeaks.perDay.slice(-7)
-              : []
-            ).map((d: any) => (
+            {(usage?.detailedStats?.dailyPeaks?.perDay ?? []).slice(-7).map(d => (
               <div key={d.day} className="flex justify-between text-xs py-0.5">
                 <span className="text-muted-foreground">{d.day}</span>
                 <span>
@@ -163,23 +179,21 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
           </div>
 
 
-          {Array.isArray(usage?.detailedStats?.hourlyHeatmap) && (
+          {usage && Array.isArray(usage.detailedStats?.hourlyHeatmap) && (
             <div className="mt-3">
               <div className="text-xs text-muted-foreground mb-1 lowercase">
                 tokens by hour (aggregated)
               </div>
               <div className="flex items-end gap-1 h-20">
                 {Array.from({ length: 24 }).map((_, h) => {
-                  const hhArr = Array.isArray(usage.detailedStats.hourlyHeatmap)
-                    ? usage.detailedStats.hourlyHeatmap
-                    : []
+                  const hhArr = usage.detailedStats.hourlyHeatmap
                   const total = hhArr
-                    .filter((x: any) => {
+                    .filter(x => {
                       const d = new Date(Number(x.ts))
                       return !Number.isNaN(d.getTime()) && d.getUTCHours() === h
                     })
-                    .reduce((s: any, x: any) => s + Number(x.totalTokens || 0), 0)
-                  const max = Math.max(1, ...hhArr.map((x: any) => Number(x.totalTokens || 0)))
+                    .reduce((s, x) => s + Number(x.totalTokens || 0), 0)
+                  const max = Math.max(1, ...hhArr.map(x => Number(x.totalTokens || 0)))
                   const hPct = Math.min(100, Math.round((total / (max || 1)) * 100))
                   return (
                     <div key={h} className="w-1/24 flex-1 flex items-end">
@@ -196,20 +210,20 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
           )}
         </div>
       )}
-      {Array.isArray(usage?.detailedStats?.movingAverages) && (
+      {usage && Array.isArray(usage.detailedStats?.movingAverages) && (
         <div className="mt-4 p-3 rounded-md bg-black/10">
           <div className="text-sm font-medium lowercase mb-2">moving average (7d)</div>
           <div style={{ width: '100%', height: 80 }}>
             <ResponsiveContainer>
               <LineChart
-                data={usage.detailedStats.movingAverages.map((m: any) => ({
+                data={usage.detailedStats.movingAverages.map(m => ({
                   day: m.day,
                   avg: m.avg,
                 }))}
               >
                 <XAxis dataKey="day" hide />
                 <YAxis hide />
-                <Tooltip formatter={(v: any) => [v, 'avg']} labelFormatter={(l: any) => l} />
+                <Tooltip formatter={v => [v, 'avg']} labelFormatter={l => l} />
                 <Line type="monotone" dataKey="avg" stroke="#A78BFA" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
@@ -236,7 +250,7 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
             </thead>
             <tbody>
               {Array.isArray(usage?.recent) &&
-                usage.recent.map((u: any) => (
+                usage.recent.map(u => (
                   <tr key={u.id} className="border-t border-border/10">
                     <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
                       {new Date(u.createdAt).toLocaleTimeString()}
@@ -261,7 +275,7 @@ export default function TokenUsage({ usage, usageOpen, setUsageOpen, openMessage
                             size="icon"
                             className="h-7 w-7"
                             title="View messages"
-                            onClick={() => openMessagesViewer(u.chatId)}
+                            onClick={() => u.chatId && openMessagesViewer(u.chatId)}
                           >
                             <Eye className="w-4 h-4" />
                           </Button>

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { getMessages } from '@/lib/db'
 import { prisma } from '@/lib/prisma'
 
@@ -12,7 +11,7 @@ export async function GET(req: NextRequest, { params }: { params: ChatParams }) 
   try {
     const { chatId } = await params
 
-    const session = await getServerSession(authOptions)
+    const session = await auth()
 
     const adminEmail = process.env.RATE_LIMIT_ADMIN_EMAIL
     if (!adminEmail) {
@@ -48,10 +47,13 @@ export async function GET(req: NextRequest, { params }: { params: ChatParams }) 
       user: chat?.user ? { id: chat.user.id, name: chat.user.name, email: chat.user.email } : null,
       messages,
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Mgmt messages fetch failed:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch messages', message: error?.message || 'Unknown error' },
+      {
+        error: 'Failed to fetch messages',
+        message: error instanceof Error && error.message ? error.message : 'Unknown error',
+      },
       { status: 500 }
     )
   }

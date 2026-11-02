@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Loader2, Trash2, Edit, Save, X, Plus, Search, Star, Calendar, Tag } from 'lucide-react'
 import { toast } from 'sonner'
 import { readJson } from '@/lib/http'
+import { errorMessage } from '@/components/narrow'
 
 export interface Memory {
   id: string
@@ -109,8 +110,8 @@ export function MemoryManagement() {
         toast.success('Memory deleted')
         setDeletingMemoryId(null)
         await refreshMemories()
-      } catch (err: any) {
-        toast.error(err.message)
+      } catch (err) {
+        toast.error(errorMessage(err))
       } finally {
         setIsLoading(false)
       }
@@ -174,8 +175,8 @@ export function MemoryManagement() {
       toast.success(editingMemory ? 'Memory updated' : 'Memory saved')
       setView('list')
       await refreshMemories()
-    } catch (err: any) {
-      toast.error(err.message)
+    } catch (err) {
+      toast.error(errorMessage(err))
     } finally {
       setIsLoading(false)
     }

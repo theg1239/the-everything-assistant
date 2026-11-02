@@ -1,9 +1,9 @@
-import type { HubVTOPCommand } from '@/types/hub'
+import { getRawText } from '../guards'
+import type { ParsedHubResult } from './attendance'
 import { extractCliTables } from './utils'
 
-export function parseHostel(raw: any) {
-  const text =
-    typeof raw?.output === 'string' ? raw.output : typeof raw?.data === 'string' ? raw.data : ''
+export function parseHostel(raw: unknown): ParsedHubResult | null {
+  const text = getRawText(raw)
   if (!text.trim()) return null
   const tables = extractCliTables(text)
   const hostelTable = tables.find(table => table.headers.length === 2)
@@ -12,12 +12,12 @@ export function parseHostel(raw: any) {
   const info: Record<string, string> = {}
   hostelTable.rows.forEach(row => {
     const [field, value] = row
-    if (!field) return
+    if (!field || value === undefined) return
     info[field.toLowerCase()] = value
   })
 
   return {
-    command: 'hostel' as HubVTOPCommand,
+    command: 'hostel',
     title: 'hostel info',
     summary: info['hostel block'] || info['hostel name'] || 'hostel synced',
     formatted_content: '',

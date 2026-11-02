@@ -1,8 +1,7 @@
 import { NextRequest } from 'next/server'
 import { paperProgress } from '@/lib/progress/paper-progress'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import * as z from 'zod/v3';
+import { auth } from '@/lib/auth'
+import * as z from 'zod'
 
 const progressSchema = z.object({
   runId: z.string().min(1),
@@ -14,9 +13,7 @@ export const runtime = 'nodejs'
 
 export async function POST(req: NextRequest) {
   try {
-    const session = (await getServerSession(authOptions as any)) as {
-      user?: { id?: string }
-    } | null
+    const session = await auth()
     if (!session?.user?.id) {
       return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 })
     }

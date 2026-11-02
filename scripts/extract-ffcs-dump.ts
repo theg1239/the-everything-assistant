@@ -1,4 +1,6 @@
-const vm = require('vm')
+import fs from 'node:fs'
+import path from 'node:path'
+import vm from 'node:vm'
 
 const DUMP_PATH = path.resolve(__dirname, '..', 'public', 'ffcs', 'dump')
 const OUTPUT_DIR = path.resolve(__dirname, '..', 'public', 'ffcs')
@@ -45,12 +47,15 @@ function extractObjectLiteral(raw: string): string {
   return raw.slice(start + 2, endIndex)
 }
 
-function evalObjectLiteral(objLiteral: string): any {
+function evalObjectLiteral(objLiteral: string): unknown {
   const script = new vm.Script(`(${objLiteral})`)
   return script.runInNewContext({})
 }
 
-function writePerSchool(obj: any): void {
+function writePerSchool(obj: unknown): void {
+  if (typeof obj !== 'object' || obj === null) {
+    throw new Error('Dump object literal did not evaluate to an object')
+  }
   for (const [dumpKey, data] of Object.entries(obj)) {
     const schoolId = SCHOOL_KEY_MAP[dumpKey] || dumpKey.toLowerCase()
     const outPath = path.join(OUTPUT_DIR, `${schoolId}.json`)

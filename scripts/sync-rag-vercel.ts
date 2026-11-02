@@ -10,9 +10,9 @@ import { embed } from 'ai'
 
 import { shouldSyncRag } from './rag-sync-policy'
 
-async function assertCurrentHead(sha: string) {
+async function assertCurrentHead(sha: string, branch: string) {
   const response = await fetch(
-    'https://api.github.com/repos/theg1239/the-everything-assistant/commits/main',
+    `https://api.github.com/repos/theg1239/the-everything-assistant/commits/${encodeURIComponent(branch)}`,
     {
       headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'vit-rag-build-sync' },
       signal: AbortSignal.timeout(10000),
@@ -29,10 +29,11 @@ async function main() {
     return
   }
   const sha = process.env.VERCEL_GIT_COMMIT_SHA
+  const branch = process.env.VERCEL_GIT_COMMIT_REF!
   if (!sha || !process.env.DATABASE_URL2 || !process.env.OPENAI_API_KEY) {
     throw new Error('RAG sync requires the Vercel commit SHA, DATABASE_URL2 and OpenAI credentials')
   }
-  await assertCurrentHead(sha)
+  await assertCurrentHead(sha, branch)
   const raw =
     getContextForAIPrompt({ includeAll: true, maxLength: 100000 }) +
     '\n\n' +
@@ -89,7 +90,7 @@ async function main() {
         throw new Error('Unexpected embedding dimension or value')
       rows.push({ text: doc.pageContent.trim(), vector: embedding })
     }
-    await assertCurrentHead(sha)
+    await assertCurrentHead(sha, branch)
     // Replace only repository-generated corpus rows. Preserve custom and PDF uploads.
     await client.query(
       "DELETE FROM vit_rag_chunks WHERE metadata->>'source' IN ('seed-rag-ts', 'vercel-rag-sync')"
